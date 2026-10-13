@@ -57,7 +57,6 @@ export const GET = defineV2Route<{ id: string }>({
     if (!postmortem) {
       throw new AppError({
         code: 'POSTMORTEM_NOT_FOUND',
-        status: 404,
         userMessage: `Postmortem with id '${id}' not found.`,
       });
     }
@@ -85,7 +84,6 @@ export const PATCH = defineV2Route<{ id: string }>({
     if (!existing) {
       throw new AppError({
         code: 'POSTMORTEM_NOT_FOUND',
-        status: 404,
         userMessage: `Postmortem with id '${id}' not found.`,
       });
     }
@@ -173,7 +171,6 @@ export const DELETE = defineV2Route<{ id: string }>({
     if (!existing) {
       throw new AppError({
         code: 'POSTMORTEM_NOT_FOUND',
-        status: 404,
         userMessage: `Postmortem with id '${id}' not found.`,
       });
     }

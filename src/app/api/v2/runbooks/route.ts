@@ -59,7 +59,6 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             version: true,
-            summary: true,
             publishedAt: true,
           },
         },
@@ -78,7 +77,6 @@ export async function GET(req: NextRequest) {
       slug: r.slug,
       description: r.description,
       version: r.publishedVersion?.version ?? 1,
-      summary: r.publishedVersion?.summary ?? null,
       publishedAt: r.publishedVersion?.publishedAt ?? null,
       executionCount: r._count.executions,
       bindingCount: r._count.bindings,

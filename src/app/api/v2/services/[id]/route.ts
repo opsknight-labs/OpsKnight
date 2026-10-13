@@ -26,7 +26,7 @@ export async function GET(
       where: { id },
       include: {
         team: { select: { id: true, name: true } },
-        escalationPolicy: { select: { id: true, name: true } },
+        policy: { select: { id: true, name: true } },
         _count: {
           select: {
             incidents: {
@@ -40,7 +40,6 @@ export async function GET(
     if (!service) {
       throw new AppError({
         code: 'SERVICE_NOT_FOUND',
-        status: 404,
         userMessage: `Service with id '${id}' was not found.`,
       });
     }
@@ -58,7 +57,7 @@ export async function GET(
       teamId: service.teamId,
       team: service.team,
       escalationPolicyId: service.escalationPolicyId,
-      escalationPolicy: service.escalationPolicy,
+      escalationPolicy: service.policy,
       openIncidentsCount: service._count.incidents,
       createdAt: service.createdAt,
       updatedAt: service.updatedAt,
@@ -88,7 +87,6 @@ export async function PATCH(
     if (!existing) {
       throw new AppError({
         code: 'SERVICE_NOT_FOUND',
-        status: 404,
         userMessage: `Service with id '${id}' was not found.`,
       });
     }
@@ -99,7 +97,7 @@ export async function PATCH(
     });
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = ServiceUpdateV2Schema.parse(body);
@@ -112,7 +110,6 @@ export async function PATCH(
       if (!team) {
         throw new AppError({
           code: 'TEAM_NOT_FOUND',
-          status: 404,
           userMessage: `Team with id '${validated.teamId}' not found.`,
         });
       }
@@ -126,7 +123,6 @@ export async function PATCH(
       if (!policy) {
         throw new AppError({
           code: 'ESCALATION_POLICY_NOT_FOUND',
-          status: 404,
           userMessage: `Escalation policy with id '${validated.escalationPolicyId}' not found.`,
         });
       }
@@ -151,7 +147,7 @@ export async function PATCH(
         createdAt: true,
         updatedAt: true,
         team: { select: { id: true, name: true } },
-        escalationPolicy: { select: { id: true, name: true } },
+        policy: { select: { id: true, name: true } },
       },
     });
 
@@ -164,7 +160,20 @@ export async function PATCH(
       details: validated,
     });
 
-    return apiV2Success(updated, { headers: rlHeaders });
+    const dto = {
+      id: updated.id,
+      name: updated.name,
+      description: updated.description,
+      status: updated.status,
+      teamId: updated.teamId,
+      escalationPolicyId: updated.escalationPolicyId,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+      team: updated.team,
+      escalationPolicy: updated.policy,
+    };
+
+    return apiV2Success(dto, { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }
@@ -182,21 +191,16 @@ export async function DELETE(
     const { id } = await params;
     const service = await prisma.service.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: {
-            incidents: {
-              where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
-            },
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        teamId: true,
       },
     });
 
     if (!service) {
       throw new AppError({
         code: 'SERVICE_NOT_FOUND',
-        status: 404,
         userMessage: `Service with id '${id}' was not found.`,
       });
     }
@@ -206,11 +210,22 @@ export async function DELETE(
       teamId: service.teamId,
     });
 
-    if (service._count.incidents > 0) {
+    // Invariant 1: Incident history is an audit record and must never be erased.
+    // Preserves foreign key RESTRICT constraint and domain safety.
+    const incidentCount = await prisma.incident.count({ where: { serviceId: id } });
+    if (incidentCount > 0) {
       throw new AppError({
         code: 'SERVICE_HAS_ACTIVE_INCIDENTS',
-        status: 409,
-        userMessage: `Cannot delete service '${service.name}' because it has ${service._count.incidents} active open incident(s). Resolve all open incidents first.`,
+        userMessage: `Cannot delete service '${service.name}' while it has ${incidentCount} incident(s). Preserve or reassign the incident history first.`,
+      });
+    }
+
+    // Invariant 2: Service objectives and reliability history must retain original scope.
+    const objectiveCount = await prisma.serviceObjective.count({ where: { serviceId: id } });
+    if (objectiveCount > 0) {
+      throw new AppError({
+        code: 'SERVICE_HAS_ACTIVE_INCIDENTS',
+        userMessage: `Cannot delete service '${service.name}' while it has ${objectiveCount} service objective revision(s). Reliability history must retain its original service scope.`,
       });
     }
 

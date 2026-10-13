@@ -34,7 +34,6 @@ export async function GET(
     if (!incident) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${id}' was not found.`,
       });
     }
@@ -56,7 +55,6 @@ export async function GET(
         content: true,
         userId: true,
         createdAt: true,
-        updatedAt: true,
         user: { select: { id: true, name: true, email: true } },
       },
     });
@@ -88,7 +86,6 @@ export async function POST(
     if (!incident) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${id}' was not found.`,
       });
     }
@@ -103,7 +100,7 @@ export async function POST(
     });
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = IncidentNoteV2Schema.parse(body);
@@ -127,9 +124,8 @@ export async function POST(
       await tx.incidentEvent.create({
         data: {
           incidentId: id,
-          type: 'NOTE_ADDED',
+          type: 'COMMENT',
           message: `Note added by ${actor.id}`,
-          actorId: actor.id,
         },
       });
 

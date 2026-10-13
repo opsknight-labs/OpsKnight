@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
         createdAt: true,
         updatedAt: true,
         team: { select: { id: true, name: true } },
-        escalationPolicy: { select: { id: true, name: true } },
+        policy: { select: { id: true, name: true } },
         _count: {
           select: {
             incidents: {
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
       teamId: s.teamId,
       team: s.team,
       escalationPolicyId: s.escalationPolicyId,
-      escalationPolicy: s.escalationPolicy,
+      escalationPolicy: s.policy,
       openIncidentsCount: s._count.incidents,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SERVICE_CREATE);
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = ServiceCreateV2Schema.parse(body);
@@ -120,7 +120,6 @@ export async function POST(req: NextRequest) {
     if (!team) {
       throw new AppError({
         code: 'TEAM_NOT_FOUND',
-        status: 404,
         userMessage: `Team with id '${validated.teamId}' not found.`,
       });
     }
@@ -133,7 +132,6 @@ export async function POST(req: NextRequest) {
     if (!policy) {
       throw new AppError({
         code: 'ESCALATION_POLICY_NOT_FOUND',
-        status: 404,
         userMessage: `Escalation policy with id '${validated.escalationPolicyId}' not found.`,
       });
     }
@@ -156,7 +154,7 @@ export async function POST(req: NextRequest) {
         createdAt: true,
         updatedAt: true,
         team: { select: { id: true, name: true } },
-        escalationPolicy: { select: { id: true, name: true } },
+        policy: { select: { id: true, name: true } },
       },
     });
 
@@ -173,7 +171,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return apiV2Created(created, { headers: rlHeaders });
+    const dto = {
+      id: created.id,
+      name: created.name,
+      description: created.description,
+      status: created.status,
+      teamId: created.teamId,
+      escalationPolicyId: created.escalationPolicyId,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt,
+      team: created.team,
+      escalationPolicy: created.policy,
+    };
+
+    return apiV2Created(dto, { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

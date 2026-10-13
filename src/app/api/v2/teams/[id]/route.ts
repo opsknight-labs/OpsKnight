@@ -41,7 +41,6 @@ export async function GET(
     if (!team) {
       throw new AppError({
         code: 'TEAM_NOT_FOUND',
-        status: 404,
         userMessage: `Team with id '${id}' was not found.`,
       });
     }
@@ -80,13 +79,12 @@ export async function PATCH(
     if (!existing) {
       throw new AppError({
         code: 'TEAM_NOT_FOUND',
-        status: 404,
         userMessage: `Team with id '${id}' was not found.`,
       });
     }
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = TeamUpdateV2Schema.parse(body);
@@ -141,7 +139,6 @@ export async function DELETE(
     if (!team) {
       throw new AppError({
         code: 'TEAM_NOT_FOUND',
-        status: 404,
         userMessage: `Team with id '${id}' was not found.`,
       });
     }
@@ -149,7 +146,6 @@ export async function DELETE(
     if (team._count.services > 0) {
       throw new AppError({
         code: 'TEAM_HAS_SERVICES',
-        status: 409,
         userMessage: `Cannot delete team '${team.name}' because ${team._count.services} service(s) are assigned to it. Reassign those services first.`,
       });
     }

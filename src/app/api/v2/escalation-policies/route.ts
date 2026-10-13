@@ -15,9 +15,14 @@ import {
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { assertEscalationPolicyNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
-import { escalationTargetExists, validateEscalationStep } from '@/lib/escalation/policy-validation';
+import {
+  escalationTargetExists,
+  validateEscalationStep,
+  firstEscalationStepIssue,
+  type ValidatedEscalationStep,
+} from '@/lib/escalation/policy-validation';
 import { AppError } from '@/lib/errors';
-import type { NotificationChannel, Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
   try {
@@ -64,7 +69,6 @@ export async function GET(req: NextRequest) {
       id: p.id,
       name: p.name,
       description: p.description,
-      repeatCount: p.repeatCount,
       stepCount: p.steps.length,
       serviceCount: p._count.services,
       steps: p.steps,
@@ -90,7 +94,7 @@ export async function POST(req: NextRequest) {
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.ESCALATION_POLICY_MANAGE);
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = EscalationPolicyCreateV2Schema.parse(body);
@@ -102,7 +106,6 @@ export async function POST(req: NextRequest) {
       if (err instanceof UniqueNameConflictError) {
         throw new AppError({
           code: 'ESCALATION_POLICY_NAME_CONFLICT',
-          status: 409,
           userMessage: `An escalation policy with the name '${validated.name}' already exists.`,
         });
       }
@@ -110,24 +113,32 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate steps & targets
+    const validatedStepPayloads: ValidatedEscalationStep[] = [];
     for (const [index, step] of validated.steps.entries()) {
-      const stepIssue = validateEscalationStep(step.delayMinutes, step.targetType, step.targetId);
-      if (stepIssue) {
+      const stepInput = {
+        targetType: step.targetType,
+        targetUserId: step.targetType === 'USER' ? step.targetId : undefined,
+        targetTeamId: step.targetType === 'TEAM' ? step.targetId : undefined,
+        targetScheduleId: step.targetType === 'SCHEDULE' ? step.targetId : undefined,
+        delayMinutes: step.delayMinutes,
+      };
+      const stepValidation = validateEscalationStep(stepInput);
+      if (!stepValidation.valid) {
         throw new AppError({
           code: 'INVALID_ESCALATION_STEP',
-          status: 400,
-          userMessage: `Step ${index + 1} is invalid: ${stepIssue}`,
+          userMessage: `Step ${index + 1} is invalid: ${firstEscalationStepIssue(stepValidation.issues)}`,
         });
       }
 
-      const targetExists = await escalationTargetExists(step.targetType, step.targetId);
+      const targetExists = await escalationTargetExists(prisma, step.targetType, step.targetId);
       if (!targetExists) {
         throw new AppError({
           code: 'TARGET_NOT_FOUND',
-          status: 400,
           userMessage: `Target '${step.targetId}' for step ${index + 1} (${step.targetType}) does not exist.`,
         });
       }
+
+      validatedStepPayloads.push(stepValidation.step);
     }
 
     const created = await prisma.$transaction(async tx => {
@@ -135,19 +146,21 @@ export async function POST(req: NextRequest) {
         data: {
           name: normalizedName,
           description: validated.description ?? null,
-          repeatCount: validated.repeatCount,
         },
       });
 
-      for (const [index, step] of validated.steps.entries()) {
+      for (const [index, stepPayload] of validatedStepPayloads.entries()) {
         await tx.escalationRule.create({
           data: {
             policyId: policy.id,
-            stepOrder: index + 1,
-            delayMinutes: step.delayMinutes,
-            targetType: step.targetType,
-            targetId: step.targetId,
-            channels: ['EMAIL' as NotificationChannel],
+            stepOrder: index,
+            targetType: stepPayload.targetType,
+            targetUserId: stepPayload.targetUserId,
+            targetTeamId: stepPayload.targetTeamId,
+            targetScheduleId: stepPayload.targetScheduleId,
+            delayMinutes: stepPayload.delayMinutes,
+            notificationChannels: stepPayload.notificationChannels,
+            notifyOnlyTeamLead: stepPayload.notifyOnlyTeamLead,
           },
         });
       }

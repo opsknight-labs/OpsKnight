@@ -100,7 +100,6 @@ export const POST = defineV2Route({
     if (!incident) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${body.incidentId}' not found.`,
       });
     }
@@ -113,7 +112,6 @@ export const POST = defineV2Route({
     if (existing) {
       throw new AppError({
         code: 'POSTMORTEM_ALREADY_EXISTS',
-        status: 409,
         userMessage: 'A postmortem already exists for this incident.',
       });
     }

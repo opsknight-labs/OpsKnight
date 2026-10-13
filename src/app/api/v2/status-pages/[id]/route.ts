@@ -36,7 +36,6 @@ export async function GET(
     if (!page) {
       throw new AppError({
         code: 'STATUS_PAGE_NOT_FOUND',
-        status: 404,
         userMessage: `Status page with id '${id}' was not found.`,
       });
     }
@@ -47,7 +46,6 @@ export async function GET(
       slug: page.slug,
       isDefault: page.isDefault,
       enabled: page.enabled,
-      description: page.description,
       services: page.services.map(s => s.service),
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
@@ -73,13 +71,12 @@ export async function PATCH(
     if (!existing) {
       throw new AppError({
         code: 'STATUS_PAGE_NOT_FOUND',
-        status: 404,
         userMessage: `Status page with id '${id}' was not found.`,
       });
     }
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = StatusPageUpdateV2Schema.parse(body);
@@ -90,7 +87,6 @@ export async function PATCH(
         name: validated.name,
         slug: validated.slug,
         isDefault: validated.isDefault,
-        description: validated.description,
         enabled: validated.enabled,
       },
       select: {
@@ -99,7 +95,6 @@ export async function PATCH(
         slug: true,
         isDefault: true,
         enabled: true,
-        description: true,
         createdAt: true,
         updatedAt: true,
       },

@@ -85,7 +85,6 @@ export async function enforceV2RateLimit(
   if (!result.allowed) {
     throw new AppError({
       code: 'RATE_LIMIT_EXCEEDED',
-      status: 429,
       userMessage: `Rate limit of ${result.limit} requests per minute exceeded. Try again in ${result.retryAfter} seconds.`,
       details: {
         limit: result.limit,

@@ -30,7 +30,6 @@ export async function POST(
     if (!notification) {
       throw new AppError({
         code: 'NOTIFICATION_NOT_FOUND',
-        status: 404,
         userMessage: `Notification with id '${id}' was not found.`,
       });
     }
@@ -38,23 +37,21 @@ export async function POST(
     if (notification.status !== 'FAILED') {
       throw new AppError({
         code: 'NOTIFICATION_NOT_RETRYABLE',
-        status: 409,
         userMessage: `Notification '${id}' is in status '${notification.status}' and cannot be retried. Only FAILED notifications can be retried.`,
       });
     }
 
     const requeued = await requeueCentralNotification(id);
     if (!requeued) {
-      // Direct status fallback to PENDING
-      await prisma.notification.update({
-        where: { id },
-        data: { status: 'PENDING' },
+      throw new AppError({
+        code: 'NOTIFICATION_RETRY_FAILED',
+        userMessage: `Notification '${id}' failed to be requeued for delivery.`,
       });
     }
 
     await logV2Audit({
       action: 'notification.retry_requested',
-      entityType: 'NOTIFICATION_CONFIG',
+      entityType: 'SYSTEM_CONFIG',
       entityId: id,
       actorId: actor.id,
       apiKeyId: apiKey.id,

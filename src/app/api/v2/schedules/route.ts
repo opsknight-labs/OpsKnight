@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SCHEDULE_MANAGE);
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = ScheduleCreateV2Schema.parse(body);

@@ -10,9 +10,13 @@ import {
   EscalationPolicyUpdateV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import { escalationTargetExists, validateEscalationStep } from '@/lib/escalation/policy-validation';
+import {
+  escalationTargetExists,
+  validateEscalationStep,
+  firstEscalationStepIssue,
+  type ValidatedEscalationStep,
+} from '@/lib/escalation/policy-validation';
 import { AppError } from '@/lib/errors';
-import type { NotificationChannel } from '@prisma/client';
 
 export async function GET(
   req: NextRequest,
@@ -35,7 +39,6 @@ export async function GET(
     if (!policy) {
       throw new AppError({
         code: 'ESCALATION_POLICY_NOT_FOUND',
-        status: 404,
         userMessage: `Escalation policy with id '${id}' was not found.`,
       });
     }
@@ -60,35 +63,41 @@ export async function PATCH(
     if (!existing) {
       throw new AppError({
         code: 'ESCALATION_POLICY_NOT_FOUND',
-        status: 404,
         userMessage: `Escalation policy with id '${id}' was not found.`,
       });
     }
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = EscalationPolicyUpdateV2Schema.parse(body);
 
+    const validatedStepPayloads: ValidatedEscalationStep[] = [];
     if (validated.steps) {
       for (const [index, step] of validated.steps.entries()) {
-        const issue = validateEscalationStep(step.delayMinutes, step.targetType, step.targetId);
-        if (issue) {
+        const stepInput = {
+          targetType: step.targetType,
+          targetUserId: step.targetType === 'USER' ? step.targetId : undefined,
+          targetTeamId: step.targetType === 'TEAM' ? step.targetId : undefined,
+          targetScheduleId: step.targetType === 'SCHEDULE' ? step.targetId : undefined,
+          delayMinutes: step.delayMinutes,
+        };
+        const stepValidation = validateEscalationStep(stepInput);
+        if (!stepValidation.valid) {
           throw new AppError({
             code: 'INVALID_ESCALATION_STEP',
-            status: 400,
-            userMessage: `Step ${index + 1} is invalid: ${issue}`,
+            userMessage: `Step ${index + 1} is invalid: ${firstEscalationStepIssue(stepValidation.issues)}`,
           });
         }
-        const exists = await escalationTargetExists(step.targetType, step.targetId);
+        const exists = await escalationTargetExists(prisma, step.targetType, step.targetId);
         if (!exists) {
           throw new AppError({
             code: 'TARGET_NOT_FOUND',
-            status: 400,
             userMessage: `Target '${step.targetId}' for step ${index + 1} (${step.targetType}) does not exist.`,
           });
         }
+        validatedStepPayloads.push(stepValidation.step);
       }
     }
 
@@ -98,21 +107,23 @@ export async function PATCH(
         data: {
           name: validated.name,
           description: validated.description,
-          repeatCount: validated.repeatCount,
         },
       });
 
       if (validated.steps) {
         await tx.escalationRule.deleteMany({ where: { policyId: id } });
-        for (const [index, step] of validated.steps.entries()) {
+        for (const [index, stepPayload] of validatedStepPayloads.entries()) {
           await tx.escalationRule.create({
             data: {
               policyId: id,
-              stepOrder: index + 1,
-              delayMinutes: step.delayMinutes,
-              targetType: step.targetType,
-              targetId: step.targetId,
-              channels: ['EMAIL' as NotificationChannel],
+              stepOrder: index,
+              targetType: stepPayload.targetType,
+              targetUserId: stepPayload.targetUserId,
+              targetTeamId: stepPayload.targetTeamId,
+              targetScheduleId: stepPayload.targetScheduleId,
+              delayMinutes: stepPayload.delayMinutes,
+              notificationChannels: stepPayload.notificationChannels,
+              notifyOnlyTeamLead: stepPayload.notifyOnlyTeamLead,
             },
           });
         }
@@ -159,7 +170,6 @@ export async function DELETE(
     if (!policy) {
       throw new AppError({
         code: 'ESCALATION_POLICY_NOT_FOUND',
-        status: 404,
         userMessage: `Escalation policy with id '${id}' was not found.`,
       });
     }
@@ -168,7 +178,6 @@ export async function DELETE(
       const serviceNames = policy.services.map(s => s.name).join(', ');
       throw new AppError({
         code: 'ESCALATION_POLICY_IN_USE',
-        status: 409,
         userMessage: `Cannot delete escalation policy '${policy.name}' because ${policy.services.length} service(s) are using it (${serviceNames}). Reassign those services first.`,
       });
     }

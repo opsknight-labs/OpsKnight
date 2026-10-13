@@ -27,7 +27,6 @@ export async function GET(
     if (!page) {
       throw new AppError({
         code: 'STATUS_PAGE_NOT_FOUND',
-        status: 404,
         userMessage: `Status page with id '${id}' was not found.`,
       });
     }
@@ -40,8 +39,9 @@ export async function GET(
         title: true,
         message: true,
         type: true,
-        status: true,
-        scheduledAt: true,
+        isActive: true,
+        startDate: true,
+        endDate: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -67,13 +67,12 @@ export async function POST(
     if (!page) {
       throw new AppError({
         code: 'STATUS_PAGE_NOT_FOUND',
-        status: 404,
         userMessage: `Status page with id '${id}' was not found.`,
       });
     }
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = StatusPageAnnouncementV2Schema.parse(body);
@@ -84,16 +83,18 @@ export async function POST(
         title: validated.title,
         message: validated.message,
         type: validated.type,
-        status: validated.status,
-        scheduledAt: validated.scheduledAt ? new Date(validated.scheduledAt) : null,
+        startDate: validated.startDate ? new Date(validated.startDate) : new Date(),
+        endDate: validated.endDate ? new Date(validated.endDate) : null,
+        isActive: validated.isActive,
       },
       select: {
         id: true,
         title: true,
         message: true,
         type: true,
-        status: true,
-        scheduledAt: true,
+        isActive: true,
+        startDate: true,
+        endDate: true,
         createdAt: true,
       },
     });

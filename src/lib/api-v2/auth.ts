@@ -44,20 +44,14 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   if (!token) {
     throw new AppError({
       code: 'AUTHENTICATION_REQUIRED',
-      status: 401,
       userMessage: 'Authentication credentials are required. Provide a valid Bearer token.',
     });
   }
 
   const v2Hash = hashTokenV2(token);
 
-  // 1. In-memory hot path cache lookup (zero DB query)
-  const cached = authCache.get(v2Hash) as V2AuthContext | undefined;
-  if (cached) {
-    return cached;
-  }
-
   const activeFilter = {
+
     revokedAt: null,
     OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     user: { status: 'ACTIVE' as const },
@@ -114,7 +108,6 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   if (!apiKeyRecord || !apiKeyRecord.user) {
     throw new AppError({
       code: 'API_KEY_INVALID',
-      status: 401,
       userMessage: 'The provided API key or service account token is invalid, expired, or revoked.',
     });
   }
@@ -123,8 +116,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   const actor = authorizationActorFromUser(user);
   if (!actor) {
     throw new AppError({
-      code: 'ACTOR_INVALID',
-      status: 401,
+      code: 'API_KEY_USER_INVALID',
       userMessage: 'The user or service account associated with this token is not active.',
     });
   }
@@ -165,12 +157,6 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
       .catch(() => {});
   }
 
-  // Cache for 60s or until token expiration
-  const ttlMs = apiKeyRecord.expiresAt
-    ? Math.min(60_000, Math.max(1000, apiKeyRecord.expiresAt.getTime() - Date.now()))
-    : 60_000;
-  authCache.set(v2Hash, authContext, ttlMs);
-
   return authContext;
 }
 
@@ -181,3 +167,4 @@ export function invalidateV2AuthCache(tokenHash?: string): void {
     authCache.clear();
   }
 }
+

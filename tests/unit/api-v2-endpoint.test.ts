@@ -66,7 +66,7 @@ describe('defineV2Route Endpoint Factory', () => {
       handler: async ({ pagination }) => {
         return {
           data: [{ id: 'inc_1', title: 'Outage' }],
-          pagination: { limit: pagination.limit, hasMore: false },
+          pagination: { limit: pagination.limit, hasMore: false, nextCursor: null },
         };
       },
     });

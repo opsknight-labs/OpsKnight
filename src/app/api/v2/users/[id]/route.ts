@@ -43,7 +43,6 @@ export async function GET(
     if (!user) {
       throw new AppError({
         code: 'USER_NOT_FOUND',
-        status: 404,
         userMessage: `User with id '${id}' was not found.`,
       });
     }

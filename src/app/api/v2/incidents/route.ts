@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_CREATE);
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = IncidentCreateV2Schema.parse(body);
@@ -115,7 +115,6 @@ export async function POST(req: NextRequest) {
     if (!service) {
       throw new AppError({
         code: 'SERVICE_NOT_FOUND',
-        status: 404,
         userMessage: `Service with id '${validated.serviceId}' not found.`,
       });
     }
@@ -137,7 +136,7 @@ export async function POST(req: NextRequest) {
         dedupKey: validated.dedupKey ?? null,
         assigneeId: validated.assigneeId ?? null,
         teamId: validated.teamId ?? service.teamId ?? null,
-        customFields: validated.customFields ?? [],
+        customFields: validated.customFields,
         source: 'REST_API',
         actor: { id: actor.id },
       },
@@ -170,7 +169,6 @@ export async function POST(req: NextRequest) {
     if (!incident) {
       throw new AppError({
         code: 'INTERNAL_ERROR',
-        status: 500,
         userMessage: 'Failed to retrieve created incident.',
       });
     }

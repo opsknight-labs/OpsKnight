@@ -26,7 +26,7 @@ export async function GET(
       where: { id },
       include: {
         layers: {
-          orderBy: { order: 'asc' },
+          orderBy: { priority: 'asc' },
           include: {
             users: {
               orderBy: { position: 'asc' },
@@ -42,7 +42,6 @@ export async function GET(
     if (!schedule) {
       throw new AppError({
         code: 'SCHEDULE_NOT_FOUND',
-        status: 404,
         userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
@@ -73,13 +72,12 @@ export async function PATCH(
     if (!existing) {
       throw new AppError({
         code: 'SCHEDULE_NOT_FOUND',
-        status: 404,
         userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = ScheduleUpdateV2Schema.parse(body);
@@ -128,14 +126,13 @@ export async function DELETE(
     if (!schedule) {
       throw new AppError({
         code: 'SCHEDULE_NOT_FOUND',
-        status: 404,
         userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
 
     // Dependency check: verify no escalation rule targets this schedule
     const rulesUsingSchedule = await prisma.escalationRule.findMany({
-      where: { targetType: 'SCHEDULE', targetId: id },
+      where: { targetType: 'SCHEDULE', targetScheduleId: id },
       select: { id: true, policy: { select: { id: true, name: true } } },
     });
 
@@ -143,7 +140,6 @@ export async function DELETE(
       const policyNames = [...new Set(rulesUsingSchedule.map(r => r.policy.name))].join(', ');
       throw new AppError({
         code: 'SCHEDULE_IN_USE',
-        status: 409,
         userMessage: `Cannot delete schedule '${schedule.name}' because it is referenced in escalation policy (${policyNames}). Reassign or remove this schedule target first.`,
       });
     }

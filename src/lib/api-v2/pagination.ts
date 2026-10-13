@@ -17,7 +17,6 @@ export function parsePaginationParams(searchParams: URLSearchParams): {
     if (!Number.isSafeInteger(parsed) || parsed <= 0) {
       throw new AppError({
         code: 'INVALID_PAGINATION_LIMIT',
-        status: 400,
         userMessage: `Limit must be a positive integer between 1 and ${MAX_PAGE_LIMIT}.`,
       });
     }
@@ -52,7 +51,6 @@ export function decodeCursor(cursorString: string): ApiV2CursorPayload {
 
   throw new AppError({
     code: 'INVALID_PAGINATION_CURSOR',
-    status: 400,
     userMessage: 'The provided pagination cursor is invalid or malformed.',
   });
 }

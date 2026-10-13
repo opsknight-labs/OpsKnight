@@ -28,13 +28,12 @@ export async function POST(
     const { id } = await params;
     const runbook = await prisma.runbook.findUnique({
       where: { id },
-      select: { id: true, name: true, archivedAt: null, publishedVersionId: true },
+      select: { id: true, name: true, archivedAt: true, publishedVersionId: true },
     });
 
-    if (!runbook || !runbook.publishedVersionId) {
+    if (!runbook || runbook.archivedAt || !runbook.publishedVersionId) {
       throw new AppError({
         code: 'RUNBOOK_NOT_FOUND',
-        status: 404,
         userMessage: `Runbook with id '${id}' was not found or is not published.`,
       });
     }
@@ -57,7 +56,7 @@ export async function POST(
       triggeredByUserId: actor.id,
       inputValues: validated.parameters,
       expectedPlanDigest: preview.digest,
-      previewAuthorizationToken: preview.previewAuthorizationToken,
+      previewAuthorizationToken: preview.authorizationToken,
     });
 
     await logV2Audit({

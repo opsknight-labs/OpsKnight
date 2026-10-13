@@ -36,26 +36,34 @@ export type V2RouteHandlerResult<TResult = any> =
     }
   | Response;
 
-export interface V2RouteConfig<
+export type V2RouteConfig<
   TParams = any,
   TQuery = any,
   TBody = any,
   TResult = any
-> {
+> = {
   rateLimitTier?: V2OperationClass;
-  action?: AuthorizationAction;
   resourceExtractor?: (
     ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders' | 'tx'>
   ) => Promise<AuthorizationResource | undefined> | AuthorizationResource | undefined;
-  paramsSchema?: z.ZodType<TParams>;
-  querySchema?: z.ZodType<TQuery>;
-  bodySchema?: z.ZodType<TBody>;
+  paramsSchema?: z.ZodType<TParams, any, any>;
+  querySchema?: z.ZodType<TQuery, any, any>;
+  bodySchema?: z.ZodType<TBody, any, any>;
   idempotent?: boolean;
   idempotencyScope?: string | ((ctx: { params: TParams; body: TBody }) => string);
   handler: (
     ctx: V2RouteContext<TParams, TQuery, TBody>
   ) => Promise<V2RouteHandlerResult<TResult>>;
-}
+} & (
+  | {
+      action: AuthorizationAction;
+      isPublic?: false;
+    }
+  | {
+      action?: never;
+      isPublic: true;
+    }
+);
 
 export type NextRouteHandler = (
   req: NextRequest,
@@ -106,7 +114,6 @@ export function defineV2Route<
         const rawBody = await req.json().catch(() => {
           throw new AppError({
             code: 'INVALID_JSON',
-            status: 400,
             userMessage: 'The request body contains invalid JSON.',
           });
         });
@@ -114,7 +121,7 @@ export function defineV2Route<
       }
 
       // 6. Enforce RBAC Scope & Capability Check
-      if (config.action) {
+      if ('action' in config && config.action) {
         let resource: AuthorizationResource | undefined = undefined;
         if (config.resourceExtractor) {
           resource = await config.resourceExtractor({
@@ -128,6 +135,11 @@ export function defineV2Route<
           });
         }
         enforceV2Authorization(actor, config.action, resource);
+      } else if (!('isPublic' in config && config.isPublic)) {
+        throw new AppError({
+          code: 'AUTHORIZATION_DENIED',
+          userMessage: 'Route configuration error: authorization action is required unless isPublic: true is explicitly declared.',
+        });
       }
 
       // 7. Execute Handler (Idempotent vs Non-Idempotent)

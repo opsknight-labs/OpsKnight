@@ -22,7 +22,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = ServiceAccountTokenIssueV2Schema.parse(body);

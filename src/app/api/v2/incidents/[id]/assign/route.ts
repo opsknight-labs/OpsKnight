@@ -33,7 +33,6 @@ export async function POST(
     if (!incident) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${id}' was not found.`,
       });
     }
@@ -58,7 +57,6 @@ export async function POST(
       if (!targetUser || targetUser.status !== 'ACTIVE') {
         throw new AppError({
           code: 'USER_NOT_FOUND',
-          status: 400,
           userMessage: `Assignee user with id '${validated.assigneeId}' is invalid or not active.`,
         });
       }
@@ -72,7 +70,6 @@ export async function POST(
       if (!targetTeam) {
         throw new AppError({
           code: 'TEAM_NOT_FOUND',
-          status: 400,
           userMessage: `Target team with id '${validated.teamId}' not found.`,
         });
       }
@@ -100,9 +97,8 @@ export async function POST(
       await tx.incidentEvent.create({
         data: {
           incidentId: id,
-          type: 'REASSIGNED',
+          type: 'ASSIGNMENT',
           message: validated.assigneeId ? `Assigned to user ${validated.assigneeId}` : 'Incident unassigned',
-          actorId: actor.id,
         },
       });
 

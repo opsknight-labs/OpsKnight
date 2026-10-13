@@ -25,16 +25,17 @@ export async function GET(
       include: {
         runbook: { select: { id: true, name: true, slug: true } },
         steps: {
-          orderBy: { stepIndex: 'asc' },
+          orderBy: { sequence: 'asc' },
           select: {
             id: true,
-            stepIndex: true,
-            title: true,
-            actionType: true,
+            sequence: true,
+            name: true,
+            type: true,
             status: true,
             startedAt: true,
-            finishedAt: true,
-            error: true,
+            completedAt: true,
+            errorCode: true,
+            errorMessage: true,
           },
         },
       },
@@ -43,7 +44,6 @@ export async function GET(
     if (!execution) {
       throw new AppError({
         code: 'EXECUTION_NOT_FOUND',
-        status: 404,
         userMessage: `Runbook execution with id '${id}' was not found.`,
       });
     }
@@ -56,7 +56,7 @@ export async function GET(
       status: execution.status,
       triggeredByUserId: execution.triggeredByUserId,
       startedAt: execution.startedAt,
-      finishedAt: execution.finishedAt,
+      completedAt: execution.completedAt,
       steps: execution.steps,
       createdAt: execution.createdAt,
       updatedAt: execution.updatedAt,

@@ -119,7 +119,6 @@ describe('API v2 Foundation', () => {
     it('formats RFC 9457 error response from AppError', async () => {
       const error = new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: 'Incident inc_404 does not exist.',
       });
 

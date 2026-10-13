@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { hashTokenV2 } from '@/lib/api-keys';
 import { isAppRole, type AppRole } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
+import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { logV2Audit } from './audit';
 import { invalidateV2AuthCache } from './auth';
 
@@ -122,7 +123,6 @@ export async function getServiceAccount(id: string) {
   ) {
     throw new AppError({
       code: 'SERVICE_ACCOUNT_NOT_FOUND',
-      status: 404,
       userMessage: `Service account with id '${id}' not found.`,
     });
   }
@@ -144,7 +144,6 @@ export async function createServiceAccount(input: CreateServiceAccountInput) {
   if (!isAppRole(input.role) || input.role === 'USER') {
     throw new AppError({
       code: 'INVALID_SERVICE_ACCOUNT_ROLE',
-      status: 400,
       userMessage: "Service account role must be 'ADMIN', 'RESPONDER', or 'AUDITOR'.",
     });
   }
@@ -217,17 +216,18 @@ export async function createServiceAccount(input: CreateServiceAccountInput) {
 export async function deleteServiceAccount(id: string, actorId: string) {
   const sa = await getServiceAccount(id);
 
-  // Revoke all tokens
-  await prisma.apiKey.updateMany({
-    where: { userId: id, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
-
-  // Mark account disabled
-  await prisma.user.update({
-    where: { id },
-    data: { status: 'DISABLED', deactivatedAt: new Date() },
-  });
+  await updateUserSecurityState(
+    id,
+    { status: 'DISABLED' },
+    { deactivatedAt: new Date() },
+    async tx => {
+      // Revoke all tokens within the transaction
+      await tx.apiKey.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+  );
 
   invalidateV2AuthCache();
 
@@ -259,7 +259,6 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
   if (!input.name || input.name.trim().length === 0) {
     throw new AppError({
       code: 'INVALID_TOKEN_NAME',
-      status: 400,
       userMessage: 'Token name is required.',
     });
   }
@@ -267,7 +266,6 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
   if (!input.scopes || input.scopes.length === 0) {
     throw new AppError({
       code: 'INVALID_TOKEN_SCOPES',
-      status: 400,
       userMessage: 'At least one valid scope must be assigned to the token.',
     });
   }
@@ -329,7 +327,6 @@ export async function revokeServiceAccountToken(
   if (!apiKey) {
     throw new AppError({
       code: 'TOKEN_NOT_FOUND',
-      status: 404,
       userMessage: `Token with id '${tokenId}' not found for this service account.`,
     });
   }

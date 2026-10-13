@@ -35,7 +35,6 @@ export async function GET(
     if (!incident) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${id}' was not found.`,
       });
     }
@@ -66,9 +65,7 @@ export async function GET(
         id: true,
         type: true,
         message: true,
-        actorId: true,
         createdAt: true,
-        actor: { select: { id: true, name: true, email: true } },
       },
     });
 

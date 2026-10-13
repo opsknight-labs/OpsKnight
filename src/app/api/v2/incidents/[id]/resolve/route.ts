@@ -35,7 +35,6 @@ export async function POST(
     if (!incident) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${id}' was not found.`,
       });
     }

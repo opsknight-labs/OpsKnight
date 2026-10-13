@@ -29,7 +29,7 @@ export async function GET(
         name: true,
         type: true,
         serviceId: true,
-        status: true,
+        enabled: true,
         createdAt: true,
         updatedAt: true,
         service: {
@@ -41,7 +41,6 @@ export async function GET(
     if (!integration) {
       throw new AppError({
         code: 'INTEGRATION_NOT_FOUND',
-        status: 404,
         userMessage: `Integration with id '${id}' was not found.`,
       });
     }
@@ -75,13 +74,12 @@ export async function PATCH(
     if (!existing) {
       throw new AppError({
         code: 'INTEGRATION_NOT_FOUND',
-        status: 404,
         userMessage: `Integration with id '${id}' was not found.`,
       });
     }
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = IntegrationUpdateV2Schema.parse(body);
@@ -96,7 +94,7 @@ export async function PATCH(
         name: true,
         type: true,
         serviceId: true,
-        status: true,
+        enabled: true,
         createdAt: true,
         updatedAt: true,
         service: { select: { id: true, name: true } },
@@ -105,8 +103,8 @@ export async function PATCH(
 
     await logV2Audit({
       action: 'integration.updated',
-      entityType: 'INTEGRATION',
-      entityId: id,
+      entityType: 'SERVICE',
+      entityId: updated.serviceId,
       actorId: actor.id,
       apiKeyId: apiKey.id,
       details: validated,

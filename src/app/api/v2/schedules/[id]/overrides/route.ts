@@ -11,6 +11,8 @@ import {
   ScheduleOverrideV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { scheduleReadWhere } from '@/lib/authorization-filters';
+import { createScheduleOverrideMutation } from '@/lib/schedules/mutations';
 import { AppError } from '@/lib/errors';
 
 export async function GET(
@@ -23,24 +25,44 @@ export async function GET(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SCHEDULE_READ);
 
     const { id } = await params;
-    const schedule = await prisma.onCallSchedule.findUnique({ where: { id } });
+    const accessWhere = scheduleReadWhere(actor);
+
+    const schedule = await prisma.onCallSchedule.findFirst({
+      where: {
+        AND: [{ id }, accessWhere],
+      },
+      select: { id: true },
+    });
+
     if (!schedule) {
       throw new AppError({
         code: 'SCHEDULE_NOT_FOUND',
-        status: 404,
         userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
 
     const overrides = await prisma.onCallOverride.findMany({
       where: { scheduleId: id },
-      orderBy: { startDate: 'desc' },
-      include: {
+      orderBy: { start: 'desc' },
+      select: {
+        id: true,
+        scheduleId: true,
+        userId: true,
+        replacesUserId: true,
+        start: true,
+        end: true,
+        createdAt: true,
         user: { select: { id: true, name: true, email: true } },
       },
     });
 
-    return apiV2Success(overrides, { headers: rlHeaders });
+    const dto = overrides.map(o => ({
+      ...o,
+      startDate: o.start,
+      endDate: o.end,
+    }));
+
+    return apiV2Success(dto, { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }
@@ -56,55 +78,37 @@ export async function POST(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SCHEDULE_MANAGE);
 
     const { id } = await params;
-    const schedule = await prisma.onCallSchedule.findUnique({ where: { id } });
+    const accessWhere = scheduleReadWhere(actor);
+
+    const schedule = await prisma.onCallSchedule.findFirst({
+      where: {
+        AND: [{ id }, accessWhere],
+      },
+      select: { id: true },
+    });
+
     if (!schedule) {
       throw new AppError({
         code: 'SCHEDULE_NOT_FOUND',
-        status: 404,
         userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({
+        code: 'INVALID_JSON',
+        userMessage: 'Invalid JSON request body.',
+      });
     });
 
     const validated = ScheduleOverrideV2Schema.parse(body);
 
-    const start = new Date(validated.startDate);
-    const end = new Date(validated.endDate);
-
-    if (end <= start) {
-      throw new AppError({
-        code: 'INVALID_TIME_RANGE',
-        status: 400,
-        userMessage: 'Override end date must be strictly after start date.',
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: validated.userId },
-      select: { id: true, status: true },
-    });
-    if (!user || user.status !== 'ACTIVE') {
-      throw new AppError({
-        code: 'USER_NOT_FOUND',
-        status: 400,
-        userMessage: `Override user with id '${validated.userId}' is invalid or inactive.`,
-      });
-    }
-
-    const created = await prisma.onCallOverride.create({
-      data: {
-        scheduleId: id,
-        userId: validated.userId,
-        startDate: start,
-        endDate: end,
-        replacesUserId: validated.replacesUserId ?? null,
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-      },
+    const created = await createScheduleOverrideMutation({
+      scheduleId: id,
+      userId: validated.userId,
+      replacesUserId: validated.replacesUserId ?? null,
+      start: new Date(validated.startDate),
+      end: new Date(validated.endDate),
     });
 
     await logV2Audit({
@@ -116,12 +120,19 @@ export async function POST(
       details: {
         overrideId: created.id,
         userId: created.userId,
-        startDate: created.startDate.toISOString(),
-        endDate: created.endDate.toISOString(),
+        replacesUserId: created.replacesUserId,
+        startDate: created.start.toISOString(),
+        endDate: created.end.toISOString(),
       },
     });
 
-    return apiV2Created(created, { headers: rlHeaders });
+    const dto = {
+      ...created,
+      startDate: created.start,
+      endDate: created.end,
+    };
+
+    return apiV2Created(dto, { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

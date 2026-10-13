@@ -390,12 +390,17 @@ function isResourceInScope(actor: AuthorizationActor, resource: AuthorizationRes
       resource.relatedTeamIds?.some(teamId => teams.has(teamId)) === true
     );
   }
-  if (resource.assigneeId === actor.id || resource.watcherIds?.includes(actor.id)) return true;
-  if (resource.visibility !== 'PUBLIC') return false;
-  return Boolean(
-    (resource.serviceTeamId && teams.has(resource.serviceTeamId)) ||
-    (resource.assignedTeamId && teams.has(resource.assignedTeamId))
-  );
+  if (resource.type === 'team') return Boolean(resource.teamId && teams.has(resource.teamId));
+  if (resource.type === 'status_page') return true;
+  if (resource.type === 'incident') {
+    if (resource.assigneeId === actor.id || resource.watcherIds?.includes(actor.id)) return true;
+    if (resource.visibility !== 'PUBLIC') return false;
+    return Boolean(
+      (resource.serviceTeamId && teams.has(resource.serviceTeamId)) ||
+      (resource.assignedTeamId && teams.has(resource.assignedTeamId))
+    );
+  }
+  return false;
 }
 
 export function authorize<A extends AuthorizationAction>(

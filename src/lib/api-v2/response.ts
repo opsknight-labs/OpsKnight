@@ -70,6 +70,7 @@ export function apiV2Success<T>(
 export function apiV2Created<T>(
   data: T,
   options: {
+    pagination?: ApiV2Pagination;
     headers?: HeadersInit;
     context?: ApiResponseContext;
   } = {}
@@ -78,20 +79,41 @@ export function apiV2Created<T>(
 }
 
 export function apiV2NoContent(
-  options: {
-    headers?: HeadersInit;
-    context?: ApiResponseContext;
-  } = {}
+  optionsOrHeaders?:
+    | HeadersInit
+    | {
+        headers?: HeadersInit;
+        context?: ApiResponseContext;
+      }
 ): NextResponse {
-  const context = options.context ?? createApiResponseContext();
-  const headers = new Headers(options.headers);
-  headers.set('x-request-id', context.requestId);
+  let headersInit: HeadersInit | undefined;
+  let context: ApiResponseContext | undefined;
+
+  if (optionsOrHeaders) {
+    if (
+      typeof optionsOrHeaders === 'object' &&
+      ('headers' in optionsOrHeaders || 'context' in optionsOrHeaders) &&
+      !(optionsOrHeaders instanceof Headers) &&
+      !Array.isArray(optionsOrHeaders)
+    ) {
+      const opts = optionsOrHeaders as { headers?: HeadersInit; context?: ApiResponseContext };
+      headersInit = opts.headers;
+      context = opts.context;
+    } else {
+      headersInit = optionsOrHeaders as HeadersInit;
+    }
+  }
+
+  const ctx = context ?? createApiResponseContext();
+  const headers = new Headers(headersInit);
+  headers.set('x-request-id', ctx.requestId);
 
   return new NextResponse(null, {
     status: 204,
     headers,
   });
 }
+
 
 export function apiV2Error(
   error: unknown,

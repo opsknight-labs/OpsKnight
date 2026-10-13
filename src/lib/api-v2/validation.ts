@@ -29,7 +29,7 @@ export const IncidentCreateV2Schema = z.object({
     .array(
       z.object({
         fieldId: z.string().trim().min(1),
-        value: z.any(),
+        value: z.string(),
       })
     )
     .optional(),
@@ -39,8 +39,11 @@ export const IncidentUpdateV2Schema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(10000).optional().nullable(),
   priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional().nullable(),
-  urgency: z.enum(['HIGH', 'LOW']).optional(),
+  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
+  assigneeId: z.string().trim().nullable().optional(),
 });
+
 
 export const IncidentAcknowledgeV2Schema = z.object({
   note: z.string().trim().max(1000).optional(),
@@ -48,7 +51,9 @@ export const IncidentAcknowledgeV2Schema = z.object({
 
 export const IncidentResolveV2Schema = z.object({
   resolutionNote: z.string().trim().max(2000).optional(),
-  resolutionKind: z.enum(['FIXED', 'FALSE_POSITIVE', 'CANCELLED', 'DUPLICATE', 'WORKAROUND']).optional(),
+  resolutionKind: z
+    .enum(['MANUAL', 'SOURCE_RECOVERY', 'AUTOMATION', 'AUTO_TIMEOUT', 'UNKNOWN'])
+    .optional(),
 });
 
 export const IncidentAssignV2Schema = z.object({
@@ -60,9 +65,17 @@ export const IncidentNoteV2Schema = z.object({
   content: z.string().trim().min(1, 'Note content cannot be empty').max(5000),
 });
 
+export const SERVICE_STATUS_VALUES = [
+  'OPERATIONAL',
+  'DEGRADED',
+  'PARTIAL_OUTAGE',
+  'MAJOR_OUTAGE',
+  'MAINTENANCE',
+] as const;
+
 export const ServiceListQuerySchema = PaginationQuerySchema.extend({
   teamId: z.string().trim().min(1).optional(),
-  status: z.enum(['OPERATIONAL', 'DEGRADED', 'OUTAGE', 'MAINTENANCE']).optional(),
+  status: z.enum(SERVICE_STATUS_VALUES).optional(),
   search: z.string().trim().max(100).optional(),
 });
 
@@ -71,7 +84,7 @@ export const ServiceCreateV2Schema = z.object({
   description: z.string().trim().max(1000).optional().nullable(),
   teamId: z.string().trim().min(1, 'Team ID is required'),
   escalationPolicyId: z.string().trim().min(1, 'Escalation policy ID is required'),
-  status: z.enum(['OPERATIONAL', 'DEGRADED', 'OUTAGE', 'MAINTENANCE']).default('OPERATIONAL'),
+  status: z.enum(SERVICE_STATUS_VALUES).default('OPERATIONAL'),
 });
 
 export const ServiceUpdateV2Schema = z.object({
@@ -79,7 +92,7 @@ export const ServiceUpdateV2Schema = z.object({
   description: z.string().trim().max(1000).optional().nullable(),
   teamId: z.string().trim().min(1).optional(),
   escalationPolicyId: z.string().trim().min(1).optional(),
-  status: z.enum(['OPERATIONAL', 'DEGRADED', 'OUTAGE', 'MAINTENANCE']).optional(),
+  status: z.enum(SERVICE_STATUS_VALUES).optional(),
 });
 
 export const TeamCreateV2Schema = z.object({
@@ -113,21 +126,19 @@ export const ScheduleOverrideV2Schema = z.object({
 
 export const EscalationStepSchema = z.object({
   delayMinutes: z.number().int().min(0).max(1440),
-  targetType: z.enum(['USER', 'SCHEDULE', 'TEAM', 'WEBHOOK']),
+  targetType: z.enum(['USER', 'SCHEDULE', 'TEAM']),
   targetId: z.string().trim().min(1),
 });
 
 export const EscalationPolicyCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(1000).optional().nullable(),
-  repeatCount: z.number().int().min(0).max(10).default(0),
   steps: z.array(EscalationStepSchema).min(1, 'At least one escalation step is required'),
 });
 
 export const EscalationPolicyUpdateV2Schema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
-  repeatCount: z.number().int().min(0).max(10).optional(),
   steps: z.array(EscalationStepSchema).optional(),
 });
 
@@ -154,9 +165,10 @@ export const StatusPageUpdateV2Schema = z.object({
 export const StatusPageAnnouncementV2Schema = z.object({
   title: z.string().trim().min(2).max(200),
   message: z.string().trim().min(1).max(5000),
-  type: z.enum(['INCIDENT', 'MAINTENANCE', 'NOTICE']).default('NOTICE'),
-  status: z.enum(['INVESTIGATING', 'IDENTIFIED', 'MONITORING', 'RESOLVED']).default('INVESTIGATING'),
-  scheduledAt: z.string().datetime().optional().nullable(),
+  type: z.string().trim().default('INFO'),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional().nullable(),
+  isActive: z.boolean().default(true),
   services: z.array(z.string().trim().min(1)).optional(),
 });
 

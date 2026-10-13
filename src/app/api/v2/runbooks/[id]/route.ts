@@ -23,7 +23,6 @@ export async function GET(
     const runbook = await prisma.runbook.findUnique({
       where: { id },
       include: {
-        inputs: { orderBy: { sequence: 'asc' } },
         publishedVersion: true,
       },
     });
@@ -31,7 +30,6 @@ export async function GET(
     if (!runbook || runbook.archivedAt) {
       throw new AppError({
         code: 'RUNBOOK_NOT_FOUND',
-        status: 404,
         userMessage: `Runbook with id '${id}' was not found.`,
       });
     }
@@ -44,14 +42,6 @@ export async function GET(
       slug: runbook.slug,
       description: runbook.description,
       version: runbook.publishedVersion?.version ?? 1,
-      inputs: runbook.inputs.map(input => ({
-        key: input.key,
-        label: input.label,
-        type: input.type,
-        required: input.required,
-        defaultValue: input.defaultValue,
-        description: input.description,
-      })),
       steps,
       createdAt: runbook.createdAt,
       updatedAt: runbook.updatedAt,

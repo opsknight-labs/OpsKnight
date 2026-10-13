@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         name: true,
         type: true,
         serviceId: true,
-        status: true,
+        enabled: true,
         createdAt: true,
         updatedAt: true,
         service: {

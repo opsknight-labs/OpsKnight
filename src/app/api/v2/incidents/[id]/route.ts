@@ -11,7 +11,9 @@ import {
   IncidentUpdateV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
+import { toIncidentApiDto } from '@/lib/incidents/api-dto';
 import { AppError } from '@/lib/errors';
 
 export async function GET(
@@ -24,33 +26,47 @@ export async function GET(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_READ);
 
     const { id } = await params;
-    const incident = await prisma.incident.findUnique({
-      where: { id },
-      include: {
-        service: { select: { id: true, name: true, teamId: true } },
-        watchers: { select: { userId: true } },
+    const accessWhere = incidentReadWhere(actor);
+
+    const incident = await prisma.incident.findFirst({
+      where: {
+        AND: [
+          { id },
+          accessWhere,
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        urgency: true,
+        serviceId: true,
+        service: { select: { id: true, name: true } },
+        assigneeId: true,
         assignee: { select: { id: true, name: true, email: true } },
+        teamId: true,
+        team: { select: { id: true, name: true } },
+        createdAt: true,
+        updatedAt: true,
+        acknowledgedAt: true,
+        resolvedAt: true,
+        snoozedUntil: true,
+        slaPausedMs: true,
+        slaAckElapsedMs: true,
+        slaResolveElapsedMs: true,
       },
     });
 
     if (!incident) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${id}' was not found.`,
       });
     }
 
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_READ, {
-      type: 'incident',
-      assigneeId: incident.assigneeId,
-      watcherIds: incident.watchers.map(w => w.userId),
-      visibility: incident.visibility,
-      serviceTeamId: incident.service.teamId,
-      assignedTeamId: incident.teamId,
-    });
-
-    return apiV2Success(incident, { headers: rlHeaders });
+    return apiV2Success(toIncidentApiDto(incident), { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }
@@ -66,51 +82,71 @@ export async function PATCH(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_MANAGE);
 
     const { id } = await params;
-    const existing = await prisma.incident.findUnique({
-      where: { id },
-      include: {
-        service: { select: { id: true, name: true, teamId: true } },
-        watchers: { select: { userId: true } },
+    const accessWhere = incidentReadWhere(actor);
+
+    const existing = await prisma.incident.findFirst({
+      where: {
+        AND: [
+          { id },
+          accessWhere,
+        ],
+      },
+      select: {
+        id: true,
+        serviceId: true,
+        assigneeId: true,
+        visibility: true,
+        teamId: true,
       },
     });
 
     if (!existing) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
-        status: 404,
         userMessage: `Incident with id '${id}' was not found.`,
       });
     }
 
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_MANAGE, {
-      type: 'incident',
-      assigneeId: existing.assigneeId,
-      watcherIds: existing.watchers.map(w => w.userId),
-      visibility: existing.visibility,
-      serviceTeamId: existing.service.teamId,
-      assignedTeamId: existing.teamId,
-    });
-
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({
+        code: 'INVALID_JSON',
+        userMessage: 'Invalid JSON request body.',
+      });
     });
 
     const validated = IncidentUpdateV2Schema.parse(body);
     const idempotencyKey = req.headers.get('idempotency-key')?.trim();
 
-    const result = await applyRestIncidentPatch({
+    const hasAssigneeUpdate = validated.assigneeId !== undefined;
+    const patchResult = await applyRestIncidentPatch({
       incidentId: id,
-      input: {
-        title: validated.title,
-        description: validated.description,
-        priority: validated.priority,
-        urgency: validated.urgency,
-      },
+      status: validated.status,
+      urgency: validated.urgency,
+      assigneeId: hasAssigneeUpdate ? (validated.assigneeId ?? null) : undefined,
+      hasAssigneeUpdate,
       actor: { id: actor.id },
       idempotency: idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined,
     });
 
-    if (!result.replayed) {
+    let finalIncident = patchResult.incident;
+
+    // Apply metadata updates if title, description, or priority are specified
+    if (
+      (validated.title !== undefined && validated.title !== finalIncident.title) ||
+      (validated.description !== undefined && validated.description !== finalIncident.description) ||
+      (validated.priority !== undefined && validated.priority !== finalIncident.priority)
+    ) {
+      finalIncident = await prisma.incident.update({
+        where: { id },
+        data: {
+          ...(validated.title !== undefined ? { title: validated.title } : {}),
+          ...(validated.description !== undefined ? { description: validated.description } : {}),
+          ...(validated.priority !== undefined ? { priority: validated.priority } : {}),
+        },
+      });
+    }
+
+    if (!patchResult.idempotencyReplayed) {
       await logV2Audit({
         action: 'incident.updated',
         entityType: 'INCIDENT',
@@ -123,10 +159,10 @@ export async function PATCH(
 
     const headers = {
       ...rlHeaders,
-      ...idempotencyResponseHeaders(result.replayed),
+      ...idempotencyResponseHeaders(patchResult.idempotencyReplayed),
     };
 
-    return apiV2Success(result.incident, { headers });
+    return apiV2Success(toIncidentApiDto(finalIncident), { headers });
   } catch (error) {
     return apiV2Error(error, req);
   }

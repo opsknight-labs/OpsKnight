@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
     const pages = await prisma.statusPage.findMany({
       where,
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       select: {
         id: true,
@@ -55,13 +55,12 @@ export async function GET(req: NextRequest) {
         slug: true,
         isDefault: true,
         enabled: true,
-        description: true,
         createdAt: true,
         updatedAt: true,
         _count: {
           select: {
             services: true,
-            subscribers: true,
+            subscriptions: true,
           },
         },
       },
@@ -73,9 +72,8 @@ export async function GET(req: NextRequest) {
       slug: p.slug,
       isDefault: p.isDefault,
       enabled: p.enabled,
-      description: p.description,
       serviceCount: p._count.services,
-      subscriberCount: p._count.subscribers,
+      subscriberCount: p._count.subscriptions,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
     }));
@@ -98,7 +96,7 @@ export async function POST(req: NextRequest) {
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.STATUS_PAGE_MANAGE);
 
     const body = await req.json().catch(() => {
-      throw new AppError({ code: 'INVALID_JSON', status: 400, userMessage: 'Invalid JSON request body.' });
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = StatusPageCreateV2Schema.parse(body);
@@ -124,7 +122,6 @@ export async function POST(req: NextRequest) {
       return apiV2Error(
         new AppError({
           code: error.code,
-          status: error.code === 'STATUS_PAGE_LIMIT_REACHED' ? 403 : 409,
           userMessage: error.message,
         }),
         req

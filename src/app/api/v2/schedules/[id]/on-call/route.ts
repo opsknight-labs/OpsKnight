@@ -29,7 +29,6 @@ export async function GET(
     if (!schedule) {
       throw new AppError({
         code: 'SCHEDULE_NOT_FOUND',
-        status: 404,
         userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
@@ -41,7 +40,6 @@ export async function GET(
     if (Number.isNaN(atTime.getTime())) {
       throw new AppError({
         code: 'INVALID_TIMESTAMP',
-        status: 400,
         userMessage: "Invalid 'at' timestamp query parameter. Provide a valid ISO 8601 date string.",
       });
     }

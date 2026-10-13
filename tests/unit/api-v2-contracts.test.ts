@@ -63,7 +63,7 @@ describe('API v2 Contracts & Security', () => {
 
     const viewerActor: AuthorizationActor = {
       id: 'usr_view',
-      role: 'VIEWER',
+      role: 'USER',
       status: 'ACTIVE',
       teamIds: ['team_1'],
       apiKey: { id: 'key_view', scopes: [API_SCOPES.INCIDENTS_READ] },
