@@ -78,15 +78,15 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
   });
 
   describe('GET /api/v2/integrations cross-team isolation', () => {
-    it('applies serviceReadWhere(actor) filter to prevent viewing other teams integrations', async () => {
+    it('applies integrationReadWhere(actor) filter with only integrations:read scope', async () => {
       currentMockActor = {
         id: 'usr_alpha',
         role: 'USER',
         status: 'ACTIVE',
         teamIds: ['team_alpha'],
-        apiKey: { id: 'key_alpha', scopes: ['integrations:read', 'services:read'] },
+        apiKey: { id: 'key_alpha', scopes: ['integrations:read'] },
       };
-      currentMockApiKey = { id: 'key_alpha', scopes: ['integrations:read', 'services:read'] };
+      currentMockApiKey = { id: 'key_alpha', scopes: ['integrations:read'] };
 
       ((prisma as any).integration.findMany as any).mockResolvedValueOnce([
         {

@@ -57,6 +57,18 @@ describe('API v2 Foundation', () => {
       expect(() => decodeCursor('invalid-cursor-!!!')).toThrowError();
     });
 
+    it('rejects cursors missing signature or with forged signature', () => {
+      const payloadWithoutSig = Buffer.from(
+        JSON.stringify({ id: 'inc_123', createdAt: '2026-10-13T12:00:00.000Z' })
+      ).toString('base64url');
+      expect(() => decodeCursor(payloadWithoutSig)).toThrowError(AppError);
+
+      const payloadWithForgedSig = Buffer.from(
+        JSON.stringify({ id: 'inc_123', createdAt: '2026-10-13T12:00:00.000Z', sig: 'forged_sig' })
+      ).toString('base64url');
+      expect(() => decodeCursor(payloadWithForgedSig)).toThrowError(AppError);
+    });
+
     it('parses valid pagination parameters and clamps limit', () => {
       const params = new URLSearchParams('limit=250&cursor=abc');
       const { limit, cursor } = parsePaginationParams(params);

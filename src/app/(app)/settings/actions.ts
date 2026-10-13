@@ -26,6 +26,12 @@ import {
   isWriteApiScope,
 } from '@/lib/authorization';
 import { getCurrentUser } from '@/lib/rbac';
+import {
+  createServiceAccount,
+  issueServiceAccountToken,
+  revokeServiceAccountToken,
+  deleteServiceAccount,
+} from '@/lib/api-v2/service-accounts';
 
 type ActionState = {
   error?: string | null;
@@ -725,5 +731,107 @@ export async function revokeApiKey(formData: FormData) {
     );
   });
 
+  revalidatePath('/settings/api-keys');
+}
+
+export async function createServiceAccountAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    const user = await getCurrentUser();
+    if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+      return { error: 'Only administrators can create service accounts.' };
+    }
+
+    const name = (formData.get('name') as string | null)?.trim() ?? '';
+    const role = (formData.get('role') as string | null)?.trim() ?? 'USER';
+    const description = (formData.get('description') as string | null)?.trim() || undefined;
+    const teamIds = formData.getAll('teamIds').filter(Boolean) as string[];
+
+    if (!name) {
+      return { error: 'Service account name is required.' };
+    }
+
+    await createServiceAccount({
+      name,
+      role: role as any,
+      description,
+      teamIds: teamIds.length > 0 ? teamIds : undefined,
+      actorId: user.id,
+    });
+
+    revalidatePath('/settings/api-keys');
+    return { success: true, token: null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to create service account.' };
+  }
+}
+
+export async function issueServiceAccountTokenAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    const user = await getCurrentUser();
+    if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+      return { error: 'Only administrators can issue service account tokens.' };
+    }
+
+    const serviceAccountId = (formData.get('serviceAccountId') as string | null)?.trim() ?? '';
+    const name = (formData.get('name') as string | null)?.trim() ?? '';
+    const scopes = formData.getAll('scopes').filter(Boolean) as string[];
+    const expirationDaysParam = formData.get('expirationDays');
+    const expiresInDays = expirationDaysParam ? Number(expirationDaysParam) : undefined;
+
+    if (!serviceAccountId) {
+      return { error: 'Service account ID is required.' };
+    }
+    if (!name) {
+      return { error: 'Token name is required.' };
+    }
+    if (scopes.length === 0) {
+      return { error: 'At least one scope must be selected.' };
+    }
+
+    const result = await issueServiceAccountToken({
+      serviceAccountId,
+      name,
+      scopes,
+      expiresInDays: expiresInDays && expiresInDays > 0 ? expiresInDays : undefined,
+      actorId: user.id,
+    });
+
+    revalidatePath('/settings/api-keys');
+    return { success: true, token: result.token };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to issue token.' };
+  }
+}
+
+export async function revokeServiceAccountTokenAction(formData: FormData) {
+  const serviceAccountId = formData.get('serviceAccountId') as string | null;
+  const tokenId = formData.get('tokenId') as string | null;
+  if (!serviceAccountId || !tokenId) return;
+
+  const user = await getCurrentUser();
+  if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+    throw new Error('Only administrators can revoke service account tokens.');
+  }
+
+  await revokeServiceAccountToken(serviceAccountId, tokenId, user.id);
+  revalidatePath('/settings/api-keys');
+}
+
+export async function deleteServiceAccountAction(formData: FormData) {
+  const serviceAccountId = formData.get('serviceAccountId') as string | null;
+  if (!serviceAccountId) return;
+
+  const user = await getCurrentUser();
+  if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+    throw new Error('Only administrators can delete service accounts.');
+  }
+
+  await deleteServiceAccount(serviceAccountId, user.id);
   revalidatePath('/settings/api-keys');
 }

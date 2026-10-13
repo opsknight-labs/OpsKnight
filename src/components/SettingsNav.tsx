@@ -17,7 +17,11 @@ export default function SettingsNav({ isAdmin = false }: Props) {
       description: 'Personal info, timezone, and notifications',
     },
     { href: '/settings/security', label: 'Security', description: 'Password and sessions' },
-    { href: '/settings/api-keys', label: 'API keys', description: 'Integration credentials' },
+    {
+      href: '/settings/api-keys',
+      label: 'Developer & API Access',
+      description: 'API keys, service accounts, and API v2 explorer',
+    },
     {
       href: '/settings/custom-fields',
       label: 'Custom Fields',

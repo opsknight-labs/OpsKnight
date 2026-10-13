@@ -9,7 +9,7 @@ import {
   logV2Audit,
   StatusPageUpdateV2Schema,
 } from '@/lib/api-v2';
-import { makeDefaultStatusPage, StatusPageAdminError } from '@/lib/status-pages/admin';
+import { StatusPageAdminError } from '@/lib/status-pages/admin';
 import { applyStatusPageConfigurationChange } from '@/lib/status-pages/publish-configuration';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
@@ -83,17 +83,14 @@ export async function PATCH(
 
     const validated = StatusPageUpdateV2Schema.parse(body);
 
-    try {
-      if (validated.isDefault === true && !existing.isDefault) {
-        await makeDefaultStatusPage(id);
-      }
+    const hasChanges =
+      validated.name !== undefined ||
+      validated.slug !== undefined ||
+      validated.enabled !== undefined ||
+      validated.isDefault !== undefined;
 
-      const hasConfigChanges =
-        validated.name !== undefined ||
-        validated.slug !== undefined ||
-        validated.enabled !== undefined;
-
-      if (hasConfigChanges) {
+    if (hasChanges) {
+      try {
         await applyStatusPageConfigurationChange({
           pageId: id,
           actor: { id: actor.id, name: apiKey.name },
@@ -101,17 +98,27 @@ export async function PATCH(
             ...(validated.name !== undefined ? { name: validated.name } : {}),
             ...(validated.slug !== undefined ? { slug: validated.slug } : {}),
             ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
+            ...(validated.isDefault !== undefined ? { isDefault: validated.isDefault } : {}),
+          },
+          transform: async (tx, patchData) => {
+            if (patchData.isDefault === true) {
+              await tx.statusPage.updateMany({
+                where: { isDefault: true, id: { not: id } },
+                data: { isDefault: false },
+              });
+            }
+            return patchData;
           },
         });
+      } catch (err) {
+        if (err instanceof StatusPageAdminError) {
+          throw new AppError({
+            code: err.code,
+            userMessage: err.message,
+          });
+        }
+        throw err;
       }
-    } catch (err) {
-      if (err instanceof StatusPageAdminError) {
-        throw new AppError({
-          code: err.code,
-          userMessage: err.message,
-        });
-      }
-      throw err;
     }
 
     const updated = await prisma.statusPage.findUniqueOrThrow({

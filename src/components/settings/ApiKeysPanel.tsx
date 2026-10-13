@@ -69,6 +69,9 @@ import {
   FileText,
   Layers,
   Calendar,
+  Bot,
+  Shield,
+  Users,
 } from 'lucide-react';
 
 export type ApiKey = {
@@ -110,61 +113,266 @@ function SubmitButton() {
 }
 
 const SCOPES_CONFIG = [
+  // Events
   {
     value: 'events:write',
     title: 'Events Ingestion',
     detail: 'Send incoming alert payloads, webhooks, and telemetry',
     icon: Send,
-    color: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-    defaultChecked: true,
+    category: 'Events',
+    write: true,
   },
+  // Incidents
   {
     value: 'incidents:read',
     title: 'Incidents Read',
     detail: 'Query active and historical incident states and timelines',
     icon: FileText,
-    color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-    defaultChecked: true,
+    category: 'Incidents',
+    write: false,
   },
   {
     value: 'incidents:write',
-    title: 'Incidents Write',
+    title: 'Incidents Manage',
     detail: 'Acknowledge, resolve, update severity, and add timeline notes',
     icon: Radio,
-    color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-    defaultChecked: false,
+    category: 'Incidents',
+    write: true,
   },
+  // Services
   {
     value: 'services:read',
     title: 'Services Read',
     detail: 'Query service catalog definitions and dependencies',
     icon: Layers,
-    color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-    defaultChecked: false,
+    category: 'Services',
+    write: false,
   },
+  {
+    value: 'services:write',
+    title: 'Services Manage',
+    detail: 'Create, update, and manage services',
+    icon: Layers,
+    category: 'Services',
+    write: true,
+  },
+  // Schedules
   {
     value: 'schedules:read',
     title: 'Schedules Read',
     detail: 'Query on-call rotations, active shifts, and responder escalation',
     icon: Calendar,
-    color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
-    defaultChecked: false,
+    category: 'Schedules',
+    write: false,
+  },
+  {
+    value: 'schedules:write',
+    title: 'Schedules Manage',
+    detail: 'Create and update rotations and schedule overrides',
+    icon: Calendar,
+    category: 'Schedules',
+    write: true,
+  },
+  // Teams
+  {
+    value: 'teams:read',
+    title: 'Teams Read',
+    detail: 'Query team memberships and assigned services',
+    icon: Users,
+    category: 'Teams',
+    write: false,
+  },
+  {
+    value: 'teams:write',
+    title: 'Teams Manage',
+    detail: 'Create and update teams and team memberships',
+    icon: Users,
+    category: 'Teams',
+    write: true,
+  },
+  // Users
+  {
+    value: 'users:read',
+    title: 'Users Read',
+    detail: 'Query organization users and directory details',
+    icon: Users,
+    category: 'Users',
+    write: false,
+  },
+  {
+    value: 'users:write',
+    title: 'Users Manage',
+    detail: 'Manage user profiles and roles',
+    icon: Users,
+    category: 'Users',
+    write: true,
+  },
+  // Escalation Policies
+  {
+    value: 'escalation-policies:read',
+    title: 'Escalation Policies Read',
+    detail: 'Inspect escalation policy rules and responder chains',
+    icon: ShieldAlert,
+    category: 'Escalations',
+    write: false,
+  },
+  {
+    value: 'escalation-policies:write',
+    title: 'Escalation Policies Manage',
+    detail: 'Create and update escalation policies',
+    icon: ShieldAlert,
+    category: 'Escalations',
+    write: true,
+  },
+  // Integrations
+  {
+    value: 'integrations:read',
+    title: 'Integrations Read',
+    detail: 'View active inbound and outbound integration status',
+    icon: Code2,
+    category: 'Integrations',
+    write: false,
+  },
+  {
+    value: 'integrations:write',
+    title: 'Integrations Manage',
+    detail: 'Manage integrations and webhook targets',
+    icon: Code2,
+    category: 'Integrations',
+    write: true,
+  },
+  // Notifications
+  {
+    value: 'notifications:read',
+    title: 'Notifications Read',
+    detail: 'Query notification delivery logs and alert history',
+    icon: Send,
+    category: 'Notifications',
+    write: false,
+  },
+  {
+    value: 'notifications:write',
+    title: 'Notifications Retry',
+    detail: 'Retry pending or failed notifications',
+    icon: Send,
+    category: 'Notifications',
+    write: true,
+  },
+  // Status Pages
+  {
+    value: 'status-pages:read',
+    title: 'Status Pages Read',
+    detail: 'Query public status page configurations and components',
+    icon: FileText,
+    category: 'Status Pages',
+    write: false,
+  },
+  {
+    value: 'status-pages:write',
+    title: 'Status Pages Manage',
+    detail: 'Update status pages, publish announcements and maintenance',
+    icon: FileText,
+    category: 'Status Pages',
+    write: true,
+  },
+  // Runbooks
+  {
+    value: 'runbooks:read',
+    title: 'Runbooks Read',
+    detail: 'Inspect automated remediation runbook definitions',
+    icon: Terminal,
+    category: 'Runbooks',
+    write: false,
+  },
+  {
+    value: 'runbooks:execute',
+    title: 'Runbooks Execute',
+    detail: 'Execute automated runbooks with parameter validation',
+    icon: Terminal,
+    category: 'Runbooks',
+    write: true,
+  },
+  {
+    value: 'runbooks:write',
+    title: 'Runbooks Manage',
+    detail: 'Create, edit, and publish runbooks',
+    icon: Terminal,
+    category: 'Runbooks',
+    write: true,
+  },
+  // Governance & Analytics
+  {
+    value: 'audit:read',
+    title: 'Audit Logs Read',
+    detail: 'Query tamper-evident audit logs and security events',
+    icon: Shield,
+    category: 'Governance',
+    write: false,
+  },
+  {
+    value: 'reports:read',
+    title: 'Reports & Metrics',
+    detail: 'Retrieve SLA metrics, MTTR, MTTD, and analytics',
+    icon: Clock,
+    category: 'Governance',
+    write: false,
+  },
+  {
+    value: 'postmortems:read',
+    title: 'Postmortems Read',
+    detail: 'View incident retrospectives and root cause analyses',
+    icon: FileText,
+    category: 'Governance',
+    write: false,
+  },
+  {
+    value: 'postmortems:write',
+    title: 'Postmortems Manage',
+    detail: 'Create and update postmortem documents',
+    icon: FileText,
+    category: 'Governance',
+    write: true,
+  },
+  // Admin & Response Policy
+  {
+    value: 'service-accounts:read',
+    title: 'Service Accounts Read',
+    detail: 'Query machine identities and active tokens',
+    icon: Bot,
+    category: 'Administration',
+    write: false,
+  },
+  {
+    value: 'service-accounts:write',
+    title: 'Service Accounts Manage',
+    detail: 'Create service accounts and issue tokens',
+    icon: Bot,
+    category: 'Administration',
+    write: true,
   },
   {
     value: 'response-policy:read',
     title: 'Response Policy Read',
-    detail: 'Preview and inspect classification, SLA, support-hours, and policy history',
+    detail: 'Inspect response policy classifications and SLAs',
     icon: ShieldAlert,
-    color: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
-    defaultChecked: false,
+    category: 'Administration',
+    write: false,
   },
   {
     value: 'response-policy:write',
     title: 'Response Policy Write',
     detail: 'Publish and restore response-policy versions',
     icon: ShieldAlert,
-    color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
-    defaultChecked: false,
+    category: 'Administration',
+    write: true,
+  },
+  {
+    value: 'admin:manage',
+    title: 'Full Workspace Admin',
+    detail: 'Full administrative access across all OpsKnight endpoints',
+    icon: Shield,
+    category: 'Administration',
+    write: true,
   },
 ];
 
@@ -193,7 +401,38 @@ export default function ApiKeysPanel({
 
   const visibleScopes = canCreateWriteKeys
     ? SCOPES_CONFIG
-    : SCOPES_CONFIG.filter(scope => !scope.value.endsWith(':write'));
+    : SCOPES_CONFIG.filter(scope => !scope.write);
+
+  const [selectedKeyScopes, setSelectedKeyScopes] = useState<Set<string>>(
+    new Set(['events:write', 'incidents:read'])
+  );
+
+  const applyKeyPreset = (type: 'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'CLEAR') => {
+    if (type === 'CLEAR') {
+      setSelectedKeyScopes(new Set());
+    } else if (type === 'ADMIN') {
+      setSelectedKeyScopes(new Set(visibleScopes.map(s => s.value)));
+    } else if (type === 'RESPONDER') {
+      setSelectedKeyScopes(
+        new Set(
+          [
+            'events:write',
+            'incidents:read',
+            'incidents:write',
+            'services:read',
+            'schedules:read',
+            'runbooks:read',
+            'runbooks:execute',
+            'notifications:read',
+            'teams:read',
+            'users:read',
+          ].filter(s => visibleScopes.some(v => v.value === s))
+        )
+      );
+    } else if (type === 'READ_ONLY') {
+      setSelectedKeyScopes(new Set(visibleScopes.filter(s => !s.write).map(s => s.value)));
+    }
+  };
 
   const handleRevoke = async (keyId: string) => {
     setIsRevoking(true);
@@ -766,32 +1005,89 @@ print(response.json()["incidents"])`}
 
             {/* Granular Permission Scopes */}
             <div className="space-y-2.5 rounded-xl border border-border/80 bg-muted/20 p-3.5">
-              <div>
-                <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
-                <p className="text-[11px] text-muted-foreground">
-                  Select only the scopes required for this automation (least privilege principle).
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Selected: {selectedKeyScopes.size} of {visibleScopes.length} scopes (least privilege principle).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {canCreateWriteKeys && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyKeyPreset('ADMIN')}
+                      className="h-7 text-[10px] px-2"
+                    >
+                      Admin Full
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyKeyPreset('RESPONDER')}
+                    className="h-7 text-[10px] px-2"
+                  >
+                    Responder
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyKeyPreset('READ_ONLY')}
+                    className="h-7 text-[10px] px-2"
+                  >
+                    Read-Only
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => applyKeyPreset('CLEAR')}
+                    className="h-7 text-[10px] px-2"
+                  >
+                    Clear
+                  </Button>
+                </div>
               </div>
 
-              <div className="grid min-w-0 gap-2.5 xl:grid-cols-2">
+              {/* Hidden inputs to guarantee all selected scopes are sent with formData */}
+              {Array.from(selectedKeyScopes).map(sc => (
+                <input key={sc} type="hidden" name="scopes" value={sc} />
+              ))}
+
+              <div className="grid min-w-0 gap-2 sm:grid-cols-2 max-h-72 overflow-y-auto pr-1">
                 {visibleScopes.map(scope => {
                   const Icon = scope.icon;
+                  const isChecked = selectedKeyScopes.has(scope.value);
                   return (
                     <div
                       key={scope.value}
-                      className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-border/80 bg-background p-3.5 text-xs transition-all hover:border-primary/40 hover:bg-accent/30"
+                      onClick={() => {
+                        setSelectedKeyScopes(prev => {
+                          const next = new Set(prev);
+                          if (next.has(scope.value)) next.delete(scope.value);
+                          else next.add(scope.value);
+                          return next;
+                        });
+                      }}
+                      className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border p-3 text-xs cursor-pointer transition-all ${
+                        isChecked
+                          ? 'border-primary/50 bg-primary/5'
+                          : 'border-border/80 bg-background hover:border-primary/40'
+                      }`}
                     >
                       <Checkbox
-                        name="scopes"
-                        value={scope.value}
-                        defaultChecked={scope.defaultChecked}
+                        checked={isChecked}
                         id={`scope-${scope.value}`}
                         className="mt-0.5 shrink-0"
+                        onCheckedChange={() => {}}
                       />
-                      <label
-                        htmlFor={`scope-${scope.value}`}
-                        className="grid min-w-0 cursor-pointer gap-2 sm:grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.35fr)_auto] sm:items-center"
-                      >
+                      <div className="grid min-w-0 cursor-pointer gap-1 sm:grid-cols-[minmax(8rem,0.8fr)_minmax(0,1.4fr)_auto] sm:items-center">
                         <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
                           <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
@@ -802,7 +1098,7 @@ print(response.json()["incidents"])`}
                         <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
                           {scope.value}
                         </code>
-                      </label>
+                      </div>
                     </div>
                   );
                 })}

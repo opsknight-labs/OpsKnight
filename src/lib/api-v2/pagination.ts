@@ -53,14 +53,18 @@ export function decodeCursor(cursorString: string): ApiV2CursorPayload {
       typeof parsed.createdAt === 'string' &&
       !Number.isNaN(new Date(parsed.createdAt).getTime())
     ) {
-      if (typeof parsed.sig === 'string') {
-        const expectedSig = cursorSignature({ id: parsed.id, createdAt: parsed.createdAt });
-        if (parsed.sig !== expectedSig) {
-          throw new AppError({
-            code: 'INVALID_PAGINATION_CURSOR',
-            userMessage: 'The provided pagination cursor signature is invalid or has been modified.',
-          });
-        }
+      if (typeof parsed.sig !== 'string') {
+        throw new AppError({
+          code: 'INVALID_PAGINATION_CURSOR',
+          userMessage: 'The provided pagination cursor is missing a valid signature.',
+        });
+      }
+      const expectedSig = cursorSignature({ id: parsed.id, createdAt: parsed.createdAt });
+      if (parsed.sig !== expectedSig) {
+        throw new AppError({
+          code: 'INVALID_PAGINATION_CURSOR',
+          userMessage: 'The provided pagination cursor signature is invalid or has been modified.',
+        });
       }
       return { id: parsed.id, createdAt: parsed.createdAt };
     }

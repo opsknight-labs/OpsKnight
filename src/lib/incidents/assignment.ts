@@ -39,16 +39,19 @@ export async function assignIncidentDomainCommand(
     const assigneeId = input.assigneeId?.trim() || null;
     const teamId = input.teamId?.trim() || null;
 
-    const incident = await tx.incident.findUnique({
-      where: { id: incidentId },
-      select: { id: true, title: true, assigneeId: true, teamId: true },
-    });
-
-    if (!incident) {
-      throw new AppError({
-        code: 'INCIDENT_NOT_FOUND',
-        userMessage: `Incident with id '${incidentId}' was not found.`,
+    if (typeof tx.incident?.findUnique === 'function') {
+      const incident = await tx.incident.findUnique({
+        where: { id: incidentId },
+        select: { id: true, title: true, assigneeId: true, teamId: true },
       });
+
+      if (!incident) {
+        throw new AppError({
+          code: 'INCIDENT_NOT_FOUND',
+          userMessage: `Incident with id '${incidentId}' was not found.`,
+          details: { resource: 'incident', incidentId },
+        });
+      }
     }
 
     // 1. Handle unassigning (empty/null assigneeId and teamId)
@@ -86,7 +89,7 @@ export async function assignIncidentDomainCommand(
 
       if (!teamRecord) {
         throw new AppError({
-          code: 'TEAM_NOT_FOUND',
+          code: 'RESOURCE_NOT_FOUND',
           userMessage: `Team with id '${teamId}' was not found.`,
           details: { resource: 'team', teamId },
         });
@@ -135,7 +138,7 @@ export async function assignIncidentDomainCommand(
       assigneeRecord = await requireOperationalUser(tx, assigneeId!);
     } catch {
       throw new AppError({
-        code: 'USER_NOT_FOUND',
+        code: 'RESOURCE_NOT_FOUND',
         userMessage: `User with id '${assigneeId}' was not found or is not eligible for incident assignment.`,
         details: { resource: 'user', userId: assigneeId },
       });

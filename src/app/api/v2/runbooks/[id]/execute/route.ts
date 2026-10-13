@@ -35,22 +35,28 @@ export const POST = defineV2Route<{ id: string }, any, z.infer<typeof RunbookExe
     }
 
     // 1. Preview execution boundary and generate authorized execution plan
-    const preview = await previewRunbookExecution({
-      runbookId: id,
-      incidentId: body.incidentId ?? undefined,
-      triggeredByUserId: actor.id,
-      inputValues: body.parameters,
-    });
+    const preview = await previewRunbookExecution(
+      {
+        runbookId: id,
+        incidentId: body.incidentId ?? undefined,
+        triggeredByUserId: actor.id,
+        inputValues: body.parameters,
+      },
+      tx
+    );
 
     // 2. Start asynchronous execution with preflight digest & preview token
-    const execution = await startRunbookExecution({
-      runbookId: id,
-      incidentId: body.incidentId ?? undefined,
-      triggeredByUserId: actor.id,
-      inputValues: body.parameters,
-      expectedPlanDigest: preview.digest,
-      previewAuthorizationToken: preview.authorizationToken,
-    });
+    const execution = await startRunbookExecution(
+      {
+        runbookId: id,
+        incidentId: body.incidentId ?? undefined,
+        triggeredByUserId: actor.id,
+        inputValues: body.parameters,
+        expectedPlanDigest: preview.digest,
+        previewAuthorizationToken: preview.authorizationToken,
+      },
+      tx
+    );
 
     await logV2Audit({
       action: 'runbook.execution_started',

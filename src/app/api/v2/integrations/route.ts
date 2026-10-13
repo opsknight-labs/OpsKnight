@@ -11,7 +11,7 @@ import {
   parsePaginationParams,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { integrationReadWhere } from '@/lib/authorization-filters';
 import type { Prisma } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get('type')?.trim();
 
     const filters: Prisma.IntegrationWhereInput[] = [
-      { service: serviceReadWhere(actor) },
+      integrationReadWhere(actor),
     ];
     if (serviceId) filters.push({ serviceId });
     if (type) filters.push({ type });

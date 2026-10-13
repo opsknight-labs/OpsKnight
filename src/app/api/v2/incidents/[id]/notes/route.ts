@@ -7,12 +7,15 @@ import {
   authenticateV2Request,
   enforceV2Authorization,
   enforceV2RateLimit,
+  idempotencyResponseHeaders,
   logV2Audit,
+  runV2IdempotentMutation,
   IncidentNoteV2Schema,
 } from '@/lib/api-v2';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(
   req: NextRequest,
@@ -76,52 +79,74 @@ export async function POST(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_NOTE);
 
     const { id } = await params;
-    const incident = await prisma.incident.findUnique({
-      where: { id },
-      include: {
-        service: { select: { id: true, name: true, teamId: true } },
-        watchers: { select: { userId: true } },
-      },
-    });
-
-    if (!incident) {
-      throw new AppError({
-        code: 'INCIDENT_NOT_FOUND',
-        userMessage: `Incident with id '${id}' was not found.`,
-      });
-    }
-
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_NOTE, {
-      type: 'incident',
-      assigneeId: incident.assigneeId,
-      watcherIds: incident.watchers.map(w => w.userId),
-      visibility: incident.visibility,
-      serviceTeamId: incident.service.teamId,
-      assignedTeamId: incident.teamId,
-    });
-
     const body = await req.json().catch(() => {
       throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
     });
 
     const validated = IncidentNoteV2Schema.parse(body);
 
-    const note = await addIncidentNoteDomainCommand({
-      incidentId: id,
-      content: validated.content,
-      actor: { id: actor.id, name: apiKey.name },
-    });
+    const execution = await runV2IdempotentMutation(
+      req,
+      apiKey.id,
+      `incident:note:${id}`,
+      validated,
+      async (tx: Prisma.TransactionClient) => {
+        const incident = await tx.incident.findUnique({
+          where: { id },
+          include: {
+            service: { select: { id: true, name: true, teamId: true } },
+            watchers: { select: { userId: true } },
+          },
+        });
 
-    await logV2Audit({
-      action: 'incident.note_added',
-      entityType: 'INCIDENT',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { noteId: note.id },
-    });
+        if (!incident) {
+          throw new AppError({
+            code: 'INCIDENT_NOT_FOUND',
+            userMessage: `Incident with id '${id}' was not found.`,
+          });
+        }
 
-    return apiV2Created(note, { headers: rlHeaders });
+        enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_NOTE, {
+          type: 'incident',
+          assigneeId: incident.assigneeId,
+          watcherIds: incident.watchers.map((w: { userId: string }) => w.userId),
+          visibility: incident.visibility,
+          serviceTeamId: incident.service.teamId,
+          assignedTeamId: incident.teamId,
+        });
+
+        const note = await addIncidentNoteDomainCommand(
+          {
+            incidentId: id,
+            content: validated.content,
+            actor: { id: actor.id, name: apiKey.name },
+          },
+          tx
+        );
+
+        return note;
+      }
+    );
+
+    const note = execution.value;
+
+    if (!execution.replayed) {
+      await logV2Audit({
+        action: 'incident.note_added',
+        entityType: 'INCIDENT',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { noteId: note.id },
+      });
+    }
+
+    return apiV2Created(note, {
+      headers: {
+        ...rlHeaders,
+        ...idempotencyResponseHeaders(execution.replayed),
+      },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
