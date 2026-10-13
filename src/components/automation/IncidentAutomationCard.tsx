@@ -71,6 +71,7 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
       <IncidentAlertContextCard
         fields={fields}
         context={context}
+        receivedContext={summary.inputContext}
         versionNumber={decision.version?.versionNumber}
         sensitive={sensitive}
         omitted={!!summary.diagnosticsOmitted || !!summary.omittedValues?.length}

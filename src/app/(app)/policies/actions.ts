@@ -707,9 +707,22 @@ export async function setPolicyArchived(policyId: string, archived: boolean) {
   z.object({ policyId: z.string().min(1).max(100), archived: z.boolean() })
     .strict()
     .parse({ policyId, archived });
-  await transitionPolicyArchive(policyId, actor.id, archived);
+  try {
+    await transitionPolicyArchive(policyId, actor.id, archived);
+  } catch (error) {
+    revalidatePath(`/policies/${policyId}`);
+    revalidatePath(`/m/policies/${policyId}`);
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Policy transition failed. Refresh dependencies and try again.',
+    };
+  }
   revalidatePath(`/policies/${policyId}`);
   revalidatePath('/policies');
   revalidatePath(`/m/policies/${policyId}`);
   revalidatePath('/m/policies');
+  return { ok: true as const };
 }

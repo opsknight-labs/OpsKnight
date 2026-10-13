@@ -90,6 +90,7 @@ async function getIncidents(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     take: limit,
     include: {
+      automationTraces: { select: { incidentId: true }, take: 1 },
       automationDecision: { select: { incidentId: true } },
       service: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },

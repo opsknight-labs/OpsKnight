@@ -53,6 +53,13 @@ export function RuleActionsEditor({
             onChange={next => onChange([next, ...supplemental])}
             onRemove={() => undefined}
           />
+          {route.type === 'NO_ESCALATION' && (
+            <p className="text-sm text-muted-foreground">
+              No escalation stops personal paging only. Ordinary service and integration
+              notifications still apply. Disable those separately if this rule should notify only
+              its selected channels.
+            </p>
+          )}
           {!policies.length && (
             <p className="text-sm text-muted-foreground">
               No escalation policies available.{' '}

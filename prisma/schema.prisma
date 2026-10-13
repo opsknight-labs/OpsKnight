@@ -3931,6 +3931,7 @@ model AutomationVersionPolicyRef {
   versionId          String
   escalationPolicyId String
   policyNameSnapshot String
+  ruleReferences     Json @default("[]")
   version            AutomationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
   @@id([versionId, escalationPolicyId])

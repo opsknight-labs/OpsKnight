@@ -66,7 +66,16 @@ export default async function IncidentDetailScreen({
   const storedIncident = await prisma.incident.findUnique({
     where: { id },
     include: {
-      automationDecision: { select: { incidentId: true } },
+      automationTraces: { select: { incidentId: true }, take: 1 },
+      automationDecision: {
+        select: {
+          incidentId: true,
+          mode: true,
+          routeType: true,
+          escalationPolicyId: true,
+          escalationPolicyNameSnapshot: true,
+        },
+      },
       service: {
         include: {
           policy: true,
@@ -109,8 +118,24 @@ export default async function IncidentDetailScreen({
   if (!storedIncident) notFound();
   const permissions = await getUserPermissions();
   const sensitive = permissions.capabilities.includes(CAPABILITIES.INCIDENT_SENSITIVE_READ);
-  const sourceRestricted = !!storedIncident.automationDecision && !sensitive;
-  const incident = visibleIncidentSource(storedIncident, sensitive);
+  const sourceRestricted =
+    (!!storedIncident.automationDecision || storedIncident.automationTraces.length > 0) &&
+    !sensitive;
+  const decision = storedIncident.automationDecision;
+  const incidentPolicy =
+    decision?.mode === 'LIVE'
+      ? decision.escalationPolicyId
+        ? {
+            id: decision.escalationPolicyId,
+            name: decision.escalationPolicyNameSnapshot ?? 'Pinned policy',
+          }
+        : null
+      : storedIncident.service.policy;
+  const incident = {
+    ...visibleIncidentSource(storedIncident, sensitive),
+    incidentPolicy,
+    noEscalation: decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION',
+  };
   const incidentSla = projectIncidentSlaState(incident, { now: new Date() });
   const canReadRunbooks =
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL) ||
@@ -288,6 +313,9 @@ export default async function IncidentDetailScreen({
   const quickLinksContent = (
     <IncidentQuickLinksCard
       incidentId={incident.id}
+      incidentPolicy={incidentPolicy}
+      pinnedPolicy={decision?.mode === 'LIVE'}
+      noEscalation={decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION'}
       service={{
         id: incident.service.id,
         name: incident.service.name,

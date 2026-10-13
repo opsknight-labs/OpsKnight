@@ -27,188 +27,221 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('supported ingestion displays pinned context and intentional paging suppression', async ({
-  page,
-}, testInfo) => {
-  const csrf = await (await page.request.get('/api/auth/csrf')).json();
-  await page.request.post('/api/auth/callback/credentials', {
-    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
-  });
-  const service = await db.service.create({ data: { name: `Context journey ${randomUUID()}` } });
-  const integration = await db.integration.create({
-    data: {
-      serviceId: service.id,
-      name: 'Context journey',
-      key: randomUUID(),
-      type: 'EVENTS_API_V2',
-    },
-  });
-  const slack = await db.slackDestination.create({
-    data: {
-      serviceId: service.id,
-      workspaceId: `browser-${randomUUID()}`,
-      channelId: 'C_BROWSER_CERT',
-      channelName: 'Browser certification',
-      enabled: true,
-    },
-  });
-  const snapshot = {
-    schemaVersion: 1 as const,
-    fields: Array.from({ length: 7 }, (_, i) => ({
-      fieldId: `context-${i}`,
-      key: `context_${i}`,
-      label: `Captured field ${i}`,
-      type: 'STRING' as const,
-      caseSensitive: false,
-      aliases: {},
-      mappings: [{ source: 'EVENT' as const, path: `payload.custom_details.context_${i}` }],
-    })),
-    rules: [
-      {
-        id: 'priority',
-        name: 'Low impact',
-        phase: 'ENRICH' as const,
-        enabled: true,
-        conditions: [],
-        actions: [{ type: 'SET_PRIORITY' as const, value: 'P3' as const }],
+for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
+  test(`supported ${notificationCase} ingestion displays pinned context and intentional paging suppression`, async ({
+    page,
+  }, testInfo) => {
+    const csrf = await (await page.request.get('/api/auth/csrf')).json();
+    await page.request.post('/api/auth/callback/credentials', {
+      form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+    });
+    const service = await db.service.create({ data: { name: `Context journey ${randomUUID()}` } });
+    const integration = await db.integration.create({
+      data: {
+        serviceId: service.id,
+        name: 'Context journey',
+        key: randomUUID(),
+        type: 'EVENTS_API_V2',
       },
-      {
-        id: 'quiet',
-        name: 'Skip personal paging',
-        phase: 'ROUTE' as const,
+    });
+    const slack = await db.slackDestination.create({
+      data: {
+        serviceId: service.id,
+        workspaceId: `browser-${randomUUID()}`,
+        channelId: 'C_BROWSER_CERT',
+        channelName: 'Browser certification',
         enabled: true,
-        conditions: [{ fieldKey: 'priority', operator: 'EQ' as const, value: 'P3' }],
-        actions: [
-          { type: 'NO_ESCALATION' as const },
-          {
-            type: 'NOTIFY_CHANNEL' as const,
-            provider: 'SLACK' as const,
-            destinationId: slack.id,
+      },
+    });
+    const teams = await db.microsoftTeamsDestination.create({
+      data: {
+        serviceId: service.id,
+        tenantId: randomUUID(),
+        teamId: randomUUID(),
+        channelId: randomUUID(),
+        channelName: 'Conditional Teams browser channel',
+      },
+    });
+    const snapshot = {
+      schemaVersion: 1 as const,
+      fields: Array.from({ length: 7 }, (_, i) => ({
+        fieldId: `context-${i}`,
+        key: `context_${i}`,
+        label: `Captured field ${i}`,
+        type: 'STRING' as const,
+        caseSensitive: false,
+        aliases: {},
+        mappings: [{ source: 'EVENT' as const, path: `payload.custom_details.context_${i}` }],
+      })),
+      rules: [
+        {
+          id: 'priority',
+          name: 'Low impact',
+          phase: 'ENRICH' as const,
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'SET_PRIORITY' as const, value: 'P3' as const }],
+        },
+        {
+          id: 'quiet',
+          name: 'Skip personal paging',
+          phase: 'ROUTE' as const,
+          enabled: true,
+          conditions: [{ fieldKey: 'priority', operator: 'EQ' as const, value: 'P3' }],
+          actions: [
+            { type: 'NO_ESCALATION' as const },
+            ...(notificationCase === 'BOTH'
+              ? [
+                  {
+                    type: 'NOTIFY_CHANNEL' as const,
+                    provider: 'TEAMS' as const,
+                    destinationId: teams.id,
+                  },
+                ]
+              : []),
+            {
+              type: 'NOTIFY_CHANNEL' as const,
+              provider: notificationCase === 'TEAMS' ? ('TEAMS' as const) : ('SLACK' as const),
+              destinationId: notificationCase === 'TEAMS' ? teams.id : slack.id,
+            },
+          ],
+        },
+      ],
+    };
+    const { compiled, issues } = compileAutomation(snapshot);
+    expect(issues.filter(issue => issue.level === 'ERROR')).toHaveLength(0);
+    const version = await db.automationVersion.create({
+      data: {
+        serviceId: service.id,
+        versionNumber: 1,
+        snapshot,
+        compiledSnapshot: compiled,
+        checksum: checksum(compiled),
+        lintReport: [],
+        publishedBy: 'browser-fixture',
+      },
+    });
+    await db.serviceAutomationConfig.create({
+      data: { serviceId: service.id, activeVersionId: version.id, mode: 'LIVE' },
+    });
+    await db.systemSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', automationEnabled: true },
+      update: { automationEnabled: true },
+    });
+    const dedupKey = randomUUID();
+    const ingestion = await page.request.post('/api/events', {
+      headers: { Authorization: `Token token=${integration.key}` },
+      data: {
+        event_action: 'trigger',
+        dedup_key: dedupKey,
+        payload: {
+          summary: 'Customer ABC123 captured context browser journey',
+          source: 'browser-certification',
+          severity: 'critical',
+          custom_details: {
+            context_0: 'PRODUCTION',
+            context_1: '<script>alert(1)</script>',
+            context_2: 'x'.repeat(1200),
+            context_6: 'Historical evidence',
           },
-        ],
-      },
-    ],
-  };
-  const { compiled, issues } = compileAutomation(snapshot);
-  expect(issues.filter(issue => issue.level === 'ERROR')).toHaveLength(0);
-  const version = await db.automationVersion.create({
-    data: {
-      serviceId: service.id,
-      versionNumber: 1,
-      snapshot,
-      compiledSnapshot: compiled,
-      checksum: checksum(compiled),
-      lintReport: [],
-      publishedBy: 'browser-fixture',
-    },
-  });
-  await db.serviceAutomationConfig.create({
-    data: { serviceId: service.id, activeVersionId: version.id, mode: 'LIVE' },
-  });
-  await db.systemSettings.upsert({
-    where: { id: 'default' },
-    create: { id: 'default', automationEnabled: true },
-    update: { automationEnabled: true },
-  });
-  const dedupKey = randomUUID();
-  const ingestion = await page.request.post('/api/events', {
-    headers: { Authorization: `Token token=${integration.key}` },
-    data: {
-      event_action: 'trigger',
-      dedup_key: dedupKey,
-      payload: {
-        summary: 'Captured context browser journey',
-        source: 'browser-certification',
-        severity: 'critical',
-        custom_details: {
-          context_0: 'PRODUCTION',
-          context_1: '<script>alert(1)</script>',
-          context_2: 'x'.repeat(1200),
-          context_6: 'Historical evidence',
         },
       },
-    },
-  });
-  expect(ingestion.status()).toBe(202);
-  const accepted = (await ingestion.json()) as {
-    data: { result: { action: string; incident: { id: string } } };
-  };
-  expect(accepted.data.result.action).toBe('triggered');
-  const incident = await db.incident.findUniqueOrThrow({
-    where: { id: accepted.data.result.incident.id },
-  });
-  expect(incident.serviceId).toBe(service.id);
-  expect(incident.priority).toBe('P3');
-  expect(
-    (await db.incidentAutomationDecision.findUniqueOrThrow({ where: { incidentId: incident.id } }))
-      .routeType
-  ).toBe('NO_ESCALATION');
-  expect(
-    await db.backgroundJob.count({
-      where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
-    })
-  ).toBe(0);
-  await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
-  await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
-  await expect(
-    page.getByText('production', { exact: true }).filter({ visible: true })
-  ).toBeVisible();
-  await expect(
-    page.getByText('Personal paging intentionally skipped', { exact: false })
-  ).toBeVisible();
-  expect(
-    await db.notification.count({
-      where: {
-        incidentId: incident.id,
-        channel: 'SLACK',
-        sourceType: 'AUTOMATION',
-        status: 'PENDING',
+    });
+    expect(ingestion.status()).toBe(202);
+    const accepted = (await ingestion.json()) as {
+      data: { result: { action: string; incident: { id: string } } };
+    };
+    expect(accepted.data.result.action).toBe('triggered');
+    const incident = await db.incident.findUniqueOrThrow({
+      where: { id: accepted.data.result.incident.id },
+    });
+    expect(incident.serviceId).toBe(service.id);
+    expect(incident.priority).toBe('P3');
+    expect(
+      (
+        await db.incidentAutomationDecision.findUniqueOrThrow({
+          where: { incidentId: incident.id },
+        })
+      ).routeType
+    ).toBe('NO_ESCALATION');
+    expect(
+      await db.backgroundJob.count({
+        where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
+      })
+    ).toBe(0);
+    await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+    await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
+    await expect(
+      page.getByText('production', { exact: true }).filter({ visible: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText('Personal paging intentionally skipped', { exact: false })
+    ).toBeVisible();
+    expect(
+      await db.notification.count({
+        where: {
+          incidentId: incident.id,
+          channel: 'SLACK',
+          sourceType: 'AUTOMATION',
+          status: 'PENDING',
+        },
+      })
+    ).toBe(notificationCase === 'TEAMS' ? 0 : 1);
+    if (notificationCase !== 'SLACK') {
+      const operation = await db.externalOperation.findFirstOrThrow({
+        where: { incidentId: incident.id, provider: 'MICROSOFT_TEAMS' },
+      });
+      expect(operation.requestPayload).toMatchObject({ origin: 'AUTOMATION' });
+    }
+    const delivery = page.getByRole('region', { name: 'Channel notification status' });
+    await expect(delivery).toContainText('Queued');
+    await expect(delivery).not.toContainText('Delivery confirmed');
+    await page.getByText(/^Show \d+ more context fields$/).click();
+    await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
+    await page.getByText('Show full value', { exact: true }).click();
+    await expect(page.getByText('x'.repeat(1200), { exact: true })).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2))
+      .toBe(true);
+    await page.getByText('Show full value', { exact: true }).click();
+    await page.screenshot({
+      path: `/tmp/automation-context-${testInfo.project.name}.png`,
+      fullPage: true,
+    });
+    const auditorEmail = `automation-reader-${randomUUID()}@example.com`;
+    await db.user.create({
+      data: {
+        email: auditorEmail,
+        name: 'Context Auditor',
+        role: 'AUDITOR',
+        status: 'ACTIVE',
+        passwordHash: await bcrypt.hash(password, 12),
       },
-    })
-  ).toBe(1);
-  const delivery = page.getByRole('region', { name: 'Channel notification status' });
-  await expect(delivery).toContainText('Queued');
-  await expect(delivery).not.toContainText('Delivery confirmed');
-  await page.getByText(/^Show \d+ more context fields$/).click();
-  await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
-  await page.getByText('Show full value', { exact: true }).click();
-  await expect(page.getByText('x'.repeat(1200), { exact: true })).toBeVisible();
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2))
-    .toBe(true);
-  await page.getByText('Show full value', { exact: true }).click();
-  await page.screenshot({
-    path: `/tmp/automation-context-${testInfo.project.name}.png`,
-    fullPage: true,
+    });
+    const readerCsrf = await (await page.request.get('/api/auth/csrf')).json();
+    await page.request.post('/api/auth/callback/credentials', {
+      form: { csrfToken: readerCsrf.csrfToken, email: auditorEmail, password, json: 'true' },
+    });
+    expect((await (await page.request.get('/api/auth/session')).json()).user.email).toBe(
+      auditorEmail
+    );
+    await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+    await expect(
+      page.getByText('Alert context is restricted.', { exact: true }).filter({ visible: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText('Alert details are restricted.', { exact: true }).filter({ visible: true })
+    ).toBeVisible();
+    const readerHtml = await page.request.get(`/incidents/${incident.id}`);
+    expect(readerHtml.status()).toBe(200);
+    const restrictedHtml = await readerHtml.text();
+    expect(restrictedHtml).not.toContain('x'.repeat(1200));
+    expect(restrictedHtml).not.toContain('ABC123');
+    const apiDetail = await page.request.get(`/api/incidents/${incident.id}`);
+    expect(await apiDetail.text()).not.toContain('ABC123');
   });
-  const auditorEmail = `automation-reader-${randomUUID()}@example.com`;
-  await db.user.create({
-    data: {
-      email: auditorEmail,
-      name: 'Context Auditor',
-      role: 'AUDITOR',
-      status: 'ACTIVE',
-      passwordHash: await bcrypt.hash(password, 12),
-    },
-  });
-  const readerCsrf = await (await page.request.get('/api/auth/csrf')).json();
-  await page.request.post('/api/auth/callback/credentials', {
-    form: { csrfToken: readerCsrf.csrfToken, email: auditorEmail, password, json: 'true' },
-  });
-  expect((await (await page.request.get('/api/auth/session')).json()).user.email).toBe(
-    auditorEmail
-  );
-  await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
-  await expect(
-    page.getByText('Alert context is restricted.', { exact: true }).filter({ visible: true })
-  ).toBeVisible();
-  await expect(
-    page.getByText('Alert details are restricted.', { exact: true }).filter({ visible: true })
-  ).toBeVisible();
-  const readerHtml = await page.request.get(`/incidents/${incident.id}`);
-  expect(readerHtml.status()).toBe(200);
-  expect(await readerHtml.text()).not.toContain('x'.repeat(1200));
-});
+}
 
 test('P1 ingestion pins its policy through later edits and archival', async ({
   page,
@@ -277,7 +310,13 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
       checksum: checksum(compiled),
       lintReport: [],
       publishedBy: actor.id,
-      policyRefs: { create: { escalationPolicyId: policy.id, policyNameSnapshot: policy.name } },
+      policyRefs: {
+        create: {
+          escalationPolicyId: policy.id,
+          policyNameSnapshot: policy.name,
+          ruleReferences: [{ id: 'production', name: 'Production critical alerts', enabled: true }],
+        },
+      },
     },
   });
   await db.serviceAutomationConfig.create({

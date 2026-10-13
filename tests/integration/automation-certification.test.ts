@@ -1117,6 +1117,117 @@ describe('service automation transaction certification', () => {
     expect(notifications[0].recipientType).toBe('SLACK_CHANNEL');
     expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
   });
+  it.each([
+    ['TEAMS', false, false],
+    ['TEAMS', true, false],
+    ['TEAMS', false, true],
+    ['TEAMS', true, true],
+    ['SLACK', false, false],
+    ['BOTH', false, false],
+  ] as const)(
+    'conditional %s with channel=%s and triggered=%s retains NO_ESCALATION',
+    async (channels, enabled, triggered) => {
+      process.env.ENCRYPTION_KEY = '0123456789abcdef'.repeat(4);
+      const { service, actor, draft, version } = await setup();
+      await db.service.update({
+        where: { id: service.id },
+        data: {
+          serviceNotificationChannels: enabled ? ['MICROSOFT_TEAMS'] : [],
+          serviceNotifyOnTriggered: triggered,
+        },
+      });
+      const teams = await db.microsoftTeamsDestination.create({
+        data: {
+          serviceId: service.id,
+          tenantId: 'test-tenant',
+          teamId: 'test-team',
+          channelId: 'test-channel',
+        },
+      });
+      const slack = await db.slackDestination.create({
+        data: {
+          serviceId: service.id,
+          workspaceId: 'test-workspace',
+          channelId: 'C_TEST',
+        },
+      });
+      const actions = [
+        ...(channels !== 'SLACK'
+          ? [
+              {
+                type: 'NOTIFY_CHANNEL' as const,
+                provider: 'TEAMS' as const,
+                destinationId: teams.id,
+              },
+            ]
+          : []),
+        ...(channels !== 'TEAMS'
+          ? [
+              {
+                type: 'NOTIFY_CHANNEL' as const,
+                provider: 'SLACK' as const,
+                destinationId: slack.id,
+              },
+            ]
+          : []),
+      ];
+      const saved = await saveDraft({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedRevision: draft.revision,
+        snapshot: {
+          ...snapshot,
+          rules: snapshot.rules.map(rule =>
+            rule.phase === 'ROUTE' ? { ...rule, actions: [...rule.actions, ...actions] } : rule
+          ),
+        },
+      });
+      await publishVersion({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedRevision: saved.revision,
+        expectedActiveVersionId: version.id,
+      });
+      const result = await ingest(service.id);
+      const incidentId = 'incident' in result ? result.incident?.id : undefined;
+      expect(incidentId).toBeTruthy();
+      expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
+      const intents = await db.notification.findMany({ where: { incidentId: incidentId! } });
+      for (const action of actions) {
+        expect(
+          intents.some(
+            intent => intent.channel === (action.provider === 'TEAMS' ? 'MICROSOFT_TEAMS' : 'SLACK')
+          )
+        ).toBe(true);
+      }
+      if (channels !== 'SLACK') {
+        const operation = await db.externalOperation.findFirstOrThrow({
+          where: { incidentId: incidentId!, provider: 'MICROSOFT_TEAMS' },
+        });
+        expect(operation.requestPayload).toMatchObject({ origin: 'AUTOMATION' });
+        const { enqueueAutomationNotification } = await import('@/lib/automation/jobs');
+        await db.$transaction(tx =>
+          enqueueAutomationNotification(tx, {
+            task: 'AUTOMATION_NOTIFY',
+            incidentId: incidentId!,
+            serviceId: service.id,
+            versionId: version.id,
+            type: 'NOTIFY_CHANNEL',
+            ruleId: 'no-page',
+            logicalKey: 'retry-test',
+            provider: 'TEAMS',
+            destinationId: teams.id,
+          })
+        );
+        expect(
+          await db.externalOperation.count({
+            where: { incidentId: incidentId!, provider: 'MICROSOFT_TEAMS' },
+          })
+        ).toBe(1);
+      }
+    }
+  );
+
   it.skipIf(process.env.AUTOMATION_INFRA_DB_RESTART !== 'true')(
     'recovers an isolated PostgreSQL restart during concurrent ingestion and replay',
     async () => {

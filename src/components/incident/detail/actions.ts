@@ -2,7 +2,8 @@
 
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { assertCanViewIncident } from '@/lib/rbac';
+import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import {
   addNote,
   addWatcher,
@@ -88,7 +89,21 @@ export async function loadOlderIncidentEvents(
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: Math.min(Math.max(1, limit), 500),
   });
-  return events.map(e => ({
+  const permissions = await getUserPermissions();
+  const decision = await prisma.incidentAutomationDecision.findUnique({
+    where: { incidentId: parsedIncidentId },
+    select: { incidentId: true },
+  });
+  const automationTraces = await prisma.automationTrace.findMany({
+    where: { incidentId: parsedIncidentId },
+    select: { incidentId: true },
+    take: 1,
+  });
+  const visible = visibleIncidentSource(
+    { events, automationDecision: decision, automationTraces },
+    permissions.capabilities.includes('incident.sensitive.read')
+  );
+  return visible.events.map(e => ({
     id: e.id,
     message: e.message,
     type: e.type,
@@ -154,10 +169,7 @@ function buildTableCursorFilter(cursor?: TableCursor) {
   if (!cursor) return {};
   const cursorDate = new Date(cursor.createdAt);
   return {
-    OR: [
-      { createdAt: { lt: cursorDate } },
-      { createdAt: cursorDate, id: { lt: cursor.id } },
-    ],
+    OR: [{ createdAt: { lt: cursorDate } }, { createdAt: cursorDate, id: { lt: cursor.id } }],
   };
 }
 
@@ -248,8 +260,22 @@ export async function loadOlderIncidentTimelineActivity(
     }),
   ]);
 
+  const permissions = await getUserPermissions();
+  const decision = await prisma.incidentAutomationDecision.findUnique({
+    where: { incidentId: parsedIncidentId },
+    select: { incidentId: true },
+  });
+  const automationTraces = await prisma.automationTrace.findMany({
+    where: { incidentId: parsedIncidentId },
+    select: { incidentId: true },
+    take: 1,
+  });
+  const visible = visibleIncidentSource(
+    { events, automationDecision: decision, automationTraces },
+    permissions.capabilities.includes('incident.sensitive.read')
+  );
   return {
-    events: events.map(e => ({
+    events: visible.events.map(e => ({
       id: e.id,
       message: e.message,
       type: e.type,

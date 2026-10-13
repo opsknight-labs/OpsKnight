@@ -47,6 +47,8 @@ export function deriveMicrosoftTeamsCardState(incident: {
 export type TeamsDeliveryEnqueueInput = {
   incidentId: string;
   destinationId: string;
+  /** Automation actions have independent notification enablement. */
+  origin?: 'SERVICE' | 'AUTOMATION';
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
   /** Monotonic incident updatedAt or version — part of the idempotency key. */
   incidentUpdatedAt: Date;
@@ -416,7 +418,20 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
     where: { provider_idempotencyKey: { provider: TEAMS_PROVIDER, idempotencyKey } },
     select: { id: true },
   });
-  if (existing) return existing.id;
+  if (existing) {
+    // A shared service/automation intent must retain the independent automation
+    // authorization even when service delivery was enqueued first. Never downgrade it.
+    if (input.origin === 'AUTOMATION') {
+      await tx.$executeRaw`UPDATE "ExternalOperation"
+        SET "requestPayload" = jsonb_set(COALESCE("requestPayload", '{}'::jsonb), '{origin}', '"AUTOMATION"'::jsonb)
+        WHERE "id" = ${existing.id}`;
+      await tx.notification.updateMany({
+        where: { deliveryKey: idempotencyKey },
+        data: { sourceType: 'AUTOMATION', templateKey: 'automation-teams' },
+      });
+    }
+    return existing.id;
+  }
   let destinationSnapshot: Record<string, string> | null = null;
   let channelName: string | null = null;
   let teamName: string | null = null;
@@ -474,6 +489,7 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
   }
   const payload: Record<string, unknown> = {
     destinationId: input.destinationId,
+    origin: input.origin ?? 'SERVICE',
     eventType: input.eventType,
     incidentUpdatedAt: input.incidentUpdatedAt.toISOString(),
     escalationGeneration: input.escalationGeneration ?? null,
@@ -527,8 +543,9 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
         incidentId: input.incidentId,
         eventType: input.eventType,
         message: `Microsoft Teams card (${input.eventType}) for ${recipientDisplay}`,
-        templateKey: `service-teams-${input.eventType}`,
-        sourceType: 'SERVICE_INCIDENT',
+        templateKey:
+          input.origin === 'AUTOMATION' ? 'automation-teams' : `service-teams-${input.eventType}`,
+        sourceType: input.origin === 'AUTOMATION' ? 'AUTOMATION' : 'SERVICE_INCIDENT',
         sourceId: input.destinationId,
         deliveryKey: idempotencyKey,
         priority: 5,
@@ -801,7 +818,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     }
     // Per-event notify flag + service channel fencing — reread at delivery time, not just at enqueue.
     // `serviceNotifyOnTriggered/Ack/Resolved` may be flipped between enqueue and process.
-    if (!staleReason) {
+    if (!staleReason && payload?.origin !== 'AUTOMATION') {
       try {
         const svc = await prisma.service.findUnique({
           where: { id: incident.serviceId },

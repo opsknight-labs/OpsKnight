@@ -153,7 +153,7 @@ export async function publishVersion(input: {
       : null;
     if (input.sourceVersionId && !source)
       throw new Error('Source version does not belong to this service');
-    const snapshot = source?.snapshot ?? draft?.snapshot ?? emptySnapshot;
+    const snapshot = snapshotSchema.parse(source?.snapshot ?? draft?.snapshot ?? emptySnapshot);
     const { compiled, issues } = compileAutomation(snapshot);
     if (issues.some(i => i.level === 'ERROR'))
       throw new Error(
@@ -186,7 +186,19 @@ export async function publishVersion(input: {
         publishedBy: input.actorId,
         lintReport: asJson(issues),
         policyRefs: {
-          create: policies.map(p => ({ escalationPolicyId: p.id, policyNameSnapshot: p.name })),
+          create: policies.map(p => ({
+            escalationPolicyId: p.id,
+            policyNameSnapshot: p.name,
+            ruleReferences: asJson(
+              snapshot.rules
+                .filter(rule =>
+                  rule.actions.some(
+                    action => action.type === 'USE_ESCALATION_POLICY' && action.policyId === p.id
+                  )
+                )
+                .map(rule => ({ id: rule.id, name: rule.name, enabled: rule.enabled }))
+            ),
+          })),
         },
       },
     });

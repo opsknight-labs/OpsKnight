@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 import {
   testPrisma as db,
@@ -172,4 +173,69 @@ it('serializes archive against publication and rejects archived rollback referen
       })
     ).rejects.toThrow('archived');
   }
+});
+
+it('backfills lightweight historical rule references and restores immutability', async () => {
+  const actor = await createTestUser({ role: 'ADMIN' });
+  const service = await createTestService('Metadata migration');
+  const policy = await db.escalationPolicy.create({ data: { name: 'Metadata policy' } });
+  const snapshot = {
+    schemaVersion: 1,
+    fields: [],
+    rules: [
+      {
+        id: 'historical-rule',
+        name: 'Historical route',
+        enabled: false,
+        phase: 'ROUTE',
+        conditions: [],
+        actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+      },
+    ],
+  };
+  const version = await db.automationVersion.create({
+    data: {
+      serviceId: service.id,
+      versionNumber: 1,
+      snapshot,
+      compiledSnapshot: snapshot,
+      checksum: 'migration-fixture',
+      publishedBy: actor.id,
+      lintReport: [],
+      policyRefs: { create: { escalationPolicyId: policy.id, policyNameSnapshot: policy.name } },
+    },
+  });
+  const migration = readFileSync(
+    'prisma/migrations/20261013120000_automation_policy_reference_metadata/migration.sql',
+    'utf8'
+  );
+  const backfill = migration.slice(
+    migration.indexOf('UPDATE "AutomationVersionPolicyRef"'),
+    migration.indexOf('ALTER TABLE "AutomationVersionPolicyRef" ENABLE')
+  );
+  await db.$transaction(async tx => {
+    await tx.$executeRawUnsafe(
+      'ALTER TABLE "AutomationVersionPolicyRef" DISABLE TRIGGER automation_policy_ref_immutable'
+    );
+    await tx.$executeRawUnsafe(backfill);
+    await tx.$executeRawUnsafe(
+      'ALTER TABLE "AutomationVersionPolicyRef" ENABLE TRIGGER automation_policy_ref_immutable'
+    );
+  });
+  const reference = await db.automationVersionPolicyRef.findUniqueOrThrow({
+    where: {
+      versionId_escalationPolicyId: { versionId: version.id, escalationPolicyId: policy.id },
+    },
+  });
+  expect(reference.ruleReferences).toEqual([
+    { id: 'historical-rule', name: 'Historical route', enabled: false },
+  ]);
+  await expect(
+    db.automationVersionPolicyRef.update({
+      where: {
+        versionId_escalationPolicyId: { versionId: version.id, escalationPolicyId: policy.id },
+      },
+      data: { policyNameSnapshot: 'Forged name' },
+    })
+  ).rejects.toThrow('immutable');
 });

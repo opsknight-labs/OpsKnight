@@ -25,3 +25,18 @@ it('rejects forged state and empty identifiers before entering the lifecycle tra
   expect(mocks.transition).not.toHaveBeenCalled();
   expect(mocks.audit).not.toHaveBeenCalled();
 });
+
+it('returns the precise concurrent dependency conflict without throwing away the page', async () => {
+  mocks.transition.mockRejectedValueOnce(
+    new Error('Cannot archive: API still references this policy.')
+  );
+  await expect(setPolicyArchived('policy', true)).resolves.toEqual({
+    ok: false,
+    error: 'Cannot archive: API still references this policy.',
+  });
+});
+
+it('returns success after an authorized lifecycle transition', async () => {
+  mocks.transition.mockResolvedValueOnce({});
+  await expect(setPolicyArchived('policy', false)).resolves.toEqual({ ok: true });
+});

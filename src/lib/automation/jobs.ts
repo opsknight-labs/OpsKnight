@@ -146,6 +146,7 @@ export async function enqueueAutomationNotification(tx: Prisma.TransactionClient
       incidentId: incident.id,
       destinationId: destination.id,
       eventType: 'triggered',
+      origin: 'AUTOMATION',
       incidentUpdatedAt: incident.createdAt,
       escalationGeneration: 0,
     });

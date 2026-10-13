@@ -6,12 +6,14 @@ type CapturedValue = { state: string; value?: unknown; raw?: unknown };
 export default function IncidentAlertContextCard({
   fields,
   context,
+  receivedContext,
   versionNumber,
   sensitive,
   omitted,
 }: {
   fields: Field[];
   context: Record<string, CapturedValue>;
+  receivedContext?: Record<string, CapturedValue>;
   versionNumber?: number;
   sensitive: boolean;
   omitted: boolean;
@@ -32,11 +34,31 @@ export default function IncidentAlertContextCard({
           : value.value == null
             ? 'Diagnostic value unavailable'
             : String(value.value);
+    const received = receivedContext?.[field.key];
+    const changed =
+      receivedContext &&
+      (received?.state !== value?.state ||
+        JSON.stringify(received?.value) !== JSON.stringify(value?.value));
+    const receivedDisplay =
+      !received || received.state === 'MISSING'
+        ? 'Not provided'
+        : received.state === 'UNMAPPED'
+          ? 'Unrecognized value'
+          : received.value == null
+            ? 'Diagnostic value unavailable'
+            : String(received.value);
     const characters = [...display];
     return (
       <div key={field.key} className="min-w-0">
         <dt className="break-words font-medium">{field.label}</dt>
         <dd className="break-words text-muted-foreground">
+          {changed && (
+            <details className="mb-1">
+              <summary className="cursor-pointer py-2">Received value</summary>
+              <p className="break-words">{receivedDisplay}</p>
+            </details>
+          )}
+          {changed && <span className="font-medium">Value after automation: </span>}
           {characters.length > 160 ? (
             <>
               <span>{characters.slice(0, 160).join('')}…</span>
@@ -63,7 +85,8 @@ export default function IncidentAlertContextCard({
       </CardHeader>
       <CardContent className="text-sm">
         <p className="mb-3 text-muted-foreground">
-          Mapped context captured when this incident was created.
+          Context captured when this incident was created. Changed fields distinguish the received
+          value from the value after automation.
         </p>
         {!sensitive ? (
           <p>Alert context is restricted.</p>

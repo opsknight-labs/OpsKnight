@@ -516,3 +516,15 @@ and Prisma response parsing; these samples alone do not identify a database
 wait cause or prove an evaluator bottleneck. The profiling Web process was
 replaced, its private debugger forward closed, and the owned clean fixture
 restored after the diagnostic. Both CI workflows passed at `8beaf84a4`.
+
+### October 13 deep-audit follow-up
+
+Conditional Teams actions persist an explicit `AUTOMATION` origin. Service-wide channel and triggered-notification switches apply only to ordinary service delivery; lifecycle fencing, destination enablement, retarget protection, provider admission and the canonical idempotency ledger still apply to automation. A shared intent is upgraded to automation authorization without creating another card intent. `NO_ESCALATION` stops personal paging, not ordinary service or integration notifications; the rule editor explains this distinction.
+
+Incident headers and quick links use the LIVE decision's pinned policy identity/name, including archived policies. The current service default is a separately labeled reference. A pinned route without a personal policy is never replaced with today's mutable default for display.
+
+Alert Context shows received values separately when enrichment changes them. Readers lacking `incident.sensitive.read` receive restricted title/description and retrigger source messages for incidents with captured LIVE decisions or SHADOW traces, before rendering or API serialization. This boundary also covers paginated timeline reads and incident lists. Stored source content remains immutable. Outgoing notifications are intentional disclosures to configured, validated destinations; they do not inherit a browser reader's permissions. Operators must authorize destination membership and avoid mapping secrets into alert summaries. This is not a promise of universal masking across every integration or arbitrary user-authored note.
+
+Policy dependencies use bounded pages (20 rows per category), separate counts and current references before historical references. Migration `20261013120000_automation_policy_reference_metadata` backfills immutable rule display metadata transactionally; publication records this metadata for future versions. Archive/restore conflicts return typed errors, keep the page visible and refresh dependencies.
+
+Local follow-up evidence: 192 unit/component/API tests passed; 43 PostgreSQL tests passed with one opt-in restart test skipped. These changes require a new release image and browser verification. Earlier browser and capacity artifacts remain evidence for their declared source revisions only. Sustained capacity, recovery under load and public-edge latency remain **NOT CERTIFIED**.

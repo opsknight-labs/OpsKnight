@@ -31,6 +31,8 @@ import PrioritySelector from './PrioritySelector';
 
 type IncidentHeaderProps = {
   incident: Incident & {
+    noEscalation?: boolean;
+    incidentPolicy?: { id: string; name: string } | null;
     service: Service & {
       policy?: { id: string; name: string } | null;
     };
@@ -311,21 +313,21 @@ export default function IncidentHeader({
         </div>
 
         {/* Policy */}
-        {incident.service.policy ? (
+        {incident.incidentPolicy ? (
           <Link
-            href={`${routePrefix}/policies/${incident.service.policy.id}`}
-            title={`Escalation Policy: ${incident.service.policy.name}`}
+            href={`${routePrefix}/policies/${incident.incidentPolicy.id}`}
+            title={`Escalation Policy: ${incident.incidentPolicy.name}`}
             className="group flex flex-col justify-center p-3.5 min-h-[74px] hover:bg-slate-50/80 transition-colors"
           >
             <div className="flex items-center gap-1.5 mb-1.5">
               <Shield className="h-3 w-3 text-slate-400 shrink-0" />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Policy
+                Incident policy
               </span>
             </div>
             <div className="flex items-center gap-1.5 max-w-full">
               <span className="text-sm font-semibold text-slate-900 group-hover:text-primary transition-colors truncate">
-                {incident.service.policy.name}
+                {incident.incidentPolicy.name}
               </span>
               <ArrowUpRight className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
             </div>
@@ -335,10 +337,12 @@ export default function IncidentHeader({
             <div className="flex items-center gap-1.5 mb-1.5">
               <Shield className="h-3 w-3 text-slate-400 shrink-0" />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Policy
+                Incident policy
               </span>
             </div>
-            <span className="text-sm text-slate-400 italic">None</span>
+            <span className="text-sm text-slate-400 italic">
+              {incident.noEscalation ? 'Personal paging skipped' : 'None'}
+            </span>
           </div>
         )}
 

@@ -77,6 +77,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const incident = await prisma.incident.findUnique({
     where: { id },
     include: {
+      automationTraces: { select: { incidentId: true }, take: 1 },
       automationDecision: { select: { incidentId: true } },
       service: { select: { id: true, name: true, teamId: true } },
       watchers: { select: { userId: true } },

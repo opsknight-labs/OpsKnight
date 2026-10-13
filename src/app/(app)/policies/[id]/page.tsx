@@ -50,7 +50,7 @@ export default async function PolicyDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ error?: string; tab?: string }>;
+  searchParams?: Promise<{ error?: string; tab?: string; depPage?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
@@ -385,6 +385,7 @@ export default async function PolicyDetailPage({
         settings={settingsContent}
         dependencies={
           <PolicyDependencies
+            page={Number((await searchParams)?.depPage ?? 1)}
             policyId={id}
             archived={!!policy.archivedAt}
             canManage={permissions.role === 'ADMIN'}

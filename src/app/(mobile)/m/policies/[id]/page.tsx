@@ -10,9 +10,10 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ depPage?: string }>;
 };
 
-export default async function MobilePolicyDetailPage({ params }: PageProps) {
+export default async function MobilePolicyDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   await assertCanViewPolicy(id);
   const permissions = await getUserPermissions();
@@ -71,6 +72,7 @@ export default async function MobilePolicyDetailPage({ params }: PageProps) {
       </div>
 
       <PolicyDependencies
+        page={Number((await searchParams)?.depPage ?? 1)}
         policyId={id}
         archived={!!policy.archivedAt}
         canManage={permissions.role === 'ADMIN'}
