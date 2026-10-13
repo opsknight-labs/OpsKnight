@@ -113,6 +113,20 @@ transaction creates only 100 recipient alerts, and drains the remainder using tw
 concurrent workers without duplicates. Results are recorded in
 `plans/certification/enterprise-sso-2.1-resilience.json`.
 
+Further regressions exercise 3,000 already-throttled requests with exact shared
+counts and at most three event/audit samples per category/window. The fan-out crash
+test terminates the worker's actual PostgreSQL connection after alert inserts and
+cursor advancement but before commit, verifies rollback, then drains the backlog
+with two workers. It also changes administrator membership between batches.
+
+The delivery-backlog fixture simulates 30-day-old intents with 100 prior attempts,
+a stale worker lease, a removed administrator and an unavailable queue. Queue
+acceptance alone must not mark delivery; after a simulated database delivery
+acknowledgment, 240 retained intents drain. Transport is stubbed: this tests durable
+application recovery and recipient checks, not SMTP/vendor delivery. A real provider
+outage, exhausted central notification retries and operator requeue must still be
+rehearsed with the configured delivery integration before release acceptance.
+
 The **Enterprise SSO certification** GitHub workflow runs these suites and the exact
 published-release upgrade on isolated PostgreSQL services, including a bounded
 read-load artifact. This complements the deployment and ordinary unit workflows.

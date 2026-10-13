@@ -86,11 +86,45 @@ export async function recordEmergencyFailure(accountId: string, reason: string) 
   );
 }
 
+type EmergencyThrottleScope = 'options-network' | 'options-account' | 'verification' | 'legacy';
+
+/** Exact shared counters, at most three durable audit samples per scope/window.
+ * Already-denied traffic cannot amplify into one event/audit/alert per request.
+ * Scope is an internal enum, never an attacker-controlled account or network value.
+ */
+export async function recordEmergencyThrottle(scope: EmergencyThrottleScope) {
+  const windowMs = 300000;
+  const bucket = Math.floor(Date.now() / windowMs);
+  await prisma.$transaction(async tx => {
+    const aggregate = await tx.authenticationFailureWindow.upsert({
+      where: { id: `throttled-emergency:${scope}:${bucket}` },
+      create: {
+        id: `throttled-emergency:${scope}:${bucket}`,
+        expiresAt: new Date((bucket + 2) * windowMs),
+      },
+      update: { count: { increment: 1 } },
+    });
+    if (![1, 100, 1000].includes(aggregate.count)) return;
+    await securityEvent(
+      tx,
+      'auth.emergency.requests.throttled',
+      '',
+      {
+        scope,
+        rejectedRequests: aggregate.count,
+        windowStartedAt: bucket * windowMs,
+        aggregateAnonymousFailure: true,
+      },
+      'blocked'
+    );
+  });
+}
+
 export async function emergencyLoginOptions(accountId: string, ip: string, reauthToken?: string) {
   // Per-network admission bounds indexed lookups. Unknown identifiers never consume
   // a real account's ceremony budget or an in-progress ceremony's verification budget.
   if (!(await consumeAuthRateLimit('emergency:options:ip', ip, 30, 300000)).allowed) {
-    await recordEmergencyFailure(accountId, 'RATE_LIMITED');
+    await recordEmergencyThrottle('options-network');
     throw new Error('Too many attempts from this network. Try again shortly.');
   }
   const account = await prisma.emergencyAccount.findUnique({
@@ -108,7 +142,7 @@ export async function emergencyLoginOptions(accountId: string, ip: string, reaut
     ? await consumeAuthRateLimit('emergency:reauth:session', session.id, 10, 300000)
     : await consumeAuthRateLimit('emergency:options:account', account.id, 20, 300000);
   if (!budget.allowed) {
-    await recordEmergencyFailure(accountId, 'RATE_LIMITED');
+    await recordEmergencyThrottle('options-account');
     throw new Error(
       'Too many attempts for this recovery identity. Use another custodian or retry shortly.'
     );
@@ -143,6 +177,7 @@ export async function verifyEmergencyLogin(
   const origin = await recoveryOrigin();
   const token = secret();
   let accountId = '';
+  let throttled = false;
   try {
     // The unguessable browser capability reserves completion independently of
     // anonymous traffic. Recheck every predicate under the transaction below.
@@ -154,12 +189,15 @@ export async function verifyEmergencyLogin(
       !pending.consumedAt &&
       pending.expiresAt.getTime() > Date.now();
     if (!ownsCeremony) {
-      await consumeAuthRateLimit('emergency:verify:invalid:ip', ip, 30, 300000);
+      throttled = !(await consumeAuthRateLimit('emergency:verify:invalid:ip', ip, 30, 300000))
+        .allowed;
       throw new Error('CHALLENGE_EXPIRED_OR_REPLAYED');
     }
     accountId = pending.emergencyAccountId;
-    if (!(await consumeAuthRateLimit('emergency:verify:ceremony', pending.id, 3, 300000)).allowed)
+    if (!(await consumeAuthRateLimit('emergency:verify:ceremony', pending.id, 3, 300000)).allowed) {
+      throttled = true;
       throw new Error('RATE_LIMITED');
+    }
     return await prisma.$transaction(
       async tx => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(210012002::bigint)`;
@@ -284,7 +322,8 @@ export async function verifyEmergencyLogin(
       { timeout: 15000 }
     );
   } catch {
-    await recordEmergencyFailure(accountId, 'WEBAUTHN_VERIFICATION_FAILED');
+    if (throttled) await recordEmergencyThrottle('verification');
+    else await recordEmergencyFailure(accountId, 'WEBAUTHN_VERIFICATION_FAILED');
     throw new Error(
       'Emergency sign-in failed. Request a new challenge, verify the account and use an active security key.'
     );
@@ -295,13 +334,13 @@ export async function verifyEmergencyLogin(
 export async function legacyEmergencyLogin(email: string, password: string, ip: string) {
   const policy = await getAuthenticationPolicy();
   const normalized = email.trim().toLowerCase();
+  let throttled = false;
   try {
-    if (
-      !(await consumeAuthRateLimit('emergency:legacy:ip', ip, 10, 300000)).allowed ||
-      policy.legacyEmergencyEmail !== normalized ||
-      !(await consumeAuthRateLimit('emergency:legacy:account', normalized, 100, 300000)).allowed
-    )
-      throw new Error('denied');
+    throttled = !(await consumeAuthRateLimit('emergency:legacy:ip', ip, 10, 300000)).allowed;
+    if (throttled || policy.legacyEmergencyEmail !== normalized) throw new Error('denied');
+    throttled = !(await consumeAuthRateLimit('emergency:legacy:account', normalized, 100, 300000))
+      .allowed;
+    if (throttled) throw new Error('denied');
     const user = await prisma.user.findUnique({ where: { email: normalized } });
     if (
       !user ||
@@ -345,7 +384,8 @@ export async function legacyEmergencyLogin(email: string, password: string, ip: 
     });
     return { token, expiresAt };
   } catch {
-    await recordEmergencyFailure('', 'LEGACY_PASSWORD_REJECTED');
+    if (throttled) await recordEmergencyThrottle('legacy');
+    else await recordEmergencyFailure('', 'LEGACY_PASSWORD_REJECTED');
     throw new Error('Emergency sign-in failed.');
   }
 }

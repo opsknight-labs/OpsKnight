@@ -116,3 +116,18 @@ materializes up to five further batches of 100 per pass; cursor advancement and
 alert creation commit together. Additional recipients receive alerts asynchronously.
 Anonymous failures retain their existing aggregate notification cap. Verify the
 scheduler and notification workers are healthy in split deployments.
+
+## Evidence during sustained throttling
+
+Already-throttled requests increment a shared rejection counter instead of creating
+an event and audit row for every request. Each five-minute window has at most three
+forensic samples per internal rejection category, at counts 1, 100 and 1,000. The
+counter remains exact across replicas; samples contain the category, window start
+and observed count rather than attacker-supplied identifiers. Counter rows are
+retained until expired authentication-data cleanup (at least one additional day).
+Export them before cleanup when longer retention is required. Requests admitted by
+the limiter still retain individual authentication-failure evidence.
+
+This bounds audit/notification amplification, not all database work: limiter and
+aggregate counters still require database writes. Configure ingress request and
+connection limits to keep volumetric traffic within the database's tested capacity.

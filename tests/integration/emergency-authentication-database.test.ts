@@ -31,6 +31,7 @@ import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import {
   processAuthenticationAlerts,
   processAuthenticationAlertFanout,
+  processAuthenticationAlertFanoutBatch,
   securityEvent,
 } from '@/lib/auth-control/security-events';
 
@@ -583,6 +584,138 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       await prisma.user.deleteMany({ where: { id: { startsWith: prefix } } });
     }
   });
+  it('aggregates thousands of already-throttled attempts without per-request audit fan-out', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/auth-abuse')>('@/lib/auth-abuse');
+    vi.mocked(consumeAuthRateLimit).mockImplementation(actual.consumeAuthRateLimit);
+    const networks = Array.from({ length: 4 }, (_, index) => `192.0.2.${100 + index}`);
+    const started = performance.now();
+    // Keep this load scenario within one admission window even near a clock boundary.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      await prisma.authenticationFailureWindow.deleteMany({
+        where: { id: { startsWith: 'throttled-emergency:' } },
+      });
+      for (const ip of networks)
+        for (let attempt = 0; attempt < 31; attempt++)
+          await actual.consumeAuthRateLimit('emergency:options:ip', ip, 30, 300000);
+      const eventsBefore = await prisma.emergencyAccessEvent.count();
+      const auditsBefore = await prisma.auditLog.count();
+      const alertsBefore = await prisma.authenticationAlert.count();
+      for (let batch = 0; batch < 100; batch++) {
+        const results = await Promise.allSettled(
+          Array.from({ length: 30 }, (_, i) =>
+            emergencyLoginOptions('unknown-throttled-account', networks[i % networks.length])
+          )
+        );
+        expect(results.every(result => result.status === 'rejected')).toBe(true);
+      }
+      const windows = await prisma.authenticationFailureWindow.findMany({
+        where: { id: { startsWith: 'throttled-emergency:options-network:' } },
+      });
+      expect(windows.reduce((sum, window) => sum + window.count, 0)).toBe(3000);
+      const eventCount = (await prisma.emergencyAccessEvent.count()) - eventsBefore;
+      const auditCount = (await prisma.auditLog.count()) - auditsBefore;
+      expect(eventCount).toBeLessThanOrEqual(windows.length * 3);
+      expect(auditCount).toBe(eventCount);
+      expect((await prisma.authenticationAlert.count()) - alertsBefore).toBeLessThanOrEqual(200);
+      measurements.throttledAbuse = {
+        requests: 3000,
+        sources: networks.length,
+        aggregateCount: 3000,
+        durableEvents: eventCount,
+        durableAuditRows: auditCount,
+        durationMs: performance.now() - started,
+      };
+    } finally {
+      clock.mockRestore();
+      vi.mocked(consumeAuthRateLimit).mockResolvedValue({
+        allowed: true,
+        remaining: 1,
+        resetAt: Date.now(),
+        count: 1,
+      });
+    }
+  }, 120000);
+
+  it('rolls back a terminated fan-out worker and resumes a large backlog with recipient changes', async () => {
+    const prefix = `zz-crash-fanout-${Date.now()}`;
+    await prisma.user.createMany({
+      data: Array.from({ length: 1400 }, (_, i) => ({
+        id: `${prefix}-${String(i).padStart(4, '0')}`,
+        email: `${prefix}-${i}@example.test`,
+        name: 'Crash fanout fixture',
+        role: 'ADMIN' as const,
+        status: 'ACTIVE' as const,
+      })),
+    });
+    let eventId = '';
+    try {
+      await processAuthenticationAlertFanout();
+      const event = await prisma.$transaction(tx =>
+        securityEvent(tx, 'auth.test.crash.fanout', actor.id)
+      );
+      eventId = event.id;
+      const initial = await prisma.authenticationAlertFanout.findUniqueOrThrow({
+        where: { eventId },
+      });
+      await expect(
+        prisma.$transaction(async tx => {
+          const [{ pid }] = await tx.$queryRaw<
+            Array<{ pid: number }>
+          >`SELECT pg_backend_pid() AS pid`;
+          await processAuthenticationAlertFanoutBatch(tx);
+          // Terminate the worker connection after inserts/cursor update, before commit.
+          await prisma.$queryRaw`SELECT pg_terminate_backend(${pid})`;
+        })
+      ).rejects.toThrow();
+      expect(await prisma.authenticationAlert.count({ where: { eventId } })).toBe(100);
+      expect(await prisma.inAppNotification.count({ where: { entityId: eventId } })).toBe(100);
+      expect(
+        (await prisma.authenticationAlertFanout.findUniqueOrThrow({ where: { eventId } })).cursor
+      ).toBe(initial.cursor);
+      const removed = `${prefix}-1399`;
+      await prisma.user.update({
+        where: { id: removed },
+        data: { role: 'USER', tokenVersion: { increment: 1 } },
+      });
+      const newcomer = await prisma.user.create({
+        data: {
+          id: `${prefix}-new`,
+          email: `${prefix}-new@example.test`,
+          name: 'New administrator',
+          role: 'ADMIN',
+          createdAt: new Date(event.createdAt.getTime() + 1000),
+        },
+      });
+      for (let pass = 0; pass < 4; pass++)
+        await Promise.all([processAuthenticationAlertFanout(), processAuthenticationAlertFanout()]);
+      expect(await prisma.authenticationAlertFanout.findUnique({ where: { eventId } })).toBeNull();
+      expect(
+        await prisma.authenticationAlert.count({
+          where: { eventId, recipientId: { in: [removed, newcomer.id] } },
+        })
+      ).toBe(0);
+      const expected = await prisma.user.count({
+        where: { role: 'ADMIN', status: 'ACTIVE', createdAt: { lte: event.createdAt } },
+      });
+      expect(await prisma.authenticationAlert.count({ where: { eventId } })).toBe(expected);
+      expect(await prisma.inAppNotification.count({ where: { entityId: eventId } })).toBe(expected);
+      measurements.fanoutCrashRecovery = {
+        actualDatabaseConnectionTerminated: true,
+        uncommittedAlertsRolledBack: true,
+        cursorPreserved: true,
+        removedAndNewRecipientsExcluded: true,
+        finalRecipients: expected,
+        concurrentWorkers: 2,
+        duplicateAlerts: 0,
+      };
+    } finally {
+      await prisma.authenticationAlertFanout.deleteMany({ where: { eventId } });
+      await prisma.authenticationAlert.deleteMany({ where: { eventId } });
+      await prisma.inAppNotification.deleteMany({ where: { entityId: eventId } });
+      await prisma.user.deleteMany({ where: { id: { startsWith: prefix } } });
+    }
+  });
   it('keeps individual abuse evidence while capping distributed anonymous alert fan-out', async () => {
     await prisma.authenticationFailureWindow.deleteMany();
     const prefix = `abuse-admin-${Date.now()}`;
@@ -668,6 +801,129 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       )
     ).toBe(true);
   });
+  it('retains an aged outage backlog, reclaims expired delivery leases and respects current recipient authority', async () => {
+    await prisma.authenticationAlert.deleteMany();
+    const prefix = `delivery-backlog-${Date.now()}`;
+    const removed = await prisma.user.create({
+      data: {
+        id: `${prefix}-removed`,
+        email: `${prefix}-removed@example.test`,
+        name: 'Removed admin',
+        role: 'USER',
+      },
+    });
+    const old = new Date(Date.now() - 30 * 86400000);
+    const fixture = await prisma.notification.create({
+      data: {
+        channel: 'EMAIL',
+        status: 'PENDING',
+        category: 'SECURITY',
+        payloadEncrypted: 'isolated-transport-stub-not-dispatched',
+        userId: actor.id,
+      },
+    });
+    try {
+      await prisma.authenticationAlert.createMany({
+        data: Array.from({ length: 240 }, (_, i) => ({
+          id: `${prefix}-${i}`,
+          eventId: `${prefix}-${i}`,
+          recipientId: actor.id,
+          title: 'Backlog fixture',
+          message: 'Local transport only',
+          createdAt: old,
+          attempts: 100,
+          nextAttemptAt: new Date(0),
+          ...(i === 0
+            ? { leaseToken: 'crashed-worker', leaseUntil: new Date(Date.now() - 1) }
+            : {}),
+        })),
+      });
+      await prisma.authenticationAlert.create({
+        data: {
+          id: `${prefix}-removed-alert`,
+          eventId: `${prefix}-removed-event`,
+          recipientId: removed.id,
+          title: 'Removed recipient fixture',
+          message: 'Must not enqueue',
+          createdAt: new Date(old.getTime() - 1),
+        },
+      });
+      vi.mocked(enqueueCentralNotification).mockClear();
+      // A long outage must not discard an old intent or label queue acceptance as delivery.
+      await processAuthenticationAlerts();
+      expect(
+        await prisma.authenticationAlert.count({ where: { deliveredAt: { not: null } } })
+      ).toBe(0);
+      const deferred = await prisma.authenticationAlert.findUniqueOrThrow({
+        where: { id: `${prefix}-removed-alert` },
+      });
+      expect(deferred.lastError).toContain('no longer an active administrator');
+      expect(
+        vi
+          .mocked(enqueueCentralNotification)
+          .mock.calls.every(([input]) => input.recipientId !== removed.id)
+      ).toBe(true);
+      vi.mocked(enqueueCentralNotification).mockResolvedValue({ id: fixture.id, created: false });
+      await prisma.authenticationAlert.updateMany({
+        where: { recipientId: actor.id },
+        data: { nextAttemptAt: new Date(0) },
+      });
+      await processAuthenticationAlerts();
+      expect(
+        await prisma.authenticationAlert.count({ where: { deliveredAt: { not: null } } })
+      ).toBe(0);
+      // Simulate the transport's eventual delivery acknowledgment in PostgreSQL.
+      await prisma.notification.update({
+        where: { id: fixture.id },
+        data: { status: 'DELIVERED' },
+      });
+      await prisma.authenticationAlert.updateMany({
+        where: { recipientId: actor.id },
+        data: { nextAttemptAt: new Date(0) },
+      });
+      for (let pass = 0; pass < 20; pass++) {
+        await Promise.all([processAuthenticationAlerts(), processAuthenticationAlerts()]);
+        if (
+          (await prisma.authenticationAlert.count({
+            where: { recipientId: actor.id, deliveredAt: null },
+          })) === 0
+        )
+          break;
+      }
+      expect(
+        await prisma.authenticationAlert.count({
+          where: { recipientId: actor.id, deliveredAt: { not: null } },
+        })
+      ).toBe(240);
+      expect(
+        (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: `${prefix}-0` } }))
+          .leaseToken
+      ).toBeNull();
+      expect(
+        (
+          await prisma.authenticationAlert.findUniqueOrThrow({
+            where: { id: `${prefix}-removed-alert` },
+          })
+        ).deliveredAt
+      ).toBeNull();
+      measurements.deliveryBacklogRecovery = {
+        simulatedOutageDays: 30,
+        priorAttempts: 100,
+        recoveredIntents: 240,
+        expiredLeaseReclaimed: true,
+        queueAcceptanceNotMarkedDelivered: true,
+        removedRecipientNotEnqueued: true,
+        transport: 'stubbed; database delivery acknowledgment',
+      };
+    } finally {
+      vi.mocked(enqueueCentralNotification).mockRejectedValue(
+        new Error('delivery queue unavailable')
+      );
+      await prisma.authenticationAlert.deleteMany({ where: { id: { startsWith: prefix } } });
+      await prisma.notification.delete({ where: { id: fixture.id } });
+      await prisma.user.delete({ where: { id: removed.id } });
+    }
+  });
   it('mandatory alert failure rolls back the security event and its audit', async () => {
     const before = await prisma.emergencyAccessEvent.count({
       where: { eventType: 'auth.test.rollback' },
@@ -684,67 +940,73 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       await prisma.emergencyAccessEvent.count({ where: { eventType: 'auth.test.rollback' } })
     ).toBe(before);
   });
-  it('repairs only the pinned database origin with fresh independent authority and preserves Required', async () => {
-    const saved = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 'default' } });
-    const fixture = await prisma.emergencyAccount.create({
-      data: {
-        displayName: 'Origin repair fixture',
-        status: 'ACTIVE',
-        independenceConfirmedAt: new Date(),
-      },
-    });
-    const session = await prisma.emergencySession.create({
-      data: {
-        emergencyAccountId: fixture.id,
-        tokenHash: digest(secret()),
+  it.each([false, true])(
+    'repairs the pinned origin and preserves Required with missing settings=%s',
+    async missingSettings => {
+      const saved = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 'default' } });
+      const fixture = await prisma.emergencyAccount.create({
+        data: {
+          displayName: 'Origin repair fixture',
+          status: 'ACTIVE',
+          independenceConfirmedAt: new Date(),
+        },
+      });
+      const session = await prisma.emergencySession.create({
+        data: {
+          emergencyAccountId: fixture.id,
+          tokenHash: digest(secret()),
+          credentialVersion: 1,
+          expiresAt: new Date(Date.now() + 3600000),
+        },
+      });
+      const principal: ControlActor = {
+        kind: 'emergency',
+        id: fixture.id,
+        sessionId: session.id,
+        sessionTokenHash: session.tokenHash,
         credentialVersion: 1,
-        expiresAt: new Date(Date.now() + 3600000),
-      },
-    });
-    const principal: ControlActor = {
-      kind: 'emergency',
-      id: fixture.id,
-      sessionId: session.id,
-      sessionTokenHash: session.tokenHash,
-      credentialVersion: 1,
-      authenticatedAt: Date.now(),
-    };
-    vi.stubEnv('AUTH_RECOVERY_ORIGIN', 'https://recovery.example.test');
-    vi.stubEnv('NEXTAUTH_URL', 'https://recovery.example.test');
-    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://other.example.test');
-    try {
-      await prisma.systemSettings.update({
-        where: { id: 'default' },
-        data: { appUrl: 'https://broken.example.test' },
-      });
-      await expect(repairCanonicalOrigin(principal, 900)).rejects.toThrow('align NEXTAUTH_URL');
-      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://recovery.example.test');
-      await prisma.authenticationPolicy.update({
-        where: { id: 'default' },
-        data: { mode: 'SSO_REQUIRED' },
-      });
-      await repairCanonicalOrigin(principal, 900);
-      expect(
-        (await prisma.systemSettings.findUniqueOrThrow({ where: { id: 'default' } })).appUrl
-      ).toBe('https://recovery.example.test');
-      expect(
-        (await prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } })).mode
-      ).toBe('SSO_REQUIRED');
-      await expect(repairCanonicalOrigin(principal, 900)).rejects.toThrow('Policy changed');
-    } finally {
-      await prisma.systemSettings.update({
-        where: { id: 'default' },
-        data: { appUrl: saved.appUrl },
-      });
-      await prisma.authenticationPolicy.update({
-        where: { id: 'default' },
-        data: { version: 900, mode: 'PASSWORD_ONLY' },
-      });
-      await prisma.emergencySession.delete({ where: { id: session.id } });
-      await prisma.emergencyAccount.delete({ where: { id: fixture.id } });
-      vi.unstubAllEnvs();
+        authenticatedAt: Date.now(),
+      };
+      vi.stubEnv('AUTH_RECOVERY_ORIGIN', 'https://recovery.example.test');
+      vi.stubEnv('NEXTAUTH_URL', 'https://recovery.example.test');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://other.example.test');
+      try {
+        await prisma.systemSettings.update({
+          where: { id: 'default' },
+          data: { appUrl: 'https://broken.example.test' },
+        });
+        if (missingSettings) await prisma.systemSettings.delete({ where: { id: 'default' } });
+        await expect(repairCanonicalOrigin(principal, 900)).rejects.toThrow('align NEXTAUTH_URL');
+        vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://recovery.example.test');
+        await prisma.authenticationPolicy.update({
+          where: { id: 'default' },
+          data: { mode: 'SSO_REQUIRED' },
+        });
+        await expect(repairCanonicalOrigin(actor, 900)).rejects.toThrow('Independent emergency');
+        if (missingSettings) expect(await prisma.systemSettings.count()).toBe(0);
+        await repairCanonicalOrigin(principal, 900);
+        expect(
+          (await prisma.systemSettings.findUniqueOrThrow({ where: { id: 'default' } })).appUrl
+        ).toBe('https://recovery.example.test');
+        expect(
+          (await prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } })).mode
+        ).toBe('SSO_REQUIRED');
+        await expect(repairCanonicalOrigin(principal, 900)).rejects.toThrow('Policy changed');
+      } finally {
+        await prisma.systemSettings.update({
+          where: { id: 'default' },
+          data: { appUrl: saved.appUrl },
+        });
+        await prisma.authenticationPolicy.update({
+          where: { id: 'default' },
+          data: { version: 900, mode: 'PASSWORD_ONLY' },
+        });
+        await prisma.emergencySession.delete({ where: { id: session.id } });
+        await prisma.emergencyAccount.delete({ where: { id: fixture.id } });
+        vi.unstubAllEnvs();
+      }
     }
-  });
+  );
   it('imports a legacy password only into recovery and explicitly restores the same administrator', async () => {
     const password = 'Legacy private certification phrase October 2026!';
     const original = await prisma.user.update({

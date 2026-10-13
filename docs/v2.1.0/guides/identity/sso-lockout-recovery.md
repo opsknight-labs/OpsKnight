@@ -6,7 +6,7 @@ product_area: identity
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-12
+  verified_at: 2026-10-13
   evidence:
     - src/components/settings/AuthenticationConsole.tsx
     - src/lib/auth-control
@@ -92,3 +92,15 @@ revision ID, expected failure, successful normal SSO test, independent drill tim
 and alert-delivery result. Never paste JWTs, authorization codes, client secrets,
 or recovery cookies into the incident. Review sessions and replica diagnostics,
 sign out of recovery, and verify a used/rotated cookie cannot mutate configuration.
+
+## Repair an environment-only installation
+
+An installation configured through `NEXTAUTH_URL` or `NEXT_PUBLIC_APP_URL` may have
+no persisted system-settings row. Authorized **Repair canonical origin** creates
+that row when absent, or updates only its application URL when present. Other
+settings retain their database defaults or existing values. The operation still
+requires a fresh independent emergency session, an explicit deployment-managed
+`AUTH_RECOVERY_ORIGIN`, aligned public URL environment variables, and the expected
+policy version. It preserves SSO Required and commits the settings change, policy
+version and mandatory audit/alert together. Missing settings never grant authority
+or trigger an automatic policy downgrade.

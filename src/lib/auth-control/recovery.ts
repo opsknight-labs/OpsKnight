@@ -108,7 +108,11 @@ export async function repairCanonicalOrigin(actor: ControlActor, expectedVersion
     await lockControlActor(tx, actor);
     const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     if (policy.version !== expectedVersion) throw new Error('Policy changed. Reload recovery.');
-    await tx.systemSettings.update({ where: { id: 'default' }, data: { appUrl: origin } });
+    await tx.systemSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', appUrl: origin },
+      update: { appUrl: origin },
+    });
     await tx.authenticationPolicy.update({
       where: { id: 'default' },
       data: { version: { increment: 1 } },

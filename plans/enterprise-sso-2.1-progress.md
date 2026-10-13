@@ -447,3 +447,44 @@ real outbound-provider delivery, live IdPs and independent physical-key custody 
 require their own acceptance runs. The user's decision to leave live tenants/keys
 pending remains in force. These results support the specific tested behavior;
 no universal compatibility, zero-downtime or numeric “10/10” certification is claimed.
+
+## Recovery and alert-resilience audit follow-up — 2026-10-13
+
+Input is archived in `enterprise-sso-2.1-recovery-hardening-audit.md`.
+The existing branch already contains the two main-branch patches referenced by
+that audit; a patch-equivalence comparison found no missing main changes.
+
+- Authorized canonical-origin repair now upserts missing system settings. Both
+  existing-row and environment-only installations are tested, including rejection
+  of conflicting environment origins, ordinary administrators and stale policy
+  versions. SSO Required remains enabled and mandatory evidence commits atomically.
+- Already-throttled emergency options, verification and legacy requests increment
+  shared counters with at most three event/audit samples per category/five-minute
+  window. The local 3,000-request stress test preserved all 3,000 rejections while
+  creating three events and three audit rows. Limiter/counter writes still occur;
+  ingress limits remain necessary for volumetric traffic.
+- The fan-out crash test terminates an actual PostgreSQL worker connection after
+  inserts and cursor advancement but before commit. Both roll back. Two workers
+  subsequently complete delivery-intent creation for 1,400 eligible administrators
+  without duplicates, excluding a removed administrator and a later-created one.
+- An aged backlog fixture retains 240 intents representing 30 days and 100 previous
+  attempts, reclaims an expired lease, excludes a removed administrator and refuses
+  to equate queue acceptance with delivery. It drains only after a simulated
+  transport acknowledgment. This is application/database recovery evidence;
+  actual provider outages and exhausted provider retries still need acceptance.
+- Recovery, throttling and local-certification guides document these behaviors
+  and distinguish the local fixtures from external certification.
+
+Verification: all 53 PostgreSQL authentication tests passed on a freshly migrated
+isolated schema. The focused authentication/provider/component and agent-container
+run passed 286 tests. The earlier full unit run passed 5,753 tests with four skips
+and one Docker lifecycle timeout during concurrent heavy workloads; all five tests
+in that lifecycle file passed in the focused rerun. TypeScript, zero-warning
+modified-file lint, eight deployment/documentation contracts and the optimized
+standalone build passed. The refreshed resilience artifact records the measured
+local results and explicitly identifies its simulated transport scope.
+
+Live tenant and independent physical-key checks remain pending as requested.
+Customer-clone upgrades, multi-node/split-runtime failures and real outbound
+provider acceptance remain release acceptance work. These changes do not claim
+universal compatibility or a numeric production-readiness certification.

@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-10-13T11:35:48.480Z",
+  "measuredAt": "2026-10-13T16:51:51.447Z",
   "scope": "Isolated PostgreSQL and signed local WebAuthn fixtures. No live IdP, physical keys or email provider.",
   "recoveryAvailability": {
     "distributedUnknownAccountFailures": 400,
@@ -8,15 +8,41 @@
     "saturatedAccountBudgetDidNotBlockCompletion": true,
     "authenticatedReauthenticationReserved": true,
     "verificationReserveBoundedToThreeAttempts": true,
-    "durationMs": 2742.084875
+    "durationMs": 655.270166
   },
   "alertFanout": {
-    "activeAdministrators": 1203,
+    "activeAdministrators": 1201,
     "synchronousRecipients": 100,
-    "transactionMs": 19.408040999999685,
-    "finalRecipients": 1203,
+    "transactionMs": 18.986333999999943,
+    "finalRecipients": 1201,
     "duplicateInAppAlerts": 0,
     "concurrentWorkers": 2,
-    "totalDurationMs": 252.64854099999957
+    "totalDurationMs": 198.06158400000004
+  },
+  "throttledAbuse": {
+    "requests": 3000,
+    "sources": 4,
+    "aggregateCount": 3000,
+    "durableEvents": 3,
+    "durableAuditRows": 3,
+    "durationMs": 2775.5660409999996
+  },
+  "fanoutCrashRecovery": {
+    "actualDatabaseConnectionTerminated": true,
+    "uncommittedAlertsRolledBack": true,
+    "cursorPreserved": true,
+    "removedAndNewRecipientsExcluded": true,
+    "finalRecipients": 1400,
+    "concurrentWorkers": 2,
+    "duplicateAlerts": 0
+  },
+  "deliveryBacklogRecovery": {
+    "simulatedOutageDays": 30,
+    "priorAttempts": 100,
+    "recoveredIntents": 240,
+    "expiredLeaseReclaimed": true,
+    "queueAcceptanceNotMarkedDelivered": true,
+    "removedRecipientNotEnqueued": true,
+    "transport": "stubbed; database delivery acknowledgment"
   }
 }

@@ -100,38 +100,40 @@ async function materializeAlerts(
   });
 }
 
+/** A single atomic batch; a lost worker connection rolls back alerts and cursor together. */
+export async function processAuthenticationAlertFanoutBatch(tx: Prisma.TransactionClient) {
+  const jobs = await tx.$queryRaw<
+    Array<{ eventId: string; title: string; message: string; cursor: string; createdAt: Date }>
+  >`SELECT * FROM "AuthenticationAlertFanout" ORDER BY "createdAt", "eventId"
+    LIMIT 1 FOR UPDATE SKIP LOCKED`;
+  const job = jobs[0];
+  if (!job) return false;
+  const admins = await tx.user.findMany({
+    where: {
+      id: { gt: job.cursor },
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      createdAt: { lte: job.createdAt },
+    },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+    take: AUTHENTICATION_ALERT_BATCH_SIZE,
+  });
+  await materializeAlerts(tx, job.eventId, job.title, job.message, admins);
+  if (admins.length < AUTHENTICATION_ALERT_BATCH_SIZE)
+    await tx.authenticationAlertFanout.delete({ where: { eventId: job.eventId } });
+  else
+    await tx.authenticationAlertFanout.update({
+      where: { eventId: job.eventId },
+      data: { cursor: admins[admins.length - 1].id },
+    });
+  return true;
+}
+
 /** Bounded, restart-safe fan-out. Row locking lets replicas work without duplicate alerts. */
 export async function processAuthenticationAlertFanout() {
   for (let batch = 0; batch < 5; batch++) {
-    const processed = await prisma.$transaction(async tx => {
-      const jobs = await tx.$queryRaw<
-        Array<{ eventId: string; title: string; message: string; cursor: string; createdAt: Date }>
-      >`SELECT * FROM "AuthenticationAlertFanout" ORDER BY "createdAt", "eventId"
-        LIMIT 1 FOR UPDATE SKIP LOCKED`;
-      const job = jobs[0];
-      if (!job) return false;
-      const admins = await tx.user.findMany({
-        where: {
-          id: { gt: job.cursor },
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          createdAt: { lte: job.createdAt },
-        },
-        orderBy: { id: 'asc' },
-        select: { id: true },
-        take: AUTHENTICATION_ALERT_BATCH_SIZE,
-      });
-      await materializeAlerts(tx, job.eventId, job.title, job.message, admins);
-      if (admins.length < AUTHENTICATION_ALERT_BATCH_SIZE)
-        await tx.authenticationAlertFanout.delete({ where: { eventId: job.eventId } });
-      else
-        await tx.authenticationAlertFanout.update({
-          where: { eventId: job.eventId },
-          data: { cursor: admins[admins.length - 1].id },
-        });
-      return true;
-    });
-    if (!processed) break;
+    if (!(await prisma.$transaction(processAuthenticationAlertFanoutBatch))) break;
   }
 }
 
