@@ -10,3 +10,5 @@ export * from './audit';
 export * from './validation';
 export * from './service-accounts';
 export * from './openapi';
+export * from './endpoint';
+

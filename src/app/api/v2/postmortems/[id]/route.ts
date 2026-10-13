@@ -1,12 +1,6 @@
-import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import {
-  apiV2Error,
-  apiV2NoContent,
-  apiV2Success,
-  authenticateV2Request,
-  enforceV2Authorization,
-  enforceV2RateLimit,
+  defineV2Route,
   logV2Audit,
   PostmortemUpdateV2Schema,
 } from '@/lib/api-v2';
@@ -14,18 +8,12 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { apiKey, actor } = await authenticateV2Request(req);
-    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.POSTMORTEM_READ);
-
-    const { id } = await params;
-
+export const GET = defineV2Route<{ id: string }>({
+  action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
+  handler: async ({ actor, params }) => {
+    const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
+
     const postmortem = await prisma.postmortem.findFirst({
       where: {
         AND: [
@@ -74,25 +62,17 @@ export async function GET(
       });
     }
 
-    return apiV2Success(postmortem, { headers: rlHeaders });
-  } catch (error) {
-    return apiV2Error(error, req);
-  }
-}
+    return { data: postmortem };
+  },
+});
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { apiKey, actor } = await authenticateV2Request(req);
-    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE);
-
-    const { id } = await params;
-    const body = PostmortemUpdateV2Schema.parse(await req.json());
-
+export const PATCH = defineV2Route<{ id: string }>({
+  action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
+  bodySchema: PostmortemUpdateV2Schema,
+  handler: async ({ actor, apiKey, params, body }) => {
+    const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
+
     const existing = await prisma.postmortem.findFirst({
       where: {
         AND: [
@@ -171,24 +151,16 @@ export async function PATCH(
       details: { changes: Object.keys(body), postmortemId: updated.id },
     });
 
-    return apiV2Success(updated, { headers: rlHeaders });
-  } catch (error) {
-    return apiV2Error(error, req);
-  }
-}
+    return { data: updated };
+  },
+});
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { apiKey, actor } = await authenticateV2Request(req);
-    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE);
-
-    const { id } = await params;
-
+export const DELETE = defineV2Route<{ id: string }>({
+  action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
+  handler: async ({ actor, apiKey, params }) => {
+    const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
+
     const existing = await prisma.postmortem.findFirst({
       where: {
         AND: [
@@ -219,8 +191,6 @@ export async function DELETE(
       details: { postmortemId: existing.id },
     });
 
-    return apiV2NoContent(rlHeaders);
-  } catch (error) {
-    return apiV2Error(error, req);
-  }
-}
+    return { status: 204 };
+  },
+});
