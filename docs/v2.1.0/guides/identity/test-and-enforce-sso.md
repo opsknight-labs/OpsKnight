@@ -6,7 +6,7 @@ product_area: identity
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-12
+  verified_at: 2026-10-13
   evidence:
     - src/components/settings/AuthenticationConsole.tsx
     - src/lib/auth-control
@@ -82,3 +82,13 @@ IdP outage and repaired staged activation without weakening Required.
 Use native browsers and actual tenants for final deployment certification. Chromium
 virtual keys and the local cryptographic fixture verify application/protocol behavior;
 they do not establish independent physical custody or vendor-side deactivation.
+
+## Existing identities without an email claim
+
+An existing administrator's issuer/subject binding can prove ownership even when
+Entra or another provider omits mutable email claims. Organization boundaries and
+administrator role checks still apply. The staged test and claims preview preserve
+that existing binding. Creating a new link requires explicit ownership approval and
+matching email assurance under the provider policy; an absent email cannot create
+a new administrator link. If an existing link is removed after testing, activation
+fails and requires a fresh ownership test rather than recreating it silently.

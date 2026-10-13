@@ -6,6 +6,8 @@ import { logAudit } from '@/lib/audit';
 import { escapeHtml, sanitizeUrl } from '@/lib/email-components';
 import { authenticationOrigin } from './origin';
 
+export const AUTHENTICATION_ALERT_BATCH_SIZE = 100;
+
 /** Mandatory audit + durable high-priority notification, in the caller's transaction. */
 export async function securityEvent(
   tx: Prisma.TransactionClient,
@@ -48,9 +50,10 @@ export async function securityEvent(
     if (failureCount !== 1 && failureCount !== 20) return event;
   }
   const admins = await tx.user.findMany({
-    where: { role: 'ADMIN', status: 'ACTIVE' },
+    where: { role: 'ADMIN', status: 'ACTIVE', createdAt: { lte: event.createdAt } },
     select: { id: true },
-    ...(anonymousFailure ? { take: 100, orderBy: { id: 'asc' as const } } : {}),
+    take: AUTHENTICATION_ALERT_BATCH_SIZE + (anonymousFailure ? 0 : 1),
+    orderBy: { id: 'asc' },
   });
   const title = anonymousFailure
     ? 'Emergency sign-in failures detected'
@@ -58,26 +61,83 @@ export async function securityEvent(
   const message = anonymousFailure
     ? `${failureCount} unauthenticated emergency failures in the current five-minute window. Individual evidence remains in Diagnostics. Aggregated alerts reach up to 100 active administrators. Event ${event.id}.`
     : `Authentication event ${action} (${outcome}). Review System → SSO / Authentication → Diagnostics and Emergency Access. Event ${event.id}.`;
-  if (admins.length) {
-    await tx.inAppNotification.createMany({
-      data: admins.map(admin => ({
-        userId: admin.id,
-        type: 'SECURITY' as const,
+  const batch = admins.slice(0, AUTHENTICATION_ALERT_BATCH_SIZE);
+  await materializeAlerts(tx, event.id, title, message, batch);
+  if (admins.length > AUTHENTICATION_ALERT_BATCH_SIZE) {
+    await tx.authenticationAlertFanout.create({
+      data: {
+        eventId: event.id,
         title,
         message,
-        entityType: 'AUTHENTICATION',
-        entityId: event.id,
-      })),
-    });
-    await tx.authenticationAlert.createMany({
-      data: admins.map(admin => ({ eventId: event.id, recipientId: admin.id, title, message })),
+        cursor: batch[batch.length - 1].id,
+        createdAt: event.createdAt,
+      },
     });
   }
   return event;
 }
 
+async function materializeAlerts(
+  tx: Prisma.TransactionClient,
+  eventId: string,
+  title: string,
+  message: string,
+  admins: Array<{ id: string }>
+) {
+  if (!admins.length) return;
+  await tx.inAppNotification.createMany({
+    data: admins.map(admin => ({
+      userId: admin.id,
+      type: 'SECURITY' as const,
+      title,
+      message,
+      entityType: 'AUTHENTICATION',
+      entityId: eventId,
+    })),
+  });
+  await tx.authenticationAlert.createMany({
+    data: admins.map(admin => ({ eventId, recipientId: admin.id, title, message })),
+  });
+}
+
+/** Bounded, restart-safe fan-out. Row locking lets replicas work without duplicate alerts. */
+export async function processAuthenticationAlertFanout() {
+  for (let batch = 0; batch < 5; batch++) {
+    const processed = await prisma.$transaction(async tx => {
+      const jobs = await tx.$queryRaw<
+        Array<{ eventId: string; title: string; message: string; cursor: string; createdAt: Date }>
+      >`SELECT * FROM "AuthenticationAlertFanout" ORDER BY "createdAt", "eventId"
+        LIMIT 1 FOR UPDATE SKIP LOCKED`;
+      const job = jobs[0];
+      if (!job) return false;
+      const admins = await tx.user.findMany({
+        where: {
+          id: { gt: job.cursor },
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          createdAt: { lte: job.createdAt },
+        },
+        orderBy: { id: 'asc' },
+        select: { id: true },
+        take: AUTHENTICATION_ALERT_BATCH_SIZE,
+      });
+      await materializeAlerts(tx, job.eventId, job.title, job.message, admins);
+      if (admins.length < AUTHENTICATION_ALERT_BATCH_SIZE)
+        await tx.authenticationAlertFanout.delete({ where: { eventId: job.eventId } });
+      else
+        await tx.authenticationAlertFanout.update({
+          where: { eventId: job.eventId },
+          data: { cursor: admins[admins.length - 1].id },
+        });
+      return true;
+    });
+    if (!processed) break;
+  }
+}
+
 /** Durable leased email delivery. In-app alerts already commit with the security event. */
 export async function processAuthenticationAlerts() {
+  await processAuthenticationAlertFanout();
   const pending = await prisma.authenticationAlert.findMany({
     where: {
       deliveredAt: null,

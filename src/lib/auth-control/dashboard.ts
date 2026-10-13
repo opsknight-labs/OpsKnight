@@ -271,17 +271,7 @@ export async function identityClaimsPreview(revisionId: string, claims: Record<s
   const subject = typeof claims.sub === 'string' ? claims.sub : null;
   if (typeof claims.iss !== 'string' || normalizeOidcIssuer(claims.iss) !== config.issuer)
     return { outcome: 'REJECT', reason: 'Issuer must exactly match this staged revision.', role };
-  if (
-    !subject ||
-    !email ||
-    claims.email_verified === false ||
-    (!provider.allowsMissingEmailVerified() && claims.email_verified !== true)
-  )
-    return {
-      outcome: 'REJECT',
-      reason: 'Stable subject and required verified email claims are missing.',
-      role,
-    };
+  if (!subject) return { outcome: 'REJECT', reason: 'A stable subject claim is required.', role };
   if (
     !provider.validateOrganizationBoundary(claims, config.allowedDomains, config.organizationId).ok
   )
@@ -292,8 +282,19 @@ export async function identityClaimsPreview(revisionId: string, claims: Record<s
   } catch {
     return { outcome: 'REJECT', reason: 'Ambiguous external identity ownership.', role };
   }
+  if (
+    !identity &&
+    (!email ||
+      claims.email_verified === false ||
+      (!provider.allowsMissingEmailVerified() && claims.email_verified !== true))
+  )
+    return {
+      outcome: 'REJECT',
+      reason: 'Verified email ownership is required for a new identity link.',
+      role,
+    };
   const user = await prisma.user.findUnique({
-    where: identity ? { id: identity.userId } : { email },
+    where: identity ? { id: identity.userId } : { email: email! },
   });
   if (user?.status === 'DISABLED') return { outcome: 'REJECT', reason: 'User is disabled.', role };
   const effectiveRole =

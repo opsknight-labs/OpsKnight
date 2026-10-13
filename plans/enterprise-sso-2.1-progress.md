@@ -386,3 +386,64 @@ measurements, not throughput guarantees. Per the user's explicit choice, live Id
 and physically independent security-key certification remain pending. No live tenant
 or production deployment was changed. See
 `docs/v2.1.0/guides/identity/local-certification.md` for replay steps and scope.
+
+## Latest deep review follow-up — 2026-10-13
+
+Input is archived in `enterprise-sso-2.1-latest-deep-review.md`. The previous pushed
+commit's hosted workflow completed successfully. Main's remaining patch `a278116a0`
+was incorporated as `161db888a` without merging, rewriting history or creating a PR.
+
+- Staged verification and claims preview accept a securely linked issuer/subject
+  without a mutable email claim. New links still require explicit approval and
+  provider-appropriate matching email assurance. An existing-binding proof cannot
+  recreate a subsequently removed identity. Five signed Entra-style token cases
+  exercise linked/unlinked, missing-email and approval combinations against local
+  HTTPS/JWKS and PostgreSQL; they do not claim live vendor acceptance.
+- Hardware recovery no longer shares an instance-wide budget with unknown accounts
+  or legacy password attempts. Known accounts retain bounded ceremony creation;
+  browser-bound in-progress ceremonies have three independent verification attempts.
+  Foreign browser requests cannot consume those attempts. Reauthentication has a
+  separate authenticated-session reserve. A real limiter/signature/database test
+  completes recovery after 400 distributed unknown-account and 40 foreign-browser
+  failures, including saturation of the account's new-ceremony budget. It also proves
+  the verification reserve stops after three failed attempts.
+- Security operations create at most 100 immediate recipient alerts. An additive
+  `AuthenticationAlertFanout` outbox stores the remainder in the same transaction.
+  Workers use cursor pagination and transactional row locks with SKIP LOCKED;
+  each pass processes at most five batches of 100. A 1,203-active-administrator
+  test completed with two concurrent workers, no duplicate alerts, and about
+  19 ms in the measured originating transaction. Each recipient's eligibility is
+  checked when its batch is materialized. Anonymous aggregation remains capped.
+- Diagnostics is now a focused component with the same session-revocation behavior,
+  keyboard support and responsive product controls. Documentation explains staged
+  ownership, recovery quotas, targeted-identifier abuse and asynchronous alert delivery.
+- Dedicated Enterprise SSO CI runs authentication units/type checking, signed-token
+  and WebAuthn database suites, distributed-abuse availability, alert fan-out, and an
+  exact published-v2.0.0 upgrade with preserved-session/race checks and load artifacts.
+
+Verification:
+
+- 5,754 unit tests across 756 files passed, four intentional skips; the subsequent
+  focused authentication/provider/component run passed all 281 tests.
+- 49 PostgreSQL tests across three authentication suites passed; the released-version
+  upgrade/race/read-load suite passed 12 tests. The new migration is additive.
+- TypeScript, modified-file lint with zero warnings, Prisma schema validation,
+  eight deployment/documentation contracts and the optimized standalone build pass.
+- Four production HTTPS browser checks pass across Chromium/Firefox/WebKit, with
+  two intentional non-Chromium virtual-authenticator skips. The local fixture uses
+  a dedicated database role and keeps production secret validation enabled.
+- The new HTTP probe performs 400 warmup requests plus 6,000 measured requests in
+  three rounds at concurrency 1/10/25/50, all with zero errors. Warm p95 ranges were
+  6.7–7.2 ms, 19.0–24.1 ms, 37.0–37.8 ms and 69.4–135.1 ms respectively. This run uses
+  one optimized web process, a five-connection database pool, and a local TLS proxy.
+  It includes Playwright client overhead and is not directly comparable with the
+  previous two-replica Kind topology. No authorization freshness check was weakened.
+
+Artifacts: `certification/enterprise-sso-2.1-resilience.json`,
+`certification/enterprise-sso-2.1-http-steady-state.json`, and the refreshed bounded
+read artifact. The previous Kind cutover record remains historical evidence for its
+recorded source, image and topology. Multi-node/split-runtime failure certification,
+real outbound-provider delivery, live IdPs and independent physical-key custody still
+require their own acceptance runs. The user's decision to leave live tenants/keys
+pending remains in force. These results support the specific tested behavior;
+no universal compatibility, zero-downtime or numeric “10/10” certification is claimed.

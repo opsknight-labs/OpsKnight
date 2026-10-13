@@ -75,16 +75,51 @@ SSO_CERT_EXPECTED_USER_ID=fixture-user-id \
 node scripts/certify-authentication-http.cjs
 ```
 
-This tool permits only localhost HTTPS and performs 300 protected-session reads,
-with concurrency up to 50. It verifies the same User ID on every response and never
+This tool permits only localhost HTTPS. It records the first request separately,
+warms up with 100 requests at each concurrency level, then measures three rounds
+of 500 requests at concurrency 1, 10, 25 and 50 (6,000 measured requests). It verifies the same User ID on every response and never
 prints cookies or authentication headers. Its self-signed-certificate exception is
-restricted to that local fixture. The original run used a TLS proxy, nginx and a
+restricted to that local fixture. Results are written to
+`plans/certification/enterprise-sso-2.1-http-steady-state.json`. Latencies include
+Playwright client IPC and JSON validation; responses are disposed after every
+request. Compare repeated rounds, median and tail latency with equivalent server
+and client resources. The historical 300-request run used a TLS proxy, nginx and a
 Kubernetes NodePort/Service with two ready application replicas; a port-forward
 transport was not used for the final browser/load measurements.
 
+## Signed provider, recovery-abuse and alert-fan-out checks
+
+Create a disposable `enterprise_sso_test` database and point `DATABASE_URL` and
+`DIRECT_URL` at it. Configure an isolated test `NEXTAUTH_SECRET`, then run:
+
+```bash
+npx prisma migrate deploy
+npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts
+```
+
+The local HTTPS issuer signs actual RS256 ID tokens and exercises code exchange,
+PKCE, nonce, JWKS and identity ownership. Entra-style tokens omit email and/or
+email_verified: an existing issuer/subject link succeeds, while a new link still
+requires explicit approval and matching email ownership. Removing a tested existing
+link before activation cannot silently recreate it. Claims preview follows the same
+ownership rules. Provider metadata uses a local fixture, not a live Entra tenant.
+
+The WebAuthn suite uses real local signatures and PostgreSQL rate limits. It injects
+400 unknown-account attempts from 40 clients and 40 foreign-browser verifications,
+then completes a legitimate ceremony despite a saturated new-ceremony account
+budget. It also verifies a reserved authenticated reauthentication path. A second
+case creates 1,200 additional administrators, checks that the security-operation
+transaction creates only 100 recipient alerts, and drains the remainder using two
+concurrent workers without duplicates. Results are recorded in
+`plans/certification/enterprise-sso-2.1-resilience.json`.
+
+The **Enterprise SSO certification** GitHub workflow runs these suites and the exact
+published-release upgrade on isolated PostgreSQL services, including a bounded
+read-load artifact. This complements the deployment and ordinary unit workflows.
+
 ## Actual Kind and Helm cutover evidence
 
-The recorded rehearsal used a dedicated Kind cluster (Kubernetes v1.37.0), one node,
+The recorded `c59a20c` rehearsal used a dedicated Kind cluster (Kubernetes v1.37.0), one node,
 its own PostgreSQL StatefulSet and a local fixture namespace:
 
 1. Extract the Helm chart from the exact v2.0.0 tag. Install its published image with
@@ -103,7 +138,8 @@ its own PostgreSQL StatefulSet and a local fixture namespace:
    The cutover gate succeeds, the migration Job fails, and application replicas
    remain zero. Confirm the original database has not advanced.
 5. Restore the correct Secret and retry with the tested new image. The migration
-   owner advances the original database to **198** migration records; two new
+   owner advanced that tested source to **198** migration records (subsequent additive
+   migrations increase this count); two new
    application replicas become ready. Verify the original administrator, unchanged
    provider ciphertext and the browser session created by the old application.
 6. Run Chromium/Firefox/WebKit console, keyboard, desktop/mobile and validation

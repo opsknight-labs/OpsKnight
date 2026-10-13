@@ -24,6 +24,9 @@ async function main() {
     (!Number.isSafeInteger(expectedPolicyVersion) || expectedPolicyVersion < 1)
   )
     throw new Error('Invalid expected policy version.');
+  const operations = 500;
+  const rounds = 3;
+  const warmupOperations = 100;
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({
@@ -31,17 +34,20 @@ async function main() {
       storageState: process.env.SSO_CERT_SESSION_STATE,
     });
     const results = [];
-    for (const concurrency of [10, 25, 50]) {
+    async function sample(concurrency, count) {
       let next = 0;
       let errors = 0;
       const latencies = [];
       const start = performance.now();
       await Promise.all(
         Array.from({ length: concurrency }, async () => {
-          while (next++ < 100) {
+          while (next++ < count) {
             const before = performance.now();
+            let response;
             try {
-              const response = await context.request.get(`${origin.origin}/api/auth/session`);
+              response = await context.request.get(`${origin.origin}/api/auth/session`, {
+                timeout: 10000,
+              });
               const data = await response.json();
               if (
                 response.status() !== 200 ||
@@ -52,29 +58,50 @@ async function main() {
                 errors++;
             } catch {
               errors++;
+            } finally {
+              await response?.dispose();
             }
             latencies.push(performance.now() - before);
           }
         })
       );
+      const durationMs = performance.now() - start;
       latencies.sort((a, b) => a - b);
-      results.push({
+      return {
         concurrency,
-        operations: 100,
+        operations: count,
         errors,
-        durationMs: performance.now() - start,
+        durationMs,
+        requestsPerSecond: (count * 1000) / durationMs,
+        p50Ms: latencies[Math.ceil(latencies.length * 0.5) - 1],
         p95Ms: latencies[Math.ceil(latencies.length * 0.95) - 1],
         p99Ms: latencies[Math.ceil(latencies.length * 0.99) - 1],
-      });
-      if (errors) throw new Error('Protected session verification failed during local HTTP load.');
+      };
+    }
+    const initialRequest = await sample(1, 1);
+    if (initialRequest.errors) throw new Error('Initial protected session check failed.');
+    for (const concurrency of [1, 10, 25, 50]) {
+      const warmup = await sample(concurrency, warmupOperations);
+      if (warmup.errors) throw new Error('Warmup protected session verification failed.');
+      for (let round = 1; round <= rounds; round++) {
+        const result = await sample(concurrency, operations);
+        results.push({ round, ...result });
+        if (result.errors)
+          throw new Error('Protected session verification failed during local HTTP load.');
+      }
     }
     mkdirSync('plans/certification', { recursive: true });
     writeFileSync(
-      'plans/certification/enterprise-sso-2.1-http-load.json',
+      'plans/certification/enterprise-sso-2.1-http-steady-state.json',
       JSON.stringify(
         {
           measuredAt: new Date().toISOString(),
           expectedPolicyVersion,
+          initialRequest,
+          warmupOperationsPerConcurrency: warmupOperations,
+          rounds,
+          client:
+            'Playwright request API with response disposal; latency includes client IPC and JSON validation.',
           scope:
             'Local TLS/HTTP session checks. Declared fixture routing and resource limits determine these diagnostic measurements; they are not a production capacity certificate.',
           results,
@@ -83,7 +110,9 @@ async function main() {
         2
       ) + '\n'
     );
-    console.log('300 local HTTP session checks passed, concurrency up to 50.');
+    console.log(
+      '6,000 measured local HTTP session checks passed after 400 warmup requests, concurrency up to 50.'
+    );
   } finally {
     await browser.close();
   }

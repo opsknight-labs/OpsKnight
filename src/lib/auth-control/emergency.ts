@@ -87,12 +87,9 @@ export async function recordEmergencyFailure(accountId: string, reason: string) 
 }
 
 export async function emergencyLoginOptions(accountId: string, ip: string, reauthToken?: string) {
-  const limits = await Promise.all([
-    consumeAuthRateLimit('emergency:options:ip', ip, 30, 300000),
-    consumeAuthRateLimit('emergency:options:account', accountId, 20, 300000),
-    consumeAuthRateLimit('emergency:global', 'instance', 300, 300000),
-  ]);
-  if (limits.some(limit => !limit.allowed)) {
+  // Per-network admission bounds indexed lookups. Unknown identifiers never consume
+  // a real account's ceremony budget or an in-progress ceremony's verification budget.
+  if (!(await consumeAuthRateLimit('emergency:options:ip', ip, 30, 300000)).allowed) {
     await recordEmergencyFailure(accountId, 'RATE_LIMITED');
     throw new Error('Too many attempts from this network. Try again shortly.');
   }
@@ -107,6 +104,15 @@ export async function emergencyLoginOptions(accountId: string, ip: string, reaut
   const session = reauthToken ? await getEmergencySession(reauthToken) : null;
   if (reauthToken && (!session || session.emergencyAccountId !== account.id))
     throw new Error('Reauthentication must use the current emergency identity.');
+  const budget = session
+    ? await consumeAuthRateLimit('emergency:reauth:session', session.id, 10, 300000)
+    : await consumeAuthRateLimit('emergency:options:account', account.id, 20, 300000);
+  if (!budget.allowed) {
+    await recordEmergencyFailure(accountId, 'RATE_LIMITED');
+    throw new Error(
+      'Too many attempts for this recovery identity. Use another custodian or retry shortly.'
+    );
+  }
   const origin = await recoveryOrigin();
   const options = await generateAuthenticationOptions({
     rpID: new URL(origin).hostname,
@@ -138,10 +144,21 @@ export async function verifyEmergencyLogin(
   const token = secret();
   let accountId = '';
   try {
-    if (
-      !(await consumeAuthRateLimit('emergency:verify:ip', ip, 30, 300000)).allowed ||
-      !(await consumeAuthRateLimit('emergency:global', 'instance', 300, 300000)).allowed
-    )
+    // The unguessable browser capability reserves completion independently of
+    // anonymous traffic. Recheck every predicate under the transaction below.
+    const pending = await prisma.emergencyChallenge.findUnique({ where: { id: challengeId } });
+    const ownsCeremony =
+      pending &&
+      ['LOGIN', 'REAUTH'].includes(pending.kind) &&
+      pending.browserHash === digest(browserToken) &&
+      !pending.consumedAt &&
+      pending.expiresAt.getTime() > Date.now();
+    if (!ownsCeremony) {
+      await consumeAuthRateLimit('emergency:verify:invalid:ip', ip, 30, 300000);
+      throw new Error('CHALLENGE_EXPIRED_OR_REPLAYED');
+    }
+    accountId = pending.emergencyAccountId;
+    if (!(await consumeAuthRateLimit('emergency:verify:ceremony', pending.id, 3, 300000)).allowed)
       throw new Error('RATE_LIMITED');
     return await prisma.$transaction(
       async tx => {
@@ -281,8 +298,8 @@ export async function legacyEmergencyLogin(email: string, password: string, ip: 
   try {
     if (
       !(await consumeAuthRateLimit('emergency:legacy:ip', ip, 10, 300000)).allowed ||
-      !(await consumeAuthRateLimit('emergency:global', 'instance', 300, 300000)).allowed ||
-      policy.legacyEmergencyEmail !== normalized
+      policy.legacyEmergencyEmail !== normalized ||
+      !(await consumeAuthRateLimit('emergency:legacy:account', normalized, 100, 300000)).allowed
     )
       throw new Error('denied');
     const user = await prisma.user.findUnique({ where: { email: normalized } });

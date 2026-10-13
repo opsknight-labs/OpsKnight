@@ -1,0 +1,169 @@
+{
+  "measuredAt": "2026-10-13T11:39:03.550Z",
+  "expectedPolicyVersion": null,
+  "warmupOperationsPerConcurrency": 100,
+  "rounds": 3,
+  "client": "Playwright request API with response disposal; latency includes client IPC and JSON validation.",
+  "scope": "Local TLS/HTTP session checks. Declared fixture routing and resource limits determine these diagnostic measurements; they are not a production capacity certificate.",
+  "results": [
+    {
+      "round": 1,
+      "concurrency": 1,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 2854.400375,
+      "requestsPerSecond": 175.16813842206702,
+      "p50Ms": 5.573124999999891,
+      "p95Ms": 6.795082999999977,
+      "p99Ms": 7.435208999999759
+    },
+    {
+      "round": 2,
+      "concurrency": 1,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 2810.9698339999995,
+      "requestsPerSecond": 177.8745520326349,
+      "p50Ms": 5.344165999999859,
+      "p95Ms": 7.190333000000464,
+      "p99Ms": 8.76549999999952
+    },
+    {
+      "round": 3,
+      "concurrency": 1,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 2678.7733749999998,
+      "requestsPerSecond": 186.6525943054067,
+      "p50Ms": 5.168666000000485,
+      "p95Ms": 6.673166999999012,
+      "p99Ms": 7.722208999999566
+    },
+    {
+      "round": 1,
+      "concurrency": 10,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 832.863374999999,
+      "requestsPerSecond": 600.338560931438,
+      "p50Ms": 16.267665999999736,
+      "p95Ms": 20.48450000000048,
+      "p99Ms": 26.780624999999418
+    },
+    {
+      "round": 2,
+      "concurrency": 10,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 776.164999999999,
+      "requestsPerSecond": 644.1929228965498,
+      "p50Ms": 15.3643749999992,
+      "p95Ms": 19.026332999999795,
+      "p99Ms": 24.14954200000102
+    },
+    {
+      "round": 3,
+      "concurrency": 10,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 832.9354170000006,
+      "requestsPerSecond": 600.2866366288752,
+      "p50Ms": 15.595957999999882,
+      "p95Ms": 24.131999999999607,
+      "p99Ms": 27.481707999999344
+    },
+    {
+      "round": 1,
+      "concurrency": 25,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 662.7517910000006,
+      "requestsPerSecond": 754.4302509474464,
+      "p50Ms": 32.8643749999992,
+      "p95Ms": 36.96891700000015,
+      "p99Ms": 50.853000000000975
+    },
+    {
+      "round": 2,
+      "concurrency": 25,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 644.9794999999995,
+      "requestsPerSecond": 775.2184371751357,
+      "p50Ms": 31.515041999999085,
+      "p95Ms": 37.30987500000083,
+      "p99Ms": 46.853667000001224
+    },
+    {
+      "round": 3,
+      "concurrency": 25,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 644.2932499999988,
+      "requestsPerSecond": 776.0441382864107,
+      "p50Ms": 31.909708999999566,
+      "p95Ms": 37.78883300000052,
+      "p99Ms": 40.167334000001574
+    },
+    {
+      "round": 1,
+      "concurrency": 50,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 653.6715409999997,
+      "requestsPerSecond": 764.9101553894943,
+      "p50Ms": 62.79183399999965,
+      "p95Ms": 69.36099999999897,
+      "p99Ms": 212.97379200000069
+    },
+    {
+      "round": 2,
+      "concurrency": 50,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 674.5683329999993,
+      "requestsPerSecond": 741.2147525164074,
+      "p50Ms": 65.84649999999965,
+      "p95Ms": 80.74641599999995,
+      "p99Ms": 81.50279200000114
+    },
+    {
+      "round": 3,
+      "concurrency": 50,
+      "operations": 500,
+      "errors": 0,
+      "durationMs": 789.2615839999999,
+      "requestsPerSecond": 633.5035305607881,
+      "p50Ms": 72.47283299999981,
+      "p95Ms": 135.12095799999952,
+      "p99Ms": 147.75029200000063
+    }
+  ],
+  "initialRequest": {
+    "concurrency": 1,
+    "operations": 1,
+    "errors": 0,
+    "durationMs": 328.32875,
+    "requestsPerSecond": 3.0457277956925792,
+    "p50Ms": 328.285,
+    "p95Ms": 328.285,
+    "p99Ms": 328.285
+  },
+  "fixture": {
+    "server": "optimized standalone Next.js",
+    "runtimeRole": "web",
+    "applicationReplicas": 1,
+    "databasePoolLimit": 5,
+    "routing": "local TLS proxy directly to web process; PostgreSQL in Docker",
+    "serverPlatform": "Darwin arm64"
+  },
+  "sourceHashes": {
+    "src/lib/auth.ts": "4f67220320f4f8e6c4233f1fd0417121119fffad629017640176a60c90fef6c9",
+    "src/lib/authentication-policy.ts": "bef89e19c96e0fca927281a3a3f3ec44e6496405966889f591cb78ecdc072688",
+    "src/lib/oidc-config.ts": "bac12300a7ec4402f2f2ac8d766ebc81e721e04337fe8df1c188541fd89f244f",
+    "src/lib/auth-control/emergency.ts": "cb00fe48a86a8090444a86fd737ffade6b5021b79d6079566bfb6dc79876d2f6",
+    "src/lib/auth-control/security-events.ts": "50b66bc7b009b8a2de189f6be4951aa28365a01eadd3de166f6b3152b1efd0ef",
+    "src/lib/auth-control/oidc-revisions.ts": "af6cb0bb62e614950e4d1579485217d43f7cce1791218a3815bb1f3ed4c1054e",
+    "src/lib/auth-control/dashboard.ts": "b268ee2cacb9497d8db9fa72daf6c32bbf907c478a8fbd6f252c86e3e0cf2d61"
+  }
+}

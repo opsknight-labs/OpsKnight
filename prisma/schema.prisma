@@ -3982,6 +3982,17 @@ model AuthenticationAlert {
   @@index([deliveredAt, nextAttemptAt])
 }
 
+// Durable remainder of a security alert's bounded administrator fan-out.
+model AuthenticationAlertFanout {
+  eventId     String   @id
+  title       String
+  message     String
+  cursor      String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // Global aggregate windows prevent anonymous failures from amplifying administrator alerts.
 model AuthenticationFailureWindow {
   id        String   @id

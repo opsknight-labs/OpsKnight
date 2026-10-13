@@ -276,18 +276,16 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
     const claims = tokens.claims();
     const provider = getOidcProviderPolicy(config.issuer, config.providerType);
     if (
-      claims.email_verified === false ||
-      (!provider.allowsMissingEmailVerified() && claims.email_verified !== true)
-    )
-      throw new Error('Verified email is required.');
-    if (
       !provider.validateOrganizationBoundary(claims, config.allowedDomains, config.organizationId)
         .ok
     )
       throw new Error('Provider organization boundary rejected the login.');
-    if (!claims.sub || typeof claims.email !== 'string')
-      throw new Error('Subject and email claims are required for administrator verification.');
-    const email = claims.email.trim().toLowerCase();
+    if (!claims.sub) throw new Error('A subject claim is required for administrator verification.');
+    const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
+    const emailOwnershipVerified =
+      Boolean(email) &&
+      claims.email_verified !== false &&
+      (claims.email_verified === true || provider.allowsMissingEmailVerified());
     const role = evaluateOidcRoleClaims(claims, config.roleMapping);
     if (!role.ok || role.groupsOverage)
       throw new Error('Resolve missing/group-overage role claims before activation.');
@@ -307,7 +305,10 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
       const identity = await findRevisionIdentity(tx, config.issuer, claims.sub);
       if (identity && identity.userId !== admin.id)
         throw new Error('This external identity belongs to another OpsKnight user.');
-      if (!identity && (!flow.linkApproved || email !== admin.email.toLowerCase()))
+      if (
+        !identity &&
+        (!flow.linkApproved || !emailOwnershipVerified || email !== admin.email.toLowerCase())
+      )
         throw new Error(
           'Explicit same-account linking approval and matching verified email are required.'
         );
@@ -325,7 +326,8 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
           subject: claims.sub,
           email,
           effectiveRole,
-          linkApproved: flow.linkApproved,
+          // An existing binding proves identity, never permission to recreate a removed link.
+          linkApproved: !identity && flow.linkApproved,
         },
       });
       await securityEvent(tx, 'auth.oidc.test.success', admin.id, {

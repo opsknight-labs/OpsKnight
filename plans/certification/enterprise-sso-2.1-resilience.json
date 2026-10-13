@@ -1,0 +1,22 @@
+{
+  "measuredAt": "2026-10-13T11:35:48.480Z",
+  "scope": "Isolated PostgreSQL and signed local WebAuthn fixtures. No live IdP, physical keys or email provider.",
+  "recoveryAvailability": {
+    "distributedUnknownAccountFailures": 400,
+    "foreignBrowserFailures": 40,
+    "validRecoveryCompleted": true,
+    "saturatedAccountBudgetDidNotBlockCompletion": true,
+    "authenticatedReauthenticationReserved": true,
+    "verificationReserveBoundedToThreeAttempts": true,
+    "durationMs": 2742.084875
+  },
+  "alertFanout": {
+    "activeAdministrators": 1203,
+    "synchronousRecipients": 100,
+    "transactionMs": 19.408040999999685,
+    "finalRecipients": 1203,
+    "duplicateInAppAlerts": 0,
+    "concurrentWorkers": 2,
+    "totalDurationMs": 252.64854099999957
+  }
+}

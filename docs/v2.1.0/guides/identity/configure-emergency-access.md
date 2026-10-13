@@ -6,7 +6,7 @@ product_area: identity
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-12
+  verified_at: 2026-10-13
   evidence:
     - src/components/settings/AuthenticationConsole.tsx
     - src/lib/auth-control
@@ -90,3 +90,29 @@ must appear; SSO Required must remain unchanged. Recover two independently ready
 identities promptly. Successful current drills clear the degraded marker when two
 identities are ready again. If none remain, a normal SSO administrator may enroll
 replacements; otherwise use the documented infrastructure incident procedure.
+
+## Recovery availability under abusive traffic
+
+Unknown account requests do not share a global budget with legitimate recovery.
+New ceremonies are limited per network (30 per five minutes) and per known account
+(20 per five minutes). Verification of an issued ceremony requires its unguessable
+browser cookie and has a separate three-attempt budget. Invalid cookies cannot
+consume that reserve. Authenticated reauthentication has its own ten-ceremony
+budget per session; hard session expiry still applies. Legacy password recovery
+uses separate network and designated-account limits and cannot spend hardware-key
+budgets.
+
+Keep account identifiers in the external custody procedure. A targeted attacker
+who knows an identifier can exhaust that account's new-ceremony allowance; an
+already-issued ceremony can still finish, and another custodian's account remains
+independent. Use ingress request/body/connection limits and a tested restricted
+recovery access path for volumetric attacks. Application quotas cannot guarantee
+availability when the database, network or host is saturated. Preserve the exact
+WebAuthn origin when providing that access path.
+
+Security mutations commit mandatory audit evidence and at most 100 immediate
+recipient alerts, plus a durable cursor for remaining administrators. The scheduler
+materializes up to five further batches of 100 per pass; cursor advancement and
+alert creation commit together. Additional recipients receive alerts asynchronously.
+Anonymous failures retain their existing aggregate notification cap. Verify the
+scheduler and notification workers are healthy in split deployments.

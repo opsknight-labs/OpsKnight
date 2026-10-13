@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 import { restorePasswordAccess, repairCanonicalOrigin } from '@/lib/auth-control/recovery';
 import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { isoCBOR } from '@simplewebauthn/server/helpers';
@@ -26,7 +28,11 @@ import {
 } from '@/lib/auth-control/emergency';
 import { lockControlActor, type ControlActor } from '@/lib/auth-control/actor';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
-import { processAuthenticationAlerts, securityEvent } from '@/lib/auth-control/security-events';
+import {
+  processAuthenticationAlerts,
+  processAuthenticationAlertFanout,
+  securityEvent,
+} from '@/lib/auth-control/security-events';
 
 vi.mock('@/lib/notification-control-plane', () => ({
   enqueueCentralNotification: vi.fn().mockRejectedValue(new Error('delivery queue unavailable')),
@@ -130,6 +136,7 @@ function assertion(
 suite('independent emergency authentication with signed WebAuthn responses and PostgreSQL', () => {
   let accountId: string;
   let token: string;
+  const measurements: Record<string, unknown> = {};
   beforeAll(async () => {
     if (!new URL(process.env.DATABASE_URL!).pathname.endsWith('/enterprise_sso_test'))
       throw new Error('Isolated enterprise_sso_test DB required.');
@@ -163,6 +170,22 @@ suite('independent emergency authentication with signed WebAuthn responses and P
     await prisma.emergencyCredential.deleteMany({ where: { emergencyAccountId: accountId } });
     if (accountId) await prisma.emergencyAccount.delete({ where: { id: accountId } });
     await prisma.$disconnect();
+    if (measurements.recoveryAvailability && measurements.alertFanout) {
+      mkdirSync('plans/certification', { recursive: true });
+      writeFileSync(
+        'plans/certification/enterprise-sso-2.1-resilience.json',
+        JSON.stringify(
+          {
+            measuredAt: new Date().toISOString(),
+            scope:
+              'Isolated PostgreSQL and signed local WebAuthn fixtures. No live IdP, physical keys or email provider.',
+            ...measurements,
+          },
+          null,
+          2
+        ) + '\n'
+      );
+    }
   });
   it('stores only public credentials, and requires a separate sign-in drill for readiness', async () => {
     const account = await createEmergencyAccount(actor, 'Independent custodian', true);
@@ -327,6 +350,95 @@ suite('independent emergency authentication with signed WebAuthn responses and P
     expect(await getEmergencySession(renewed.token)).not.toBeNull();
     token = renewed.token;
   });
+  it('preserves real recovery completion during distributed unknown-account and verification abuse', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/auth-abuse')>('@/lib/auth-abuse');
+    vi.mocked(consumeAuthRateLimit).mockImplementation(actual.consumeAuthRateLimit);
+    const started = performance.now();
+    try {
+      await prisma.rateLimit.deleteMany({ where: { key: { startsWith: 'auth:emergency:' } } });
+      // More than the former shared 300-request budget, spread over 40 clients.
+      for (let batch = 0; batch < 20; batch++) {
+        const attempts = await Promise.allSettled(
+          Array.from({ length: 20 }, (_, i) =>
+            emergencyLoginOptions(`unknown-${batch}-${i}`, `198.51.100.${(batch * 20 + i) % 40}`)
+          )
+        );
+        expect(attempts.every(result => result.status === 'rejected')).toBe(true);
+      }
+      const flow = await emergencyLoginOptions(accountId, '192.0.2.1');
+      // Even saturation of new ceremonies cannot steal the existing browser capability.
+      for (let i = 0; i < 25; i++)
+        await actual.consumeAuthRateLimit('emergency:options:account', accountId, 20, 300000);
+      await expect(emergencyLoginOptions(accountId, '192.0.2.2')).rejects.toThrow('Too many');
+      const failures = await Promise.allSettled(
+        Array.from({ length: 40 }, (_, i) =>
+          verifyEmergencyLogin(
+            flow.challengeId,
+            secret(),
+            assertion(flow.options.challenge, 4),
+            `203.0.113.${i}`
+          )
+        )
+      );
+      expect(failures.every(result => result.status === 'rejected')).toBe(true);
+      const login = await verifyEmergencyLogin(
+        flow.challengeId,
+        flow.browserToken,
+        assertion(flow.options.challenge, 4),
+        '192.0.2.1'
+      );
+      token = login.token;
+      expect((await getEmergencySession(token))?.account?.id).toBe(accountId);
+      // Authenticated reauthentication has its own bounded reserve.
+      const reauth = await emergencyLoginOptions(accountId, '192.0.2.1', token);
+      expect(reauth.challengeId).toBeTruthy();
+      for (let attempt = 0; attempt < 3; attempt++)
+        await expect(
+          verifyEmergencyLogin(
+            reauth.challengeId,
+            reauth.browserToken,
+            assertion(reauth.options.challenge, 5, 1),
+            '192.0.2.1'
+          )
+        ).rejects.toThrow('sign-in failed');
+      await expect(
+        verifyEmergencyLogin(
+          reauth.challengeId,
+          reauth.browserToken,
+          assertion(reauth.options.challenge, 5),
+          '192.0.2.1'
+        )
+      ).rejects.toThrow('sign-in failed');
+      expect(
+        (
+          await prisma.emergencyCredential.findUniqueOrThrow({
+            where: { credentialId: b64(credentialId) },
+          })
+        ).counter
+      ).toBe(BigInt(4));
+
+      measurements.recoveryAvailability = {
+        distributedUnknownAccountFailures: 400,
+        foreignBrowserFailures: 40,
+        validRecoveryCompleted: true,
+        saturatedAccountBudgetDidNotBlockCompletion: true,
+        authenticatedReauthenticationReserved: true,
+        verificationReserveBoundedToThreeAttempts: true,
+        durationMs: performance.now() - started,
+      };
+      console.log(
+        'Recovery survived 440 distributed failures, milliseconds:',
+        Math.round(performance.now() - started)
+      );
+    } finally {
+      vi.mocked(consumeAuthRateLimit).mockResolvedValue({
+        allowed: true,
+        remaining: 1,
+        resetAt: Date.now(),
+        count: 1,
+      });
+    }
+  });
   it('does not count a successful drill from another canonical origin', async () => {
     await prisma.emergencyAccount.update({
       where: { id: accountId },
@@ -415,6 +527,56 @@ suite('independent emergency authentication with signed WebAuthn responses and P
         where: { id: other.id },
         data: { verifiedAt: other.verifiedAt },
       });
+  });
+  it('bounds the security transaction and completes large alert fan-out once across concurrent workers', async () => {
+    const prefix = `fanout-scale-${Date.now()}`;
+    const recipients = Array.from({ length: 1200 }, (_, index) => ({
+      id: `${prefix}-${String(index).padStart(4, '0')}`,
+      name: 'Fanout fixture',
+      email: `${prefix}-${index}@example.test`,
+      role: 'ADMIN' as const,
+      status: 'ACTIVE' as const,
+    }));
+    await prisma.user.createMany({ data: recipients });
+    let eventId = '';
+    try {
+      const expected = await prisma.user.count({ where: { role: 'ADMIN', status: 'ACTIVE' } });
+      const start = performance.now();
+      const event = await prisma.$transaction(tx =>
+        securityEvent(tx, 'auth.test.fanout', actor.id)
+      );
+      eventId = event.id;
+      expect(await prisma.authenticationAlert.count({ where: { eventId } })).toBe(100);
+      expect(
+        await prisma.authenticationAlertFanout.findUnique({ where: { eventId } })
+      ).not.toBeNull();
+      const transactionMs = performance.now() - start;
+      console.log(
+        '1,200-admin bounded security transaction milliseconds:',
+        Math.round(performance.now() - start)
+      );
+      for (let round = 0; round < 4; round++)
+        await Promise.all([processAuthenticationAlertFanout(), processAuthenticationAlertFanout()]);
+      expect(await prisma.authenticationAlert.count({ where: { eventId } })).toBe(expected);
+      expect(await prisma.inAppNotification.count({ where: { entityId: eventId } })).toBe(expected);
+      expect(await prisma.authenticationAlertFanout.findUnique({ where: { eventId } })).toBeNull();
+      await processAuthenticationAlertFanout();
+      expect(await prisma.authenticationAlert.count({ where: { eventId } })).toBe(expected);
+      measurements.alertFanout = {
+        activeAdministrators: expected,
+        synchronousRecipients: 100,
+        transactionMs,
+        finalRecipients: expected,
+        duplicateInAppAlerts: 0,
+        concurrentWorkers: 2,
+        totalDurationMs: performance.now() - start,
+      };
+    } finally {
+      await prisma.authenticationAlertFanout.deleteMany({ where: { eventId } });
+      await prisma.authenticationAlert.deleteMany({ where: { eventId } });
+      await prisma.inAppNotification.deleteMany({ where: { entityId: eventId } });
+      await prisma.user.deleteMany({ where: { id: { startsWith: prefix } } });
+    }
   });
   it('keeps individual abuse evidence while capping distributed anonymous alert fan-out', async () => {
     await prisma.authenticationFailureWindow.deleteMany();

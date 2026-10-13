@@ -20,11 +20,12 @@ import {
 import { authenticationOrigin } from '@/lib/auth-control/origin';
 import { restorePasswordAccess } from '@/lib/auth-control/recovery';
 import { evaluateAuthenticationPolicy } from '@/lib/authentication-policy-evaluator';
-import { searchAuthenticationUsers } from '@/lib/auth-control/dashboard';
+import { searchAuthenticationUsers, identityClaimsPreview } from '@/lib/auth-control/dashboard';
 import { digest, secret } from '@/lib/auth-control/emergency';
 import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
 import type { ControlActor } from '@/lib/auth-control/actor';
 
+const entraIssuer = 'https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0';
 const runtime = vi.hoisted(() => ({ issuer: '' }));
 vi.mock('@/lib/auth-control/actor', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/auth-control/actor')>();
@@ -39,10 +40,10 @@ vi.mock('@/lib/auth-control/origin', () => ({
 // HTTPS token exchange, RS256/JWKS, nonce, PKCE, identity binding and activation.
 vi.mock('@/lib/oidc-validation', () => ({
   resetOidcRuntimeMetadataCache: vi.fn(),
-  validateOidcConnection: vi.fn(async () => ({
+  validateOidcConnection: vi.fn(async (issuer: string) => ({
     isValid: true,
     metadata: {
-      issuer: runtime.issuer,
+      issuer,
       authorizationEndpoint: `${runtime.issuer}/authorize`,
       tokenEndpoint: `${runtime.issuer}/token`,
       jwksUri: `${runtime.issuer}/jwks`,
@@ -144,14 +145,18 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
           }
           const idToken = await new SignJWT({
             email:
-              details.variant === 'email'
-                ? 'foreign@example.test'
-                : 'staged-certifier@example.test',
-            email_verified: details.variant !== 'unverified',
+              details.variant === 'entra-no-email'
+                ? undefined
+                : details.variant === 'email'
+                  ? 'foreign@example.test'
+                  : 'staged-certifier@example.test',
+            email_verified: details.variant.startsWith('entra-')
+              ? undefined
+              : details.variant !== 'unverified',
             nonce: details.variant === 'nonce' ? 'foreign-nonce' : details.nonce,
           })
             .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
-            .setIssuer(runtime.issuer)
+            .setIssuer(details.variant.startsWith('entra-') ? entraIssuer : runtime.issuer)
             .setAudience(details.variant === 'audience' ? 'wrong-client' : 'test-client')
             .setSubject('existing-admin-subject')
             .setIssuedAt()
@@ -268,6 +273,65 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       expect(await prisma.oidcIdentity.count({ where: { userId: actor.id } })).toBe(0);
     } finally {
       await prisma.user.delete({ where: { id: other.id } });
+    }
+  });
+  it.each([
+    { linked: true, email: false, approved: false, succeeds: true },
+    { linked: true, email: true, approved: false, succeeds: true },
+    { linked: false, email: false, approved: true, succeeds: false },
+    { linked: false, email: true, approved: false, succeeds: false },
+    { linked: false, email: true, approved: true, succeeds: true },
+  ])('Entra staged ownership: %j', async ({ linked, email, approved, succeeds }) => {
+    const staged = await stageOidcRevision(actor, {
+      issuer: entraIssuer,
+      providerType: 'azure',
+      clientId: 'test-client',
+      clientSecret: 'test-secret',
+    });
+    try {
+      if (linked)
+        await prisma.oidcIdentity.create({
+          data: { issuer: entraIssuer, subject: 'existing-admin-subject', userId: actor.id },
+        });
+      const preview = await identityClaimsPreview(staged.revisionId, {
+        iss: entraIssuer,
+        sub: 'existing-admin-subject',
+        ...(email ? { email: 'staged-certifier@example.test' } : {}),
+      });
+      expect(preview.outcome).toBe(
+        linked ? 'EXISTING_IDENTITY' : email ? 'LINK_APPROVAL_REQUIRED' : 'REJECT'
+      );
+      const flow = await beginOidcRevisionTest(actor, staged.revisionId, actor.id, approved);
+      const result = completeOidcRevisionTest(
+        callbackState(flow.url),
+        issueCode(flow.url, email ? 'entra-email' : 'entra-no-email'),
+        flow.browserToken
+      );
+      if (succeeds) {
+        await expect(result).resolves.toBe(staged.revisionId);
+        const proof = await prisma.oidcRevisionTest.findFirstOrThrow({
+          where: { revisionId: staged.revisionId },
+        });
+        expect(proof.adminUserId).toBe(actor.id);
+        expect(proof.linkApproved).toBe(!linked && approved);
+        expect(proof.email).toBe(email ? 'staged-certifier@example.test' : '');
+        if (linked) {
+          await prisma.oidcIdentity.deleteMany({ where: { issuer: entraIssuer } });
+          await expect(
+            activateOidcRevision(
+              actor,
+              staged.revisionId,
+              900,
+              'SSO_OPTIONAL',
+              'ACTIVATE VERIFIED SSO'
+            )
+          ).rejects.toThrow('linking readiness changed');
+        }
+      } else await expect(result).rejects.toThrow('test failed');
+      expect(await prisma.oidcConfig.count()).toBe(0);
+    } finally {
+      await prisma.oidcIdentity.deleteMany({ where: { issuer: entraIssuer } });
+      await prisma.oidcRevision.delete({ where: { id: staged.revisionId } });
     }
   });
   it('records a real code/PKCE/nonce/JWKS verified administrator proof only once', async () => {
