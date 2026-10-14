@@ -56,7 +56,11 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
       }
 
       // Check incident-level visibility/access permissions
-      if (incident.visibility !== 'PUBLIC' && actor.role !== 'ADMIN') {
+      if (
+        incident.visibility !== 'PUBLIC' &&
+        actor.role !== 'ADMIN' &&
+        actor.role !== 'RESPONDER'
+      ) {
         const isAssignee = incident.assigneeId === actor.id;
         const isWatcher = incident.watchers.some(w => w.userId === actor.id);
         if (!isAssignee && !isWatcher) {

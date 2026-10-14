@@ -1,0 +1,190 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import ServiceAccountsPanel, { type ServiceAccountItem } from '@/components/settings/ServiceAccountsPanel';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
+}));
+
+vi.mock('@/app/(app)/settings/actions', () => ({
+  createServiceAccountAction: vi.fn().mockResolvedValue({ success: true }),
+  issueServiceAccountTokenAction: vi.fn().mockResolvedValue({ success: true, token: 'ok_live_test_token' }),
+  deleteServiceAccountAction: vi.fn().mockResolvedValue({ success: true }),
+  revokeServiceAccountTokenAction: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+const mockAccounts: ServiceAccountItem[] = [
+  {
+    id: 'sa-1',
+    name: 'CI/CD Automation Bot',
+    email: 'sa-cicd@serviceaccount.opsknight.local',
+    role: 'ADMIN',
+    status: 'ACTIVE',
+    createdAt: '2026-09-01T10:00:00Z',
+    updatedAt: '2026-09-01T10:00:00Z',
+    teams: [{ id: 'team-infra', name: 'Infrastructure' }],
+    activeTokensCount: 2,
+    tokens: [
+      {
+        id: 'tok-1',
+        name: 'GitHub Actions Main Token',
+        prefix: 'ok_live_gh1',
+        scopes: ['incidents:read', 'incidents:write'],
+        createdAt: '2026-09-01T10:05:00Z',
+        lastUsedAt: '2026-10-12T14:00:00Z',
+        expiresAt: null,
+      },
+      {
+        id: 'tok-2',
+        name: 'Deploy Key',
+        prefix: 'ok_live_dp2',
+        scopes: ['services:read'],
+        createdAt: '2026-09-02T10:00:00Z',
+        lastUsedAt: null,
+        expiresAt: '2026-12-31T23:59:59Z',
+      },
+    ],
+  },
+  {
+    id: 'sa-2',
+    name: 'Pager Monitoring Relay',
+    email: 'sa-pager@serviceaccount.opsknight.local',
+    role: 'RESPONDER',
+    status: 'ACTIVE',
+    createdAt: '2026-09-10T11:00:00Z',
+    updatedAt: '2026-09-10T11:00:00Z',
+    teams: [{ id: 'team-ops', name: 'SRE Team' }],
+    activeTokensCount: 1,
+    tokens: [
+      {
+        id: 'tok-3',
+        name: 'Alert Ingest Key',
+        prefix: 'ok_live_al3',
+        scopes: ['events:write'],
+        createdAt: '2026-09-10T11:05:00Z',
+        lastUsedAt: '2026-10-14T08:00:00Z',
+        expiresAt: null,
+      },
+    ],
+  },
+];
+
+const mockTeams = [
+  { id: 'team-infra', name: 'Infrastructure' },
+  { id: 'team-ops', name: 'SRE Team' },
+];
+
+describe('ServiceAccountsPanel Component', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders service accounts with name, email, role, and active token count', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    expect(screen.getByText('CI/CD Automation Bot')).toBeDefined();
+    expect(screen.getByText('sa-cicd@serviceaccount.opsknight.local')).toBeDefined();
+    expect(screen.getByText('Pager Monitoring Relay')).toBeDefined();
+    expect(screen.getByText('sa-pager@serviceaccount.opsknight.local')).toBeDefined();
+    expect(screen.getByText(/2 active tokens/i)).toBeDefined();
+    expect(screen.getByText(/1 active token/i)).toBeDefined();
+  });
+
+  it('shows create button when isAdmin is true and hides when isAdmin is false', () => {
+    const { rerender } = render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    expect(screen.getByText('New Service Account')).toBeDefined();
+
+    rerender(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={false}
+      />
+    );
+
+    expect(screen.queryByText('New Service Account')).toBeNull();
+  });
+
+  it('filters service accounts by search query', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText(/search service accounts by name or email/i);
+    fireEvent.change(searchInput, { target: { value: 'Pager' } });
+
+    expect(screen.getByText('Pager Monitoring Relay')).toBeDefined();
+    expect(screen.queryByText('CI/CD Automation Bot')).toBeNull();
+  });
+
+  it('displays empty state when no accounts match search filter', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText(/search service accounts by name or email/i);
+    fireEvent.change(searchInput, { target: { value: 'nonexistent-bot' } });
+
+    expect(screen.getByText(/no matching service accounts/i)).toBeDefined();
+  });
+
+  it('expands account details to show issued tokens', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    // Expand the first service account
+    const viewTokensButton = screen.getByText('View Tokens (2)');
+    fireEvent.click(viewTokensButton);
+
+    expect(screen.getByText('GitHub Actions Main Token')).toBeDefined();
+    expect(screen.getByText('ok_live_gh1...')).toBeDefined();
+    expect(screen.getByText('Deploy Key')).toBeDefined();
+    expect(screen.getByText('ok_live_dp2...')).toBeDefined();
+  });
+
+  it('opens create service account dialog when clicking New Service Account', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    const createButton = screen.getByText('New Service Account');
+    fireEvent.click(createButton);
+
+    expect(screen.getByText('Create Service Account')).toBeDefined();
+    expect(
+      screen.getByPlaceholderText(/e\.g\., CI\/CD GitHub Runner or Terraform Operator/i)
+    ).toBeDefined();
+  });
+});

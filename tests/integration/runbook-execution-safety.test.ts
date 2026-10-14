@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma, RunbookInputType } from '@prisma/client';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import {
   computeDefinitionChecksum,
   computePlanDigest,
@@ -47,6 +47,9 @@ import {
   resetDatabase,
   testPrisma,
 } from '../helpers/test-db';
+import { NextRequest } from 'next/server';
+import { POST as executeRunbookV2Route } from '@/app/api/v2/runbooks/[id]/execute/route';
+import { hashTokenV2 } from '@/lib/api-keys';
 
 /** Explicitly provision legitimate automatic fixtures; actor-less production calls stay rejected. */
 async function startRunbookExecution(input: RunbookExecutionRequest) {
@@ -2673,7 +2676,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           type: 'SYSTEMD',
           riskClass: 'READ_ONLY',
           config: {
-            unit: 'nginx',
+            unit: 'nginx.service',
             action: 'status',
           },
         },
@@ -2719,7 +2722,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(execution.serviceId).toBe(incident.serviceId);
     expect(execution.bindingId).toBe(binding!.id);
     expect(execution.incidentId).toBe(incident.id);
-    expect(execution.resolvedTargetAgentId).toBe(target.agent.id);
+    expect(execution.resolvedTargetAgentPoolId).toBe(target.pool.id);
 
     // Advancing step claims agent attempt
     await advanceExecution(execution.id);
@@ -2727,5 +2730,105 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(claim).not.toBeNull();
     expect(claim?.executionId).toBe(execution.id);
   });
+
+  it('executes incident-linked runbook via v2 REST API route with bearer token authentication and idempotency against real PostgreSQL', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: {
+            unit: 'nginx.service',
+            action: 'status',
+          },
+        },
+      ],
+    });
+
+    const incident = await createTestIncident('REST API incident runbook', target.service.id);
+
+    // Create an API key with runbooks:execute and runbooks:read scopes for a responder user
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    const rawToken = `ok_test_${randomUUID().replace(/-/g, '')}`;
+    await testPrisma.apiKey.create({
+      data: {
+        name: 'Runbook API Key',
+        prefix: rawToken.slice(0, 12),
+        tokenHash: hashTokenV2(rawToken),
+        scopes: ['runbooks:read', 'runbooks:execute'],
+        userId: responder.id,
+      },
+    });
+
+    const idempotencyKey = `idem-${randomUUID()}`;
+
+    // 1. Initial execution request
+    const request = new NextRequest(
+      `http://localhost:3000/api/v2/runbooks/${target.runbook.id}/execute`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          incidentId: incident.id,
+          serviceId: target.service.id,
+        }),
+      }
+    );
+
+    const response = await executeRunbookV2Route(request, {
+      params: Promise.resolve({ id: target.runbook.id }),
+    });
+
+    expect(response.status).toBe(202);
+    const body = await response.json();
+    expect(body.data).toBeDefined();
+    expect(body.data.executionId).toBeDefined();
+    expect(body.data.status).toBe('QUEUED');
+    expect(body.data.runbookId).toBe(target.runbook.id);
+    expect(body.data.incidentId).toBe(incident.id);
+    expect(body.data.serviceId).toBe(target.service.id);
+
+    // Verify execution record in database
+    const dbExecution = await testPrisma.runbookExecution.findUnique({
+      where: { id: body.data.executionId },
+    });
+    expect(dbExecution).not.toBeNull();
+    expect(dbExecution?.serviceId).toBe(target.service.id);
+    expect(dbExecution?.incidentId).toBe(incident.id);
+    expect(dbExecution?.bindingId).toBe(target.binding.id);
+
+    // 2. Idempotent replay with same idempotency key
+    const replayRequest = new NextRequest(
+      `http://localhost:3000/api/v2/runbooks/${target.runbook.id}/execute`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          incidentId: incident.id,
+          serviceId: target.service.id,
+        }),
+      }
+    );
+
+    const replayResponse = await executeRunbookV2Route(replayRequest, {
+      params: Promise.resolve({ id: target.runbook.id }),
+    });
+
+    expect(replayResponse.status).toBe(202);
+    expect(replayResponse.headers.get('idempotency-replayed')).toBe('true');
+    const replayBody = await replayResponse.json();
+    expect(replayBody.data.executionId).toBe(body.data.executionId);
+  });
 });
+
 

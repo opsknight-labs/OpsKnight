@@ -112,7 +112,15 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
     expect(body.code).toBe('INCIDENT_NOT_FOUND');
   });
 
-  it('rejects incident-linked execution when incident is private and caller lacks access', async () => {
+  it('rejects incident-linked execution when incident is private and caller is a scoped USER lacking access', async () => {
+    currentMockActor = {
+      id: 'usr_normal_user',
+      role: 'USER',
+      status: 'ACTIVE',
+      teamIds: ['team_other'],
+      apiKey: { id: 'key_usr_1', scopes: ['runbooks:read', 'runbooks:execute'] },
+    };
+
     vi.mocked(prisma.runbook.findUnique).mockResolvedValue({
       id: 'rb_1',
       name: 'Restart Pods',
@@ -133,7 +141,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'idempotency-key': 'idem-private-inc',
+        'idempotency-key': 'idem-private-inc-user',
       },
       body: JSON.stringify({ incidentId: 'inc_private' }),
     });
@@ -142,6 +150,55 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.code).toBe('AUTHORIZATION_DENIED');
+  });
+
+  it('permits incident-linked execution when incident is private and caller is a RESPONDER', async () => {
+    currentMockActor = {
+      id: 'usr_responder_1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamIds: ['team_other'],
+      apiKey: { id: 'key_resp_1', scopes: ['runbooks:read', 'runbooks:execute'] },
+    };
+
+    vi.mocked(prisma.runbook.findUnique).mockResolvedValue({
+      id: 'rb_1',
+      name: 'Restart Pods',
+      archivedAt: null,
+      publishedVersionId: 'ver_pub_1',
+    } as any);
+
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      id: 'inc_private_resp',
+      serviceId: 'svc_alpha',
+      visibility: 'RESTRICTED',
+      assigneeId: 'usr_other',
+      watchers: [],
+      service: { id: 'svc_alpha', name: 'Alpha', teamId: 'team_alpha' },
+    } as any);
+
+    vi.mocked(prisma.serviceRunbookBinding.findFirst).mockResolvedValue({
+      id: 'bind_rb1_svcalpha',
+      runbookId: 'rb_1',
+      serviceId: 'svc_alpha',
+      enabled: true,
+      versionStrategy: 'PINNED',
+      runbookVersionId: 'ver_pinned_99',
+    } as any);
+
+    const req = new NextRequest('http://localhost:3000/api/v2/runbooks/rb_1/execute', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'idem-private-inc-responder',
+      },
+      body: JSON.stringify({ incidentId: 'inc_private_resp' }),
+    });
+
+    const res = await executeRunbookRoute(req, { params: Promise.resolve({ id: 'rb_1' }) });
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body.data.executionId).toBe('exec_abc_123');
   });
 
   it('rejects when runbook is not bound to the incident service', async () => {

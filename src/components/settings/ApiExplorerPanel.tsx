@@ -167,6 +167,17 @@ export default function ApiExplorerPanel({
       hasBody ? "    'Content-Type': 'application/json'," : null,
     ].filter(Boolean).join('\n');
 
+    const responseHandling =
+      ep.method === 'DELETE'
+        ? `if (response.status === 204) {
+  console.log('Success (204 No Content)');
+} else {
+  const data = await response.json();
+  console.log(data);
+}`
+        : `const data = await response.json();
+console.log(data);`;
+
     return `const response = await fetch('${fullUrl}', {
   method: '${ep.method}',
   headers: {
@@ -174,8 +185,7 @@ ${headerLines}
   },${hasBody && ep.requestBody?.sample ? `\n  body: JSON.stringify(${JSON.stringify(ep.requestBody.sample, null, 2)}),` : ''}
 });
 
-const data = await response.json();
-console.log(data);`;
+${responseHandling}`;
   };
 
   const getPythonSnippet = (ep: ApiEndpointDoc) => {
@@ -193,6 +203,14 @@ console.log(data);`;
 
     const pythonBody = hasBody && ep.requestBody?.sample ? toPythonLiteral(ep.requestBody.sample, 0) : null;
 
+    const pythonResponseHandling =
+      ep.method === 'DELETE'
+        ? `if response.status_code == 204:
+    print("Success (204 No Content)")
+else:
+    print(response.json())`
+        : `print(response.json())`;
+
     if (pythonBody) {
       return `import requests
 
@@ -203,7 +221,7 @@ ${pythonHeaders}
 payload = ${pythonBody}
 
 response = requests.${methodLower}(url, headers=headers, json=payload)
-print(response.json())`;
+${pythonResponseHandling}`;
     }
 
     return `import requests
@@ -214,7 +232,7 @@ ${pythonHeaders}
 }
 
 response = requests.${methodLower}(url, headers=headers)
-print(response.json())`;
+${pythonResponseHandling}`;
   };
 
   return (
