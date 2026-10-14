@@ -274,17 +274,29 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.keyboard.press('Escape');
   await expect(page.getByText('ui-credential-rotated', { exact: true })).not.toBeVisible();
   await expect(secretCard.getByLabel('Secret value hidden')).toBeVisible();
-  await page.goto('/runbooks/agents');
+  // Stay in the client router: a hard navigation can abort the rotation action's pending RSC refresh in Firefox.
+  await page
+    .getByRole('navigation', { name: 'Infrastructure sections' })
+    .getByRole('link', { name: /^agents/i })
+    .click();
   await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
   const cancelledName = `UI cancelled enrollment ${Date.now()}`;
   await page.getByLabel('Agent name', { exact: true }).fill(cancelledName);
   await page.getByRole('button', { name: 'Create enrollment', exact: true }).click();
   await expect(page.getByText('Copy this one-time token now', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Cancel this enrollment', exact: true }).click();
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel this enrollment', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Cancel this enrollment', exact: true })
+    .click();
   await expect(page.getByRole('status').filter({ hasText: 'Enrollment revoked.' })).toBeVisible();
   await expect(page.getByText('Copy this one-time token now', { exact: true })).not.toBeVisible();
-  await expect.poll(async () => (await prisma.runbookAgent.findFirstOrThrow({ where: { name: cancelledName } })).status).toBe('REVOKED');
+  await expect
+    .poll(
+      async () =>
+        (await prisma.runbookAgent.findFirstOrThrow({ where: { name: cancelledName } })).status
+    )
+    .toBe('REVOKED');
 });
 
 test('publish, attach, target, trigger, incident suggestion, exact approval and cancellation', async ({
@@ -344,6 +356,12 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   ).toBeVisible();
   await page.goto(`/services/${serviceId}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
+  await page.getByLabel('Workflow search', { exact: true }).fill(name);
+  await page.getByLabel('Agent / pool search', { exact: true }).fill(agent.name);
+  await Promise.all([
+    page.waitForURL(url => url.searchParams.get('ruleCatalog') === name),
+    page.getByRole('button', { name: 'Search options', exact: true }).click(),
+  ]);
   await page.getByRole('button', { name: 'Create rule', exact: true }).click();
   await page.getByRole('combobox', { name: 'Choose workflow' }).click();
   await page.getByRole('option', { name: `${name} (v1)` }).click();
@@ -366,6 +384,11 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
     .poll(async () => prisma.serviceAutomationRule.count({ where: { serviceId, runbookId: id } }))
     .toBe(1);
   await page.keyboard.press('Escape');
+  await page
+    .locator('.bg-card')
+    .filter({ has: page.getByRole('link', { name, exact: true }) })
+    .getByText('Manage rule', { exact: true })
+    .click();
   await page
     .locator('.bg-card')
     .filter({ has: page.getByRole('link', { name, exact: true }) })
@@ -510,9 +533,82 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   page,
 }, testInfo) => {
   await login(page);
-  const workflow = await prisma.runbook.findFirstOrThrow({
-    where: { name: { startsWith: 'UI Operational Journey' }, publishedVersionId: { not: null } },
-    orderBy: { createdAt: 'desc' },
+  const created = await prisma.runbook.create({
+    data: {
+      name: `UI Version Contract ${testInfo.project.name} ${Date.now()}`,
+      slug: `ui-version-${crypto.randomUUID()}`,
+    },
+  });
+  const oldVersion = await prisma.runbookVersion.create({
+    data: {
+      runbookId: created.id,
+      version: 1,
+      state: 'DRAFT',
+      checksum: 'a'.repeat(64),
+      definition: {
+        steps: [
+          {
+            key: 'diagnose',
+            name: 'Diagnose',
+            type: 'LINUX_DIAGNOSTICS',
+            riskClass: 'READ_ONLY',
+            config: { action: 'summary' },
+          },
+        ],
+      },
+      inputs: {
+        create: {
+          key: 'legacy',
+          label: 'Legacy input',
+          type: 'STRING',
+          required: true,
+          description: '',
+          sequence: 0,
+        },
+      },
+    },
+  });
+  await prisma.runbookVersion.update({
+    where: { id: oldVersion.id },
+    data: { state: 'PUBLISHED' },
+  });
+  const currentVersion = await prisma.runbookVersion.create({
+    data: {
+      runbookId: created.id,
+      version: 2,
+      state: 'DRAFT',
+      checksum: 'b'.repeat(64),
+      definition: {
+        steps: [
+          {
+            key: 'restart',
+            name: 'Restart',
+            type: 'SYSTEMD',
+            riskClass: 'IDEMPOTENT_WRITE',
+            requiresApproval: true,
+            config: { action: 'restart', unit: '{{inputs.unit}}' },
+          },
+        ],
+      },
+      inputs: {
+        create: {
+          key: 'unit',
+          label: 'Service unit',
+          type: 'STRING',
+          required: true,
+          description: '',
+          sequence: 0,
+        },
+      },
+    },
+  });
+  await prisma.runbookVersion.update({
+    where: { id: currentVersion.id },
+    data: { state: 'PUBLISHED' },
+  });
+  const workflow = await prisma.runbook.update({
+    where: { id: created.id },
+    data: { publishedVersionId: currentVersion.id },
     include: { publishedVersion: true },
   });
   const ruleName = `UI independent rule ${testInfo.project.name} ${Date.now()}`;
@@ -521,6 +617,11 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   });
   await page.goto(`/services/${serviceId}?tab=runbooks`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
+  await page.getByLabel('Workflow search', { exact: true }).fill(workflow.name);
+  await Promise.all([
+    page.waitForURL(url => url.searchParams.get('ruleCatalog') === workflow.name),
+    page.getByRole('button', { name: 'Search options', exact: true }).click(),
+  ]);
   await page.getByRole('button', { name: 'Create rule', exact: true }).click();
   await page.getByRole('combobox', { name: 'Choose workflow' }).click();
   await page
@@ -529,8 +630,14 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
       exact: true,
     })
     .click();
+  await page.getByRole('combobox', { name: 'Version strategy', exact: true }).click();
+  await page.getByRole('option', { name: 'Pinned', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Pinned version', exact: true }).click();
+  await page.getByRole('option', { name: 'v1 · PUBLISHED', exact: true }).click();
   await page.getByLabel('Rule name', { exact: true }).fill(ruleName);
   await page.getByRole('button', { name: 'Continue to target and inputs', exact: true }).click();
+  await page.getByLabel('Legacy input', { exact: false }).fill('selected-old-schema');
+  await expect(page.getByLabel('Service unit', { exact: false })).not.toBeVisible();
   await page.getByRole('button', { name: 'Continue to trigger', exact: true }).click();
   await page.getByRole('button', { name: 'Continue to review and save', exact: true }).click();
   await page.getByRole('button', { name: `Attach ${workflow.name}`, exact: true }).click();
@@ -541,6 +648,8 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     where: { serviceId, name: ruleName },
   });
   expect(rule.enabled).toBe(false);
+  expect(rule.runbookVersionId).toBe(oldVersion.id);
+  expect(rule.inputValues).toEqual({ legacy: 'selected-old-schema' });
   await page.keyboard.press('Escape');
   await page.goto(`/services/${serviceId}?tab=runbooks`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
@@ -548,6 +657,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     .locator('.bg-card')
     .filter({ has: page.getByRole('link', { name: ruleName, exact: true }) });
   await expect(card.getByText('Rule paused', { exact: false })).toBeVisible();
+  await card.getByText('Manage rule', { exact: true }).click();
   await card.getByRole('button', { name: 'Duplicate paused rule', exact: true }).click();
   await expect
     .poll(async () =>
@@ -592,6 +702,27 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     path: `test-results/rule-evidence-${testInfo.project.name}.png`,
     fullPage: true,
   });
+  await prisma.runbookVersion.createMany({
+    data: Array.from({ length: 105 }, (_, index) => ({
+      runbookId: workflow.id,
+      version: index + 3,
+      state: 'RETIRED' as const,
+      checksum: 'c'.repeat(64),
+      definition: oldVersion.definition!,
+    })),
+  });
+  const comparison = await page.goto(
+    `/runbooks/${workflow.id}/compare?base=${oldVersion.id}&next=${currentVersion.id}`
+  );
+  expect(comparison?.status()).toBe(200);
+  await expect(
+    page.getByRole('heading', { name: `${workflow.name} · Version comparison`, exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('option', { name: 'v1 · PUBLISHED', exact: true }).first()
+  ).toBeAttached();
+  await page.getByRole('link', { name: 'Older versions', exact: true }).click();
+  await expect(page.getByText('Version page 2', { exact: true })).toBeVisible();
 });
 test('390px infrastructure, health and builder have no horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -875,4 +1006,112 @@ test('server pagination, administrator labels, effective capabilities and budget
       .filter({ visible: true })
   ).toBeVisible();
   expect(await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })).toBe(1);
+});
+
+test('service rule rendering stays bounded at 100, 1000 and 10000 rules', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(240000);
+  await login(page);
+  const service = await prisma.service.create({
+    data: { name: `UI Render Scale ${testInfo.project.name} ${Date.now()}` },
+  });
+  const workflow = await prisma.runbook.create({
+    data: { name: `UI Render Workflow ${Date.now()}`, slug: crypto.randomUUID() },
+  });
+  const version = await prisma.runbookVersion.create({
+    data: {
+      runbookId: workflow.id,
+      version: 1,
+      state: 'PUBLISHED',
+      checksum: 'd'.repeat(64),
+      definition: {
+        steps: [
+          {
+            key: 'diagnose',
+            name: 'Diagnose',
+            type: 'LINUX_DIAGNOSTICS',
+            riskClass: 'READ_ONLY',
+            config: { action: 'summary' },
+          },
+        ],
+      },
+    },
+  });
+  await prisma.runbook.update({
+    where: { id: workflow.id },
+    data: { publishedVersionId: version.id },
+  });
+  const agent = await prisma.runbookAgent.create({
+    data: {
+      name: `UI Render Agent ${Date.now()}`,
+      status: 'ONLINE',
+      lastHeartbeatAt: new Date(),
+      capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+    },
+  });
+  await prisma.runbookAgent.createMany({
+    data: Array.from({ length: 999 }, (_, i) => ({
+      name: `Render fleet ${testInfo.project.name} ${i}`,
+      status: 'ONLINE' as const,
+      lastHeartbeatAt: new Date(),
+      capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+    })),
+  });
+  const samples = [];
+  let previous = 0;
+  for (const size of [100, 1000, 10000]) {
+    await prisma.serviceAutomationRule.createMany({
+      data: Array.from({ length: size - previous }, (_, i) => ({
+        name: `Render rule ${previous + i}`,
+        serviceId: service.id,
+        runbookId: workflow.id,
+        runbookVersionId: version.id,
+        versionStrategy: 'PINNED' as const,
+        defaultAgentId: agent.id,
+      })),
+    });
+    previous = size;
+    const latencies = [];
+    for (let i = 0; i < 5; i++) {
+      const started = performance.now();
+      await page.goto(`/services/${service.id}?tab=runbooks`);
+      await expect(page.getByText('20 rules on this page', { exact: true })).toBeVisible();
+      expect(await page.getByRole('link', { name: /^Render rule / }).count()).toBe(20);
+      latencies.push(performance.now() - started);
+    }
+    samples.push({
+      rules: size,
+      fleetAgents: 1000,
+      visibleRules: 20,
+      navigationToVisibleMs: latencies,
+      p95Ms: Math.max(...latencies),
+    });
+  }
+  const names = await page.getByRole('link', { name: /^Render rule / }).allTextContents();
+  await page.getByRole('link', { name: 'Next rules', exact: true }).click();
+  await expect(page).toHaveURL(/rulesAfter=/);
+  await expect(page.getByRole('link', { name: 'First rules', exact: true })).toBeVisible();
+  expect(
+    (await page.getByRole('link', { name: /^Render rule / }).allTextContents()).some(name =>
+      names.includes(name)
+    )
+  ).toBe(false);
+  await noOverflow(page);
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  await mkdir('test-results/runbook-engine', { recursive: true });
+  await writeFile(
+    `test-results/runbook-engine/rule-render-${testInfo.project.name}.json`,
+    JSON.stringify(
+      {
+        measuredAt: new Date().toISOString(),
+        topology:
+          'Local production server + PostgreSQL + browser; fixture Agents, no physical execution',
+        browser: testInfo.project.name,
+        samples,
+      },
+      null,
+      2
+    )
+  );
 });

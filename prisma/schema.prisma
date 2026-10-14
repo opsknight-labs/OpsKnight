@@ -3552,6 +3552,7 @@ model ServiceAutomationRule {
   updatedAt DateTime @updatedAt
 
   @@index([serviceId, runbookId])
+  @@index([serviceId, createdAt, id])
   // Retain the existing physical table and foreign keys; IDs are stable rule IDs.
   @@map("ServiceRunbookBinding")
   @@index([serviceId])

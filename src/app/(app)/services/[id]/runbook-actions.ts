@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { RunbookError } from '@/lib/runbooks/errors';
+import { parseAgentSelector } from '@/lib/runbooks/selector-input';
+import { RunbookDefinitionError, RunbookError } from '@/lib/runbooks/errors';
 import type { RunbookInput } from '@prisma/client';
 import { CAPABILITIES } from '@/lib/authorization';
 import prisma from '@/lib/prisma';
@@ -35,6 +36,12 @@ function generatedInputValues(
   definitions: Pick<RunbookInput, 'key' | 'type'>[]
 ): Record<string, unknown> {
   const values: Record<string, unknown> = {};
+  const known = new Set(definitions.map(input => `input:${input.key}`));
+  for (const name of formData.keys())
+    if (name.startsWith('input:') && !known.has(name))
+      throw new RunbookDefinitionError(
+        'Inputs changed. Reload the form and review the selected version.'
+      );
   for (const input of definitions) {
     const raw = formData.get(`input:${input.key}`);
     if (input.type === 'BOOLEAN') {
@@ -90,23 +97,25 @@ async function bindingActor(serviceId: string) {
   return actor;
 }
 
-export async function attachRunbookAction(serviceId: string, formData: FormData) {
+async function attachRunbook(serviceId: string, formData: FormData) {
   const actor = await bindingActor(idSchema.parse(serviceId));
+  const selector = parseAgentSelector(formData.get('agentSelector'));
+  if (!selector.success) return { error: selector.error, field: 'agentSelector' };
   const strategy = String(formData.get('versionStrategy') ?? 'LATEST_PUBLISHED');
-  const [runbookId, publishedVersionId] = String(formData.get('runbookSelection') ?? '').split(':');
-  const definitions = await inputDefinitions(
-    idSchema.parse(runbookId),
-    strategy === 'PINNED' ? idSchema.parse(publishedVersionId) : undefined
+  const [runbookId] = String(formData.get('runbookSelection') ?? '').split(':');
+  const selectedVersionId = idSchema.parse(
+    String(formData.get(strategy === 'PINNED' ? 'runbookVersionId' : 'expectedVersionId') ?? '')
   );
+  const definitions = await inputDefinitions(idSchema.parse(runbookId), selectedVersionId);
   const parsed = createServiceRunbookBindingSchema.parse({
     runbookId,
     name: String(formData.get('ruleName') ?? ''),
-    runbookVersionId: strategy === 'PINNED' ? publishedVersionId || undefined : undefined,
+    runbookVersionId: strategy === 'PINNED' ? selectedVersionId : undefined,
     enabled: formData.get('enabled') === 'true',
     mode: formData.get('mode') ?? 'MANUAL',
     versionStrategy: strategy,
     inputValues: generatedInputValues(formData, definitions),
-    agentSelector: JSON.parse(String(formData.get('agentSelector') ?? '{}')),
+    agentSelector: selector.data,
     ...executionTarget(formData.get('executionTarget')),
   });
   try {
@@ -121,7 +130,8 @@ export async function attachRunbookAction(serviceId: string, formData: FormData)
             conditionLogic: 'AND',
             conditions: [],
           }
-        : undefined
+        : undefined,
+      selectedVersionId
     );
   } catch (error) {
     if (error instanceof RunbookError) return { error: error.userMessage };
@@ -130,12 +140,10 @@ export async function attachRunbookAction(serviceId: string, formData: FormData)
   revalidatePath(`/services/${serviceId}`);
 }
 
-export async function updateRunbookBindingAction(
-  serviceId: string,
-  bindingId: string,
-  formData: FormData
-) {
+async function updateRunbookBinding(serviceId: string, bindingId: string, formData: FormData) {
   const actor = await bindingActor(idSchema.parse(serviceId));
+  const selector = parseAgentSelector(formData.get('agentSelector'));
+  if (!selector.success) return { error: selector.error, field: 'agentSelector' };
   const target = executionTarget(formData.get('executionTarget'));
   const binding = await prisma.serviceAutomationRule.findFirst({
     where: { id: idSchema.parse(bindingId), serviceId },
@@ -146,7 +154,13 @@ export async function updateRunbookBindingAction(
     formData.get('versionStrategy') === 'PINNED'
       ? idSchema.parse(String(formData.get('runbookVersionId') ?? ''))
       : undefined;
-  const definitions = await inputDefinitions(binding.runbookId, selectedVersionId);
+  const expectedVersionId = idSchema.parse(
+    String(formData.get('expectedVersionId') ?? selectedVersionId ?? '')
+  );
+  const definitions = await inputDefinitions(
+    binding.runbookId,
+    selectedVersionId ?? expectedVersionId
+  );
   const parsed = updateServiceRunbookBindingSchema.parse({
     name: String(formData.get('ruleName') ?? ''),
     enabled: formData.get('enabled') === 'true',
@@ -159,10 +173,16 @@ export async function updateRunbookBindingAction(
     inputValues: generatedInputValues(formData, definitions),
     defaultAgentId: target.defaultAgentId ?? null,
     defaultAgentPoolId: target.defaultAgentPoolId ?? null,
-    agentSelector: JSON.parse(String(formData.get('agentSelector') ?? '{}')),
+    agentSelector: selector.data,
   });
   try {
-    await updateServiceBinding(serviceId, idSchema.parse(bindingId), parsed, actor.id);
+    await updateServiceBinding(
+      serviceId,
+      idSchema.parse(bindingId),
+      parsed,
+      actor.id,
+      expectedVersionId
+    );
   } catch (error) {
     if (error instanceof RunbookError) return { error: error.userMessage };
     throw error;
@@ -333,5 +353,30 @@ export async function executeServiceRuleAction(
   } catch (error) {
     const { toPublicAppError } = await import('@/lib/errors');
     return { error: toPublicAppError(error).message };
+  }
+}
+
+export async function attachRunbookAction(serviceId: string, formData: FormData) {
+  try {
+    return await attachRunbook(serviceId, formData);
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    if (error instanceof z.ZodError)
+      return { error: 'Review the selected version, inputs and target.', field: 'configuration' };
+    throw error;
+  }
+}
+export async function updateRunbookBindingAction(
+  serviceId: string,
+  bindingId: string,
+  formData: FormData
+) {
+  try {
+    return await updateRunbookBinding(serviceId, bindingId, formData);
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    if (error instanceof z.ZodError)
+      return { error: 'Review the selected version, inputs and target.', field: 'configuration' };
+    throw error;
   }
 }

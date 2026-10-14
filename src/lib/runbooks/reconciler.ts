@@ -381,15 +381,16 @@ export async function reconcileRunbooks(limit = 100) {
     ...new Set([...stranded.map(row => row.executionId), ...cancelled.map(row => row.id)]),
   ];
   if (recoveryIds.length) {
-    await prisma.backgroundJob.createMany({
-      data: recoveryIds.map(executionId => ({
-        type: 'RUNBOOK' as const,
-        status: 'PENDING' as const,
-        scheduledAt: now,
-        maxAttempts: 8,
-        payload: { kind: 'RECONCILE_EXECUTION', executionId },
-      })),
-    });
+    for (const executionId of recoveryIds) {
+      const recoveryJobId = `runbook-recovery:${executionId}`;
+      const payload = JSON.stringify({ kind: 'RECONCILE_EXECUTION', executionId });
+      await prisma.$executeRaw`
+        INSERT INTO "BackgroundJob" (id, type, status, "scheduledAt", "maxAttempts", payload, "updatedAt")
+        VALUES (${recoveryJobId}, 'RUNBOOK', 'PENDING', ${now}, 8, ${payload}::jsonb, ${now})
+        ON CONFLICT (id) DO UPDATE SET status = 'PENDING', "scheduledAt" = EXCLUDED."scheduledAt",
+          attempts = 0, "startedAt" = NULL, "completedAt" = NULL, "failedAt" = NULL, error = NULL, "updatedAt" = EXCLUDED."updatedAt"
+        WHERE "BackgroundJob".status IN ('COMPLETED', 'FAILED', 'CANCELLED')`;
+    }
   }
   return {
     inspected: expired.length,

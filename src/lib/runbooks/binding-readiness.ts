@@ -24,7 +24,8 @@ type Binding = Prisma.ServiceAutomationRuleGetPayload<{
 }>;
 export async function getBindingReadiness(
   binding: Binding,
-  now = new Date()
+  now = new Date(),
+  db: typeof prisma = prisma
 ): Promise<BindingReadiness> {
   const checks: BindingReadiness['checks'] = [];
   const presentation = describeBinding(binding, [], []);
@@ -109,7 +110,7 @@ export async function getBindingReadiness(
         });
         return result('BLOCKED');
       }
-      const candidates = await prisma.runbookAgent.findMany({
+      const candidates = await db.runbookAgent.findMany({
         where: {
           status: 'ONLINE',
           lastHeartbeatAt: { gte: new Date(now.getTime() - 90_000) },
@@ -143,7 +144,7 @@ export async function getBindingReadiness(
           message: 'Target exceeds the bounded readiness check. Narrow the selector.',
         });
       const pool = binding.defaultAgentPoolId
-        ? await prisma.runbookAgentPool.findUnique({
+        ? await db.runbookAgentPool.findUnique({
             where: { id: binding.defaultAgentPoolId },
             select: { mode: true },
           })
@@ -162,7 +163,7 @@ export async function getBindingReadiness(
         selectedAgentId = candidates[0].id;
       // Dynamic multi-Agent selectors need per-Agent plan checks; do not claim them verified via an unfiltered fleet query.
       if (!selector.length || selectedAgentId) {
-        const readiness = await checkExecutionReadiness(prisma, {
+        const readiness = await checkExecutionReadiness(db, {
           steps,
           inputValues: values,
           agentId: selectedAgentId,
@@ -185,7 +186,7 @@ export async function getBindingReadiness(
         state: 'deferred',
         message: 'One or more steps require approval of the frozen execution plan.',
       });
-    const policyChecks = await prisma.runbookPolicyCheck.findMany({
+    const policyChecks = await db.runbookPolicyCheck.findMany({
       where: {
         ruleId: binding.id,
         versionId: version.id,

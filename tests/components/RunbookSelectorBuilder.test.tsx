@@ -28,3 +28,18 @@ it('preserves a valid advanced selector when returning to fields', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Use label fields' }));
   expect(screen.getByLabelText('Label 1 key')).toHaveValue('region');
 });
+
+it('blocks malformed JSON, duplicate JSON keys and invalid label names until corrected', () => {
+  const { container } = render(<RunbookSelectorBuilder />);
+  fireEvent.click(screen.getByRole('button', { name: 'Use advanced JSON' }));
+  for (const value of ['{', '{"region":"one","region":"two"}', '{"bad key":"west"}']) {
+    fireEvent.change(screen.getByLabelText('Advanced selector JSON'), { target: { value } });
+    expect(screen.getByRole('alert')).toBeVisible();
+    expect(container.querySelector('[data-form-invalid="true"]')).not.toBeNull();
+  }
+  fireEvent.change(screen.getByLabelText('Advanced selector JSON'), {
+    target: { value: '{"region":"west"}' },
+  });
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(container.querySelector('[data-form-invalid="true"]')).toBeNull();
+});

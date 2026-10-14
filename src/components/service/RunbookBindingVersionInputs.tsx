@@ -44,7 +44,9 @@ export default function RunbookBindingVersionInputs({
   targets,
   initialMode,
   includeInputs = true,
+  onVersionChange,
 }: {
+  onVersionChange?: (versionId: string) => void;
   initialMode?: 'MANUAL' | 'SUGGESTED' | 'AUTOMATIC';
   includeInputs?: boolean;
   versions: Version[];
@@ -68,6 +70,7 @@ export default function RunbookBindingVersionInputs({
 
   return (
     <>
+      <input type="hidden" name="expectedVersionId" value={effectiveVersionId} />
       {initialMode !== undefined && (
         <div className="space-y-2">
           <Label>Execution mode</Label>
@@ -102,6 +105,7 @@ export default function RunbookBindingVersionInputs({
                 setMode('AUTOMATIC');
                 setStrategy('PINNED');
                 setVersionId(publishedVersionId);
+                onVersionChange?.(publishedVersionId);
               }}
             >
               Pin version and select Automatic
@@ -125,7 +129,10 @@ export default function RunbookBindingVersionInputs({
           label="Version strategy"
           value={strategy}
           disabled={mode === 'AUTOMATIC'}
-          onValueChange={value => setStrategy(value as typeof strategy)}
+          onValueChange={value => {
+            setStrategy(value as typeof strategy);
+            onVersionChange?.(value === 'PINNED' ? versionId : publishedVersionId);
+          }}
           options={[
             { value: 'LATEST_PUBLISHED', label: 'Latest published' },
             { value: 'PINNED', label: 'Pinned' },
@@ -138,7 +145,10 @@ export default function RunbookBindingVersionInputs({
           name="runbookVersionId"
           label="Pinned version"
           value={versionId}
-          onValueChange={setVersionId}
+          onValueChange={value => {
+            setVersionId(value);
+            onVersionChange?.(value);
+          }}
           disabled={strategy !== 'PINNED'}
           options={selectable.map(candidate => ({
             value: candidate.id,

@@ -15,6 +15,7 @@ export const USER_REFERENCE_POLICY = {
   overrides: { deactivate: 'REPORT', delete: 'BLOCK' },
   overrideReplacements: { deactivate: 'REPORT', delete: 'BLOCK' },
   layerAssignments: { deactivate: 'REPORT', delete: 'BLOCK' },
+  policyChecks: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbooksCreated: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbookVersionsCreated: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbookVersionsPublished: { deactivate: 'KEEP', delete: 'SET_NULL' },

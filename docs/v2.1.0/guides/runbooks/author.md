@@ -155,3 +155,11 @@ approval. See the [reference](../../reference/runbooks) for limits and semantics
 ## Compare publication impact
 
 Open **Compare versions and rule impact** before publishing or changing a rule's pin. Review added/removed/changed actions, derived risk, masked configuration, prechecks, verification and input changes side by side. Rules using latest publication track future publications; pinned rules and existing executions retain their frozen versions. Comparison performs no action and cannot establish platform permission.
+
+## Service rule pages and version selection
+
+Service automation lists show 20 rules per page. **Next rules** uses a stable creation-time/ID cursor; **First rules** returns to the newest page. Readiness checks and displayed counts apply to that visible page. Workflow and Agent/pool searches keep configuration inventories bounded; narrow the search when an option is absent. Existing pinned and current published versions remain available when configuring an attached rule.
+
+For a new pinned rule, the selected version determines the input fields, target restrictions, review and saved version. If latest publication changes while a form is open, saving fails with a reload instruction before creating a rule. Invalid selector JSON, duplicate keys and invalid labels disable saving until corrected. Cards show the rule's state, target, blockers and last run; **Rule evidence** opens detailed checks/history, and **Manage rule** reveals editing, duplication and detach controls.
+
+Version comparison authorizes both requested versions independently of the selector page. **Older versions** and **Newer versions** paginate the selector without losing the selected comparison.

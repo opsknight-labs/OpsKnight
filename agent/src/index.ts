@@ -537,6 +537,7 @@ export async function run(options: RunAgentOptions = {}) {
   }
   if (!options.skipHeartbeat) {
     await heartbeat();
+    if (!options.skipHealth) await publishHealth();
   }
 
   const heartbeatTimer = options.skipHeartbeat

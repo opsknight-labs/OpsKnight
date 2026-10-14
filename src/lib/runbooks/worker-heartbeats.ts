@@ -20,7 +20,10 @@ export async function getRunbookWorkerEvidence(now: Date) {
       orderBy: { lastSeenAt: 'desc' },
       take: 100,
     });
-    return evaluateRunbookWorkerEvidence(workers, now);
+    const configured = Number(process.env.OPSKNIGHT_RUNBOOK_EXPECTED_WORKERS);
+    const expected =
+      Number.isInteger(configured) && configured > 0 && configured <= 100 ? configured : null;
+    return evaluateRunbookWorkerEvidence(workers, now, expected);
   } catch {
     return {
       status: 'UNKNOWN' as const,

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Runbook engine remediation
 
+- Fixed pinned-version/input drift during rule creation, bounded service rule readiness with cursor pagination, and coordinated watchdog recovery with idempotent jobs.
+- Historical version comparison supports older versions; invalid selectors return inline errors and disable saving. Worker health now discloses expected redundancy, and rule cards group secondary controls under Manage rule.
+
 - Independent service automation rules with a guided paused-first setup, typed selectors, explicit automatic version pins, configuration validation, signed Agent policy checks, and single-use execution previews.
 - Rule history and origin links, credential-masked version comparison, truthful configured/historical counts, and scoped inventory failure handling.
 - Separate Agent startup/liveness/readiness probes, bounded reconnect, single-flight heartbeats, durable identity handling and node-affine Swarm state.

@@ -40,3 +40,18 @@ it('reports worker failures and rejects implausible future timestamps', () => {
       .status
   ).toBe('UNKNOWN');
 });
+
+it('discloses lost redundancy even when a surviving worker makes progress', () => {
+  expect(evaluateRunbookWorkerEvidence([worker], now, 2)).toMatchObject({
+    status: 'DEGRADED',
+    healthyInstances: 1,
+    expectedInstances: 2,
+    redundancy: 'DEGRADED',
+  });
+  expect(
+    evaluateRunbookWorkerEvidence([worker, { ...worker, instanceId: 'second' }], now, 2)
+  ).toMatchObject({ status: 'HEALTHY', redundancy: 'SATISFIED' });
+  expect(evaluateRunbookWorkerEvidence([worker], now)).toMatchObject({
+    redundancy: 'UNCONFIGURED',
+  });
+});

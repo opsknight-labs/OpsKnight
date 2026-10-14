@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
+import { parseAgentSelector } from '@/lib/runbooks/selector-input';
 import { schedulingLabelsSchema } from '@/lib/runbooks/labels';
 export default function RunbookSelectorBuilder({ initialValue = {} }: { initialValue?: unknown }) {
   const id = useId();
@@ -32,10 +33,13 @@ export default function RunbookSelectorBuilder({ initialValue = {} }: { initialV
       parseError = true;
     }
   }
-  const parsed = schedulingLabelsSchema.safeParse(candidate);
-  const valid = !parseError && !duplicate && parsed.success;
+  const parsed = advanced ? parseAgentSelector(raw) : schedulingLabelsSchema.safeParse(candidate);
+  const valid =
+    !parseError &&
+    parsed.success &&
+    (advanced || (!duplicate && !rows.some(row => !row.key.trim())));
   return (
-    <fieldset className="space-y-2 min-w-0">
+    <fieldset className="space-y-2 min-w-0" data-form-invalid={valid ? undefined : 'true'}>
       <legend className="text-sm font-medium">Agent label selector</legend>
       <p className="text-xs text-muted-foreground">
         Match all labels. An empty selector adds no label restriction; Agent or pool scope still
@@ -49,7 +53,13 @@ export default function RunbookSelectorBuilder({ initialValue = {} }: { initialV
       {advanced ? (
         <>
           <Label htmlFor={`${id}-raw`}>Advanced selector JSON</Label>
-          <Textarea id={`${id}-raw`} value={raw} onChange={event => setRaw(event.target.value)} />
+          <Textarea
+            aria-invalid={!valid}
+            aria-describedby={!valid ? `${id}-error` : undefined}
+            id={`${id}-raw`}
+            value={raw}
+            onChange={event => setRaw(event.target.value)}
+          />
         </>
       ) : (
         rows.map((row, index) => (
@@ -124,7 +134,7 @@ export default function RunbookSelectorBuilder({ initialValue = {} }: { initialV
         {advanced ? 'Use label fields' : 'Use advanced JSON'}
       </Button>
       {!valid && (
-        <p role="alert" className="text-xs text-destructive">
+        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
           Selector must contain at most 32 unique valid label keys and string values. Saving is
           rejected until corrected.
         </p>

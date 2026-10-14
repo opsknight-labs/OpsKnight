@@ -329,9 +329,9 @@ sudo /opt/opsknight-agent/preflight.sh`
       <p className="text-xs text-muted-foreground">
         These commands deploy only the Agent and require an existing OpsKnight installation. Run
         them from the repository root. Use an Agent-reachable HTTPS URL. Secret-backed steps require
-        HTTPS, including container Agents; internal HTTP URLs only support steps without secrets.
-        Keep the enrollment Secret while the deployment references it; the consumed token cannot
-        enroll again. Persisted identity is used after enrollment.
+        HTTPS, including container Agents. All generated setup commands require HTTPS. Keep the
+        enrollment Secret while the deployment references it; the consumed token cannot enroll
+        again. Persisted identity is used after enrollment.
       </p>
     </div>
   );

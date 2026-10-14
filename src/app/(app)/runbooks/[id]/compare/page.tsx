@@ -14,17 +14,19 @@ export default async function VersionComparePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ base?: string; next?: string }>;
+  searchParams: Promise<{ base?: string; next?: string; versionsPage?: string }>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
   const query = await searchParams;
+  const versionsPage = Math.max(1, Math.min(10000, Number(query.versionsPage) || 1));
   const runbook = await prisma.runbook.findUnique({
     where: { id },
     include: {
       versions: {
         orderBy: { version: 'desc' },
-        take: 100,
+        take: 51,
+        skip: (Math.floor(versionsPage) - 1) * 50,
         select: { id: true, version: true, state: true },
       },
     },
@@ -44,12 +46,21 @@ export default async function VersionComparePage({
         <Link href={`/runbooks/${id}`}>Back to runbook</Link>
       </div>
     );
+  const requestedVersions = await prisma.runbookVersion.findMany({
+    where: { runbookId: id, id: { in: [selection.data.base, selection.data.next] } },
+    select: { id: true, version: true, state: true },
+  });
   if (
     ![selection.data.base, selection.data.next].every(versionId =>
-      runbook.versions.some(version => version.id === versionId)
+      requestedVersions.some(version => version.id === versionId)
     )
   )
     notFound();
+  const selectorVersions = [
+    ...new Map(
+      [...requestedVersions, ...runbook.versions.slice(0, 50)].map(version => [version.id, version])
+    ).values(),
+  ];
   const impact = await getVersionImpact(id, selection.data.base, selection.data.next);
   return (
     <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-4">
@@ -58,6 +69,7 @@ export default async function VersionComparePage({
         description={impact.warning}
       />
       <form className="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="versionsPage" value={versionsPage} />
         <label>
           Before
           <select
@@ -65,7 +77,7 @@ export default async function VersionComparePage({
             defaultValue={selection.data.base}
             className="block rounded border p-2 bg-background"
           >
-            {runbook.versions.map(version => (
+            {selectorVersions.map(version => (
               <option key={version.id} value={version.id}>
                 v{version.version} · {version.state}
               </option>
@@ -79,7 +91,7 @@ export default async function VersionComparePage({
             defaultValue={selection.data.next}
             className="block rounded border p-2 bg-background"
           >
-            {runbook.versions.map(version => (
+            {selectorVersions.map(version => (
               <option key={version.id} value={version.id}>
                 v{version.version} · {version.state}
               </option>
@@ -90,6 +102,23 @@ export default async function VersionComparePage({
           Compare versions
         </button>
       </form>
+      <nav aria-label="Version selector pages" className="flex gap-4 text-sm">
+        <span>Version page {versionsPage}</span>
+        {versionsPage > 1 && (
+          <Link
+            href={`?base=${selection.data.base}&next=${selection.data.next}&versionsPage=${versionsPage - 1}`}
+          >
+            Newer versions
+          </Link>
+        )}
+        {runbook.versions.length > 50 && (
+          <Link
+            href={`?base=${selection.data.base}&next=${selection.data.next}&versionsPage=${versionsPage + 1}`}
+          >
+            Older versions
+          </Link>
+        )}
+      </nav>
       <section aria-label="Workflow changes" className="space-y-3">
         {impact.steps
           .filter(step => step.change !== 'UNCHANGED')

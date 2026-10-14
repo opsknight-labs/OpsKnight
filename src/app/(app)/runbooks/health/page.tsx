@@ -77,12 +77,15 @@ export default async function RunbookHealthPage() {
 
   // Synthesize actionable issues for first-order operator review
   const issues: HealthIssue[] = [];
-  if (health.workers.status !== 'HEALTHY')
+  if (health.workers.status !== 'HEALTHY' || health.workers.redundancy === 'UNCONFIGURED')
     issues.push({
       id: 'worker-evidence',
       type: 'queue',
       severity: health.workers.status === 'DEGRADED' ? 'danger' : 'warning',
-      title: 'Runbook worker evidence missing or degraded',
+      title:
+        health.workers.redundancy === 'UNCONFIGURED'
+          ? 'Worker redundancy is unverified'
+          : 'Runbook worker evidence missing or degraded',
       description: health.workers.reason,
       actionHref: '/api/health?mode=readiness',
       actionLabel: 'Inspect worker deployment',

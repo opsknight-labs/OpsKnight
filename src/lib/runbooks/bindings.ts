@@ -141,7 +141,8 @@ export async function createServiceBinding(
   serviceId: string,
   raw: CreateServiceRunbookBindingInput,
   actorId: string,
-  initialTrigger?: CreateRunbookTriggerInput
+  initialTrigger?: CreateRunbookTriggerInput,
+  expectedVersionId?: string
 ) {
   const input = createServiceRunbookBindingSchema.parse(raw);
   const trigger = initialTrigger ? createRunbookTriggerSchema.parse(initialTrigger) : undefined;
@@ -155,6 +156,10 @@ export async function createServiceBinding(
       input.versionStrategy,
       input.runbookVersionId
     );
+    if (expectedVersionId && expectedVersionId !== version.id)
+      throw new RunbookDefinitionError(
+        'The published version changed. Reload the rule form and review its inputs.'
+      );
     const inputValues = applyRunbookInputDefaults(version.inputs, input.inputValues);
     validateBindingInputValues(version.inputs, inputValues);
     await validateBindingTarget(
@@ -227,7 +232,8 @@ export async function updateServiceBinding(
   serviceId: string,
   bindingId: string,
   raw: UpdateServiceRunbookBindingInput,
-  actorId: string
+  actorId: string,
+  expectedVersionId?: string
 ) {
   const input = updateServiceRunbookBindingSchema.parse(raw);
   return prisma.$transaction(async tx => {
@@ -254,6 +260,10 @@ export async function updateServiceBinding(
         strategy === 'PINNED' &&
         requestedVersionId === current.runbookVersionId
     );
+    if (expectedVersionId && expectedVersionId !== version.id)
+      throw new RunbookDefinitionError(
+        'The selected version changed. Reload the form and review its inputs.'
+      );
     const values = applyRunbookInputDefaults(
       version.inputs,
       input.inputValues ?? (current.inputValues as Record<string, unknown>)

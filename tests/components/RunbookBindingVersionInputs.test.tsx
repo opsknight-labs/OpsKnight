@@ -74,3 +74,59 @@ it('keeps manual mode when the pin confirmation is cancelled', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Keep current mode' }));
   expect(screen.getByRole('combobox', { name: 'Execution mode' })).toHaveValue('MANUAL');
 });
+
+it('resolves fields and the submitted version from the exact pinned selection', () => {
+  const changed = vi.fn();
+  const { container } = render(
+    <RunbookBindingVersionInputs
+      versions={[
+        {
+          id: 'old',
+          version: 1,
+          state: 'PUBLISHED',
+          inputs: [
+            {
+              key: 'legacy',
+              label: 'Legacy input',
+              type: 'STRING',
+              required: true,
+              defaultValue: null,
+              description: '',
+            },
+          ],
+        },
+        {
+          id: 'new',
+          version: 2,
+          state: 'PUBLISHED',
+          inputs: [
+            {
+              key: 'replacement',
+              label: 'Replacement input',
+              type: 'STRING',
+              required: true,
+              defaultValue: null,
+              description: '',
+            },
+          ],
+        },
+      ]}
+      publishedVersionId="new"
+      initialStrategy="LATEST_PUBLISHED"
+      initialVersionId={null}
+      values={{}}
+      onVersionChange={changed}
+    />
+  );
+  expect(screen.getByLabelText('Replacement input *')).toBeVisible();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Version strategy' }), {
+    target: { value: 'PINNED' },
+  });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Pinned version' }), {
+    target: { value: 'old' },
+  });
+  expect(screen.getByLabelText('Legacy input *')).toBeVisible();
+  expect(screen.queryByLabelText('Replacement input *')).toBeNull();
+  expect(container.querySelector('input[name="expectedVersionId"]')).toHaveValue('old');
+  expect(changed).toHaveBeenLastCalledWith('old');
+});

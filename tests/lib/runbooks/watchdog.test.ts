@@ -1,4 +1,10 @@
 import { expect, it, vi } from 'vitest';
+vi.mock('@/lib/prisma', () => ({
+  default: {
+    $transaction: async (callback: (tx: unknown) => Promise<void>) =>
+      callback({ $queryRaw: async () => [{ acquired: true }] }),
+  },
+}));
 vi.mock('@/lib/runbooks/worker-heartbeats', () => ({ getRunbookWorkerEvidence: vi.fn() }));
 vi.mock('@/lib/runbooks/reconciler', () => ({ reconcileRunbooks: vi.fn() }));
 import { getRunbookWorkerEvidence } from '@/lib/runbooks/worker-heartbeats';

@@ -1,0 +1,45 @@
+{
+  "measuredAt": "2026-10-14T11:04:46.921Z",
+  "topology": "Local PostgreSQL read model plus visible-page readiness; excludes full browser rendering and network authorization",
+  "samples": [
+    {
+      "rules": 100,
+      "agents": 1000,
+      "visible": 20,
+      "queryCounts": [
+        68,
+        68,
+        68,
+        68,
+        68
+      ],
+      "p95Ms": 95.12333300000046
+    },
+    {
+      "rules": 1000,
+      "agents": 1000,
+      "visible": 20,
+      "queryCounts": [
+        68,
+        68,
+        68,
+        68,
+        68
+      ],
+      "p95Ms": 41.253584000000046
+    },
+    {
+      "rules": 10000,
+      "agents": 1000,
+      "visible": 20,
+      "queryCounts": [
+        68,
+        68,
+        68,
+        68,
+        68
+      ],
+      "p95Ms": 46.55408299999999
+    }
+  ]
+}

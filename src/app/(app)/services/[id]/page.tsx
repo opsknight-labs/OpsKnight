@@ -1,3 +1,4 @@
+import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import {
   describeBinding,
@@ -95,7 +96,15 @@ const INCIDENTS_PER_PAGE = 20;
 
 type ServiceDetailPageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ page?: string; tab?: string; error?: string; saved?: string }>;
+  searchParams?: Promise<{
+    page?: string;
+    tab?: string;
+    error?: string;
+    saved?: string;
+    rulesAfter?: string;
+    ruleCatalog?: string;
+    ruleTargets?: string;
+  }>;
 };
 
 function getWebhookUrl(
@@ -174,6 +183,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);
+  const rulesAfter = resolvedSearchParams?.rulesAfter?.slice(0, 512);
+  const catalogQuery = (resolvedSearchParams?.ruleCatalog ?? '').slice(0, 100);
+  const targetQuery = (resolvedSearchParams?.ruleTargets ?? '').slice(0, 100);
   const activeTab = resolvedSearchParams?.tab || 'incidents';
   const errorCode = resolvedSearchParams?.error;
   const isSaved = resolvedSearchParams?.saved === '1';
@@ -434,36 +446,19 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     availableRunbookAgentsResult,
     availableRunbookAgentPoolsResult,
   ] = await Promise.allSettled([
-    prisma.serviceAutomationRule.findMany({
-      where: { serviceId: id },
-      include: {
-        runbook: {
-          include: { publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } } },
-        },
-        runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
-        executions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            status: true,
-            startedAt: true,
-            completedAt: true,
-            createdAt: true,
-          },
-        },
-        _count: {
-          select: { executions: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
+    getServiceRulePage(id, rulesAfter),
     prisma.runbook.findMany({
-      where: { archivedAt: null, publishedVersionId: { not: null } },
+      where: {
+        archivedAt: null,
+        publishedVersionId: { not: null },
+        name: { contains: catalogQuery, mode: 'insensitive' },
+      },
+      take: 50,
       include: {
         publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
         versions: {
+          take: 20,
+          where: { state: { in: ['PUBLISHED', 'RETIRED'] } },
           include: { inputs: { orderBy: { sequence: 'asc' } } },
           orderBy: { version: 'desc' },
         },
@@ -471,18 +466,26 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       orderBy: { name: 'asc' },
     }),
     prisma.runbookAgent.findMany({
-      where: { status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] } },
+      where: {
+        status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] },
+        name: { contains: targetQuery, mode: 'insensitive' },
+      },
+      take: 100,
       select: { id: true, name: true, hostname: true, status: true },
       orderBy: { name: 'asc' },
     }),
     prisma.runbookAgentPool.findMany({
+      where: { name: { contains: targetQuery, mode: 'insensitive' } },
+      take: 100,
       select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
       orderBy: { name: 'asc' },
     }),
   ]);
 
   const serviceAutomationRules =
-    serviceAutomationRulesResult.status === 'fulfilled' ? serviceAutomationRulesResult.value : [];
+    serviceAutomationRulesResult.status === 'fulfilled'
+      ? serviceAutomationRulesResult.value.rules
+      : [];
   const availableRunbooks =
     availableRunbooksResult.status === 'fulfilled' ? availableRunbooksResult.value : [];
   const availableRunbookAgents =
@@ -512,9 +515,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   // Bound dependency pressure when a service has many independent rules.
   const runbookReadiness = new Map<string, Awaited<ReturnType<typeof getBindingReadiness>>>();
   for (let offset = 0; offset < serviceAutomationRules.length; offset += 8) {
-    const batch = await Promise.all(serviceAutomationRules.slice(offset, offset + 8).map(
-      async binding => [binding.id, await getBindingReadiness(binding)] as const
-    ));
+    const batch = await Promise.all(
+      serviceAutomationRules
+        .slice(offset, offset + 8)
+        .map(async binding => [binding.id, await getBindingReadiness(binding)] as const)
+    );
     for (const [ruleId, readiness] of batch) runbookReadiness.set(ruleId, readiness);
   }
 
@@ -1310,6 +1315,18 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         runbooksContent={
           <ServiceRunbooks
             serviceId={service.id}
+            pagination={{
+              after: rulesAfter,
+              hasNext:
+                serviceAutomationRulesResult.status === 'fulfilled' &&
+                serviceAutomationRulesResult.value.hasNext,
+              nextCursor:
+                serviceAutomationRulesResult.status === 'fulfilled'
+                  ? serviceAutomationRulesResult.value.nextCursor
+                  : undefined,
+            }}
+            catalogQuery={catalogQuery}
+            targetQuery={targetQuery}
             bindings={serviceAutomationRules.map(binding => ({
               ...binding,
               presentation: describeBinding(

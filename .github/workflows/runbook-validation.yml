@@ -124,7 +124,7 @@ jobs:
           tests/lib/job-worker.test.ts tests/components/AgentSetupInstructions.test.tsx
           tests/components/ServiceRunbooks.test.tsx tests/components/RunbookSelectorBuilder.test.tsx
           tests/components/RunbookBindingVersionInputs.test.tsx tests/components/RunbookHealthTruth.test.tsx
-          tests/components/RuleWizard.test.tsx
+          tests/components/RuleWizard.test.tsx tests/components/SelectorFormValidation.test.tsx
       - name: Real PostgreSQL concurrency and execution fences
         env: { VITEST_USE_REAL_DB: '1' }
         run: >-
@@ -135,6 +135,7 @@ jobs:
           tests/integration/runbook-binding-readiness-database.test.ts
           tests/integration/runbook-policy-checks-database.test.ts
           tests/integration/runbook-worker-evidence-database.test.ts
+          tests/integration/runbook-review-regressions-database.test.ts
           tests/integration/encryption-migration.test.ts
 
   deployment-candidate:
@@ -323,16 +324,18 @@ jobs:
           sudo systemctl enable --now opsknight-agent
           echo "Waiting for live agent enrollment and identity generation..."
           ENROLLED=false
-          for i in $(seq 1 15); do
-            if sudo test -f /var/lib/opsknight-agent/identity.json && sudo test -f /var/lib/opsknight-agent/health.json; then
+          for i in $(seq 1 60); do
+            if sudo test -f /var/lib/opsknight-agent/identity.json && sudo grep -q '"ready":true' /var/lib/opsknight-agent/health.json; then
               ENROLLED=true
               break
             fi
             sleep 1
           done
           if [[ "$ENROLLED" != "true" ]]; then
-            echo "Agent service failed to generate identity within 15s. Journal logs:"
-            sudo journalctl -u opsknight-agent -n 50 --no-pager
+            echo "Agent service failed to generate identity within 60s. Journal logs:"
+            sudo systemctl status opsknight-agent --no-pager || true
+            sudo cat /var/lib/opsknight-agent/health.json || true
+            sudo journalctl -u opsknight-agent -n 100 --no-pager
             exit 1
           fi
 
@@ -530,6 +533,13 @@ jobs:
           sudo systemctl disable opsknight-agent
           pkill -f "Mock OpsKnight control-plane" || true
           rm -rf /tmp/keys-staged.json /tmp/priv-default.pem /tmp/priv-staged.pem /tmp/broken-agent.tar.gz /tmp/broken-staging
+
+      - name: Diagnose native Agent failure
+        if: failure()
+        run: |
+          sudo systemctl status opsknight-agent --no-pager || true
+          sudo journalctl -u opsknight-agent -n 100 --no-pager || true
+          sudo cat /var/lib/opsknight-agent/health.json || true
 
   deployment-manifests:
     needs: changes

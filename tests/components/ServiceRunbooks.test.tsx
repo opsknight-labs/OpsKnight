@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { fireEvent, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import ServiceRunbooks from '@/components/service/ServiceRunbooks';
 
@@ -67,7 +67,8 @@ it('redacts secret-reference defaults in the service summary', () => {
       canManage={false}
     />
   );
-  expect(screen.getByText('Configured secret reference')).toBeVisible();
+  fireEvent.click(screen.getByText('Manage rule'));
+  expect(screen.getByText('Configured secret reference')).toBeInTheDocument();
   expect(screen.queryByText(/sensitive-reference/)).not.toBeInTheDocument();
 });
 
@@ -98,8 +99,9 @@ it('provides a View Runbook link rather than an inaccurate immediate execution t
       canManage={false}
     />
   );
-  const link = screen.getByRole('link', { name: /View Runbook/i });
-  expect(link).toBeVisible();
+  fireEvent.click(screen.getByText('Manage rule'));
+  const link = screen.getByRole('link', { name: /View Runbook/i, hidden: true });
+  expect(link).toBeInTheDocument();
   expect(link).toHaveAttribute('href', '/runbooks/runbook');
 });
 
