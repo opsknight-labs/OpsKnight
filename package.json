@@ -123,7 +123,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@simplewebauthn/browser": "13.3.0",
-    "@simplewebauthn/server": "13.3.0",
+    "@simplewebauthn/server": "13.3.2",
     "@types/web-push": "^3.6.4",
     "@vvo/tzdb": "^6.198.0",
     "bcrypt": "^6.0.0",

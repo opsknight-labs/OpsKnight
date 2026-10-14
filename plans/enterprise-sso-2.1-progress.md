@@ -841,3 +841,38 @@ production-browser checks (two intentional Chromium-only hardware skips). The NG
 fixture rejected 989/1,000 burst requests before upstream work and recovered after
 refill. Strict TypeScript and modified-file lint passed without errors or warnings.
 CI publishes the secret-free admission, hashing, metrics and browser reports.
+
+
+### PR #865 rebase, security bot and migration gate fixes — 2026-10-14
+
+Rebased the existing feature branch onto current main without merging. Upgraded
+@simplewebauthn/server from 13.3.0 to the advisory-patched 13.3.2. The browser package
+remains on its compatible 13.3.0 release.
+
+Both the control-plane certification and database integration jobs stopped before
+deployment because the strict validator rejected four already-applied SSO migration
+files. Their SQL and Prisma checksums remain unchanged. The validator now recognizes
+only the exact reviewed SHA-256 bytes and specific rule for each file, with an explicit
+reason. The enum addition is not consumed by the unrelated DDL in that transaction;
+the index drops replace known predecessor indexes. Changed bytes and new migration
+names still receive strict errors. Five executable negative/positive contract tests
+run before control-plane validation.
+
+Fixed notification/SLA stream policy rechecks to include the authenticated stable
+User ID. A restored administrator under Required retains streaming access until the
+explicit password exception expires; another ID with the same email remains denied.
+Four stream regression cases use the real policy evaluator.
+
+SARIF now uses the formatter's documented ignore-suppressed option, matching normal
+ESLint behavior for existing justified source suppressions. No rules are disabled.
+CodeQL alert 5096 was reviewed and dismissed as a false positive: the flagged SHA-256
+helper indexes random 256-bit recovery capabilities and public identifiers, while
+submitted passwords are verified only by salted scrypt. The source records this
+boundary; the security rule remains enabled.
+
+Final local PR-fix validation: 176 focused authentication/stream tests and five migration
+validator contract tests passed; all 112 PostgreSQL cases passed with the patched server
+dependency. The optimized production build and seven HTTPS browser cases passed (two
+intentional hardware skips). Strict TypeScript, modified-file lint and the relevant
+SARIF scan were clean. Migration validation reports zero errors; its 40 legacy warnings
+remain visible. No historical migration file was edited.

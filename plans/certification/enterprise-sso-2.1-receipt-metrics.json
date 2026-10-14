@@ -1,8 +1,8 @@
 {
-  "measuredAt": "2026-10-14T16:47:55.622Z",
+  "measuredAt": "2026-10-14T17:13:45.314Z",
   "rows": 100000,
   "scope": "Isolated PostgreSQL; mocked provider send/admission; concurrent real queue dispatch and exact metric collector",
-  "concurrentDurationMs": 1752.2036670000007,
+  "concurrentDurationMs": 2300.425875000001,
   "counts": {
     "pending": 75002,
     "retried": 25002,
@@ -18,12 +18,12 @@
             "Partial Mode": "Simple",
             "Parallel Aware": false,
             "Async Capable": false,
-            "Startup Cost": 4373.16,
-            "Total Cost": 4373.17,
+            "Startup Cost": 4373.19,
+            "Total Cost": 4373.2,
             "Plan Rows": 1,
             "Plan Width": 24,
-            "Actual Startup Time": 25.519,
-            "Actual Total Time": 25.519,
+            "Actual Startup Time": 42.915,
+            "Actual Total Time": 42.916,
             "Actual Rows": 1,
             "Actual Loops": 1,
             "Shared Hit Blocks": 2373,
@@ -46,10 +46,10 @@
                 "Alias": "NotificationProviderFeedback",
                 "Startup Cost": 0,
                 "Total Cost": 3373.13,
-                "Plan Rows": 100003,
+                "Plan Rows": 100006,
                 "Plan Width": 12,
-                "Actual Startup Time": 0.012,
-                "Actual Total Time": 18.134,
+                "Actual Startup Time": 0.016,
+                "Actual Total Time": 33.395,
                 "Actual Rows": 100005,
                 "Actual Loops": 1,
                 "Filter": "(\"processedAt\" IS NULL)",
@@ -68,7 +68,7 @@
             ]
           },
           "Planning": {
-            "Shared Hit Blocks": 91,
+            "Shared Hit Blocks": 97,
             "Shared Read Blocks": 0,
             "Shared Dirtied Blocks": 0,
             "Shared Written Blocks": 0,
@@ -79,9 +79,9 @@
             "Temp Read Blocks": 0,
             "Temp Written Blocks": 0
           },
-          "Planning Time": 1.575,
+          "Planning Time": 1.415,
           "Triggers": [],
-          "Execution Time": 25.615
+          "Execution Time": 42.969
         }
       ]
     }

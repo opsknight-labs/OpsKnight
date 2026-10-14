@@ -23,6 +23,8 @@ export const emergencyCookieOptions = {
   secure: process.env.NODE_ENV === 'production',
   path: '/',
 };
+// SHA-256 indexes random 256-bit capability tokens, challenges and public credential IDs.
+// Recovery passwords never enter this helper; emergency-password.ts uses salted scrypt.
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 export const secret = () => randomBytes(32).toString('base64url');
 

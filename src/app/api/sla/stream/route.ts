@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
         while (true) {
           const decision = await checkAuthenticationPolicy(
             'SESSION',
-            { email: session.user.email },
+            { id: session.user.id, email: session.user.email },
             {
               method: session.authenticationMethod,
               policyVersion: session.issuedUnderPolicyVersion,
