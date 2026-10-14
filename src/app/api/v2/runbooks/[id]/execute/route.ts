@@ -68,6 +68,7 @@ export const POST = defineV2Route<{ id: string }, any, z.infer<typeof RunbookExe
         executionId: execution.id,
         incidentId: body.incidentId ?? null,
       },
+      tx,
     });
 
     return {

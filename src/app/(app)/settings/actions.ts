@@ -639,20 +639,17 @@ export async function createApiKey(
     const scopes = formData.getAll('scopes').filter(Boolean) as string[];
     const expirationDays = Number(formData.get('expirationDays') || 90);
     const requestedScopes = scopes.filter(isApiScope);
+    if (!name) {
+      return { error: 'Name is required.' };
+    }
+    if (requestedScopes.length === 0) {
+      return { error: 'At least one valid permission scope must be selected.' };
+    }
     const canWrite = hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE);
     if (!canWrite && requestedScopes.some(isWriteApiScope)) {
       return { error: 'Write scopes require Responder or Admin access.' };
     }
-    const finalScopes =
-      requestedScopes.length > 0
-        ? requestedScopes
-        : canWrite
-          ? [API_SCOPES.EVENTS_WRITE]
-          : [API_SCOPES.INCIDENTS_READ];
-
-    if (!name) {
-      return { error: 'Name is required.' };
-    }
+    const finalScopes = requestedScopes;
     if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 365) {
       return { error: 'API keys must expire between 1 and 365 days.' };
     }
@@ -745,7 +742,7 @@ export async function createServiceAccountAction(
     }
 
     const name = (formData.get('name') as string | null)?.trim() ?? '';
-    const role = (formData.get('role') as string | null)?.trim() ?? 'USER';
+    const role = (formData.get('role') as string | null)?.trim() ?? 'RESPONDER';
     const description = (formData.get('description') as string | null)?.trim() || undefined;
     const teamIds = formData.getAll('teamIds').filter(Boolean) as string[];
 

@@ -124,22 +124,21 @@ export async function POST(
           tx
         );
 
+        await logV2Audit({
+          action: 'incident.note_added',
+          entityType: 'INCIDENT',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: { noteId: note.id },
+          tx,
+        });
+
         return note;
       }
     );
 
     const note = execution.value;
-
-    if (!execution.replayed) {
-      await logV2Audit({
-        action: 'incident.note_added',
-        entityType: 'INCIDENT',
-        entityId: id,
-        actorId: actor.id,
-        apiKeyId: apiKey.id,
-        details: { noteId: note.id },
-      });
-    }
 
     return apiV2Created(note, {
       headers: {

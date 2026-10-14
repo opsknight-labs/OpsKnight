@@ -141,10 +141,10 @@ export async function getServiceAccount(id: string) {
 }
 
 export async function createServiceAccount(input: CreateServiceAccountInput) {
-  if (!isAppRole(input.role) || input.role === 'USER') {
+  if (!isAppRole(input.role)) {
     throw new AppError({
       code: 'INVALID_SERVICE_ACCOUNT_ROLE',
-      userMessage: "Service account role must be 'ADMIN', 'RESPONDER', or 'AUDITOR'.",
+      userMessage: "Service account role must be a valid system role ('ADMIN', 'RESPONDER', 'AUDITOR', or 'USER').",
     });
   }
 

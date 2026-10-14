@@ -15,6 +15,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: opsknight
+      # checkov:skip=CKV_SECRET_4: Ephemeral local certification test database credentials
       POSTGRES_PASSWORD: certification-only
       POSTGRES_DB: opsknight
     healthcheck:

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useActionState } from 'react';
+import { useState, useMemo, useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
@@ -196,6 +196,21 @@ export default function ServiceAccountsPanel({
 
   // Reveal Token Banner
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (createState?.success) {
+      setCreateDialogOpen(false);
+      router.refresh();
+    }
+  }, [createState?.success, router]);
+
+  useEffect(() => {
+    if (issueTokenState?.success && issueTokenState?.token) {
+      setIssueTokenTargetId(null);
+      setRevealedToken(issueTokenState.token);
+      router.refresh();
+    }
+  }, [issueTokenState?.success, issueTokenState?.token, router]);
 
   // Delete SA Confirmation
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
@@ -611,14 +626,7 @@ export default function ServiceAccountsPanel({
             </div>
           </DialogHeader>
 
-          <form
-            action={async formData => {
-              await createAction(formData);
-              setCreateDialogOpen(false);
-              router.refresh();
-            }}
-            className="space-y-4 pt-2"
-          >
+          <form action={createAction} className="space-y-4 pt-2">
             {createState?.error && (
               <Alert variant="destructive">
                 <ShieldAlert className="h-4 w-4" />
@@ -646,11 +654,11 @@ export default function ServiceAccountsPanel({
               <select
                 id="sa-role"
                 name="role"
-                defaultValue="USER"
+                defaultValue="RESPONDER"
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="USER">User (Resource-scoped access to assigned teams)</option>
                 <option value="RESPONDER">Responder (Can manage & acknowledge incidents)</option>
+                <option value="USER">User (Resource-scoped access to assigned teams)</option>
                 <option value="ADMIN">Admin (Full administrative privileges)</option>
               </select>
             </div>
@@ -730,14 +738,11 @@ export default function ServiceAccountsPanel({
           </DialogHeader>
 
           <form
-            action={async formData => {
-              // Add selected scopes to formData
+            action={formData => {
               for (const sc of selectedScopes) {
                 formData.append('scopes', sc);
               }
-              await issueTokenAction(formData);
-              setIssueTokenTargetId(null);
-              router.refresh();
+              issueTokenAction(formData);
             }}
             className="space-y-4 pt-2"
           >

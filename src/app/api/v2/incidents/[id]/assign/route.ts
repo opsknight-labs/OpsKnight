@@ -82,25 +82,24 @@ export async function POST(
           },
         });
 
+        await logV2Audit({
+          action: 'incident.assigned',
+          entityType: 'INCIDENT',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: {
+            assigneeId: result.assigneeId,
+            teamId: result.teamId,
+          },
+          tx,
+        });
+
         return { updated, result };
       }
     );
 
-    const { updated, result } = execution.value;
-
-    if (!execution.replayed) {
-      await logV2Audit({
-        action: 'incident.assigned',
-        entityType: 'INCIDENT',
-        entityId: id,
-        actorId: actor.id,
-        apiKeyId: apiKey.id,
-        details: {
-          assigneeId: result.assigneeId,
-          teamId: result.teamId,
-        },
-      });
-    }
+    const { updated } = execution.value;
 
     return apiV2Success(updated, {
       headers: {

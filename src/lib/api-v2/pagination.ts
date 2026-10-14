@@ -5,8 +5,22 @@ import type { ApiV2CursorPayload, ApiV2Pagination } from './types';
 export const DEFAULT_PAGE_LIMIT = 20;
 export const MAX_PAGE_LIMIT = 100;
 
+function getCursorSigningSecret(): string {
+  const secret = process.env.API_V2_CURSOR_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'test') {
+      return 'test-cursor-salt-never-used-in-production';
+    }
+    throw new AppError({
+      code: 'INTERNAL_ERROR',
+      userMessage: 'Pagination signing secret is not configured. Server cannot sign pagination cursors.',
+    });
+  }
+  return secret;
+}
+
 function cursorSignature(payload: { id: string; createdAt: string }): string {
-  const secret = process.env.NEXTAUTH_SECRET || 'opsknight-v2-pagination-salt';
+  const secret = getCursorSigningSecret();
   return createHmac('sha256', secret)
     .update(`${payload.id}:${payload.createdAt}`)
     .digest('base64url')

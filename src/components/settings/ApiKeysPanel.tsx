@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState, useMemo } from 'react';
+import { useActionState, useState, useMemo, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { createApiKey, revokeApiKey } from '@/app/(app)/settings/actions';
@@ -398,6 +398,12 @@ export default function ApiKeysPanel({
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED' | 'EXPIRED'>('ALL');
+
+  useEffect(() => {
+    if (state?.success) {
+      setCreateDialogOpen(false);
+    }
+  }, [state?.success, state?.token]);
 
   const visibleScopes = canCreateWriteKeys
     ? SCOPES_CONFIG
@@ -948,13 +954,7 @@ print(response.json()["incidents"])`}
             </div>
           </DialogHeader>
 
-          <form
-            action={formData => {
-              formAction(formData);
-              setCreateDialogOpen(false);
-            }}
-            className="space-y-5 pt-2"
-          >
+          <form action={formAction} className="space-y-5 pt-2">
             {state?.error && (
               <Alert variant="destructive">
                 <XCircle className="h-4 w-4" />
