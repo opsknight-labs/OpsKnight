@@ -32,6 +32,7 @@ import {
   revokeServiceAccountToken,
   deleteServiceAccount,
 } from '@/lib/api-v2/service-accounts';
+import { invalidateV2AuthCache } from '@/lib/api-v2/auth';
 
 type ActionState = {
   error?: string | null;
@@ -707,7 +708,7 @@ export async function revokeApiKey(formData: FormData) {
   const user = await getCurrentUser();
   const key = await prisma.apiKey.findUnique({
     where: { id: keyId },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, tokenHash: true },
   });
   if (!key || (user.role !== 'ADMIN' && key.userId !== user.id)) {
     throw new Error('API key not found or you do not have permission to revoke it.');
@@ -737,6 +738,10 @@ export async function revokeApiKey(formData: FormData) {
       tx
     );
   });
+
+  if (key.tokenHash) {
+    invalidateV2AuthCache(key.tokenHash);
+  }
 
   revalidatePath('/settings/api-keys');
 }

@@ -101,6 +101,42 @@ export async function enforceV2RateLimit(
 export const LEGACY_AUTH_ADMISSION_LIMIT = 10;
 export const LEGACY_AUTH_ADMISSION_WINDOW_MS = 60_000;
 
+export const GENERAL_PRE_AUTH_ADMISSION_LIMIT = 60;
+export const GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS = 60_000;
+
+/**
+ * Pre-authentication IP-based admission limit for all unauthenticated token lookups.
+ * Shields PostgreSQL from database query floods with arbitrary/random API keys
+ * before the authenticated token rate limiter runs.
+ */
+export async function checkPreAuthAdmission(clientIp: string): Promise<boolean> {
+  const sanitizedIp = clientIp.trim() || 'unknown';
+  const now = Date.now();
+  const windowStart = Math.floor(now / GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS);
+  const memKey = `v2:preauth-db-ip:${sanitizedIp}:${windowStart}`;
+
+  // 1. In-memory fast shield (protects PostgreSQL connection pool from query exhaustion)
+  const currentCount = rateLimitMemoryCache.get(memKey) ?? 0;
+  if (currentCount >= GENERAL_PRE_AUTH_ADMISSION_LIMIT) {
+    return false;
+  }
+  rateLimitMemoryCache.set(memKey, currentCount + 1, GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS);
+
+  // 2. Distributed coordination across replicas via PostgreSQL RateLimit
+  try {
+    const dbKey = `api:v2:preauth:${sanitizedIp}`;
+    const pgResult = await checkRateLimit(
+      dbKey,
+      GENERAL_PRE_AUTH_ADMISSION_LIMIT,
+      GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS
+    );
+    return pgResult.allowed;
+  } catch {
+    // If DB check fails, rely on in-memory decision
+    return true;
+  }
+}
+
 /**
  * Pre-authentication IP-based admission limit for legacy token verification.
  * Shields the Node.js event loop and CPU from expensive scrypt operations

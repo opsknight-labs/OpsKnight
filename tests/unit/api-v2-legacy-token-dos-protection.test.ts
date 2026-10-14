@@ -137,4 +137,90 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
       })
     );
   });
+  it('serves valid token requests from positive cache on subsequent calls without touching database', async () => {
+    const validToken = 'ok_live_validkey000111222333444555666777';
+    const v2Hash = hashTokenV2(validToken);
+
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue({
+      id: 'key_valid_1',
+      name: 'Production Ingest Key',
+      prefix: validToken.slice(0, 12),
+      tokenHash: v2Hash,
+      scopes: ['incidents:read', 'events:write'],
+      userId: 'usr_owner_1',
+      lastUsedAt: new Date(),
+      user: {
+        id: 'usr_owner_1',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        department: null,
+        jobTitle: null,
+        email: 'admin@opsknight.local',
+        teamMemberships: [],
+      },
+    } as any);
+
+    const req1 = new NextRequest('http://localhost:3000/api/v2/incidents', {
+      headers: {
+        authorization: `Bearer ${validToken}`,
+        'x-forwarded-for': '198.51.100.20',
+      },
+    });
+
+    const ctx1 = await authenticateV2Request(req1);
+    expect(ctx1.apiKey.id).toBe('key_valid_1');
+    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(1);
+
+    // Second request with same valid token: served from positive cache, 0 additional DB lookups
+    const req2 = new NextRequest('http://localhost:3000/api/v2/incidents', {
+      headers: {
+        authorization: `Bearer ${validToken}`,
+        'x-forwarded-for': '198.51.100.20',
+      },
+    });
+
+    const ctx2 = await authenticateV2Request(req2);
+    expect(ctx2.apiKey.id).toBe('key_valid_1');
+    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('throttles invalid modern-format API key floods at general pre-auth admission limit (60) before querying database', async () => {
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+
+    const clientIp = '198.51.100.77';
+
+    // Send 60 distinct invalid modern-format tokens from same IP
+    for (let i = 0; i < 60; i++) {
+      const modernToken = `ok_live_randomtoken_${i}_${'z'.repeat(20)}`;
+      const req = new NextRequest('http://localhost:3000/api/v2/incidents', {
+        headers: {
+          authorization: `Bearer ${modernToken}`,
+          'x-forwarded-for': clientIp,
+        },
+      });
+
+      await expect(authenticateV2Request(req)).rejects.toThrow(
+        'The provided API key or service account token is invalid'
+      );
+    }
+
+    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(60);
+
+    // 61st request from same IP must be rejected by pre-auth admission limit WITHOUT querying database
+    const token61 = `ok_live_randomtoken_61_${'z'.repeat(20)}`;
+    const req61 = new NextRequest('http://localhost:3000/api/v2/incidents', {
+      headers: {
+        authorization: `Bearer ${token61}`,
+        'x-forwarded-for': clientIp,
+      },
+    });
+
+    await expect(authenticateV2Request(req61)).rejects.toMatchObject({
+      code: 'RATE_LIMIT_EXCEEDED',
+      status: 429,
+    });
+
+    // DB was NOT touched for 61st request
+    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(60);
+  });
 });

@@ -2915,9 +2915,9 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
 
         nodeRes.writeHead(routeRes.status, Object.fromEntries(routeRes.headers.entries()));
         nodeRes.end(await routeRes.text());
-      } catch (err: unknown) {
+      } catch {
         nodeRes.writeHead(500, { 'content-type': 'application/json' });
-        nodeRes.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        nodeRes.end(JSON.stringify({ error: 'Internal test server error' }));
       }
     });
 

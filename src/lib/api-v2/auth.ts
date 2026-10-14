@@ -6,7 +6,7 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { getClientIp } from '@/lib/client-ip';
 import { authCache } from './cache';
-import { checkLegacyTokenAdmission } from './rate-limit';
+import { checkLegacyTokenAdmission, checkPreAuthAdmission } from './rate-limit';
 
 export { hashTokenV2 } from '@/lib/api-keys';
 
@@ -51,11 +51,30 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   }
 
   const v2Hash = hashTokenV2(token);
+
+  // 1. Positive memory cache (0 DB queries on repeated valid calls)
+  const positiveCacheKey = `v2:valid-token:${v2Hash}`;
+  const cachedContext = authCache.get(positiveCacheKey) as V2AuthContext | undefined;
+  if (cachedContext) {
+    return cachedContext;
+  }
+
+  // 2. Negative memory cache (0 DB queries on repeated invalid calls)
   const negativeCacheKey = `v2:invalid-token:${v2Hash}`;
   if (authCache.get(negativeCacheKey)) {
     throw new AppError({
       code: 'API_KEY_INVALID',
       userMessage: 'The provided API key or service account token is invalid, expired, or revoked.',
+    });
+  }
+
+  // 3. Pre-authentication admission limit: shield PostgreSQL from floods of arbitrary/random API keys
+  const clientIp = getClientIp(req);
+  const preAuthAdmitted = await checkPreAuthAdmission(clientIp);
+  if (!preAuthAdmitted) {
+    throw new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      userMessage: 'Too many unauthenticated token verification attempts from this IP address. Please wait before retrying.',
     });
   }
 
@@ -87,9 +106,8 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   if (!apiKeyRecord) {
     // Shield CPU & event loop from expensive scrypt operations under invalid token bursts
     if (isLegacy1xTokenShape(token)) {
-      const clientIp = getClientIp(req.headers);
-      const admitted = await checkLegacyTokenAdmission(clientIp);
-      if (!admitted) {
+      const legacyAdmitted = await checkLegacyTokenAdmission(clientIp);
+      if (!legacyAdmitted) {
         throw new AppError({
           code: 'RATE_LIMIT_EXCEEDED',
           userMessage: 'Too many invalid token authentication attempts from this IP address. Please wait before retrying.',
@@ -168,6 +186,9 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
     actor: fullActor,
   };
 
+  // Cache valid auth context for 60 seconds to protect DB on high-throughput authenticated traffic
+  authCache.set(positiveCacheKey, authContext, 60_000);
+
   // Debounced lastUsedAt update (at most once every 5 minutes in background)
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000);
   if (!apiKeyRecord.lastUsedAt || apiKeyRecord.lastUsedAt < fiveMinutesAgo) {
@@ -184,6 +205,8 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
 
 export function invalidateV2AuthCache(tokenHash?: string): void {
   if (tokenHash) {
+    authCache.delete(`v2:valid-token:${tokenHash}`);
+    authCache.delete(`v2:invalid-token:${tokenHash}`);
     authCache.delete(tokenHash);
   } else {
     authCache.clear();
