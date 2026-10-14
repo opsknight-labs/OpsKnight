@@ -49,6 +49,8 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci --legacy-peer-deps
         env: { HUSKY: '0' }
+      - name: Verify immutable migration exceptions remain scoped
+        run: node --test tests/ci/sso-applied-migration-validation.test.cjs
       - run: npm run prisma:validate && npx prisma generate && npx tsc --noEmit --incremental false
       - run: docker build -t opsknight-certification:local .
       - name: Run one migration owner, then start three web and three worker replicas

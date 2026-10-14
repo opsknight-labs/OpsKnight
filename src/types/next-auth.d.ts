@@ -12,6 +12,10 @@ declare module 'next-auth' {
     };
     /** Canonical JWT JTI backing this active session */
     sessionId?: string;
+    authenticationMethod?: 'credentials' | 'oidc' | 'legacy-emergency';
+    authenticationPolicyVersion?: number;
+    authenticatedAt?: number;
+    issuedUnderPolicyVersion?: number;
     /** Error code if token validation failed or security lookup was unavailable */
     error?: string;
     /** Unix epoch seconds of the session's absolute expiry (Remember-Me hard cap). */
@@ -32,6 +36,6 @@ declare module 'next-auth/jwt' {
     tokenVersion?: number;
     avatarUrl?: string | null;
     gender?: string | null;
-    authProvider?: 'oidc' | 'credentials';
+    authProvider?: 'oidc' | 'credentials' | 'legacy-emergency';
   }
 }

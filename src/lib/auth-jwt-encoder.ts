@@ -115,6 +115,10 @@ export async function customJwtDecode(params: JWTDecodeParams): Promise<JWT | nu
         sessionId: payload.jti,
         userId: payload.sub,
         policy,
+        issuedUnderPolicyVersion:
+          typeof payload.issuedUnderPolicyVersion === 'number'
+            ? payload.issuedUnderPolicyVersion
+            : null,
         expiresAtSeconds: typeof payload.exp === 'number' ? payload.exp : null,
         // userAgent is not available in JWTDecodeParams; captured during
         // first authenticated HTTP request via touchSessionActivity instead.

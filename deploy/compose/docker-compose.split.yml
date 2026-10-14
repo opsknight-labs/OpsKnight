@@ -15,6 +15,7 @@ services:
       OPSKNIGHT_MIGRATION_ONLY: 'true'
       DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
@@ -51,6 +52,7 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       DATABASE_URL: ${WEB_DATABASE_URL:-${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
@@ -100,6 +102,7 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
@@ -145,6 +148,7 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
@@ -190,6 +194,7 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
@@ -235,6 +240,7 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
@@ -281,6 +287,7 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
@@ -326,6 +333,7 @@ services:
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}}
       DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}}
+      AUTH_RECOVERY_ORIGIN: ${AUTH_RECOVERY_ORIGIN:-}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}

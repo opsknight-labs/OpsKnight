@@ -80,3 +80,15 @@ kubectl apply -f deploy/kubernetes/kustomize/migration-job.yaml
 kubectl -n opsknight wait --for=condition=complete job/opsknight-migration --timeout=15m
 kubectl apply -k deploy/kubernetes/kustomize/profiles/integrated
 ```
+
+### 2.1 authentication compatibility cutover
+
+Application Deployments use `Recreate`. On upgrade a read-only pre-upgrade Job
+verifies all integrated/split application Deployments are scaled to zero and their
+pods have fully stopped before the migration hook runs. Schedule a maintenance
+window, stop ingress, drain workers and suspend external controllers. Keep
+PostgreSQL/PgBouncer running. HPA-managed web Deployments need their recorded replica
+count restored only after the new template is applied (`--wait=false` permits that
+controlled sequence). Never resume old binaries on a migrated database or treat
+`--atomic` as database rollback. See
+[Upgrade existing SSO](../../docs/v2.1.0/guides/identity/upgrade-existing-sso.md).

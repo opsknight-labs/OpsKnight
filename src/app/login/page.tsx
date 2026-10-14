@@ -5,7 +5,7 @@ import { getOidcRuntimeCapability } from '@/lib/oidc-validation';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { forcedSignOutUrl } from '@/lib/app-routes';
 import { redirect } from 'next/navigation';
-import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
+import { getDatabaseLocalAuthPolicy } from '@/lib/authentication-policy';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
@@ -49,8 +49,9 @@ export default async function LoginPage({
 
   const session = await getServerSession(await getAuthOptions());
   const ssoCapability = await getOidcRuntimeCapability();
-  const ssoEnabled = ssoCapability.runtimeReady;
-  const ssoError = ssoCapability.error;
+  const localAuthPolicy = await getDatabaseLocalAuthPolicy();
+  const ssoEnabled = ssoCapability.runtimeReady && localAuthPolicy.oidcLoginEnabled;
+  const ssoError = localAuthPolicy.oidcLoginEnabled ? ssoCapability.error : null;
 
   const awaitedSearchParams = await searchParams;
   const rawCallbackUrl =
@@ -88,7 +89,6 @@ export default async function LoginPage({
     typeof awaitedSearchParams?.error === 'string' ? awaitedSearchParams.error : null;
   const passwordSet = awaitedSearchParams?.password === '1';
 
-  const localAuthPolicy = getLocalAuthPolicy();
   const credentialEntryEnabled = localAuthPolicy.enabled;
   const breakGlassOnly =
     !localAuthPolicy.localLoginEnabled &&

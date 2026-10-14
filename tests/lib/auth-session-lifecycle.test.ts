@@ -44,7 +44,17 @@ vi.mock('@/lib/users/admin-invariants', () => ({
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL' }]),
+    authenticationPolicy: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'default',
+        mode: 'SSO_OPTIONAL',
+        version: 1,
+        legacyEmergencyEmail: null,
+      }),
+    },
     oidcConfig: {
+      findUnique: vi.fn().mockImplementation(() => prisma.oidcConfig.findFirst()),
       findFirst: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       updateMany: vi.fn(),
@@ -625,7 +635,7 @@ describe('Auth session lifecycle and hardening', () => {
     });
   });
 
-  describe('Finding: configVersion increments only on security-sensitive changes', () => {
+  describe('Legacy direct provider writes cannot bypass staged verification', () => {
     const existingUpdatedAt = new Date('2026-09-12T10:00:00.000Z');
     const baseExistingConfig = {
       id: 'cfg-1',
@@ -727,120 +737,101 @@ describe('Auth session lifecycle and hardening', () => {
       updatedAt: existingUpdatedAt.toISOString(),
     };
 
-    it('does NOT increment configVersion on cosmetic providerLabel change', async () => {
+    it('requires staging on cosmetic providerLabel change', async () => {
       const formData = createOidcFormData({ providerLabel: 'New Brand Label' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.providerLabel).toBe('New Brand Label');
-      expect(updateData.configVersion).toBeUndefined();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('does NOT increment configVersion on cosmetic profileMapping change', async () => {
+    it('requires staging on cosmetic profileMapping change', async () => {
       const formData = createOidcFormData({ 'profileMapping.department': 'org_unit' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.profileMapping).toEqual({ department: 'org_unit' });
-      expect(updateData.configVersion).toBeUndefined();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('does NOT increment configVersion when clientSecret is unchanged placeholder', async () => {
+    it('requires staging when clientSecret is unchanged placeholder', async () => {
       const formData = createOidcFormData({ clientSecret: '********' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toBeUndefined();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when clientSecret is updated to a new value', async () => {
+    it('requires staging when clientSecret is updated to a new value', async () => {
       const formData = createOidcFormData({ clientSecret: 'fresh-secret-value-123' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.clientSecret).toBe('fresh-secret-value-123');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when clientId changes', async () => {
+    it('requires staging when clientId changes', async () => {
       const formData = createOidcFormData({ clientId: 'brand-new-client-id' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.clientId).toBe('brand-new-client-id');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when tokenEndpointAuthMethod changes', async () => {
+    it('requires staging when tokenEndpointAuthMethod changes', async () => {
       const formData = createOidcFormData({ tokenEndpointAuthMethod: 'client_secret_post' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data as any;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.tokenEndpointAuthMethod).toBe('client_secret_post');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when allowedDomains changes', async () => {
+    it('requires staging when allowedDomains changes', async () => {
       const formData = createOidcFormData({ allowedDomains: 'newdomain.com, otherdomain.org' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.allowedDomains).toEqual(['newdomain.com', 'otherdomain.org']);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when organizationId changes', async () => {
+    it('requires staging when organizationId changes', async () => {
       const formData = createOidcFormData({ organizationId: 'org_enterprise_123' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.organizationId).toBe('org_enterprise_123');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion and initiates issuer migration when issuer changes', async () => {
+    it('requires staging and initiates issuer migration when issuer changes', async () => {
       const formData = createOidcFormData({
         issuer: 'https://new-issuer.example.com',
         confirmIssuerMigration: 'true',
       });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.issuer).toBe('https://new-issuer.example.com');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when roleMapping changes', async () => {
+    it('requires staging when roleMapping changes', async () => {
       const newRoleMapping = JSON.stringify([{ claim: 'groups', value: 'admins', role: 'ADMIN' }]);
       const formData = createOidcFormData({ roleMapping: newRoleMapping });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.roleMapping).toEqual([{ claim: 'groups', value: 'admins', role: 'ADMIN' }]);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when roleMapping rule order changes', async () => {
+    it('requires staging when roleMapping rule order changes', async () => {
       // Setup existing config with [admins -> ADMIN, responders -> RESPONDER]
       vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
         ...baseExistingConfig,
@@ -859,13 +850,12 @@ describe('Auth session lifecycle and hardening', () => {
       const formData = createOidcFormData({ roleMapping: reordered });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('does NOT increment configVersion when roleMapping rules have identical order with cosmetic whitespace', async () => {
+    it('requires staging when roleMapping rules have identical order with cosmetic whitespace', async () => {
       vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
         ...baseExistingConfig,
         roleMapping: [
@@ -881,21 +871,18 @@ describe('Auth session lifecycle and hardening', () => {
       const formData = createOidcFormData({ roleMapping: withWhitespace });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toBeUndefined();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
 
-    it('DOES increment configVersion when customScopes changes', async () => {
+    it('requires staging when customScopes changes', async () => {
       const formData = createOidcFormData({ customScopes: 'openid profile email groups' });
       const result = await saveOidcConfig(prevState, formData);
 
-      expect(result.success).toBe(true);
-      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
-      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
-      expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.customScopes).toBe('groups');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('staged configuration');
+      expect(prisma.oidcConfig.updateMany).not.toHaveBeenCalled();
     });
   });
 

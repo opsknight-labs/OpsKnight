@@ -38,6 +38,14 @@ vi.mock('@/lib/users/admin-invariants', () => ({
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    authenticationPolicy: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'default',
+        mode: 'SSO_OPTIONAL',
+        version: 1,
+        legacyEmergencyEmail: null,
+      }),
+    },
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -254,7 +262,10 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(updateUserSecurityState).toHaveBeenCalledWith(
       'u-responder',
       { role: 'USER' },
-      expect.objectContaining({ tokenVersion: { increment: 1 } })
+      expect.objectContaining({ tokenVersion: { increment: 1 } }),
+      undefined,
+      expect.any(Function),
+      undefined
     );
   });
 
@@ -322,7 +333,10 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(updateUserSecurityState).toHaveBeenCalledWith(
       'u1',
       { role: 'RESPONDER', roleSource: 'OIDC' },
-      expect.objectContaining({ tokenVersion: { increment: 1 } })
+      expect.objectContaining({ tokenVersion: { increment: 1 } }),
+      undefined,
+      expect.any(Function),
+      undefined
     );
   });
 
@@ -845,5 +859,40 @@ describe('Auth JWT + OIDC callback contract', () => {
       where: { id: 'u1' },
       data: { tokenVersion: { increment: 1 } },
     });
+  });
+});
+
+describe('provider activation across auth option caches', () => {
+  it('rejects a callback captured before rotation before resolving or creating any identity', async () => {
+    resetAuthOptionsCache();
+    const previous = await getAuthOptions();
+    const current = await getOidcConfig();
+    vi.mocked(getOidcConfig).mockResolvedValueOnce({
+      ...current!,
+      clientId: 'rotated-client',
+      configVersion: 2,
+    });
+    vi.mocked(resolveOidcIdentityForSignIn).mockClear();
+    const result = await previous.callbacks!.signIn!({
+      user: { id: 'external', email: 'real@example.com' },
+      account: { provider: 'oidc', type: 'oauth', providerAccountId: 'subject' },
+      profile: { sub: 'subject', email: 'real@example.com' },
+    });
+    expect(result).toBe('/login?error=OIDC_CONFIGURATION_CHANGED');
+    expect(resolveOidcIdentityForSignIn).not.toHaveBeenCalled();
+  });
+  it('rebuilds options on the next request without resetting another replica cache', async () => {
+    resetAuthOptionsCache();
+    const previous = await getAuthOptions();
+    const current = await getOidcConfig();
+    vi.mocked(getOidcConfig).mockResolvedValueOnce({
+      ...current!,
+      clientId: 'rotated-client',
+      configVersion: 2,
+    });
+    const changed = await getAuthOptions();
+    expect(changed).not.toBe(previous);
+    const converged = await getAuthOptions();
+    expect(converged).not.toBe(changed);
   });
 });

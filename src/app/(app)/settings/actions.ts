@@ -1,7 +1,8 @@
 'use server';
 
+import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
+
 import prisma from '@/lib/prisma';
-import { revokeUserSessions } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
@@ -553,6 +554,7 @@ export async function updatePassword(
 ): Promise<ActionState> {
   try {
     const user = await getCurrentUser();
+    await assertPasswordOperationAllowed();
     const currentPassword = (formData.get('currentPassword') as string | null) ?? '';
     const newPassword = (formData.get('newPassword') as string | null) ?? '';
     const confirmPassword = (formData.get('confirmPassword') as string | null) ?? '';
@@ -580,19 +582,39 @@ export async function updatePassword(
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash },
+    await prisma.$transaction(async tx => {
+      await assertPasswordOperationAllowed(tx);
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${user.id} FOR UPDATE`;
+      const current = await tx.user.findUnique({
+        where: { id: user.id },
+        select: { passwordHash: true, tokenVersion: true, status: true },
+      });
+      if (
+        !current ||
+        current.status !== 'ACTIVE' ||
+        current.tokenVersion !== user.tokenVersion ||
+        current.passwordHash !== credentials.passwordHash
+      )
+        throw new Error(
+          'Credentials or account security state changed. Sign in again before changing your password.'
+        );
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      });
+      await logAudit(
+        {
+          action: 'user.password.updated',
+          entityType: 'USER',
+          actorId: user.id,
+          entityId: user.id,
+        },
+        tx
+      );
     });
-    await revokeUserSessions(user.id);
-
-    await logAudit({
-      action: 'user.password.updated',
-      entityType: 'USER',
-      entityId: user.id,
-      actorId: user.id,
-      details: { method: 'settings' },
-    });
+    const { invalidateSessionSecurityProjection } =
+      await import('@/lib/session-security-projection');
+    invalidateSessionSecurityProjection(user.id);
 
     revalidatePath('/settings/security');
     return { success: true };

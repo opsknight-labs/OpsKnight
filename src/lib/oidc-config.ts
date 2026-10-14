@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
@@ -198,7 +199,8 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
   }
 }
 
-async function getOidcConfigRecord(): Promise<OidcConfigRecord | null> {
+async function getOidcConfigRecord(fresh = false): Promise<OidcConfigRecord | null> {
+  if (fresh) return fetchOidcConfigRecordUncached();
   const now = Date.now();
   if (oidcConfigRecordCache && oidcConfigRecordCache.expiresAt > now) {
     return oidcConfigRecordCache.value;
@@ -227,27 +229,32 @@ async function getOidcConfigRecord(): Promise<OidcConfigRecord | null> {
 let oidcConfigCache:
   | {
       value: OidcConfig | null;
+      key: string;
       expiresAt: number;
     }
   | undefined;
-let oidcConfigInFlight: Promise<OidcConfig | null> | undefined;
+let oidcConfigInFlight: { key: string; promise: Promise<OidcConfig | null> } | undefined;
 
 export async function getOidcConfig(): Promise<OidcConfig | null> {
+  // One authoritative row read; reuse decryption only for the same stored record.
+  // A replica-local TTL must never extend a revoked provider registration.
+  const record = await getOidcConfigRecord(true);
+  const key = createHash('sha256').update(JSON.stringify(record)).digest('hex');
   const now = Date.now();
-  if (oidcConfigCache && oidcConfigCache.expiresAt > now) {
+  if (oidcConfigCache && oidcConfigCache.key === key && oidcConfigCache.expiresAt > now) {
     return oidcConfigCache.value;
   }
 
-  if (oidcConfigInFlight) {
-    return oidcConfigInFlight;
+  if (oidcConfigInFlight?.key === key) {
+    return oidcConfigInFlight.promise;
   }
 
-  oidcConfigInFlight = (async () => {
+  const promise = (async () => {
     logger.debug('[OIDC] Loading OIDC config', {
       component: 'oidc-config',
     });
 
-    const config = await getOidcConfigRecord();
+    const config = record;
     if (!config) {
       logger.info('[OIDC] OIDC config not available (no record in database)', {
         component: 'oidc-config',
@@ -329,15 +336,17 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
     }
   })();
 
+  oidcConfigInFlight = { key, promise };
   try {
-    const value = await oidcConfigInFlight;
+    const value = await promise;
     oidcConfigCache = {
       value,
+      key,
       expiresAt: Date.now() + CONFIG_TTL_MS,
     };
     return value;
   } finally {
-    oidcConfigInFlight = undefined;
+    if (oidcConfigInFlight?.promise === promise) oidcConfigInFlight = undefined;
   }
 }
 

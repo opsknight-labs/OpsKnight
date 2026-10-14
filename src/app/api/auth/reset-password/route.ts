@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
+import { getDatabaseLocalAuthPolicy } from '@/lib/authentication-policy';
 import { z } from 'zod';
 import { completePasswordReset } from '@/lib/password-reset';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
@@ -27,13 +27,13 @@ function json(body: Record<string, unknown>, status: number) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!getLocalAuthPolicy().localLoginEnabled) {
-    return NextResponse.json(
-      { error: 'Local password authentication is disabled.' },
-      { status: 403 }
-    );
-  }
   try {
+    if (!(await getDatabaseLocalAuthPolicy()).localLoginEnabled) {
+      return NextResponse.json(
+        { error: 'Local password authentication is disabled.' },
+        { status: 403 }
+      );
+    }
     const parsed = schema.safeParse(await readJsonBodyWithLimit(req, 8192));
     if (!parsed.success) return json({ error: 'Invalid reset request.' }, 400);
     const result = await completePasswordReset(
@@ -44,7 +44,13 @@ export async function POST(req: NextRequest) {
     if (!result.success) {
       return json(
         { error: result.error || 'Unable to reset password.' },
-        result.code === 'RATE_LIMITED' ? 429 : result.code === 'INTERNAL' ? 500 : 400
+        result.code === 'POLICY_DENIED'
+          ? 403
+          : result.code === 'RATE_LIMITED'
+            ? 429
+            : result.code === 'INTERNAL'
+              ? 500
+              : 400
       );
     }
     return json({ message: result.message }, 200);

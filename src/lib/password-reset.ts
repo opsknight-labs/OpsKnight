@@ -1,3 +1,7 @@
+import {
+  assertPasswordOperationAllowed,
+  AuthenticationPolicyDeniedError,
+} from '@/lib/authentication-policy';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
@@ -24,7 +28,7 @@ export type PasswordResetCompletionResult = {
   success: boolean;
   message?: string;
   error?: string;
-  code?: 'INVALID_TOKEN' | 'WEAK_PASSWORD' | 'RATE_LIMITED' | 'INTERNAL';
+  code?: 'INVALID_TOKEN' | 'WEAK_PASSWORD' | 'RATE_LIMITED' | 'INTERNAL' | 'POLICY_DENIED';
 };
 
 export type IssuedPasswordResetToken = {
@@ -61,6 +65,7 @@ export async function issuePasswordResetToken(params: {
   ttlMs?: number;
   metadata?: Prisma.InputJsonObject;
 }): Promise<IssuedPasswordResetToken> {
+  await assertPasswordOperationAllowed();
   const ttlMs = params.ttlMs ?? RESET_TOKEN_TTL_MS;
 
   for (let attempt = 1; attempt <= RESET_ISSUE_ATTEMPTS; attempt += 1) {
@@ -72,6 +77,7 @@ export async function issuePasswordResetToken(params: {
     try {
       await prisma.$transaction(
         async tx => {
+          await assertPasswordOperationAllowed(tx);
           await acquireAdvisoryLock(tx, passwordResetIssuanceLockKey(params.userId));
 
           await tx.userToken.updateMany({
@@ -202,6 +208,7 @@ export async function initiatePasswordReset(
   const startTime = Date.now();
 
   try {
+    await assertPasswordOperationAllowed();
     try {
       await checkRateLimit(normalizedEmail, ipAddress);
     } catch (error) {
@@ -348,6 +355,7 @@ export async function completePasswordReset(
   const tokenHash = createHash('sha256').update(token).digest('hex');
 
   try {
+    await assertPasswordOperationAllowed();
     const [tokenRate, ipRate] = await Promise.all([
       consumeAuthRateLimit('password-reset:complete:token', tokenHash, 5, COMPLETION_WINDOW_MS),
       ip
@@ -428,6 +436,7 @@ export async function completePasswordReset(
     const now = new Date();
 
     await prisma.$transaction(async tx => {
+      await assertPasswordOperationAllowed(tx);
       const claimed = await tx.userToken.updateMany({
         where: {
           id: record.id,
@@ -589,6 +598,8 @@ export async function completePasswordReset(
         error: 'Invalid or expired reset link.',
       };
     }
+    if (error instanceof AuthenticationPolicyDeniedError)
+      return { success: false, code: 'POLICY_DENIED', error: error.message };
     logger.error('password.reset.complete.error', {
       component: 'password-reset',
       error: error instanceof Error ? error.message : String(error),

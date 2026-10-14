@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkAuthenticationPolicy } from '@/lib/authentication-policy';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { assertCanReadServiceMetrics } from '@/lib/rbac';
 
@@ -98,6 +99,19 @@ export async function GET(req: NextRequest) {
         let batchNumber = 0;
 
         while (true) {
+          const decision = await checkAuthenticationPolicy(
+            'SESSION',
+            { id: session.user.id, email: session.user.email },
+            {
+              method: session.authenticationMethod,
+              policyVersion: session.issuedUnderPolicyVersion,
+            }
+          );
+          if (!decision.allowed || Date.now() >= new Date(session.expires).getTime()) {
+            controller.enqueue(encoder.encode('event: authorization_revoked\ndata: {}\n\n'));
+            controller.close();
+            return;
+          }
           if (req.signal.aborted || isCancelled) {
             break;
           }

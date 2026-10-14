@@ -30,8 +30,10 @@ import { cn } from '@/lib/utils';
 type FormState = {
   error?: string | null;
   success?: boolean;
+  ssoOnly?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
+  emailQueued?: boolean;
   providerConfigured?: boolean;
   providerName?: string | null;
   recipientEmail?: string | null;
@@ -128,8 +130,8 @@ export default function UserCreateForm({ action, className = '', disabled = fals
   // Dedicated Post-Invite Result Screen
   if (state?.success && !dismissed) {
     const isAutoEmailSent = state.providerConfigured && state.emailSent;
-    const isDeliveryFailed = state.providerConfigured && !state.emailSent;
-    const isManualOnly = !state.providerConfigured;
+    const isDeliveryFailed = state.providerConfigured && !state.emailSent && !state.emailQueued;
+    const isManualOnly = !state.providerConfigured && !state.ssoOnly;
     const targetEmail = state.recipientEmail || email;
 
     return (
@@ -139,6 +141,28 @@ export default function UserCreateForm({ action, className = '', disabled = fals
           className
         )}
       >
+        {state.ssoOnly && (
+          <div role="status" className="rounded-xl border p-4 space-y-2">
+            <h3 className="font-semibold">SSO invitation ready</h3>
+            <p>
+              {targetEmail} must use the configured SSO connection within seven days. The first
+              verified sign-in links this existing account. No password setup token was created.
+            </p>
+            <Link className="underline" href={state.inviteUrl || '/login'}>
+              Workspace sign-in
+            </Link>
+            <p className="text-sm text-muted-foreground">
+              {state.emailSent
+                ? 'Invitation email delivered.'
+                : state.emailQueued
+                  ? 'Invitation email queued for delivery. You can also share the sign-in URL.'
+                  : state.providerConfigured
+                    ? 'Email delivery could not be queued. Share the sign-in URL manually.'
+                    : 'No email provider is configured. Share the sign-in URL manually.'}{' '}
+              A provider change or expired approval requires a renewed invitation.
+            </p>
+          </div>
+        )}
         {/* CASE 1: Email Provider Configured & Email Sent */}
         {isAutoEmailSent && (
           <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 dark:bg-emerald-950/20 p-4 sm:p-5 space-y-4">
@@ -554,6 +578,13 @@ export default function UserCreateForm({ action, className = '', disabled = fals
             </Select>
           </div>
 
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="ssoOnly" className="mt-1" />
+            <span>
+              Invite with SSO only. No password setup token. Required SSO always uses this
+              invitation type.
+            </span>
+          </label>
           <SubmitButton disabled={disabled} />
         </fieldset>
 

@@ -1,5 +1,7 @@
 'use server';
 
+import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
+
 import { createHash, timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
@@ -60,6 +62,14 @@ export async function setPassword(
   formData: FormData
 ): Promise<SetPasswordState> {
   const startTime = Date.now();
+  try {
+    await assertPasswordOperationAllowed();
+  } catch {
+    return {
+      error:
+        'Password onboarding is unavailable. Contact your administrator and use SSO if required.',
+    };
+  }
   const parsed = schema.safeParse({
     token: formData.get('token'),
     password: formData.get('password'),
@@ -165,6 +175,7 @@ export async function setPassword(
 
   try {
     await prisma.$transaction(async tx => {
+      await assertPasswordOperationAllowed(tx);
       const claimed = await tx.userToken.updateMany({
         where: {
           id: record.id,

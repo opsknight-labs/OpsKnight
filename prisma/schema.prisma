@@ -300,6 +300,7 @@ enum InAppNotificationType {
   TEAM
   SERVICE
   ACTION_ITEM
+  SECURITY
 }
 
 enum IncidentUrgency {
@@ -776,6 +777,38 @@ model SlackOAuthConfig {
   updater       User?    @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([id])
+}
+
+enum AuthenticationMode {
+  PASSWORD_ONLY
+  SSO_OPTIONAL
+  SSO_REQUIRED
+}
+
+// Singleton. Never derive live policy from replica-local environment variables.
+model AuthenticationPolicyImport {
+  id         String   @id @default("default")
+  importedAt DateTime @default(now())
+}
+
+model AuthenticationPolicy {
+  id                        String             @id @default("default")
+  mode                      AuthenticationMode
+  version                   Int                @default(1)
+  oidcConfigVersion         Int?
+  activeRevisionId          String?
+  passwordSessionMinVersion Int                @default(0)
+  oidcSessionMinVersion     Int                @default(0)
+  enforcedAt                DateTime?
+  lastVerifiedAt            DateTime?
+  updatedBy                 String?
+  updatedAt                 DateTime           @updatedAt
+  migratedAt                DateTime           @default(now())
+  legacyEmergencyEmail      String?
+  passwordRecoveryUserId    String?
+  passwordRecoveryExpiresAt DateTime?
+  recoveryDegradedAt        DateTime?
+  legacySnapshot            Json
 }
 
 model OidcConfig {
@@ -1704,6 +1737,8 @@ model Notification {
   failedAt               DateTime?
   reconciliationDeadline DateTime?
   errorMsg               String?
+  feedbackPending        Boolean @default(false)
+  deliveryProvider       String?
   providerMessageId      String?                       @unique
   attempts               Int                           @default(0)
   createdAt              DateTime                      @default(now())
@@ -1713,6 +1748,8 @@ model Notification {
   content                NotificationContent?          @relation(fields: [contentId], references: [id], onDelete: SetNull)
   fanout                 NotificationFanout?           @relation(fields: [fanoutId], references: [id], onDelete: SetNull)
 
+  // idx_notification_feedback_pending is a managed partial index (WHERE feedbackPending=true)
+  // in migration 20261014193000; Prisma 5 cannot express its predicate.
   @@index([incidentId])
   @@index([userId])
   @@index([userId, createdAt])
@@ -1823,11 +1860,22 @@ model NotificationProviderFeedback {
   providerMessageId String?
   eventType         String
   recipientHash     String?
+  reconciliationAttempts Int @default(0)
+  quarantinedAt DateTime?
+  reconciliationReason String?
+  processedAt       DateTime?
+  nextReconcileAt   DateTime @default(now())
   occurredAt        DateTime
   createdAt         DateTime @default(now())
 
   @@unique([provider, providerEventId])
   @@index([providerMessageId])
+  @@index([provider, providerMessageId, processedAt], map: "idx_feedback_provider_message_pending")
+  @@index([processedAt, nextReconcileAt])
+  @@index([processedAt, quarantinedAt, nextReconcileAt], map: "idx_feedback_replay_due")
+  @@index([processedAt, id], map: "idx_feedback_processed_retention")
+  @@index([quarantinedAt, id], map: "idx_feedback_quarantine_retention")
+  @@index([providerMessageId, provider, reconciliationReason, quarantinedAt], map: "idx_feedback_quarantined_message")
   @@index([eventType, occurredAt])
 }
 
@@ -1851,20 +1899,22 @@ model InAppNotification {
 }
 
 model UserDevice {
-  id        String   @id @default(cuid())
-  userId    String
-  deviceId  String
-  token     String
-  platform  String
-  userAgent String?
-  lastUsed  DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  userId           String
+  deviceId         String
+  token            String
+  platform         String
+  userAgent        String?
+  lastUsed         DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sessionExpiresAt DateTime?
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@index([userId])
   @@index([token])
+  @@index([platform, sessionExpiresAt])
 }
 
 model AuditLog {
@@ -2455,9 +2505,9 @@ model MetricRollup {
 
 model SystemSettings {
   id                                   String   @id @default("default")
-  runbookAutoExecutionsPerIncident      Int      @default(3)
-  runbookAutoWritesPerIncident          Int      @default(3)
-  runbookAutoNonIdempotentPerIncident   Int      @default(0)
+  runbookAutoExecutionsPerIncident     Int      @default(3)
+  runbookAutoWritesPerIncident         Int      @default(3)
+  runbookAutoNonIdempotentPerIncident  Int      @default(0)
   appUrl                               String?
   encryptionKey                        String?
   incidentRetentionDays                Int      @default(730)
@@ -3459,7 +3509,7 @@ model ServiceRunbookBinding {
   mode               RunbookBindingMode     @default(MANUAL)
   versionStrategy    RunbookVersionStrategy @default(LATEST_PUBLISHED)
   defaultAgentPoolId String?
-  agentSelector      Json @default("{}")
+  agentSelector      Json                   @default("{}")
   defaultAgentId     String?
   inputValues        Json                   @default("{}")
   createdById        String?
@@ -3520,11 +3570,11 @@ model RunbookTriggerCondition {
 }
 
 model RunbookExecutionSigningKey {
-  id                  String   @id
+  id                  String    @id
   publicKey           String
   privateKeyEncrypted String
-  createdAt           DateTime @default(now())
-  state               String   @default("ACTIVE")
+  createdAt           DateTime  @default(now())
+  state               String    @default("ACTIVE")
   activatedAt         DateTime?
   retiredAt           DateTime?
 }
@@ -3578,7 +3628,7 @@ model RunbookExecution {
   definitionChecksum        String
   resolvedTargetAgentId     String?
   resolvedTargetAgentPoolId String?
-  targetSelection           Json @default("{}")
+  targetSelection           Json                   @default("{}")
 
   runbook                 Runbook                @relation(fields: [runbookId], references: [id], onDelete: Restrict)
   runbookVersion          RunbookVersion         @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
@@ -3610,7 +3660,7 @@ model RunbookExecutionStep {
   id                 String            @id @default(cuid())
   executionId        String
   stepKey            String
-  containerRuntime   String @default("docker")
+  containerRuntime   String            @default("docker")
   verificationResult Json?
   sequence           Int
   name               String
@@ -3645,30 +3695,30 @@ model RunbookExecutionStep {
 }
 
 model RunbookStepAttempt {
-  id                String               @id @default(cuid())
-  executionStepId   String
-  attemptNumber     Int
-  status            RunbookAttemptStatus @default(PENDING)
-  requiresConfidentialTransport Boolean @default(false)
-  targetAgentId     String?
-  targetAgentPoolId String?
-  claimedAgentId    String?
-  claimedAt         DateTime?
-  leaseToken        String?
-  leaseExpiresAt    DateTime?
-  availableAt       DateTime             @default(now())
-  claimDeadlineAt   DateTime?
-  idempotencyKey    String?
-  planDigest        String?
-  startedAt         DateTime?
-  completedAt       DateTime?
-  exitCode          Int?
-  outputPreview     String?
-  outputArtifactId  String?
-  errorCode         String?
-  errorMessage      String?
-  preState          Json?
-  postState         Json?
+  id                            String               @id @default(cuid())
+  executionStepId               String
+  attemptNumber                 Int
+  status                        RunbookAttemptStatus @default(PENDING)
+  requiresConfidentialTransport Boolean              @default(false)
+  targetAgentId                 String?
+  targetAgentPoolId             String?
+  claimedAgentId                String?
+  claimedAt                     DateTime?
+  leaseToken                    String?
+  leaseExpiresAt                DateTime?
+  availableAt                   DateTime             @default(now())
+  claimDeadlineAt               DateTime?
+  idempotencyKey                String?
+  planDigest                    String?
+  startedAt                     DateTime?
+  completedAt                   DateTime?
+  exitCode                      Int?
+  outputPreview                 String?
+  outputArtifactId              String?
+  errorCode                     String?
+  errorMessage                  String?
+  preState                      Json?
+  postState                     Json?
 
   executionStep   RunbookExecutionStep @relation(fields: [executionStepId], references: [id], onDelete: Cascade)
   targetAgent     RunbookAgent?        @relation("RunbookAttemptTargetAgent", fields: [targetAgentId], references: [id], onDelete: Restrict)
@@ -3849,4 +3899,188 @@ model RunbookPreviewAuthorization {
 
   @@index([expiresAt])
   @@index([actorId, createdAt])
+}
+
+// Recovery principals deliberately have no relation to User, teams or SCIM.
+model EmergencyAccount {
+  id                        String                @id @default(cuid())
+  displayName               String
+  authenticationMethod      String @default("WEBAUTHN")
+  passwordHash              String?
+  status                    String                @default("ENROLLING")
+  enrolledAt                DateTime              @default(now())
+  verifiedAt                DateTime?
+  lastUsedAt                DateTime?
+  credentialVersion         Int                   @default(1)
+  verifiedCredentialVersion Int?
+  verifiedOrigin            String?
+  independenceConfirmedAt   DateTime
+  credentials               EmergencyCredential[]
+  sessions                  EmergencySession[]
+}
+
+model EmergencyCredential {
+  id                 String           @id @default(cuid())
+  emergencyAccountId String
+  credentialId       String           @unique
+  publicKey          Bytes
+  counter            BigInt           @default(0)
+  transports         String[]         @default([])
+  deviceType         String
+  backedUp           Boolean
+  displayName        String
+  createdAt          DateTime         @default(now())
+  revokedAt          DateTime?
+  account            EmergencyAccount @relation(fields: [emergencyAccountId], references: [id], onDelete: Restrict)
+
+  @@index([emergencyAccountId, revokedAt])
+}
+
+model EmergencySession {
+  id                 String            @id @default(cuid())
+  tokenHash          String            @unique
+  emergencyAccountId String?
+  legacyUserId       String?
+  credentialVersion  Int
+  createdAt          DateTime          @default(now())
+  expiresAt          DateTime
+  lastActivityAt     DateTime          @default(now())
+  authenticatedAt    DateTime          @default(now())
+  revokedAt          DateTime?
+  account            EmergencyAccount? @relation(fields: [emergencyAccountId], references: [id], onDelete: Restrict)
+
+  @@index([emergencyAccountId, revokedAt])
+  @@index([expiresAt])
+}
+
+model EmergencyChallenge {
+  id                 String    @id @default(cuid())
+  challenge          String    @unique
+  browserHash        String
+  kind               String
+  emergencyAccountId String
+  credentialVersion  Int
+  authorizedBy       String?
+  sessionId          String?
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model EmergencyAccessEvent {
+  id                 String   @id @default(cuid())
+  emergencyAccountId String?
+  eventType          String
+  outcome            String
+  context            Json
+  createdAt          DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([emergencyAccountId, createdAt])
+}
+
+model AuthenticationAlert {
+  id                 String    @id @default(cuid())
+  eventId            String
+  recipientId        String
+  title              String
+  message            String
+  createdAt          DateTime  @default(now())
+  nextAttemptAt      DateTime  @default(now())
+  attempts           Int       @default(0)
+  leaseUntil         DateTime?
+  leaseToken         String?
+  acceptedAt         DateTime?
+  notificationId     String?
+  deliveredAt        DateTime?
+  cancelledAt        DateTime?
+  failedAt           DateTime?
+  deliveryGeneration Int       @default(0)
+  lastError          String?
+
+  @@unique([eventId, recipientId])
+  @@index([createdAt, id])
+  @@index([acceptedAt, deliveredAt, cancelledAt, failedAt, nextAttemptAt])
+  @@index([notificationId])
+  @@index([deliveredAt])
+  @@index([cancelledAt])
+  @@index([failedAt])
+}
+
+// Durable remainder of a security alert's bounded administrator fan-out.
+model AuthenticationAlertFanout {
+  eventId     String   @id
+  title       String
+  message     String
+  cursor      String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// Global aggregate windows prevent anonymous failures from amplifying administrator alerts.
+model AuthenticationFailureWindow {
+  id        String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model OidcRevision {
+  id                  String             @id @default(cuid())
+  configuration       Json
+  baseConfigVersion   Int
+  createdBy           String
+  createdAt           DateTime           @default(now())
+  discoveryVerifiedAt DateTime?
+  activatedAt         DateTime?
+  previousRevisionId  String?
+  tests               OidcRevisionTest[]
+}
+
+model OidcRevisionTest {
+  id                  String       @id @default(cuid())
+  revisionId          String
+  adminUserId         String
+  adminTokenVersion   Int
+  testedConfigVersion Int          @default(0)
+  verifiedOrigin      String?
+  issuer              String
+  subject             String
+  email               String
+  effectiveRole       String
+  linkApproved        Boolean
+  verifiedAt          DateTime     @default(now())
+  revision            OidcRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@index([revisionId, verifiedAt])
+}
+
+model OidcTestFlow {
+  id                  String    @id @default(cuid())
+  stateHash           String    @unique
+  browserHash         String
+  revisionId          String
+  adminUserId         String
+  adminTokenVersion   Int
+  testedConfigVersion Int       @default(0)
+  authorizedBy        String
+  linkApproved        Boolean
+  secrets             String
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model AuthenticationReplicaObservation {
+  id          String   @id
+  snapshot    Json
+  differs     Boolean
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
 }

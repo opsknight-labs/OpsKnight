@@ -1,0 +1,90 @@
+{{- if .Release.IsUpgrade }}
+{{- if and (not .Values.image.tag) (not .Values.image.digest) }}
+{{- fail "Authentication cutover upgrades require an explicit tested image.tag or image.digest containing the cutover gate script" }}
+{{- end }}
+{{- $name := printf "%s-auth-cutover" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- $base := include "opsknight.fullname" . }}
+{{- $deployments := list $base (printf "%s-web" $base) (printf "%s-scheduler" $base) (printf "%s-general-worker" $base) (printf "%s-critical-worker" $base) (printf "%s-bulk-worker" $base) (printf "%s-runbook-worker" $base) (printf "%s-status-projector" $base) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: {{ $deployments | toJson }}
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-4"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-2"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 60
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: authentication-cutover
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: true
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: check-cutover
+          image: {{ include "opsknight.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [node, scripts/check-authentication-cutover.cjs]
+          env:
+            - name: CUTOVER_DEPLOYMENTS_JSON
+              value: {{ $deployments | toJson | quote }}
+            - name: CUTOVER_POD_SELECTOR
+              value: {{ printf "app.kubernetes.io/instance=%s" .Release.Name | quote }}
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+{{- end }}

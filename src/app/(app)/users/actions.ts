@@ -1,6 +1,12 @@
 'use server';
 
+import {
+  getAuthenticationPolicy,
+  assertPasswordOperationAllowed,
+} from '@/lib/authentication-policy';
+
 import prisma from '@/lib/prisma';
+import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import { randomBytes, createHash } from 'crypto';
@@ -20,6 +26,7 @@ import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 type EmailInviteResult = {
   sent: boolean;
+  queued?: boolean;
   providerConfigured: boolean;
   providerName?: string | null;
 };
@@ -35,6 +42,8 @@ async function sendInviteEmailIfConfigured(data: {
   name: string;
   inviteUrl: string;
   invitedBy?: string;
+  ssoOnly?: boolean;
+  generation?: number;
 }): Promise<EmailInviteResult> {
   try {
     const { getEmailConfig } = await import('@/lib/notification-providers');
@@ -58,31 +67,36 @@ async function sendInviteEmailIfConfigured(data: {
       userName: data.name,
       inviteUrl: data.inviteUrl,
       invitedBy: data.invitedBy,
+      ssoOnly: data.ssoOnly,
     });
 
-    const result = await enqueueCentralNotification({
-      category: 'ADMINISTRATION',
-      channel: 'EMAIL',
-      recipientType: 'USER',
-      recipientId: data.userId,
-      recipientAddress: data.email,
-      userId: data.userId,
-      templateKey: 'user-invitation',
-      sourceType: 'USER_INVITATION',
-      sourceId: data.userId,
-      eventKey: inviteEventKey(data.inviteUrl),
-      displayMessage: 'Workspace invitation',
-      priority: 2,
-      payload: {
-        kind: 'EMAIL',
-        to: data.email,
-        subject: template.subject,
-        html: template.html,
-        text: template.text,
+    const result = await enqueueCentralNotification(
+      {
+        category: 'ADMINISTRATION',
+        channel: 'EMAIL',
+        recipientType: 'USER',
+        recipientId: data.userId,
+        recipientAddress: data.email,
+        userId: data.userId,
+        templateKey: 'user-invitation',
+        sourceType: 'USER_INVITATION',
+        sourceId: data.userId,
+        eventKey: `${inviteEventKey(data.inviteUrl)}${data.generation ? `:${data.generation}` : ''}`,
+        displayMessage: 'Workspace invitation',
+        priority: 2,
+        payload: {
+          kind: 'EMAIL',
+          to: data.email,
+          subject: template.subject,
+          html: template.html,
+          text: template.text,
+        },
       },
-    });
+      { dispatchImmediately: data.ssoOnly ? false : undefined }
+    );
     return {
       sent: result.delivered === true,
+      queued: !result.skipped && result.delivered !== true && !result.error,
       providerConfigured: true,
       providerName,
     };
@@ -207,8 +221,10 @@ async function deleteUserInternal(userId: string) {
 export type UserFormState = {
   error?: string | null;
   success?: boolean;
+  ssoOnly?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
+  emailQueued?: boolean;
   providerConfigured?: boolean;
   providerName?: string | null;
   recipientEmail?: string | null;
@@ -284,8 +300,32 @@ export async function addUser(
       return { error: 'A user with that email already exists.' };
     }
 
+    const policy = await getAuthenticationPolicy();
+    if (policy.mode === 'SSO_REQUIRED' || formData.get('ssoOnly') === 'on') {
+      const result = await inviteSsoUser({ name, email, role });
+      const delivery = await sendInviteEmailIfConfigured({
+        userId: result.userId,
+        email,
+        name,
+        inviteUrl: result.inviteUrl,
+        invitedBy: admin?.name || admin?.email || undefined,
+        ssoOnly: true,
+        generation: result.generation,
+      });
+      revalidatePath('/users');
+      revalidatePath('/audit');
+      return {
+        ...result,
+        emailSent: delivery.sent,
+        emailQueued: delivery.queued,
+        providerConfigured: delivery.providerConfigured,
+        providerName: delivery.providerName,
+      };
+    }
+    await assertPasswordOperationAllowed();
     let inviteToken = '';
     const user = await prisma.$transaction(async tx => {
+      await assertPasswordOperationAllowed(tx);
       const newUser = await tx.user.create({
         data: {
           name,
@@ -591,6 +631,34 @@ export async function generateInvite(
   const { checkRateLimit } = await import('@/lib/password-reset');
   await checkRateLimit(user.email, realIp, 'user.invite.resent');
 
+  const policy = await getAuthenticationPolicy();
+  const existingApproval = await prisma.oidcLinkingApproval.findUnique({ where: { userId } });
+  if (policy.mode === 'SSO_REQUIRED' || existingApproval || _formData.get('ssoOnly') === 'on') {
+    const result = await inviteSsoUser({
+      userId,
+      name: user.name || user.email,
+      email: user.email,
+      role: user.role,
+    });
+    const delivery = await sendInviteEmailIfConfigured({
+      userId: result.userId,
+      email: user.email,
+      name: user.name || user.email,
+      inviteUrl: result.inviteUrl,
+      invitedBy: admin?.name || admin?.email || undefined,
+      ssoOnly: true,
+      generation: result.generation,
+    });
+    revalidatePath('/users');
+    revalidatePath('/audit');
+    return {
+      ...result,
+      emailSent: delivery.sent,
+      emailQueued: delivery.queued,
+      providerConfigured: delivery.providerConfigured,
+      providerName: delivery.providerName,
+    };
+  }
   const inviteUrl = await createInviteToken(user.id, user.email);
 
   await logAudit({

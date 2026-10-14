@@ -87,3 +87,35 @@ describe('OIDC configuration loading', () => {
     );
   });
 });
+
+describe('authoritative provider cache freshness', () => {
+  it('reuses decryption for an unchanged record and converges immediately when another replica changes it', async () => {
+    resetOidcConfigCache();
+    const record = {
+      id: 'default',
+      enabled: true,
+      issuer: 'https://example.test',
+      clientId: 'old-client',
+      clientSecret: 'encrypted',
+      autoProvision: false,
+      allowedDomains: [],
+      configVersion: 7,
+    };
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue(record as never);
+    const first = await getOidcConfig();
+    expect(await getOidcConfig()).toBe(first);
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+      ...record,
+      clientId: 'new-client',
+      configVersion: 8,
+    } as never);
+    const changed = await getOidcConfig();
+    expect(changed).toMatchObject({ clientId: 'new-client', configVersion: 8 });
+    expect(changed).not.toBe(first);
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+      ...record,
+      configVersion: 9,
+    } as never);
+    expect(await getOidcConfig()).toMatchObject({ clientId: 'old-client', configVersion: 9 });
+  });
+});

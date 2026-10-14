@@ -6,6 +6,7 @@ metadata:
     {{- include "opsknight.labels" . | nindent 4 }}
 data:
   NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  AUTH_RECOVERY_ORIGIN: {{ .Values.config.authRecoveryOrigin | default "" | quote }}
   NEXTAUTH_URL: {{ .Values.config.nextauthUrl | quote }}
   NEXT_PUBLIC_APP_URL: {{ .Values.config.nextPublicAppUrl | quote }}
   TRUST_PROXY_HEADERS: {{ .Values.config.trustProxyHeaders | quote }}

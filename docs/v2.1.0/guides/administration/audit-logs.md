@@ -10,8 +10,16 @@ reader:
   evidence: [docs/v2.0.0/assets/audit-log.png]
 verification:
   level: source
-  verified_at: 2026-09-29
-  evidence: [src/app/(app)/audit/page.tsx, src/components/audit/AuditFilters.tsx, src/components/audit/AuditLogTable.tsx, src/components/audit/AuditDetailModal.tsx, src/lib/audit.ts, src/lib/audit-filters.ts]
+  verified_at: 2026-10-12
+  evidence:
+    [
+      src/app/(app)/audit/page.tsx,
+      src/components/audit/AuditFilters.tsx,
+      src/components/audit/AuditLogTable.tsx,
+      src/components/audit/AuditDetailModal.tsx,
+      src/lib/audit.ts,
+      src/lib/audit-filters.ts,
+    ]
 ---
 
 # Review audit logs
@@ -48,6 +56,15 @@ Use **Export CSV** in the filter toolbar to export the records supplied to the c
 
 ## Understand a record
 
+For authentication policy, filter `action=auth.policy.migrated` to inspect the
+one-time legacy import, or `action=auth.policy.changed` for an administrator mode
+change. These events use entity type `SYSTEM_CONFIG` and entity ID `default`.
+The change event includes old/new mode and version and the actor's authentication
+method. Policy updates and their mandatory audit commit in the same transaction.
+`user.password.updated` is likewise committed with a settings password mutation.
+Dedicated emergency enrollment, WebAuthn sign-in and recovery-operation events
+are not implemented yet; do not infer their presence from these policy records.
+
 An entry can include the action, entity type and identifier, actor relation plus captured actor name/email, source, timestamp, structured details, and old/new values when the emitter supplied them. Not every action has an “outcome” field, and the UI does not expose success/failure filtering.
 
 - Use **Audit Log** for recorded administrative/security mutations.
@@ -69,3 +86,12 @@ Audit data can contain user and resource identifiers plus operational metadata. 
 - **An actor is blank:** historical/system activity may retain captured actor fields without a current user relation; inspect the row details.
 - **CSV contains fewer records than expected:** paginate and export the required result pages or use the approved evidence-export workflow for the broader case.
 - **Audit and System Logs disagree:** compare timestamps and resource IDs; they serve different purposes and have different persistence boundaries.
+
+## Authentication security events
+
+Review **System → SSO / Authentication → Diagnostics** for recent staged-provider
+tests/activation, emergency enrollment/sign-in/failure/revocation, explicit password
+restoration and targeted session revocation. Production mutations commit their audit
+and durable high-priority alert intent in one transaction. Failed audit/intent writes
+reject the mutation. Tokens, secrets and private keys are excluded from Diagnostics.
+Email delivery outages retain pending intents and in-app administrator security alerts.

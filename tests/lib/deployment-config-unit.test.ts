@@ -395,7 +395,7 @@ describe('deployment configuration invariants', () => {
     const restore = read('deploy/scripts/drills/verify-backup-restore.sh');
 
     expect(values).toContain('topologySpreadConstraints:');
-    expect(deployment).toContain('maxUnavailable: 0');
+    expect(deployment).toContain('type: Recreate');
     expect(deployment).toContain('terminationGracePeriodSeconds:');
     expect(enterprise).toContain('replicaCount: 3');
     expect(enterprise).toContain('minAvailable: 2');
@@ -926,7 +926,7 @@ describe('deployment configuration invariants', () => {
     const agentK8sParsed = YAML.parse(agentK8sKustomization) as {
       patches?: Array<{ target?: { kind?: string }; patch?: string }>;
     };
-    const npPatch = agentK8sParsed.patches?.find((p) => p.target?.kind === 'NetworkPolicy')?.patch;
+    const npPatch = agentK8sParsed.patches?.find(p => p.target?.kind === 'NetworkPolicy')?.patch;
     expect(npPatch).toBeDefined();
     const np = YAML.parse(npPatch!) as {
       spec?: {
@@ -936,8 +936,8 @@ describe('deployment configuration invariants', () => {
         }>;
       };
     };
-    const k8sApiEgress = np.spec?.egress?.find((e) =>
-      e.ports?.some((p) => p.port === 443 || p.port === 6443)
+    const k8sApiEgress = np.spec?.egress?.find(e =>
+      e.ports?.some(p => p.port === 443 || p.port === 6443)
     );
     expect(k8sApiEgress?.to).toBeDefined();
     expect(k8sApiEgress?.to?.[0]?.ipBlock?.cidr).toBe('10.96.0.0/12');

@@ -122,6 +122,7 @@ jobs:
             > /tmp/opsknight-helm-migration-job.yaml
           helm template opsknight deploy/kubernetes/helm/opsknight \
             --namespace opsknight \
+            --set-string image.tag=ci-tested-enterprise-sso \
             --is-upgrade \
             --set migrations.job.enabled=true \
             > /tmp/opsknight-helm-migration-upgrade-job.yaml
@@ -132,6 +133,11 @@ jobs:
             --set networkPolicy.enabled=true \
             --set-string agent.networkPolicy.kubernetesApiCIDRs[0]=10.96.0.1/32 \
             > /tmp/opsknight-helm-agent.yaml
+          if helm template opsknight deploy/kubernetes/helm/opsknight --namespace opsknight --is-upgrade >/tmp/opsknight-unpinned-upgrade.log 2>&1; then
+            echo 'unpinned authentication upgrade unexpectedly rendered'
+            exit 1
+          fi
+          grep -q 'explicit tested image.tag or image.digest' /tmp/opsknight-unpinned-upgrade.log
           if helm template opsknight deploy/kubernetes/helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
             echo 'invalid runtime.mode unexpectedly rendered'
             exit 1
@@ -197,7 +203,9 @@ jobs:
           set -euo pipefail
           grep -q 'ghcr.io/opsknight-labs/opsknight:' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
-          grep -q 'maxUnavailable: 0' /tmp/opsknight-helm.yaml
+          grep -q 'type: Recreate' /tmp/opsknight-helm.yaml
+          test "$(grep -c 'type: Recreate' /tmp/opsknight-helm-split.yaml)" -eq 7
+          test "$(grep -c 'type: Recreate' /tmp/opsknight-kustomize-split.yaml)" -eq 7
           grep -q 'topologySpreadConstraints:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/config:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml

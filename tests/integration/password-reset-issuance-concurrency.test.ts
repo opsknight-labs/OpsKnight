@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
 
+vi.unmock('@/lib/prisma');
+
 const describeIntegration =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
@@ -8,7 +10,6 @@ let issuePasswordResetToken: typeof import('@/lib/password-reset').issuePassword
 
 describeIntegration('Password reset issuance concurrency', () => {
   beforeEach(async () => {
-    vi.unmock('@/lib/prisma');
     vi.resetModules();
     ({ issuePasswordResetToken } = await import('@/lib/password-reset'));
     await resetDatabase();

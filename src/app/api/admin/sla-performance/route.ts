@@ -108,11 +108,11 @@ export async function GET(req: NextRequest) {
 
   if (queryCount > 0) {
     // Average duration
-    const totalDuration = logs.reduce((sum: number, log: any) => sum + log.durationMs, 0);
+    const totalDuration = logs.reduce((sum: number, log: { durationMs: number; incidentCount: number }) => sum + log.durationMs, 0);
     avgDuration = Math.round(totalDuration / queryCount);
 
     // Average incident count
-    const totalIncidentCount = logs.reduce((sum: number, log: any) => sum + log.incidentCount, 0);
+    const totalIncidentCount = logs.reduce((sum: number, log: { durationMs: number; incidentCount: number }) => sum + log.incidentCount, 0);
     avgIncidentCount = Math.round(totalIncidentCount / queryCount);
 
     // Percentiles (logs are already sorted by durationMs)
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     p95Duration = calculatePercentile(durations, 95);
 
     // Slow queries (>5 seconds)
-    slowQueryCount = logs.filter((log: any) => log.durationMs > 5000).length;
+    slowQueryCount = logs.filter((log: { durationMs: number }) => log.durationMs > 5000).length;
   }
 
   const metrics: PerformanceMetrics = {

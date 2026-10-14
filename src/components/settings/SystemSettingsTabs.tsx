@@ -43,7 +43,7 @@ export default function SystemSettingsTabs({
     },
     {
       id: 'sso',
-      label: 'SSO / OIDC',
+      label: 'SSO / Authentication',
       icon: <Shield className="h-3.5 w-3.5" />,
       badge:
         ssoEnabled && scimEnabled ? (

@@ -136,6 +136,7 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
         // doesn't pass a User-Agent or rememberMe flag, so this should
         // be false (mobile UA / explicit rememberMe would flip it).
         rememberMe: false,
+        legacyEmergency: false,
       });
     });
 

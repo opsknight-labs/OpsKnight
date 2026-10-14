@@ -28,6 +28,50 @@ test('2.1.0 is upcoming without changing the released version', () => {
 });
 
 test('2.1.0 frontmatter and local links resolve', () => {
-  execFileSync(process.execPath, ['scripts/docs/check-frontmatter.mjs', 'docs/v2.1.0'], { stdio: 'pipe' });
-  execFileSync(process.execPath, ['scripts/check-docs-links.cjs', 'docs/v2.1.0'], { stdio: 'pipe' });
+  execFileSync(process.execPath, ['scripts/docs/check-frontmatter.mjs', 'docs/v2.1.0'], {
+    stdio: 'pipe',
+  });
+  execFileSync(process.execPath, ['scripts/check-docs-links.cjs', 'docs/v2.1.0'], {
+    stdio: 'pipe',
+  });
+});
+
+test('2.1 identity policy guides describe the implemented migration and activation boundary', () => {
+  const guide = readFileSync('docs/v2.1.0/guides/identity/authentication-modes.md', 'utf8');
+  for (const phrase of [
+    'Password Only',
+    'SSO Optional',
+    'SSO Required',
+    'five-minute',
+    'once',
+    'PostgreSQL',
+    'one-hour',
+    '15-minute',
+    'Rollback',
+    'restricted recovery',
+  ]) {
+    assert.ok(
+      guide.toLowerCase().includes(phrase.toLowerCase()),
+      `Missing policy procedure: ${phrase}`
+    );
+  }
+  assert.match(guide, /two active, independently held hardware-key emergency identities/);
+  assert.match(guide, /never creates an ordinary administrator session/);
+  for (const name of [
+    'migrate-admin-to-sso',
+    'configure-emergency-access',
+    'test-and-enforce-sso',
+    'rotate-oidc-credentials',
+    'sso-lockout-recovery',
+  ])
+    assert.ok(existsSync(`docs/v2.1.0/guides/identity/${name}.md`));
+  const oidc = readFileSync('docs/v2.1.0/guides/identity/configure-oidc.md', 'utf8');
+  assert.match(oidc, /SSO \/ Authentication/);
+  assert.ok(!oidc.includes('Local credential login is controlled by `AUTH_LOCAL_LOGIN_ENABLED`'));
+  for (const provider of ['Microsoft Entra', 'Google', 'Okta', 'Auth0', 'Keycloak']) {
+    assert.ok(oidc.includes(provider), `Lost provider instructions: ${provider}`);
+  }
+  assert.ok(
+    readFileSync('docs/v2.1.0/guides/identity/README.md', 'utf8').includes('authentication-modes')
+  );
 });

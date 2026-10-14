@@ -11,7 +11,7 @@ reader:
 keywords: [invite users, disable account, delete user, user roles, team membership, offboarding]
 verification:
   level: source
-  verified_at: 2026-09-29
+  verified_at: 2026-10-12
   evidence:
     - src/app/(app)/users/page.tsx
     - src/app/(app)/users/[id]/page.tsx
@@ -25,6 +25,16 @@ verification:
 
 # Manage users and account lifecycle
 
+Under SSO Required, password invitations and invitation-based password completion
+are blocked server-side. Use existing OIDC/JIT or SCIM provisioning procedures for
+SSO onboarding. Existing-account OIDC linking is explicitly approved and preserves
+the User ID and operational history; do not delete the first administrator to
+introduce SSO. Review role-source and mapping consequences before testing login.
+Dedicated emergency identities are not implemented yet. Imported legacy emergency
+password identities are still normal User records, so keep them outside provider
+assignments and automated offboarding; they are not automatically excluded by
+the dedicated-principal architecture specified for the final release.
+
 ![User directory populated with active responders and administrators](/docs/v2.0.0/assets/users.png)
 
 The **Users** area controls human accounts, application roles, team membership,
@@ -34,18 +44,18 @@ schedules, escalation targets, teams, and API credentials.
 
 User status and role are separate:
 
-| Status | Meaning |
-| --- | --- |
-| `INVITED` | Account exists but invitation onboarding is not complete |
-| `ACTIVE` | Account can authenticate through its configured identity path |
-| `DISABLED` | Account access is revoked; historical records remain |
+| Status     | Meaning                                                       |
+| ---------- | ------------------------------------------------------------- |
+| `INVITED`  | Account exists but invitation onboarding is not complete      |
+| `ACTIVE`   | Account can authenticate through its configured identity path |
+| `DISABLED` | Account access is revoked; historical records remain          |
 
-| Application role | Intended use |
-| --- | --- |
-| `ADMIN` | Organization-wide administration and security-sensitive configuration |
-| `RESPONDER` | Incident response and operational work within authorized scope |
-| `AUDITOR` | Read-oriented audit and review workflows |
-| `USER` | Standard member access without responder or administrator authority |
+| Application role | Intended use                                                          |
+| ---------------- | --------------------------------------------------------------------- |
+| `ADMIN`          | Organization-wide administration and security-sensitive configuration |
+| `RESPONDER`      | Incident response and operational work within authorized scope        |
+| `AUDITOR`        | Read-oriented audit and review workflows                              |
+| `USER`           | Standard member access without responder or administrator authority   |
 
 Team roles (`OWNER`, `ADMIN`, and `MEMBER`) are separate from application roles.
 Adding someone as a team owner does not make them an OpsKnight administrator.
@@ -351,3 +361,18 @@ At least on the organization's review cadence:
 Do not treat a clean Users list alone as proof of least privilege: team scope,
 API keys, chat identity links, schedules, and external provider assignment all
 contribute to effective access.
+
+## SSO-only invitation onboarding
+
+In **Users**, choose **Invite with SSO only** to create a pending account with no
+password hash or setup token. Required SSO automatically selects this behavior.
+Activate an SSO connection first. The seven-day approval binds the exact issuer,
+client, configuration version and verified email. Share the workspace login URL;
+the user chooses production SSO and the approved first sign-in binds issuer and
+subject to this original User. Email alone cannot join an existing account.
+
+Renew a pending SSO invitation after expiry or provider changes. Renewal invalidates
+password invitation/reset capabilities for the pending user. Review **Access &
+provisioning** for each user's role source and linked issuer. OIDC claims do not
+replace SCIM lifecycle authority; disabled users remain blocked. Emergency
+identities are managed separately under **System → Emergency Access**.

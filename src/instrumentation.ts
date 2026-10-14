@@ -8,6 +8,7 @@
  */
 
 let shutdownHandlersRegistered = false;
+let authenticationHeartbeat: ReturnType<typeof setInterval> | null = null;
 let stopScheduler: (() => Promise<void>) | null = null;
 let stopJobWorkerService: (() => Promise<void>) | null = null;
 let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
@@ -15,6 +16,8 @@ let shutdownPromise: Promise<void> | null = null;
 
 async function stopRuntimeServices(): Promise<void> {
   const stops: Promise<void>[] = [];
+  if (authenticationHeartbeat) clearInterval(authenticationHeartbeat);
+  authenticationHeartbeat = null;
 
   if (stopScheduler) {
     stops.push(stopScheduler());
@@ -68,6 +71,16 @@ export async function register() {
       await import('./lib/runtime-role');
     const role = getOpsKnightProcessRole();
     const responsibilities = getRuntimeResponsibilities(role);
+    if (role === 'web' || role === 'integrated') {
+      const { observeAuthenticationReplica } = await import('./lib/auth-control/replicas');
+      await observeAuthenticationReplica();
+      authenticationHeartbeat = setInterval(() => {
+        void observeAuthenticationReplica().catch(() => {
+          console.error('[Runtime] Authentication replica observation unavailable.');
+        });
+      }, 120000);
+      authenticationHeartbeat.unref();
+    }
 
     // Keep Node-only runtime imports inside the Node runtime guard. Next.js also
     // analyzes instrumentation for non-Node targets during build, and moving

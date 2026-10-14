@@ -1,0 +1,73 @@
+{
+  "verifiedAt": "2026-10-13T05:05:00.227511+00:00",
+  "baselineRelease": "v2.0.0",
+  "baselineCommit": "097f4916a38ddcc6d1512f71b72bde36abbeb171",
+  "baselineImageRevision": "097f4916a38ddcc6d1512f71b72bde36abbeb171",
+  "applicationImageId": "sha256:d29896b970e10c7eb4a4e4df220f1886ec6dd8e8af7124af8c795a7ab69f3741",
+  "sourceHashes": {
+    "src/lib/auth.ts": "4f67220320f4f8e6c4233f1fd0417121119fffad629017640176a60c90fef6c9",
+    "src/lib/oidc-identity-resolution.ts": "d62b57fce7d22f6ec1b395c03f693233c1b3c487880fecb5c52489a2ac53ab02",
+    "src/lib/users/admin-invariants.ts": "0eefc0ffa01ba56c60d8bdaa721141a2db04560dba3ad821321697a8b09586a3",
+    "src/lib/oidc/registration.ts": "a1b414e96f61cfb6e8277c1d5777513c6dbd0eb40acb1afe7a7484e6201be269"
+  },
+  "topology": {
+    "kindVersion": "Kubernetes v1.37.0",
+    "nodes": 1,
+    "upgradedApplicationReplicas": 2,
+    "restoredOldApplicationReplicas": 1,
+    "routing": "Local self-signed TLS proxy -> nginx -> Kubernetes NodePort/Service"
+  },
+  "checks": {
+    "publishedReleasePasswordLogin": true,
+    "liveRuntimeUpgradeRejectedBeforeMigration": true,
+    "failedMigrationKeptRuntimeStopped": true,
+    "failedMigrationOriginalDatabaseMigrations": 177,
+    "correctedUpgradeSucceeded": true,
+    "upgradedDatabaseMigrations": 198,
+    "originalUserIdAndAdminRolePreserved": true,
+    "originalBrowserSessionPreserved": true,
+    "providerCiphertextPreserved": true,
+    "backupRestoredWith177Migrations": true,
+    "restoredDatabaseHasNoAuthenticationPolicy": true,
+    "publishedOldImageOnRestoredDatabaseSessionPreserved": true,
+    "productionBrowserChecksPassed": 4,
+    "virtualAuthenticatorSkipsOnOtherBrowsers": 2
+  },
+  "databaseOutage": {
+    "databasePodDeleted": true,
+    "outageResponse": 500,
+    "protectedUserServed": false,
+    "originalSessionRecovered": true
+  },
+  "httpSessionLoad": {
+    "scope": "Local TLS proxy, nginx, Kubernetes NodePort/Service and two web replicas. Existing pre-upgrade password session. Diagnostic measurements, not production capacity certification.",
+    "results": [
+      {
+        "concurrency": 10,
+        "operations": 100,
+        "errors": 0,
+        "durationMs": 1205.98175,
+        "p95Ms": 686.0795,
+        "p99Ms": 718.3286669999999
+      },
+      {
+        "concurrency": 25,
+        "operations": 100,
+        "errors": 0,
+        "durationMs": 671.7205830000003,
+        "p95Ms": 573.4368749999999,
+        "p99Ms": 665.6753749999998
+      },
+      {
+        "concurrency": 50,
+        "operations": 100,
+        "errors": 0,
+        "durationMs": 587.9934170000001,
+        "p95Ms": 525.8404580000001,
+        "p99Ms": 554.019209
+      }
+    ]
+  },
+  "backupSha256": "06ddd69d9e7921471a95a54668913fccc0672cad96fc1ce9cbb0ef6282f49533",
+  "scope": "Local integrated topology and application/schema boundaries. Does not certify multi-node HA, split worker operational load, customer ingress, live OAuth tenants, physical keys/custody, or real outbound notification providers."
+}

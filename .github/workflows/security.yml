@@ -53,6 +53,9 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: ESLint Security Scan (SARIF)
+        env:
+          # Match normal ESLint: documented in-source suppressions are not active findings.
+          SARIF_ESLINT_IGNORE_SUPPRESSED: 'true'
         run: |
           mkdir -p reports
           npx eslint . --format @microsoft/eslint-formatter-sarif --output-file reports/eslint-security.sarif || true
