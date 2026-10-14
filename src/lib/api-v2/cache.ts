@@ -65,9 +65,7 @@ export class MemoryLruCache<T> {
 
 // Global caches (persisted across module re-evaluations in development)
 declare global {
-  // eslint-disable-next-line no-var
   var __v2AuthCache: MemoryLruCache<unknown> | undefined;
-  // eslint-disable-next-line no-var
   var __v2RateLimitCache: MemoryLruCache<number> | undefined;
 }
 

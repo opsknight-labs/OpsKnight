@@ -170,5 +170,17 @@ describe('API v2 Foundation', () => {
       expect(spec.paths).toBeDefined();
       expect(spec.components).toBeDefined();
     });
+
+    it('declares Idempotency-Key header as required for runbook execution', () => {
+      const spec = getOpenApiV2Spec();
+      const executeOp = (spec.paths as any)['/runbooks/{id}/execute']?.post;
+      expect(executeOp).toBeDefined();
+
+      const idempotencyParam = executeOp.parameters?.find(
+        (p: any) => p.name === 'Idempotency-Key' && p.in === 'header'
+      );
+      expect(idempotencyParam).toBeDefined();
+      expect(idempotencyParam.required).toBe(true);
+    });
   });
 });

@@ -1385,7 +1385,13 @@ export function getOpenApiV2Spec(): Record<string, unknown> {
           summary: 'Trigger safe runbook execution with idempotency',
           parameters: [
             { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } },
+            {
+              name: 'Idempotency-Key',
+              in: 'header',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Unique idempotency key required to prevent duplicate execution',
+            },
           ],
           requestBody: {
             content: {

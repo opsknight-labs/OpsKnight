@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/shadcn/card';
+import { Card } from '@/components/ui/shadcn/card';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -16,8 +16,6 @@ import {
   ChevronDown,
   ChevronRight,
   Shield,
-  ExternalLink,
-  Layers,
 } from 'lucide-react';
 
 export type ApiEndpointDoc = {
@@ -112,9 +110,41 @@ export default function ApiExplorerPanel({
     setExpandedEndpoints(new Set());
   };
 
+  function toPythonLiteral(value: unknown, indent = 0): string {
+    const pad = ' '.repeat(indent);
+    if (value === null) return 'None';
+    if (value === true) return 'True';
+    if (value === false) return 'False';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') return JSON.stringify(value);
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '[]';
+      const items = value
+        .map(item => `${pad}    ${toPythonLiteral(item, indent + 4)}`)
+        .join(',\n');
+      return `[\n${items},\n${pad}]`;
+    }
+    if (typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>);
+      if (entries.length === 0) return '{}';
+      const lines = entries
+        .map(([k, v]) => `${pad}    ${JSON.stringify(k)}: ${toPythonLiteral(v, indent + 4)}`)
+        .join(',\n');
+      return `{\n${lines},\n${pad}}`;
+    }
+    return String(value);
+  }
+
   const getCurlSnippet = (ep: ApiEndpointDoc) => {
     const fullUrl = `${baseUrl}/api/v2${ep.path}`;
+    const hasRequiredIdempotency =
+      ep.parameters?.some(p => p.name.toLowerCase() === 'idempotency-key' && p.required) ||
+      ep.path === '/runbooks/{id}/execute';
+
     let snippet = `curl -X ${ep.method} "${fullUrl}" \\\n  -H "Authorization: Bearer ok_live_your_api_key"`;
+    if (hasRequiredIdempotency) {
+      snippet += ` \\\n  -H "Idempotency-Key: idem_live_unique_key"`;
+    }
     if (ep.method === 'POST' || ep.method === 'PATCH' || ep.method === 'PUT') {
       snippet += ` \\\n  -H "Content-Type: application/json"`;
       if (ep.requestBody?.sample) {
@@ -127,10 +157,20 @@ export default function ApiExplorerPanel({
   const getJsSnippet = (ep: ApiEndpointDoc) => {
     const fullUrl = `${baseUrl}/api/v2${ep.path}`;
     const hasBody = ep.method === 'POST' || ep.method === 'PATCH' || ep.method === 'PUT';
+    const hasRequiredIdempotency =
+      ep.parameters?.some(p => p.name.toLowerCase() === 'idempotency-key' && p.required) ||
+      ep.path === '/runbooks/{id}/execute';
+
+    const headerLines = [
+      "    'Authorization': 'Bearer ok_live_your_api_key',",
+      hasRequiredIdempotency ? "    'Idempotency-Key': 'idem_live_unique_key'," : null,
+      hasBody ? "    'Content-Type': 'application/json'," : null,
+    ].filter(Boolean).join('\n');
+
     return `const response = await fetch('${fullUrl}', {
   method: '${ep.method}',
   headers: {
-    'Authorization': 'Bearer ok_live_your_api_key',${hasBody ? "\n    'Content-Type': 'application/json'," : ''}
+${headerLines}
   },${hasBody && ep.requestBody?.sample ? `\n  body: JSON.stringify(${JSON.stringify(ep.requestBody.sample, null, 2)}),` : ''}
 });
 
@@ -142,15 +182,38 @@ console.log(data);`;
     const fullUrl = `${baseUrl}/api/v2${ep.path}`;
     const methodLower = ep.method.toLowerCase();
     const hasBody = ep.method === 'POST' || ep.method === 'PATCH' || ep.method === 'PUT';
+    const hasRequiredIdempotency =
+      ep.parameters?.some(p => p.name.toLowerCase() === 'idempotency-key' && p.required) ||
+      ep.path === '/runbooks/{id}/execute';
+
+    const pythonHeaders = [
+      '        "Authorization": "Bearer ok_live_your_api_key",',
+      hasRequiredIdempotency ? '        "Idempotency-Key": "idem_live_unique_key",' : null,
+    ].filter(Boolean).join('\n');
+
+    const pythonBody = hasBody && ep.requestBody?.sample ? toPythonLiteral(ep.requestBody.sample, 0) : null;
+
+    if (pythonBody) {
+      return `import requests
+
+url = "${fullUrl}"
+headers = {
+${pythonHeaders}
+}
+payload = ${pythonBody}
+
+response = requests.${methodLower}(url, headers=headers, json=payload)
+print(response.json())`;
+    }
+
     return `import requests
 
-response = requests.${methodLower}(
-    "${fullUrl}",
-    headers={
-        "Authorization": "Bearer ok_live_your_api_key",
-    },${hasBody && ep.requestBody?.sample ? `\n    json=${JSON.stringify(ep.requestBody.sample, null, 4)},` : ''}
-)
+url = "${fullUrl}"
+headers = {
+${pythonHeaders}
+}
 
+response = requests.${methodLower}(url, headers=headers)
 print(response.json())`;
   };
 

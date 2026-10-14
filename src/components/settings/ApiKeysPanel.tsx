@@ -407,9 +407,15 @@ export default function ApiKeysPanel({
     }
   }, [state?.success, state?.token]);
 
-  const visibleScopes = canCreateWriteKeys
-    ? SCOPES_CONFIG
-    : SCOPES_CONFIG.filter(scope => !scope.write);
+  const visibleScopes = SCOPES_CONFIG.filter(scope => {
+    if (scope.category === 'Administration' && !isAdmin) {
+      return false;
+    }
+    if (scope.write && !canCreateWriteKeys) {
+      return false;
+    }
+    return true;
+  });
 
   const [selectedKeyScopes, setSelectedKeyScopes] = useState<Set<string>>(
     canCreateWriteKeys
@@ -421,10 +427,7 @@ export default function ApiKeysPanel({
     if (type === 'CLEAR') {
       setSelectedKeyScopes(new Set());
     } else if (type === 'ADMIN') {
-      const allowedScopes = isAdmin
-        ? visibleScopes
-        : visibleScopes.filter(s => s.category !== 'Administration');
-      setSelectedKeyScopes(new Set(allowedScopes.map(s => s.value)));
+      setSelectedKeyScopes(new Set(visibleScopes.map(s => s.value)));
     } else if (type === 'RESPONDER') {
       setSelectedKeyScopes(
         new Set(

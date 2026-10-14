@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { isAppError, normalizeError, toPublicAppError, type AppError } from '@/lib/errors';
+import { isAppError, normalizeError, toPublicAppError } from '@/lib/errors';
 import { createApiResponseContext, type ApiResponseContext } from '@/lib/api-response';
 import type {
   ApiV2Pagination,

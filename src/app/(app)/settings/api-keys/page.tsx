@@ -21,6 +21,7 @@ import { Key, ShieldCheck, Bot, Activity, Terminal, Code2, Clock, ShieldAlert } 
 import { getAppUrl } from '@/lib/app-url';
 import { listServiceAccounts } from '@/lib/api-v2/service-accounts';
 import { getOpenApiV2Spec } from '@/lib/api-v2/openapi';
+import { getVerifiedSampleBody } from '@/lib/api-v2/endpoint-samples';
 
 function getEndpointScope(method: string, path: string): string {
   const m = method.toUpperCase();
@@ -204,7 +205,7 @@ export default async function ApiKeysSettingsPage() {
     : [];
 
   const now = new Date();
-  const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   const formattedKeys: ApiKey[] = rawKeys.map(key => ({
     id: key.id,
@@ -328,8 +329,9 @@ export default async function ApiKeysSettingsPage() {
       for (const method of ['get', 'post', 'patch', 'put', 'delete'] as const) {
         const op = pathItem[method];
         if (op) {
+          const verifiedSample = getVerifiedSampleBody(method, pathKey);
           const reqSchema = op.requestBody?.content?.['application/json']?.schema;
-          const sampleBody = reqSchema ? generateSampleFromSchema(reqSchema) : undefined;
+          const sampleBody = verifiedSample ?? (reqSchema ? generateSampleFromSchema(reqSchema) : undefined);
 
           endpoints.push({
             method: method.toUpperCase() as any,
