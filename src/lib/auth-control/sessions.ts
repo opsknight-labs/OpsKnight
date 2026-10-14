@@ -36,12 +36,15 @@ export async function cleanAuthenticationCeremonies() {
 }
 
 /** Retain terminal delivery metadata for 90 days; never delete pending intents or audit evidence.
- * Three indexed batches cap work per scheduler pass, including installations with old backlogs.
+ * Four indexed batches cap work per scheduler pass, including installations with old backlogs.
  */
 export async function cleanAuthenticationAlerts() {
   const cutoff = new Date(Date.now() - 90 * 86400000);
-  for (const column of ['deliveredAt', 'cancelledAt', 'failedAt'] as const) {
-    const where = { [column]: { lt: cutoff } };
+  for (const column of ['acceptedAt', 'deliveredAt', 'cancelledAt', 'failedAt'] as const) {
+    const where = {
+      [column]: { lt: cutoff },
+      ...(column === 'acceptedAt' ? { deliveredAt: null, failedAt: null, cancelledAt: null } : {}),
+    };
     const batch = await prisma.authenticationAlert.findMany({
       where,
       orderBy: { [column]: 'asc' },

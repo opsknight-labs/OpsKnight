@@ -37,6 +37,7 @@ export async function authenticationDashboard(
     pendingAlerts,
     fanoutJobs,
     deliveredAlertCount,
+    acceptedAlertCount,
     cancelledAlertCount,
     failedAlertCount,
     sessions,
@@ -92,12 +93,22 @@ export async function authenticationDashboard(
       : Promise.resolve([]),
     section === 'diagnostics'
       ? prisma.authenticationAlert.count({
-          where: { deliveredAt: null, cancelledAt: null, failedAt: null },
+          where: { acceptedAt: null, deliveredAt: null, cancelledAt: null, failedAt: null },
         })
       : Promise.resolve(0),
     section === 'diagnostics' ? prisma.authenticationAlertFanout.count() : Promise.resolve(0),
     section === 'diagnostics'
       ? prisma.authenticationAlert.count({ where: { deliveredAt: { not: null } } })
+      : Promise.resolve(0),
+    section === 'diagnostics'
+      ? prisma.authenticationAlert.count({
+          where: {
+            acceptedAt: { not: null },
+            deliveredAt: null,
+            failedAt: null,
+            cancelledAt: null,
+          },
+        })
       : Promise.resolve(0),
     section === 'diagnostics'
       ? prisma.authenticationAlert.count({ where: { cancelledAt: { not: null } } })
@@ -238,6 +249,7 @@ export async function authenticationDashboard(
     pendingEmailAlerts: pendingAlerts,
     pendingEmailFanoutJobs: fanoutJobs,
     deliveredEmailAlertCount: deliveredAlertCount,
+    acceptedEmailAlertCount: acceptedAlertCount,
     cancelledEmailAlertCount: cancelledAlertCount,
     failedEmailAlertCount: failedAlertCount,
   };
@@ -352,6 +364,20 @@ export async function identityClaimsPreview(revisionId: string, claims: Record<s
     roleSource: user?.roleSource ?? 'OIDC',
     effectiveRole,
     role,
+    identityRecognized: Boolean(identity),
+    administratorVerification: {
+      ready: Boolean(
+        user?.status === 'ACTIVE' && effectiveRole === 'ADMIN' && role.ok && !role.groupsOverage
+      ),
+      reason:
+        !role.ok || role.groupsOverage
+          ? 'Administrator verification blocked by incomplete group claims.'
+          : user?.status !== 'ACTIVE'
+            ? 'Select an active administrator for verification.'
+            : effectiveRole !== 'ADMIN'
+              ? 'These claims do not preserve administrator access.'
+              : 'Sample claims permit an administrator test; real signed-token verification is still required.',
+    },
     warning:
       role.ok && role.groupsOverage
         ? 'Entra group overage prevents mapped elevation. Resolve claims before rollout.'
@@ -364,6 +390,7 @@ export const authenticationAlertHistoryStatus = z.enum([
   'pending',
   'failed',
   'delivered',
+  'accepted',
   'cancelled',
 ]);
 const alertCursorSchema = z
@@ -380,14 +407,16 @@ export async function authenticationAlertHistory(
     : null;
   const state =
     status === 'pending'
-      ? { deliveredAt: null, failedAt: null, cancelledAt: null }
+      ? { acceptedAt: null, deliveredAt: null, failedAt: null, cancelledAt: null }
       : status === 'failed'
         ? { failedAt: { not: null }, deliveredAt: null, cancelledAt: null }
-        : status === 'delivered'
-          ? { deliveredAt: { not: null } }
-          : status === 'cancelled'
-            ? { cancelledAt: { not: null } }
-            : {};
+        : status === 'accepted'
+          ? { acceptedAt: { not: null }, deliveredAt: null, failedAt: null, cancelledAt: null }
+          : status === 'delivered'
+            ? { deliveredAt: { not: null } }
+            : status === 'cancelled'
+              ? { cancelledAt: { not: null } }
+              : {};
   const rows = await prisma.authenticationAlert.findMany({
     where: {
       ...state,
@@ -408,6 +437,7 @@ export async function authenticationAlertHistory(
       recipientId: true,
       title: true,
       createdAt: true,
+      acceptedAt: true,
       deliveredAt: true,
       failedAt: true,
       cancelledAt: true,
@@ -434,8 +464,12 @@ export async function authenticationAlertHistory(
           ? ('DELIVERED' as const)
           : row.failedAt
             ? ('FAILED' as const)
-            : ('PENDING' as const),
-      completedAt: (row.cancelledAt ?? row.deliveredAt ?? row.failedAt)?.toISOString() ?? null,
+            : row.acceptedAt
+              ? ('ACCEPTED' as const)
+              : ('PENDING' as const),
+      completedAt:
+        (row.cancelledAt ?? row.deliveredAt ?? row.failedAt ?? row.acceptedAt)?.toISOString() ??
+        null,
     })),
     nextCursor:
       rows.length > 25 && last

@@ -143,6 +143,7 @@ export async function processAuthenticationAlerts() {
   await processAuthenticationAlertFanout();
   const pending = await prisma.authenticationAlert.findMany({
     where: {
+      acceptedAt: null,
       deliveredAt: null,
       cancelledAt: null,
       failedAt: null,
@@ -157,6 +158,7 @@ export async function processAuthenticationAlerts() {
     const claim = await prisma.authenticationAlert.updateMany({
       where: {
         id: alert.id,
+        acceptedAt: null,
         deliveredAt: null,
         cancelledAt: null,
         failedAt: null,
@@ -167,6 +169,10 @@ export async function processAuthenticationAlerts() {
     });
     if (claim.count !== 1) continue;
     let delivered = false;
+    let accepted = false;
+    let notificationId: string | null = null;
+    let acceptedAt: Date | null = null;
+    let deliveredAt: Date | null = null;
     let failed = false;
     try {
       const recipient = await prisma.user.findUnique({
@@ -216,43 +222,58 @@ export async function processAuthenticationAlerts() {
         },
         { dispatchImmediately: false }
       );
-      const notification = await prisma.notification.findUnique({
-        where: { id: result.id },
-        select: {
-          status: true,
-          attempts: true,
-          maxAttempts: true,
-          payloadEncrypted: true,
-          expiresAt: true,
-        },
-      });
-      delivered = notification?.status === 'SENT' || notification?.status === 'DELIVERED';
-      failed =
-        !notification ||
-        notification.status === 'SKIPPED' ||
-        (notification.status === 'FAILED' &&
-          (notification.attempts >= notification.maxAttempts ||
-            !notification.payloadEncrypted ||
-            Boolean(notification.expiresAt && notification.expiresAt.getTime() <= Date.now())));
+      notificationId = result.id;
     } catch {
       /* Preserve the durable intent and retry; never log provider secrets. */
     }
-    await prisma.authenticationAlert.updateMany({
-      where: { id: alert.id, leaseToken },
-      data: {
-        deliveredAt: delivered ? new Date() : null,
-        failedAt: failed ? new Date() : null,
-        leaseUntil: null,
-        leaseToken: null,
-        nextAttemptAt: new Date(
-          Date.now() + Math.min(3600000, 15000 * 2 ** Math.min(alert.attempts, 8))
-        ),
-        lastError: delivered
-          ? null
-          : failed
-            ? 'Email delivery stopped. Review the provider and retry explicitly; delivery may be uncertain.'
-            : 'Email delivery pending or unavailable. In-app security alert is retained.',
-      },
+    await prisma.$transaction(async tx => {
+      // Serialize receipt updates with linking the current delivery generation.
+      // A receipt before linking is reread; one after linking finds the durable reference.
+      if (notificationId) {
+        await tx.$queryRaw`SELECT "id" FROM "Notification" WHERE "id" = ${notificationId} FOR UPDATE`;
+        const notification = await tx.notification.findUnique({
+          where: { id: notificationId },
+          select: {
+            status: true,
+            sentAt: true,
+            deliveredAt: true,
+            attempts: true,
+            maxAttempts: true,
+            payloadEncrypted: true,
+            expiresAt: true,
+          },
+        });
+        delivered = notification?.status === 'DELIVERED';
+        accepted = delivered || notification?.status === 'SENT';
+        acceptedAt = accepted ? (notification?.sentAt ?? new Date()) : null;
+        deliveredAt = delivered ? (notification?.deliveredAt ?? new Date()) : null;
+        failed =
+          !notification ||
+          notification.status === 'SKIPPED' ||
+          (notification.status === 'FAILED' &&
+            (notification.attempts >= notification.maxAttempts ||
+              !notification.payloadEncrypted ||
+              Boolean(notification.expiresAt && notification.expiresAt.getTime() <= Date.now())));
+      }
+      await tx.authenticationAlert.updateMany({
+        where: { id: alert.id, leaseToken },
+        data: {
+          notificationId,
+          acceptedAt,
+          deliveredAt,
+          failedAt: failed ? new Date() : null,
+          leaseUntil: null,
+          leaseToken: null,
+          nextAttemptAt: new Date(
+            Date.now() + Math.min(3600000, 15000 * 2 ** Math.min(alert.attempts, 8))
+          ),
+          lastError: accepted
+            ? null
+            : failed
+              ? 'Email delivery stopped. Review the provider and retry explicitly; delivery may be uncertain.'
+              : 'Email delivery pending or unavailable. In-app security alert is retained.',
+        },
+      });
     });
   }
 }
@@ -283,6 +304,8 @@ export async function retryAuthenticationAlert(
     await tx.authenticationAlert.update({
       where: { id: alert.id },
       data: {
+        acceptedAt: null,
+        notificationId: null,
         failedAt: null,
         deliveryGeneration: { increment: 1 },
         attempts: 0,

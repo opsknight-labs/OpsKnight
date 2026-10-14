@@ -241,6 +241,41 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         revision.configuration.clientId
       );
     }
+
+    if (process.env.SSO_E2E_READINESS_PREVIEW === '1') {
+      await page
+        .getByRole('combobox', { name: 'Provider revision', exact: true })
+        .selectOption('browser-overage-preview');
+      await page.getByRole('tab', { name: 'Access & provisioning', exact: true }).click();
+      const sample = page.getByLabel(
+        'Sample claims for identity and role preview (never paste tokens)'
+      );
+      const claims = {
+        iss: 'https://accounts.google.com',
+        sub: 'browser-ready-subject',
+        email_verified: true,
+        hasgroups: true,
+      };
+      await sample.fill(JSON.stringify(claims));
+      await page.getByRole('button', { name: 'Preview identity and roles' }).click();
+      await expect(page.getByText('Identity recognized', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText('Administrator verification blocked by incomplete group claims.', {
+          exact: true,
+        })
+      ).toBeVisible();
+      await sample.fill(
+        JSON.stringify({ ...claims, hasgroups: false, groups: ['administrators'] })
+      );
+      await expect(page.getByText('Identity recognized', { exact: true })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Preview identity and roles' }).click();
+      await expect(
+        page.getByText(
+          'Sample claims permit an administrator test; real signed-token verification is still required.',
+          { exact: true }
+        )
+      ).toBeVisible();
+    }
     if (process.env.SSO_E2E_DELIVERY_HISTORY === '1') {
       let staleReads = 0;
       // Simulate a stale read without changing the browser's native POST behavior.
@@ -286,6 +321,16 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       await expect(history.getByRole('button', { name: 'Confirm email retry' })).toBeEnabled();
       await history.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.unroute('**/api/auth/control?*');
+      await history.getByLabel('Delivery status').selectOption('accepted');
+      await expect(history.getByText('Provider accepted fixture', { exact: true })).toBeVisible();
+      await expect(history.getByText(/Sent to provider ·/)).toBeVisible();
+      await expect(history.getByText(/Delivery confirmed ·/)).toHaveCount(0);
+      await history.getByLabel('Delivery status').selectOption('delivered');
+      await expect(history.getByText('Delivery confirmed fixture', { exact: true })).toBeVisible();
+      await expect(history.getByText(/Delivery confirmed ·/)).toBeVisible();
+      await history.getByLabel('Delivery status').selectOption('failed');
+      await expect(history.getByRole('button', { name: 'Retry email' }).first()).toBeVisible();
+
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 1000 });
         const closeNavigation = page.getByRole('button', {

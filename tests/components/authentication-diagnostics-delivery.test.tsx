@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import AuthenticationDiagnostics from '@/components/settings/AuthenticationDiagnostics';
 
@@ -8,6 +8,7 @@ const data = {
   failedEmailAlertCount: 1,
   pendingEmailFanoutJobs: 1,
   deliveredEmailAlertCount: 12,
+  acceptedEmailAlertCount: 2,
   cancelledEmailAlertCount: 3,
   replicas: [],
   events: [],
@@ -111,5 +112,29 @@ describe('security delivery diagnostics', () => {
     fireEvent.change(screen.getByLabelText('Delivery status'), { target: { value: 'cancelled' } });
     expect(await screen.findByText('No deliveries match this status.')).toBeInTheDocument();
     expect(screen.queryByText('Older security alert')).not.toBeInTheDocument();
+  });
+  it('labels provider acceptance separately from confirmed delivery', async () => {
+    const load = vi
+      .fn()
+      .mockResolvedValue({
+        alerts: [{ ...firstPage.alerts[0], state: 'ACCEPTED' }],
+        nextCursor: null,
+      });
+    render(
+      <AuthenticationDiagnostics
+        data={data}
+        pending={false}
+        onRefresh={vi.fn()}
+        onRevoke={vi.fn()}
+        onRetry={vi.fn()}
+        onLoadHistory={load}
+      />
+    );
+    const summary = within(screen.getByLabelText('Security email processing'));
+    expect(summary.getByText('Sent to provider')).toBeInTheDocument();
+    expect(summary.getByText('Delivery confirmed')).toBeInTheDocument();
+    expect(await screen.findByText(/Sent to provider ·/)).toBeInTheDocument();
+    expect(screen.queryByText(/Delivery confirmed ·/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry email' })).not.toBeInTheDocument();
   });
 });

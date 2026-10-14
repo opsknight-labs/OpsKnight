@@ -144,6 +144,8 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
             return;
           }
           const idToken = await new SignJWT({
+            hasgroups: details.variant === 'overage' ? true : undefined,
+            groups: details.variant === 'groups-valid' ? ['administrators'] : undefined,
             email:
               details.variant === 'entra-no-email'
                 ? undefined
@@ -337,6 +339,48 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       await prisma.oidcRevision.delete({ where: { id: staged.revisionId } });
     }
   });
+  it.each(['overage', 'groups-valid'])(
+    'keeps identity recognition separate from signed administrator readiness: %s',
+    async variant => {
+      const staged = await stageOidcRevision(actor, {
+        issuer: runtime.issuer,
+        providerType: 'custom',
+        clientId: 'test-client',
+        clientSecret: 'test-secret',
+        roleMapping: [{ claim: 'groups', value: 'administrators', role: 'ADMIN' }],
+      });
+      await prisma.oidcIdentity.create({
+        data: { issuer: runtime.issuer, subject: 'existing-admin-subject', userId: actor.id },
+      });
+      try {
+        const preview = await identityClaimsPreview(staged.revisionId, {
+          iss: runtime.issuer,
+          sub: 'existing-admin-subject',
+          email: 'staged-certifier@example.test',
+          email_verified: true,
+          ...(variant === 'overage' ? { hasgroups: true } : { groups: ['administrators'] }),
+        });
+        expect(preview.outcome).toBe('EXISTING_IDENTITY');
+        expect('identityRecognized' in preview && preview.identityRecognized).toBe(true);
+        expect(preview.administratorVerification?.ready).toBe(variant !== 'overage');
+        if (variant === 'overage')
+          expect(preview.administratorVerification?.reason).toContain(
+            'blocked by incomplete group claims'
+          );
+        const flow = await beginOidcRevisionTest(actor, staged.revisionId, actor.id, false);
+        const result = completeOidcRevisionTest(
+          callbackState(flow.url),
+          issueCode(flow.url, variant),
+          flow.browserToken
+        );
+        if (variant === 'overage') await expect(result).rejects.toThrow('test failed');
+        else await expect(result).resolves.toBe(staged.revisionId);
+      } finally {
+        await prisma.oidcIdentity.deleteMany({ where: { issuer: runtime.issuer } });
+        await prisma.oidcRevision.delete({ where: { id: staged.revisionId } });
+      }
+    }
+  );
   it.each(['unverified', 'false-string', 'false-number', 'missing-verification'])(
     'linked staged identity uses production claim normalization: %s',
     async variant => {

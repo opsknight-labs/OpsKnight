@@ -269,9 +269,37 @@ Mail already accepted by a provider cannot be recalled.
 
 Diagnostics reports **Fan-out jobs pending** separately from **Materialized emails
 pending**. A job may represent many recipients; neither figure is presented as a
-combined recipient backlog. Completed, failed and cancelled counts cover retained
+combined recipient backlog. Provider-accepted, delivery-confirmed, failed and cancelled counts cover retained
 records. Delivery history supports all five states, loads 25 records per page and
 uses **Load more deliveries** for older entries. Retry confirmation stays open when
 the server rejects the operation, with its error shown in the console. A successful
 retry closes confirmation and refreshes history. Retention remains 90 days for
 terminal delivery metadata; audit/in-app evidence follows its separate policy.
+
+## Identity recognition and administrator readiness
+
+Claims preview reports stable issuer/subject identity recognition separately from
+administrator verification readiness. A recognized identity with group overage is
+shown as **Identity recognized** with **Administrator verification blocked by
+incomplete group claims**. It cannot satisfy the staged administrator test until
+those claims are resolved. Sample claims remain a preview; a real signed-token
+administrator test is required before activation. Editing claims or provider rules
+invalidates the displayed preview.
+
+## Submission and delivery receipts
+
+**Sent to provider** records transport acceptance. **Delivery confirmed** requires
+a delivery receipt or a central notification already confirmed as delivered.
+Providers without final-delivery feedback remain **Sent to provider**; acceptance
+is never presented as recipient delivery. Pending, accepted, confirmed, failed and
+cancelled history filters report distinct states. A terminal bounce, complaint,
+suppression or invalid-recipient receipt moves the accepted message to failed.
+
+Receipt processing is serialized with linking the alert to its current transport
+notification, so an early receipt is retained. Retrying clears that link and creates
+a new generation; a late receipt for the old attempt cannot confirm the replacement.
+Older completion timestamps are migrated conservatively into provider-acceptance
+metadata because the old field did not distinguish acceptance from delivery.
+Review the original provider evidence separately when auditing historical delivery.
+Accepted messages without confirmation and other terminal delivery metadata use
+bounded 90-day retention; security audit and in-app evidence remain independent.

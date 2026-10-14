@@ -40,8 +40,55 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
     if (!event.providerMessageId) return { processed: true, subscriptionId: null };
     const notification = await tx.notification.findUnique({
       where: { providerMessageId: event.providerMessageId },
-      select: { recipientType: true, recipientId: true, userId: true, channel: true, recipientHash: true },
+      select: {
+        id: true,
+        attempts: true,
+        maxAttempts: true,
+        sourceType: true,
+        templateKey: true,
+        recipientType: true,
+        recipientId: true,
+        userId: true,
+        channel: true,
+        recipientHash: true,
+      },
     });
+    if (
+      notification?.sourceType === 'AUTHENTICATION' &&
+      notification.templateKey === 'authentication-security-alert'
+    ) {
+      if (event.type === 'DELIVERED') {
+        await tx.notification.updateMany({
+          where: { id: notification.id, status: { in: ['PENDING', 'SENT', 'UNKNOWN'] } },
+          data: { status: 'DELIVERED', deliveredAt: event.occurredAt },
+        });
+        await tx.authenticationAlert.updateMany({
+          where: { notificationId: notification.id, failedAt: null, cancelledAt: null },
+          data: { deliveredAt: event.occurredAt, lastError: null },
+        });
+      } else if (
+        ['HARD_BOUNCE', 'INVALID_RECIPIENT', 'COMPLAINT', 'SUPPRESSION'].includes(event.type)
+      ) {
+        await tx.notification.updateMany({
+          where: { id: notification.id },
+          data: {
+            status: 'FAILED',
+            attempts: Math.max(notification.attempts, notification.maxAttempts),
+            failedAt: event.occurredAt,
+            payloadEncrypted: null,
+          },
+        });
+        await tx.authenticationAlert.updateMany({
+          where: { notificationId: notification.id, cancelledAt: null },
+          data: {
+            failedAt: event.occurredAt,
+            deliveredAt: null,
+            lastError:
+              'Provider reported terminal delivery failure. Review provider feedback before retrying.',
+          },
+        });
+      }
+    }
     if (notification?.userId) {
       const terminalStatus =
         event.type === 'HARD_BOUNCE'
@@ -66,24 +113,45 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
     }
     const id = notification.recipientId;
     if (event.type === 'DELIVERED') {
-      await tx.statusPageSubscription.updateMany({ where: { id }, data: { lastDeliveredAt: event.occurredAt } });
+      await tx.statusPageSubscription.updateMany({
+        where: { id },
+        data: { lastDeliveredAt: event.occurredAt },
+      });
     } else if (event.type === 'SOFT_BOUNCE') {
       const subscription = await tx.statusPageSubscription.update({
-        where: { id }, data: { lastBounceAt: event.occurredAt, lastFailedAt: event.occurredAt, bounceCount: { increment: 1 } },
+        where: { id },
+        data: {
+          lastBounceAt: event.occurredAt,
+          lastFailedAt: event.occurredAt,
+          bounceCount: { increment: 1 },
+        },
         select: { bounceCount: true },
       });
       if (subscription.bounceCount >= 3) {
-        await tx.statusPageSubscription.update({ where: { id }, data: { state: 'BOUNCED', suppressionReason: 'Repeated soft bounce' } });
+        await tx.statusPageSubscription.update({
+          where: { id },
+          data: { state: 'BOUNCED', suppressionReason: 'Repeated soft bounce' },
+        });
       }
     } else {
-      const state = event.type === 'COMPLAINT' ? 'COMPLAINED' : event.type === 'HARD_BOUNCE' ? 'BOUNCED' : 'SUPPRESSED';
-      await tx.statusPageSubscription.updateMany({ where: { id }, data: {
-        state,
-        suppressionReason: event.type,
-        lastFailedAt: event.occurredAt,
-        ...(event.type === 'COMPLAINT' ? { complainedAt: event.occurredAt } : {}),
-        ...(event.type === 'HARD_BOUNCE' ? { lastBounceAt: event.occurredAt, bounceCount: { increment: 1 } } : {}),
-      } });
+      const state =
+        event.type === 'COMPLAINT'
+          ? 'COMPLAINED'
+          : event.type === 'HARD_BOUNCE'
+            ? 'BOUNCED'
+            : 'SUPPRESSED';
+      await tx.statusPageSubscription.updateMany({
+        where: { id },
+        data: {
+          state,
+          suppressionReason: event.type,
+          lastFailedAt: event.occurredAt,
+          ...(event.type === 'COMPLAINT' ? { complainedAt: event.occurredAt } : {}),
+          ...(event.type === 'HARD_BOUNCE'
+            ? { lastBounceAt: event.occurredAt, bounceCount: { increment: 1 } }
+            : {}),
+        },
+      });
     }
     return { processed: true, subscriptionId: id };
   });

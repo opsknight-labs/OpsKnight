@@ -23,6 +23,7 @@ export default function AuthenticationDiagnostics({
     | 'pendingEmailAlerts'
     | 'pendingEmailFanoutJobs'
     | 'deliveredEmailAlertCount'
+    | 'acceptedEmailAlertCount'
     | 'cancelledEmailAlertCount'
     | 'failedEmailAlertCount'
     | 'replicas'
@@ -133,14 +134,15 @@ export default function AuthenticationDiagnostics({
           ))}
       </ul>
       <dl
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6"
         aria-label="Security email processing"
       >
         {[
           ['Fan-out jobs pending', data.pendingEmailFanoutJobs],
           ['Materialized emails pending', data.pendingEmailAlerts],
           ['Failed deliveries', data.failedEmailAlertCount],
-          ['Completed deliveries', data.deliveredEmailAlertCount],
+          ['Sent to provider', data.acceptedEmailAlertCount],
+          ['Delivery confirmed', data.deliveredEmailAlertCount],
           ['Cancelled deliveries', data.cancelledEmailAlertCount],
         ].map(([label, count]) => (
           <div key={label} className="rounded-lg border border-border p-3">
@@ -171,7 +173,8 @@ export default function AuthenticationDiagnostics({
           >
             <option value="failed">Failed</option>
             <option value="pending">Pending</option>
-            <option value="delivered">Completed</option>
+            <option value="accepted">Sent to provider</option>
+            <option value="delivered">Delivery confirmed</option>
             <option value="cancelled">Cancelled</option>
             <option value="all">All</option>
           </select>
@@ -194,7 +197,12 @@ export default function AuthenticationDiagnostics({
             <li key={alert.id} className="space-y-2 border-t border-border pt-3 text-sm">
               <p className="break-words">{alert.title}</p>
               <p className="text-muted-foreground">
-                {alert.state} · {alert.attempts} attempts ·{' '}
+                {alert.state === 'ACCEPTED'
+                  ? 'Sent to provider'
+                  : alert.state === 'DELIVERED'
+                    ? 'Delivery confirmed'
+                    : alert.state}{' '}
+                · {alert.attempts} attempts ·{' '}
                 <time dateTime={alert.completedAt ?? alert.createdAt}>
                   {new Date(alert.completedAt ?? alert.createdAt).toLocaleString()}
                 </time>

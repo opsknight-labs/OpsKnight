@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
+import { ingestNotificationProviderFeedback } from '@/lib/notification-provider-feedback';
 import { authenticationAlertHistory, authenticationDashboard } from '@/lib/auth-control/dashboard';
 import { cleanAuthenticationAlerts } from '@/lib/auth-control/sessions';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -1252,6 +1253,149 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       await prisma.notification.deleteMany({ where: { sourceType: 'AUTHENTICATION' } });
     }
   });
+  it.each(['DELIVERED', 'HARD_BOUNCE'] as const)(
+    'distinguishes provider acceptance from later %s receipt',
+    async type => {
+      await prisma.authenticationAlert.deleteMany();
+      const marker = `receipt-${type}-${Date.now()}`;
+      const notification = await prisma.notification.create({
+        data: {
+          status: 'SENT',
+          channel: 'EMAIL',
+          category: 'SECURITY',
+          recipientType: 'EMAIL',
+          userId: actor.id,
+          recipientId: actor.id,
+          sourceType: 'AUTHENTICATION',
+          templateKey: 'authentication-security-alert',
+          providerMessageId: marker,
+          sentAt: new Date(),
+        },
+      });
+      const alert = await prisma.authenticationAlert.create({
+        data: {
+          eventId: marker,
+          recipientId: actor.id,
+          title: 'Receipt fixture',
+          message: 'Fixture',
+        },
+      });
+      vi.mocked(enqueueCentralNotification).mockResolvedValue({
+        id: notification.id,
+        created: false,
+      });
+      try {
+        await processAuthenticationAlerts();
+        const sent = await prisma.authenticationAlert.findUniqueOrThrow({
+          where: { id: alert.id },
+        });
+        expect(sent.acceptedAt).not.toBeNull();
+        expect(sent.deliveredAt).toBeNull();
+        expect(sent.notificationId).toBe(notification.id);
+        const summary = await authenticationDashboard(actor, 'diagnostics');
+        expect(summary.acceptedEmailAlertCount).toBe(1);
+        expect(summary.deliveredEmailAlertCount).toBe(0);
+        expect((await authenticationAlertHistory('accepted')).alerts[0].state).toBe('ACCEPTED');
+        vi.mocked(enqueueCentralNotification).mockClear();
+        await processAuthenticationAlerts();
+        expect(enqueueCentralNotification).not.toHaveBeenCalled();
+        const occurredAt = new Date();
+        await ingestNotificationProviderFeedback({
+          provider: 'fixture',
+          providerMessageId: marker,
+          providerEventId: marker,
+          type,
+          occurredAt,
+        });
+        const received = await prisma.authenticationAlert.findUniqueOrThrow({
+          where: { id: alert.id },
+        });
+        if (type === 'DELIVERED') {
+          expect(received.deliveredAt).toEqual(occurredAt);
+          expect((await authenticationAlertHistory('delivered')).alerts[0].state).toBe('DELIVERED');
+        } else {
+          expect(received.failedAt).toEqual(occurredAt);
+          await retryAuthenticationAlert({ ...actor, authenticatedAt: Date.now() }, alert.id, 0);
+          expect(
+            (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: alert.id } }))
+              .notificationId
+          ).toBeNull();
+          await ingestNotificationProviderFeedback({
+            provider: 'fixture',
+            providerMessageId: marker,
+            providerEventId: `${marker}-late`,
+            type: 'DELIVERED',
+            occurredAt,
+          });
+          expect(
+            (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: alert.id } }))
+              .deliveredAt
+          ).toBeNull();
+        }
+      } finally {
+        vi.mocked(enqueueCentralNotification).mockRejectedValue(
+          new Error('delivery queue unavailable')
+        );
+        await prisma.authenticationAlert.deleteMany();
+        await prisma.notification.delete({ where: { id: notification.id } });
+        await prisma.notificationProviderFeedback.deleteMany({
+          where: { providerMessageId: marker },
+        });
+      }
+    }
+  );
+  it('retains a confirmed receipt arriving before the alert links its notification', async () => {
+    await prisma.authenticationAlert.deleteMany();
+    const marker = `early-receipt-${Date.now()}`;
+    const notification = await prisma.notification.create({
+      data: {
+        status: 'SENT',
+        channel: 'EMAIL',
+        category: 'SECURITY',
+        userId: actor.id,
+        recipientId: actor.id,
+        sourceType: 'AUTHENTICATION',
+        templateKey: 'authentication-security-alert',
+        providerMessageId: marker,
+        sentAt: new Date(),
+      },
+    });
+    const alert = await prisma.authenticationAlert.create({
+      data: {
+        eventId: marker,
+        recipientId: actor.id,
+        title: 'Early receipt fixture',
+        message: 'Fixture',
+      },
+    });
+    const occurredAt = new Date();
+    vi.mocked(enqueueCentralNotification).mockImplementation(async () => {
+      await ingestNotificationProviderFeedback({
+        provider: 'fixture',
+        providerMessageId: marker,
+        providerEventId: marker,
+        type: 'DELIVERED',
+        occurredAt,
+      });
+      return { id: notification.id, created: false };
+    });
+    try {
+      await processAuthenticationAlerts();
+      expect(
+        (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: alert.id } }))
+          .deliveredAt
+      ).toEqual(occurredAt);
+    } finally {
+      vi.mocked(enqueueCentralNotification).mockRejectedValue(
+        new Error('delivery queue unavailable')
+      );
+      await prisma.authenticationAlert.deleteMany();
+      await prisma.notification.delete({ where: { id: notification.id } });
+      await prisma.notificationProviderFeedback.deleteMany({
+        where: { providerMessageId: marker },
+      });
+    }
+  });
   it('keeps retryable provider failures and unknown outcomes under central reconciliation', async () => {
     await prisma.authenticationAlert.deleteMany();
     const notification = await prisma.notification.create({
@@ -1307,6 +1451,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
     await prisma.authenticationAlert.createMany({
       data: [
         { id: `${prefix}-delivered`, deliveredAt: old },
+        { id: `${prefix}-accepted`, acceptedAt: old },
         { id: `${prefix}-cancelled`, cancelledAt: old },
         { id: `${prefix}-failed`, failedAt: old },
         { id: `${prefix}-pending` },

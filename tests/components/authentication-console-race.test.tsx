@@ -46,6 +46,7 @@ const fixtureDashboard = {
   pendingEmailAlerts: 0,
   pendingEmailFanoutJobs: 0,
   deliveredEmailAlertCount: 0,
+  acceptedEmailAlertCount: 0,
   cancelledEmailAlertCount: 0,
   failedEmailAlertCount: 0,
   legacyEmergencyConfigured: false,

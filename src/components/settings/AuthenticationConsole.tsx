@@ -135,7 +135,9 @@ export default function AuthenticationConsole({
     JSON.stringify(configuration.profileMapping, null, 2)
   );
   const [claims, setClaims] = useState('{}');
-  const [claimResult, setClaimResult] = useState('');
+  const [claimResult, setClaimResult] = useState<Awaited<
+    ReturnType<typeof import('@/lib/auth-control/dashboard').identityClaimsPreview>
+  > | null>(null);
   const [linkApproved, setLinkApproved] = useState(false);
   const [broadAcknowledged, setBroadAcknowledged] = useState(false);
   const [impact, setImpact] = useState<Preview | null>(null);
@@ -505,7 +507,7 @@ export default function AuthenticationConsole({
                           setProfileJson(JSON.stringify(next.profileMapping, null, 2));
                         }
                         setDraftDirty(false);
-                        setClaimResult('');
+                        setClaimResult(null);
                         setLinkApproved(false);
                         setBroadAcknowledged(false);
                         setImpact(null);
@@ -654,7 +656,10 @@ export default function AuthenticationConsole({
                       className={inputClass}
                       rows={6}
                       value={claims}
-                      onChange={event => setClaims(event.target.value)}
+                      onChange={event => {
+                        setClaims(event.target.value);
+                        setClaimResult(null);
+                      }}
                     />
                   </label>
                   <Button
@@ -663,25 +668,45 @@ export default function AuthenticationConsole({
                     onClick={() =>
                       void perform(async () => {
                         setClaimResult(
-                          JSON.stringify(
-                            await authenticationRequest({
-                              action: 'claims',
-                              revisionId,
-                              claims: JSON.parse(claims),
-                            }),
-                            null,
-                            2
-                          )
+                          await authenticationRequest({
+                            action: 'claims',
+                            revisionId,
+                            claims: JSON.parse(claims),
+                          })
                         );
                       })
                     }
                   >
                     Preview identity and roles
                   </Button>
-                  {claimResult && (
-                    <pre className="max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 text-xs">
-                      {claimResult}
-                    </pre>
+                  {claimResult && !draftDirty && (
+                    <div
+                      className="space-y-3 rounded-md border border-border p-3 text-sm"
+                      role="status"
+                    >
+                      <p>
+                        {'identityRecognized' in claimResult && claimResult.identityRecognized
+                          ? 'Identity recognized'
+                          : claimResult.reason}
+                      </p>
+                      {claimResult.administratorVerification && (
+                        <p
+                          className={
+                            claimResult.administratorVerification.ready
+                              ? 'text-emerald-700 dark:text-emerald-300'
+                              : 'text-amber-700 dark:text-amber-300'
+                          }
+                        >
+                          {claimResult.administratorVerification.reason}
+                        </p>
+                      )}
+                      <details>
+                        <summary className="cursor-pointer">Claim evaluation details</summary>
+                        <pre className="mt-2 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 text-xs">
+                          {JSON.stringify(claimResult, null, 2)}
+                        </pre>
+                      </details>
+                    </div>
                   )}
                   {data.actor.kind === 'admin' && <AuthenticationUserDirectory />}
                   {scimSection}

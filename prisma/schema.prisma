@@ -3975,6 +3975,8 @@ model AuthenticationAlert {
   attempts           Int       @default(0)
   leaseUntil         DateTime?
   leaseToken         String?
+  acceptedAt         DateTime?
+  notificationId     String?
   deliveredAt        DateTime?
   cancelledAt        DateTime?
   failedAt           DateTime?
@@ -3983,7 +3985,9 @@ model AuthenticationAlert {
 
   @@unique([eventId, recipientId])
   @@index([createdAt, id])
-  @@index([deliveredAt, cancelledAt, failedAt, nextAttemptAt])
+  @@index([acceptedAt, deliveredAt, cancelledAt, failedAt, nextAttemptAt])
+  @@index([notificationId])
+  @@index([deliveredAt])
   @@index([cancelledAt])
   @@index([failedAt])
 }

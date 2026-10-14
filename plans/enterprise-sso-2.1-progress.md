@@ -622,3 +622,46 @@ PWA acceptance is separate. Desktop/mobile screenshots were inspected; long sess
 identifiers wrap and navigation is closed for diagnostics captures. The browser
 record includes source file hashes in `certification/enterprise-sso-2.1-delivery-browser.json`.
 Fixture web/proxy processes and their dedicated database role were cleaned up.
+
+## Readiness accuracy and provider receipts — 2026-10-14
+
+Input: `enterprise-sso-2.1-readiness-and-receipts-audit.md`.
+The preceding commit's entire hosted validation completed successfully, including
+runbook database/browser and Swarm L1–L5 jobs.
+
+- Claims preview separates issuer/subject identity recognition from administrator
+  test readiness. Group overage can recognize a linked user while explicitly
+  blocking administrator verification. Signed-token regressions test both overage
+  rejection and complete-group acceptance against the same preview. Edited claims
+  and dirty provider rules do not retain a stale displayed result.
+- Authentication alerts distinguish acceptedAt from deliveredAt and link the current
+  transport notification. Provider acceptance is labelled Sent to provider; only
+  final receipt evidence is labelled Delivery confirmed. Accepted records leave
+  automatic polling and retain the distinct history/filter/count state.
+- Receipt ingestion confirms current linked alerts and handles terminal failure
+  feedback. Transactional row locking closes the receipt-before-linking race.
+  Retry clears the transport reference so late old receipts cannot confirm a new
+  generation. Tests cover acceptance, confirmation, bounce, early receipts and
+  stale-generation isolation without external provider dispatch.
+- The additive migration preserves older completion evidence as acceptedAt and
+  clears unsupported delivery claims. Indexed receipt lookup and bounded 90-day
+  retention cover accepted and confirmed records independently; audit evidence is
+  unaffected. Provider integrations without final receipts remain accepted.
+
+The fresh PostgreSQL authentication run passed all 80 tests. This verifies local
+behavior; live tenant/key/provider and production multi-node acceptance remain
+scoped external checks under the user's earlier instruction.
+
+Full unit verification passed 5,763 tests across 757 files with four intentional
+skips. The actual receipt migration was applied to a preceding-schema fixture with
+an old completion timestamp; the exact timestamp moved to acceptedAt and deliveredAt
+became null. TypeScript, zero-warning modified-file lint and deployment/docs
+contracts passed. Migration indexes cover receipt linkage and retention scans.
+
+Optimized production build and four HTTPS browser tests passed across Chromium,
+Firefox and WebKit, with two intentional virtual-authenticator skips. The browser
+checks recognize the same linked identity while blocking group-overage readiness,
+clear edited preview results, accept complete-group preview, and show accepted and
+confirmed email as different filtered states. Updated browser evidence includes
+source hashes for receipt handling and its migration. Local fixture processes and
+the dedicated database role were cleaned up after verification.
