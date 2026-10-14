@@ -3,13 +3,15 @@
   "baselineRevision": "a278116a0b03c0dac1f5e94c68f88e3814152a2c",
   "scope": "Runbook remediation candidate. Suites overlap; counts must not be summed as unique tests.",
   "checks": {
-    "productionBuild": "PASS; existing Next middleware/PWA/Tailwind advisories remain",
+    "productionBuild": "PASS: local licensed fonts; no Google Fonts build dependency",
     "typecheck": "PASS: npx tsc --noEmit --incremental false",
     "modifiedFileLint": "PASS: ESLint, zero warnings for configured modified files",
     "unitComponentRegression": {
       "status": "PASS",
-      "files": 46,
-      "tests": 428
+      "files": 760,
+      "tests": 5746,
+      "skipped": 4,
+      "scope": "Full unit configuration"
     },
     "database": {
       "status": "PASS",
@@ -24,19 +26,42 @@
     },
     "browser": {
       "status": "PASS",
-      "tests": 24,
-      "browsers": [
-        "Chromium",
-        "Firefox",
-        "WebKit"
-      ],
-      "productionServer": true
+      "tests": 27,
+      "browsers": ["Chromium", "Firefox", "WebKit"],
+      "productionServer": true,
+      "scope": "Includes exact older pinned inputs, >100-version comparison and 100/1000/10000-rule visible rendering"
     },
     "docsLint": "PASS",
     "deploymentTemplates": "PASS: both Helm charts, deployment layout, workflow parsing and change classification",
     "realCompose": "live-compose.json",
     "realKind": "live-kind.json",
-    "simulatedClaims": "scale-simulation.json"
+    "simulatedClaims": "scale-simulation.json",
+    "reviewDatabaseRegressions": {
+      "status": "PASS",
+      "tests": 5,
+      "contracts": [
+        "Exact pinned version/input schema",
+        "Publication drift rejected under lock",
+        "100/1000/10000-rule visible-page query budget",
+        "1000-execution concurrent recovery job deduplication",
+        "Three-session watchdog leader election"
+      ]
+    },
+    "rulePageReadModel": "rule-page-scale.json",
+    "nativeCI": {
+      "status": "PASS",
+      "run": 38560019070,
+      "candidate": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
+      "scope": "Linux x64 CI systemd fixture enrollment, initial readiness, key rotation, upgrade/rollback; not official public release certification"
+    },
+    "rulePageBrowserRendering": [
+      "rule-render-chromium.json",
+      "rule-render-firefox.json",
+      "rule-render-webkit.json"
+    ]
   },
-  "qualification": "qualification.json"
+  "qualification": "qualification.json",
+  "baselineCandidateRevision": "21700dc4d15625a4d6e7ff5021a649eaa273e649",
+  "reviewFixCandidateRevision": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
+  "remoteCI": "Pending for review-fix candidate; checked-in local results are not a claim that all GitHub checks have passed."
 }

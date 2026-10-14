@@ -1,0 +1,46 @@
+{
+  "measuredAt": "2026-10-14T11:58:07.944Z",
+  "topology": "Local production server + PostgreSQL + browser; fixture Agents, no physical execution",
+  "browser": "firefox",
+  "samples": [
+    {
+      "rules": 100,
+      "fleetAgents": 1000,
+      "visibleRules": 20,
+      "navigationToVisibleMs": [
+        620.6236250000075,
+        530.462875000012,
+        538.3435000000027,
+        537.4757079999981,
+        503.42079200000444
+      ],
+      "p95Ms": 620.6236250000075
+    },
+    {
+      "rules": 1000,
+      "fleetAgents": 1000,
+      "visibleRules": 20,
+      "navigationToVisibleMs": [
+        514.5115000000078,
+        548.3914999999979,
+        590.8401670000021,
+        521.5881669999944,
+        524.8388330000016
+      ],
+      "p95Ms": 590.8401670000021
+    },
+    {
+      "rules": 10000,
+      "fleetAgents": 1000,
+      "visibleRules": 20,
+      "navigationToVisibleMs": [
+        490.5987920000043,
+        501.40958300000057,
+        535.4108330000017,
+        509.1544169999979,
+        544.2388749999955
+      ],
+      "p95Ms": 544.2388749999955
+    }
+  ]
+}

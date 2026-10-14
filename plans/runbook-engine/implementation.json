@@ -39,9 +39,7 @@
       "Bounded startup reconnect, single-flight heartbeats, canceled long polls, preserved durable identities/spool",
       "Worker/queue/unknown-outcome/spool Prometheus metrics and alerts"
     ],
-    "remaining": [
-      "Expanded physical topology chaos/upgrade matrix remains NOT_TESTED"
-    ]
+    "remaining": ["Expanded physical topology chaos/upgrade matrix remains NOT_TESTED"]
   },
   "phase3": {
     "status": "implemented_locally_verified",
@@ -84,16 +82,28 @@
   ],
   "validation": {
     "productionBuild": "PASS",
-    "unitComponentTests": 428,
-    "databaseTests": 118,
+    "unitComponentTests": 5746,
+    "databaseTests": 123,
     "docsLint": "PASS",
     "liveCompose": "PASS: enrollment, signed diagnostic, output artifact, local policy, restart identity and actual dedicated worker dispatch",
     "localKind": "PASS: Helm and Kustomize enroll, drain readiness/liveness, restart identity",
-    "browserMatrix": "PASS: 24 journeys across Chromium, Firefox and WebKit; responsive screenshots reviewed",
+    "browserMatrix": "PASS: 27 production journeys across Chromium, Firefox and WebKit, including >100-version comparison and 100/1000/10000-rule rendering",
     "typecheck": "PASS",
     "lint": "PASS: modified JavaScript/TypeScript files, zero warnings",
     "liveModes": "PASS: Manual inactive, Suggested no execution, Automatic real signed read-only execution, negative conditions, duplicate event fence",
     "runtimeStartupRecoveryTests": 20,
-    "qualificationReport": "evidence/qualification.json"
-  }
+    "qualificationReport": "evidence/qualification.json",
+    "unitFiles": 760
+  },
+  "reviewRemediation": [
+    "Exact selected pinned version, schema/risk/target and publication drift fence",
+    "Cursor-paginated service rules and bounded searchable configuration options",
+    "Advisory-locked watchdog and stable recovery job IDs",
+    "Independent comparison ID authorization and version selector pages",
+    "Accessible selector errors and disabled save",
+    "Expected worker redundancy disclosure",
+    "Compact rule cards with secondary management controls",
+    "Native health readiness wait and immediate post-heartbeat health",
+    "Isolated browser actors and locally bundled licensed fonts"
+  ]
 }

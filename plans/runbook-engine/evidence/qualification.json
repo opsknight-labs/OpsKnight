@@ -8,7 +8,10 @@
       "gate": "G1",
       "topology": "Native Linux x64/arm64 official release",
       "status": "NOT_TESTED",
-      "reason": "v2.0.0 release assets remain empty; no public release was created. Installer distribution is now fail-closed."
+      "reason": "Official public distribution and supported-host x64/arm64 matrix remain NOT_TESTED; native systemd CI fixture checks now pass.",
+      "implemented": [
+        "Linux x64 CI systemd enrollment, initial readiness, key rotation and upgrade/rollback PASS at 4c80c1f1ef5031940c35d4ce500913cb7b903dcc"
+      ]
     },
     {
       "gate": "G2",
@@ -74,10 +77,8 @@
       "gate": "G8",
       "topology": "PostgreSQL concurrency, plan authorization and lifecycle fences",
       "status": "PASS",
-      "evidence": "118 distinct database tests across six suites (117-case full run plus focused readiness/policy rerun with an additional deferred-selector case)",
-      "limits": [
-        "Database and browser simulations do not certify all physical write outcomes"
-      ]
+      "evidence": "118 original distinct database cases plus 5 review regressions covering version/input authority, bounded rule pages, recovery deduplication and three-session advisory locking.",
+      "limits": ["Database and browser simulations do not certify all physical write outcomes"]
     },
     {
       "gate": "G9",
@@ -92,19 +93,18 @@
       "gate": "G10",
       "topology": "Chromium/Firefox/WebKit browser journeys, mobile/keyboard/theme/zoom checks",
       "status": "PASS",
-      "evidence": "24 browser journeys; screenshots",
-      "limits": [
-        "Human screen-reader evaluation NOT_TESTED"
-      ]
+      "evidence": "27 browser journeys; updated responsive screenshots and three browser rule-render reports",
+      "limits": ["Human screen-reader evaluation NOT_TESTED"]
     },
     {
       "gate": "G11",
       "topology": "10/100/1000 idle simulated Agent direct-library claims",
       "status": "PASS",
-      "evidence": "scale-simulation.json",
+      "evidence": "scale-simulation.json and rule-page-scale.json",
       "limits": [
         "Not authenticated network load or production fleet capacity",
-        "Sustained backlog/failover/starvation capacity NOT_TESTED"
+        "Sustained backlog/failover/starvation capacity NOT_TESTED",
+        "Rule-page measurements cover fixture Agent inventory and read-only queries, not physical action throughput."
       ]
     },
     {
