@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import prisma from '@/lib/prisma';
 import {
   createEmergencyAccount,
@@ -76,6 +77,77 @@ suite('independent password emergency identities against PostgreSQL', () => {
     await prisma.emergencySession.deleteMany({ where: { emergencyAccountId: { in: ids } } });
     await prisma.emergencyCredential.deleteMany({ where: { emergencyAccountId: { in: ids } } });
     await prisma.emergencyAccount.deleteMany({ where: { id: { in: ids } } });
+  });
+  it('preserves two real custodian logins during distributed unknown-password attempts', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/auth-abuse')>('@/lib/auth-abuse');
+    vi.mocked(consumeAuthRateLimit).mockImplementation(actual.consumeAuthRateLimit);
+    try {
+      await prisma.rateLimit.deleteMany({
+        where: { key: { startsWith: 'auth:emergency:password:' } },
+      });
+      const proof = await passwordEmergencyLogin(first.id, first.password!, '192.0.2.9');
+      for (let batch = 0; batch < 4; batch++) {
+        const attack = Array.from({ length: 25 }, (_, index) =>
+          passwordEmergencyLogin(`unknown-${batch}-${index}`, 'wrong', `198.51.${batch}.${index}`)
+        );
+        const attempts = Promise.allSettled(attack);
+        const legitimate = await Promise.all([
+          passwordEmergencyLogin(first.id, first.password!, '192.0.2.10', proof.token),
+          passwordEmergencyLogin(second.id, second.password!, '192.0.2.11'),
+        ]);
+        proof.token = legitimate[0].token;
+        expect((await getEmergencySession(legitimate[1].token))?.emergencyAccountId).toBe(
+          second.id
+        );
+        expect((await attempts).every(result => result.status === 'rejected')).toBe(true);
+      }
+      const { authPrivacyDigest } = actual;
+      const digest = await authPrivacyDigest('emergency:password:unknown', 'instance');
+      const counters = await prisma.rateLimit.findMany({
+        where: {
+          key: { startsWith: `auth:emergency:password:unknown:${digest}:` },
+        },
+      });
+      expect(counters.reduce((total, row) => total + row.count, 0)).toBe(100);
+      mkdirSync('plans/certification', { recursive: true });
+      writeFileSync(
+        'plans/certification/enterprise-sso-2.1-password-admission.json',
+        JSON.stringify(
+          {
+            measuredAt: new Date().toISOString(),
+            scope:
+              'Isolated PostgreSQL distributed admission and real scrypt; not a volumetric production capacity certificate',
+            unknownAttempts: 100,
+            distinctSourceAddresses: 100,
+            rejectedUnknownAttempts: 100,
+            successfulCustodianLogins: 4,
+            successfulCurrentSessionReauthentications: 4,
+            distributedUnknownBudgetPerSecond: 10,
+            laneLimitsPerProcess: { unknown: 1, login: 2, reauthentication: 1, management: 2 },
+            knownIdentityConcurrentLoginLimit: 1,
+          },
+          null,
+          2
+        ) + '\n'
+      );
+    } finally {
+      vi.mocked(consumeAuthRateLimit).mockResolvedValue({
+        allowed: true,
+        remaining: 20,
+        resetAt: Date.now() + 300000,
+        count: 0,
+      });
+      // Other cases assert enrollment is not a drill.
+      await prisma.emergencyAccount.updateMany({
+        where: { id: { in: [first.id, second.id] } },
+        data: {
+          status: 'ENROLLING',
+          verifiedAt: null,
+          verifiedOrigin: null,
+          verifiedCredentialVersion: null,
+        },
+      });
+    }
   });
   it('stores salted hashes, never counts enrollment as a drill, and preserves existing user authentication', async () => {
     expect(first.password).toMatch(/^[A-Za-z0-9_-]{43}$/);

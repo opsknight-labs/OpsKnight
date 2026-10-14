@@ -136,7 +136,8 @@ connection limits to keep volumetric traffic within the database's tested capaci
 
 `deploy/nginx/emergency-rate-limit.conf` is an opt-in NGINX HTTP-context example
 for the exact `/api/auth/emergency` endpoint: two requests/second per source with
-a burst of ten, returning 429 before proxying excess requests. See the
+a burst of ten and at most four concurrent emergency requests per source, returning
+429 before proxying excess requests. See the
 [NGINX rate-limit module](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html)
 for directive semantics. Tune these example limits against shared-NAT custodian
 traffic and rehearse completing a hardware ceremony during abuse before deployment.
@@ -219,7 +220,25 @@ limits apply before hashing, with a separate current-session reauthentication bu
 Hashing uses Node's built-in scrypt at N=32768, r=8, p=3 (32 MiB), random 128-bit salt
 and constant-time comparison. This is an [OWASP documented alternative](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
 when Argon2id is unavailable; it avoids adding native binaries across supported images.
-At most two KDF operations run per web process, without an unbounded waiting queue.
+Hash work is partitioned per web process: one unknown-identifier check, two known-identity
+logins (at most one per identity), one current-session reauthentication and two fresh
+administrator credential-generation operations. There is no application waiting queue;
+Node's bounded worker pool schedules at most these six operations (about 192 MiB of
+scrypt working memory plus runtime overhead at the full lane limits). Unknown probes
+cannot allocate the login or reauthentication slots. PostgreSQL also limits unknown
+password identifiers to ten attempts per second across source IPs and replicas; known
+identities retain their separate account and network budgets. Responses remain generic,
+but admission timing is not an account-existence confidentiality guarantee. Treat the
+random account identifier as recovery material and store it with the credential.
+
+Use the [ingress abuse protection](#optional-edge-admission-protection) procedure
+and the NGINX example when exposing recovery publicly. Enforce trusted client-IP headers
+and block direct access to web replicas. These bounds preserve hash capacity during
+unknown-identifier traffic; they cannot guarantee availability against saturation of
+the database/network or an attacker who already possesses a custodian's identifier.
+Keep a separately protected recovery route and an independent hardware identity where
+that threat requires stronger availability. No cluster-wide quota may consume the
+reserved authenticated reauthentication lane.
 Independent passwords contain 256 random bits. Do not save them in a vault whose only
 unlock route depends on the same SSO service being repaired.
 
@@ -239,3 +258,15 @@ absolute expiry and enforces the existing fifteen-minute idle timeout. Sensitive
 still require five-minute freshness. Concurrent rotation or disablement is checked again
 inside the PostgreSQL authorization transaction after password verification; a password
 verified against an older credential version cannot create a surviving session.
+
+
+### Routine rotation with two ready identities
+
+Under SSO Required, keep two drilled identities available throughout routine rotation.
+Create a third temporary identity with independent custody, store its credential and
+complete a separate emergency sign-in drill. Rotate the original identity, store its
+replacement and drill it again. Only then disable the temporary identity. The console
+shows this sequence when exactly two identities are ready. This uses the existing
+creation and drill flow; it does not leave two active passwords on one identity.
+Compromise confirmation is reserved for an actually exposed credential, permitting
+immediate revocation while clearly reporting degraded recovery readiness.

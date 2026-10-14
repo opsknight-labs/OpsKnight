@@ -437,3 +437,19 @@ Chromium also recovered after restarting the owned PostgreSQL fixture. The secre
 report is `plans/certification/enterprise-sso-2.1-password-browser.json`.
 Live IdP tenants, physical keys, real mail providers and production HA acceptance remain
 pending; this local evidence does not certify those external environments.
+
+
+### Password admission under distributed probes
+
+The password integration suite now enables the real PostgreSQL admission counters
+and overlaps 100 unknown-account password attempts from distinct source addresses
+with four successful custodian logins and four current-session reauthentications.
+The secret-free outcome is recorded in
+`plans/certification/enterprise-sso-2.1-password-admission.json`. Unit tests hold real
+scrypt work in the unknown lane while login and reauthentication succeed, and check
+that one targeted known identity cannot allocate both login slots. Excess hash work
+is rejected without an application queue; lane counters release on completion.
+The NGINX fixture verifies excess ingress requests are rejected before upstream work,
+ordinary login is unaffected and admission resumes after refill. These isolated tests
+do not certify resistance to network/database saturation or coordinated targeting of
+all known custodian identifiers. Preserve the independently protected ingress path.

@@ -285,8 +285,8 @@ export default function AuthenticationConsole({
           <ShieldAlert className="h-4 w-4" />
           <AlertTitle>Recovery readiness is degraded</AlertTitle>
           <AlertDescription>
-            Required remains enforced. Create and independently drill replacement recovery identities
-            immediately. A compromised credential can always be revoked.
+            Required remains enforced. Create and independently drill replacement recovery
+            identities immediately. A compromised credential can always be revoked.
           </AlertDescription>
         </Alert>
       )}
@@ -949,7 +949,8 @@ export default function AuthenticationConsole({
                         checked={originRepairConfirmed}
                         onChange={event => setOriginRepairConfirmed(event.target.checked)}
                       />
-                      I confirm the pinned origin is the trusted URL used for these recovery identities.
+                      I confirm the pinned origin is the trusted URL used for these recovery
+                      identities.
                     </label>
                     <Button
                       disabled={pending || !originRepairConfirmed}
@@ -1121,6 +1122,17 @@ export default function AuthenticationConsole({
                     >
                       Enroll hardware key
                     </Button>
+                    {account.ready &&
+                      data.mode === 'SSO_REQUIRED' &&
+                      data.verifiedEmergencyAccounts <= 2 && (
+                        <p className="text-sm text-muted-foreground">
+                          Routine rotation needs a verified replacement first. Create a third
+                          recovery identity above, store its credential independently and complete
+                          its sign-in drill. Then rotate this identity and drill it again before
+                          retiring the temporary replacement. Use compromise confirmation only for
+                          an actual exposed credential; it immediately reduces recovery coverage.
+                        </p>
+                      )}
                     <label className="flex items-start gap-2 text-sm">
                       <input
                         type="checkbox"

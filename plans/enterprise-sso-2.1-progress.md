@@ -811,3 +811,33 @@ The production-browser gate also exposed a WebKit hydration race: the server-ren
 identity name could accept input before React initialized it. Setup fields now remain
 disabled until hydration, matching the recovery method selector. The test continues to
 exercise the actual form rather than adding sleeps or bypassing the browser flow.
+
+
+### Password recovery admission isolation and rotation guidance — 2026-10-14
+
+The review of 2ce960a identified that unknown-identifier scrypt operations could occupy
+both login slots. Hashing now has independent bounded lanes for unknown identifiers,
+known login, current-session reauthentication and fresh administrator generation.
+One known identity cannot occupy both login slots. The PostgreSQL unknown-probe budget
+is shared across source IPs and replicas; it cannot spend known-login/reauthentication
+budgets. Generic failures and the same admitted dummy KDF are retained. The optional
+NGINX example additionally limits concurrent per-source emergency requests. Existing
+network limits, trusted ingress and database capacity remain required; these controls
+do not claim arbitrary volumetric attack resistance or hide all admission timing.
+
+The console explains the third-identity preparation/drill/rotate/drill/retire sequence
+when Required has exactly two ready identities. It preserves the existing readiness
+guard and reserves compromise confirmation for actual exposure. No dual-password state
+or automatic Required bypass is introduced.
+
+New tests overlap real scrypt unknown traffic with successful login/reauthentication,
+check per-identity exclusion and capacity release, and exercise 100 distinct-network
+unknown password attempts against real PostgreSQL admission while two custodians
+complete actual restricted login and reauthentication.
+
+Local final validation passed: 164 focused authentication/component tests, all 112
+PostgreSQL tests after 209 migrations, the optimized production build, and seven
+production-browser checks (two intentional Chromium-only hardware skips). The NGINX
+fixture rejected 989/1,000 burst requests before upstream work and recovered after
+refill. Strict TypeScript and modified-file lint passed without errors or warnings.
+CI publishes the secret-free admission, hashing, metrics and browser reports.

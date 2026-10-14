@@ -35,13 +35,71 @@ describe('bounded emergency password hashing', () => {
           saltBits: 128,
           operations: 5,
           totalDurationMs: performance.now() - startedAt,
-          maximumConcurrentOperationsPerProcess: 2,
+          maximumConcurrentOperationsPerProcess: 6,
+          laneLimits: { unknown: 1, login: 2, reauthentication: 1, management: 2 },
           unknownAccountKdfExercised: true,
         },
         null,
         2
       ) + '\n'
     );
+  });
+  it('preserves real login and authenticated reauthentication while unknown work is saturated', async () => {
+    const credential = await generateEmergencyPassword();
+    const unknown = verifyEmergencyPassword('attacker-input', null);
+    const flood = Promise.allSettled(
+      Array.from({ length: 40 }, () => verifyEmergencyPassword('attacker-input', null))
+    );
+    const login = verifyEmergencyPassword(credential.password, credential.hash, {
+      identity: 'custodian-one',
+      reauthentication: false,
+    });
+    const duplicate = verifyEmergencyPassword('wrong', credential.hash, {
+      identity: 'custodian-one',
+      reauthentication: false,
+    }).catch(() => 'busy');
+    const reauth = verifyEmergencyPassword(credential.password, credential.hash, {
+      identity: 'custodian-one',
+      reauthentication: true,
+    });
+    expect(await login).toBe(true);
+    expect(await reauth).toBe(true);
+    expect(await duplicate).toBe('busy');
+    expect(await unknown).toBe(false);
+    expect((await flood).every(result => result.status === 'rejected')).toBe(true);
+    expect(
+      await verifyEmergencyPassword(credential.password, credential.hash, {
+        identity: 'custodian-one',
+        reauthentication: false,
+      })
+    ).toBe(true);
+  });
+  it('one targeted known identity cannot spend the other login slot or reauthentication capacity', async () => {
+    const credential = await generateEmergencyPassword();
+    const targeted = verifyEmergencyPassword('wrong', credential.hash, {
+      identity: 'targeted-custodian',
+      reauthentication: false,
+    });
+    const repeated = Promise.allSettled(
+      Array.from({ length: 20 }, () =>
+        verifyEmergencyPassword('wrong', credential.hash, {
+          identity: 'targeted-custodian',
+          reauthentication: false,
+        })
+      )
+    );
+    const legitimate = verifyEmergencyPassword(credential.password, credential.hash, {
+      identity: 'other-custodian',
+      reauthentication: false,
+    });
+    const reauth = verifyEmergencyPassword(credential.password, credential.hash, {
+      identity: 'targeted-custodian',
+      reauthentication: true,
+    });
+    expect(await legitimate).toBe(true);
+    expect(await reauth).toBe(true);
+    expect(await targeted).toBe(false);
+    expect((await repeated).every(result => result.status === 'rejected')).toBe(true);
   });
   it('bounds concurrent memory-hard work without an unbounded request queue', async () => {
     const outcomes = await Promise.allSettled(

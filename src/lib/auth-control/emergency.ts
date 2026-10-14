@@ -470,9 +470,19 @@ export async function passwordEmergencyLogin(
       throttled = true;
       throw new Error('THROTTLED');
     }
+    // Unknown identifiers cannot spend the capacity reserved for real identities.
+    // PostgreSQL coordinates this probe budget across IPs and application replicas.
+    if (
+      (!account || account.authenticationMethod !== 'PASSWORD' || !account.passwordHash) &&
+      !(await consumeAuthRateLimit('emergency:password:unknown', 'instance', 10, 1000)).allowed
+    ) {
+      throttled = true;
+      throw new Error('THROTTLED');
+    }
     const valid = await verifyEmergencyPassword(
       password,
-      account?.authenticationMethod === 'PASSWORD' ? account.passwordHash : null
+      account?.authenticationMethod === 'PASSWORD' ? account.passwordHash : null,
+      account ? { identity: account.id, reauthentication: Boolean(previous) } : undefined
     );
     if (
       !account ||

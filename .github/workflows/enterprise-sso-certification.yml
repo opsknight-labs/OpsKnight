@@ -72,6 +72,9 @@ jobs:
           path: |
             plans/certification/enterprise-sso-2.1-resilience.json
             plans/certification/enterprise-sso-2.1-edge.json
+            plans/certification/enterprise-sso-2.1-password-admission.json
+            plans/certification/enterprise-sso-2.1-password-hashing.json
+            plans/certification/enterprise-sso-2.1-receipt-metrics.json
           if-no-files-found: ignore
 
   published-release-upgrade:
@@ -134,5 +137,7 @@ jobs:
         if: always()
         with:
           name: enterprise-authentication-browser-captures
-          path: ${{ runner.temp }}/enterprise-authentication-captures
+          path: |
+            ${{ runner.temp }}/enterprise-authentication-captures
+            plans/certification/enterprise-sso-2.1-password-browser.json
           if-no-files-found: ignore
