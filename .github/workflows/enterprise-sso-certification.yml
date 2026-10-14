@@ -117,7 +117,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://certifier:unused-setup-fixture@127.0.0.1:1/enterprise_sso_test
       DIRECT_URL: postgresql://certifier:unused-setup-fixture@127.0.0.1:1/enterprise_sso_test
-      SSO_CERT_CAPTURE_DIR: ${{ runner.temp }}/enterprise-authentication-captures
       LOG_LEVEL: error
     steps:
       - uses: actions/checkout@v7
@@ -128,6 +127,8 @@ jobs:
       - name: Install certification browsers
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Production HTTPS recovery, password rotation and database restart
+        env:
+          SSO_CERT_CAPTURE_DIR: ${{ runner.temp }}/enterprise-authentication-captures
         run: python3 scripts/certify-enterprise-authentication-browser.py --build
       - uses: actions/upload-artifact@v4
         if: always()
