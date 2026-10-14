@@ -55,6 +55,8 @@ describe('authentication section request cancellation', () => {
       replicas: [],
       registeredSessions: [],
       pendingEmailAlerts: 0,
+      failedEmailAlerts: [],
+      failedEmailAlertCount: 0,
       legacyEmergencyConfigured: false,
       originConflict: false,
       recoveryOrigin: 'https://instance.example.test',

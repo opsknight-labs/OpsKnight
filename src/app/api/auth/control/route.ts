@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { jsonApiOk, jsonError } from '@/lib/api-response';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
+import { retryAuthenticationAlert } from '@/lib/auth-control/security-events';
 import { revokeAuthenticationSession } from '@/lib/auth-control/sessions';
 import { getControlActor } from '@/lib/auth-control/actor';
 import {
@@ -34,6 +35,14 @@ import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 
 const id = z.string().min(1).max(128);
 const schema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('retryAlert'),
+      alertId: id,
+      expectedGeneration: z.number().int().min(0),
+      confirmation: z.literal('RETRY SECURITY EMAIL'),
+    })
+    .strict(),
   z
     .object({
       action: z.literal('repairOrigin'),
@@ -240,6 +249,9 @@ export async function POST(request: NextRequest) {
           input.displayName,
           input.response
         );
+        return json({ success: true });
+      case 'retryAlert':
+        await retryAuthenticationAlert(actor, input.alertId, input.expectedGeneration);
         return json({ success: true });
       case 'revokeSession':
         await revokeAuthenticationSession(actor, input.sessionId);

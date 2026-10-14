@@ -40,3 +40,12 @@ export function coerceBooleanClaim(value: unknown): boolean | undefined {
   }
   return undefined;
 }
+
+/** The shared organization-boundary input for login, staging and preview. */
+export function normalizeOidcBoundaryClaims(claims: OidcClaims): OidcClaims {
+  return {
+    ...claims,
+    ...(typeof claims.email === 'string' ? { email: claims.email.trim().toLowerCase() } : {}),
+    email_verified: coerceBooleanClaim(claims.email_verified),
+  };
+}

@@ -3965,23 +3965,26 @@ model EmergencyAccessEvent {
 }
 
 model AuthenticationAlert {
-  id            String    @id @default(cuid())
-  eventId       String
-  recipientId   String
-  title         String
-  message       String
-  createdAt     DateTime  @default(now())
-  nextAttemptAt DateTime  @default(now())
-  attempts      Int       @default(0)
-  leaseUntil    DateTime?
-  leaseToken    String?
-  deliveredAt   DateTime?
-  cancelledAt   DateTime?
-  lastError     String?
+  id                 String    @id @default(cuid())
+  eventId            String
+  recipientId        String
+  title              String
+  message            String
+  createdAt          DateTime  @default(now())
+  nextAttemptAt      DateTime  @default(now())
+  attempts           Int       @default(0)
+  leaseUntil         DateTime?
+  leaseToken         String?
+  deliveredAt        DateTime?
+  cancelledAt        DateTime?
+  failedAt           DateTime?
+  deliveryGeneration Int       @default(0)
+  lastError          String?
 
   @@unique([eventId, recipientId])
-  @@index([deliveredAt, cancelledAt, nextAttemptAt])
+  @@index([deliveredAt, cancelledAt, failedAt, nextAttemptAt])
   @@index([cancelledAt])
+  @@index([failedAt])
 }
 
 // Durable remainder of a security alert's bounded administrator fan-out.

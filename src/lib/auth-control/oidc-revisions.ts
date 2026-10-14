@@ -1,5 +1,5 @@
 import 'server-only';
-import { coerceBooleanClaim } from '@/lib/oidc/claims';
+import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import { Issuer, custom, generators } from 'openid-client';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -277,8 +277,11 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
     const claims = tokens.claims();
     const provider = getOidcProviderPolicy(config.issuer, config.providerType);
     if (
-      !provider.validateOrganizationBoundary(claims, config.allowedDomains, config.organizationId)
-        .ok
+      !provider.validateOrganizationBoundary(
+        normalizeOidcBoundaryClaims(claims),
+        config.allowedDomains,
+        config.organizationId
+      ).ok
     )
       throw new Error('Provider organization boundary rejected the login.');
     if (!claims.sub) throw new Error('A subject claim is required for administrator verification.');

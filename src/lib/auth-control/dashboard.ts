@@ -1,5 +1,5 @@
 import 'server-only';
-import { coerceBooleanClaim } from '@/lib/oidc/claims';
+import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { providerConfigSchema } from './provider-config';
@@ -34,6 +34,8 @@ export async function authenticationDashboard(
     ready,
     replicas,
     pendingAlerts,
+    failedAlerts,
+    failedAlertCount,
     sessions,
   ] = await Promise.all([
     getAuthenticationPolicy(),
@@ -85,7 +87,20 @@ export async function authenticationDashboard(
           take: 100,
         })
       : Promise.resolve([]),
-    prisma.authenticationAlert.count({ where: { deliveredAt: null, cancelledAt: null } }),
+    prisma.authenticationAlert.count({
+      where: { deliveredAt: null, cancelledAt: null, failedAt: null },
+    }),
+    section === 'diagnostics'
+      ? prisma.authenticationAlert.findMany({
+          where: { failedAt: { not: null }, deliveredAt: null, cancelledAt: null },
+          orderBy: { failedAt: 'desc' },
+          take: 20,
+          select: { id: true, title: true, failedAt: true, deliveryGeneration: true },
+        })
+      : Promise.resolve([]),
+    prisma.authenticationAlert.count({
+      where: { failedAt: { not: null }, deliveredAt: null, cancelledAt: null },
+    }),
     section === 'diagnostics'
       ? prisma.userDevice.findMany({
           where: { deviceId: { startsWith: 'session:' } },
@@ -215,6 +230,11 @@ export async function authenticationDashboard(
       lastSeenAt: replica.lastSeenAt.toISOString(),
     })),
     pendingEmailAlerts: pendingAlerts,
+    failedEmailAlerts: failedAlerts.map(alert => ({
+      ...alert,
+      failedAt: alert.failedAt!.toISOString(),
+    })),
+    failedEmailAlertCount: failedAlertCount,
   };
 }
 
@@ -274,7 +294,11 @@ export async function identityClaimsPreview(revisionId: string, claims: Record<s
     return { outcome: 'REJECT', reason: 'Issuer must exactly match this staged revision.', role };
   if (!subject) return { outcome: 'REJECT', reason: 'A stable subject claim is required.', role };
   if (
-    !provider.validateOrganizationBoundary(claims, config.allowedDomains, config.organizationId).ok
+    !provider.validateOrganizationBoundary(
+      normalizeOidcBoundaryClaims(claims),
+      config.allowedDomains,
+      config.organizationId
+    ).ok
   )
     return { outcome: 'REJECT', reason: 'Organization boundary rejected these claims.', role };
   const emailVerified = coerceBooleanClaim(claims.email_verified);

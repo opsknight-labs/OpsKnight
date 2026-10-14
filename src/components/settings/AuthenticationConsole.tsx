@@ -1234,6 +1234,17 @@ export default function AuthenticationConsole({
               data={data}
               pending={pending}
               onRefresh={() => perform(refresh)}
+              onRetry={(alertId, expectedGeneration) =>
+                perform(async () => {
+                  await authenticationRequest({
+                    action: 'retryAlert',
+                    alertId,
+                    expectedGeneration,
+                    confirmation: 'RETRY SECURITY EMAIL',
+                  });
+                  await refresh();
+                })
+              }
               onRevoke={sessionId =>
                 perform(async () => {
                   await authenticationRequest({ action: 'revokeSession', sessionId });

@@ -31,6 +31,7 @@ import { lockControlActor, type ControlActor } from '@/lib/auth-control/actor';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import {
   processAuthenticationAlerts,
+  retryAuthenticationAlert,
   processAuthenticationAlertFanout,
   processAuthenticationAlertFanoutBatch,
   securityEvent,
@@ -664,16 +665,30 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       const initial = await prisma.authenticationAlertFanout.findUniqueOrThrow({
         where: { eventId },
       });
+      let terminatedPid = 0;
+      let terminationAcknowledged = false;
+      let batchProcessed = false;
       await expect(
         prisma.$transaction(async tx => {
           const [{ pid }] = await tx.$queryRaw<
             Array<{ pid: number }>
           >`SELECT pg_backend_pid() AS pid`;
-          await processAuthenticationAlertFanoutBatch(tx);
+          terminatedPid = pid;
+          batchProcessed = await processAuthenticationAlertFanoutBatch(tx);
           // Terminate the worker connection after inserts/cursor update, before commit.
-          await prisma.$queryRaw`SELECT pg_terminate_backend(${pid})`;
+          const [result] = await prisma.$queryRaw<Array<{ terminated: boolean }>>`
+            SELECT pg_terminate_backend(${pid}::integer) AS terminated`;
+          terminationAcknowledged = result.terminated;
+          // Force an operation on the killed connection, rather than accepting a commit alone.
+          await tx.$queryRaw`SELECT 1`;
         })
       ).rejects.toThrow();
+      expect(batchProcessed).toBe(true);
+      expect(terminationAcknowledged).toBe(true);
+      expect(terminatedPid).toBeGreaterThan(0);
+      const [backend] = await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT count(*) FROM pg_stat_activity WHERE pid = ${terminatedPid}::integer`;
+      expect(Number(backend.count)).toBe(0);
       expect(await prisma.authenticationAlert.count({ where: { eventId } })).toBe(100);
       expect(await prisma.inAppNotification.count({ where: { entityId: eventId } })).toBe(100);
       expect(
@@ -707,7 +722,8 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       expect(await prisma.authenticationAlert.count({ where: { eventId } })).toBe(expected);
       expect(await prisma.inAppNotification.count({ where: { entityId: eventId } })).toBe(expected);
       measurements.fanoutCrashRecovery = {
-        actualDatabaseConnectionTerminated: true,
+        actualDatabaseConnectionTerminated: terminationAcknowledged,
+        backendAbsentFromActivity: Number(backend.count) === 0,
         uncommittedAlertsRolledBack: true,
         cursorPreserved: true,
         removedAndNewRecipientsExcluded: true,
@@ -942,6 +958,214 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       await prisma.user.delete({ where: { id: removed.id } });
     }
   });
+  it.each(['FAILED', 'SKIPPED'] as const)(
+    'stops terminal %s email delivery and explicitly retries with a fresh key',
+    async status => {
+      await prisma.authenticationAlert.deleteMany();
+      const notification = await prisma.notification.create({
+        data: {
+          channel: 'EMAIL',
+          category: 'SECURITY',
+          userId: actor.id,
+          status,
+          attempts: 3,
+          maxAttempts: 3,
+          expiresAt: new Date(0),
+        },
+      });
+      const alert = await prisma.authenticationAlert.create({
+        data: {
+          eventId: `terminal-${status}`,
+          recipientId: actor.id,
+          title: 'Terminal fixture',
+          message: 'Fixture',
+        },
+      });
+      vi.mocked(enqueueCentralNotification).mockResolvedValue({
+        id: notification.id,
+        created: false,
+      });
+      try {
+        await processAuthenticationAlerts();
+        const failed = await prisma.authenticationAlert.findUniqueOrThrow({
+          where: { id: alert.id },
+        });
+        expect(failed.failedAt).not.toBeNull();
+        expect(failed.deliveredAt).toBeNull();
+        vi.mocked(enqueueCentralNotification).mockClear();
+        await prisma.authenticationAlert.update({
+          where: { id: alert.id },
+          data: { nextAttemptAt: new Date(0) },
+        });
+        await processAuthenticationAlerts();
+        expect(enqueueCentralNotification).not.toHaveBeenCalled();
+        await expect(
+          retryAuthenticationAlert({ ...actor, authenticatedAt: 0 }, alert.id, 0)
+        ).rejects.toThrow('Fresh');
+        const fresh = { ...actor, authenticatedAt: Date.now() };
+        const results = await Promise.allSettled([
+          retryAuthenticationAlert(fresh, alert.id, 0),
+          retryAuthenticationAlert(fresh, alert.id, 0),
+        ]);
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        const retry = await prisma.authenticationAlert.findUniqueOrThrow({
+          where: { id: alert.id },
+        });
+        expect(retry.deliveryGeneration).toBe(1);
+        expect(retry.failedAt).toBeNull();
+        expect(
+          await prisma.auditLog.count({ where: { action: 'auth.alert.delivery.retry' } })
+        ).toBe(status === 'FAILED' ? 1 : 2);
+        // Simulated provider acknowledgment; old terminal transport row is never revived.
+        const delivered = await prisma.notification.create({
+          data: { channel: 'EMAIL', category: 'SECURITY', userId: actor.id, status: 'DELIVERED' },
+        });
+        vi.mocked(enqueueCentralNotification).mockResolvedValue({
+          id: delivered.id,
+          created: true,
+        });
+        await processAuthenticationAlerts();
+        expect(
+          vi
+            .mocked(enqueueCentralNotification)
+            .mock.calls.some(([input]) => input.eventKey === `${alert.id}:retry:1`)
+        ).toBe(true);
+        expect(
+          (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: alert.id } }))
+            .deliveredAt
+        ).not.toBeNull();
+        expect(
+          (await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })).status
+        ).toBe(status);
+        await prisma.notification.delete({ where: { id: delivered.id } });
+      } finally {
+        vi.mocked(enqueueCentralNotification).mockRejectedValue(
+          new Error('delivery queue unavailable')
+        );
+        await prisma.authenticationAlert.deleteMany();
+        await prisma.notification.delete({ where: { id: notification.id } });
+      }
+    }
+  );
+  it('rebuilds expired transport payloads through the real central enqueue and deduplication path', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/notification-control-plane')>(
+      '@/lib/notification-control-plane'
+    );
+    await prisma.authenticationAlert.deleteMany();
+    const eventId = `real-queue-${Date.now()}`;
+    const alert = await prisma.authenticationAlert.create({
+      data: {
+        eventId,
+        recipientId: actor.id,
+        title: 'Queue recovery fixture',
+        message: 'No provider dispatch',
+      },
+    });
+    vi.mocked(enqueueCentralNotification).mockImplementation(actual.enqueueCentralNotification);
+    try {
+      await processAuthenticationAlerts();
+      const original = await prisma.notification.findFirstOrThrow({ where: { sourceId: eventId } });
+      expect(original.payloadEncrypted).toBeTruthy();
+      await prisma.notification.update({
+        where: { id: original.id },
+        data: { status: 'SKIPPED', payloadEncrypted: null, expiresAt: new Date(0) },
+      });
+      await prisma.authenticationAlert.update({
+        where: { id: alert.id },
+        data: { nextAttemptAt: new Date(0) },
+      });
+      await processAuthenticationAlerts();
+      expect(
+        (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: alert.id } })).failedAt
+      ).not.toBeNull();
+      await retryAuthenticationAlert({ ...actor, authenticatedAt: Date.now() }, alert.id, 0);
+      await processAuthenticationAlerts();
+      const notifications = await prisma.notification.findMany({ where: { sourceId: eventId } });
+      expect(notifications).toHaveLength(2);
+      const rebuilt = notifications.find(row => row.id !== original.id)!;
+      expect(rebuilt.deliveryKey).not.toBe(original.deliveryKey);
+      expect(rebuilt.payloadEncrypted).toBeTruthy();
+      expect(rebuilt.status).toBe('PENDING');
+      await prisma.authenticationAlert.update({
+        where: { id: alert.id },
+        data: { nextAttemptAt: new Date(0) },
+      });
+      await processAuthenticationAlerts();
+      expect(await prisma.notification.count({ where: { sourceId: eventId } })).toBe(2);
+      // No SMTP call: only the final provider acknowledgment is simulated.
+      await prisma.notification.update({
+        where: { id: rebuilt.id },
+        data: { status: 'DELIVERED' },
+      });
+      await prisma.authenticationAlert.update({
+        where: { id: alert.id },
+        data: { nextAttemptAt: new Date(0) },
+      });
+      await processAuthenticationAlerts();
+      expect(
+        (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: alert.id } }))
+          .deliveredAt
+      ).not.toBeNull();
+      measurements.terminalDeliveryRecovery = {
+        realCentralEnqueue: true,
+        expiredPayloadRebuilt: true,
+        retryKeyDeduplicated: true,
+        acknowledgment: 'simulated; no provider dispatch',
+      };
+    } finally {
+      vi.mocked(enqueueCentralNotification).mockRejectedValue(
+        new Error('delivery queue unavailable')
+      );
+      await prisma.authenticationAlert.deleteMany();
+      await prisma.notification.deleteMany({ where: { sourceType: 'AUTHENTICATION' } });
+    }
+  });
+  it('keeps retryable provider failures and unknown outcomes under central reconciliation', async () => {
+    await prisma.authenticationAlert.deleteMany();
+    const notification = await prisma.notification.create({
+      data: {
+        channel: 'EMAIL',
+        category: 'SECURITY',
+        userId: actor.id,
+        status: 'FAILED',
+        attempts: 1,
+        maxAttempts: 3,
+        payloadEncrypted: 'isolated-stub',
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    const alert = await prisma.authenticationAlert.create({
+      data: {
+        eventId: 'retryable-fixture',
+        recipientId: actor.id,
+        title: 'Fixture',
+        message: 'Fixture',
+      },
+    });
+    vi.mocked(enqueueCentralNotification).mockResolvedValue({
+      id: notification.id,
+      created: false,
+    });
+    try {
+      for (const status of ['FAILED', 'UNKNOWN', 'PENDING'] as const) {
+        await prisma.notification.update({ where: { id: notification.id }, data: { status } });
+        await prisma.authenticationAlert.update({
+          where: { id: alert.id },
+          data: { nextAttemptAt: new Date(0) },
+        });
+        await processAuthenticationAlerts();
+        expect(
+          (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: alert.id } })).failedAt
+        ).toBeNull();
+      }
+    } finally {
+      vi.mocked(enqueueCentralNotification).mockRejectedValue(
+        new Error('delivery queue unavailable')
+      );
+      await prisma.authenticationAlert.deleteMany();
+      await prisma.notification.delete({ where: { id: notification.id } });
+    }
+  });
   it('cleans only old terminal delivery metadata while preserving pending work and security evidence', async () => {
     const event = await prisma.$transaction(tx =>
       securityEvent(tx, 'auth.test.retention', actor.id)
@@ -952,6 +1176,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       data: [
         { id: `${prefix}-delivered`, deliveredAt: old },
         { id: `${prefix}-cancelled`, cancelledAt: old },
+        { id: `${prefix}-failed`, failedAt: old },
         { id: `${prefix}-pending` },
         { id: `${prefix}-recent`, deliveredAt: new Date() },
       ].map(row => ({

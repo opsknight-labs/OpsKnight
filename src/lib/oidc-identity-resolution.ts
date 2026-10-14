@@ -1,3 +1,4 @@
+import { normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import type { Prisma } from '@prisma/client';
 import {
   assertCurrentOidcRegistration,
@@ -114,13 +115,13 @@ export async function resolveOidcIdentityForSignIn(
   const email = normalizeEmail(input.email);
   const providerPolicy = getOidcProviderPolicy(input.issuer, input.providerType);
   const organizationResult = providerPolicy.validateOrganizationBoundary(
-    {
+    normalizeOidcBoundaryClaims({
       ...(input.claims ?? {}),
       ...(email ? { email } : {}),
       ...(input.emailVerifiedClaim !== undefined
         ? { email_verified: input.emailVerifiedClaim }
         : {}),
-    },
+    }),
     input.allowedDomains,
     input.organizationId
   );

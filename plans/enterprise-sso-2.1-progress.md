@@ -532,3 +532,47 @@ external checks; local fixtures do not certify those environments.
 Hosted certification exposed a fixture startup connection-reset race after Docker
 published its port. The bounded readiness loop now retries socket startup errors
 and fails explicitly if NGINX never becomes ready; measured load errors remain fatal.
+
+## Corrected crash evidence and complete delivery recovery — 2026-10-14
+
+Input: `enterprise-sso-2.1-certification-correction-audit.md`.
+
+The earlier claim of actual backend termination through `adeda2ccc` was invalid:
+the test accepted a PostgreSQL argument-type error as its expected exception.
+That historical assertion is withdrawn. The corrected test requires a successful
+integer-PID termination acknowledgment, a failed operation on the killed connection,
+and independent absence from `pg_stat_activity`, before checking alert/cursor
+rollback and concurrent recovery. The new artifact records both observations.
+
+- Login, staging and claims preview share organization-boundary claim normalization.
+  Seven signed-token domain cases cover boolean, string and numeric true/false and
+  missing verification, alongside the existing linked Entra compatibility suite.
+- The worker reconciles exhausted/expired FAILED and SKIPPED transport records into
+  a terminal failed state. Retryable failures remain pending; UNKNOWN remains under
+  central reconciliation. Failed intents leave the automatic polling queue.
+- Diagnostics displays a bounded failed-delivery list and confirmation-based retry.
+  The action requires fresh authority, rechecks recipient eligibility, locks the
+  intent, fences duplicate/stale generations, and commits mandatory audit evidence.
+  A new generation rebuilds the transport payload under a new idempotency key.
+  Cancelled recipients cannot be revived. Terminal failed metadata uses the same
+  bounded 90-day retention as completed/cancelled records; audit evidence is separate.
+- Database tests cover terminal cancellation/failure, retryable-state preservation,
+  fresh authority, concurrent retries, new keys and delivery acknowledgment. UI
+  tests cover confirmation, cancellation and disabled actions during mutation.
+- Current main patches are already represented on this branch; a fresh comparison
+  found no missing patches. No merge, PR or history rewrite was performed.
+
+Local real-provider delivery, live tenant/key and production multi-node acceptance
+are not implied by these fixtures. The user's instruction to leave live tenants
+and physical keys pending remains in force.
+
+Verification for this follow-up: 69 PostgreSQL authentication tests passed on a
+freshly migrated isolated schema. The full unit suite passed 5,756 tests across
+757 files, with four intentional skips; the focused authentication/UI run passed
+283 tests. TypeScript, modified-file lint with zero warnings, Prisma schema
+validation and eight deployment/documentation contracts passed. The real central
+enqueue regression verifies rebuilt encrypted payloads and deduplication across
+worker passes; only the final delivery acknowledgment is simulated.
+
+The optimized production build also passed. The dedicated hosted workflow includes
+the new diagnostics component regression and all signed-token/database cases.

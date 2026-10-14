@@ -199,7 +199,7 @@ provider/link ownership rules; absence is not an explicit rejection.
 Removed or inactive administrators' email intents receive a terminal cancellation
 timestamp. Restoring administrator access does not restart those old intents.
 The pending-delivery dashboard excludes cancelled intents. The scheduled cleanup
-retains delivered and cancelled metadata for 90 days from the terminal timestamp,
+retains delivered, cancelled and failed metadata for 90 days from the terminal timestamp,
 then removes up to 1,000 of each per pass. Pending delivery and fan-out work, security
 events, audit rows and in-app alerts are unaffected by this cleanup. Existing
 notification/audit retention policies remain separate. Cancellation cannot recall
@@ -215,3 +215,44 @@ Run `python3 scripts/certify-sso-edge.py` with Docker to test the optional
 upstream. It verifies early 429 rejection, ordinary login isolation and admission
 after refill; `plans/certification/enterprise-sso-2.1-edge.json` records results.
 No real authentication or database requests occur in that edge fixture.
+
+## Connection-termination evidence correction
+
+The original fan-out crash fixture incorrectly allowed any transaction error to
+satisfy its expectation. PostgreSQL could reject `pg_terminate_backend(bigint)`
+before a connection was terminated. Reports produced through `adeda2ccc` therefore
+must not be used as evidence of real connection termination.
+
+The corrected fixture casts the PID to `integer`, requires the termination call
+to return true, forces another operation on that transaction, and independently
+requires the PID to be absent from `pg_stat_activity`. It then checks rollback of
+both alert rows and cursor, concurrent recovery, and recipient changes. A SQL
+type error or a false termination result now fails certification. Refreshed reports
+include `backendAbsentFromActivity` alongside the termination acknowledgment.
+
+## Failed security email recovery
+
+Diagnostics distinguishes pending emails from terminal failures. Exhausted `FAILED`
+notifications, failed notifications with expired/missing payloads, and `SKIPPED`
+notifications stop the authentication worker's automatic polling. A retryable
+`FAILED` notification remains pending while the central queue has attempts and a
+live payload. `UNKNOWN` outcomes remain with central reconciliation; they are not
+automatically resent. Inspect Notification History for provider-specific details.
+
+After correcting the provider, open **System → SSO / Authentication → Diagnostics**.
+The failed-delivery list shows the 20 most recent records. Choose **Retry email**
+and confirm the new attempt. Fresh administrator or independent recovery authority
+is required. The operation checks recipient eligibility, rejects stale/concurrent
+requests and commits a mandatory audit event. It rebuilds a new payload from the
+retained security intent under a new idempotency key, so an expired old payload
+does not block recovery. Repeated clicks cannot create multiple retry generations.
+An explicit retry may duplicate a message whose earlier delivery was uncertain.
+Cancelled recipients cannot be retried. Failed metadata joins delivered/cancelled
+metadata in the bounded 90-day retention policy; export delivery metadata before
+that window if needed. Security audit and in-app evidence retain their own policies.
+
+Local tests cover terminal failure reconciliation, retryable/unknown state
+preservation, fresh-authority enforcement, concurrent retry rejection, new delivery
+keys, real central enqueue with rebuilt encrypted payloads and deduplication,
+simulated delivery acknowledgment, and the confirmation UI. They do not claim
+real SMTP/vendor acceptance; those checks remain external acceptance work.

@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { escapeHtml, sanitizeUrl } from '@/lib/email-components';
+import { lockControlActor, type ControlActor } from './actor';
 import { authenticationOrigin } from './origin';
 
 export const AUTHENTICATION_ALERT_BATCH_SIZE = 100;
@@ -144,6 +145,7 @@ export async function processAuthenticationAlerts() {
     where: {
       deliveredAt: null,
       cancelledAt: null,
+      failedAt: null,
       nextAttemptAt: { lte: new Date() },
       OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
     },
@@ -157,6 +159,7 @@ export async function processAuthenticationAlerts() {
         id: alert.id,
         deliveredAt: null,
         cancelledAt: null,
+        failedAt: null,
         nextAttemptAt: { lte: new Date() },
         OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
       },
@@ -164,6 +167,7 @@ export async function processAuthenticationAlerts() {
     });
     if (claim.count !== 1) continue;
     let delivered = false;
+    let failed = false;
     try {
       const recipient = await prisma.user.findUnique({
         where: { id: alert.recipientId },
@@ -195,7 +199,10 @@ export async function processAuthenticationAlerts() {
           templateKey: 'authentication-security-alert',
           sourceType: 'AUTHENTICATION',
           sourceId: alert.eventId,
-          eventKey: alert.id,
+          eventKey:
+            alert.deliveryGeneration === 0
+              ? alert.id
+              : `${alert.id}:retry:${alert.deliveryGeneration}`,
           displayMessage: alert.message,
           priority: 0,
           trafficClass: 'CRITICAL',
@@ -211,9 +218,22 @@ export async function processAuthenticationAlerts() {
       );
       const notification = await prisma.notification.findUnique({
         where: { id: result.id },
-        select: { status: true },
+        select: {
+          status: true,
+          attempts: true,
+          maxAttempts: true,
+          payloadEncrypted: true,
+          expiresAt: true,
+        },
       });
       delivered = notification?.status === 'SENT' || notification?.status === 'DELIVERED';
+      failed =
+        !notification ||
+        notification.status === 'SKIPPED' ||
+        (notification.status === 'FAILED' &&
+          (notification.attempts >= notification.maxAttempts ||
+            !notification.payloadEncrypted ||
+            Boolean(notification.expiresAt && notification.expiresAt.getTime() <= Date.now())));
     } catch {
       /* Preserve the durable intent and retry; never log provider secrets. */
     }
@@ -221,6 +241,7 @@ export async function processAuthenticationAlerts() {
       where: { id: alert.id, leaseToken },
       data: {
         deliveredAt: delivered ? new Date() : null,
+        failedAt: failed ? new Date() : null,
         leaseUntil: null,
         leaseToken: null,
         nextAttemptAt: new Date(
@@ -228,8 +249,53 @@ export async function processAuthenticationAlerts() {
         ),
         lastError: delivered
           ? null
-          : 'Email delivery pending or unavailable. In-app security alert is retained.',
+          : failed
+            ? 'Email delivery stopped. Review the provider and retry explicitly; delivery may be uncertain.'
+            : 'Email delivery pending or unavailable. In-app security alert is retained.',
       },
     });
   }
+}
+
+/** Explicit, fenced retry creates a new delivery key; expired payloads are rebuilt from the intent. */
+export async function retryAuthenticationAlert(
+  actor: ControlActor,
+  alertId: string,
+  expectedGeneration: number
+) {
+  await prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor);
+    await tx.$queryRaw`SELECT "id" FROM "AuthenticationAlert" WHERE "id" = ${alertId} FOR UPDATE`;
+    const alert = await tx.authenticationAlert.findUniqueOrThrow({ where: { id: alertId } });
+    if (
+      !alert.failedAt ||
+      alert.deliveredAt ||
+      alert.cancelledAt ||
+      alert.deliveryGeneration !== expectedGeneration
+    )
+      throw new Error('Delivery state changed. Refresh diagnostics.');
+    const recipient = await tx.user.findUnique({
+      where: { id: alert.recipientId },
+      select: { role: true, status: true },
+    });
+    if (recipient?.role !== 'ADMIN' || recipient.status !== 'ACTIVE')
+      throw new Error('Recipient is no longer an active administrator.');
+    await tx.authenticationAlert.update({
+      where: { id: alert.id },
+      data: {
+        failedAt: null,
+        deliveryGeneration: { increment: 1 },
+        attempts: 0,
+        nextAttemptAt: new Date(),
+        leaseToken: null,
+        leaseUntil: null,
+        lastError: null,
+      },
+    });
+    await securityEvent(tx, 'auth.alert.delivery.retry', actor.id, {
+      alertId,
+      eventId: alert.eventId,
+      generation: expectedGeneration + 1,
+    });
+  });
 }

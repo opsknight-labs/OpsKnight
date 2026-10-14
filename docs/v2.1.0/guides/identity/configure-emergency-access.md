@@ -151,3 +151,9 @@ It limits all emergency actions, including verification; maintain a separately
 protected custodian network path for same-NAT abuse and distributed saturation.
 Do not exempt requests merely because an unvalidated cookie/header is present.
 Ordinary login and OIDC callback paths are outside this example's limit.
+
+Security emails that exhaust central retries or are skipped stop automatic polling
+and appear under **Diagnostics → Failed security email deliveries**. Correct the
+provider before using the explicit retry action. This requires fresh authority
+and preserves an audit event. Pending transport retries remain automatic; cancelled
+recipient deliveries remain terminal. In-app security evidence is independent.
