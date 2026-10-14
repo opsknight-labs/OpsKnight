@@ -876,3 +876,10 @@ dependency. The optimized production build and seven HTTPS browser cases passed 
 intentional hardware skips). Strict TypeScript, modified-file lint and the relevant
 SARIF scan were clean. Migration validation reports zero errors; its 40 legacy warnings
 remain visible. No historical migration file was edited.
+
+The broad L2 workflow also invoked the five database-name-guarded SSO certification
+suites against opsknight_test. Their required enterprise_sso_test database guards stay
+intact. L2 now routes those exact suites to the existing mandatory Enterprise SSO
+workflow, which applies all migrations and executes all 112 cases on their own database.
+The general L2 job retains every other integration suite. This separates destructive
+failure-injection/certification fixtures without dropping coverage or relaxing guards.
