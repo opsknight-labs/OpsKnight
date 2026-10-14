@@ -504,7 +504,7 @@ export default function LoginClient({
           </form>
         )}
 
-        <p className="text-center text-sm">
+        <p className="text-center text-sm pt-4">
           <Link href="/login/emergency" className="underline">
             Emergency Access
           </Link>
