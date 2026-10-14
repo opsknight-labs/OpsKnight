@@ -31,9 +31,9 @@ const write = {
       key: 'restart',
       name: 'Restart',
       type: 'SYSTEMD',
-      riskClass: 'IDEMPOTENT_WRITE',
+      riskClass: 'NON_IDEMPOTENT',
       requiresApproval: true,
-      config: { action: 'restart', unit: '{{inputs.unit}}' },
+      config: { action: 'restart', unit: 'test.service' },
     },
   ],
 };

@@ -3,13 +3,26 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
-const EMAIL = `runbook-ui-${Date.now()}@example.invalid`;
+let EMAIL = '';
+
 const PASSWORD = 'Runbook-ui-test-harbor-472!';
 let runbookId = '';
 let serviceId = '';
 let incidentId = '';
 test.describe.configure({ mode: 'serial' });
 test.beforeEach(async ({ page }) => {
+  EMAIL = `runbook-ui-${crypto.randomUUID()}@example.invalid`;
+  await prisma.user.upsert({
+    where: { email: EMAIL },
+    update: { role: 'ADMIN', status: 'ACTIVE', passwordHash: await bcrypt.hash(PASSWORD, 12) },
+    create: {
+      email: EMAIL,
+      name: 'Runbook UI Fixture',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      passwordHash: await bcrypt.hash(PASSWORD, 12),
+    },
+  });
   page.on('dialog', dialog => dialog.accept());
   // Incident alerts from earlier matrix fixtures can cover top-right controls.
   await page.addLocatorHandler(
@@ -24,17 +37,6 @@ test.beforeAll(async () => {
     !['/runbook_ui_test', '/rbe_engine_test'].includes(new URL(process.env.DATABASE_URL!).pathname)
   )
     throw new Error('Dedicated test database required');
-  await prisma.user.upsert({
-    where: { email: EMAIL },
-    update: { role: 'ADMIN', status: 'ACTIVE', passwordHash: await bcrypt.hash(PASSWORD, 12) },
-    create: {
-      email: EMAIL,
-      name: 'Runbook UI Fixture',
-      role: 'ADMIN',
-      status: 'ACTIVE',
-      passwordHash: await bcrypt.hash(PASSWORD, 12),
-    },
-  });
   const service = await prisma.service.upsert({
     where: { name: 'Runbook UI Fixture Service' },
     update: {},
@@ -584,9 +586,9 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
             key: 'restart',
             name: 'Restart',
             type: 'SYSTEMD',
-            riskClass: 'IDEMPOTENT_WRITE',
+            riskClass: 'NON_IDEMPOTENT',
             requiresApproval: true,
-            config: { action: 'restart', unit: '{{inputs.unit}}' },
+            config: { action: 'restart', unit: 'test.service' },
           },
         ],
       },
