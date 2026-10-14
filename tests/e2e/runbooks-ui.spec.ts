@@ -228,7 +228,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .poll(async () => prisma.runbookAgentPool.count({ where: { name: poolName } }))
     .toBe(1);
   await page.keyboard.press('Escape');
-  const poolCard = page.locator('.bg-card').filter({ hasText: poolName });
+  const poolCard = page.locator('.bg-card').filter({ visible: true }).filter({ hasText: poolName });
   await poolCard.getByRole('button', { name: 'Manage pool' }).click();
   await page.getByRole('combobox', { name: 'Agent to add' }).click();
   await page.getByPlaceholder('Search agent to add…').fill(agentName);
@@ -255,7 +255,10 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const secret = await prisma.runbookSecret.findUniqueOrThrow({ where: { name: secretName } });
   expect(secret.valueEncrypted).not.toContain('ui-credential-initial');
   await page.keyboard.press('Escape');
-  const secretCard = page.locator('.bg-card').filter({ hasText: secretName });
+  const secretCard = page
+    .locator('.bg-card')
+    .filter({ visible: true })
+    .filter({ hasText: secretName });
   await expect(secretCard.getByLabel('Secret value hidden')).toBeVisible();
   await secretCard.getByRole('button', { name: 'Manage grants / Rotate' }).click();
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
@@ -358,7 +361,7 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   ).toBeVisible();
   await page.goto(`/services/${serviceId}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
-  await page.getByLabel('Workflow search', { exact: true }).fill(name);
+  await page.getByRole('textbox', { name: 'Workflow search', exact: true }).fill(name);
   await page.getByLabel('Agent / pool search', { exact: true }).fill(agent.name);
   await Promise.all([
     page.waitForURL(url => url.searchParams.get('ruleCatalog') === name),
@@ -388,11 +391,13 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.keyboard.press('Escape');
   await page
     .locator('.bg-card')
+    .filter({ visible: true })
     .filter({ has: page.getByRole('link', { name, exact: true }) })
     .getByText('Manage rule', { exact: true })
     .click();
   await page
     .locator('.bg-card')
+    .filter({ visible: true })
     .filter({ has: page.getByRole('link', { name, exact: true }) })
     .getByRole('button', { name: 'Configure', exact: true })
     .click();
@@ -619,7 +624,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   });
   await page.goto(`/services/${serviceId}?tab=runbooks`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
-  await page.getByLabel('Workflow search', { exact: true }).fill(workflow.name);
+  await page.getByRole('textbox', { name: 'Workflow search', exact: true }).fill(workflow.name);
   await Promise.all([
     page.waitForURL(url => url.searchParams.get('ruleCatalog') === workflow.name),
     page.getByRole('button', { name: 'Search options', exact: true }).click(),
@@ -657,8 +662,11 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
   const card = page
     .locator('.bg-card')
+    .filter({ visible: true })
     .filter({ has: page.getByRole('link', { name: ruleName, exact: true }) });
-  await expect(card.getByText('Rule paused', { exact: false })).toBeVisible();
+  await expect(
+    card.getByText('Rule paused · Target checks not run.', { exact: true })
+  ).toBeVisible();
   await card.getByText('Manage rule', { exact: true }).click();
   await card.getByRole('button', { name: 'Duplicate paused rule', exact: true }).click();
   await expect
@@ -1212,7 +1220,101 @@ test('service-scoped USER access never serializes the global Runbook library', a
   expect(await configuration.text()).not.toContain(marker);
   await page.goto(`/services/${service.id}?tab=runbooks`);
   await expect(
-    page.getByText('Runbook access requires additional permission.', { exact: true })
+    page
+      .getByRole('tabpanel', { name: /^Runbooks/ })
+      .getByText('Runbook access requires additional permission.', { exact: true })
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create rule', exact: true })).not.toBeVisible();
+});
+
+test('editing an active Automatic rule warns, pauses it and leads to reactivation evidence', async ({
+  page,
+}) => {
+  const service = await prisma.service.create({
+    data: { name: `Automatic UX ${crypto.randomUUID()}` },
+  });
+  const workflow = await prisma.runbook.create({
+    data: { name: 'Automatic UX workflow', slug: crypto.randomUUID() },
+  });
+  const version = await prisma.runbookVersion.create({
+    data: {
+      runbookId: workflow.id,
+      version: 1,
+      state: 'PUBLISHED',
+      checksum: 'd'.repeat(64),
+      definition: {
+        steps: [
+          {
+            key: 'diagnose',
+            name: 'Diagnose',
+            type: 'LINUX_DIAGNOSTICS',
+            riskClass: 'READ_ONLY',
+            config: { diagnostic: 'summary' },
+          },
+        ],
+      },
+    },
+  });
+  await prisma.runbook.update({
+    where: { id: workflow.id },
+    data: { publishedVersionId: version.id },
+  });
+  const agent = await prisma.runbookAgent.create({
+    data: {
+      name: `Automatic UX Agent ${crypto.randomUUID()}`,
+      status: 'ONLINE',
+      lastHeartbeatAt: new Date(),
+      capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+    },
+  });
+  const rule = await prisma.serviceAutomationRule.create({
+    data: {
+      serviceId: service.id,
+      runbookId: workflow.id,
+      runbookVersionId: version.id,
+      versionStrategy: 'PINNED',
+      mode: 'AUTOMATIC',
+      defaultAgentId: agent.id,
+      enabled: true,
+      triggers: { create: { event: 'INCIDENT_CREATED', enabled: true } },
+    },
+  });
+  await login(page);
+  await page.goto(`/services/${service.id}`);
+  await page.getByRole('tab', { name: /^Runbooks/ }).click();
+  await page.getByText('Manage rule', { exact: true }).click();
+  await page.getByRole('button', { name: 'Configure', exact: true }).click();
+  await expect(
+    page.getByText(
+      'Saving configuration or trigger conditions pauses this Automatic rule immediately.',
+      { exact: false }
+    )
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Add selector label', exact: true }).click();
+  await page.getByLabel('Label 1 key', { exact: true }).fill('region');
+  await page.getByLabel('Label 1 value', { exact: true }).fill('{{incident.labels.region}}');
+  await expect(
+    page.getByText('This target is unsupported in Automatic mode.', { exact: false })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Save and pause Automatic rule', exact: true })
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'Remove label 1', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Save and pause Automatic rule', exact: true })
+  ).toBeEnabled();
+  await page.getByRole('button', { name: 'Save and pause Automatic rule', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } })).enabled
+    )
+    .toBe(false);
+  await page
+    .getByRole('link', { name: 'Recheck policy and reactivate from Rule evidence' })
+    .click();
+  await expect(page).toHaveURL(
+    `http://127.0.0.1:3205/services/${service.id}/automations/${rule.id}`
+  );
+  await expect(page.getByRole('heading', { name: 'Activate Automatic rule' })).toBeVisible();
 });

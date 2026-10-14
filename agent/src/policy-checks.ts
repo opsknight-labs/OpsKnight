@@ -1,3 +1,4 @@
+import { hasUnverifiablePolicyInput } from './policy-inputs';
 import { verifyExecutionEnvelope } from './envelope';
 import { assertPolicyAllows } from './policy';
 import type { AgentPolicy, ClaimedAttempt } from './types';
@@ -22,7 +23,7 @@ export function evaluatePolicyCheck(
   if (check.kind !== 'POLICY_CHECK' || !Array.isArray(check.steps) || check.steps.length > 200)
     throw new Error('Invalid policy-check envelope.');
   return check.steps.map(step => {
-    if (JSON.stringify(step.config).includes('[REDACTED]'))
+    if (hasUnverifiablePolicyInput(step))
       return { key: step.key, allowed: null, reason: 'REDACTED_INPUT' as const };
     try {
       assertPolicyAllows(

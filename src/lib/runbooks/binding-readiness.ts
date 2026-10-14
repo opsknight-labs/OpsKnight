@@ -83,6 +83,15 @@ export async function getBindingReadiness(
         !Array.isArray(binding.agentSelector)
           ? Object.entries(binding.agentSelector)
           : [];
+      if (binding.mode === 'AUTOMATIC' && rawSelector.length && !binding.defaultAgentId) {
+        checks.push({
+          code: 'AUTOMATIC_DYNAMIC_TARGET_UNSUPPORTED',
+          state: 'blocked',
+          message:
+            'Automatic rules require a specific Agent or a fixed pool without a label selector. Use Suggested mode for dynamic targets.',
+        });
+        return result('BLOCKED');
+      }
       if (
         rawSelector.some(
           ([, value]) => typeof value === 'string' && value.includes('incident.labels.')

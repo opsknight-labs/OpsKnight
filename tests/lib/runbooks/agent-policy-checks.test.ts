@@ -120,3 +120,29 @@ it('reports redacted command fields as indeterminate, even if a placeholder matc
     )
   ).toEqual([{ key: 'write', allowed: null, reason: 'REDACTED_INPUT' }]);
 });
+
+it('certifies a static Bash command while secret environment metadata stays redacted', () => {
+  const { signature: _signature, ...body } = envelope();
+  const command = 'test -n "$OPSKNIGHT_INPUT_TOKEN"';
+  body.steps = [{ ...body.steps[1], config: { command, env: { TOKEN: '[REDACTED]' } } }];
+  const signed = {
+    ...body,
+    signature: sign(null, Buffer.from(canonicalEnvelope(body)), keys.privateKey).toString('base64'),
+  };
+  const policy = {
+    allowedStepTypes: ['BASH' as const],
+    allowNonIdempotent: true,
+    systemdUnits: [],
+    dockerContainers: [],
+    kubernetesNamespaces: [],
+    bashCommandPatterns: [command],
+    maxRuntimeSeconds: 30,
+    maxOutputBytes: 1024,
+  };
+  expect(evaluatePolicyCheck(signed, policy, pin, 'agent')).toEqual([
+    { key: 'write', allowed: true },
+  ]);
+  expect(
+    evaluatePolicyCheck(signed, { ...policy, bashCommandPatterns: ['echo safe'] }, pin, 'agent')
+  ).toEqual([{ key: 'write', allowed: false }]);
+});

@@ -33,6 +33,7 @@ import {
 } from '@/components/runbooks/RunbookControls';
 import RunbookTargetSelect from '@/components/runbooks/RunbookTargetSelect';
 import RunbookSelectorBuilder from '@/components/runbooks/RunbookSelectorBuilder';
+import AutomaticTargetGuard from '@/components/runbooks/AutomaticTargetGuard';
 import RuleWizard from '@/components/runbooks/RuleWizard';
 import {
   checkRulePolicyAction,
@@ -444,6 +445,7 @@ export default function ServiceRunbooks({
                                 </p>
                               )}
                               <RunbookSelectorBuilder />
+                              <AutomaticTargetGuard />
 
                               {(activeAttachVersion?.inputs?.length ?? 0) > 0 && (
                                 <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
@@ -798,6 +800,22 @@ export default function ServiceRunbooks({
                             </Button>
                           }
                         >
+                          {binding.mode === 'AUTOMATIC' && (
+                            <div
+                              role="note"
+                              className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+                            >
+                              Saving configuration or trigger conditions pauses this Automatic rule
+                              immediately.{' '}
+                              <Link
+                                className="underline"
+                                href={`/services/${serviceId}/automations/${binding.id}`}
+                              >
+                                Recheck policy and reactivate from Rule evidence
+                              </Link>{' '}
+                              after every save. Suggestions and execution history are retained.
+                            </div>
+                          )}
                           <ActionForm
                             action={updateRunbookBindingAction.bind(null, serviceId, binding.id)}
                             className="grid gap-3 lg:grid-cols-4"
@@ -839,6 +857,7 @@ export default function ServiceRunbooks({
                               }}
                             />
                             <RunbookSelectorBuilder initialValue={binding.agentSelector} />
+                            <AutomaticTargetGuard />
                             <Field label="Rule name">
                               <Input
                                 name="ruleName"
@@ -859,7 +878,10 @@ export default function ServiceRunbooks({
                             </Field>
                             <div className="order-2 flex gap-2 lg:col-span-4">
                               <SubmitButton variant="outline">
-                                <Settings2 className="mr-1.5 h-3.5 w-3.5" /> Save binding
+                                <Settings2 className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                {binding.mode === 'AUTOMATIC'
+                                  ? 'Save and pause Automatic rule'
+                                  : 'Save binding'}
                               </SubmitButton>
                             </div>
                           </ActionForm>
@@ -894,7 +916,9 @@ export default function ServiceRunbooks({
                             </Field>
                             <div className="flex items-end">
                               <SubmitButton variant="outline" pendingLabel="Saving trigger…">
-                                Save trigger
+                                {binding.mode === 'AUTOMATIC'
+                                  ? 'Save trigger and pause Automatic rule'
+                                  : 'Save trigger'}
                               </SubmitButton>
                             </div>
                             <div className="space-y-3 lg:col-span-3">

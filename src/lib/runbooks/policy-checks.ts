@@ -1,4 +1,5 @@
 import 'server-only';
+import { hasUnverifiablePolicyInput } from '../../../agent/src/policy-inputs';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
@@ -173,11 +174,9 @@ export async function submitPolicyCheck(agentId: string, raw: unknown) {
       !expected.every(key => input.results.some(result => result.key === key))
     )
       throw new Error('Policy result must address every frozen step exactly once.');
-    const frozen = check.steps as unknown as Array<{ key: string; config: unknown }>;
+    const frozen = check.steps as unknown as Array<{ key: string; type?: string; config: unknown }>;
     const results = input.results.map(result =>
-      frozen.some(
-        step => step.key === result.key && JSON.stringify(step.config).includes('[REDACTED]')
-      )
+      frozen.some(step => step.key === result.key && hasUnverifiablePolicyInput(step))
         ? { key: result.key, allowed: null, reason: 'REDACTED_INPUT' as const }
         : result
     );

@@ -350,6 +350,7 @@ export async function replaceBindingTrigger(
 ) {
   const input = createRunbookTriggerSchema.parse(raw);
   return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${bindingId} AND "serviceId" = ${serviceId} FOR UPDATE`;
     const binding = await tx.serviceAutomationRule.findFirst({
       where: { id: bindingId, serviceId },
     });
@@ -360,25 +361,40 @@ export async function replaceBindingTrigger(
         where: { id: binding.id },
         data: { enabled: false },
       });
-    await tx.runbookTrigger.deleteMany({ where: { bindingId, event: input.event } });
-    const trigger = await tx.runbookTrigger.create({
-      data: {
-        bindingId,
-        event: input.event,
-        conditionLogic: input.conditionLogic,
-        enabled: input.enabled,
-        createdById: actorId,
-        conditions: {
-          create: input.conditions.map(condition => ({
-            field: condition.field,
-            operator: condition.operator,
-            value: (condition.value ?? null) as Prisma.InputJsonValue,
-            sequence: condition.sequence,
-          })),
-        },
-      },
+    const previous = await tx.runbookTrigger.findFirst({
+      where: { bindingId, event: input.event },
+      orderBy: { createdAt: 'asc' },
       include: { conditions: { orderBy: { sequence: 'asc' } } },
     });
+    const conditions = input.conditions.map(condition => ({
+      field: condition.field,
+      operator: condition.operator,
+      value: (condition.value ?? null) as Prisma.InputJsonValue,
+      sequence: condition.sequence,
+    }));
+    // Keep suggestion/execution foreign keys intact. Old condition sets remain in the audit.
+    const trigger = previous
+      ? await tx.runbookTrigger.update({
+          where: { id: previous.id },
+          data: {
+            revision: { increment: 1 },
+            conditionLogic: input.conditionLogic,
+            enabled: input.enabled,
+            conditions: { deleteMany: {}, create: conditions },
+          },
+          include: { conditions: { orderBy: { sequence: 'asc' } } },
+        })
+      : await tx.runbookTrigger.create({
+          data: {
+            bindingId,
+            event: input.event,
+            conditionLogic: input.conditionLogic,
+            enabled: input.enabled,
+            createdById: actorId,
+            conditions: { create: conditions },
+          },
+          include: { conditions: { orderBy: { sequence: 'asc' } } },
+        });
     await logAudit(
       {
         action: 'runbook.trigger.configured',
@@ -389,6 +405,32 @@ export async function replaceBindingTrigger(
           bindingId,
           serviceId: binding.serviceId,
           event: trigger.event,
+          triggerId: trigger.id,
+          revision: trigger.revision,
+          before: previous
+            ? {
+                revision: previous.revision,
+                conditionLogic: previous.conditionLogic,
+                enabled: previous.enabled,
+                conditions: previous.conditions.map(({ field, operator, value, sequence }) => ({
+                  field,
+                  operator,
+                  value,
+                  sequence,
+                })),
+              }
+            : null,
+          after: {
+            revision: trigger.revision,
+            conditionLogic: trigger.conditionLogic,
+            enabled: trigger.enabled,
+            conditions: trigger.conditions.map(({ field, operator, value, sequence }) => ({
+              field,
+              operator,
+              value,
+              sequence,
+            })),
+          },
           conditionCount: trigger.conditions.length,
         },
       },
@@ -502,6 +544,14 @@ export async function activateServiceRule(
     if (triggers.some(trigger => trigger.conditions.length === 0) && !confirmMatchAll)
       throw new RunbookDefinitionError(
         'Explicitly confirm that this rule may match every new incident for this service.'
+      );
+    const selector = Object.entries((rule.agentSelector ?? {}) as Record<string, unknown>);
+    if (
+      selector.some(([, value]) => String(value).includes('incident.labels.')) ||
+      (selector.length && !rule.defaultAgentId)
+    )
+      throw new RunbookDefinitionError(
+        'Automatic rules require a specific Agent or a fixed pool without a label selector. Use Suggested mode for incident-dependent or dynamic targets.'
       );
     const { getBindingReadiness } = await import('./binding-readiness');
     const readiness = await getBindingReadiness({ ...rule, enabled: true }, new Date(), tx);

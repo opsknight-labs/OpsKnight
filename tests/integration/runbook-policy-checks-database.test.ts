@@ -115,57 +115,72 @@ suite('Agent local policy-check authority', () => {
       )
     ).toBe(false);
   });
-  it('retains indeterminate secret fields even when an older Agent reports acceptance', async () => {
-    const actor = await createTestUser();
-    const service = await createTestService('Deferred policy');
-    const workflow = await testPrisma.runbook.create({
-      data: { name: 'Deferred', slug: crypto.randomUUID() },
-    });
-    const version = await testPrisma.runbookVersion.create({
-      data: {
-        runbookId: workflow.id,
-        version: 1,
-        state: 'PUBLISHED',
-        checksum: 'c'.repeat(64),
-        definition: {
-          steps: [
-            {
-              key: 'command',
-              name: 'Command',
-              type: 'BASH',
-              riskClass: 'NON_IDEMPOTENT',
-              config: { command: 'echo [REDACTED]' },
-            },
-          ],
+  it.each([
+    { type: undefined, config: { command: 'echo [REDACTED]' }, status: 'DEFERRED' },
+    { type: 'BASH', config: { command: 'echo [REDACTED]' }, status: 'DEFERRED' },
+    {
+      type: 'BASH',
+      config: { command: 'test -n "$OPSKNIGHT_INPUT_TOKEN"', env: { TOKEN: '[REDACTED]' } },
+      status: 'PASSED',
+    },
+  ])(
+    'retains secret uncertainty only in executable policy fields ($status)',
+    async ({ type, config, status }) => {
+      const actor = await createTestUser();
+      const service = await createTestService('Deferred policy');
+      const workflow = await testPrisma.runbook.create({
+        data: { name: 'Deferred', slug: crypto.randomUUID() },
+      });
+      const version = await testPrisma.runbookVersion.create({
+        data: {
+          runbookId: workflow.id,
+          version: 1,
+          state: 'PUBLISHED',
+          checksum: 'c'.repeat(64),
+          definition: {
+            steps: [
+              {
+                key: 'command',
+                name: 'Command',
+                type: 'BASH',
+                riskClass: 'NON_IDEMPOTENT',
+                config: { command: 'echo [REDACTED]' },
+              },
+            ],
+          },
         },
-      },
-    });
-    const agent = await testPrisma.runbookAgent.create({ data: { name: 'Deferred Agent' } });
-    const rule = await testPrisma.serviceAutomationRule.create({
-      data: { serviceId: service.id, runbookId: workflow.id },
-    });
-    const check = await testPrisma.runbookPolicyCheck.create({
-      data: {
-        id: crypto.randomUUID(),
-        ruleId: rule.id,
-        agentId: agent.id,
-        versionId: version.id,
-        checksum: version.checksum,
-        steps: [{ key: 'command', config: { command: 'echo [REDACTED]' } }],
-        expiresAt: new Date(Date.now() + 60000),
-        createdById: actor.id,
-      },
-    });
-    await submitPolicyCheck(agent.id, {
-      id: check.id,
-      policyHash: 'b'.repeat(64),
-      results: [{ key: 'command', allowed: true }],
-    });
-    const saved = await testPrisma.runbookPolicyCheck.findUniqueOrThrow({
-      where: { id: check.id },
-    });
-    expect(saved.status).toBe('DEFERRED');
-    expect(saved.results).toEqual([{ key: 'command', allowed: null, reason: 'REDACTED_INPUT' }]);
-    expect(await testPrisma.runbookExecution.count()).toBe(0);
-  });
+      });
+      const agent = await testPrisma.runbookAgent.create({ data: { name: 'Deferred Agent' } });
+      const rule = await testPrisma.serviceAutomationRule.create({
+        data: { serviceId: service.id, runbookId: workflow.id },
+      });
+      const check = await testPrisma.runbookPolicyCheck.create({
+        data: {
+          id: crypto.randomUUID(),
+          ruleId: rule.id,
+          agentId: agent.id,
+          versionId: version.id,
+          checksum: version.checksum,
+          steps: [{ key: 'command', ...(type ? { type } : {}), config }],
+          expiresAt: new Date(Date.now() + 60000),
+          createdById: actor.id,
+        },
+      });
+      await submitPolicyCheck(agent.id, {
+        id: check.id,
+        policyHash: 'b'.repeat(64),
+        results: [{ key: 'command', allowed: true }],
+      });
+      const saved = await testPrisma.runbookPolicyCheck.findUniqueOrThrow({
+        where: { id: check.id },
+      });
+      expect(saved.status).toBe(status);
+      expect(saved.results).toEqual(
+        status === 'DEFERRED'
+          ? [{ key: 'command', allowed: null, reason: 'REDACTED_INPUT' }]
+          : [{ key: 'command', allowed: true }]
+      );
+      expect(await testPrisma.runbookExecution.count()).toBe(0);
+    }
+  );
 });

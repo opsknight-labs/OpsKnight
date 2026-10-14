@@ -21,6 +21,7 @@ export type DetailTabsProps = {
   activeTab?: string;
   onTabChange?: (tabId: string) => void;
   syncWithUrl?: boolean;
+  navigationMode?: 'shallow' | 'server';
   urlParamName?: string;
   layout?: 'grid' | 'auto';
   className?: string;
@@ -36,6 +37,7 @@ export default function DetailTabs({
   activeTab: controlledActiveTab,
   onTabChange,
   syncWithUrl = true,
+  navigationMode = 'shallow',
   urlParamName = 'tab',
   layout = 'grid',
   className,
@@ -119,7 +121,8 @@ export default function DetailTabs({
         const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
 
         // Use window.history.replaceState for instant URL bar update without triggering blocking RSC re-fetch
-        window.history.replaceState(null, '', newUrl);
+        if (navigationMode === 'server') router.replace(newUrl, { scroll: false });
+        else window.history.replaceState(null, '', newUrl);
       }
     }
   };

@@ -3560,6 +3560,7 @@ model ServiceAutomationRule {
 }
 
 model RunbookTrigger {
+  revision       Int                   @default(1)
   id             String                @id @default(cuid())
   bindingId      String
   event          RunbookTriggerEvent

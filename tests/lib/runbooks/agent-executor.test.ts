@@ -87,6 +87,21 @@ describe('runbook Agent executor', () => {
     expect(result.output).toBe('payments|3');
   });
 
+  it('receives a secret as environment data without inserting it into shell source', async () => {
+    const command = 'test -n "$OPSKNIGHT_INPUT_TOKEN" && printf ready';
+    const request = {
+      ...attempt(command, { token: 'literal; $(exit 99) `exit 99`' }),
+      secretInputKeys: ['token'],
+    };
+    const result = await executeAttempt(
+      request,
+      { ...policy, bashCommandPatterns: [command] },
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ status: 'SUCCEEDED', exitCode: 0, output: 'ready' });
+    expect(request.step.config.command).toBe(command);
+  });
+
   it('bounds captured output and marks truncation', async () => {
     const result = await executeAttempt(
       attempt("printf '0123456789'"),

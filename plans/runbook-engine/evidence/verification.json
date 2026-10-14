@@ -4,8 +4,71 @@
   "scope": "Runbook remediation candidate. Suites overlap; counts must not be summed as unique tests.",
   "checks": {
     "productionBuild": "PASS: local licensed fonts; no Google Fonts build dependency",
-    "typecheck": "PASS: npx tsc --noEmit --incremental false",
+    "typecheck": "PASS: npx tsc --noEmit",
     "modifiedFileLint": "PASS: ESLint, zero warnings for configured modified files",
+    "browser": {
+      "status": "PASS",
+      "tests": 33,
+      "browsers": ["Chromium", "Firefox", "WebKit"],
+      "productionServer": true,
+      "scope": "Complete publish/attach/trigger/approval/cancellation, old pinned versions, pagination/scale, capability isolation, Automatic edit/pause/reactivation guidance and dynamic-target UI guard"
+    },
+    "docsLint": "PASS",
+    "deploymentTemplates": "PASS: both Helm charts, deployment layout, workflow parsing and change classification",
+    "realCompose": "live-compose.json",
+    "realKind": "live-kind.json",
+    "simulatedClaims": "scale-simulation.json",
+    "reviewDatabaseRegressions": {
+      "status": "PASS",
+      "tests": 8,
+      "contracts": [
+        "Exact pinned version and input schema; publication drift rejected under lock",
+        "Bounded visible-page readiness at 100/1000/10000 rules and 1000 Agents",
+        "1000-execution concurrent recovery deduplication and leader election",
+        "Separate Automatic activation, match-all confirmation and fresh local policy evidence",
+        "Two certified dynamic-selector Agents remain explicitly unsupported for Automatic activation",
+        "Three schedulers with one database connection each reconcile through the held-lock transaction",
+        "Pending/started suggestions, completed executions and before/after trigger condition revisions survive edits"
+      ]
+    },
+    "rulePageReadModel": "rule-page-scale.json",
+    "nativeCI": {
+      "status": "PASS",
+      "run": 38560019070,
+      "candidate": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
+      "scope": "Linux x64 CI systemd fixture enrollment, initial readiness, key rotation, upgrade/rollback; not official public release certification"
+    },
+    "rulePageBrowserRendering": [
+      "rule-render-chromium.json",
+      "rule-render-firefox.json",
+      "rule-render-webkit.json"
+    ],
+    "unitComponentRegression": {
+      "status": "PASS",
+      "files": 42,
+      "tests": 327,
+      "scope": "All Runbook library unit tests, selected-version configuration authorization, service rules, version inputs, wizard and selector components"
+    },
+    "database": {
+      "status": "PASS",
+      "files": 4,
+      "tests": 36,
+      "database": "isolated rbe_engine_test",
+      "scope": "Review regressions, Agent policy checks, binding readiness and workflow lifecycle"
+    },
+    "focusedAgentContracts": {
+      "status": "PASS",
+      "files": 4,
+      "tests": 20,
+      "scope": "Executor, policy checks, startup recovery and watchdog; overlaps the unit suite"
+    }
+  },
+  "qualification": "qualification.json",
+  "baselineCandidateRevision": "21700dc4d15625a4d6e7ff5021a649eaa273e649",
+  "reviewFixCandidateRevision": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
+  "remoteCI": "Use PR #864 checks for exact-head results; checked-in local evidence does not assert mutable GitHub CI status.",
+  "historicalFullSuite": {
+    "candidateRevision": "c0b428591f373453d56b316f1c97d75d4fb96030",
     "unitComponentRegression": {
       "status": "PASS",
       "files": 760,
@@ -24,44 +87,7 @@
       "status": "PASS",
       "tests": 20
     },
-    "browser": {
-      "status": "PASS",
-      "tests": 27,
-      "browsers": ["Chromium", "Firefox", "WebKit"],
-      "productionServer": true,
-      "scope": "Includes exact older pinned inputs, >100-version comparison and 100/1000/10000-rule visible rendering"
-    },
-    "docsLint": "PASS",
-    "deploymentTemplates": "PASS: both Helm charts, deployment layout, workflow parsing and change classification",
-    "realCompose": "live-compose.json",
-    "realKind": "live-kind.json",
-    "simulatedClaims": "scale-simulation.json",
-    "reviewDatabaseRegressions": {
-      "status": "PASS",
-      "tests": 5,
-      "contracts": [
-        "Exact pinned version/input schema",
-        "Publication drift rejected under lock",
-        "100/1000/10000-rule visible-page query budget",
-        "1000-execution concurrent recovery job deduplication",
-        "Three-session watchdog leader election"
-      ]
-    },
-    "rulePageReadModel": "rule-page-scale.json",
-    "nativeCI": {
-      "status": "PASS",
-      "run": 38560019070,
-      "candidate": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
-      "scope": "Linux x64 CI systemd fixture enrollment, initial readiness, key rotation, upgrade/rollback; not official public release certification"
-    },
-    "rulePageBrowserRendering": [
-      "rule-render-chromium.json",
-      "rule-render-firefox.json",
-      "rule-render-webkit.json"
-    ]
+    "scope": "Previous candidate results retained as historical evidence; not claims about this correction pass."
   },
-  "qualification": "qualification.json",
-  "baselineCandidateRevision": "21700dc4d15625a4d6e7ff5021a649eaa273e649",
-  "reviewFixCandidateRevision": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
-  "remoteCI": "Pending for review-fix candidate; checked-in local results are not a claim that all GitHub checks have passed."
+  "correctionPassBaseRevision": "62a36d1d51024680657e93b68bd79c499f9f3673"
 }

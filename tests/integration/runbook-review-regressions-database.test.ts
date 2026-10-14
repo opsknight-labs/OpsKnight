@@ -1,7 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { testPrisma, resetDatabase, createTestService, createTestUser } from '../helpers/test-db';
+import {
+  testPrisma,
+  resetDatabase,
+  createTestService,
+  createTestUser,
+  createTestIncident,
+} from '../helpers/test-db';
 import { attachRunbookAction } from '@/app/(app)/services/[id]/runbook-actions';
 import {
   activateServiceRule,
@@ -147,6 +153,92 @@ suite('PR 864 review regression contracts', () => {
       )
     ).rejects.toThrow('published version changed');
     expect(await testPrisma.serviceAutomationRule.count()).toBe(0);
+  });
+  it('preserves pending and accepted suggestions, completed executions and audited condition revisions', async () => {
+    const { service, workflow, old } = await fixture();
+    const rule = await testPrisma.serviceAutomationRule.create({
+      data: {
+        serviceId: service.id,
+        runbookId: workflow.id,
+        runbookVersionId: old.id,
+        versionStrategy: 'PINNED',
+        mode: 'SUGGESTED',
+        inputValues: { legacy: 'test' },
+      },
+    });
+    const incident = await createTestIncident('Keep response history', service.id);
+    const first = await replaceBindingTrigger(
+      service.id,
+      rule.id,
+      {
+        event: 'INCIDENT_CREATED',
+        enabled: true,
+        conditionLogic: 'AND',
+        conditions: [{ field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH', sequence: 0 }],
+      },
+      actor.id
+    );
+    const suggestions = await Promise.all(
+      (['SUGGESTED', 'STARTED'] as const).map(state =>
+        testPrisma.runbookSuggestion.create({
+          data: {
+            incidentId: incident.id,
+            bindingId: rule.id,
+            runbookVersionId: old.id,
+            triggerId: first.id,
+            sourceEventId: crypto.randomUUID(),
+            fingerprint: crypto.randomUUID(),
+            state,
+            planSnapshot: { definitionChecksum: old.checksum, inputValues: { legacy: 'frozen' } },
+          },
+        })
+      )
+    );
+    const execution = await testPrisma.runbookExecution.create({
+      data: {
+        runbookId: workflow.id,
+        runbookVersionId: old.id,
+        serviceId: service.id,
+        bindingId: rule.id,
+        triggerId: first.id,
+        triggerFingerprint: 'original-evidence',
+        definitionChecksum: old.checksum,
+        status: 'SUCCEEDED',
+        completedAt: new Date(),
+        deadlineAt: new Date(Date.now() + 60000),
+      },
+    });
+    const second = await replaceBindingTrigger(
+      service.id,
+      rule.id,
+      {
+        event: 'INCIDENT_CREATED',
+        enabled: true,
+        conditionLogic: 'OR',
+        conditions: [{ field: 'incident.urgency', operator: 'EQUALS', value: 'LOW', sequence: 0 }],
+      },
+      actor.id
+    );
+    expect(second).toMatchObject({ id: first.id, revision: 2, conditionLogic: 'OR' });
+    expect(await testPrisma.runbookTrigger.count({ where: { bindingId: rule.id } })).toBe(1);
+    expect(await testPrisma.runbookSuggestion.findMany()).toEqual(
+      expect.arrayContaining(suggestions)
+    );
+    expect(await testPrisma.runbookSuggestion.count()).toBe(2);
+    expect(await testPrisma.runbookExecution.findUnique({ where: { id: execution.id } })).toEqual(
+      execution
+    );
+    const audit = await testPrisma.auditLog.findMany({
+      where: { action: 'runbook.trigger.configured' },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(audit).toHaveLength(2);
+    expect((audit[1].details as { metadata: unknown }).metadata).toMatchObject({
+      triggerId: first.id,
+      revision: 2,
+      before: { revision: 1, conditions: [{ field: 'incident.urgency', value: 'HIGH' }] },
+      after: { revision: 2, conditions: [{ field: 'incident.urgency', value: 'LOW' }] },
+    });
   });
   it('bounds visible rule queries and readiness at 100/1000/10000 rules with a 1000-Agent inventory', async () => {
     const { service, workflow, old } = await fixture();
@@ -317,6 +409,60 @@ suite('second audit activation and minimum-pool contracts', () => {
       id: check.id,
       policyHash: 'f'.repeat(64),
       results: [{ key: 'diagnose', allowed: true }],
+    });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: rule.id },
+      data: {
+        defaultAgentId: null,
+        agentSelector: { region: 'production' },
+      },
+    });
+    await testPrisma.runbookAgent.update({
+      where: { id: agent.id },
+      data: { labels: { region: 'production' } },
+    });
+    const secondAgent = await testPrisma.runbookAgent.create({
+      data: {
+        name: 'Second certified selector Agent',
+        status: 'ONLINE',
+        lastHeartbeatAt: new Date(),
+        labels: { region: 'production' },
+        capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+        policyHash: 'f'.repeat(64),
+      },
+    });
+    await requestRulePolicyChecks(service.id, rule.id, user.id);
+    for (const candidate of [agent, secondAgent]) {
+      const [pending] = await pendingAgentPolicyChecks(candidate.id);
+      expect(pending).toBeDefined();
+      await submitPolicyCheck(candidate.id, {
+        id: pending.id,
+        policyHash: 'f'.repeat(64),
+        results: [{ key: 'diagnose', allowed: true }],
+      });
+    }
+    expect(
+      await testPrisma.runbookPolicyCheck.count({ where: { ruleId: rule.id, status: 'PASSED' } })
+    ).toBe(3);
+    await expect(activateServiceRule(service.id, rule.id, user.id, true)).rejects.toThrow(
+      'Use Suggested mode'
+    );
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: rule.id },
+      data: {
+        defaultAgentId: agent.id,
+        agentSelector: { region: '{{incident.labels.region}}' },
+      },
+    });
+    await expect(activateServiceRule(service.id, rule.id, user.id, true)).rejects.toThrow(
+      'Use Suggested mode'
+    );
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: rule.id },
+      data: {
+        defaultAgentId: agent.id,
+        agentSelector: {},
+      },
     });
     await activateServiceRule(service.id, rule.id, user.id, true);
     expect(

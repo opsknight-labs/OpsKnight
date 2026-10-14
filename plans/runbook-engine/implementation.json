@@ -93,7 +93,8 @@
     "liveModes": "PASS: Manual inactive, Suggested no execution, Automatic real signed read-only execution, negative conditions, duplicate event fence",
     "runtimeStartupRecoveryTests": 20,
     "qualificationReport": "evidence/qualification.json",
-    "unitFiles": 760
+    "unitFiles": 760,
+    "scope": "Historical full-suite baseline at c0b42859; see latestReviewCorrection and evidence/verification.json for current local checks."
   },
   "reviewRemediation": [
     "Exact selected pinned version, schema/risk/target and publication drift fence",
@@ -105,5 +106,18 @@
     "Compact rule cards with secondary management controls",
     "Native health readiness wait and immediate post-heartbeat health",
     "Isolated browser actors and locally bundled licensed fonts"
-  ]
+  ],
+  "latestReviewCorrection": {
+    "baseRevision": "62a36d1d51024680657e93b68bd79c499f9f3673",
+    "localVerification": "evidence/verification.json",
+    "changes": [
+      "Single server-navigation path for service tabs; no shallow-history race",
+      "Capability-gated metadata catalog and on-demand selected-version configuration",
+      "Identity-preserving trigger edits with monotonic condition revisions and audited snapshots",
+      "Explicit Automatic pause warning, dynamic-target restriction and guided reactivation",
+      "Static Bash policy certification distinguishes redacted metadata from executable uncertainty",
+      "Authenticated-contact readiness expiration and same-connection recovery watchdog"
+    ],
+    "qualification": "Existing production/platform gates remain separately assessed in evidence/qualification.json"
+  }
 }
