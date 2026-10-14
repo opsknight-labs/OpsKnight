@@ -101,39 +101,66 @@ export async function enforceV2RateLimit(
 export const LEGACY_AUTH_ADMISSION_LIMIT = 10;
 export const LEGACY_AUTH_ADMISSION_WINDOW_MS = 60_000;
 
-export const GENERAL_PRE_AUTH_ADMISSION_LIMIT = 60;
-export const GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS = 60_000;
+export const FAILED_AUTH_ADMISSION_LIMIT = 60;
+export const FAILED_AUTH_ADMISSION_WINDOW_MS = 60_000;
+
+/** Backwards compatibility alias */
+export const GENERAL_PRE_AUTH_ADMISSION_LIMIT = FAILED_AUTH_ADMISSION_LIMIT;
+export const GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS = FAILED_AUTH_ADMISSION_WINDOW_MS;
 
 /**
- * Pre-authentication IP-based admission limit for all unauthenticated token lookups.
- * Shields PostgreSQL from database query floods with arbitrary/random API keys
- * before the authenticated token rate limiter runs.
+ * Check whether a client IP is currently blocked due to exceeding failed authentication attempts.
+ * Legitimate requests with valid tokens are never blocked by this check.
+ * Fallback / unidentified addresses ('0.0.0.0', 'unknown') are NEVER throttled in a shared bucket
+ * to prevent denial of service for unrelated self-hosted clients without proxy headers.
  */
-export async function checkPreAuthAdmission(clientIp: string): Promise<boolean> {
-  const sanitizedIp = clientIp.trim() || 'unknown';
-  const now = Date.now();
-  const windowStart = Math.floor(now / GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS);
-  const memKey = `v2:preauth-db-ip:${sanitizedIp}:${windowStart}`;
-
-  // 1. In-memory fast shield (protects PostgreSQL connection pool from query exhaustion)
-  const currentCount = rateLimitMemoryCache.get(memKey) ?? 0;
-  if (currentCount >= GENERAL_PRE_AUTH_ADMISSION_LIMIT) {
-    return false;
+export async function isFailedAuthAdmissionBlocked(clientIp: string): Promise<boolean> {
+  const sanitizedIp = clientIp.trim();
+  if (!sanitizedIp || sanitizedIp === '0.0.0.0' || sanitizedIp === 'unknown') {
+    return false; // Never block unidentified or fallback 0.0.0.0
   }
-  rateLimitMemoryCache.set(memKey, currentCount + 1, GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS);
 
-  // 2. Distributed coordination across replicas via PostgreSQL RateLimit
-  try {
-    const dbKey = `api:v2:preauth:${sanitizedIp}`;
-    const pgResult = await checkRateLimit(
-      dbKey,
-      GENERAL_PRE_AUTH_ADMISSION_LIMIT,
-      GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS
-    );
-    return pgResult.allowed;
-  } catch {
-    // If DB check fails, rely on in-memory decision
+  const now = Date.now();
+  const windowStart = Math.floor(now / FAILED_AUTH_ADMISSION_WINDOW_MS);
+  const memKey = `v2:failed-auth-ip:${sanitizedIp}:${windowStart}`;
+
+  // Check in-memory fast shield
+  const currentCount = rateLimitMemoryCache.get(memKey) ?? 0;
+  if (currentCount >= FAILED_AUTH_ADMISSION_LIMIT) {
     return true;
+  }
+
+  return false;
+}
+
+/**
+ * Record a failed authentication attempt (invalid/nonexistent token) against a client IP.
+ * Only failed attempts consume this abuse quota, separating abuse defense from legitimate traffic.
+ * Fallback / unidentified addresses ('0.0.0.0', 'unknown') are ignored to prevent shared pool exhaustion.
+ */
+export async function recordFailedAuthAttempt(clientIp: string): Promise<void> {
+  const sanitizedIp = clientIp.trim();
+  if (!sanitizedIp || sanitizedIp === '0.0.0.0' || sanitizedIp === 'unknown') {
+    return; // Do not penalize shared 0.0.0.0 pool
+  }
+
+  const now = Date.now();
+  const windowStart = Math.floor(now / FAILED_AUTH_ADMISSION_WINDOW_MS);
+  const memKey = `v2:failed-auth-ip:${sanitizedIp}:${windowStart}`;
+
+  const currentCount = rateLimitMemoryCache.get(memKey) ?? 0;
+  rateLimitMemoryCache.set(memKey, currentCount + 1, FAILED_AUTH_ADMISSION_WINDOW_MS);
+
+  // Distributed coordination across replicas via PostgreSQL RateLimit
+  try {
+    const dbKey = `api:v2:failed-auth:${sanitizedIp}`;
+    await checkRateLimit(
+      dbKey,
+      FAILED_AUTH_ADMISSION_LIMIT,
+      FAILED_AUTH_ADMISSION_WINDOW_MS
+    );
+  } catch {
+    // Rely on in-memory decision
   }
 }
 
@@ -141,9 +168,14 @@ export async function checkPreAuthAdmission(clientIp: string): Promise<boolean> 
  * Pre-authentication IP-based admission limit for legacy token verification.
  * Shields the Node.js event loop and CPU from expensive scrypt operations
  * when an attacker floods invalid 1.x-shaped tokens before API key rate limiting runs.
+ * Fallback / unidentified addresses ('0.0.0.0', 'unknown') are NEVER throttled in a shared bucket.
  */
 export async function checkLegacyTokenAdmission(clientIp: string): Promise<boolean> {
-  const sanitizedIp = clientIp.trim() || 'unknown';
+  const sanitizedIp = clientIp.trim();
+  if (!sanitizedIp || sanitizedIp === '0.0.0.0' || sanitizedIp === 'unknown') {
+    return true; // Never throttle unidentified or fallback 0.0.0.0
+  }
+
   const now = Date.now();
   const windowStart = Math.floor(now / LEGACY_AUTH_ADMISSION_WINDOW_MS);
   const memKey = `v2:legacy-scrypt-ip:${sanitizedIp}:${windowStart}`;
@@ -168,4 +200,11 @@ export async function checkLegacyTokenAdmission(clientIp: string): Promise<boole
     // If DB check fails, rely on in-memory decision
     return true;
   }
+}
+
+/**
+ * Backwards-compatibility wrapper for admission checks.
+ */
+export async function checkPreAuthAdmission(clientIp: string): Promise<boolean> {
+  return !(await isFailedAuthAdmissionBlocked(clientIp));
 }

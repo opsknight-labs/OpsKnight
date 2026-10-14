@@ -6,7 +6,11 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { getClientIp } from '@/lib/client-ip';
 import { authCache } from './cache';
-import { checkLegacyTokenAdmission, checkPreAuthAdmission } from './rate-limit';
+import {
+  checkLegacyTokenAdmission,
+  isFailedAuthAdmissionBlocked,
+  recordFailedAuthAttempt,
+} from './rate-limit';
 
 export { hashTokenV2 } from '@/lib/api-keys';
 
@@ -52,14 +56,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
 
   const v2Hash = hashTokenV2(token);
 
-  // 1. Positive memory cache (0 DB queries on repeated valid calls)
-  const positiveCacheKey = `v2:valid-token:${v2Hash}`;
-  const cachedContext = authCache.get(positiveCacheKey) as V2AuthContext | undefined;
-  if (cachedContext) {
-    return cachedContext;
-  }
-
-  // 2. Negative memory cache (0 DB queries on repeated invalid calls)
+  // 1. Negative memory cache (0 DB queries on repeated invalid calls)
   const negativeCacheKey = `v2:invalid-token:${v2Hash}`;
   if (authCache.get(negativeCacheKey)) {
     throw new AppError({
@@ -68,10 +65,10 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
     });
   }
 
-  // 3. Pre-authentication admission limit: shield PostgreSQL from floods of arbitrary/random API keys
+  // 2. IP abuse check: only blocks IPs that have accumulated excessive failed attempts
   const clientIp = getClientIp(req);
-  const preAuthAdmitted = await checkPreAuthAdmission(clientIp);
-  if (!preAuthAdmitted) {
+  const isBlocked = await isFailedAuthAdmissionBlocked(clientIp);
+  if (isBlocked) {
     throw new AppError({
       code: 'RATE_LIMIT_EXCEEDED',
       userMessage: 'Too many unauthenticated token verification attempts from this IP address. Please wait before retrying.',
@@ -146,6 +143,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
 
   if (!apiKeyRecord || !apiKeyRecord.user) {
     authCache.set(negativeCacheKey, true, 30_000);
+    await recordFailedAuthAttempt(clientIp);
     throw new AppError({
       code: 'API_KEY_INVALID',
       userMessage: 'The provided API key or service account token is invalid, expired, or revoked.',
@@ -155,6 +153,8 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   const user = apiKeyRecord.user;
   const actor = authorizationActorFromUser(user);
   if (!actor) {
+    authCache.set(negativeCacheKey, true, 30_000);
+    await recordFailedAuthAttempt(clientIp);
     throw new AppError({
       code: 'API_KEY_USER_INVALID',
       userMessage: 'The user or service account associated with this token is not active.',
@@ -186,9 +186,6 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
     actor: fullActor,
   };
 
-  // Cache valid auth context for 60 seconds to protect DB on high-throughput authenticated traffic
-  authCache.set(positiveCacheKey, authContext, 60_000);
-
   // Debounced lastUsedAt update (at most once every 5 minutes in background)
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000);
   if (!apiKeyRecord.lastUsedAt || apiKeyRecord.lastUsedAt < fiveMinutesAgo) {
@@ -205,7 +202,6 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
 
 export function invalidateV2AuthCache(tokenHash?: string): void {
   if (tokenHash) {
-    authCache.delete(`v2:valid-token:${tokenHash}`);
     authCache.delete(`v2:invalid-token:${tokenHash}`);
     authCache.delete(tokenHash);
   } else {

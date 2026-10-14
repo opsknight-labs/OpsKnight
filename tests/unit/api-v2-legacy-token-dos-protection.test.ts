@@ -143,11 +143,11 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
       })
     );
   });
-  it('serves valid token requests from positive cache on subsequent calls without touching database', async () => {
+  it('authoritatively checks valid token directly and immediately enforces revocation across all replicas with zero cache lag', async () => {
     const validToken = 'ok_live_validkey000111222333444555666777';
     const v2Hash = hashTokenV2(validToken);
 
-    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue({
+    const validRecord = {
       id: 'key_valid_1',
       name: 'Production Ingest Key',
       prefix: validToken.slice(0, 12),
@@ -164,7 +164,9 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
         email: 'admin@opsknight.local',
         teamMemberships: [],
       },
-    } as any);
+    };
+
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValueOnce(validRecord as any);
 
     const req1 = new NextRequest('http://localhost:3000/api/v2/incidents', {
       headers: {
@@ -177,7 +179,9 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
     expect(ctx1.apiKey.id).toBe('key_valid_1');
     expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(1);
 
-    // Second request with same valid token: served from positive cache, 0 additional DB lookups
+    // Simulating token revocation on another replica (DB now returns null for active filter)
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValueOnce(null);
+
     const req2 = new NextRequest('http://localhost:3000/api/v2/incidents', {
       headers: {
         authorization: `Bearer ${validToken}`,
@@ -185,12 +189,14 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
       },
     });
 
-    const ctx2 = await authenticateV2Request(req2);
-    expect(ctx2.apiKey.id).toBe('key_valid_1');
-    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(1);
+    // Zero cache lag: revoked token is immediately rejected across replicas
+    await expect(authenticateV2Request(req2)).rejects.toThrow(
+      'The provided API key or service account token is invalid'
+    );
+    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(2);
   });
 
-  it('throttles invalid modern-format API key floods at general pre-auth admission limit (60) before querying database', async () => {
+  it('throttles invalid modern-format API key floods at failed auth limit (60) before querying database', async () => {
     vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
 
     const clientIp = '198.51.100.77';
@@ -212,7 +218,7 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
 
     expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(60);
 
-    // 61st request from same IP must be rejected by pre-auth admission limit WITHOUT querying database
+    // 61st invalid request from same IP must be rejected by failed-auth admission limit WITHOUT querying database
     const token61 = `ok_live_randomtoken_61_${'z'.repeat(20)}`;
     const req61 = new NextRequest('http://localhost:3000/api/v2/incidents', {
       headers: {
@@ -228,5 +234,27 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
 
     // DB was NOT touched for 61st request
     expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(60);
+  });
+
+  it('does not group unidentifiable 0.0.0.0 clients into a shared restrictive rate-limit bucket', async () => {
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+
+    // Direct deployments without reverse proxies where client IP falls back to 0.0.0.0
+    // Must never exhaust a shared 60-request quota across unrelated clients
+    for (let i = 0; i < 65; i++) {
+      const token = `ok_live_directclient_${i}_${'y'.repeat(20)}`;
+      const req = new NextRequest('http://localhost:3000/api/v2/incidents', {
+        headers: {
+          authorization: `Bearer ${token}`,
+          // No forwarded headers, untrusted direct fallback
+        },
+      });
+
+      // Receives 401 invalid token, NEVER 429 rate limit exceeded
+      await expect(authenticateV2Request(req)).rejects.toMatchObject({
+        code: 'API_KEY_INVALID',
+        status: 401,
+      });
+    }
   });
 });
