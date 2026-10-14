@@ -157,3 +157,22 @@ and appear under **Diagnostics → Failed security email deliveries**. Correct t
 provider before using the explicit retry action. This requires fresh authority
 and preserves an audit event. Pending transport retries remain automatic; cancelled
 recipient deliveries remain terminal. In-app security evidence is independent.
+
+## Authorization at queued email dispatch
+
+Authentication-security email is checked both when enqueued and immediately before
+calling each provider, including fallback providers. A recipient must still be an
+active administrator and the queued address must match the user's current email.
+Demotion, deactivation, deletion or an address change suppresses queued delivery as
+`SKIPPED`; the authentication intent subsequently records terminal failure for
+explicit review. Unavailable authorization reads defer delivery without sending.
+Mail already accepted by a provider cannot be recalled.
+
+Diagnostics reports **Fan-out jobs pending** separately from **Materialized emails
+pending**. A job may represent many recipients; neither figure is presented as a
+combined recipient backlog. Completed, failed and cancelled counts cover retained
+records. Delivery history supports all five states, loads 25 records per page and
+uses **Load more deliveries** for older entries. Retry confirmation stays open when
+the server rejects the operation, with its error shown in the console. A successful
+retry closes confirmation and refreshes history. Retention remains 90 days for
+terminal delivery metadata; audit/in-app evidence follows its separate policy.

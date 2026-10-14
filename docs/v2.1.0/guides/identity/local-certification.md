@@ -198,7 +198,7 @@ provider/link ownership rules; absence is not an explicit rejection.
 
 Removed or inactive administrators' email intents receive a terminal cancellation
 timestamp. Restoring administrator access does not restart those old intents.
-The pending-delivery dashboard excludes cancelled intents. The scheduled cleanup
+The diagnostics page separates fan-out jobs, materialized pending emails, failed, completed and cancelled deliveries. The scheduled cleanup
 retains delivered, cancelled and failed metadata for 90 days from the terminal timestamp,
 then removes up to 1,000 of each per pass. Pending delivery and fan-out work, security
 events, audit rows and in-app alerts are unaffected by this cleanup. Existing
@@ -240,7 +240,7 @@ live payload. `UNKNOWN` outcomes remain with central reconciliation; they are no
 automatically resent. Inspect Notification History for provider-specific details.
 
 After correcting the provider, open **System → SSO / Authentication → Diagnostics**.
-The failed-delivery list shows the 20 most recent records. Choose **Retry email**
+The delivery history loads 25 records per page and supports status filtering. Choose **Retry email**
 and confirm the new attempt. Fresh administrator or independent recovery authority
 is required. The operation checks recipient eligibility, rejects stale/concurrent
 requests and commits a mandatory audit event. It rebuilds a new payload from the
@@ -256,3 +256,22 @@ preservation, fresh-authority enforcement, concurrent retry rejection, new deliv
 keys, real central enqueue with rebuilt encrypted payloads and deduplication,
 simulated delivery acknowledgment, and the confirmation UI. They do not claim
 real SMTP/vendor acceptance; those checks remain external acceptance work.
+
+## Authorization at queued email dispatch
+
+Authentication-security email is checked both when enqueued and immediately before
+calling each provider, including fallback providers. A recipient must still be an
+active administrator and the queued address must match the user's current email.
+Demotion, deactivation, deletion or an address change suppresses queued delivery as
+`SKIPPED`; the authentication intent subsequently records terminal failure for
+explicit review. Unavailable authorization reads defer delivery without sending.
+Mail already accepted by a provider cannot be recalled.
+
+Diagnostics reports **Fan-out jobs pending** separately from **Materialized emails
+pending**. A job may represent many recipients; neither figure is presented as a
+combined recipient backlog. Completed, failed and cancelled counts cover retained
+records. Delivery history supports all five states, loads 25 records per page and
+uses **Load more deliveries** for older entries. Retry confirmation stays open when
+the server rejects the operation, with its error shown in the console. A successful
+retry closes confirmation and refreshes history. Retention remains 90 days for
+terminal delivery metadata; audit/in-app evidence follows its separate policy.

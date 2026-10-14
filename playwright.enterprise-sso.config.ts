@@ -11,6 +11,8 @@ export default defineConfig({
   use: {
     headless: true,
     trace: 'off',
+    // Auth network fixtures must reach Playwright interception rather than a service worker.
+    serviceWorkers: 'block',
     // Self-signed TLS is permitted only for this explicitly selected local fixture.
     ignoreHTTPSErrors:
       process.env.SSO_E2E_ALLOW_SELF_SIGNED === '1' &&

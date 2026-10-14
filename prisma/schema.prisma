@@ -3982,6 +3982,7 @@ model AuthenticationAlert {
   lastError          String?
 
   @@unique([eventId, recipientId])
+  @@index([createdAt, id])
   @@index([deliveredAt, cancelledAt, failedAt, nextAttemptAt])
   @@index([cancelledAt])
   @@index([failedAt])

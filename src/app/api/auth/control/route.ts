@@ -7,6 +7,8 @@ import { revokeAuthenticationSession } from '@/lib/auth-control/sessions';
 import { getControlActor } from '@/lib/auth-control/actor';
 import {
   authenticationDashboard,
+  authenticationAlertHistory,
+  authenticationAlertHistoryStatus,
   identityClaimsPreview,
   searchAuthenticationUsers,
 } from '@/lib/auth-control/dashboard';
@@ -137,9 +139,10 @@ export async function GET(request: NextRequest) {
         section: z
           .enum(['overview', 'connection', 'access', 'policy', 'emergency', 'diagnostics'])
           .default('overview'),
-        view: z.enum(['dashboard', 'admins', 'users']).default('dashboard'),
+        view: z.enum(['dashboard', 'admins', 'users', 'alerts']).default('dashboard'),
         q: z.string().max(100).default(''),
-        after: z.string().max(128).optional(),
+        after: z.string().max(512).optional(),
+        status: authenticationAlertHistoryStatus.default('failed'),
       })
       .strict()
       .parse(Object.fromEntries(request.nextUrl.searchParams));
@@ -149,6 +152,8 @@ export async function GET(request: NextRequest) {
         .allowed
     )
       return jsonError('Too many authentication reads.', 429, undefined, headers);
+    if (params.view === 'alerts')
+      return json(await authenticationAlertHistory(params.status, params.after));
     if (params.view !== 'dashboard')
       return json(
         await searchAuthenticationUsers(actor, params.q, params.after, params.view === 'admins')

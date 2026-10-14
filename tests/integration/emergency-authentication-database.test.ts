@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
+import { authenticationAlertHistory, authenticationDashboard } from '@/lib/auth-control/dashboard';
 import { cleanAuthenticationAlerts } from '@/lib/auth-control/sessions';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
@@ -37,6 +38,15 @@ import {
   securityEvent,
 } from '@/lib/auth-control/security-events';
 
+const deliveryMocks = vi.hoisted(() => ({
+  sendEmail: vi
+    .fn()
+    .mockResolvedValue({ success: true, providerMessageId: 'isolated-provider-ack' }),
+}));
+vi.mock('@/lib/email', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/email')>()),
+  sendEmail: deliveryMocks.sendEmail,
+}));
 vi.mock('@/lib/notification-control-plane', () => ({
   enqueueCentralNotification: vi.fn().mockRejectedValue(new Error('delivery queue unavailable')),
 }));
@@ -1047,6 +1057,128 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       }
     }
   );
+  it.each(['active', 'demoted', 'disabled', 'deleted', 'address-changed'] as const)(
+    'revalidates %s recipients after real central enqueue and before provider dispatch',
+    async change => {
+      const actual = await vi.importActual<typeof import('@/lib/notification-control-plane')>(
+        '@/lib/notification-control-plane'
+      );
+      const recipient = await prisma.user.create({
+        data: {
+          email: `dispatch-${change}-${Date.now()}@example.test`,
+          name: 'Dispatch fixture',
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        },
+      });
+      const result = await actual.enqueueCentralNotification(
+        {
+          category: 'SECURITY',
+          channel: 'EMAIL',
+          recipientType: 'EMAIL',
+          recipientId: recipient.id,
+          userId: recipient.id,
+          recipientAddress: recipient.email,
+          templateKey: 'authentication-security-alert',
+          sourceType: 'AUTHENTICATION',
+          sourceId: `dispatch-${change}`,
+          eventKey: `dispatch-${change}`,
+          displayMessage: 'Private authentication event',
+          priority: 0,
+          trafficClass: 'CRITICAL',
+          payload: {
+            kind: 'EMAIL',
+            to: recipient.email,
+            subject: 'Private security fixture',
+            html: '<p>Private fixture</p>',
+          },
+        },
+        { dispatchImmediately: false }
+      );
+      try {
+        if (change === 'deleted') await prisma.user.delete({ where: { id: recipient.id } });
+        else if (change !== 'active')
+          await prisma.user.update({
+            where: { id: recipient.id },
+            data:
+              change === 'demoted'
+                ? { role: 'USER' }
+                : change === 'disabled'
+                  ? { status: 'DISABLED' }
+                  : { email: `new-${recipient.email}` },
+          });
+        deliveryMocks.sendEmail.mockClear();
+        const dispatch = await actual.deliverCentralNotification(result.id);
+        if (change === 'active') expect(dispatch).toMatchObject({ success: true });
+        const stored = await prisma.notification.findUniqueOrThrow({ where: { id: result.id } });
+        if (change === 'active') expect(stored.errorMsg).toBeNull();
+        expect(deliveryMocks.sendEmail).toHaveBeenCalledTimes(change === 'active' ? 1 : 0);
+        expect(stored.status).toBe(change === 'active' ? 'SENT' : 'SKIPPED');
+        expect(stored.payloadEncrypted).toBeNull();
+        if (change !== 'active')
+          expect(stored.errorMsg).toMatch(/no longer authorized|invalid recipient/);
+      } finally {
+        await prisma.notification.delete({ where: { id: result.id } });
+        await prisma.user.deleteMany({ where: { id: recipient.id } });
+      }
+    }
+  );
+  it('reports unfinished fan-out separately and pages retained email history without duplicates', async () => {
+    await prisma.authenticationAlert.deleteMany();
+    await prisma.authenticationAlertFanout.deleteMany();
+    const prefix = `history-${Date.now()}`;
+    const time = new Date(Date.now() - 1000);
+    await prisma.authenticationAlertFanout.create({
+      data: { eventId: prefix, title: 'Fixture', message: 'Fixture', cursor: actor.id },
+    });
+    await prisma.authenticationAlert.createMany({
+      data: Array.from({ length: 62 }, (_, index) => ({
+        id: `${prefix}-${String(index).padStart(3, '0')}`,
+        eventId: `${prefix}-${index}`,
+        recipientId: actor.id,
+        title: 'History fixture',
+        message: 'Fixture',
+        createdAt: time,
+        ...(index < 55
+          ? { failedAt: time }
+          : index < 58
+            ? { deliveredAt: time }
+            : index < 60
+              ? { cancelledAt: time }
+              : {}),
+      })),
+    });
+    try {
+      const summary = await authenticationDashboard(
+        { ...actor, authenticatedAt: Date.now() },
+        'diagnostics'
+      );
+      expect(summary.pendingEmailFanoutJobs).toBe(1);
+      expect(summary.pendingEmailAlerts).toBe(2);
+      expect(summary.failedEmailAlertCount).toBe(55);
+      expect(summary.deliveredEmailAlertCount).toBe(3);
+      expect(summary.cancelledEmailAlertCount).toBe(2);
+      const first = await authenticationAlertHistory('failed');
+      expect(first.alerts).toHaveLength(25);
+      const second = await authenticationAlertHistory('failed', first.nextCursor!);
+      const third = await authenticationAlertHistory('failed', second.nextCursor!);
+      expect(third.alerts).toHaveLength(5);
+      expect(third.nextCursor).toBeNull();
+      expect(
+        new Set([...first.alerts, ...second.alerts, ...third.alerts].map(row => row.id)).size
+      ).toBe(55);
+      for (const [status, count] of [
+        ['pending', 2],
+        ['delivered', 3],
+        ['cancelled', 2],
+      ] as const)
+        expect((await authenticationAlertHistory(status)).alerts).toHaveLength(count);
+      await expect(authenticationAlertHistory('all', 'invalid-cursor')).rejects.toThrow();
+    } finally {
+      await prisma.authenticationAlert.deleteMany({ where: { id: { startsWith: prefix } } });
+      await prisma.authenticationAlertFanout.delete({ where: { eventId: prefix } });
+    }
+  });
   it('rebuilds expired transport payloads through the real central enqueue and deduplication path', async () => {
     const actual = await vi.importActual<typeof import('@/lib/notification-control-plane')>(
       '@/lib/notification-control-plane'

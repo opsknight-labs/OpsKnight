@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-10-14T03:08:08.500Z",
+  "measuredAt": "2026-10-14T03:40:02.702Z",
   "scope": "Isolated PostgreSQL and signed local WebAuthn fixtures. No live IdP, physical keys or email provider.",
   "recoveryAvailability": {
     "distributedUnknownAccountFailures": 400,
@@ -8,26 +8,26 @@
     "saturatedAccountBudgetDidNotBlockCompletion": true,
     "authenticatedReauthenticationReserved": true,
     "verificationReserveBoundedToThreeAttempts": true,
-    "durationMs": 623.9644170000001
+    "durationMs": 627.2814170000001
   },
   "alertFanout": {
-    "activeAdministrators": 1201,
+    "activeAdministrators": 1203,
     "synchronousRecipients": 100,
-    "transactionMs": 24.950874999999996,
-    "finalRecipients": 1201,
+    "transactionMs": 20.248166999999967,
+    "finalRecipients": 1203,
     "duplicateInAppAlerts": 0,
     "concurrentWorkers": 2,
-    "totalDurationMs": 220.52695799999992
+    "totalDurationMs": 202.94441700000016
   },
   "throttledAbuse": {
-    "requests": 31080,
+    "requests": 32880,
     "concurrency": 30,
-    "sustainedLoadMs": 30012.996790999998,
+    "sustainedLoadMs": 30038.334457999998,
     "sources": 4,
-    "aggregateCount": 31080,
+    "aggregateCount": 32880,
     "durableEvents": 3,
     "durableAuditRows": 3,
-    "durationMs": 30117.016417
+    "durationMs": 30119.583041
   },
   "fanoutCrashRecovery": {
     "actualDatabaseConnectionTerminated": true,
@@ -35,7 +35,7 @@
     "uncommittedAlertsRolledBack": true,
     "cursorPreserved": true,
     "removedAndNewRecipientsExcluded": true,
-    "finalRecipients": 1400,
+    "finalRecipients": 1402,
     "concurrentWorkers": 2,
     "duplicateAlerts": 0
   },

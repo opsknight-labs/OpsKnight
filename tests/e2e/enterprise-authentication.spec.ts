@@ -241,6 +241,77 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         revision.configuration.clientId
       );
     }
+    if (process.env.SSO_E2E_DELIVERY_HISTORY === '1') {
+      let staleReads = 0;
+      // Simulate a stale read without changing the browser's native POST behavior.
+      await page.route('**/api/auth/control?*', async route => {
+        if (!new URL(route.request().url()).searchParams.has('status')) return route.continue();
+        const response = await route.fetch();
+        const body = await response.json();
+        if (body.data?.alerts) {
+          staleReads++;
+          body.data.alerts = body.data.alerts.map((alert: { deliveryGeneration: number }) => ({
+            ...alert,
+            deliveryGeneration: alert.deliveryGeneration + 1000,
+          }));
+        }
+        return route.fulfill({ response, json: body });
+      });
+
+      await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Security email delivery history' })
+      ).toBeVisible();
+      await expect(page.getByText('Fan-out jobs pending', { exact: true })).toBeVisible();
+      await expect(page.getByText('Materialized emails pending', { exact: true })).toBeVisible();
+      const history = page
+        .getByRole('heading', { name: 'Security email delivery history' })
+        .locator('..');
+      await expect(history.getByRole('button', { name: 'Load more deliveries' })).toBeVisible();
+      await history.getByRole('button', { name: 'Load more deliveries' }).click();
+      await expect(history.locator('li')).toHaveCount(30);
+      expect(staleReads).toBeGreaterThanOrEqual(2);
+      await history.getByRole('button', { name: 'Retry email' }).first().click();
+      const retryResponse = page.waitForResponse(
+        response =>
+          response.url().endsWith('/api/auth/control') && response.request().method() === 'POST'
+      );
+      await history.getByRole('button', { name: 'Confirm email retry' }).click();
+      expect(await (await retryResponse).json()).toMatchObject({
+        error: expect.stringContaining('Delivery state changed'),
+      });
+      await expect(
+        page.getByRole('alert').filter({ hasText: 'Delivery state changed' })
+      ).toBeVisible();
+      await expect(history.getByRole('button', { name: 'Confirm email retry' })).toBeEnabled();
+      await history.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.unroute('**/api/auth/control?*');
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        const closeNavigation = page.getByRole('button', {
+          name: 'Close navigation menu',
+          exact: true,
+        });
+        if (await closeNavigation.isVisible()) await closeNavigation.click();
+        if (width === 390)
+          await page.waitForFunction(
+            () =>
+              (document.querySelector('.sidebar-mobile')?.getBoundingClientRect().right ?? 0) <= 1
+          );
+        await page
+          .getByRole('heading', { name: 'Security email delivery history' })
+          .scrollIntoViewIfNeeded();
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+        ).toBe(true);
+        if (process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR)
+          await page.screenshot({
+            path: `${process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR}/diagnostics-${page.context().browser()?.browserType().name()}-${width}.png`,
+            fullPage: true,
+          });
+      }
+      await page.getByRole('tab', { name: 'Connection', exact: true }).click();
+    }
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });
       const closeNavigation = page.getByRole('button', {

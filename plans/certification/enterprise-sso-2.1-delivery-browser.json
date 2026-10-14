@@ -1,0 +1,30 @@
+{
+  "measuredAt": "2026-10-14T03:53:21.400527+00:00",
+  "scope": "Optimized local HTTPS web process, isolated PostgreSQL schema and dedicated database role; no scheduler, live IdP or outbound email provider.",
+  "passed": 4,
+  "skipped": 2,
+  "intentionalSkips": "Virtual hardware authenticator requires Chromium.",
+  "browsers": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "viewportWidths": [
+    1440,
+    390
+  ],
+  "historyPagination": true,
+  "realStaleGenerationRejected": true,
+  "failedConfirmationPreserved": true,
+  "virtualHardwareRecovery": true,
+  "serviceWorkers": "blocked for deterministic authentication network interception; PWA acceptance belongs to its separate suite",
+  "sourceFilesSha256": {
+    "src/lib/notification-control-plane.ts": "7d47ee5f8b569cfbecd51f39ef342bbb5005f94486cde7a7c1a6ba9525dcd494",
+    "src/lib/auth-control/dashboard.ts": "374c70c26cf8ec07e7f225ff997775ced112f8418515aa17e4b9175ac3588e8a",
+    "src/app/api/auth/control/route.ts": "bb2637d120d4b8a5151a1ba9ba7791c382235e198fc57a45eb9aa01b11e49233",
+    "src/components/settings/AuthenticationConsole.tsx": "f81eb08ff66649048ee64cac9c6c05ec3f1eef11dfe961107842c47888f1c292",
+    "src/components/settings/AuthenticationDiagnostics.tsx": "19440a73730bb8f6e640ad1fd4b213c75194a8caf36ab8db185554329e1485ad",
+    "tests/e2e/enterprise-authentication.spec.ts": "8695bcbf9b709a6c77090ee1e3b6e921b962c46179663a85c5494d542d588de7",
+    "playwright.enterprise-sso.config.ts": "48b7d0edd29910cfebf0f3751ee5908ed1228a08ea252337b6f7d7ee5af29847"
+  }
+}

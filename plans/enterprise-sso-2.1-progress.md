@@ -576,3 +576,49 @@ worker passes; only the final delivery acknowledgment is simulated.
 
 The optimized production build also passed. The dedicated hosted workflow includes
 the new diagnostics component regression and all signed-token/database cases.
+
+## Queued authorization and complete delivery diagnostics — 2026-10-14
+
+Input: `enterprise-sso-2.1-dispatch-authorization-audit.md`.
+
+- Central notification delivery rechecks active administrator authority and current
+  email address for authentication-security mail after enqueue and at the last
+  provider boundary, including failover. Invalid recipients are SKIPPED with payload
+  cleanup. Unavailable authorization reads defer without sending or consuming the
+  delivery retry budget. External mail already accepted cannot be recalled.
+- PostgreSQL tests use real central enqueue/dispatch for active, demoted, disabled,
+  deleted and changed-address recipients; the outbound provider is stubbed. Separate
+  tests change authority during admission and before fallback, and force a final
+  authorization-read failure. Ordinary notification categories retain their policy.
+- Diagnostics separates pending fan-out jobs from materialized pending email, failed,
+  completed and cancelled counts. Expensive delivery summaries run only in Diagnostics.
+  The history endpoint uses bounded keyset pages of 25 with a timestamp/id index;
+  tests cover tied timestamps across three pages and all status filters.
+- Mutation results now explicitly signal success or failure. Retry confirmation closes
+  only after success; component and full-console tests prove server rejection preserves
+  the confirmation. Paginated history aborts superseded requests on filter changes.
+- The browser suite exercises history pagination, a real stale-generation rejection,
+  retained confirmation, and desktop/mobile diagnostics layout when the isolated
+  delivery-history fixture is enabled.
+
+All 75 database authentication tests passed on a fresh migrated schema. Live IdP and
+physical-key checks remain pending per the user's instruction. This scoped outbound
+stub does not claim live-provider or production multi-node acceptance.
+
+Verification: full unit suite passed 5,762 tests across 757 files with four intentional
+skips; all 75 database tests passed. Modified-file lint has zero warnings and
+TypeScript/Prisma validation pass. Eight deployment/documentation contracts, Helm
+lint, default/split rendering, Kustomize rendering and runtime-capacity preflight
+pass. The optimized standalone production build passes. Long session identifiers
+now wrap on mobile; the browser suite closes the navigation drawer before capturing
+diagnostics and uses a stale read to exercise normal browser POST rejection.
+
+Production HTTPS browser verification passed four tests across Chromium, Firefox
+and WebKit, with two intentional non-Chromium virtual-authenticator skips. History
+pagination and server-side stale-generation rejection are exercised in every
+browser; confirmation remains open after rejection. The fixture verifies stale
+read interception and blocks service workers so network interception is deterministic.
+PWA acceptance is separate. Desktop/mobile screenshots were inspected; long session
+identifiers wrap and navigation is closed for diagnostics captures. The browser
+record includes source file hashes in `certification/enterprise-sso-2.1-delivery-browser.json`.
+Fixture web/proxy processes and their dedicated database role were cleaned up.

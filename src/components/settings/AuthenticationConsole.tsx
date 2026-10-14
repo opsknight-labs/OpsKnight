@@ -62,6 +62,23 @@ export async function authenticationRequest<T>(
   return data.data;
 }
 
+async function loadAuthenticationAlertHistory(
+  status: NonNullable<
+    Parameters<typeof import('@/lib/auth-control/dashboard').authenticationAlertHistory>[0]
+  >,
+  after?: string,
+  signal?: AbortSignal
+) {
+  const query = new URLSearchParams({ view: 'alerts', status });
+  if (after) query.set('after', after);
+  const response = await fetch(`/api/auth/control?${query}`, { cache: 'no-store', signal });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || 'Delivery history unavailable.');
+  return body.data as Awaited<
+    ReturnType<typeof import('@/lib/auth-control/dashboard').authenticationAlertHistory>
+  >;
+}
+
 export default function AuthenticationConsole({
   initialData,
   callbackUrl,
@@ -167,15 +184,17 @@ export default function AuthenticationConsole({
     return () => controller.abort();
   }, [activeTab, data.section]);
   const pending = busy || sectionLoading || !hydrated;
-  const perform = async (work: () => Promise<void>) => {
+  const perform = async (work: () => Promise<void>): Promise<boolean> => {
     setPending(true);
     setMessage('');
     setMessageError(false);
     try {
       await work();
+      return true;
     } catch (error) {
       setMessageError(true);
       setMessage(error instanceof Error ? error.message : 'Unable to complete operation.');
+      return false;
     } finally {
       setPending(false);
     }
@@ -1233,7 +1252,10 @@ export default function AuthenticationConsole({
             <AuthenticationDiagnostics
               data={data}
               pending={pending}
-              onRefresh={() => perform(refresh)}
+              onLoadHistory={loadAuthenticationAlertHistory}
+              onRefresh={async () => {
+                await perform(refresh);
+              }}
               onRetry={(alertId, expectedGeneration) =>
                 perform(async () => {
                   await authenticationRequest({
@@ -1245,12 +1267,12 @@ export default function AuthenticationConsole({
                   await refresh();
                 })
               }
-              onRevoke={sessionId =>
-                perform(async () => {
+              onRevoke={async sessionId => {
+                await perform(async () => {
                   await authenticationRequest({ action: 'revokeSession', sessionId });
                   await refresh();
-                })
-              }
+                });
+              }}
             />
           </DetailTabContent>
         )}

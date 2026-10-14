@@ -1,4 +1,5 @@
 import 'server-only';
+import { z } from 'zod';
 import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
@@ -34,7 +35,9 @@ export async function authenticationDashboard(
     ready,
     replicas,
     pendingAlerts,
-    failedAlerts,
+    fanoutJobs,
+    deliveredAlertCount,
+    cancelledAlertCount,
     failedAlertCount,
     sessions,
   ] = await Promise.all([
@@ -87,20 +90,23 @@ export async function authenticationDashboard(
           take: 100,
         })
       : Promise.resolve([]),
-    prisma.authenticationAlert.count({
-      where: { deliveredAt: null, cancelledAt: null, failedAt: null },
-    }),
     section === 'diagnostics'
-      ? prisma.authenticationAlert.findMany({
-          where: { failedAt: { not: null }, deliveredAt: null, cancelledAt: null },
-          orderBy: { failedAt: 'desc' },
-          take: 20,
-          select: { id: true, title: true, failedAt: true, deliveryGeneration: true },
+      ? prisma.authenticationAlert.count({
+          where: { deliveredAt: null, cancelledAt: null, failedAt: null },
         })
-      : Promise.resolve([]),
-    prisma.authenticationAlert.count({
-      where: { failedAt: { not: null }, deliveredAt: null, cancelledAt: null },
-    }),
+      : Promise.resolve(0),
+    section === 'diagnostics' ? prisma.authenticationAlertFanout.count() : Promise.resolve(0),
+    section === 'diagnostics'
+      ? prisma.authenticationAlert.count({ where: { deliveredAt: { not: null } } })
+      : Promise.resolve(0),
+    section === 'diagnostics'
+      ? prisma.authenticationAlert.count({ where: { cancelledAt: { not: null } } })
+      : Promise.resolve(0),
+    section === 'diagnostics'
+      ? prisma.authenticationAlert.count({
+          where: { failedAt: { not: null }, deliveredAt: null, cancelledAt: null },
+        })
+      : Promise.resolve(0),
     section === 'diagnostics'
       ? prisma.userDevice.findMany({
           where: { deviceId: { startsWith: 'session:' } },
@@ -230,10 +236,9 @@ export async function authenticationDashboard(
       lastSeenAt: replica.lastSeenAt.toISOString(),
     })),
     pendingEmailAlerts: pendingAlerts,
-    failedEmailAlerts: failedAlerts.map(alert => ({
-      ...alert,
-      failedAt: alert.failedAt!.toISOString(),
-    })),
+    pendingEmailFanoutJobs: fanoutJobs,
+    deliveredEmailAlertCount: deliveredAlertCount,
+    cancelledEmailAlertCount: cancelledAlertCount,
     failedEmailAlertCount: failedAlertCount,
   };
 }
@@ -350,6 +355,93 @@ export async function identityClaimsPreview(revisionId: string, claims: Record<s
     warning:
       role.ok && role.groupsOverage
         ? 'Entra group overage prevents mapped elevation. Resolve claims before rollout.'
+        : null,
+  };
+}
+
+export const authenticationAlertHistoryStatus = z.enum([
+  'all',
+  'pending',
+  'failed',
+  'delivered',
+  'cancelled',
+]);
+const alertCursorSchema = z
+  .object({ id: z.string().min(1).max(128), createdAt: z.string().datetime() })
+  .strict();
+
+/** Bounded keyset history includes terminal records and stable ordering for timestamp ties. */
+export async function authenticationAlertHistory(
+  status: z.infer<typeof authenticationAlertHistoryStatus> = 'failed',
+  after?: string
+) {
+  const cursor = after
+    ? alertCursorSchema.parse(JSON.parse(Buffer.from(after, 'base64url').toString('utf8')))
+    : null;
+  const state =
+    status === 'pending'
+      ? { deliveredAt: null, failedAt: null, cancelledAt: null }
+      : status === 'failed'
+        ? { failedAt: { not: null }, deliveredAt: null, cancelledAt: null }
+        : status === 'delivered'
+          ? { deliveredAt: { not: null } }
+          : status === 'cancelled'
+            ? { cancelledAt: { not: null } }
+            : {};
+  const rows = await prisma.authenticationAlert.findMany({
+    where: {
+      ...state,
+      ...(cursor
+        ? {
+            OR: [
+              { createdAt: { lt: new Date(cursor.createdAt) } },
+              { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 26,
+    select: {
+      id: true,
+      eventId: true,
+      recipientId: true,
+      title: true,
+      createdAt: true,
+      deliveredAt: true,
+      failedAt: true,
+      cancelledAt: true,
+      attempts: true,
+      lastError: true,
+      deliveryGeneration: true,
+    },
+  });
+  const page = rows.slice(0, 25);
+  const last = page[page.length - 1];
+  return {
+    alerts: page.map(row => ({
+      id: row.id,
+      eventId: row.eventId,
+      recipientId: row.recipientId,
+      title: row.title,
+      createdAt: row.createdAt.toISOString(),
+      attempts: row.attempts,
+      lastError: row.lastError,
+      deliveryGeneration: row.deliveryGeneration,
+      state: row.cancelledAt
+        ? ('CANCELLED' as const)
+        : row.deliveredAt
+          ? ('DELIVERED' as const)
+          : row.failedAt
+            ? ('FAILED' as const)
+            : ('PENDING' as const),
+      completedAt: (row.cancelledAt ?? row.deliveredAt ?? row.failedAt)?.toISOString() ?? null,
+    })),
+    nextCursor:
+      rows.length > 25 && last
+        ? Buffer.from(
+            JSON.stringify({ id: last.id, createdAt: last.createdAt.toISOString() })
+          ).toString('base64url')
         : null,
   };
 }
