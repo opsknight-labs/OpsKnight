@@ -7,7 +7,7 @@ import {
 } from '@/lib/notification-provider-feedback';
 import { authenticationAlertHistory, authenticationDashboard } from '@/lib/auth-control/dashboard';
 import { cleanAuthenticationAlerts } from '@/lib/auth-control/sessions';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 import { restorePasswordAccess, repairCanonicalOrigin } from '@/lib/auth-control/recovery';
 import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
@@ -1414,6 +1414,18 @@ suite('independent emergency authentication with signed WebAuthn responses and P
         expect(
           await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })
         ).toEqual(received);
+        if (type === 'DELIVERED') {
+          await ingestNotificationProviderFeedback({
+            ...event,
+            providerEventId: `${marker}-bounce`,
+            type: 'HARD_BOUNCE',
+          });
+          const bounced = await prisma.notification.findUniqueOrThrow({
+            where: { id: notification.id },
+          });
+          expect(bounced.status).toBe('FAILED');
+          expect(bounced.deliveredAt).toBeNull();
+        }
         if (type === 'HARD_BOUNCE') {
           await ingestNotificationProviderFeedback({
             ...event,
@@ -1483,6 +1495,76 @@ suite('independent emergency authentication with signed WebAuthn responses and P
         expect(notification.status).toBe(type === 'DELIVERED' ? 'DELIVERED' : 'FAILED');
       } finally {
         await prisma.notification.delete({ where: { id: intent.id } });
+        await prisma.notificationProviderFeedback.deleteMany({
+          where: { providerMessageId: marker },
+        });
+      }
+    }
+  );
+  it.each(['DELIVERED', 'HARD_BOUNCE'] as const)(
+    'repairs a historical unmatched %s receipt during upgrade without replaying counters',
+    async type => {
+      const marker = `historical-receipt-${type}-${Date.now()}`;
+      const occurredAt = new Date();
+      const notification = await prisma.notification.create({
+        data: {
+          status: 'SENT',
+          channel: 'EMAIL',
+          category: 'SECURITY',
+          userId: actor.id,
+          sourceType: 'AUTHENTICATION',
+          templateKey: 'authentication-security-alert',
+          deliveryProvider: 'fixture',
+          providerMessageId: marker,
+        },
+      });
+      const alert = await prisma.authenticationAlert.create({
+        data: {
+          eventId: marker,
+          recipientId: actor.id,
+          title: 'Fixture',
+          message: 'Fixture',
+          notificationId: notification.id,
+          acceptedAt: occurredAt,
+        },
+      });
+      await prisma.notificationProviderFeedback.create({
+        data: {
+          provider: 'fixture',
+          providerEventId: marker,
+          providerMessageId: marker,
+          eventType: type,
+          occurredAt,
+          processedAt: occurredAt,
+        },
+      });
+      const endpointBefore = await prisma.userNotificationEndpoint.findMany({
+        where: { userId: actor.id },
+      });
+      const statements = readFileSync(
+        'prisma/migrations/20261014150000_reconcile_historical_authentication_receipts/migration.sql',
+        'utf8'
+      )
+        .replace(/^--.*$/gm, '')
+        .split(';')
+        .filter(sql => sql.trim());
+      try {
+        for (let pass = 0; pass < 2; pass++)
+          for (const sql of statements) await prisma.$executeRawUnsafe(sql);
+        const received = await prisma.notification.findUniqueOrThrow({
+          where: { id: notification.id },
+        });
+        const linked = await prisma.authenticationAlert.findUniqueOrThrow({
+          where: { id: alert.id },
+        });
+        expect(received.status).toBe(type === 'DELIVERED' ? 'DELIVERED' : 'FAILED');
+        expect(type === 'DELIVERED' ? linked.deliveredAt : linked.failedAt).toEqual(occurredAt);
+        expect(
+          await prisma.userNotificationEndpoint.findMany({ where: { userId: actor.id } })
+        ).toEqual(endpointBefore);
+      } finally {
+        await prisma.authenticationAlert.delete({ where: { id: alert.id } });
+        await prisma.notification.delete({ where: { id: notification.id } });
         await prisma.notificationProviderFeedback.deleteMany({
           where: { providerMessageId: marker },
         });

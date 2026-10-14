@@ -128,6 +128,7 @@ async function reconcileFeedback(id: string) {
           where: { id: notification.id },
           data: {
             status: 'FAILED',
+            deliveredAt: null,
             attempts: Math.max(notification.attempts, notification.maxAttempts),
             failedAt: event.occurredAt,
             payloadEncrypted: null,

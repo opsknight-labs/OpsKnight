@@ -691,11 +691,24 @@ Addressed the review of `38f3e58` archived in
   the dedicated hosted certification workflow.
 
 Local verification: 5,766 unit/component tests passed (four intentional skips);
-33 focused webhook/control-plane tests passed after final assertions; 87 authentication
+33 focused webhook/control-plane tests passed after final assertions; 89 authentication
 PostgreSQL tests passed across three suites; 15 subscriber integration tests passed.
-Fresh isolated schemas applied all 204 migrations. A prior-schema fixture verified
+Fresh isolated schemas applied all 205 migrations. A prior-schema fixture verified
 provider backfill, historical-event idempotence and unmatched-event preservation.
 Type checking and modified-file lint completed with zero errors/warnings. The optimized production
 build passed. No UI redesign or external acceptance claims.
 Live IdP tenants, physical keys, real-provider adapters and production HA acceptance
 remain pending under the user's existing local-certification scope.
+
+Follow-up upgrade hardening repairs authentication transport and linked-alert state
+from historical matched receipts using recorded provider evidence, including receipts
+that arrived before message IDs existed under the previous release. This repair repeats
+safely without replaying endpoint/subscription counters. Delivery followed by terminal
+bounce now clears the transport delivery timestamp; late delivery cannot revive that
+terminal failure. Dedicated PostgreSQL regressions execute the historical repair twice
+and verify endpoint records are unchanged.
+
+The final 89-test run passed against a temporary PostgreSQL container using the same
+public-schema layout as hosted certification, with all 205 migrations applied. The
+container and its volumes were removed afterward. A preceding shared-database run
+was stopped after connection-pool timeouts and is not counted as passing evidence.

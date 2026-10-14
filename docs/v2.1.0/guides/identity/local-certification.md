@@ -318,7 +318,9 @@ Correlation requires both the message ID and the sending provider. Existing reco
 recorded delivery-attempt evidence; unknown provider identity is never inferred from a
 callback. New send results persist provider identity even if attempt-ledger persistence
 fails. Existing feedback that may already have changed endpoint counters is preserved
-as processed during migration; previously unmatched messages without a notification
+as processed during migration. A follow-up migration repairs idempotent authentication
+transport states for historical receipts with recorded provider evidence, without
+repeating endpoint counters. Previously unmatched messages without a notification
 remain eligible for reconciliation. Historical records without provider evidence require
 operator investigation and are not automatically confirmed.
 
