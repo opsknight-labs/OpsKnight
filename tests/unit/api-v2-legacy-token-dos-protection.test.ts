@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authCache, rateLimitMemoryCache } from '@/lib/api-v2/cache';
@@ -11,6 +11,12 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
     vi.clearAllMocks();
     authCache.clear();
     rateLimitMemoryCache.clear();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-01T12:00:10Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('rejects an invalid token and serves subsequent identical requests from negative cache', async () => {
