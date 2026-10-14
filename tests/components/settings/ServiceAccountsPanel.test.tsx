@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ServiceAccountsPanel, { type ServiceAccountItem } from '@/components/settings/ServiceAccountsPanel';
+import {
+  issueServiceAccountTokenAction,
+  deleteServiceAccountAction,
+  revokeServiceAccountTokenAction,
+} from '@/app/(app)/settings/actions';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -11,8 +16,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/app/(app)/settings/actions', () => ({
   createServiceAccountAction: vi.fn().mockResolvedValue({ success: true }),
   issueServiceAccountTokenAction: vi.fn().mockResolvedValue({ success: true, token: 'ok_live_test_token' }),
-  deleteServiceAccountAction: vi.fn().mockResolvedValue({ success: true }),
-  revokeServiceAccountTokenAction: vi.fn().mockResolvedValue({ success: true }),
+  deleteServiceAccountAction: vi.fn().mockResolvedValue(undefined),
+  revokeServiceAccountTokenAction: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockAccounts: ServiceAccountItem[] = [
@@ -186,5 +191,184 @@ describe('ServiceAccountsPanel Component', () => {
     expect(
       screen.getByPlaceholderText(/e\.g\., CI\/CD GitHub Runner or Terraform Operator/i)
     ).toBeDefined();
+  });
+
+  it('opens issue token dialog and switches scope presets', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    const issueButtons = screen.getAllByRole('button', { name: /issue token/i });
+    fireEvent.click(issueButtons[0]);
+
+    expect(screen.getByText('Issue Service Account Token')).toBeDefined();
+    expect(screen.getByLabelText(/token name \/ label \*/i)).toBeDefined();
+    expect(screen.getByLabelText(/expiration duration/i)).toBeDefined();
+
+    // Default preset when opening is RESPONDER (10 scopes)
+    expect(screen.getByText(/selected: 10 of 31 scopes/i)).toBeDefined();
+
+    // Click Admin Full preset
+    fireEvent.click(screen.getByRole('button', { name: 'Admin Full' }));
+    expect(screen.getByText(/selected: 31 of 31 scopes/i)).toBeDefined();
+
+    // Click Clear preset
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByText(/selected: 0 of 31 scopes/i)).toBeDefined();
+
+    // Click Read-Only preset
+    fireEvent.click(screen.getByRole('button', { name: 'Read-Only' }));
+    expect(screen.getByText(/selected: 15 of 31 scopes/i)).toBeDefined();
+  });
+
+  it('submits issue token form and displays revealed token banner', async () => {
+    vi.mocked(issueServiceAccountTokenAction).mockResolvedValue({
+      success: true,
+      token: 'ok_live_test_revealed_token_999',
+    });
+
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: /issue token/i })[0]);
+
+    const nameInput = screen.getByLabelText(/token name \/ label \*/i);
+    fireEvent.change(nameInput, { target: { value: 'Nightly Backup Runner' } });
+
+    const submitBtn = screen.getByRole('button', { name: 'Issue Token' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(issueServiceAccountTokenAction).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Service Account Access Token Issued')).toBeDefined();
+      expect(screen.getByText('ok_live_test_revealed_token_999')).toBeDefined();
+    });
+  });
+
+  it('opens revoke token dialog and confirms revocation', async () => {
+    vi.mocked(revokeServiceAccountTokenAction).mockResolvedValue(undefined);
+
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    // Expand tokens
+    fireEvent.click(screen.getByText('View Tokens (2)'));
+    expect(screen.getByText('GitHub Actions Main Token')).toBeDefined();
+
+    // Click revoke on the first token
+    const revokeButtons = screen.getAllByRole('button', { name: 'Revoke' });
+    fireEvent.click(revokeButtons[0]);
+
+    expect(screen.getByRole('alertdialog')).toBeDefined();
+    expect(screen.getByText('Revoke Access Token?')).toBeDefined();
+    expect(
+      screen.getByText(/are you sure you want to revoke 'github actions main token'\?/i)
+    ).toBeDefined();
+
+    // Confirm revocation
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke Token' }));
+
+    await waitFor(() => {
+      expect(revokeServiceAccountTokenAction).toHaveBeenCalledTimes(1);
+    });
+
+    const formData = vi.mocked(revokeServiceAccountTokenAction).mock.calls[0][0] as FormData;
+    expect(formData.get('serviceAccountId')).toBe('sa-1');
+    expect(formData.get('tokenId')).toBe('tok-1');
+  });
+
+  it('displays error in revoke dialog when revocation fails', async () => {
+    vi.mocked(revokeServiceAccountTokenAction).mockRejectedValueOnce(
+      new Error('Failed to revoke machine token due to network error')
+    );
+
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('View Tokens (2)'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Revoke' })[0]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke Token' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to revoke machine token due to network error')).toBeDefined();
+    });
+  });
+
+  it('opens delete account dialog and confirms deletion', async () => {
+    vi.mocked(deleteServiceAccountAction).mockResolvedValue(undefined);
+
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    // Click delete on CI/CD Automation Bot
+    const deleteBtn = screen.getByRole('button', { name: 'Delete CI/CD Automation Bot' });
+    fireEvent.click(deleteBtn);
+
+    expect(screen.getByRole('alertdialog')).toBeDefined();
+    expect(screen.getByText('Delete Service Account?')).toBeDefined();
+    expect(
+      screen.getByText(
+        /this will deactivate the service account and permanently revoke all of its issued tokens/i
+      )
+    ).toBeDefined();
+
+    // Confirm delete
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+
+    await waitFor(() => {
+      expect(deleteServiceAccountAction).toHaveBeenCalledTimes(1);
+    });
+
+    const formData = vi.mocked(deleteServiceAccountAction).mock.calls[0][0] as FormData;
+    expect(formData.get('serviceAccountId')).toBe('sa-1');
+  });
+
+  it('displays error in delete dialog when deletion fails', async () => {
+    vi.mocked(deleteServiceAccountAction).mockRejectedValueOnce(
+      new Error('Database lock error during deletion')
+    );
+
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete CI/CD Automation Bot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Database lock error during deletion')).toBeDefined();
+    });
   });
 });

@@ -21,13 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/shadcn/dialog';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from '@/components/ui/shadcn/card';
+import { Card } from '@/components/ui/shadcn/card';
 import {
   Table,
   TableHeader,
@@ -64,14 +58,11 @@ import {
   Trash2,
   ShieldAlert,
   CheckCircle2,
-  Clock,
   Search,
   X,
   Loader2,
-  ShieldCheck,
   ChevronDown,
   ChevronRight,
-  Shield,
   Layers,
 } from 'lucide-react';
 
@@ -497,6 +488,7 @@ export default function ServiceAccountsPanel({
                         <Button
                           variant="ghost"
                           size="sm"
+                          aria-label={`Delete ${sa.name}`}
                           onClick={() => setDeleteAccountId(sa.id)}
                           className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
@@ -844,7 +836,8 @@ export default function ServiceAccountsPanel({
                   return (
                     <div
                       key={scope.value}
-                      onClick={() => {
+                      onClick={e => {
+                        if ((e.target as HTMLElement).closest('button, input')) return;
                         setSelectedScopes(prev => {
                           const next = new Set(prev);
                           if (next.has(scope.value)) next.delete(scope.value);
@@ -862,7 +855,14 @@ export default function ServiceAccountsPanel({
                         checked={isChecked}
                         id={`sc-${scope.value}`}
                         className="mt-0.5"
-                        onCheckedChange={() => {}}
+                        onCheckedChange={checked => {
+                          setSelectedScopes(prev => {
+                            const next = new Set(prev);
+                            if (checked) next.add(scope.value);
+                            else next.delete(scope.value);
+                            return next;
+                          });
+                        }}
                       />
                       <div className="min-w-0">
                         <span className="block text-[11px] font-semibold text-foreground truncate">

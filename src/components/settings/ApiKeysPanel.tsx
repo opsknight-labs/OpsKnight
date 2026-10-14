@@ -1077,7 +1077,8 @@ print(response.json()["incidents"])`}
                   return (
                     <div
                       key={scope.value}
-                      onClick={() => {
+                      onClick={e => {
+                        if ((e.target as HTMLElement).closest('button, input')) return;
                         setSelectedKeyScopes(prev => {
                           const next = new Set(prev);
                           if (next.has(scope.value)) next.delete(scope.value);
@@ -1095,7 +1096,14 @@ print(response.json()["incidents"])`}
                         checked={isChecked}
                         id={`scope-${scope.value}`}
                         className="mt-0.5 shrink-0"
-                        onCheckedChange={() => {}}
+                        onCheckedChange={checked => {
+                          setSelectedKeyScopes(prev => {
+                            const next = new Set(prev);
+                            if (checked) next.add(scope.value);
+                            else next.delete(scope.value);
+                            return next;
+                          });
+                        }}
                       />
                       <div className="grid min-w-0 cursor-pointer gap-1 sm:grid-cols-[minmax(8rem,0.8fr)_minmax(0,1.4fr)_auto] sm:items-center">
                         <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">

@@ -33,7 +33,7 @@ export async function checkRateLimit(
     });
 
     const resetAt = (windowStart + 1) * windowMs;
-    const count = result.count;
+    const count = typeof result?.count === 'number' ? result.count : 1;
     const remaining = Math.max(0, limit - count);
 
     return {

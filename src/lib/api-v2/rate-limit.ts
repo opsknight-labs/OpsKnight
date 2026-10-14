@@ -97,3 +97,39 @@ export async function enforceV2RateLimit(
 
   return headers;
 }
+
+export const LEGACY_AUTH_ADMISSION_LIMIT = 10;
+export const LEGACY_AUTH_ADMISSION_WINDOW_MS = 60_000;
+
+/**
+ * Pre-authentication IP-based admission limit for legacy token verification.
+ * Shields the Node.js event loop and CPU from expensive scrypt operations
+ * when an attacker floods invalid 1.x-shaped tokens before API key rate limiting runs.
+ */
+export async function checkLegacyTokenAdmission(clientIp: string): Promise<boolean> {
+  const sanitizedIp = clientIp.trim() || 'unknown';
+  const now = Date.now();
+  const windowStart = Math.floor(now / LEGACY_AUTH_ADMISSION_WINDOW_MS);
+  const memKey = `v2:legacy-scrypt-ip:${sanitizedIp}:${windowStart}`;
+
+  // 1. In-memory fast shield (protects PostgreSQL and event loop under high burst)
+  const currentCount = rateLimitMemoryCache.get(memKey) ?? 0;
+  if (currentCount >= LEGACY_AUTH_ADMISSION_LIMIT) {
+    return false;
+  }
+  rateLimitMemoryCache.set(memKey, currentCount + 1, LEGACY_AUTH_ADMISSION_WINDOW_MS);
+
+  // 2. Distributed coordination across replicas via PostgreSQL RateLimit
+  try {
+    const dbKey = `api:v2:legacy-scrypt:${sanitizedIp}`;
+    const pgResult = await checkRateLimit(
+      dbKey,
+      LEGACY_AUTH_ADMISSION_LIMIT,
+      LEGACY_AUTH_ADMISSION_WINDOW_MS
+    );
+    return pgResult.allowed;
+  } catch {
+    // If DB check fails, rely on in-memory decision
+    return true;
+  }
+}

@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma, RunbookInputType } from '@prisma/client';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import {
   computeDefinitionChecksum,
   computePlanDigest,
@@ -2828,6 +2830,158 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(replayResponse.headers.get('idempotency-replayed')).toBe('true');
     const replayBody = await replayResponse.json();
     expect(replayBody.data.executionId).toBe(body.data.executionId);
+
+    // 3. Complete agent lifecycle: advance execution, claim attempt, submit agent command result
+    await advanceExecution(body.data.executionId);
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim).not.toBeNull();
+    expect(claim?.executionId).toBe(body.data.executionId);
+
+    await fenceAgentAttempt({
+      attemptId: claim!.attemptId,
+      agentId: target.agent.id,
+      leaseToken: claim!.leaseToken,
+    });
+
+    await submitAgentResult(target.agent.id, {
+      attemptId: claim!.attemptId,
+      leaseToken: claim!.leaseToken,
+      producedAt: new Date().toISOString(),
+      status: 'SUCCEEDED',
+      exitCode: 0,
+    });
+
+    await advanceExecution(body.data.executionId);
+
+    const completedExecution = await testPrisma.runbookExecution.findUnique({
+      where: { id: body.data.executionId },
+    });
+    expect(completedExecution?.status).toBe('SUCCEEDED');
+    expect(completedExecution?.completedAt).not.toBeNull();
+  });
+
+  it('serves runbook execution over real HTTP server with Bearer auth, agent claim, and terminal verification', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: {
+            unit: 'nginx.service',
+            action: 'status',
+          },
+        },
+      ],
+    });
+
+    const incident = await createTestIncident('HTTP server runbook execution', target.service.id);
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    const rawToken = `ok_test_${randomUUID().replace(/-/g, '')}`;
+    await testPrisma.apiKey.create({
+      data: {
+        name: 'HTTP Server API Key',
+        prefix: rawToken.slice(0, 12),
+        tokenHash: hashTokenV2(rawToken),
+        scopes: ['runbooks:read', 'runbooks:execute'],
+        userId: responder.id,
+      },
+    });
+
+    // Set up real Node.js HTTP server on ephemeral port
+    const server = createServer(async (nodeReq, nodeRes) => {
+      try {
+        let bodyBuffer = '';
+        for await (const chunk of nodeReq) {
+          bodyBuffer += chunk;
+        }
+
+        const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}${nodeReq.url}`;
+        const headers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(nodeReq.headers)) {
+          if (v) headers[k] = Array.isArray(v) ? v.join(', ') : v;
+        }
+
+        const nextReq = new NextRequest(url, {
+          method: nodeReq.method,
+          headers,
+          body: bodyBuffer || undefined,
+        });
+
+        const routeRes = await executeRunbookV2Route(nextReq, {
+          params: Promise.resolve({ id: target.runbook.id }),
+        });
+
+        nodeRes.writeHead(routeRes.status, Object.fromEntries(routeRes.headers.entries()));
+        nodeRes.end(await routeRes.text());
+      } catch (err: unknown) {
+        nodeRes.writeHead(500, { 'content-type': 'application/json' });
+        nodeRes.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+      }
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const serverUrl = `http://127.0.0.1:${port}/api/v2/runbooks/${target.runbook.id}/execute`;
+
+    try {
+      const idempotencyKey = `idem-http-${randomUUID()}`;
+
+      // Invoke route over actual TCP / HTTP socket
+      const res = await fetch(serverUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          incidentId: incident.id,
+          serviceId: target.service.id,
+        }),
+      });
+
+      expect(res.status).toBe(202);
+      const resJson = (await res.json()) as { data: { executionId: string; status: string } };
+      expect(resJson.data.executionId).toBeDefined();
+      expect(resJson.data.status).toBe('QUEUED');
+
+      const executionId = resJson.data.executionId;
+
+      // Exercise full agent dispatch and completion lifecycle
+      await advanceExecution(executionId);
+      const claim = await claimAgentAttempt(target.agent.id);
+      expect(claim).not.toBeNull();
+      expect(claim?.executionId).toBe(executionId);
+
+      await fenceAgentAttempt({
+        attemptId: claim!.attemptId,
+        agentId: target.agent.id,
+        leaseToken: claim!.leaseToken,
+      });
+
+      await submitAgentResult(target.agent.id, {
+        attemptId: claim!.attemptId,
+        leaseToken: claim!.leaseToken,
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+        exitCode: 0,
+      });
+
+      await advanceExecution(executionId);
+
+      // Verify database reflects SUCCEEDED state
+      const dbRecord = await testPrisma.runbookExecution.findUnique({
+        where: { id: executionId },
+      });
+      expect(dbRecord?.status).toBe('SUCCEEDED');
+      expect(dbRecord?.completedAt).not.toBeNull();
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve()))
+      );
+    }
   });
 });
 

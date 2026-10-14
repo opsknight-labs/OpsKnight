@@ -1,10 +1,12 @@
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashLegacyTokenCandidates, hashTokenV2 } from '@/lib/api-keys';
+import { hashLegacyTokenCandidates, hashTokenV2, isLegacy1xTokenShape } from '@/lib/api-keys';
 import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { getClientIp } from '@/lib/client-ip';
 import { authCache } from './cache';
+import { checkLegacyTokenAdmission } from './rate-limit';
 
 export { hashTokenV2 } from '@/lib/api-keys';
 
@@ -49,6 +51,13 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   }
 
   const v2Hash = hashTokenV2(token);
+  const negativeCacheKey = `v2:invalid-token:${v2Hash}`;
+  if (authCache.get(negativeCacheKey)) {
+    throw new AppError({
+      code: 'API_KEY_INVALID',
+      userMessage: 'The provided API key or service account token is invalid, expired, or revoked.',
+    });
+  }
 
   const activeFilter = {
 
@@ -76,6 +85,18 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
 
   // Check legacy hash migration fallback if not found
   if (!apiKeyRecord) {
+    // Shield CPU & event loop from expensive scrypt operations under invalid token bursts
+    if (isLegacy1xTokenShape(token)) {
+      const clientIp = getClientIp(req.headers);
+      const admitted = await checkLegacyTokenAdmission(clientIp);
+      if (!admitted) {
+        throw new AppError({
+          code: 'RATE_LIMIT_EXCEEDED',
+          userMessage: 'Too many invalid token authentication attempts from this IP address. Please wait before retrying.',
+        });
+      }
+    }
+
     const legacyCandidates = await hashLegacyTokenCandidates(token);
     if (legacyCandidates.length > 0) {
       apiKeyRecord = await prisma.apiKey.findFirst({
@@ -106,6 +127,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   }
 
   if (!apiKeyRecord || !apiKeyRecord.user) {
+    authCache.set(negativeCacheKey, true, 30_000);
     throw new AppError({
       code: 'API_KEY_INVALID',
       userMessage: 'The provided API key or service account token is invalid, expired, or revoked.',
