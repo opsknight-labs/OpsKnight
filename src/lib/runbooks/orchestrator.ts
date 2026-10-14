@@ -193,6 +193,7 @@ async function prepareRunbookExecution(
             id: input.bindingId,
             runbookId: runbook.id,
             enabled: true,
+            detachedAt: null,
             ...(input.serviceId ? { serviceId: input.serviceId } : {}),
             ...(input.triggerId
               ? { triggers: { some: { id: input.triggerId, enabled: true } } }

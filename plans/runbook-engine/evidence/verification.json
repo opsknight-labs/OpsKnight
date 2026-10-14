@@ -119,6 +119,40 @@
     },
     "browserEvidence": "Both complete browser CI jobs passed on 6761aef4f; no UI changes in this follow-up. New head is revalidated by CI.",
     "swarmRootCause": "Replica counts reached desired values while UpdateStatus was updating; deployment returned before keyring-bearing replacement tasks converged.",
-    "remoteCI": "Pending after follow-up push; use exact-head PR checks."
+    "remoteCI": "All three Swarm validation jobs passed on 0ab15e610; protocol runs 38601425537 and 38601417564 plus standalone 38601425796. One duplicate browser job failed on a WebKit hard-navigation/server-action refresh race, corrected in the next follow-up."
+  },
+  "ruleLifecycleAndRuntimeFollowup": {
+    "baseRevision": "0ab15e610e9b7ad2c4f7d0d9ca3d31a241b2b5bb",
+    "changes": [
+      "Detach archives/disables rules without deleting suggestions, triggers or execution associations",
+      "Archived rule edits, reactivation and execution are rejected; historical evidence remains readable",
+      "Incident trigger evaluation uses ordered batches of at most 100 rules",
+      "Suggestion transactions recheck that the rule remains enabled and attached after acquiring the workflow lock"
+    ],
+    "localChecks": {
+      "unitAndComponents": {
+        "status": "PASS",
+        "tests": 316,
+        "files": 37
+      },
+      "executionAndReviewDatabase": {
+        "status": "PASS",
+        "tests": 66,
+        "files": 2
+      },
+      "productionBuild": "PASS",
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "documentation": "PASS",
+      "browser": {
+        "status": "PASS",
+        "tests": 33,
+        "browsers": ["Chromium", "Firefox", "WebKit"],
+        "skipped": 0
+      }
+    },
+    "runtimeScale": "incident-trigger-scale.json",
+    "limitation": "Batching bounds loaded rule/condition data, not total processing time. The fixture measures three concurrent duplicate deliveries with five matching suggestions and no physical execution; sustained production throughput remains unqualified.",
+    "remoteCI": "Use exact-head PR checks after the follow-up push."
   }
 }

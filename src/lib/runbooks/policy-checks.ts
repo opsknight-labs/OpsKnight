@@ -38,7 +38,7 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${ruleId} AND "serviceId" = ${serviceId} FOR UPDATE`;
     const rule = await tx.serviceAutomationRule.findFirst({
-      where: { id: ruleId, serviceId },
+      where: { id: ruleId, serviceId, detachedAt: null },
       include: {
         runbook: { include: { publishedVersion: { include: { inputs: true } } } },
         runbookVersion: { include: { inputs: true } },

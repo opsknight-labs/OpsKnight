@@ -28,7 +28,9 @@ test.beforeEach(async ({ page }) => {
   await page.addLocatorHandler(
     page.getByRole('button', { name: /^Dismiss (all incident alerts|incident alert)$/ }).first(),
     async button => {
-      await button.click();
+      // Ambient alerts from other fixtures can sit behind a modal. Dismiss this
+      // unrelated overlay without waiting for a pointer blocked by the dialog.
+      await button.evaluate(element => (element as HTMLButtonElement).click());
     }
   );
 });
@@ -658,8 +660,8 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   expect(rule.runbookVersionId).toBe(oldVersion.id);
   expect(rule.inputValues).toEqual({ legacy: 'selected-old-schema' });
   await page.keyboard.press('Escape');
-  await page.goto(`/services/${serviceId}?tab=runbooks`);
-  await page.getByRole('tab', { name: /^Runbooks/ }).click();
+  // The action refreshes this service route. Wait for its visible result instead
+  // of racing that pending refresh with a hard navigation (especially WebKit).
   const card = page
     .locator('.bg-card')
     .filter({ visible: true })

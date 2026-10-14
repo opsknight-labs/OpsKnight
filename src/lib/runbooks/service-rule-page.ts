@@ -22,6 +22,7 @@ export async function getServiceRulePage(
   const rows = await db.serviceAutomationRule.findMany({
     where: {
       serviceId,
+      detachedAt: null,
       ...(cursor
         ? {
             OR: [

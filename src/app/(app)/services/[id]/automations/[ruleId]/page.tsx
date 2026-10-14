@@ -106,7 +106,7 @@ export default async function AutomationRulePage({
         <RuleConfigurationCheck
           action={validateRuleConfigurationAction.bind(null, input.id, rule.id)}
         />
-        {canManage && (
+        {canManage && !rule.detachedAt && (
           <ActionForm action={checkRulePolicyAction.bind(null, input.id, rule.id)}>
             <SubmitButton variant="outline">Check Agent policy · No execution</SubmitButton>
           </ActionForm>
@@ -131,7 +131,7 @@ export default async function AutomationRulePage({
             />
           </div>
         )}
-        {canManage && !rule.enabled && rule.mode === 'AUTOMATIC' && (
+        {canManage && !rule.detachedAt && !rule.enabled && rule.mode === 'AUTOMATIC' && (
           <ActionForm action={activateRuleAction.bind(null, input.id, rule.id)}>
             <h3 className="font-semibold">Activate Automatic rule</h3>
             <p className="text-sm">
@@ -169,6 +169,12 @@ export default async function AutomationRulePage({
       <section id="trigger" className="rounded-lg border p-4 space-y-2">
         <h2 className="font-semibold">Trigger</h2>
         <p>{presentation.trigger}</p>
+        {rule.detachedAt && (
+          <p>
+            This rule was detached and archived. Its configuration, suggestions and execution
+            history are retained. It cannot run or be reactivated.
+          </p>
+        )}
         {rule.triggers.map(trigger => (
           <article key={trigger.id}>
             <p>

@@ -13,6 +13,8 @@ import {
   activateServiceRule,
   createServiceBinding,
   replaceBindingTrigger,
+  detachServiceBinding,
+  updateServiceBinding,
 } from '@/lib/runbooks/bindings';
 import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
@@ -241,7 +243,127 @@ suite('PR 864 review regression contracts', () => {
       before: { revision: 1, conditions: [{ field: 'incident.urgency', value: 'HIGH' }] },
       after: { revision: 2, conditions: [{ field: 'incident.urgency', value: 'LOW' }] },
     });
+    await detachServiceBinding(service.id, rule.id, actor.id);
+    expect(
+      await testPrisma.serviceAutomationRule.findUnique({ where: { id: rule.id } })
+    ).toMatchObject({
+      enabled: false,
+      detachedAt: expect.any(Date),
+      inputValues: { legacy: 'test' },
+    });
+    expect(await testPrisma.runbookSuggestion.findMany()).toEqual(
+      expect.arrayContaining(suggestions)
+    );
+    expect(await testPrisma.runbookExecution.findUnique({ where: { id: execution.id } })).toEqual(
+      execution
+    );
+    expect((await getServiceRulePage(service.id)).rules).toHaveLength(0);
+    const { evaluateIncidentTriggers } = await import('@/lib/runbooks/triggers');
+    expect(await evaluateIncidentTriggers(incident.id, 'after-detach')).toMatchObject({
+      matched: 0,
+      suggested: 0,
+    });
+    expect(await testPrisma.runbookSuggestion.count()).toBe(2);
+
+    await expect(
+      updateServiceBinding(service.id, rule.id, { enabled: true }, actor.id)
+    ).rejects.toThrow('not found');
+    await expect(
+      replaceBindingTrigger(
+        service.id,
+        rule.id,
+        { event: 'INCIDENT_CREATED', enabled: true, conditionLogic: 'AND', conditions: [] },
+        actor.id
+      )
+    ).rejects.toThrow('not found');
   });
+  it('evaluates 100/1000/10000 incident rules in bounded batches and deduplicates concurrent events', async () => {
+    const { service, workflow, old } = await fixture();
+    const incident = await createTestIncident('Trigger scale', service.id);
+    const { evaluateIncidentTriggers } = await import('@/lib/runbooks/triggers');
+    const { default: applicationPrisma } = await import('@/lib/prisma');
+    const original = applicationPrisma.serviceAutomationRule.findMany.bind(
+      applicationPrisma.serviceAutomationRule
+    );
+    let largestBatch = 0;
+    const spy = vi
+      .spyOn(applicationPrisma.serviceAutomationRule, 'findMany')
+      .mockImplementation(args => {
+        const query = original(args);
+        void query.then(
+          rows => {
+            largestBatch = Math.max(largestBatch, rows.length);
+          },
+          () => {}
+        );
+        return query;
+      });
+    const samples = [];
+    let previous = 0;
+    try {
+      for (const size of [100, 1000, 10000]) {
+        const ids = Array.from({ length: size - previous }, () => crypto.randomUUID());
+        await testPrisma.serviceAutomationRule.createMany({
+          data: ids.map(id => ({
+            id,
+            serviceId: service.id,
+            runbookId: workflow.id,
+            runbookVersionId: old.id,
+            mode: 'SUGGESTED',
+            versionStrategy: 'PINNED',
+            inputValues: { legacy: 'test' },
+          })),
+        });
+        await testPrisma.runbookTrigger.createMany({
+          data: ids.map(id => ({ id, bindingId: id, event: 'INCIDENT_CREATED' })),
+        });
+        await testPrisma.runbookTriggerCondition.createMany({
+          data: ids.map((id, index) => ({
+            triggerId: id,
+            field: 'incident.urgency',
+            operator: 'EQUALS',
+            value: previous === 0 && index < 5 ? 'HIGH' : 'LOW',
+          })),
+        });
+        previous = size;
+        const start = performance.now();
+        const source = `scale-${size}`;
+        const results = await Promise.all(
+          Array.from({ length: 3 }, () => evaluateIncidentTriggers(incident.id, source))
+        );
+        expect(results.every(result => result.matched === 5)).toBe(true);
+        expect(results.reduce((total, result) => total + result.suggested, 0)).toBe(5);
+        expect(await testPrisma.runbookSuggestion.count({ where: { sourceEventId: source } })).toBe(
+          5
+        );
+        expect(await testPrisma.runbookExecution.count()).toBe(0);
+        expect(largestBatch).toBeLessThanOrEqual(100);
+        samples.push({
+          rules: size,
+          deliveries: 3,
+          matchingRules: 5,
+          largestBatch,
+          elapsedMs: performance.now() - start,
+        });
+      }
+    } finally {
+      spy.mockRestore();
+    }
+    await mkdir('test-results/runbook-engine', { recursive: true });
+    await writeFile(
+      'test-results/runbook-engine/incident-trigger-scale.json',
+      JSON.stringify(
+        {
+          measuredAt: new Date().toISOString(),
+          topology:
+            'Local PostgreSQL; real trigger matcher and suggestion writes; three concurrent duplicate deliveries; no physical Agent execution',
+          samples,
+        },
+        null,
+        2
+      )
+    );
+  }, 120000);
   it('bounds visible rule queries and readiness at 100/1000/10000 rules with a 1000-Agent inventory', async () => {
     const { service, workflow, old } = await fixture();
     await testPrisma.runbookAgent.createMany({

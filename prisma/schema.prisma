@@ -3523,6 +3523,7 @@ model RunbookInput {
 }
 
 model ServiceAutomationRule {
+  detachedAt DateTime?
   policyChecks RunbookPolicyCheck[]
   name               String                 @default("")
   id                 String                 @id @default(cuid())
@@ -3553,6 +3554,7 @@ model ServiceAutomationRule {
 
   @@index([serviceId, runbookId])
   @@index([serviceId, createdAt, id])
+  @@index([serviceId, id])
   // Retain the existing physical table and foreign keys; IDs are stable rule IDs.
   @@map("ServiceRunbookBinding")
   @@index([serviceId])

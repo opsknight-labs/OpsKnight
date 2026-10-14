@@ -241,7 +241,7 @@ export async function updateServiceBinding(
   return prisma.$transaction(async tx => {
     const requestedEnabled = input.enabled;
     const current = await tx.serviceAutomationRule.findFirst({
-      where: { id: bindingId, serviceId },
+      where: { id: bindingId, serviceId, detachedAt: null },
     });
     if (!current) throw new RunbookDefinitionError('Service runbook binding not found.');
     await lockRunbookForUpdate(tx, current.runbookId, { action: 'update binding for' });
@@ -288,7 +288,7 @@ export async function updateServiceBinding(
       (input.agentSelector ?? current.agentSelector) as Record<string, unknown>
     );
     const changed = await tx.serviceAutomationRule.updateMany({
-      where: { id: bindingId, serviceId },
+      where: { id: bindingId, serviceId, detachedAt: null },
       data: {
         ...input,
         runbookVersionId: strategy === 'PINNED' ? version.id : null,
@@ -297,7 +297,7 @@ export async function updateServiceBinding(
     });
     if (changed.count !== 1) throw new RunbookDefinitionError('Service runbook binding not found.');
     const updated = await tx.serviceAutomationRule.findFirstOrThrow({
-      where: { id: bindingId, serviceId },
+      where: { id: bindingId, serviceId, detachedAt: null },
     });
     await logAudit(
       {
@@ -321,11 +321,13 @@ export async function updateServiceBinding(
 export async function detachServiceBinding(serviceId: string, bindingId: string, actorId: string) {
   return prisma.$transaction(async tx => {
     const binding = await tx.serviceAutomationRule.findFirst({
-      where: { id: bindingId, serviceId },
+      where: { id: bindingId, serviceId, detachedAt: null },
     });
     if (!binding) throw new RunbookDefinitionError('Service runbook binding not found.');
-    const deleted = await tx.serviceAutomationRule.deleteMany({
-      where: { id: bindingId, serviceId },
+    await lockRunbookForUpdate(tx, binding.runbookId, { action: 'detach a rule for' });
+    const deleted = await tx.serviceAutomationRule.updateMany({
+      where: { id: bindingId, serviceId, detachedAt: null },
+      data: { enabled: false, detachedAt: new Date() },
     });
     if (deleted.count !== 1) throw new RunbookDefinitionError('Service runbook binding not found.');
     await logAudit(
@@ -352,7 +354,7 @@ export async function replaceBindingTrigger(
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${bindingId} AND "serviceId" = ${serviceId} FOR UPDATE`;
     const binding = await tx.serviceAutomationRule.findFirst({
-      where: { id: bindingId, serviceId },
+      where: { id: bindingId, serviceId, detachedAt: null },
     });
     if (!binding) throw new RunbookDefinitionError('Service runbook binding not found.');
     await lockRunbookForUpdate(tx, binding.runbookId, { action: 'configure triggers for' });
@@ -442,7 +444,9 @@ export async function replaceBindingTrigger(
 
 export async function pauseServiceRule(serviceId: string, ruleId: string, actorId: string) {
   return prisma.$transaction(async tx => {
-    const rule = await tx.serviceAutomationRule.findFirst({ where: { id: ruleId, serviceId } });
+    const rule = await tx.serviceAutomationRule.findFirst({
+      where: { id: ruleId, serviceId, detachedAt: null },
+    });
     if (!rule) throw new RunbookDefinitionError('Service automation rule not found.');
     await tx.serviceAutomationRule.update({ where: { id: ruleId }, data: { enabled: false } });
     await logAudit(
@@ -460,7 +464,7 @@ export async function pauseServiceRule(serviceId: string, ruleId: string, actorI
 export async function duplicateServiceRule(serviceId: string, ruleId: string, actorId: string) {
   return prisma.$transaction(async tx => {
     const original = await tx.serviceAutomationRule.findFirst({
-      where: { id: ruleId, serviceId },
+      where: { id: ruleId, serviceId, detachedAt: null },
       include: { triggers: { include: { conditions: true } } },
     });
     if (!original) throw new RunbookDefinitionError('Service automation rule not found.');
@@ -524,7 +528,7 @@ export async function activateServiceRule(
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${ruleId} AND "serviceId" = ${serviceId} FOR UPDATE`;
     const rule = await tx.serviceAutomationRule.findFirst({
-      where: { id: ruleId, serviceId },
+      where: { id: ruleId, serviceId, detachedAt: null },
       include: {
         runbook: { include: { publishedVersion: { include: { inputs: true } } } },
         runbookVersion: { include: { inputs: true } },

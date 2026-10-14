@@ -888,7 +888,7 @@ export default function ServiceRunbooks({
                           <ConfirmAction
                             action={detachRunbookAction.bind(null, serviceId, binding.id)}
                             title={`Detach ${binding.runbook.name}?`}
-                            description="This service will no longer offer or trigger the Runbook. Existing execution history is retained."
+                            description="This rule will be archived and disabled. Pending suggestions cannot be started. Suggestion history, configuration and execution links are retained."
                             label="Detach Runbook"
                           />
                           <ActionForm
