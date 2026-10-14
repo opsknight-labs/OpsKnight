@@ -303,3 +303,27 @@ metadata because the old field did not distinguish acceptance from delivery.
 Review the original provider evidence separately when auditing historical delivery.
 Accepted messages without confirmation and other terminal delivery metadata use
 bounded 90-day retention; security audit and in-app evidence remain independent.
+
+### Receipts before provider acceptance persistence
+
+Provider feedback is stored durably before reconciliation. A callback arriving before the
+send result's message ID is persisted remains pending. The central dispatcher replays
+pending receipts after persisting that result; queue processing also reconciles up to
+100 due events per pass. Unmatched events yield for one minute, so an unknown message
+cannot monopolize the batch. Concurrent replay locks each event and notification;
+endpoint counters apply once per provider event ID. Terminal authentication delivery
+failures cannot be reversed by a later delivery receipt.
+
+Correlation requires both the message ID and the sending provider. Existing records use
+recorded delivery-attempt evidence; unknown provider identity is never inferred from a
+callback. New send results persist provider identity even if attempt-ledger persistence
+fails. Existing feedback that may already have changed endpoint counters is preserved
+as processed during migration; previously unmatched messages without a notification
+remain eligible for reconciliation. Historical records without provider evidence require
+operator investigation and are not automatically confirmed.
+
+The HMAC endpoint accepts at most 64 KiB of raw request bytes, including streamed bodies
+without a Content-Length header, and requires a bounded SHA-256 signature header.
+Oversized bodies receive HTTP 413 before signature hashing or event ingestion.
+These local ordering checks do not replace acceptance against a real provider's callback
+adapter, physical WebAuthn keys, live identity tenants, or production HA deployments.

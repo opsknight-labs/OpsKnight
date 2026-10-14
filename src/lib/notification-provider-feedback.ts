@@ -20,28 +20,47 @@ export interface ProviderFeedback {
 }
 
 export async function ingestNotificationProviderFeedback(event: ProviderFeedback) {
-  return prisma.$transaction(async tx => {
-    try {
-      await tx.notificationProviderFeedback.create({
-        data: {
-          provider: event.provider,
-          providerEventId: event.providerEventId,
-          providerMessageId: event.providerMessageId,
-          eventType: event.type,
-          occurredAt: event.occurredAt,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return { processed: false, reason: 'duplicate' as const };
-      }
+  let id: string;
+  try {
+    const stored = await prisma.notificationProviderFeedback.create({
+      data: {
+        provider: event.provider,
+        providerEventId: event.providerEventId,
+        providerMessageId: event.providerMessageId,
+        eventType: event.type,
+        occurredAt: event.occurredAt,
+      },
+    });
+    id = stored.id;
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
       throw error;
+    return { processed: false, reason: 'duplicate' as const };
+  }
+  return reconcileFeedback(id);
+}
+
+async function reconcileFeedback(id: string) {
+  return prisma.$transaction(async tx => {
+    // Lock the durable event: concurrent worker/webhook replay must apply counters once.
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "NotificationProviderFeedback" WHERE id = ${id}
+      AND "processedAt" IS NULL FOR UPDATE SKIP LOCKED`;
+    if (!locked.length) return { processed: false, reason: 'duplicate' as const };
+    const stored = await tx.notificationProviderFeedback.findUniqueOrThrow({ where: { id } });
+    const event = { ...stored, type: stored.eventType as ProviderFeedbackType };
+    if (!event.providerMessageId) {
+      await tx.notificationProviderFeedback.update({
+        where: { id },
+        data: { processedAt: new Date() },
+      });
+      return { processed: true, subscriptionId: null };
     }
-    if (!event.providerMessageId) return { processed: true, subscriptionId: null };
     const notification = await tx.notification.findUnique({
       where: { providerMessageId: event.providerMessageId },
       select: {
         id: true,
+        deliveryProvider: true,
         attempts: true,
         maxAttempts: true,
         sourceType: true,
@@ -53,19 +72,55 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
         recipientHash: true,
       },
     });
+    const attempt =
+      notification && !notification.deliveryProvider
+        ? await tx.notificationDeliveryAttempt.findFirst({
+            where: { notificationId: notification.id, providerMessageId: event.providerMessageId },
+            orderBy: { ordinal: 'desc' },
+            select: { provider: true },
+          })
+        : null;
+    if (!notification || (notification.deliveryProvider ?? attempt?.provider) !== event.provider) {
+      await tx.notificationProviderFeedback.update({
+        where: { id },
+        data: {
+          nextReconcileAt: new Date(Date.now() + 60_000),
+        },
+      });
+      return { processed: false, reason: 'unmatched' as const };
+    }
+    // Serialize distinct receipts for the same notification as well.
+    await tx.$queryRaw`SELECT id FROM "Notification" WHERE id = ${notification.id} FOR UPDATE`;
+    await tx.notificationProviderFeedback.update({
+      where: { id },
+      data: { processedAt: new Date() },
+    });
     if (
       notification?.sourceType === 'AUTHENTICATION' &&
       notification.templateKey === 'authentication-security-alert'
     ) {
+      const current = await tx.notification.findUniqueOrThrow({
+        where: { id: notification.id },
+        select: { status: true, attempts: true, maxAttempts: true },
+      });
+      // A late delivery callback cannot revive a terminally failed transport or endpoint.
+      if (
+        event.type === 'DELIVERED' &&
+        current.status === 'FAILED' &&
+        current.attempts >= current.maxAttempts
+      ) {
+        return { processed: true, subscriptionId: null };
+      }
       if (event.type === 'DELIVERED') {
-        await tx.notification.updateMany({
+        const updated = await tx.notification.updateMany({
           where: { id: notification.id, status: { in: ['PENDING', 'SENT', 'UNKNOWN'] } },
           data: { status: 'DELIVERED', deliveredAt: event.occurredAt },
         });
-        await tx.authenticationAlert.updateMany({
-          where: { notificationId: notification.id, failedAt: null, cancelledAt: null },
-          data: { deliveredAt: event.occurredAt, lastError: null },
-        });
+        if (updated.count)
+          await tx.authenticationAlert.updateMany({
+            where: { notificationId: notification.id, failedAt: null, cancelledAt: null },
+            data: { deliveredAt: event.occurredAt, lastError: null },
+          });
       } else if (
         ['HARD_BOUNCE', 'INVALID_RECIPIENT', 'COMPLAINT', 'SUPPRESSION'].includes(event.type)
       ) {
@@ -111,15 +166,15 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
     if (notification?.recipientType !== 'SUBSCRIBER' || !notification.recipientId) {
       return { processed: true, subscriptionId: null };
     }
-    const id = notification.recipientId;
+    const subscriptionId = notification.recipientId;
     if (event.type === 'DELIVERED') {
       await tx.statusPageSubscription.updateMany({
-        where: { id },
+        where: { id: subscriptionId },
         data: { lastDeliveredAt: event.occurredAt },
       });
     } else if (event.type === 'SOFT_BOUNCE') {
       const subscription = await tx.statusPageSubscription.update({
-        where: { id },
+        where: { id: subscriptionId },
         data: {
           lastBounceAt: event.occurredAt,
           lastFailedAt: event.occurredAt,
@@ -129,7 +184,7 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
       });
       if (subscription.bounceCount >= 3) {
         await tx.statusPageSubscription.update({
-          where: { id },
+          where: { id: subscriptionId },
           data: { state: 'BOUNCED', suppressionReason: 'Repeated soft bounce' },
         });
       }
@@ -141,7 +196,7 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
             ? 'BOUNCED'
             : 'SUPPRESSED';
       await tx.statusPageSubscription.updateMany({
-        where: { id },
+        where: { id: subscriptionId },
         data: {
           state,
           suppressionReason: event.type,
@@ -153,6 +208,32 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
         },
       });
     }
-    return { processed: true, subscriptionId: id };
+    return { processed: true, subscriptionId };
   });
+}
+
+/** Indexed, bounded replay; unmatched rows yield for a minute to avoid starving later receipts. */
+export async function reconcileNotificationProviderFeedback(
+  notificationId?: string,
+  now = new Date()
+) {
+  const notification = notificationId
+    ? await prisma.notification.findUnique({
+        where: { id: notificationId },
+        select: { providerMessageId: true },
+      })
+    : null;
+  if (notificationId && !notification?.providerMessageId) return;
+  const rows = await prisma.notificationProviderFeedback.findMany({
+    where: {
+      processedAt: null,
+      ...(notificationId
+        ? { providerMessageId: notification!.providerMessageId }
+        : { nextReconcileAt: { lte: now } }),
+    },
+    orderBy: { nextReconcileAt: 'asc' },
+    take: 100,
+    select: { id: true },
+  });
+  for (const row of rows) await reconcileFeedback(row.id);
 }

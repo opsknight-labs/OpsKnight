@@ -665,3 +665,37 @@ clear edited preview results, accept complete-group preview, and show accepted a
 confirmed email as different filtered states. Updated browser evidence includes
 source hashes for receipt handling and its migration. Local fixture processes and
 the dedicated database role were cleaned up after verification.
+
+### Provider callback ordering hardening — 2026-10-14
+
+Addressed the review of `38f3e58` archived in
+`enterprise-sso-2.1-early-provider-receipts-audit.md`:
+
+- Persist incoming feedback independently of its reconciliation transaction. Pending
+  receipts survive callbacks before message-ID persistence and process restarts.
+- Reconcile after dispatcher acceptance persistence, including its attempt-ledger
+  fallback, and replay up to 100 indexed due events per queue pass. Unmatched events
+  yield for a minute; event and notification locks serialize concurrent replay.
+- Require recorded provider identity as well as message ID. Preserve legacy attempt
+  evidence, backfill known providers, and retain unknown-provider receipts for
+  investigation. Preserve existing event effects during migration without repeating
+  subscription or endpoint counters; previously unmatched events remain pending.
+- Reject raw webhook bodies above 64 KiB, including undeclared streamed bodies, before
+  hashing. Validate SHA-256 header format and length before reading.
+- Keep terminal authentication bounces terminal when later delivery receipts arrive.
+  Explicit retry generation isolation remains covered by the existing regression.
+- Added real PostgreSQL ordering regressions for both delivery and bounce before the
+  actual dispatcher's mocked provider returns, immediate and worker replay, concurrent
+  duplicate events, wrong-provider/failover isolation, and legacy attempt correlation.
+  Added webhook size/signature tests and dispatcher fallback-provider assertions to
+  the dedicated hosted certification workflow.
+
+Local verification: 5,766 unit/component tests passed (four intentional skips);
+33 focused webhook/control-plane tests passed after final assertions; 87 authentication
+PostgreSQL tests passed across three suites; 15 subscriber integration tests passed.
+Fresh isolated schemas applied all 204 migrations. A prior-schema fixture verified
+provider backfill, historical-event idempotence and unmatched-event preservation.
+Type checking and modified-file lint completed with zero errors/warnings. The optimized production
+build passed. No UI redesign or external acceptance claims.
+Live IdP tenants, physical keys, real-provider adapters and production HA acceptance
+remain pending under the user's existing local-certification scope.

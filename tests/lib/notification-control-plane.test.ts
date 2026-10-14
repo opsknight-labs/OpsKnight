@@ -1,3 +1,6 @@
+vi.mock('@/lib/notification-provider-feedback', () => ({
+  reconcileNotificationProviderFeedback: vi.fn().mockResolvedValue(undefined),
+}));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCentralNotificationIntent,
@@ -10,6 +13,7 @@ import {
   resolveNotificationExpiry,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
+import { reconcileNotificationProviderFeedback } from '@/lib/notification-provider-feedback';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
 import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/provider-admission';
 import { notificationEndpointAddressHash } from '@/lib/user-notification-endpoints';
@@ -626,17 +630,23 @@ describe('central notification control plane', () => {
     } as never);
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error('attempt ledger unavailable'));
-    mocks.sendEmail.mockResolvedValue({ success: true, providerMessageId: 'provider-accepted' });
+    mocks.sendEmail.mockResolvedValue({
+      success: true,
+      providerMessageId: 'provider-accepted',
+      selectedProvider: 'ses',
+    });
 
     await expect(deliverCentralNotification('notification_accepted')).resolves.toEqual({
       success: true,
       claimed: true,
     });
+    expect(reconcileNotificationProviderFeedback).toHaveBeenCalledWith('notification_accepted');
     expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: 'SENT',
           providerMessageId: 'provider-accepted',
+          deliveryProvider: 'ses',
           payloadEncrypted: null,
         }),
       })

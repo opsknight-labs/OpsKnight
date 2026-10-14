@@ -132,7 +132,9 @@ describeIfRealDB('Status Page Subscription Integration', () => {
         );
 
         expect(res.status).toBe(200);
-        expect(await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } })).toMatchObject({
+        expect(
+          await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } })
+        ).toMatchObject({
           state,
           unsubscribedAt,
           suppressionReason: `provider:${state.toLowerCase()}`,
@@ -174,7 +176,10 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       });
       await testPrisma.notification.update({
         where: { id: notification.id },
-        data: { providerMessageId: 'provider-message-delayed-complaint' },
+        data: {
+          providerMessageId: 'provider-message-delayed-complaint',
+          deliveryProvider: 'test-provider',
+        },
       });
       const complainedAt = new Date('2026-09-09T09:05:00.000Z');
 
@@ -193,7 +198,9 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } })).toMatchObject({
+      expect(
+        await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } })
+      ).toMatchObject({
         state: 'COMPLAINED',
         unsubscribedAt,
         suppressionReason: 'COMPLAINT',
@@ -226,13 +233,13 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } })).toMatchObject({
+      expect(
+        await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } })
+      ).toMatchObject({
         state: 'ACTIVE',
         verified: true,
       });
-      expect(
-        await testPrisma.notification.count({ where: { recipientId: sub.id } })
-      ).toBe(0);
+      expect(await testPrisma.notification.count({ where: { recipientId: sub.id } })).toBe(0);
     });
 
     it('does not resend verification for a recently created pending subscriber', async () => {
@@ -251,9 +258,7 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(
-        await testPrisma.notification.count({ where: { recipientId: sub.id } })
-      ).toBe(0);
+      expect(await testPrisma.notification.count({ where: { recipientId: sub.id } })).toBe(0);
     });
 
     it('refreshes verification for an expired pending subscriber', async () => {

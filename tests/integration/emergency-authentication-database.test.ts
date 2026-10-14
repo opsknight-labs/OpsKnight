@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
-import { ingestNotificationProviderFeedback } from '@/lib/notification-provider-feedback';
+import {
+  ingestNotificationProviderFeedback,
+  reconcileNotificationProviderFeedback,
+} from '@/lib/notification-provider-feedback';
 import { authenticationAlertHistory, authenticationDashboard } from '@/lib/auth-control/dashboard';
 import { cleanAuthenticationAlerts } from '@/lib/auth-control/sessions';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -47,6 +50,10 @@ const deliveryMocks = vi.hoisted(() => ({
 vi.mock('@/lib/email', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/email')>()),
   sendEmail: deliveryMocks.sendEmail,
+}));
+vi.mock('@/lib/notification-providers', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/notification-providers')>()),
+  getAllConfiguredEmailProviders: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/lib/notification-control-plane', () => ({
   enqueueCentralNotification: vi.fn().mockRejectedValue(new Error('delivery queue unavailable')),
@@ -1268,6 +1275,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
           recipientId: actor.id,
           sourceType: 'AUTHENTICATION',
           templateKey: 'authentication-security-alert',
+          deliveryProvider: 'fixture',
           providerMessageId: marker,
           sentAt: new Date(),
         },
@@ -1344,6 +1352,182 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       }
     }
   );
+  it.each([
+    ['DELIVERED', 'immediate'],
+    ['HARD_BOUNCE', 'immediate'],
+    ['DELIVERED', 'worker'],
+    ['HARD_BOUNCE', 'worker'],
+  ] as const)(
+    'reconciles %s before message ID persistence through %s exactly once and isolates providers',
+    async (type, mode) => {
+      const marker = `before-message-${type}-${Date.now()}`;
+      const notification = await prisma.notification.create({
+        data: {
+          status: 'PENDING',
+          payloadEncrypted: 'isolated-receipt-fixture',
+          channel: 'EMAIL',
+          category: 'SECURITY',
+          userId: actor.id,
+          sourceType: 'AUTHENTICATION',
+          templateKey: 'authentication-security-alert',
+        },
+      });
+      const event = {
+        provider: 'fixture',
+        providerEventId: marker,
+        providerMessageId: marker,
+        type,
+        occurredAt: new Date(),
+      };
+      try {
+        expect(await ingestNotificationProviderFeedback(event)).toMatchObject({
+          reason: 'unmatched',
+        });
+        await prisma.notification.update({
+          where: { id: notification.id },
+          data: {
+            status: 'SENT',
+            sentAt: new Date(),
+            providerMessageId: marker,
+            deliveryProvider: 'other',
+          },
+        });
+        await reconcileNotificationProviderFeedback(notification.id);
+        expect(
+          (await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })).status
+        ).toBe('SENT');
+        await prisma.notification.update({
+          where: { id: notification.id },
+          data: { deliveryProvider: 'fixture' },
+        });
+        // The bounded worker catches up after persistence or a crashed immediate replay.
+        if (mode === 'immediate') await reconcileNotificationProviderFeedback(notification.id);
+        else await reconcileNotificationProviderFeedback(undefined, new Date(Date.now() + 120000));
+        const received = await prisma.notification.findUniqueOrThrow({
+          where: { id: notification.id },
+        });
+        expect(received.status).toBe(type === 'DELIVERED' ? 'DELIVERED' : 'FAILED');
+        expect(await ingestNotificationProviderFeedback(event)).toMatchObject({
+          reason: 'duplicate',
+        });
+        await reconcileNotificationProviderFeedback(notification.id);
+        expect(
+          await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })
+        ).toEqual(received);
+        if (type === 'HARD_BOUNCE') {
+          await ingestNotificationProviderFeedback({
+            ...event,
+            providerEventId: `${marker}-late`,
+            type: 'DELIVERED',
+          });
+          expect(
+            (await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })).status
+          ).toBe('FAILED');
+        }
+      } finally {
+        await prisma.notification.delete({ where: { id: notification.id } });
+        await prisma.notificationProviderFeedback.deleteMany({
+          where: { providerMessageId: marker },
+        });
+      }
+    }
+  );
+  it.each(['DELIVERED', 'HARD_BOUNCE'] as const)(
+    'reconciles an actual dispatcher %s callback before send returns',
+    async type => {
+      const control = await vi.importActual<typeof import('@/lib/notification-control-plane')>(
+        '@/lib/notification-control-plane'
+      );
+      const marker = `dispatch-receipt-${type}-${Date.now()}`;
+      const intent = await control.createCentralNotificationIntent({
+        category: 'SECURITY',
+        channel: 'EMAIL',
+        recipientType: 'EMAIL',
+        recipientId: actor.id,
+        userId: actor.id,
+        recipientAddress: 'emergency-certifier@example.test',
+        sourceType: 'AUTHENTICATION',
+        templateKey: 'authentication-security-alert',
+        sourceId: marker,
+        eventKey: marker,
+        displayMessage: 'Dispatcher ordering fixture',
+        payload: {
+          kind: 'EMAIL',
+          to: 'emergency-certifier@example.test',
+          subject: 'Fixture',
+          html: '<p>Fixture</p>',
+        },
+      });
+      deliveryMocks.sendEmail.mockImplementationOnce(async () => {
+        expect(
+          (await prisma.notification.findUniqueOrThrow({ where: { id: intent.id } }))
+            .providerMessageId
+        ).toBeNull();
+        await ingestNotificationProviderFeedback({
+          provider: 'fixture',
+          providerEventId: marker,
+          providerMessageId: marker,
+          type,
+          occurredAt: new Date(),
+        });
+        return { success: true, providerMessageId: marker, selectedProvider: 'fixture' };
+      });
+      try {
+        expect(await control.deliverCentralNotification(intent.id)).toMatchObject({
+          success: true,
+        });
+        const notification = await prisma.notification.findUniqueOrThrow({
+          where: { id: intent.id },
+        });
+        expect(notification.deliveryProvider).toBe('fixture');
+        expect(notification.status).toBe(type === 'DELIVERED' ? 'DELIVERED' : 'FAILED');
+      } finally {
+        await prisma.notification.delete({ where: { id: intent.id } });
+        await prisma.notificationProviderFeedback.deleteMany({
+          where: { providerMessageId: marker },
+        });
+      }
+    }
+  );
+  it('correlates legacy notifications using recorded delivery-attempt provider evidence', async () => {
+    const marker = `legacy-provider-${Date.now()}`;
+    const notification = await prisma.notification.create({
+      data: {
+        status: 'SENT',
+        channel: 'EMAIL',
+        category: 'SECURITY',
+        userId: actor.id,
+        sourceType: 'AUTHENTICATION',
+        templateKey: 'authentication-security-alert',
+        providerMessageId: marker,
+        deliveryAttempts: {
+          create: {
+            ordinal: 1,
+            outcome: 'ACCEPTED',
+            provider: 'fixture',
+            providerMessageId: marker,
+          },
+        },
+      },
+    });
+    try {
+      await ingestNotificationProviderFeedback({
+        provider: 'fixture',
+        providerEventId: marker,
+        providerMessageId: marker,
+        type: 'DELIVERED',
+        occurredAt: new Date(),
+      });
+      expect(
+        (await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })).status
+      ).toBe('DELIVERED');
+    } finally {
+      await prisma.notification.delete({ where: { id: notification.id } });
+      await prisma.notificationProviderFeedback.deleteMany({
+        where: { providerMessageId: marker },
+      });
+    }
+  });
   it('retains a confirmed receipt arriving before the alert links its notification', async () => {
     await prisma.authenticationAlert.deleteMany();
     const marker = `early-receipt-${Date.now()}`;
@@ -1356,6 +1540,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
         recipientId: actor.id,
         sourceType: 'AUTHENTICATION',
         templateKey: 'authentication-security-alert',
+        deliveryProvider: 'fixture',
         providerMessageId: marker,
         sentAt: new Date(),
       },

@@ -1737,6 +1737,7 @@ model Notification {
   failedAt               DateTime?
   reconciliationDeadline DateTime?
   errorMsg               String?
+  deliveryProvider       String?
   providerMessageId      String?                       @unique
   attempts               Int                           @default(0)
   createdAt              DateTime                      @default(now())
@@ -1856,11 +1857,15 @@ model NotificationProviderFeedback {
   providerMessageId String?
   eventType         String
   recipientHash     String?
+  processedAt       DateTime?
+  nextReconcileAt   DateTime @default(now())
   occurredAt        DateTime
   createdAt         DateTime @default(now())
 
   @@unique([provider, providerEventId])
   @@index([providerMessageId])
+  @@index([provider, providerMessageId, processedAt], map: "idx_feedback_provider_message_pending")
+  @@index([processedAt, nextReconcileAt])
   @@index([eventType, occurredAt])
 }
 

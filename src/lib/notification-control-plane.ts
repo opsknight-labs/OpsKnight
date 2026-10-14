@@ -1,6 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
+import { reconcileNotificationProviderFeedback } from './notification-provider-feedback';
 import {
   Prisma,
   type NotificationCategory,
@@ -2459,6 +2460,8 @@ export async function deliverCentralNotification(
         failedAt: null,
         errorMsg: result.skipped ? (result.error ?? null) : null,
         providerMessageId: result.providerMessageId,
+        deliveryProvider:
+          (result as { selectedProvider?: string }).selectedProvider || currentProvider,
         ...terminalPayload(candidate.category),
       };
       let committed: { count: number };
@@ -2549,6 +2552,7 @@ export async function deliverCentralNotification(
           error: safeError(persistenceError),
         });
       }
+      await reconcileNotificationProviderFeedback(candidate.id);
       if (committed.count === 0) {
         const current = await prisma.notification.findUnique({
           where: { id: candidate.id },
@@ -2946,6 +2950,7 @@ export async function processCentralNotificationQueue(
   failed: number;
 }> {
   const now = new Date();
+  await reconcileNotificationProviderFeedback(undefined, now);
   await reconcileUnknownNotifications(now);
   await cleanupExpiredNotifications(now);
   try {
