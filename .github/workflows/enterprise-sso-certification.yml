@@ -61,7 +61,7 @@ jobs:
       - name: Apply additive migrations
         run: npx prisma migrate deploy
       - name: Signed OIDC, WebAuthn, abuse availability and notification fan-out
-        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts
+        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts tests/integration/provider-feedback-isolation-database.test.ts
 
       - name: Emergency edge admission fixture
         run: python3 scripts/certify-sso-edge.py

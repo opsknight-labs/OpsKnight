@@ -712,3 +712,34 @@ The final 89-test run passed against a temporary PostgreSQL container using the 
 public-schema layout as hosted certification, with all 205 migrations applied. The
 container and its volumes were removed afterward. A preceding shared-database run
 was stopped after connection-pool timeouts and is not counted as passing evidence.
+
+### Shared notification receipt isolation — 2026-10-14
+
+The review of `088767b` found that receipt replay had become a shared-queue dependency.
+The audit is archived in `enterprise-sso-2.1-receipt-isolation-audit.md`.
+
+Core dispatch now precedes background receipt maintenance; fan-out accounting precedes
+immediate post-send replay. Both boundaries catch replay/query failures independently
+of successful provider submission. Per-receipt transactions isolate failures, persist
+bounded retry metadata and preserve the original receipt if retry persistence also
+fails. Missing subscribers are locked/checked before side effects and quarantined;
+malformed event types, exhausted attempts and aged unmatched records are quarantined.
+Replay excludes quarantine, uses indexed batches of 100, exponential backoff, a 12-attempt
+limit, a 24-hour age limit and a budget for starting work. Indexed retention removes at
+most 100 old records per terminal state while retaining 90 days of searchable evidence.
+
+The new dedicated PostgreSQL suite verifies deleted subscriptions with waiting critical
+mail, injected replay failure with successful provider submission/fan-out accounting,
+valid receipt progression after a bad receipt in the same batch, retry exhaustion,
+failed retry persistence followed by recovery, age exhaustion and bounded retention.
+The hosted SSO workflow includes this suite. Provider send/admission are isolated fixtures;
+queue claiming, rollback, receipt scheduling and counters use real PostgreSQL.
+
+Full unit suite: 5,768 passed, four intentional skips. The six new isolation tests
+include real notification-lock contention; receipt work uses PostgreSQL statement and
+lock timeouts as well as an interactive-transaction deadline. Final database/type/lint/
+build results are verified before push. Final local certification passed 95 PostgreSQL
+tests across four suites after all 206 migrations, and 35 focused unit regressions.
+Type checking and modified-file lint passed with zero errors/warnings; the optimized
+production build passed. Existing SSO, UI and live tenant/key/HA acceptance scope are
+unchanged. Local certification cannot replace the external acceptance gates.

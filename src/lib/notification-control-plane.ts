@@ -1,7 +1,10 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import { reconcileNotificationProviderFeedback } from './notification-provider-feedback';
+import {
+  cleanNotificationProviderFeedback,
+  reconcileNotificationProviderFeedback,
+} from './notification-provider-feedback';
 import {
   Prisma,
   type NotificationCategory,
@@ -2552,7 +2555,6 @@ export async function deliverCentralNotification(
           error: safeError(persistenceError),
         });
       }
-      await reconcileNotificationProviderFeedback(candidate.id);
       if (committed.count === 0) {
         const current = await prisma.notification.findUnique({
           where: { id: candidate.id },
@@ -2564,6 +2566,11 @@ export async function deliverCentralNotification(
         return { success: false, claimed: false };
       }
       await recordFanoutTerminal(candidate.fanoutId, result.skipped ? 'skipped' : 'completed');
+      try {
+        await reconcileNotificationProviderFeedback(candidate.id);
+      } catch {
+        logger.warn('notification.feedback_post_send_deferred', { notificationId: candidate.id });
+      }
       return { success: true, claimed: true };
     }
 
@@ -2950,7 +2957,6 @@ export async function processCentralNotificationQueue(
   failed: number;
 }> {
   const now = new Date();
-  await reconcileNotificationProviderFeedback(undefined, now);
   await reconcileUnknownNotifications(now);
   await cleanupExpiredNotifications(now);
   try {
@@ -3041,6 +3047,17 @@ export async function processCentralNotificationQueue(
       )
         failed++;
     }
+  }
+  // Receipt maintenance runs after dispatch and never changes its success accounting.
+  try {
+    await reconcileNotificationProviderFeedback(undefined, now);
+  } catch {
+    logger.warn('notification.feedback_queue_replay_deferred');
+  }
+  try {
+    await cleanNotificationProviderFeedback(now);
+  } catch {
+    logger.warn('notification.feedback_retention_deferred');
   }
   return { processed: succeeded + failed, succeeded, failed };
 }

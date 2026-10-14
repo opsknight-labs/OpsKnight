@@ -1857,6 +1857,9 @@ model NotificationProviderFeedback {
   providerMessageId String?
   eventType         String
   recipientHash     String?
+  reconciliationAttempts Int @default(0)
+  quarantinedAt DateTime?
+  reconciliationReason String?
   processedAt       DateTime?
   nextReconcileAt   DateTime @default(now())
   occurredAt        DateTime
@@ -1866,6 +1869,9 @@ model NotificationProviderFeedback {
   @@index([providerMessageId])
   @@index([provider, providerMessageId, processedAt], map: "idx_feedback_provider_message_pending")
   @@index([processedAt, nextReconcileAt])
+  @@index([processedAt, quarantinedAt, nextReconcileAt], map: "idx_feedback_replay_due")
+  @@index([processedAt, id], map: "idx_feedback_processed_retention")
+  @@index([quarantinedAt, id], map: "idx_feedback_quarantine_retention")
   @@index([eventType, occurredAt])
 }
 

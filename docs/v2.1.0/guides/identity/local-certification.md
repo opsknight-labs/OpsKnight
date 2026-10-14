@@ -329,3 +329,48 @@ without a Content-Length header, and requires a bounded SHA-256 signature header
 Oversized bodies receive HTTP 413 before signature hashing or event ingestion.
 These local ordering checks do not replace acceptance against a real provider's callback
 adapter, physical WebAuthn keys, live identity tenants, or production HA deployments.
+
+### Receipt replay failure isolation and quarantine
+
+Core notification dispatch runs before background receipt maintenance. Successful
+provider submission and fan-out accounting are persisted before immediate replay;
+a replay or receipt-selection failure cannot turn that submission into a failed send.
+Each receipt reconciles in its own bounded transaction. A failed transaction rolls
+back its notification, alert, endpoint and subscription changes together. Retry state
+is then persisted independently; failure to persist that state leaves the original
+receipt durable for a later worker pass. Database unavailability still affects core
+dispatch itself; this isolation does not claim that notifications work without PostgreSQL.
+
+Replay selects at most 100 due events and stops starting new events after a two-second
+processing budget. Transactions use a one-second timeout and a 500 ms acquisition
+limit, with PostgreSQL statement and lock timeouts of 750 ms and 250 ms; a transaction already started, retry-state persistence and batch selection can
+extend the overall maintenance duration. Maintenance runs after queued delivery, and
+its errors are logged separately from delivery success. Integrated schedulers poll at
+least every two minutes when otherwise idle; dedicated notification workers retain
+their configured idle polling interval.
+
+Missing subscription records and invalid stored event types enter terminal quarantine.
+Unmatched provider/message pairs and transient reconciliation errors use exponential
+backoff capped at one hour. A receipt is quarantined after 12 reconciliation attempts
+or when it reaches 24 hours of age at reconciliation. Quarantined events retain their
+provider/event IDs, occurrence time, attempt count and classification for investigation;
+they are excluded from automatic replay. Processed and quarantined evidence is retained
+for 90 days and cleaned in indexed batches of at most 100 records per terminal state.
+Unprocessed active receipts are never removed by that cleanup.
+
+Operators can inspect pending and quarantined receipts directly through the
+`NotificationProviderFeedback` table using `processedAt`, `quarantinedAt`,
+`reconciliationAttempts`, `nextReconcileAt` and `reconciliationReason`. Reasons include
+`RECIPIENT_DELETED`, `INVALID_EVENT_TYPE`, `UNMATCHED_PROVIDER_MESSAGE`,
+`RECONCILIATION_ERROR` and `RECONCILIATION_EXHAUSTED`. Investigate provider mapping,
+message persistence and target deletion before manually changing quarantine state.
+Event deduplication is guaranteed while its evidence remains within the retention window;
+provider adapters should not replay receipts beyond that window.
+
+The local regression executes a PostgreSQL trigger that rejects receipt processing,
+checks that accepted mail and fan-out counts remain successful, then verifies that a
+later valid receipt in the same batch completes. A second injected failure rejects
+retry-state persistence too; the durably ingested event completes after storage recovers.
+Deleted-subscriber soft bounces are quarantined while real queued critical notifications
+drain. These checks use mocked provider sends/admission with real PostgreSQL queue
+claims, transactions, receipt updates and fan-out counters.

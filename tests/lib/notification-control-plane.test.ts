@@ -1,4 +1,5 @@
 vi.mock('@/lib/notification-provider-feedback', () => ({
+  cleanNotificationProviderFeedback: vi.fn().mockResolvedValue(undefined),
   reconcileNotificationProviderFeedback: vi.fn().mockResolvedValue(undefined),
 }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -501,33 +502,40 @@ describe('central notification control plane', () => {
     expect(prisma.notificationDeliveryAttempt.create).not.toHaveBeenCalled();
   });
 
-  it('scrubs expired security payloads in a bounded queue cleanup pass', async () => {
-    vi.mocked(prisma.notification.findMany).mockResolvedValue([
-      { id: 'notification_expired' },
-    ] as never);
-    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+  it.each([false, true])(
+    'scrubs expired security payloads even when receipt selection fails=%s',
+    async replayFails => {
+      if (replayFails)
+        vi.mocked(reconcileNotificationProviderFeedback).mockRejectedValueOnce(
+          new Error('receipt index unavailable')
+        );
+      vi.mocked(prisma.notification.findMany).mockResolvedValue([
+        { id: 'notification_expired' },
+      ] as never);
+      vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
 
-    await expect(processCentralNotificationQueue()).resolves.toEqual({
-      processed: 0,
-      succeeded: 0,
-      failed: 0,
-    });
-    expect(prisma.notification.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        take: 100,
-        where: expect.objectContaining({
-          OR: expect.arrayContaining([
-            expect.objectContaining({ status: 'PENDING', lastAttemptAt: null }),
-          ]),
-        }),
-      })
-    );
-    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'SKIPPED', payloadEncrypted: null }),
-      })
-    );
-  });
+      await expect(processCentralNotificationQueue()).resolves.toEqual({
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+      });
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 100,
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({ status: 'PENDING', lastAttemptAt: null }),
+            ]),
+          }),
+        })
+      );
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'SKIPPED', payloadEncrypted: null }),
+        })
+      );
+    }
+  );
 
   it('uses class-specific floors when aging queued notifications', async () => {
     await processCentralNotificationQueue();
@@ -614,44 +622,51 @@ describe('central notification control plane', () => {
     );
   });
 
-  it('does not report provider acceptance as failure when attempt-ledger persistence aborts', async () => {
-    const due = new Date(Date.now() - 60_000);
-    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
-      id: 'notification_accepted',
-      status: 'PENDING',
-      category: 'ADMINISTRATION',
-      attempts: 0,
-      maxAttempts: 5,
-      nextAttemptAt: due,
-      scheduledAt: due,
-      lastAttemptAt: null,
-      expiresAt: null,
-      payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
-    } as never);
-    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
-    vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error('attempt ledger unavailable'));
-    mocks.sendEmail.mockResolvedValue({
-      success: true,
-      providerMessageId: 'provider-accepted',
-      selectedProvider: 'ses',
-    });
+  it.each([false, true])(
+    'preserves accepted submission when the attempt ledger aborts and replay fails=%s',
+    async replayFails => {
+      const due = new Date(Date.now() - 60_000);
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notification_accepted',
+        status: 'PENDING',
+        category: 'ADMINISTRATION',
+        attempts: 0,
+        maxAttempts: 5,
+        nextAttemptAt: due,
+        scheduledAt: due,
+        lastAttemptAt: null,
+        expiresAt: null,
+        payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+      } as never);
+      vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+      vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error('attempt ledger unavailable'));
+      mocks.sendEmail.mockResolvedValue({
+        success: true,
+        providerMessageId: 'provider-accepted',
+        selectedProvider: 'ses',
+      });
 
-    await expect(deliverCentralNotification('notification_accepted')).resolves.toEqual({
-      success: true,
-      claimed: true,
-    });
-    expect(reconcileNotificationProviderFeedback).toHaveBeenCalledWith('notification_accepted');
-    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: 'SENT',
-          providerMessageId: 'provider-accepted',
-          deliveryProvider: 'ses',
-          payloadEncrypted: null,
-        }),
-      })
-    );
-  });
+      if (replayFails)
+        vi.mocked(reconcileNotificationProviderFeedback).mockRejectedValueOnce(
+          new Error('receipt query unavailable')
+        );
+      await expect(deliverCentralNotification('notification_accepted')).resolves.toEqual({
+        success: true,
+        claimed: true,
+      });
+      expect(reconcileNotificationProviderFeedback).toHaveBeenCalledWith('notification_accepted');
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'SENT',
+            providerMessageId: 'provider-accepted',
+            deliveryProvider: 'ses',
+            payloadEncrypted: null,
+          }),
+        })
+      );
+    }
+  );
 
   it('skips delivering historical notifications whose payload eventAt exceeds TTL even without stored expiresAt', async () => {
     const due = new Date();
