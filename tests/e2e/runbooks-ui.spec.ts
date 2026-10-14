@@ -371,7 +371,7 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.getByRole('option', { name: /^Suggested/ }).click();
   await page.getByRole('combobox', { name: 'Initial rule status' }).click();
   await page
-    .getByRole('option', { name: 'Enable after configuration validation', exact: true })
+    .getByRole('option', { name: 'Enable Manual/Suggested · Automatic saves paused', exact: true })
     .click();
   await page.getByRole('button', { name: 'Continue to target and inputs', exact: true }).click();
   await page.getByRole('combobox', { name: 'Execution target' }).click();
@@ -1131,4 +1131,88 @@ test('service rule rendering stays bounded at 100, 1000 and 10000 rules', async 
       2
     )
   );
+});
+
+test('service-scoped USER access never serializes the global Runbook library', async ({
+  page,
+  context,
+}) => {
+  const scoped = await prisma.user.create({
+    data: {
+      email: `runbook-scoped-${crypto.randomUUID()}@example.invalid`,
+      name: 'Service scoped reader',
+      role: 'USER',
+      status: 'ACTIVE',
+      passwordHash: await bcrypt.hash(PASSWORD, 12),
+    },
+  });
+  const team = await prisma.team.create({
+    data: {
+      name: `Scoped team ${crypto.randomUUID()}`,
+      members: { create: { userId: scoped.id } },
+    },
+  });
+  const service = await prisma.service.create({
+    data: { name: `Scoped service ${crypto.randomUUID()}`, teamId: team.id },
+  });
+  const marker = `PRIVATE-RUNBOOK-COMMAND-${crypto.randomUUID()}`;
+  const workflow = await prisma.runbook.create({
+    data: { name: 'Private audit fixture', slug: crypto.randomUUID() },
+  });
+  const version = await prisma.runbookVersion.create({
+    data: {
+      runbookId: workflow.id,
+      version: 1,
+      state: 'PUBLISHED',
+      checksum: 'a'.repeat(64),
+      definition: {
+        steps: [
+          {
+            key: 'private',
+            name: marker,
+            type: 'BASH',
+            riskClass: 'READ_ONLY',
+            config: { command: `echo ${marker}` },
+          },
+        ],
+      },
+    },
+  });
+  await prisma.runbook.update({
+    where: { id: workflow.id },
+    data: { publishedVersionId: version.id },
+  });
+  await prisma.serviceAutomationRule.create({
+    data: {
+      serviceId: service.id,
+      runbookId: workflow.id,
+      runbookVersionId: version.id,
+      versionStrategy: 'PINNED',
+      enabled: false,
+    },
+  });
+  await context.clearCookies();
+  await page.goto('/login');
+  await page.locator('input[type="email"]').fill(scoped.email);
+  await page.locator('input[type="password"]').fill(PASSWORD);
+  await page.locator('form button[type="submit"]').click();
+  await expect(page).not.toHaveURL(/\/login/);
+  for (const tab of ['incidents', 'runbooks']) {
+    const response = await context.request.get(`/services/${service.id}?tab=${tab}`);
+    expect(response.status()).toBe(200);
+    const payload = await response.text();
+    expect(payload).not.toContain(marker);
+    expect(payload).not.toContain(workflow.id);
+    expect(payload).not.toContain(version.id);
+  }
+  const configuration = await context.request.get(
+    `/api/runbooks/versions/${version.id}/configuration?runbookId=${workflow.id}`
+  );
+  expect(configuration.status()).toBe(403);
+  expect(await configuration.text()).not.toContain(marker);
+  await page.goto(`/services/${service.id}?tab=runbooks`);
+  await expect(
+    page.getByText('Runbook access requires additional permission.', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create rule', exact: true })).not.toBeVisible();
 });

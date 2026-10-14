@@ -22,6 +22,8 @@ export function evaluatePolicyCheck(
   if (check.kind !== 'POLICY_CHECK' || !Array.isArray(check.steps) || check.steps.length > 200)
     throw new Error('Invalid policy-check envelope.');
   return check.steps.map(step => {
+    if (JSON.stringify(step.config).includes('[REDACTED]'))
+      return { key: step.key, allowed: null, reason: 'REDACTED_INPUT' as const };
     try {
       assertPolicyAllows(
         { step, inputValues: {}, secretInputKeys: [] } as unknown as ClaimedAttempt,

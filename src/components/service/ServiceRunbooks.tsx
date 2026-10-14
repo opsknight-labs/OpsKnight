@@ -1,4 +1,5 @@
 'use client';
+import { useVersionConfiguration } from '@/components/runbooks/useVersionConfiguration';
 import type { BindingReadiness } from '@/lib/runbooks/binding-readiness';
 
 import React, { useMemo, useState } from 'react';
@@ -83,12 +84,23 @@ export type ServiceRunbookBinding = Prisma.ServiceAutomationRuleGetPayload<{
   };
 };
 
-export type AvailableRunbook = Prisma.RunbookGetPayload<{
-  include: {
-    publishedVersion: { include: { inputs: true } };
-    versions: { include: { inputs: true } };
-  };
-}>;
+type CatalogVersion = {
+  id: string;
+  version: number;
+  state: import('@prisma/client').RunbookVersionState;
+  inputs?: RunbookInput[];
+  definition?: unknown;
+  hasAgentWrite?: boolean;
+  metadataOnly?: boolean;
+};
+export type AvailableRunbook = {
+  id: string;
+  name: string;
+  description: string;
+  publishedVersionId: string | null;
+  publishedVersion: CatalogVersion | null;
+  versions: CatalogVersion[];
+};
 
 export type ServiceRunbookAgent = {
   id: string;
@@ -144,9 +156,16 @@ export default function ServiceRunbooks({
     return unattached[0] || null;
   }, [unattached, selectedAttachId]);
 
-  const activeAttachVersion = activeAttachRunbook?.versions.find(
+  const selectedMetadata = activeAttachRunbook?.versions.find(
     version => version.id === (selectedAttachVersionId ?? activeAttachRunbook.publishedVersionId)
   );
+  const loadedVersion = useVersionConfiguration(
+    selectedMetadata?.metadataOnly ? selectedMetadata.id : null,
+    activeAttachRunbook?.id
+  );
+  const activeAttachVersion = selectedMetadata?.metadataOnly
+    ? loadedVersion.data
+    : selectedMetadata;
 
   // Client-side instant 0ms search & filter
   const filteredBindings = useMemo(() => {
@@ -250,6 +269,13 @@ export default function ServiceRunbooks({
           )}
         </nav>
       )}
+      <Button asChild variant="outline">
+        <Link
+          href={`/services/${serviceId}?tab=runbooks&rulesCheck=1&rulesAfter=${encodeURIComponent(pagination?.after ?? '')}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
+        >
+          Check visible rule readiness
+        </Link>
+      </Button>
       {/* Elevated Header with Live KPI Overview */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -338,9 +364,21 @@ export default function ServiceRunbooks({
                             <>
                               <RunbookBindingVersionInputs
                                 initialMode="MANUAL"
-                                versions={activeAttachRunbook.versions.map(version => ({
+                                runbookId={activeAttachRunbook.id}
+                                versions={[
+                                  ...new Map(
+                                    [
+                                      ...activeAttachRunbook.versions,
+                                      ...(activeAttachRunbook.publishedVersion
+                                        ? [activeAttachRunbook.publishedVersion]
+                                        : []),
+                                    ].map(version => [version.id, version])
+                                  ).values(),
+                                ].map(version => ({
                                   ...version,
-                                  hasAgentWrite: hasAgentWrites(version.definition),
+                                  hasAgentWrite:
+                                    version.hasAgentWrite ?? hasAgentWrites(version.definition),
+                                  inputs: version.inputs ?? [],
                                 }))}
                                 publishedVersionId={activeAttachRunbook.publishedVersionId ?? ''}
                                 initialStrategy="LATEST_PUBLISHED"
@@ -369,7 +407,7 @@ export default function ServiceRunbooks({
                                     },
                                     {
                                       value: 'true',
-                                      label: 'Enable after configuration validation',
+                                      label: 'Enable Manual/Suggested · Automatic saves paused',
                                     },
                                   ]}
                                 />
@@ -387,15 +425,27 @@ export default function ServiceRunbooks({
                                   pools={availableAgentPools}
                                   hasAgentWrite={
                                     activeAttachVersion
-                                      ? hasAgentWrites(activeAttachVersion.definition)
+                                      ? (activeAttachVersion.hasAgentWrite ??
+                                        hasAgentWrites(
+                                          'definition' in activeAttachVersion
+                                            ? activeAttachVersion.definition
+                                            : undefined
+                                        ))
                                       : false
                                   }
                                 />
                               </Field>
 
+                              {selectedMetadata?.metadataOnly && !activeAttachVersion && (
+                                <p data-form-invalid="true" role="status">
+                                  {loadedVersion.error
+                                    ? 'Version configuration unavailable. Reload to retry.'
+                                    : 'Loading selected version configuration…'}
+                                </p>
+                              )}
                               <RunbookSelectorBuilder />
 
-                              {(activeAttachVersion?.inputs.length ?? 0) > 0 && (
+                              {(activeAttachVersion?.inputs?.length ?? 0) > 0 && (
                                 <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
                                   <InputFields
                                     key={activeAttachVersion?.id}
@@ -438,10 +488,11 @@ export default function ServiceRunbooks({
                           content: (
                             <>
                               <p className="text-sm">
-                                Review the selected immutable version, execution mode, target and
-                                inputs before saving. Configuration checks do not prove platform
-                                permissions. Save paused to review configuration and Agent policy
-                                evidence first.
+                                Automatic rules always save paused. Activate separately from Rule
+                                evidence after fresh policy checks. Review the selected immutable
+                                version, execution mode, target and inputs before saving.
+                                Configuration checks do not prove platform permissions. Save paused
+                                to review configuration and Agent policy evidence first.
                               </p>
                               <div className="lg:col-span-3 pt-2">
                                 <SubmitButton pendingLabel="Attaching…">
@@ -640,6 +691,13 @@ export default function ServiceRunbooks({
               </CardHeader>
 
               <CardContent className="space-y-3.5 pt-0">
+                {!binding.readiness && (
+                  <p className="text-xs text-muted-foreground">
+                    {binding.enabled
+                      ? 'Target and policy readiness not assessed. Open Rule evidence or check this page.'
+                      : 'Rule paused · Target checks not run.'}
+                  </p>
+                )}
                 {binding.readiness && (
                   <section
                     aria-label="Rule readiness"
@@ -746,12 +804,16 @@ export default function ServiceRunbooks({
                           >
                             <RunbookBindingVersionInputs
                               initialMode={binding.mode}
+                              runbookId={binding.runbookId}
                               versions={[
                                 ...new Map(
                                   [
-                                    ...(availableRunbooks.find(
-                                      item => item.id === binding.runbookId
-                                    )?.versions ?? []),
+                                    ...(availableRunbooks
+                                      .find(item => item.id === binding.runbookId)
+                                      ?.versions.map(version => ({
+                                        ...version,
+                                        inputs: version.inputs ?? [],
+                                      })) ?? []),
                                     ...(binding.runbookVersion ? [binding.runbookVersion] : []),
                                     ...(binding.runbook.publishedVersion
                                       ? [binding.runbook.publishedVersion]

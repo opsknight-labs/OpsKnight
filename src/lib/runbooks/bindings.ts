@@ -145,6 +145,8 @@ export async function createServiceBinding(
   expectedVersionId?: string
 ) {
   const input = createServiceRunbookBindingSchema.parse(raw);
+  const requestedEnabled = input.enabled;
+  if (input.mode === 'AUTOMATIC') input.enabled = false;
   const trigger = initialTrigger ? createRunbookTriggerSchema.parse(initialTrigger) : undefined;
   return prisma.$transaction(async tx => {
     await lockRunbookForUpdate(tx, input.runbookId, { action: 'bind' });
@@ -165,7 +167,7 @@ export async function createServiceBinding(
     await validateBindingTarget(
       tx,
       version,
-      input.enabled,
+      input.enabled || requestedEnabled,
       input.defaultAgentId,
       input.defaultAgentPoolId,
       input.agentSelector
@@ -237,11 +239,13 @@ export async function updateServiceBinding(
 ) {
   const input = updateServiceRunbookBindingSchema.parse(raw);
   return prisma.$transaction(async tx => {
+    const requestedEnabled = input.enabled;
     const current = await tx.serviceAutomationRule.findFirst({
       where: { id: bindingId, serviceId },
     });
     if (!current) throw new RunbookDefinitionError('Service runbook binding not found.');
     await lockRunbookForUpdate(tx, current.runbookId, { action: 'update binding for' });
+    if ((input.mode ?? current.mode) === 'AUTOMATIC') input.enabled = false;
     const strategy = input.versionStrategy ?? current.versionStrategy;
     const requestedVersionId =
       input.runbookVersionId === undefined ? current.runbookVersionId : input.runbookVersionId;
@@ -278,7 +282,7 @@ export async function updateServiceBinding(
     await validateBindingTarget(
       tx,
       version,
-      input.enabled ?? current.enabled,
+      requestedEnabled ?? current.enabled,
       agentId,
       agentPoolId,
       (input.agentSelector ?? current.agentSelector) as Record<string, unknown>
@@ -351,6 +355,11 @@ export async function replaceBindingTrigger(
     });
     if (!binding) throw new RunbookDefinitionError('Service runbook binding not found.');
     await lockRunbookForUpdate(tx, binding.runbookId, { action: 'configure triggers for' });
+    if (binding.mode === 'AUTOMATIC')
+      await tx.serviceAutomationRule.update({
+        where: { id: binding.id },
+        data: { enabled: false },
+      });
     await tx.runbookTrigger.deleteMany({ where: { bindingId, event: input.event } });
     const trigger = await tx.runbookTrigger.create({
       data: {
@@ -460,5 +469,77 @@ export async function duplicateServiceRule(serviceId: string, ruleId: string, ac
       tx
     );
     return duplicate;
+  });
+}
+
+/** Activation is separate from configuration, scoped, locked and based on current evidence. */
+export async function activateServiceRule(
+  serviceId: string,
+  ruleId: string,
+  actorId: string,
+  confirmMatchAll: boolean
+) {
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${ruleId} AND "serviceId" = ${serviceId} FOR UPDATE`;
+    const rule = await tx.serviceAutomationRule.findFirst({
+      where: { id: ruleId, serviceId },
+      include: {
+        runbook: { include: { publishedVersion: { include: { inputs: true } } } },
+        runbookVersion: { include: { inputs: true } },
+        triggers: { include: { conditions: true } },
+      },
+    });
+    if (!rule || rule.mode !== 'AUTOMATIC' || rule.versionStrategy !== 'PINNED')
+      throw new RunbookDefinitionError(
+        'Activation requires a paused Automatic rule with an exact version pin.'
+      );
+    if (rule.enabled) throw new RunbookDefinitionError('This rule is already active.');
+    const triggers = rule.triggers.filter(
+      trigger => trigger.enabled && trigger.event === 'INCIDENT_CREATED'
+    );
+    if (!triggers.length)
+      throw new RunbookDefinitionError('Configure an active incident-created trigger first.');
+    if (triggers.some(trigger => trigger.conditions.length === 0) && !confirmMatchAll)
+      throw new RunbookDefinitionError(
+        'Explicitly confirm that this rule may match every new incident for this service.'
+      );
+    const { getBindingReadiness } = await import('./binding-readiness');
+    const readiness = await getBindingReadiness({ ...rule, enabled: true }, new Date(), tx);
+    if (
+      readiness.state === 'BLOCKED' ||
+      readiness.state === 'UNKNOWN' ||
+      readiness.checks.some(
+        check =>
+          check.state === 'deferred' &&
+          check.code !== 'APPROVAL_REQUIRED' &&
+          !check.code.startsWith('TARGET_CHECK_')
+      )
+    )
+      throw new RunbookDefinitionError(
+        'Resolve configuration and target checks before activation.'
+      );
+    const version = rule.runbookVersion!;
+    const needsAgent = flattenSteps(
+      parseRunbookDefinition(version.definition, version.inputs)
+    ).some(step => requiresAgent(step.type));
+    const accepted = readiness.checks.filter(
+      check => check.code.startsWith('AGENT_POLICY_') && check.state === 'passed'
+    ).length;
+    if (needsAgent && (!readiness.eligibleAgents || accepted !== readiness.eligibleAgents))
+      throw new RunbookDefinitionError(
+        'Request fresh successful local policy checks for every selected Agent before activation.'
+      );
+    await tx.serviceAutomationRule.update({ where: { id: rule.id }, data: { enabled: true } });
+    await logAudit(
+      {
+        action: 'runbook.rule.activated',
+        entityType: 'RUNBOOK',
+        entityId: rule.runbookId,
+        actorId,
+        details: { serviceId, ruleId, versionId: version.id, confirmMatchAll },
+      },
+      tx
+    );
+    return { saved: true };
   });
 }

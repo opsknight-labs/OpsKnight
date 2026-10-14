@@ -18,7 +18,7 @@ it('runs bounded reconciliation independently when dispatch workers are missing'
     reason: 'missing',
   });
   await runRunbookWatchdog();
-  expect(reconcileRunbooks).toHaveBeenCalledWith(100);
+  expect(reconcileRunbooks).toHaveBeenCalledWith(100, expect.any(Object));
 });
 it('does not duplicate a healthy worker reconciliation sweep', async () => {
   vi.mocked(reconcileRunbooks).mockClear();

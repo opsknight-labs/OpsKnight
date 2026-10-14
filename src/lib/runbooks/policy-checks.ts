@@ -145,7 +145,16 @@ export const policyCheckResultSchema = z
     id: z.string().uuid(),
     policyHash: z.string().regex(/^[a-f0-9]{64}$/),
     results: z
-      .array(z.object({ key: z.string().max(100), allowed: z.boolean() }).strict())
+      .array(
+        z
+          .object({
+            key: z.string().max(100),
+            allowed: z.boolean().nullable(),
+            reason: z.literal('REDACTED_INPUT').optional(),
+          })
+          .strict()
+          .refine(result => result.allowed !== null || result.reason === 'REDACTED_INPUT')
+      )
       .max(200),
   })
   .strict();
@@ -164,12 +173,24 @@ export async function submitPolicyCheck(agentId: string, raw: unknown) {
       !expected.every(key => input.results.some(result => result.key === key))
     )
       throw new Error('Policy result must address every frozen step exactly once.');
+    const frozen = check.steps as unknown as Array<{ key: string; config: unknown }>;
+    const results = input.results.map(result =>
+      frozen.some(
+        step => step.key === result.key && JSON.stringify(step.config).includes('[REDACTED]')
+      )
+        ? { key: result.key, allowed: null, reason: 'REDACTED_INPUT' as const }
+        : result
+    );
     const updated = await tx.runbookPolicyCheck.updateMany({
       where: { id: check.id, agentId, status: 'PENDING' },
       data: {
-        status: input.results.every(result => result.allowed) ? 'PASSED' : 'BLOCKED',
+        status: results.some(result => result.allowed === false)
+          ? 'BLOCKED'
+          : results.some(result => result.allowed === null)
+            ? 'DEFERRED'
+            : 'PASSED',
         policyHash: input.policyHash,
-        results: input.results,
+        results,
         checkedAt: new Date(),
       },
     });

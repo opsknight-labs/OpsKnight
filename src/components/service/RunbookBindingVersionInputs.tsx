@@ -1,5 +1,6 @@
 'use client';
 
+import { useVersionConfiguration } from '@/components/runbooks/useVersionConfiguration';
 import { useId, useState } from 'react';
 import type { RunbookInputType, RunbookVersionState } from '@prisma/client';
 import { Input } from '@/components/ui/shadcn/input';
@@ -33,6 +34,7 @@ type Version = {
   state: RunbookVersionState;
   inputs: InputDefinition[];
   hasAgentWrite?: boolean;
+  metadataOnly?: boolean;
 };
 
 export default function RunbookBindingVersionInputs({
@@ -45,7 +47,9 @@ export default function RunbookBindingVersionInputs({
   initialMode,
   includeInputs = true,
   onVersionChange,
+  runbookId,
 }: {
+  runbookId?: string;
   onVersionChange?: (versionId: string) => void;
   initialMode?: 'MANUAL' | 'SUGGESTED' | 'AUTOMATIC';
   includeInputs?: boolean;
@@ -63,7 +67,12 @@ export default function RunbookBindingVersionInputs({
   const [strategy, setStrategy] = useState(initialStrategy);
   const [versionId, setVersionId] = useState(initialVersionId ?? publishedVersionId);
   const effectiveVersionId = strategy === 'PINNED' ? versionId : publishedVersionId;
-  const version = versions.find(candidate => candidate.id === effectiveVersionId);
+  const metadata = versions.find(candidate => candidate.id === effectiveVersionId);
+  const loaded = useVersionConfiguration(
+    metadata?.metadataOnly ? effectiveVersionId : null,
+    runbookId
+  );
+  const version = metadata?.metadataOnly ? loaded.data : metadata;
   const selectable = versions.filter(
     candidate => candidate.state === 'PUBLISHED' || candidate.id === initialVersionId
   );
@@ -156,6 +165,13 @@ export default function RunbookBindingVersionInputs({
           }))}
         />
       </div>
+      {metadata?.metadataOnly && !version && (
+        <p data-form-invalid="true" role="status">
+          {loaded.error
+            ? 'Version configuration unavailable. Reload to retry.'
+            : 'Loading selected version configuration…'}
+        </p>
+      )}
       {targets && (
         <div className="space-y-2">
           <Label>Execution target</Label>

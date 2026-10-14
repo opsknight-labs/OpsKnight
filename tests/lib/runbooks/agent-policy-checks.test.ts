@@ -94,3 +94,29 @@ it('rejects tampered and wrong-Agent policy envelopes before reading their actio
     )
   ).toThrow();
 });
+
+it('reports redacted command fields as indeterminate, even if a placeholder matches an allowlist', () => {
+  const { signature: _signature, ...body } = envelope();
+  body.steps = [{ ...body.steps[1], config: { command: 'echo [REDACTED]' } }];
+  const signed = {
+    ...body,
+    signature: sign(null, Buffer.from(canonicalEnvelope(body)), keys.privateKey).toString('base64'),
+  };
+  expect(
+    evaluatePolicyCheck(
+      signed,
+      {
+        allowedStepTypes: ['BASH'],
+        allowNonIdempotent: true,
+        systemdUnits: [],
+        dockerContainers: [],
+        kubernetesNamespaces: [],
+        bashCommandPatterns: ['^echo .*'],
+        maxRuntimeSeconds: 30,
+        maxOutputBytes: 1024,
+      },
+      pin,
+      'agent'
+    )
+  ).toEqual([{ key: 'write', allowed: null, reason: 'REDACTED_INPUT' }]);
+});

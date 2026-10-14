@@ -115,4 +115,57 @@ suite('Agent local policy-check authority', () => {
       )
     ).toBe(false);
   });
+  it('retains indeterminate secret fields even when an older Agent reports acceptance', async () => {
+    const actor = await createTestUser();
+    const service = await createTestService('Deferred policy');
+    const workflow = await testPrisma.runbook.create({
+      data: { name: 'Deferred', slug: crypto.randomUUID() },
+    });
+    const version = await testPrisma.runbookVersion.create({
+      data: {
+        runbookId: workflow.id,
+        version: 1,
+        state: 'PUBLISHED',
+        checksum: 'c'.repeat(64),
+        definition: {
+          steps: [
+            {
+              key: 'command',
+              name: 'Command',
+              type: 'BASH',
+              riskClass: 'NON_IDEMPOTENT',
+              config: { command: 'echo [REDACTED]' },
+            },
+          ],
+        },
+      },
+    });
+    const agent = await testPrisma.runbookAgent.create({ data: { name: 'Deferred Agent' } });
+    const rule = await testPrisma.serviceAutomationRule.create({
+      data: { serviceId: service.id, runbookId: workflow.id },
+    });
+    const check = await testPrisma.runbookPolicyCheck.create({
+      data: {
+        id: crypto.randomUUID(),
+        ruleId: rule.id,
+        agentId: agent.id,
+        versionId: version.id,
+        checksum: version.checksum,
+        steps: [{ key: 'command', config: { command: 'echo [REDACTED]' } }],
+        expiresAt: new Date(Date.now() + 60000),
+        createdById: actor.id,
+      },
+    });
+    await submitPolicyCheck(agent.id, {
+      id: check.id,
+      policyHash: 'b'.repeat(64),
+      results: [{ key: 'command', allowed: true }],
+    });
+    const saved = await testPrisma.runbookPolicyCheck.findUniqueOrThrow({
+      where: { id: check.id },
+    });
+    expect(saved.status).toBe('DEFERRED');
+    expect(saved.results).toEqual([{ key: 'command', allowed: null, reason: 'REDACTED_INPUT' }]);
+    expect(await testPrisma.runbookExecution.count()).toBe(0);
+  });
 });

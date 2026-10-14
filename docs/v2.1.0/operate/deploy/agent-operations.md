@@ -282,3 +282,11 @@ and signed lease lifetime, rather than reopening replay immediately after acknow
 Apply migrations before rolling out web, scheduler and worker replicas. The new durable heartbeat/policy-check tables are additive. `ServiceAutomationRule` maps to the existing `ServiceRunbookBinding` table, preserving rule IDs and execution/suggestion foreign keys; the old one-workflow-per-service uniqueness constraint is removed. Back up PostgreSQL before upgrading. A schema rollback must not recreate that constraint while independent duplicate rules exist. Prefer a forward fix; if reverting application binaries, pause new rules, reconcile active work, and review duplicate-rule behavior before restarting old replicas. Do not delete history or identity volumes as a rollback procedure.
 
 Before promoting a release, exercise fresh install, enroll, one signed read-only action/result artifact, restart identity preservation, drain, upgrade and rollback in the intended topology. CI source/build tests are not certification of every Linux distribution, external TLS proxy, air-gapped registry, Swarm node loss or production capacity. Record PASS/FAIL/NOT_TESTED evidence for each environment.
+
+## Connectivity readiness and policy uncertainty
+
+Liveness remains independent during a control-plane partition. Readiness becomes false after a failed authenticated contact or when the last authenticated heartbeat is 90 seconds old; claims pause until contact recovers. The health file records contact age using a monotonic clock. Identity and uncertain-result spool state remain intact.
+
+Local policy checking does not receive decrypted secrets. A configuration field masked for secrecy produces **DEFERRED**, rather than a definitive policy pass or denial. Exact command allowlists are evaluated again against the actual resolved execution plan at execution time. The server preserves this uncertainty even when an older Agent reports a decision on a masked placeholder.
+
+The scheduler watchdog shares the transaction/connection holding its PostgreSQL advisory lock with reconciliation. It supports a one-connection scheduler pool without acquiring an additional connection during recovery.

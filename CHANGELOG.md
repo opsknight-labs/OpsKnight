@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Runbook engine remediation
 
+- Restricted service Runbook data to authorized Runbooks views, replaced the full catalog payload with metadata and authorized selected-version fetches, and made deep readiness checks explicit.
+- Automatic rules now save paused and activate separately with fresh policy evidence and explicit match-all trigger confirmation. Agent partitions fail readiness while preserving liveness; secret-dependent preflight checks report uncertainty. Watchdog reconciliation reuses the lock connection for minimum-pool deployments.
+
 - Fixed pinned-version/input drift during rule creation, bounded service rule readiness with cursor pagination, and coordinated watchdog recovery with idempotent jobs.
 - Historical version comparison supports older versions; invalid selectors return inline errors and disable saving. Worker health now discloses expected redundancy, and rule cards group secondary controls under Manage rule.
 

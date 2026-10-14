@@ -380,3 +380,22 @@ export async function updateRunbookBindingAction(
     throw error;
   }
 }
+
+export async function activateRuleAction(serviceId: string, ruleId: string, formData: FormData) {
+  const actor = await bindingActor(idSchema.parse(serviceId));
+  const { activateServiceRule } = await import('@/lib/runbooks/bindings');
+  try {
+    const result = await activateServiceRule(
+      serviceId,
+      idSchema.parse(ruleId),
+      actor.id,
+      formData.get('confirmMatchAll') === 'true'
+    );
+    revalidatePath(`/services/${serviceId}`);
+    revalidatePath(`/services/${serviceId}/automations/${ruleId}`);
+    return result;
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
+}

@@ -163,3 +163,9 @@ Service automation lists show 20 rules per page. **Next rules** uses a stable cr
 For a new pinned rule, the selected version determines the input fields, target restrictions, review and saved version. If latest publication changes while a form is open, saving fails with a reload instruction before creating a rule. Invalid selector JSON, duplicate keys and invalid labels disable saving until corrected. Cards show the rule's state, target, blockers and last run; **Rule evidence** opens detailed checks/history, and **Manage rule** reveals editing, duplication and detach controls.
 
 Version comparison authorizes both requested versions independently of the selector page. **Older versions** and **Newer versions** paginate the selector without losing the selected comparison.
+
+## Automatic activation and scoped configuration
+
+Viewing a service does not grant Runbook-library access. The Runbooks view requires `runbook.read.all`; other service views do not load the catalog, rules or Agent inventory. Catalog entries contain metadata, and selected version input/risk details are fetched through a separately authorized endpoint. Target/policy checks are requested from Rule evidence or **Check visible rule readiness**, rather than running for every ordinary page view.
+
+Automatic rules always save paused, including configuration changes to an active rule. Open **Rule evidence**, validate configuration, request fresh Agent policy checks, and use **Activate Automatic rule**. Each selected Agent must have current successful policy evidence for the frozen version and inputs. A trigger with no conditions requires explicit confirmation that it may match every new incident for the service. Activation does not execute a workflow or bypass step approval, frozen-plan preview, target permission or unknown-outcome fences. Incident-context selectors and secret-dependent policy fields cannot be fully verified for activation in advance.

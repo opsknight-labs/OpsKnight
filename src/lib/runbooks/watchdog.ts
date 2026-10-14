@@ -17,7 +17,7 @@ export async function runRunbookWatchdog() {
           Array<{ acquired: boolean }>
         >`SELECT pg_try_advisory_xact_lock(864, 1) AS acquired`;
         if (!lock?.acquired) return;
-        await reconcileRunbooks(100);
+        await reconcileRunbooks(100, tx);
       },
       { timeout: 30_000 }
     );

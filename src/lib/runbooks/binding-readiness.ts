@@ -25,7 +25,7 @@ type Binding = Prisma.ServiceAutomationRuleGetPayload<{
 export async function getBindingReadiness(
   binding: Binding,
   now = new Date(),
-  db: typeof prisma = prisma
+  db: Prisma.TransactionClient = prisma
 ): Promise<BindingReadiness> {
   const checks: BindingReadiness['checks'] = [];
   const presentation = describeBinding(binding, [], []);
@@ -208,8 +208,13 @@ export async function getBindingReadiness(
       seen.add(policyCheck.agentId);
       checks.push({
         code: `AGENT_POLICY_${policyCheck.agentId}`,
-        state: policyCheck.status === 'PASSED' ? 'passed' : 'blocked',
-        message: `${policyCheck.status === 'PASSED' ? 'Agent local policy accepted the frozen configuration' : 'Agent local policy denied one or more actions'} at ${policyCheck.checkedAt?.toISOString()}. This evidence does not grant target permissions and does not execute steps.`,
+        state:
+          policyCheck.status === 'PASSED'
+            ? 'passed'
+            : policyCheck.status === 'DEFERRED'
+              ? 'deferred'
+              : 'blocked',
+        message: `${policyCheck.status === 'PASSED' ? 'Agent local policy accepted the frozen configuration' : policyCheck.status === 'DEFERRED' ? 'Agent policy cannot verify secret-dependent fields before execution' : 'Agent local policy denied one or more actions'} at ${policyCheck.checkedAt?.toISOString()}. This evidence does not grant target permissions and does not execute steps.`,
       });
     }
     const blocked = checks.some(check => check.state === 'blocked');

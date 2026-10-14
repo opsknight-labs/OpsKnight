@@ -17,6 +17,7 @@ import RuleConfigurationCheck from '@/components/runbooks/RuleConfigurationCheck
 import RunbookExecutionPreview from '@/components/runbooks/RunbookExecutionPreview';
 import { ActionForm, SubmitButton } from '@/components/runbooks/RunbookControls';
 import {
+  activateRuleAction,
   validateRuleConfigurationAction,
   checkRulePolicyAction,
   previewServiceRuleAction,
@@ -130,10 +131,26 @@ export default async function AutomationRulePage({
             />
           </div>
         )}
+        {canManage && !rule.enabled && rule.mode === 'AUTOMATIC' && (
+          <ActionForm action={activateRuleAction.bind(null, input.id, rule.id)}>
+            <h3 className="font-semibold">Activate Automatic rule</h3>
+            <p className="text-sm">
+              Activation requires current configuration and successful Agent policy evidence.
+              Execution approval gates still apply.
+            </p>
+            {rule.triggers.some(trigger => trigger.enabled && trigger.conditions.length === 0) && (
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="confirmMatchAll" value="true" required />I confirm this
+                rule can match every new incident for this service.
+              </label>
+            )}
+            <SubmitButton>Activate Automatic rule</SubmitButton>
+          </ActionForm>
+        )}
         {!rule.enabled && (
           <p className="text-sm">
-            This rule is paused. Review its checks and enable it in service configuration before
-            running it.
+            This rule is paused. Review its checks and use its activation controls before running
+            it.
           </p>
         )}
       </section>

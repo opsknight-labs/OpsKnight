@@ -1,22 +1,26 @@
 import 'server-only';
 
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { DEFAULT_STEP_TIMEOUT_SECONDS, isSafeToRetryAfterUnknown } from './types';
 import { retryDelayMs } from './safety';
 
-export async function reconcileRunbooks(limit = 100) {
+export async function reconcileRunbooks(limit = 100, connection?: Prisma.TransactionClient) {
+  const db = connection ?? prisma;
+  const transaction = (callback: (tx: Prisma.TransactionClient) => Promise<void>) =>
+    connection ? callback(connection) : prisma.$transaction(callback);
   const now = new Date();
   // Capability records are temporary. Audit events keep issuance/consumption scope and execution IDs.
   const previewRetentionCutoff = new Date(now.getTime() - 30 * 86_400_000);
-  const expiredPreviewBatch = await prisma.runbookPreviewAuthorization.findMany({
+  const expiredPreviewBatch = await db.runbookPreviewAuthorization.findMany({
     where: { expiresAt: { lt: previewRetentionCutoff } },
     orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
     take: Math.min(1000, Math.max(1, Math.trunc(limit) || 100)),
     select: { id: true },
   });
   const previewAuthorizationsDeleted = expiredPreviewBatch.length
-    ? await prisma.runbookPreviewAuthorization.deleteMany({
+    ? await db.runbookPreviewAuthorization.deleteMany({
         where: {
           id: { in: expiredPreviewBatch.map(record => record.id) },
           expiresAt: { lt: previewRetentionCutoff },
@@ -24,30 +28,30 @@ export async function reconcileRunbooks(limit = 100) {
       })
     : { count: 0 };
   const evidenceCutoff = new Date(now.getTime() - 30 * 86400000);
-  const oldChecks = await prisma.runbookPolicyCheck.findMany({
+  const oldChecks = await db.runbookPolicyCheck.findMany({
     where: { expiresAt: { lt: evidenceCutoff } },
     take: Math.min(1000, Math.max(1, limit)),
     select: { id: true },
     orderBy: { expiresAt: 'asc' },
   });
   if (oldChecks.length)
-    await prisma.runbookPolicyCheck.deleteMany({
+    await db.runbookPolicyCheck.deleteMany({
       where: { id: { in: oldChecks.map(check => check.id) }, expiresAt: { lt: evidenceCutoff } },
     });
-  const oldWorkers = await prisma.runtimeWorkerHeartbeat.findMany({
+  const oldWorkers = await db.runtimeWorkerHeartbeat.findMany({
     where: { lastSeenAt: { lt: evidenceCutoff } },
     take: Math.min(1000, Math.max(1, limit)),
     select: { instanceId: true },
     orderBy: { lastSeenAt: 'asc' },
   });
   if (oldWorkers.length)
-    await prisma.runtimeWorkerHeartbeat.deleteMany({
+    await db.runtimeWorkerHeartbeat.deleteMany({
       where: {
         instanceId: { in: oldWorkers.map(worker => worker.instanceId) },
         lastSeenAt: { lt: evidenceCutoff },
       },
     });
-  const overdueExecutions = await prisma.runbookExecution.findMany({
+  const overdueExecutions = await db.runbookExecution.findMany({
     where: {
       deadlineAt: { lte: now },
       status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
@@ -57,7 +61,7 @@ export async function reconcileRunbooks(limit = 100) {
     take: limit,
   });
   for (const { id: executionId, incidentId } of overdueExecutions) {
-    await prisma.$transaction(async tx => {
+    await transaction(async tx => {
       const timedOut = await tx.runbookExecution.updateMany({
         where: {
           id: executionId,
@@ -98,7 +102,7 @@ export async function reconcileRunbooks(limit = 100) {
       }
     });
   }
-  const expired = await prisma.runbookStepAttempt.findMany({
+  const expired = await db.runbookStepAttempt.findMany({
     where: {
       OR: [
         { status: 'PENDING', claimDeadlineAt: { lt: now } },
@@ -118,7 +122,7 @@ export async function reconcileRunbooks(limit = 100) {
   let unknown = 0;
   for (const attempt of expired) {
     if (attempt.status === 'PENDING') {
-      await prisma.$transaction(async tx => {
+      await transaction(async tx => {
         const timedOut = await tx.runbookStepAttempt.updateMany({
           where: { id: attempt.id, status: 'PENDING', claimDeadlineAt: { lt: now } },
           data: {
@@ -171,7 +175,7 @@ export async function reconcileRunbooks(limit = 100) {
       continue;
     }
     if (attempt.status === 'CLAIMED') {
-      const reset = await prisma.runbookStepAttempt.updateMany({
+      const reset = await db.runbookStepAttempt.updateMany({
         where: { id: attempt.id, status: 'CLAIMED', leaseExpiresAt: { lt: now } },
         data: {
           status: 'PENDING',
@@ -188,7 +192,7 @@ export async function reconcileRunbooks(limit = 100) {
       attempt.executionStep.execution.cancelRequestedAt ||
       attempt.executionStep.execution.status === 'CANCEL_REQUESTED'
     ) {
-      await prisma.$transaction(async tx => {
+      await transaction(async tx => {
         const isWrite = attempt.executionStep.riskClass !== 'READ_ONLY';
         const cancelled = await tx.runbookStepAttempt.updateMany({
           where: { id: attempt.id, status: 'RUNNING', leaseExpiresAt: { lt: now } },
@@ -230,7 +234,7 @@ export async function reconcileRunbooks(limit = 100) {
       });
       continue;
     }
-    await prisma.$transaction(async tx => {
+    await transaction(async tx => {
       const marked = await tx.runbookStepAttempt.updateMany({
         where: { id: attempt.id, status: 'RUNNING', leaseExpiresAt: { lt: now } },
         data: {
@@ -289,11 +293,11 @@ export async function reconcileRunbooks(limit = 100) {
     });
   }
   const staleAgentCutoff = new Date(Date.now() - 90_000);
-  const offline = await prisma.runbookAgent.updateMany({
+  const offline = await db.runbookAgent.updateMany({
     where: { status: { in: ['ONLINE', 'DEGRADED'] }, lastHeartbeatAt: { lt: staleAgentCutoff } },
     data: { status: 'OFFLINE' },
   });
-  await prisma.runbookAgentRequestNonce.deleteMany({
+  await db.runbookAgentRequestNonce.deleteMany({
     where: { createdAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
   });
   const configuredRetentionDays = Number.parseInt(
@@ -303,10 +307,10 @@ export async function reconcileRunbooks(limit = 100) {
   const artifactRetentionDays = Number.isFinite(configuredRetentionDays)
     ? Math.min(3650, Math.max(1, configuredRetentionDays))
     : 30;
-  const artifactsDeleted = await prisma.runbookArtifact.deleteMany({
+  const artifactsDeleted = await db.runbookArtifact.deleteMany({
     where: { createdAt: { lt: new Date(now.getTime() - artifactRetentionDays * 86_400_000) } },
   });
-  const localRunning = await prisma.runbookExecutionStep.findMany({
+  const localRunning = await db.runbookExecutionStep.findMany({
     where: {
       status: 'RUNNING',
       type: 'HTTP',
@@ -323,7 +327,7 @@ export async function reconcileRunbooks(limit = 100) {
         (step.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS) * 1000
     );
     if (timeoutAt >= now) continue;
-    await prisma.$transaction(async tx => {
+    await transaction(async tx => {
       const safeRetry =
         isSafeToRetryAfterUnknown(step.riskClass) && step.attemptCount <= step.maxRetries;
       const changed = await tx.runbookExecutionStep.updateMany({
@@ -356,7 +360,7 @@ export async function reconcileRunbooks(limit = 100) {
       localRecovered++;
     });
   }
-  const stranded = await prisma.runbookExecutionStep.findMany({
+  const stranded = await db.runbookExecutionStep.findMany({
     where: {
       OR: [
         { status: { in: ['PENDING', 'READY'] } },
@@ -372,7 +376,7 @@ export async function reconcileRunbooks(limit = 100) {
     distinct: ['executionId'],
     take: limit,
   });
-  const cancelled = await prisma.runbookExecution.findMany({
+  const cancelled = await db.runbookExecution.findMany({
     where: { status: 'CANCEL_REQUESTED' },
     select: { id: true },
     take: limit,
@@ -384,7 +388,7 @@ export async function reconcileRunbooks(limit = 100) {
     for (const executionId of recoveryIds) {
       const recoveryJobId = `runbook-recovery:${executionId}`;
       const payload = JSON.stringify({ kind: 'RECONCILE_EXECUTION', executionId });
-      await prisma.$executeRaw`
+      await db.$executeRaw`
         INSERT INTO "BackgroundJob" (id, type, status, "scheduledAt", "maxAttempts", payload, "updatedAt")
         VALUES (${recoveryJobId}, 'RUNBOOK', 'PENDING', ${now}, 8, ${payload}::jsonb, ${now})
         ON CONFLICT (id) DO UPDATE SET status = 'PENDING', "scheduledAt" = EXCLUDED."scheduledAt",

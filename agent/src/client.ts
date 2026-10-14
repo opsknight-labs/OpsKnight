@@ -105,7 +105,7 @@ export class AgentClient {
   async policyChecks(result?: {
     id: string;
     policyHash: string;
-    results: Array<{ key: string; allowed: boolean }>;
+    results: Array<{ key: string; allowed: boolean | null; reason?: 'REDACTED_INPUT' }>;
   }) {
     return this.request<{
       checks?: import('./policy-checks').PolicyCheckEnvelope[];

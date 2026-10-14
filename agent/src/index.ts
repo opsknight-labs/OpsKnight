@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { authenticatedContactReady } from './contact-readiness';
 // Identity and policy paths come only from the local operator's environment, never API input.
 import { createHash } from 'node:crypto';
 import { uptime } from 'node:os';
@@ -264,6 +265,7 @@ export async function run(options: RunAgentOptions = {}) {
   const spool = options.spool ?? new ResultSpool(`${effectiveDataDir}/spool`);
   let active = 0;
   let heartbeatEstablished = options.skipHeartbeat === true;
+  let lastAuthenticatedContact = options.skipHeartbeat ? uptime() : null;
   let transientCommunicationError: string | null = null;
   let terminalAuthError: string | null = null;
   let storageError: string | null = null;
@@ -319,6 +321,12 @@ export async function run(options: RunAgentOptions = {}) {
   const getActiveBlockingCondition = async (): Promise<string | null> => {
     if (!heartbeatEstablished)
       return 'Waiting for the initial authenticated control-plane heartbeat.';
+    if (
+      !options.skipHeartbeat &&
+      (lastAuthenticatedContact === null || uptime() - lastAuthenticatedContact >= 90)
+    )
+      return 'Authenticated control-plane contact is stale; execution claims paused.';
+    if (transientCommunicationError) return transientCommunicationError;
     if (terminalAuthError) return terminalAuthError;
     if (storageError) {
       const recovered = await checkStorageHealth();
@@ -451,6 +459,7 @@ export async function run(options: RunAgentOptions = {}) {
     transientCommunicationError = null;
     terminalAuthError = null;
     heartbeatEstablished = true;
+    lastAuthenticatedContact = uptime();
     // Older servers do not expose policy checks. A missing endpoint never changes execution authority.
     if (typeof client.policyChecks === 'function') {
       try {
@@ -510,6 +519,12 @@ export async function run(options: RunAgentOptions = {}) {
           ready:
             !draining &&
             heartbeatEstablished &&
+            (options.skipHeartbeat ||
+              authenticatedContactReady(
+                uptime(),
+                lastAuthenticatedContact,
+                transientCommunicationError
+              )) &&
             clockError === null &&
             storageError === null &&
             terminalAuthError === null,
@@ -520,6 +535,8 @@ export async function run(options: RunAgentOptions = {}) {
           clockError,
           terminalAuthError,
           transientCommunicationError,
+          lastAuthenticatedContactAgeSeconds:
+            lastAuthenticatedContact === null ? null : uptime() - lastAuthenticatedContact,
           lastClaimError,
         }),
         { mode: 0o600 }

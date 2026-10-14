@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow } from 'lucide-react';
@@ -41,6 +42,9 @@ export default function ServiceDetailTabs({
   settingsContent,
   actions,
 }: ServiceDetailTabsProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const query = useSearchParams();
   const tabItems = [
     {
       id: 'incidents',
@@ -79,7 +83,19 @@ export default function ServiceDetailTabs({
   ];
 
   return (
-    <DetailTabs tabs={tabItems} defaultTab={defaultTab} actions={actions} className="space-y-6">
+    <DetailTabs
+      tabs={tabItems}
+      defaultTab={defaultTab}
+      onTabChange={tab => {
+        if (tab === 'runbooks') {
+          const params = new URLSearchParams(query.toString());
+          params.set('tab', 'runbooks');
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        }
+      }}
+      actions={actions}
+      className="space-y-6"
+    >
       <DetailTabContent value="incidents" className="mt-0 space-y-6">
         {incidentsContent}
       </DetailTabContent>

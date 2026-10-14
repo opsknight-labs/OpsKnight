@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 
 export default function RuleWizard({
@@ -13,8 +13,24 @@ export default function RuleWizard({
   const heading = useRef<HTMLHeadingElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const id = useId();
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => {
+    const node = root.current;
+    if (!node) return;
+    const refresh = () => setInvalid(Boolean(node.querySelector('[data-form-invalid="true"]')));
+    const observer = new MutationObserver(refresh);
+    observer.observe(node, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-form-invalid'],
+    });
+    refresh();
+    return () => observer.disconnect();
+  }, []);
   function move(next: number) {
     if (next > current) {
+      if (root.current?.querySelector('[data-form-invalid="true"]')) return;
       const fields = root.current?.querySelectorAll<
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
       >(
@@ -112,7 +128,12 @@ export default function RuleWizard({
           </Button>
         )}
         {current < steps.length - 1 && (
-          <Button type="button" className="min-h-11" onClick={() => move(current + 1)}>
+          <Button
+            type="button"
+            disabled={invalid}
+            className="min-h-11"
+            onClick={() => move(current + 1)}
+          >
             Continue to {steps[current + 1]?.title.toLowerCase()}
           </Button>
         )}
