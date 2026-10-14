@@ -50,16 +50,10 @@ describe('createTemplate Action', () => {
 
   it('creates a new template successfully', async () => {
     // Mock name available
-    (assertIncidentTemplateNameAvailable as any).mockResolvedValue('new template');
-    (prisma.incidentTemplate.create as any).mockResolvedValue({
-      id: 'tpl-1',
-      name: 'new template',
-    });
-
-    // Mock redirect to throw so execution stops (simulating Next.js)
-    // or just accept it returns undefined and check calls.
-    // But createTemplate code relies on redirect interrupting flow?
-    // No, it's at the end. So it's fine.
+    vi.mocked(assertIncidentTemplateNameAvailable).mockResolvedValue('new template');
+    vi.mocked(prisma.incidentTemplate.create).mockResolvedValue(
+      { id: 'tpl-1', name: 'new template' } as unknown as Awaited<ReturnType<typeof prisma.incidentTemplate.create>>
+    );
 
     const formData = new FormData();
     formData.append('name', 'New Template');
@@ -77,7 +71,7 @@ describe('createTemplate Action', () => {
 
   it('redirects with error if template name already exists', async () => {
     // Mock assert to throw
-    (assertIncidentTemplateNameAvailable as any).mockRejectedValue(
+    vi.mocked(assertIncidentTemplateNameAvailable).mockRejectedValue(
       new UniqueNameConflictError('incidentTemplate', 'Existing Template')
     );
 
@@ -98,7 +92,7 @@ describe('createTemplate Action', () => {
 
     // I will mock redirect to throw 'NEXT_REDIRECT'.
     const error = new Error('NEXT_REDIRECT');
-    (redirect as any).mockImplementation(() => {
+    vi.mocked(redirect).mockImplementation(() => {
       throw error;
     });
 
@@ -107,8 +101,8 @@ describe('createTemplate Action', () => {
 
     try {
       await createTemplate(formData);
-    } catch (e: any) {
-      expect(e.message).toBe('NEXT_REDIRECT');
+    } catch (e: unknown) {
+      expect(e instanceof Error && e.message).toBe('NEXT_REDIRECT');
     }
 
     expect(redirect).toHaveBeenCalledWith('/incidents/templates/create?error=duplicate-template');
@@ -116,8 +110,8 @@ describe('createTemplate Action', () => {
   });
 
   it('handles optional fields correctly', async () => {
-    (assertIncidentTemplateNameAvailable as any).mockResolvedValue('minimal template');
-    (redirect as any).mockImplementation(() => {}); // Reset to no-op for success case
+    vi.mocked(assertIncidentTemplateNameAvailable).mockResolvedValue('minimal template');
+    vi.mocked(redirect).mockImplementation((() => {}) as unknown as typeof redirect); // Reset to no-op for success case
 
     const formData = new FormData();
     formData.append('name', 'Minimal Template');
