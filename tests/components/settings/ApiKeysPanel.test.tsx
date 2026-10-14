@@ -87,7 +87,7 @@ describe('ApiKeysPanel Component', () => {
   });
 
   it('opens create API key modal dialog on button click', () => {
-    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} />);
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={true} />);
 
     const generateButtons = screen.getAllByRole('button', { name: /generate api key/i });
     fireEvent.click(generateButtons[0]);
@@ -103,11 +103,20 @@ describe('ApiKeysPanel Component', () => {
     expect(dialog.className).toContain('sm:w-[94vw]');
   });
 
-  it('keeps response-policy read available while hiding write scope without write access', () => {
-    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={false} />);
+  it('keeps response-policy read available for admins while hiding write scope without write access', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={false} isAdmin={true} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
     expect(screen.getByText('Response Policy Read')).toBeDefined();
     expect(screen.queryByText('Response Policy Write')).toBeNull();
+  });
+
+  it('hides all administrative scopes for non-admins', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={false} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
+    expect(screen.queryByText('Response Policy Read')).toBeNull();
+    expect(screen.queryByText('Response Policy Write')).toBeNull();
+    expect(screen.queryByText('Full Workspace Admin')).toBeNull();
+    expect(screen.queryByText('Service Accounts Read')).toBeNull();
   });
 
 

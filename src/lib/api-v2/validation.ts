@@ -16,24 +16,29 @@ export const IncidentListQuerySchema = PaginationQuerySchema.extend({
   search: z.string().trim().max(100).optional(),
 });
 
-export const IncidentCreateV2Schema = z.object({
-  title: z.string().trim().min(1, 'Title is required').max(200),
-  description: z.string().trim().max(10000).optional().nullable(),
-  serviceId: z.string().trim().min(1, 'Service ID is required'),
-  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('HIGH'),
-  priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional().nullable(),
-  assigneeId: z.string().trim().optional().nullable(),
-  teamId: z.string().trim().optional().nullable(),
-  dedupKey: z.string().trim().max(255).optional().nullable(),
-  customFields: z
-    .array(
-      z.object({
-        fieldId: z.string().trim().min(1),
-        value: z.string(),
-      })
-    )
-    .optional(),
-});
+export const IncidentCreateV2Schema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required').max(200),
+    description: z.string().trim().max(10000).optional().nullable(),
+    serviceId: z.string().trim().min(1, 'Service ID is required'),
+    urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('HIGH'),
+    priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional().nullable(),
+    assigneeId: z.string().trim().optional().nullable(),
+    teamId: z.string().trim().optional().nullable(),
+    dedupKey: z.string().trim().max(255).optional().nullable(),
+    customFields: z
+      .array(
+        z.object({
+          fieldId: z.string().trim().min(1),
+          value: z.string(),
+        })
+      )
+      .optional(),
+  })
+  .refine(data => !(data.assigneeId && data.teamId), {
+    message: 'Assign an incident to either a user or a team, not both.',
+    path: ['assigneeId'],
+  });
 
 export const IncidentUpdateV2Schema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
@@ -196,6 +201,8 @@ export const StatusPageAnnouncementV2Schema = z.object({
 
 export const RunbookExecuteV2Schema = z.object({
   incidentId: z.string().trim().optional().nullable(),
+  serviceId: z.string().trim().optional().nullable(),
+  bindingId: z.string().trim().optional().nullable(),
   parameters: z.record(z.string(), z.any()).optional().default({}),
 });
 

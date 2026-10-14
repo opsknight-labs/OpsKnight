@@ -2663,4 +2663,69 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(manualExecution.id).toBeDefined();
     expect(manualExecution.triggeredByUserId).toBe(target.actor.id);
   });
+
+  it('executes incident-linked runbook through preview and orchestrator with service boundary and agent target', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: {
+            unit: 'nginx',
+            action: 'status',
+          },
+        },
+      ],
+    });
+
+    const incident = await createTestIncident('Incident linked execution', target.service.id);
+
+    // Resolve service boundary and binding like the v2 API endpoint
+    const binding = await testPrisma.serviceRunbookBinding.findFirst({
+      where: {
+        runbookId: target.runbook.id,
+        serviceId: incident.serviceId,
+        enabled: true,
+      },
+    });
+    expect(binding).toBeDefined();
+
+    const preview = await previewRunbookExecution({
+      runbookId: target.runbook.id,
+      runbookVersionId: target.version.id,
+      serviceId: incident.serviceId,
+      bindingId: binding!.id,
+      incidentId: incident.id,
+      triggeredByUserId: target.actor.id,
+    });
+
+    expect(preview.digest).toBeDefined();
+    expect(preview.authorizationToken).toBeDefined();
+
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      runbookVersionId: target.version.id,
+      serviceId: incident.serviceId,
+      bindingId: binding!.id,
+      incidentId: incident.id,
+      triggeredByUserId: target.actor.id,
+      expectedPlanDigest: preview.digest,
+      previewAuthorizationToken: preview.authorizationToken,
+    });
+
+    expect(execution.id).toBeDefined();
+    expect(execution.serviceId).toBe(incident.serviceId);
+    expect(execution.bindingId).toBe(binding!.id);
+    expect(execution.incidentId).toBe(incident.id);
+    expect(execution.resolvedTargetAgentId).toBe(target.agent.id);
+
+    // Advancing step claims agent attempt
+    await advanceExecution(execution.id);
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim).not.toBeNull();
+    expect(claim?.executionId).toBe(execution.id);
+  });
 });
+

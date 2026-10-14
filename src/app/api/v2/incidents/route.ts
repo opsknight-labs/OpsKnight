@@ -125,6 +125,24 @@ export async function POST(req: NextRequest) {
       teamId: service.teamId,
     });
 
+    // Mutually exclusive assignment: an individual assignee must not implicitly inherit the service team
+    if (validated.assigneeId && validated.teamId) {
+      throw new AppError({
+        code: 'INCIDENT_INVALID_ARGUMENT',
+        userMessage: 'Assign an incident to either a user or a team, not both.',
+        fields: [
+          {
+            field: 'assigneeId',
+            code: 'invalid',
+            message: 'Assign an incident to either a user or a team, not both.',
+          },
+        ],
+      });
+    }
+
+    const assigneeId = validated.assigneeId ?? null;
+    const teamId = assigneeId ? null : (validated.teamId ?? service.teamId ?? null);
+
     const idempotencyKey = req.headers.get('idempotency-key')?.trim();
     const execution = await executeIdempotentIncidentCreation(
       {
@@ -134,8 +152,8 @@ export async function POST(req: NextRequest) {
         urgency: validated.urgency,
         priority: validated.priority ?? null,
         dedupKey: validated.dedupKey ?? null,
-        assigneeId: validated.assigneeId ?? null,
-        teamId: validated.teamId ?? service.teamId ?? null,
+        assigneeId,
+        teamId,
         customFields: validated.customFields,
         source: 'REST_API',
         actor: { id: actor.id },

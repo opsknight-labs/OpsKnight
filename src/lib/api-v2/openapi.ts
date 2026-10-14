@@ -1400,6 +1400,8 @@ export function getOpenApiV2Spec(): Record<string, unknown> {
                   type: 'object',
                   properties: {
                     incidentId: { type: 'string', nullable: true },
+                    serviceId: { type: 'string', nullable: true },
+                    bindingId: { type: 'string', nullable: true },
                     parameters: { type: 'object' },
                   },
                 },
