@@ -7,12 +7,15 @@ import {
   enforceV2Authorization,
   enforceV2RateLimit,
   logV2Audit,
+  runV2AuditedMutation,
   ServiceUpdateV2Schema,
 } from '@/lib/api-v2';
+import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -63,13 +66,15 @@ export async function GET(
       updatedAt: service.updatedAt,
     };
 
-    return apiV2Success(dto, { headers: rlHeaders });
+    return apiV2Success(dto, {
+      headers: { ...rlHeaders, ...etagHeaders(service.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function PATCH(
+export const PATCH = withV2Observability(async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -128,37 +133,43 @@ export async function PATCH(
       }
     }
 
-    const updated = await prisma.service.update({
-      where: { id },
-      data: {
-        name: validated.name,
-        description: validated.description,
-        teamId: validated.teamId,
-        escalationPolicyId: validated.escalationPolicyId,
-        status: validated.status,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        status: true,
-        teamId: true,
-        escalationPolicyId: true,
-        createdAt: true,
-        updatedAt: true,
-        team: { select: { id: true, name: true } },
-        policy: { select: { id: true, name: true } },
-      },
-    });
+    const expected = parseIfMatch(req);
 
-    await logV2Audit({
-      action: 'service.updated',
-      entityType: 'SERVICE',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: validated,
-    });
+    const updated = await withIfMatch(expected, () =>
+      runV2AuditedMutation(
+        tx =>
+          tx.service.update({
+            where: { id, ...ifMatchWhere(expected) },
+            data: {
+              name: validated.name,
+              description: validated.description,
+              teamId: validated.teamId,
+              escalationPolicyId: validated.escalationPolicyId,
+              status: validated.status,
+            },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              status: true,
+              teamId: true,
+              escalationPolicyId: true,
+              createdAt: true,
+              updatedAt: true,
+              team: { select: { id: true, name: true } },
+              policy: { select: { id: true, name: true } },
+            },
+          }),
+        () => ({
+          action: 'service.updated',
+          entityType: 'SERVICE',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: validated,
+        })
+      )
+    );
 
     const dto = {
       id: updated.id,
@@ -173,13 +184,15 @@ export async function PATCH(
       escalationPolicy: updated.policy,
     };
 
-    return apiV2Success(dto, { headers: rlHeaders });
+    return apiV2Success(dto, {
+      headers: { ...rlHeaders, ...etagHeaders(updated.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function DELETE(
+export const DELETE = withV2Observability(async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -242,8 +255,11 @@ export async function DELETE(
       });
     });
 
-    return apiV2Success({ success: true, message: `Service '${service.name}' deleted successfully.` }, { headers: rlHeaders });
+    return apiV2Success(
+      { success: true, message: `Service '${service.name}' deleted successfully.` },
+      { headers: rlHeaders }
+    );
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

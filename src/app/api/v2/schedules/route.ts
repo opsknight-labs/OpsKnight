@@ -9,7 +9,8 @@ import {
   enforceV2Authorization,
   enforceV2RateLimit,
   formatCursorPagination,
-  logV2Audit,
+  idempotencyResponseHeaders,
+  runV2IdempotentAuditedMutation,
   parsePaginationParams,
   ScheduleCreateV2Schema,
 } from '@/lib/api-v2';
@@ -17,8 +18,9 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -82,9 +84,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withV2Observability(async function POST(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
@@ -96,31 +98,41 @@ export async function POST(req: NextRequest) {
 
     const validated = ScheduleCreateV2Schema.parse(body);
 
-    const schedule = await prisma.onCallSchedule.create({
-      data: {
-        name: validated.name,
-        timeZone: validated.timeZone,
-      },
-      select: {
-        id: true,
-        name: true,
-        timeZone: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const execution = await runV2IdempotentAuditedMutation(
+      req,
+      apiKey.id,
+      'schedule:create',
+      validated,
+      tx =>
+        tx.onCallSchedule.create({
+          data: {
+            name: validated.name,
+            timeZone: validated.timeZone,
+          },
+          select: {
+            id: true,
+            name: true,
+            timeZone: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+      schedule => ({
+        action: 'schedule.created',
+        entityType: 'SCHEDULE',
+        entityId: schedule.id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { name: schedule.name, timeZone: schedule.timeZone },
+      })
+    );
 
-    await logV2Audit({
-      action: 'schedule.created',
-      entityType: 'SCHEDULE',
-      entityId: schedule.id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: schedule.name, timeZone: schedule.timeZone },
-    });
+    const schedule = execution.value;
 
-    return apiV2Created(schedule, { headers: rlHeaders });
+    return apiV2Created(schedule, {
+      headers: { ...rlHeaders, ...idempotencyResponseHeaders(execution.replayed) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

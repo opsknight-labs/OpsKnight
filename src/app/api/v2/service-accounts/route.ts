@@ -7,14 +7,17 @@ import {
   createServiceAccount,
   enforceV2Authorization,
   enforceV2RateLimit,
+  idempotencyResponseHeaders,
   listServiceAccounts,
+  runV2IdempotentMutation,
   ServiceAccountCreateV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import type { AppRole } from '@/lib/authorization';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -25,9 +28,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withV2Observability(async function POST(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
@@ -39,16 +42,26 @@ export async function POST(req: NextRequest) {
 
     const validated = ServiceAccountCreateV2Schema.parse(body);
 
-    const account = await createServiceAccount({
-      name: validated.name,
-      role: validated.role as AppRole,
-      description: validated.description,
-      teamIds: validated.teamIds,
-      actorId: actor.id,
-    });
+    const execution = await runV2IdempotentMutation(
+      req,
+      apiKey.id,
+      'service-account:create',
+      validated,
+      tx =>
+        createServiceAccount({
+          name: validated.name,
+          role: validated.role as AppRole,
+          description: validated.description,
+          teamIds: validated.teamIds,
+          actorId: actor.id,
+          tx,
+        })
+    );
 
-    return apiV2Created(account, { headers: rlHeaders });
+    return apiV2Created(execution.value, {
+      headers: { ...rlHeaders, ...idempotencyResponseHeaders(execution.replayed) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

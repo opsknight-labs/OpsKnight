@@ -13,6 +13,7 @@ import type {
   AuthorizationResource,
 } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from './observability';
 import type { Prisma } from '@prisma/client';
 
 export interface V2RouteContext<TParams = any, TQuery = any, TBody = any> {
@@ -82,7 +83,7 @@ export function defineV2Route<
   TBody = any,
   TResult = any
 >(config: V2RouteConfig<TParams, TQuery, TBody, TResult>): NextRouteHandler {
-  return async (
+  return withV2Observability(async (
     req: NextRequest,
     context?: { params?: Promise<Record<string, string>> | Record<string, string> }
   ) => {
@@ -245,5 +246,5 @@ export function defineV2Route<
     } catch (error) {
       return apiV2Error(error, req);
     }
-  };
+  });
 }

@@ -9,6 +9,7 @@ import {
   logV2Audit,
   EscalationPolicyUpdateV2Schema,
 } from '@/lib/api-v2';
+import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import {
   escalationTargetExists,
@@ -17,8 +18,9 @@ import {
   type ValidatedEscalationStep,
 } from '@/lib/escalation/policy-validation';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -46,13 +48,15 @@ export async function GET(
       });
     }
 
-    return apiV2Success(policy, { headers: rlHeaders });
+    return apiV2Success(policy, {
+      headers: { ...rlHeaders, ...etagHeaders(policy.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function PATCH(
+export const PATCH = withV2Observability(async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -107,73 +111,82 @@ export async function PATCH(
       }
     }
 
-    const updated = await prisma.$transaction(async tx => {
-      await tx.escalationPolicy.update({
-        where: { id },
-        data: {
-          name: validated.name,
-          description: validated.description,
-        },
-      });
+    const expected = parseIfMatch(req);
 
-      if (validated.steps) {
-        await tx.escalationRuleCondition.deleteMany({ where: { rule: { policyId: id } } });
-        await tx.escalationRule.deleteMany({ where: { policyId: id } });
-        for (const [index, stepPayload] of validatedStepPayloads.entries()) {
-          await tx.escalationRule.create({
-            data: {
-              policyId: id,
-              stepOrder: index,
-              targetType: stepPayload.targetType,
-              targetUserId: stepPayload.targetUserId,
-              targetTeamId: stepPayload.targetTeamId,
-              targetScheduleId: stepPayload.targetScheduleId,
-              delayMinutes: stepPayload.delayMinutes,
-              notificationChannels: stepPayload.notificationChannels,
-              notifyOnlyTeamLead: stepPayload.notifyOnlyTeamLead,
-              ...(stepPayload.conditions && stepPayload.conditions.length > 0
-                ? {
-                    conditions: {
-                      create: stepPayload.conditions.map(c => ({
-                        field: c.field,
-                        operator: c.operator,
-                        values: c.values,
-                      })),
-                    },
-                  }
-                : {}),
-            },
-          });
-        }
-      }
-
-      return tx.escalationPolicy.findUnique({
-        where: { id },
-        include: {
-          steps: {
-            orderBy: { stepOrder: 'asc' },
-            include: { conditions: true },
+    const updated = await withIfMatch(expected, () =>
+      prisma.$transaction(async tx => {
+        await tx.escalationPolicy.update({
+          where: { id, ...ifMatchWhere(expected) },
+          data: {
+            name: validated.name,
+            description: validated.description,
           },
-        },
-      });
-    });
+        });
 
-    await logV2Audit({
-      action: 'escalation_policy.updated',
-      entityType: 'ESCALATION_POLICY',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: validated,
-    });
+        if (validated.steps) {
+          await tx.escalationRuleCondition.deleteMany({ where: { rule: { policyId: id } } });
+          await tx.escalationRule.deleteMany({ where: { policyId: id } });
+          for (const [index, stepPayload] of validatedStepPayloads.entries()) {
+            await tx.escalationRule.create({
+              data: {
+                policyId: id,
+                stepOrder: index,
+                targetType: stepPayload.targetType,
+                targetUserId: stepPayload.targetUserId,
+                targetTeamId: stepPayload.targetTeamId,
+                targetScheduleId: stepPayload.targetScheduleId,
+                delayMinutes: stepPayload.delayMinutes,
+                notificationChannels: stepPayload.notificationChannels,
+                notifyOnlyTeamLead: stepPayload.notifyOnlyTeamLead,
+                ...(stepPayload.conditions && stepPayload.conditions.length > 0
+                  ? {
+                      conditions: {
+                        create: stepPayload.conditions.map(c => ({
+                          field: c.field,
+                          operator: c.operator,
+                          values: c.values,
+                        })),
+                      },
+                    }
+                  : {}),
+              },
+            });
+          }
+        }
 
-    return apiV2Success(updated, { headers: rlHeaders });
+        const result = await tx.escalationPolicy.findUnique({
+          where: { id },
+          include: {
+            steps: {
+              orderBy: { stepOrder: 'asc' },
+              include: { conditions: true },
+            },
+          },
+        });
+
+        await logV2Audit({
+          action: 'escalation_policy.updated',
+          entityType: 'ESCALATION_POLICY',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: validated,
+          tx,
+        });
+
+        return result;
+      })
+    );
+
+    return apiV2Success(updated, {
+      headers: { ...rlHeaders, ...etagHeaders(updated!.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function DELETE(
+export const DELETE = withV2Observability(async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -220,8 +233,11 @@ export async function DELETE(
       });
     });
 
-    return apiV2Success({ success: true, message: `Escalation policy '${policy.name}' deleted successfully.` }, { headers: rlHeaders });
+    return apiV2Success(
+      { success: true, message: `Escalation policy '${policy.name}' deleted successfully.` },
+      { headers: rlHeaders }
+    );
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

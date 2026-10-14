@@ -176,6 +176,7 @@ export default function ServiceAccountsPanel({
 
   // Issue Token Dialog
   const [issueTokenTargetId, setIssueTokenTargetId] = useState<string | null>(null);
+  const [tokenExpiry, setTokenExpiry] = useState('90');
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(
     new Set(['events:write', 'incidents:read'])
   );
@@ -768,15 +769,27 @@ export default function ServiceAccountsPanel({
                 <select
                   id="token-expiry"
                   name="expirationDays"
-                  defaultValue="90"
+                  value={tokenExpiry}
+                  onChange={event => setTokenExpiry(event.target.value)}
+                  aria-describedby={tokenExpiry === '0' ? 'token-expiry-warning' : undefined}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <option value="30">30 days</option>
                   <option value="90">90 days (Recommended)</option>
                   <option value="180">180 days</option>
                   <option value="365">1 year</option>
-                  <option value="0">Never expires (Service Machine)</option>
+                  <option value="0">Never expires (security exception)</option>
                 </select>
+                {tokenExpiry === '0' && (
+                  <p
+                    id="token-expiry-warning"
+                    role="note"
+                    className="text-[11px] text-amber-700 dark:text-amber-400"
+                  >
+                    This token stays valid until you revoke it. Use it only when rotation is not
+                    possible, and record who owns it.
+                  </p>
+                )}
               </div>
             </div>
 

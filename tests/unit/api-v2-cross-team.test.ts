@@ -125,7 +125,7 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
   });
 
   describe('GET /api/v2/schedules/[id]/on-call resource authorization', () => {
-    it('returns 403 AUTHORIZATION_DENIED if caller does not have read access to target schedule', async () => {
+    it('returns 404 SCHEDULE_NOT_FOUND (not 403) if caller cannot read the target schedule, so existence is not revealed', async () => {
       currentMockActor = {
         id: 'usr_beta',
         role: 'USER',
@@ -146,9 +146,9 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
       const req = new NextRequest('http://localhost:3000/api/v2/schedules/sched_secret/on-call');
       const res = await getScheduleOnCallRoute(req, { params: Promise.resolve({ id: 'sched_secret' }) });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
       const body = await res.json();
-      expect(body.code).toBe('AUTHORIZATION_DENIED');
+      expect(body.code).toBe('SCHEDULE_NOT_FOUND');
     });
 
     it('returns 200 when schedule is accessible to actor', async () => {

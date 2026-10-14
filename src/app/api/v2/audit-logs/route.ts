@@ -11,9 +11,12 @@ import {
   parsePaginationParams,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import type { AuditEntityType, Prisma } from '@prisma/client';
+import { AuditEntityType, type Prisma } from '@prisma/client';
+import { AppError } from '@/lib/errors';
+import { projectAuditDetails } from '@/lib/api-v2/audit-projection';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'SEARCH_EXPORT');
@@ -29,7 +32,18 @@ export async function GET(req: NextRequest) {
 
     const filters: Prisma.AuditLogWhereInput[] = [];
     if (action) filters.push({ action: { contains: action, mode: 'insensitive' } });
-    if (entityType) filters.push({ entityType: entityType as AuditEntityType });
+    if (entityType) {
+      if (!Object.values(AuditEntityType).includes(entityType as AuditEntityType)) {
+        throw new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: `Unknown entityType '${entityType}'.`,
+          fields: [
+            { field: 'entityType', code: 'invalid_enum_value', message: 'Unknown entity type.' },
+          ],
+        });
+      }
+      filters.push({ entityType: entityType as AuditEntityType });
+    }
     if (entityId) filters.push({ entityId });
     if (actorId) filters.push({ actorId });
 
@@ -58,7 +72,10 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const result = formatCursorPagination(logs, limit);
+    const result = formatCursorPagination(
+      logs.map(log => ({ ...log, details: projectAuditDetails(log.details) })),
+      limit
+    );
 
     return apiV2Success(result.data, {
       pagination: result.pagination,
@@ -67,4 +84,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

@@ -27,7 +27,7 @@ let currentMockActor: any = {
   role: 'RESPONDER',
   status: 'ACTIVE',
   teamIds: ['team_alpha'],
-  apiKey: { id: 'key_resp_1', scopes: ['runbooks:read', 'runbooks:execute'] },
+  apiKey: { id: 'key_resp_1', scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'] },
 };
 
 vi.mock('@/lib/api-v2/auth', () => ({
@@ -65,7 +65,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       role: 'RESPONDER',
       status: 'ACTIVE',
       teamIds: ['team_alpha'],
-      apiKey: { id: 'key_resp_1', scopes: ['runbooks:read', 'runbooks:execute'] },
+      apiKey: { id: 'key_resp_1', scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'] },
     };
   });
 
@@ -95,7 +95,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       publishedVersionId: 'ver_pub_1',
     } as any);
 
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost:3000/api/v2/runbooks/rb_1/execute', {
       method: 'POST',
@@ -112,13 +112,13 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
     expect(body.code).toBe('INCIDENT_NOT_FOUND');
   });
 
-  it('rejects incident-linked execution when incident is private and caller is a scoped USER lacking access', async () => {
+  it('treats an incident the caller cannot read as not found, applying the canonical read filter', async () => {
     currentMockActor = {
-      id: 'usr_normal_user',
-      role: 'USER',
+      id: 'usr_responder_2',
+      role: 'RESPONDER',
       status: 'ACTIVE',
       teamIds: ['team_other'],
-      apiKey: { id: 'key_usr_1', scopes: ['runbooks:read', 'runbooks:execute'] },
+      apiKey: { id: 'key_resp_2', scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'] },
     };
 
     vi.mocked(prisma.runbook.findUnique).mockResolvedValue({
@@ -127,29 +127,22 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       archivedAt: null,
       publishedVersionId: 'ver_pub_1',
     } as any);
-
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-      id: 'inc_private',
-      serviceId: 'svc_alpha',
-      visibility: 'RESTRICTED',
-      assigneeId: 'usr_other',
-      watchers: [],
-      service: { id: 'svc_alpha', name: 'Alpha', teamId: 'team_alpha' },
-    } as any);
+    // The read filter excludes the incident, so the database returns nothing for it.
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost:3000/api/v2/runbooks/rb_1/execute', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'idempotency-key': 'idem-private-inc-user',
-      },
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'idem-private-inc-user' },
       body: JSON.stringify({ incidentId: 'inc_private' }),
     });
 
     const res = await executeRunbookRoute(req, { params: Promise.resolve({ id: 'rb_1' }) });
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.code).toBe('AUTHORIZATION_DENIED');
+    // Indistinguishable from a missing incident: existence is not revealed.
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('INCIDENT_NOT_FOUND');
+    expect(prisma.incident.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { AND: [{ id: 'inc_private' }, expect.anything()] } })
+    );
   });
 
   it('permits incident-linked execution when incident is private and caller is a RESPONDER', async () => {
@@ -158,7 +151,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       role: 'RESPONDER',
       status: 'ACTIVE',
       teamIds: ['team_other'],
-      apiKey: { id: 'key_resp_1', scopes: ['runbooks:read', 'runbooks:execute'] },
+      apiKey: { id: 'key_resp_1', scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'] },
     };
 
     vi.mocked(prisma.runbook.findUnique).mockResolvedValue({
@@ -168,7 +161,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       publishedVersionId: 'ver_pub_1',
     } as any);
 
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue({
       id: 'inc_private_resp',
       serviceId: 'svc_alpha',
       visibility: 'RESTRICTED',
@@ -209,7 +202,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       publishedVersionId: 'ver_pub_1',
     } as any);
 
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue({
       id: 'inc_100',
       serviceId: 'svc_beta',
       visibility: 'PUBLIC',
@@ -245,7 +238,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       publishedVersionId: 'ver_pub_1',
     } as any);
 
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue({
       id: 'inc_100',
       serviceId: 'svc_alpha',
       visibility: 'PUBLIC',

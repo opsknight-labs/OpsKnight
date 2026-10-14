@@ -7,13 +7,15 @@ import {
   authenticateV2Request,
   enforceV2Authorization,
   enforceV2RateLimit,
-  logV2Audit,
+  idempotencyResponseHeaders,
+  runV2IdempotentAuditedMutation,
   StatusPageAnnouncementV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -51,9 +53,9 @@ export async function GET(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(
+export const POST = withV2Observability(async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -77,42 +79,52 @@ export async function POST(
 
     const validated = StatusPageAnnouncementV2Schema.parse(body);
 
-    const announcement = await prisma.statusPageAnnouncement.create({
-      data: {
-        statusPageId: id,
-        title: validated.title,
-        message: validated.message,
-        type: validated.type,
-        startDate: validated.startDate ? new Date(validated.startDate) : new Date(),
-        endDate: validated.endDate ? new Date(validated.endDate) : null,
-        isActive: validated.isActive,
-      },
-      select: {
-        id: true,
-        title: true,
-        message: true,
-        type: true,
-        isActive: true,
-        startDate: true,
-        endDate: true,
-        createdAt: true,
-      },
-    });
+    const execution = await runV2IdempotentAuditedMutation(
+      req,
+      apiKey.id,
+      `status-page:${id}:announcement:create`,
+      validated,
+      tx =>
+        tx.statusPageAnnouncement.create({
+          data: {
+            statusPageId: id,
+            title: validated.title,
+            message: validated.message,
+            type: validated.type,
+            startDate: validated.startDate ? new Date(validated.startDate) : new Date(),
+            endDate: validated.endDate ? new Date(validated.endDate) : null,
+            isActive: validated.isActive,
+          },
+          select: {
+            id: true,
+            title: true,
+            message: true,
+            type: true,
+            isActive: true,
+            startDate: true,
+            endDate: true,
+            createdAt: true,
+          },
+        }),
+      announcement => ({
+        action: 'status_page_announcement.created',
+        entityType: 'STATUS_PAGE',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: {
+          announcementId: announcement.id,
+          title: announcement.title,
+        },
+      })
+    );
 
-    await logV2Audit({
-      action: 'status_page_announcement.created',
-      entityType: 'STATUS_PAGE',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: {
-        announcementId: announcement.id,
-        title: announcement.title,
-      },
-    });
+    const announcement = execution.value;
 
-    return apiV2Created(announcement, { headers: rlHeaders });
+    return apiV2Created(announcement, {
+      headers: { ...rlHeaders, ...idempotencyResponseHeaders(execution.replayed) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

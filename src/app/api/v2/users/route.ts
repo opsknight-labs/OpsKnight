@@ -12,8 +12,9 @@ import {
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -71,4 +72,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

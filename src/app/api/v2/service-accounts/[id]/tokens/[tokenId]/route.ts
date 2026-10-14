@@ -8,8 +8,9 @@ import {
   revokeServiceAccountToken,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function DELETE(
+export const DELETE = withV2Observability(async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; tokenId: string }> }
 ) {
@@ -25,4 +26,4 @@ export async function DELETE(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

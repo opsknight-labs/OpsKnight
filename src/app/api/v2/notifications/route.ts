@@ -10,14 +10,20 @@ import {
   formatCursorPagination,
   parsePaginationParams,
 } from '@/lib/api-v2';
-import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { authorize, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import type { NotificationChannel, NotificationStatus, Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.NOTIFICATION_READ);
+    // Policy: delivery history is operator data. ADMIN/RESPONDER (global) see delivery
+    // detail; AUDITOR (resource-scoped read) sees delivery metadata only. USER has no
+    // access through the API at all, so there is deliberately no "own notifications" branch.
+    const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.NOTIFICATION_READ });
+    const canReadDeliveryDetail = decision.allowed && decision.scope === 'global';
 
     const { searchParams } = new URL(req.url);
     const { limit, cursor } = parsePaginationParams(searchParams);
@@ -29,12 +35,7 @@ export async function GET(req: NextRequest) {
 
     const filters: Prisma.NotificationWhereInput[] = [];
 
-    // USER role can only see their own notifications
-    if (actor.role === 'USER') {
-      filters.push({ userId: actor.id });
-    } else if (userId) {
-      filters.push({ userId });
-    }
+    if (userId) filters.push({ userId });
 
     if (channel) filters.push({ channel: channel as NotificationChannel });
     if (status) filters.push({ status: status as NotificationStatus });
@@ -66,7 +67,22 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const result = formatCursorPagination(notifications, limit);
+    const visible = canReadDeliveryDetail
+      ? notifications
+      : notifications.map(
+          ({
+            message: _message,
+            recipientId: _recipientId,
+            recipientDisplay: _display,
+            user,
+            ...rest
+          }) => ({
+            ...rest,
+            user: user ? { id: user.id, name: user.name } : null,
+          })
+        );
+
+    const result = formatCursorPagination(visible, limit);
 
     return apiV2Success(result.data, {
       pagination: result.pagination,
@@ -75,4 +91,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

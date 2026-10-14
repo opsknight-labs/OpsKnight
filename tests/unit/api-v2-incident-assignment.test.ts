@@ -139,7 +139,9 @@ describe('API v2 Incident Assignment Mutually Exclusive Semantics', () => {
           assigneeId: 'usr_alice',
           teamId: null,
         }),
-        expect.anything()
+        expect.anything(),
+        // in-transaction audit hook
+        expect.any(Function)
       );
     });
 
@@ -166,7 +168,9 @@ describe('API v2 Incident Assignment Mutually Exclusive Semantics', () => {
           assigneeId: null,
           teamId: 'team_service_alpha',
         }),
-        expect.anything()
+        expect.anything(),
+        // in-transaction audit hook
+        expect.any(Function)
       );
     });
 
@@ -193,7 +197,9 @@ describe('API v2 Incident Assignment Mutually Exclusive Semantics', () => {
           assigneeId: null,
           teamId: 'team_override_bravo',
         }),
-        expect.anything()
+        expect.anything(),
+        // in-transaction audit hook
+        expect.any(Function)
       );
     });
 

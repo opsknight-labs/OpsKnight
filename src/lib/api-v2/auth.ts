@@ -5,15 +5,22 @@ import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { getClientIp } from '@/lib/client-ip';
+import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
+import { recordAuthFailure } from './observability';
+import { isServiceAccountIdentity } from '@/lib/service-account-identity';
 import { authCache } from './cache';
 import {
+  acquireLegacyScryptSlot,
+  acquireVerificationSlot,
   checkLegacyTokenAdmission,
+  FAILED_AUTH_ADMISSION_LIMIT,
+  failedAuthRetryAfterSeconds,
   isFailedAuthAdmissionBlocked,
+  legacyAdmissionRetryAfterSeconds,
   recordFailedAuthAttempt,
 } from './rate-limit';
 
 export { hashTokenV2 } from '@/lib/api-keys';
-
 
 export interface V2ApiKeyIdentity {
   id: string;
@@ -45,9 +52,22 @@ function extractToken(req: NextRequest): string | null {
   return null;
 }
 
+// Every token OpsKnight issues is `ok_` followed by URL-safe base64. Anything
+// else cannot match a stored hash, so reject it before spending database work.
+const MAX_TOKEN_LENGTH = 256;
+const WELL_FORMED_TOKEN_PATTERN = /^ok_[A-Za-z0-9_-]{16,}$/;
+
+export function isWellFormedApiToken(token: string): boolean {
+  return token.length <= MAX_TOKEN_LENGTH && WELL_FORMED_TOKEN_PATTERN.test(token);
+}
+
+const INVALID_TOKEN_MESSAGE =
+  'The provided API key or service account token is invalid, expired, or revoked.';
+
 export async function authenticateV2Request(req: NextRequest): Promise<V2AuthContext> {
   const token = extractToken(req);
   if (!token) {
+    recordAuthFailure('missing_credentials');
     throw new AppError({
       code: 'AUTHENTICATION_REQUIRED',
       userMessage: 'Authentication credentials are required. Provide a valid Bearer token.',
@@ -59,6 +79,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   // 1. Negative memory cache (0 DB queries on repeated invalid calls)
   const negativeCacheKey = `v2:invalid-token:${v2Hash}`;
   if (authCache.get(negativeCacheKey)) {
+    recordAuthFailure('invalid_token');
     throw new AppError({
       code: 'API_KEY_INVALID',
       userMessage: 'The provided API key or service account token is invalid, expired, or revoked.',
@@ -69,19 +90,50 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   const clientIp = getClientIp(req);
   const isBlocked = await isFailedAuthAdmissionBlocked(clientIp);
   if (isBlocked) {
+    recordAuthFailure('ip_throttled');
     throw new AppError({
       code: 'RATE_LIMIT_EXCEEDED',
-      userMessage: 'Too many unauthenticated token verification attempts from this IP address. Please wait before retrying.',
+      userMessage:
+        'Too many unauthenticated token verification attempts from this IP address. Please wait before retrying.',
+      details: { retryAfter: failedAuthRetryAfterSeconds(), limit: FAILED_AUTH_ADMISSION_LIMIT },
     });
   }
 
-  const activeFilter = {
+  // 3. Reject tokens that cannot possibly be valid before any database work.
+  if (!isWellFormedApiToken(token)) {
+    recordAuthFailure('malformed_token');
+    await recordFailedAuthAttempt(clientIp);
+    throw new AppError({ code: 'API_KEY_INVALID', userMessage: INVALID_TOKEN_MESSAGE });
+  }
 
+  // 4. Bound concurrent verification work for unidentified clients.
+  let releaseSlot: () => void;
+  try {
+    releaseSlot = await acquireVerificationSlot(clientIp);
+  } catch (error) {
+    recordAuthFailure('verification_busy');
+    throw error;
+  }
+  try {
+    return await verifyTokenAgainstDatabase(token, v2Hash, clientIp, negativeCacheKey);
+  } finally {
+    releaseSlot();
+  }
+}
+
+async function verifyTokenAgainstDatabase(
+  token: string,
+  v2Hash: string,
+  clientIp: string,
+  negativeCacheKey: string
+): Promise<V2AuthContext> {
+  const activeFilter = {
     revokedAt: null,
     OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     user: { status: 'ACTIVE' as const },
   };
 
+  const lookupStartedAt = performance.now();
   let apiKeyRecord = await prisma.apiKey.findFirst({
     where: { tokenHash: v2Hash, ...activeFilter },
     include: {
@@ -99,20 +151,42 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
     },
   });
 
+  observeOperationalHistogram(
+    'opsknight_api_v2_auth_lookup_duration_seconds',
+    (performance.now() - lookupStartedAt) / 1000
+  );
+
   // Check legacy hash migration fallback if not found
   if (!apiKeyRecord) {
     // Shield CPU & event loop from expensive scrypt operations under invalid token bursts
     if (isLegacy1xTokenShape(token)) {
       const legacyAdmitted = await checkLegacyTokenAdmission(clientIp);
       if (!legacyAdmitted) {
+        recordAuthFailure('legacy_throttled');
         throw new AppError({
           code: 'RATE_LIMIT_EXCEEDED',
-          userMessage: 'Too many invalid token authentication attempts from this IP address. Please wait before retrying.',
+          userMessage:
+            'Too many legacy token authentication attempts. Please wait before retrying.',
+          details: { retryAfter: legacyAdmissionRetryAfterSeconds() },
         });
       }
     }
 
-    const legacyCandidates = await hashLegacyTokenCandidates(token);
+    let legacyCandidates: string[];
+    let releaseScrypt: () => void = () => {};
+    if (isLegacy1xTokenShape(token)) {
+      try {
+        releaseScrypt = acquireLegacyScryptSlot();
+      } catch (error) {
+        recordAuthFailure('legacy_throttled');
+        throw error;
+      }
+    }
+    try {
+      legacyCandidates = await hashLegacyTokenCandidates(token);
+    } finally {
+      releaseScrypt();
+    }
     if (legacyCandidates.length > 0) {
       apiKeyRecord = await prisma.apiKey.findFirst({
         where: { tokenHash: { in: legacyCandidates }, ...activeFilter },
@@ -142,6 +216,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   }
 
   if (!apiKeyRecord || !apiKeyRecord.user) {
+    recordAuthFailure('invalid_token');
     authCache.set(negativeCacheKey, true, 30_000);
     await recordFailedAuthAttempt(clientIp);
     throw new AppError({
@@ -153,6 +228,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   const user = apiKeyRecord.user;
   const actor = authorizationActorFromUser(user);
   if (!actor) {
+    recordAuthFailure('inactive_principal');
     authCache.set(negativeCacheKey, true, 30_000);
     await recordFailedAuthAttempt(clientIp);
     throw new AppError({
@@ -161,10 +237,7 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
     });
   }
 
-  const isServiceAccount =
-    user.department === 'SERVICE_ACCOUNT' ||
-    user.jobTitle === 'Service Account' ||
-    user.email.includes('@serviceaccount.');
+  const isServiceAccount = isServiceAccountIdentity(user);
 
   const apiKeyIdentity: V2ApiKeyIdentity = {
     id: apiKeyRecord.id,
@@ -208,4 +281,3 @@ export function invalidateV2AuthCache(tokenHash?: string): void {
     authCache.clear();
   }
 }
-

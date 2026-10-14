@@ -45,3 +45,26 @@ export async function logV2Audit(params: {
     });
   }
 }
+
+export type V2AuditParams = Omit<Parameters<typeof logV2Audit>[0], 'tx'>;
+
+/**
+ * Run a business mutation and its mandatory audit record in one transaction.
+ * If the audit insert fails the mutation rolls back, so a successful response
+ * can never exist without its audit record. Pass an existing transaction (for
+ * example the idempotency transaction) to join it instead of opening a new one.
+ */
+export async function runV2AuditedMutation<T>(
+  mutate: (tx: Prisma.TransactionClient) => Promise<T>,
+  audit: (result: T) => V2AuditParams,
+  existingTx?: Prisma.TransactionClient
+): Promise<T> {
+  const run = async (tx: Prisma.TransactionClient) => {
+    const result = await mutate(tx);
+    await logV2Audit({ ...audit(result), tx });
+    return result;
+  };
+  if (existingTx) return run(existingTx);
+  const { default: prisma } = await import('@/lib/prisma');
+  return prisma.$transaction(run);
+}

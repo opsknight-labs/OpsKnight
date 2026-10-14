@@ -13,8 +13,9 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -78,4 +79,4 @@ export async function GET(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

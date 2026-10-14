@@ -1,15 +1,9 @@
 import prisma from '@/lib/prisma';
-import {
-  defineV2Route,
-  logV2Audit,
-  RunbookExecuteV2Schema,
-} from '@/lib/api-v2';
+import { defineV2Route, logV2Audit, RunbookExecuteV2Schema } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import {
-  previewRunbookExecution,
-  startRunbookExecution,
-} from '@/lib/runbooks/orchestrator';
+import { previewRunbookExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
 import { AppError } from '@/lib/errors';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import type { z } from 'zod';
 
 export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof RunbookExecuteV2Schema>>({
@@ -40,8 +34,10 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
     let resolvedRunbookVersionId: string | undefined = runbook.publishedVersionId;
 
     if (body.incidentId) {
-      const incident = await db.incident.findUnique({
-        where: { id: body.incidentId },
+      // The canonical read filter decides visibility, so an incident the caller cannot read is
+      // indistinguishable from a missing one and no access rule is duplicated here.
+      const incident = await db.incident.findFirst({
+        where: { AND: [{ id: body.incidentId }, incidentReadWhere(actor)] },
         include: {
           service: { select: { id: true, name: true, teamId: true } },
           watchers: { select: { userId: true } },
@@ -53,38 +49,6 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
           code: 'INCIDENT_NOT_FOUND',
           userMessage: `Incident with id '${body.incidentId}' was not found.`,
         });
-      }
-
-      // Check incident-level visibility/access permissions
-      if (
-        incident.visibility !== 'PUBLIC' &&
-        actor.role !== 'ADMIN' &&
-        actor.role !== 'RESPONDER'
-      ) {
-        const isAssignee = incident.assigneeId === actor.id;
-        const isWatcher = incident.watchers.some(w => w.userId === actor.id);
-        if (!isAssignee && !isWatcher) {
-          throw new AppError({
-            code: 'AUTHORIZATION_DENIED',
-            userMessage: 'You do not have permission to execute runbooks for this private incident.',
-          });
-        }
-      }
-
-      if (actor.role === 'USER') {
-        const actorTeams = new Set(actor.teamIds ?? []);
-        const matchesTeam =
-          (incident.service?.teamId && actorTeams.has(incident.service.teamId)) ||
-          (incident.teamId && actorTeams.has(incident.teamId)) ||
-          incident.assigneeId === actor.id ||
-          incident.watchers.some(w => w.userId === actor.id);
-
-        if (!matchesTeam) {
-          throw new AppError({
-            code: 'AUTHORIZATION_DENIED',
-            userMessage: 'You do not have permission to access this incident.',
-          });
-        }
       }
 
       if (body.serviceId && body.serviceId !== incident.serviceId) {

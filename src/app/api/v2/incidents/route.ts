@@ -20,8 +20,9 @@ import { incidentReadWhere } from '@/lib/authorization-filters';
 import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -93,9 +94,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withV2Observability(async function POST(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
@@ -158,7 +159,25 @@ export async function POST(req: NextRequest) {
         source: 'REST_API',
         actor: { id: actor.id },
       },
-      idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined
+      idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined,
+      (tx, created) =>
+        // A deduplicated alert merges into an existing incident; only a real creation is audited as one.
+        created.outcome === 'CREATED'
+          ? logV2Audit({
+              action: 'incident.created',
+              entityType: 'INCIDENT',
+              entityId: created.id,
+              actorId: actor.id,
+              apiKeyId: apiKey.id,
+              details: {
+                title: validated.title,
+                serviceId: validated.serviceId,
+                urgency: validated.urgency,
+                priority: validated.priority ?? null,
+              },
+              tx,
+            })
+          : Promise.resolve()
     );
 
     const createdId = execution.value.id;
@@ -191,22 +210,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (!execution.replayed) {
-      await logV2Audit({
-        action: 'incident.created',
-        entityType: 'INCIDENT',
-        entityId: incident.id,
-        actorId: actor.id,
-        apiKeyId: apiKey.id,
-        details: {
-          title: incident.title,
-          serviceId: incident.serviceId,
-          urgency: incident.urgency,
-          priority: incident.priority,
-        },
-      });
-    }
-
     const headers = {
       ...rlHeaders,
       ...idempotencyResponseHeaders(execution.replayed),
@@ -216,4 +219,4 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

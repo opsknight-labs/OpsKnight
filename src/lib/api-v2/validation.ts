@@ -49,7 +49,6 @@ export const IncidentUpdateV2Schema = z.object({
   assigneeId: z.string().trim().nullable().optional(),
 });
 
-
 export const IncidentAcknowledgeV2Schema = z.object({
   note: z.string().trim().max(1000).optional(),
 });
@@ -61,10 +60,20 @@ export const IncidentResolveV2Schema = z.object({
     .optional(),
 });
 
-export const IncidentAssignV2Schema = z.object({
-  assigneeId: z.string().trim().nullable().optional(),
-  teamId: z.string().trim().nullable().optional(),
-});
+export const IncidentAssignV2Schema = z
+  .object({
+    assigneeId: z.string().trim().nullable().optional(),
+    teamId: z.string().trim().nullable().optional(),
+  })
+  .refine(data => !(data.assigneeId && data.teamId), {
+    message: 'Assign an incident to either a user or a team, not both.',
+    path: ['assigneeId'],
+  })
+  .refine(data => data.assigneeId !== undefined || data.teamId !== undefined, {
+    // An empty body must not silently unassign; unassigning is an explicit null.
+    message: 'Provide assigneeId or teamId. Use null to unassign.',
+    path: ['assigneeId'],
+  });
 
 export const IncidentNoteV2Schema = z.object({
   content: z.string().trim().min(1, 'Note content cannot be empty').max(5000),
@@ -141,16 +150,7 @@ export const EscalationStepSchema = z.object({
   targetId: z.string().trim().min(1),
   notificationChannels: z
     .array(
-      z.enum([
-        'EMAIL',
-        'SMS',
-        'VOICE',
-        'PUSH',
-        'SLACK',
-        'WEBHOOK',
-        'WHATSAPP',
-        'MICROSOFT_TEAMS',
-      ])
+      z.enum(['EMAIL', 'SMS', 'VOICE', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP', 'MICROSOFT_TEAMS'])
     )
     .optional(),
   notifyOnlyTeamLead: z.boolean().optional(),
@@ -176,14 +176,25 @@ export const IntegrationUpdateV2Schema = z.object({
 
 export const StatusPageCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),
-  slug: z.string().trim().min(2).max(100).regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase letters, numbers, and hyphens'),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase letters, numbers, and hyphens'),
   isDefault: z.boolean().default(false),
   description: z.string().trim().max(1000).optional().nullable(),
 });
 
 export const StatusPageUpdateV2Schema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
-  slug: z.string().trim().min(2).max(100).regex(/^[a-z0-9-]+$/).optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
   isDefault: z.boolean().optional(),
   description: z.string().trim().max(1000).optional().nullable(),
   enabled: z.boolean().optional(),
@@ -217,15 +228,14 @@ export const ServiceAccountTokenIssueV2Schema = z.object({
   name: z.string().trim().min(1).max(100),
   scopes: z
     .array(
-      z
-        .string()
-        .trim()
-        .refine(isApiScope, {
-          message: 'Invalid API scope. Scopes must belong to the API scope registry.',
-        })
+      z.string().trim().refine(isApiScope, {
+        message: 'Invalid API scope. Scopes must belong to the API scope registry.',
+      })
     )
     .min(1, 'At least one scope is required'),
   expiresInDays: z.number().int().min(1).max(365).optional(),
+  /** Explicit decision to issue a token without an expiry; mutually exclusive with expiresInDays. */
+  neverExpires: z.boolean().optional(),
 });
 
 export const PostmortemListQuerySchema = z.object({
@@ -262,4 +272,3 @@ export const PostmortemUpdateV2Schema = z.object({
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
   isPublic: z.boolean().optional(),
 });
-

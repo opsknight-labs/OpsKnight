@@ -22,6 +22,12 @@ import { getAppUrl } from '@/lib/app-url';
 import { listServiceAccounts } from '@/lib/api-v2/service-accounts';
 import { getOpenApiV2Spec } from '@/lib/api-v2/openapi';
 import { getVerifiedSampleBody } from '@/lib/api-v2/endpoint-samples';
+import {
+  API_ACTIVITY_PAGE_SIZE,
+  buildApiActivityWhere,
+  encodeActivityCursor,
+  parseApiActivityFilters,
+} from '@/lib/api-v2/activity-query';
 
 function getEndpointScope(method: string, path: string): string {
   const m = method.toUpperCase();
@@ -180,7 +186,19 @@ const sanitizeAuditDetails = (rawDetails: unknown): Record<string, unknown> | nu
   return Object.keys(safe).length > 0 ? safe : null;
 };
 
-export default async function ApiKeysSettingsPage() {
+const WORKSPACE_TABS = ['api-keys', 'service-accounts', 'explorer', 'activity'] as const;
+
+export default async function ApiKeysSettingsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = (await searchParams) ?? {};
+  const requestedTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
+  const activeTab = (WORKSPACE_TABS as readonly string[]).includes(requestedTab ?? '')
+    ? (requestedTab as (typeof WORKSPACE_TABS)[number])
+    : 'api-keys';
+  const activityFilters = parseApiActivityFilters(query);
   const [session, appUrl] = await Promise.all([
     getServerSession(await getAuthOptions()),
     getAppUrl(),
@@ -242,23 +260,17 @@ export default async function ApiKeysSettingsPage() {
     ip: string | null;
   }> = [];
 
+  let nextActivityCursor: string | null = null;
+
   if (isAdmin) {
     const [saRes, teamsRes, auditRes] = await Promise.all([
       listServiceAccounts(),
       prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+      // Filtered, ordered and paginated in the database; one extra row signals another page.
       prisma.auditLog.findMany({
-        where: {
-          OR: [
-            { action: { startsWith: 'api_key.' } },
-            { action: { startsWith: 'service_account' } },
-            { action: { startsWith: 'incident.' } },
-            { action: { startsWith: 'runbook.' } },
-            { action: { startsWith: 'status_page.' } },
-            { action: { startsWith: 'notification.' } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 100,
+        where: buildApiActivityWhere(activityFilters),
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: API_ACTIVITY_PAGE_SIZE + 1,
         select: {
           id: true,
           action: true,
@@ -276,22 +288,12 @@ export default async function ApiKeysSettingsPage() {
     rawServiceAccounts = saRes;
     teams = teamsRes;
 
-    // Filter rawAuditLogs strictly to verified API sources
-    rawAuditLogs = auditRes
-      .filter(log => {
-        if (log.action.startsWith('api_key.') || log.action.startsWith('service_account')) {
-          return true;
-        }
-        const d = (log.details as Record<string, unknown> | null) ?? {};
-        return (
-          d.apiGateway === 'api_v2' ||
-          d.source === 'API' ||
-          d.source === 'api_v2' ||
-          Boolean(d.apiKeyId) ||
-          Boolean(d.serviceAccountId)
-        );
-      })
-      .slice(0, 50);
+    const hasMoreActivity = auditRes.length > API_ACTIVITY_PAGE_SIZE;
+    rawAuditLogs = auditRes.slice(0, API_ACTIVITY_PAGE_SIZE);
+    nextActivityCursor =
+      hasMoreActivity && rawAuditLogs.length > 0
+        ? encodeActivityCursor(rawAuditLogs[rawAuditLogs.length - 1])
+        : null;
   }
 
   // Format Service Accounts
@@ -446,7 +448,7 @@ export default async function ApiKeysSettingsPage() {
       />
 
       {/* Unified 4-Tab Developer Workspace */}
-      <Tabs defaultValue="api-keys" className="space-y-6">
+      <Tabs defaultValue={activeTab} className="space-y-6">
         <TabsList className="h-10 bg-muted/70 p-1 border border-border/80 rounded-xl">
           <TabsTrigger value="api-keys" className="text-xs font-semibold gap-1.5 px-3.5">
             <Key className="h-3.5 w-3.5" />
@@ -518,7 +520,19 @@ export default async function ApiKeysSettingsPage() {
         {/* Tab 4: API Activity */}
         <TabsContent value="activity" className="space-y-4">
           {isAdmin ? (
-            <ApiActivityPanel activities={formattedActivities} />
+            <ApiActivityPanel
+              activities={formattedActivities}
+              nextCursor={nextActivityCursor}
+              filters={{
+                q: activityFilters.action ?? '',
+                entity: activityFilters.entityType ?? '',
+                actor: activityFilters.actor ?? '',
+                key: activityFilters.apiKeyId ?? '',
+                from: typeof query.from === 'string' ? query.from : '',
+                to: typeof query.to === 'string' ? query.to : '',
+                hasCursor: Boolean(activityFilters.cursor),
+              }}
+            />
           ) : (
             <Card className="border-border/80 shadow-xs">
               <CardHeader className="pb-3 border-b border-border/60">

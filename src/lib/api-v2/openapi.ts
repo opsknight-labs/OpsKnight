@@ -2,7 +2,9 @@
  * OpenAPI 3.1 specification for OpsKnight Public REST API v2
  */
 
-export function getOpenApiV2Spec(): Record<string, unknown> {
+import { finalizeOpenApiSpec } from './openapi-finalize';
+
+function buildBaseSpec(): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
@@ -968,7 +970,7 @@ export function getOpenApiV2Spec(): Record<string, unknown> {
       '/schedules/{id}/on-call': {
         get: {
           tags: ['Schedules'],
-          summary: 'Calculate effective on-call users at timestamp or range',
+          summary: 'Calculate the effective on-call users at a point in time',
           parameters: [
             { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
             { name: 'at', in: 'query', schema: { type: 'string', format: 'date-time' } },
@@ -1369,7 +1371,7 @@ export function getOpenApiV2Spec(): Record<string, unknown> {
       '/runbooks/{id}': {
         get: {
           tags: ['Runbooks'],
-          summary: 'Get runbook definition and steps',
+          summary: 'Get runbook summary and step summaries (step configuration is never returned)',
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           responses: {
             '200': { description: 'Runbook details' },
@@ -1699,4 +1701,12 @@ export function getOpenApiV2Spec(): Record<string, unknown> {
       },
     },
   };
+}
+
+let cached: Record<string, unknown> | undefined;
+
+/** The published OpenAPI 3.1 document: the hand-written description, finalised from the canonical registry. */
+export function getOpenApiV2Spec(): Record<string, unknown> {
+  cached ??= finalizeOpenApiSpec(buildBaseSpec());
+  return cached;
 }

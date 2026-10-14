@@ -1,11 +1,8 @@
-'use client';
-
-import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/shadcn/card';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/shadcn/select';
 import {
   Table,
   TableHeader,
@@ -15,7 +12,8 @@ import {
   TableCell,
 } from '@/components/ui/shadcn/table';
 import { EmptyState } from './feedback/EmptyState';
-import { Activity, Search, X, Shield, Clock, Terminal } from 'lucide-react';
+import { API_ACTIVITY_ENTITY_TYPES } from '@/lib/api-v2/activity-query';
+import { Activity, Search, Terminal } from 'lucide-react';
 
 export type ApiAuditLogItem = {
   id: string;
@@ -29,92 +27,128 @@ export type ApiAuditLogItem = {
   ip?: string | null;
 };
 
+export type ApiActivityFilterValues = {
+  q: string;
+  entity: string;
+  actor: string;
+  key: string;
+  from: string;
+  to: string;
+  hasCursor: boolean;
+};
+
+const SELECT_CLASS =
+  'h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[150px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+function activityHref(filters: ApiActivityFilterValues, cursor?: string | null): string {
+  const params = new URLSearchParams({ tab: 'activity' });
+  (['q', 'entity', 'actor', 'key', 'from', 'to'] as const).forEach(name => {
+    if (filters[name]) params.set(name, filters[name]);
+  });
+  if (cursor) params.set('cursor', cursor);
+  return `?${params.toString()}`;
+}
+
+/**
+ * Security audit history of API gateway mutations. Filtering and pagination run in
+ * the database (see lib/api-v2/activity-query), driven by the URL so filters survive
+ * reloads and can be shared. It is not request-traffic telemetry: reads and failed
+ * requests are not recorded here.
+ */
 export default function ApiActivityPanel({
   activities,
+  nextCursor,
+  filters,
 }: {
   activities: ApiAuditLogItem[];
+  nextCursor: string | null;
+  filters: ApiActivityFilterValues;
 }) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [entityFilter, setEntityFilter] = useState('ALL');
-
-  const entityTypes = useMemo(() => {
-    const set = new Set<string>();
-    activities.forEach(a => set.add(a.entityType));
-    return Array.from(set).sort();
-  }, [activities]);
-
-  const filteredActivities = useMemo(() => {
-    return activities.filter(item => {
-      const matchesSearch =
-        searchQuery === '' ||
-        item.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.entityId && item.entityId.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.actorEmail && item.actorEmail.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.actorName && item.actorName.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesEntity = entityFilter === 'ALL' || item.entityType === entityFilter;
-      return matchesSearch && matchesEntity;
-    });
-  }, [activities, searchQuery, entityFilter]);
+  const filtered = Boolean(
+    filters.q || filters.entity || filters.actor || filters.key || filters.from || filters.to
+  );
 
   return (
     <div className="space-y-6">
-      {/* 1. Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <form
+        method="get"
+        className="flex flex-col gap-3 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs"
+        aria-label="Filter API activity"
+      >
+        <input type="hidden" name="tab" value="activity" />
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              name="q"
+              defaultValue={filters.q}
+              aria-label="Action contains"
+              placeholder="Action, e.g. incident.resolved"
+              className="h-9 text-xs pl-8 bg-background"
+            />
+          </div>
           <Input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search activity by action, entity ID, or actor..."
-            className="h-9 text-xs pl-8 bg-background"
+            name="actor"
+            defaultValue={filters.actor}
+            aria-label="Actor"
+            placeholder="Actor name or email"
+            className="h-9 text-xs bg-background sm:w-[200px]"
           />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+          <Input
+            name="key"
+            defaultValue={filters.key}
+            aria-label="API key ID"
+            placeholder="API key ID"
+            className="h-9 text-xs bg-background sm:w-[180px]"
+          />
+          <select
+            name="entity"
+            defaultValue={filters.entity}
+            aria-label="Resource type"
+            className={SELECT_CLASS}
+          >
+            <option value="">All resources</option>
+            {API_ACTIVITY_ENTITY_TYPES.map(type => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-[11px] text-muted-foreground flex flex-col gap-1">
+            From
+            <Input type="date" name="from" defaultValue={filters.from} className="h-9 text-xs bg-background" />
+          </label>
+          <label className="text-[11px] text-muted-foreground flex flex-col gap-1">
+            To
+            <Input type="date" name="to" defaultValue={filters.to} className="h-9 text-xs bg-background" />
+          </label>
+          <Button type="submit" size="sm" className="h-9">
+            Apply filters
+          </Button>
+          {(filtered || filters.hasCursor) && (
+            <Button asChild variant="outline" size="sm" className="h-9">
+              <Link href="?tab=activity">Reset</Link>
+            </Button>
           )}
         </div>
-
-        <Select value={entityFilter} onValueChange={setEntityFilter}>
-          <SelectTrigger className="h-9 text-xs w-[160px] bg-background">
-            <SelectValue placeholder="All Resource Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Resources ({entityTypes.length})</SelectItem>
-            {entityTypes.map(t => (
-              <SelectItem key={t} value={t}>
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      </form>
 
       {/* 2. Audit Activity List / Table */}
-      {filteredActivities.length === 0 ? (
+      {activities.length === 0 ? (
         <EmptyState
           icon={Activity}
-          title={searchQuery || entityFilter !== 'ALL' ? 'No matching API activity' : 'No recent API activity logged'}
+          title={filtered ? 'No matching API activity' : 'No API activity recorded yet'}
           description={
-            searchQuery || entityFilter !== 'ALL'
-              ? 'Try clearing your search terms or selecting a different resource filter.'
-              : 'As external integrations and service accounts invoke OpsKnight REST API v2 endpoints, tamper-evident audit records will stream here in real time.'
+            filtered
+              ? 'Try widening the date range or clearing a filter.'
+              : 'When integrations and service accounts change data through REST API v2, audit records appear here.'
           }
           action={
-            searchQuery || entityFilter !== 'ALL' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  setEntityFilter('ALL');
-                }}
-              >
-                Reset Filters
+            filtered ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="?tab=activity">Reset filters</Link>
               </Button>
             ) : undefined
           }
@@ -126,7 +160,8 @@ export default function ApiActivityPanel({
               <div>
                 <CardTitle className="text-sm font-bold">API Gateway Audit Trail</CardTitle>
                 <CardDescription className="text-xs">
-                  {filteredActivities.length} recent {filteredActivities.length === 1 ? 'event' : 'events'} recorded
+                  Audit history of API mutations, newest first. Reads and rejected requests are not
+                  recorded here.
                 </CardDescription>
               </div>
             </div>
@@ -144,7 +179,7 @@ export default function ApiActivityPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredActivities.map(act => (
+                  {activities.map(act => (
                     <TableRow key={act.id} className="border-border/60 hover:bg-muted/20">
                       <TableCell className="py-3 font-mono text-xs font-bold text-foreground">
                         <div className="flex items-center gap-1.5">
@@ -194,6 +229,21 @@ export default function ApiActivityPanel({
               </Table>
             </div>
           </CardContent>
+          <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+            <span>Showing {activities.length} events</span>
+            <div className="flex gap-2">
+              {filters.hasCursor && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={activityHref(filters)}>Newest</Link>
+                </Button>
+              )}
+              {nextCursor && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={activityHref(filters, nextCursor)}>Older events</Link>
+                </Button>
+              )}
+            </div>
+          </div>
         </Card>
       )}
     </div>

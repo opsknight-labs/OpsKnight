@@ -15,8 +15,9 @@ import { incidentReadWhere } from '@/lib/authorization-filters';
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
 import { toIncidentApiDto } from '@/lib/incidents/api-dto';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -30,10 +31,7 @@ export async function GET(
 
     const incident = await prisma.incident.findFirst({
       where: {
-        AND: [
-          { id },
-          accessWhere,
-        ],
+        AND: [{ id }, accessWhere],
       },
       select: {
         id: true,
@@ -70,9 +68,9 @@ export async function GET(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function PATCH(
+export const PATCH = withV2Observability(async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -86,10 +84,7 @@ export async function PATCH(
 
     const existing = await prisma.incident.findFirst({
       where: {
-        AND: [
-          { id },
-          accessWhere,
-        ],
+        AND: [{ id }, accessWhere],
       },
       select: {
         id: true,
@@ -129,20 +124,19 @@ export async function PATCH(
       hasAssigneeUpdate,
       actor: { id: actor.id, name: apiKey.name },
       idempotency: idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined,
+      inTx: tx =>
+        logV2Audit({
+          action: 'incident.updated',
+          entityType: 'INCIDENT',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: validated,
+          tx,
+        }),
     });
 
     const finalIncident = patchResult.incident;
-
-    if (!patchResult.idempotencyReplayed) {
-      await logV2Audit({
-        action: 'incident.updated',
-        entityType: 'INCIDENT',
-        entityId: id,
-        actorId: actor.id,
-        apiKeyId: apiKey.id,
-        details: validated,
-      });
-    }
 
     const headers = {
       ...rlHeaders,
@@ -153,4 +147,4 @@ export async function PATCH(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

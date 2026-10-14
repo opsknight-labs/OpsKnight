@@ -13,8 +13,10 @@ import { makeDefaultStatusPage, StatusPageAdminError } from '@/lib/status-pages/
 import { applyStatusPageConfigurationChange } from '@/lib/status-pages/publish-configuration';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -57,9 +59,9 @@ export async function GET(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function PATCH(
+export const PATCH = withV2Observability(async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -100,13 +102,25 @@ export async function PATCH(
     if (existing.isDefault && validated.isDefault === false) {
       throw new AppError({
         code: 'STATUS_PAGE_DEFAULT_REPLACEMENT_REQUIRED',
-        userMessage: 'Cannot unset default status page directly. Designate another status page as default instead.',
+        userMessage:
+          'Cannot unset default status page directly. Designate another status page as default instead.',
       });
     }
 
+    const auditInTx = (tx: Prisma.TransactionClient) =>
+      logV2Audit({
+        action: 'status_page.updated',
+        entityType: 'STATUS_PAGE',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: validated,
+        tx,
+      });
+
     try {
       if (validated.isDefault === true && !existing.isDefault) {
-        await makeDefaultStatusPage(id);
+        await makeDefaultStatusPage(id, auditInTx);
       }
 
       const hasConfigChanges =
@@ -122,6 +136,11 @@ export async function PATCH(
             ...(validated.name !== undefined ? { name: validated.name } : {}),
             ...(validated.slug !== undefined ? { slug: validated.slug } : {}),
             ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
+          },
+          // Runs inside the configuration transaction, so the audit record commits with the change.
+          transform: async (tx, data) => {
+            await auditInTx(tx);
+            return data;
           },
         });
       }
@@ -148,17 +167,8 @@ export async function PATCH(
       },
     });
 
-    await logV2Audit({
-      action: 'status_page.updated',
-      entityType: 'STATUS_PAGE',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: validated,
-    });
-
     return apiV2Success(updated, { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

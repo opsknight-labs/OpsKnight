@@ -17,8 +17,9 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { createStatusPage, StatusPageAdminError } from '@/lib/status-pages/admin';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -87,9 +88,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withV2Observability(async function POST(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
@@ -101,20 +102,23 @@ export async function POST(req: NextRequest) {
 
     const validated = StatusPageCreateV2Schema.parse(body);
 
-    const page = await createStatusPage({
-      name: validated.name,
-      slug: validated.slug,
-      makeDefault: validated.isDefault,
-    });
-
-    await logV2Audit({
-      action: 'status_page.created',
-      entityType: 'STATUS_PAGE',
-      entityId: page.id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: page.name, slug: page.slug },
-    });
+    const page = await createStatusPage(
+      {
+        name: validated.name,
+        slug: validated.slug,
+        makeDefault: validated.isDefault,
+      },
+      (tx, created) =>
+        logV2Audit({
+          action: 'status_page.created',
+          entityType: 'STATUS_PAGE',
+          entityId: created.id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: { name: created.name, slug: created.slug },
+          tx,
+        })
+    );
 
     return apiV2Created(page, { headers: rlHeaders });
   } catch (error) {
@@ -129,4 +133,4 @@ export async function POST(req: NextRequest) {
     }
     return apiV2Error(error, req);
   }
-}
+});

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idempotency';
@@ -8,7 +9,7 @@ import {
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
-import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './engagement-reconciliation';
 
 export type RestIncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
@@ -26,6 +27,8 @@ export type RestIncidentPatchInput = {
   hasAssigneeUpdate: boolean;
   actor: { id: string; name?: string };
   idempotency?: IdempotencyContext;
+  /** Runs in the patch transaction after changes apply (never on replay), e.g. the audit write. */
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>;
 };
 
 export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
@@ -79,34 +82,12 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
         const titleChanged = input.title !== undefined && input.title !== current.title;
         const descriptionChanged =
           input.description !== undefined && input.description !== current.description;
-        const priorityChanged =
-          input.priority !== undefined && input.priority !== current.priority;
+        const priorityChanged = input.priority !== undefined && input.priority !== current.priority;
         const urgencyChanged = input.urgency !== undefined && input.urgency !== current.urgency;
         const assigneeChanged =
           input.hasAssigneeUpdate && (input.assigneeId ?? null) !== (current.assigneeId ?? null);
 
-        let assigneeName: string | null = null;
-        if (assigneeChanged && input.assigneeId) {
-          let assignee;
-          try {
-            assignee = await requireOperationalUser(tx, input.assigneeId);
-          } catch {
-            throw new AppError({
-              code: 'RESOURCE_NOT_FOUND',
-              userMessage: 'Assignee not found.',
-              details: { assigneeId: input.assigneeId },
-            });
-          }
-          assigneeName = assignee.name;
-        }
-
-        if (
-          titleChanged ||
-          descriptionChanged ||
-          priorityChanged ||
-          urgencyChanged ||
-          assigneeChanged
-        ) {
+        if (titleChanged || descriptionChanged || priorityChanged || urgencyChanged) {
           await tx.incident.update({
             where: { id: input.incidentId },
             data: {
@@ -114,7 +95,6 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
               ...(descriptionChanged ? { description: input.description } : {}),
               ...(priorityChanged ? { priority: input.priority } : {}),
               ...(urgencyChanged ? { urgency: input.urgency } : {}),
-              ...(assigneeChanged ? { assigneeId: input.assigneeId ?? null, teamId: null } : {}),
             },
           });
         }
@@ -152,18 +132,21 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
         }
 
         if (assigneeChanged) {
-          await tx.incidentEvent.create({
-            data: {
+          // Same canonical command as POST /incidents/{id}/assign, so timeline,
+          // notification outbox and war-room effects cannot diverge between paths.
+          await assignIncidentDomainCommand(
+            {
               incidentId: input.incidentId,
-              message: input.assigneeId
-                ? `Incident manually reassigned to ${assigneeName || 'user'}`
-                : 'Incident unassigned',
+              assigneeId: input.assigneeId ?? null,
+              teamId: null,
+              actor: input.actor,
             },
-          });
+            tx
+          );
         }
 
         const metadataChanged = titleChanged || descriptionChanged || priorityChanged;
-        if (!lifecycle?.changed && (urgencyChanged || assigneeChanged || metadataChanged)) {
+        if (!lifecycle?.changed && (urgencyChanged || metadataChanged)) {
           await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
             'INCIDENT_UPDATE_SERVICE_NOTIFICATION',
             'INCIDENT_UPDATE_WEBHOOK',
@@ -178,6 +161,8 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
             details: { incidentId: input.incidentId },
           });
         }
+
+        if (input.inTx) await input.inTx(tx);
 
         return {
           incident,

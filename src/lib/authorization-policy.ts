@@ -403,6 +403,11 @@ function isResourceInScope(actor: AuthorizationActor, resource: AuthorizationRes
   return false;
 }
 
+/** The API scope that authorises an action, if the action is reachable with an API credential. */
+export function apiScopeForAction(action: AuthorizationAction): ApiScope | undefined {
+  return ACTION_POLICIES.get(action)?.apiScope;
+}
+
 export function authorize<A extends AuthorizationAction>(
   input: AuthorizationRequest<A>
 ): AuthorizationDecision {

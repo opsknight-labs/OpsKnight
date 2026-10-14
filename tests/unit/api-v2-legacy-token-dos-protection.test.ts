@@ -9,6 +9,7 @@ import { hashTokenV2 } from '@/lib/api-keys';
 describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.rateLimit.upsert).mockReset();
     authCache.clear();
     rateLimitMemoryCache.clear();
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -256,5 +257,127 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
         status: 401,
       });
     }
+  });
+
+  describe('distributed and unidentified-client protections', () => {
+    const request = (token: string, ip?: string) =>
+      new NextRequest('http://localhost:3000/api/v2/incidents', {
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(ip ? { 'x-forwarded-for': ip } : {}),
+        },
+      });
+
+    it('learns the shared PostgreSQL failed-auth count, so failures spread over replicas still block', async () => {
+      vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+      // Other replicas already recorded 59 failures for this IP in the shared counter.
+      vi.mocked(prisma.rateLimit.upsert).mockResolvedValue({ count: 60 } as any);
+
+      await expect(
+        authenticateV2Request(request(`ok_live_${'a'.repeat(30)}`, '198.51.100.150'))
+      ).rejects.toMatchObject({ code: 'API_KEY_INVALID' });
+
+      // This replica saw one local failure, yet the shared count now blocks the next lookup.
+      const blocked = await authenticateV2Request(
+        request(`ok_live_${'b'.repeat(30)}`, '198.51.100.150')
+      ).catch(error => error);
+      expect(blocked).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED', status: 429 });
+      expect(blocked.details.retryAfter).toBeGreaterThanOrEqual(1);
+      expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects malformed tokens before any database lookup', async () => {
+      for (const token of [
+        'x',
+        'ok_short',
+        `ok_live_${'a'.repeat(300)}`,
+        'ok_bad chars here!!!!!!!',
+      ]) {
+        await expect(authenticateV2Request(request(token, '198.51.100.151'))).rejects.toMatchObject(
+          {
+            code: 'API_KEY_INVALID',
+          }
+        );
+      }
+      expect(prisma.apiKey.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('bounds concurrent verification for unidentified clients without a quota lockout', async () => {
+      const gates: Array<() => void> = [];
+      vi.mocked(prisma.apiKey.findFirst).mockImplementation(
+        () =>
+          new Promise(resolve => {
+            gates.push(() => resolve(null));
+          }) as any
+      );
+      const { UNIDENTIFIED_VERIFICATION_CONCURRENCY: max } =
+        await import('@/lib/api-v2/rate-limit');
+
+      const inFlight = Array.from({ length: max }, (_, i) =>
+        authenticateV2Request(request(`ok_live_flood_${i}_${'f'.repeat(24)}`)).catch(error => error)
+      );
+      await vi.waitFor(() => expect(gates.length).toBe(max));
+
+      const shed = await authenticateV2Request(request(`ok_live_extra_${'e'.repeat(24)}`)).catch(
+        error => error
+      );
+      expect(shed).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED', status: 429 });
+      expect(shed.details.retryAfter).toBe(1);
+
+      gates.forEach(release => release());
+      const settled = await Promise.all(inFlight);
+      expect(settled.every(e => e.code === 'API_KEY_INVALID')).toBe(true);
+
+      // Slots are released: the bucket is usable again and was never quota-locked.
+      vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+      await expect(
+        authenticateV2Request(request(`ok_live_after_${'a'.repeat(24)}`))
+      ).rejects.toMatchObject({ code: 'API_KEY_INVALID' });
+    });
+
+    it('queues a brief burst for an unidentified client instead of rejecting it', async () => {
+      const gates: Array<() => void> = [];
+      vi.mocked(prisma.apiKey.findFirst).mockImplementation(
+        () => new Promise(resolve => gates.push(() => resolve(null))) as any
+      );
+      const { UNIDENTIFIED_VERIFICATION_CONCURRENCY: max } =
+        await import('@/lib/api-v2/rate-limit');
+
+      const first = Array.from({ length: max }, (_, i) =>
+        authenticateV2Request(request(`ok_live_burst_${i}_${'b'.repeat(24)}`)).catch(error => error)
+      );
+      await vi.waitFor(() => expect(gates.length).toBe(max));
+
+      // One more caller arrives while every slot is busy; a slot frees up shortly after.
+      const queued = authenticateV2Request(request(`ok_live_queued_${'q'.repeat(24)}`)).catch(
+        error => error
+      );
+      setTimeout(() => gates[0]!(), 20);
+      await vi.waitFor(() => expect(gates.length).toBe(max + 1));
+      gates.forEach(release => release());
+
+      const result = await queued;
+      expect(result).toMatchObject({ code: 'API_KEY_INVALID' }); // verified (and invalid), not shed
+      await Promise.all(first);
+    });
+
+    it('applies a stricter shared legacy-scrypt budget to unidentified clients', async () => {
+      vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+      const { LEGACY_UNIDENTIFIED_LIMIT: limit } = await import('@/lib/api-v2/rate-limit');
+
+      for (let i = 0; i < limit; i++) {
+        await expect(
+          authenticateV2Request(request(`ok_${`u${i}`.padEnd(43, 'a')}`))
+        ).rejects.toMatchObject({ code: 'API_KEY_INVALID' });
+      }
+      const shed = await authenticateV2Request(request(`ok_${'z'.repeat(43)}`)).catch(e => e);
+      expect(shed).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED', status: 429 });
+      expect(shed.details.retryAfter).toBeGreaterThanOrEqual(1);
+
+      // Modern-format tokens from the same bucket are unaffected.
+      await expect(
+        authenticateV2Request(request(`ok_live_modern_${'m'.repeat(24)}`))
+      ).rejects.toMatchObject({ code: 'API_KEY_INVALID' });
+    });
   });
 });

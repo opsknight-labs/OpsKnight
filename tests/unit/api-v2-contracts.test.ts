@@ -199,7 +199,7 @@ describe('API v2 Contracts & Security', () => {
   });
 
   describe('OpenAPI Route Endpoint', () => {
-    it('returns OpenAPI 3.1 specification at /api/v2/openapi.json in canonical envelope', async () => {
+    it('returns the bare OpenAPI 3.1 document at /api/v2/openapi.json', async () => {
       const req = new NextRequest('http://localhost:3000/api/v2/openapi.json');
       const response = await getOpenApiRoute(req);
 
@@ -207,12 +207,15 @@ describe('API v2 Contracts & Security', () => {
       expect(response.headers.get('content-type')).toContain('application/json');
 
       const body = await response.json();
-      expect(body.data.openapi).toBe('3.1.0');
-      expect(body.data.info.title).toContain('OpsKnight');
-      expect(body.data.paths['/incidents']).toBeDefined();
-      expect(body.data.paths['/services']).toBeDefined();
-      expect(body.data.paths['/postmortems']).toBeDefined();
-      expect(body.data.paths['/service-accounts']).toBeDefined();
+      // Standard consumers read these at the root, not under an envelope.
+      expect(body.data).toBeUndefined();
+      expect(body.requestId).toBeUndefined();
+      expect(body.openapi).toBe('3.1.0');
+      expect(body.info.title).toContain('OpsKnight');
+      expect(body.paths['/incidents']).toBeDefined();
+      expect(body.paths['/services']).toBeDefined();
+      expect(body.paths['/postmortems']).toBeDefined();
+      expect(body.paths['/service-accounts']).toBeDefined();
     });
   });
 });

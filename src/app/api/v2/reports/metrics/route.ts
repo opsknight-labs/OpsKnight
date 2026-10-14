@@ -11,8 +11,9 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -54,9 +55,7 @@ export async function GET(req: NextRequest) {
     }
 
     const resolvedCount =
-      sla.statusMix.find(s => s.status === 'RESOLVED')?.count ??
-      sla.resolvedIncidents ??
-      0;
+      sla.statusMix.find(s => s.status === 'RESOLVED')?.count ?? sla.resolvedIncidents ?? 0;
 
     const metrics = {
       windowDays: days,
@@ -76,4 +75,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

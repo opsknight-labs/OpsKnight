@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { isAppError, normalizeError, toPublicAppError } from '@/lib/errors';
+import { ERROR_REGISTRY, isAppError, normalizeError, toPublicAppError } from '@/lib/errors';
+import { recordApiError, recordIdempotency } from './observability';
+import { mapDatabaseError } from './database-errors';
 import { createApiResponseContext, type ApiResponseContext } from '@/lib/api-response';
 import type {
   ApiV2Pagination,
@@ -28,10 +30,7 @@ function sanitizeJsonValue<T>(value: T): T {
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(
       ([key, nested]) =>
-        key !== '__proto__' &&
-        key !== 'constructor' &&
-        key !== 'prototype' &&
-        nested !== undefined
+        key !== '__proto__' && key !== 'constructor' && key !== 'prototype' && nested !== undefined
     )
     .map(([key, nested]) => [key, sanitizeJsonValue(nested)] as const);
 
@@ -114,9 +113,8 @@ export function apiV2NoContent(
   });
 }
 
-
 export function apiV2Error(
-  error: unknown,
+  rawError: unknown,
   req?: Request,
   options: {
     status?: number;
@@ -124,8 +122,11 @@ export function apiV2Error(
     context?: ApiResponseContext;
   } = {}
 ): NextResponse {
-  const context = options.context ?? createApiResponseContext(req ? { headers: req.headers } : undefined);
+  const context =
+    options.context ?? createApiResponseContext(req ? { headers: req.headers } : undefined);
   const instance = req ? new URL(req.url).pathname : '/api/v2';
+  // One mapping for database failures, so no route can leak a 500 for a conflict or outage.
+  const error = mapDatabaseError(rawError);
 
   let status = options.status ?? 500;
   let code = 'INTERNAL_ERROR';
@@ -150,7 +151,10 @@ export function apiV2Error(
     const publicError = toPublicAppError(error);
     status = options.status ?? error.status;
     code = publicError.code;
-    title = code.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+    title = code
+      .split('_')
+      .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+      .join(' ');
     detail = publicError.message;
     retryable = publicError.retryable;
     if (publicError.fields && publicError.fields.length > 0) {
@@ -165,8 +169,18 @@ export function apiV2Error(
     }
   } else if (typeof error === 'string') {
     status = options.status ?? 400;
-    code = status === 404 ? 'RESOURCE_NOT_FOUND' : status === 403 ? 'FORBIDDEN' : status === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST';
-    title = code.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+    code =
+      status === 404
+        ? 'RESOURCE_NOT_FOUND'
+        : status === 403
+          ? 'FORBIDDEN'
+          : status === 401
+            ? 'UNAUTHORIZED'
+            : 'BAD_REQUEST';
+    title = code
+      .split('_')
+      .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+      .join(' ');
     detail = error;
     retryable = status >= 500;
   } else if (error instanceof Error) {
@@ -174,10 +188,19 @@ export function apiV2Error(
     const publicError = toPublicAppError(normalized);
     status = options.status ?? normalized.status;
     code = publicError.code;
-    title = code.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+    title = code
+      .split('_')
+      .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+      .join(' ');
     detail = publicError.message;
     retryable = publicError.retryable;
   }
+
+  const category =
+    (ERROR_REGISTRY as Record<string, { category: string }>)[code]?.category ??
+    (error instanceof ZodError ? 'validation' : 'internal');
+  recordApiError(category, status);
+  if (code === 'IDEMPOTENCY_KEY_CONFLICT') recordIdempotency('conflict');
 
   const problem: ApiV2ProblemDetails = {
     type: `${ERROR_TYPE_PREFIX}${code.toLowerCase().replace(/_/g, '-')}`,
@@ -197,7 +220,7 @@ export function apiV2Error(
   headers.set('Content-Type', 'application/problem+json; charset=utf-8');
   headers.set('x-request-id', context.requestId);
 
-  if (status === 429 || code === 'RATE_LIMIT_EXCEEDED') {
+  if (status === 429 || status === 503 || code === 'RATE_LIMIT_EXCEEDED') {
     if (meta && typeof meta.retryAfter === 'number' && !headers.has('Retry-After')) {
       headers.set('Retry-After', String(meta.retryAfter));
     }

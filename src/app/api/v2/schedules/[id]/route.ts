@@ -7,13 +7,16 @@ import {
   enforceV2Authorization,
   enforceV2RateLimit,
   logV2Audit,
+  runV2AuditedMutation,
   ScheduleUpdateV2Schema,
 } from '@/lib/api-v2';
+import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -49,28 +52,29 @@ export async function GET(
 
     const accessible = await prisma.onCallSchedule.findFirst({
       where: {
-        AND: [
-          { id },
-          scheduleReadWhere(actor),
-        ],
+        AND: [{ id }, scheduleReadWhere(actor)],
       },
       select: { id: true },
     });
 
     if (!accessible) {
+      // Indistinguishable from a missing schedule, so the detail endpoint does not
+      // reveal the existence of schedules the collection query excludes.
       throw new AppError({
-        code: 'AUTHORIZATION_DENIED',
-        userMessage: 'You are not authorized to access this schedule.',
+        code: 'SCHEDULE_NOT_FOUND',
+        userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
 
-    return apiV2Success(schedule, { headers: rlHeaders });
+    return apiV2Success(schedule, {
+      headers: { ...rlHeaders, ...etagHeaders(schedule.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function PATCH(
+export const PATCH = withV2Observability(async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -94,37 +98,45 @@ export async function PATCH(
 
     const validated = ScheduleUpdateV2Schema.parse(body);
 
-    const updated = await prisma.onCallSchedule.update({
-      where: { id },
-      data: {
-        name: validated.name,
-        timeZone: validated.timeZone,
-      },
-      select: {
-        id: true,
-        name: true,
-        timeZone: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const expected = parseIfMatch(req);
 
-    await logV2Audit({
-      action: 'schedule.updated',
-      entityType: 'SCHEDULE',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: validated,
-    });
+    const updated = await withIfMatch(expected, () =>
+      runV2AuditedMutation(
+        tx =>
+          tx.onCallSchedule.update({
+            where: { id, ...ifMatchWhere(expected) },
+            data: {
+              name: validated.name,
+              timeZone: validated.timeZone,
+            },
+            select: {
+              id: true,
+              name: true,
+              timeZone: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          }),
+        () => ({
+          action: 'schedule.updated',
+          entityType: 'SCHEDULE',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: validated,
+        })
+      )
+    );
 
-    return apiV2Success(updated, { headers: rlHeaders });
+    return apiV2Success(updated, {
+      headers: { ...rlHeaders, ...etagHeaders(updated.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function DELETE(
+export const DELETE = withV2Observability(async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -172,8 +184,11 @@ export async function DELETE(
       });
     });
 
-    return apiV2Success({ success: true, message: `Schedule '${schedule.name}' deleted successfully.` }, { headers: rlHeaders });
+    return apiV2Success(
+      { success: true, message: `Schedule '${schedule.name}' deleted successfully.` },
+      { headers: rlHeaders }
+    );
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

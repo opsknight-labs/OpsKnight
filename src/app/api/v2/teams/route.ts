@@ -9,15 +9,17 @@ import {
   enforceV2Authorization,
   enforceV2RateLimit,
   formatCursorPagination,
-  logV2Audit,
+  idempotencyResponseHeaders,
+  runV2IdempotentAuditedMutation,
   parsePaginationParams,
   TeamCreateV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -82,9 +84,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withV2Observability(async function POST(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
@@ -96,31 +98,41 @@ export async function POST(req: NextRequest) {
 
     const validated = TeamCreateV2Schema.parse(body);
 
-    const team = await prisma.team.create({
-      data: {
-        name: validated.name,
-        description: validated.description ?? null,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const execution = await runV2IdempotentAuditedMutation(
+      req,
+      apiKey.id,
+      'team:create',
+      validated,
+      tx =>
+        tx.team.create({
+          data: {
+            name: validated.name,
+            description: validated.description ?? null,
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+      created => ({
+        action: 'team.created',
+        entityType: 'TEAM',
+        entityId: created.id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { name: created.name },
+      })
+    );
 
-    await logV2Audit({
-      action: 'team.created',
-      entityType: 'TEAM',
-      entityId: team.id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: team.name },
-    });
+    const team = execution.value;
 
-    return apiV2Created(team, { headers: rlHeaders });
+    return apiV2Created(team, {
+      headers: { ...rlHeaders, ...idempotencyResponseHeaders(execution.replayed) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

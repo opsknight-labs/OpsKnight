@@ -9,8 +9,10 @@ import {
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { projectRunbookSteps } from '@/lib/api-v2/runbook-projection';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -34,7 +36,8 @@ export async function GET(
       });
     }
 
-    const steps = (runbook.publishedVersion?.definition as { steps?: unknown[] })?.steps ?? [];
+    // Step configuration (commands, URLs, env, secret references) is never returned.
+    const steps = projectRunbookSteps(runbook.publishedVersion?.definition);
 
     const dto = {
       id: runbook.id,
@@ -51,4 +54,4 @@ export async function GET(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

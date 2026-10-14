@@ -6,13 +6,15 @@ import {
   authenticateV2Request,
   enforceV2Authorization,
   enforceV2RateLimit,
-  logV2Audit,
+  runV2AuditedMutation,
   IntegrationUpdateV2Schema,
 } from '@/lib/api-v2';
+import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -50,13 +52,15 @@ export async function GET(
       teamId: integration.service.teamId,
     });
 
-    return apiV2Success(integration, { headers: rlHeaders });
+    return apiV2Success(integration, {
+      headers: { ...rlHeaders, ...etagHeaders(integration.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function PATCH(
+export const PATCH = withV2Observability(async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -93,35 +97,43 @@ export async function PATCH(
 
     const validated = IntegrationUpdateV2Schema.parse(body);
 
-    const updated = await prisma.integration.update({
-      where: { id },
-      data: {
-        ...(validated.name !== undefined ? { name: validated.name } : {}),
-        ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        serviceId: true,
-        enabled: true,
-        createdAt: true,
-        updatedAt: true,
-        service: { select: { id: true, name: true } },
-      },
-    });
+    const expected = parseIfMatch(req);
 
-    await logV2Audit({
-      action: 'integration.updated',
-      entityType: 'SERVICE',
-      entityId: updated.serviceId,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: validated,
-    });
+    const updated = await withIfMatch(expected, () =>
+      runV2AuditedMutation(
+        tx =>
+          tx.integration.update({
+            where: { id, ...ifMatchWhere(expected) },
+            data: {
+              ...(validated.name !== undefined ? { name: validated.name } : {}),
+              ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
+            },
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              serviceId: true,
+              enabled: true,
+              createdAt: true,
+              updatedAt: true,
+              service: { select: { id: true, name: true } },
+            },
+          }),
+        result => ({
+          action: 'integration.updated',
+          entityType: 'SERVICE',
+          entityId: result.serviceId,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: validated,
+        })
+      )
+    );
 
-    return apiV2Success(updated, { headers: rlHeaders });
+    return apiV2Success(updated, {
+      headers: { ...rlHeaders, ...etagHeaders(updated.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

@@ -9,7 +9,8 @@ import {
   enforceV2Authorization,
   enforceV2RateLimit,
   formatCursorPagination,
-  logV2Audit,
+  idempotencyResponseHeaders,
+  runV2IdempotentAuditedMutation,
   parsePaginationParams,
   ServiceCreateV2Schema,
   ServiceListQuerySchema,
@@ -18,8 +19,9 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -98,9 +100,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withV2Observability(async function POST(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
@@ -136,40 +138,48 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const created = await prisma.service.create({
-      data: {
-        name: validated.name,
-        description: validated.description ?? null,
-        teamId: validated.teamId,
-        escalationPolicyId: validated.escalationPolicyId,
-        status: validated.status,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        status: true,
-        teamId: true,
-        escalationPolicyId: true,
-        createdAt: true,
-        updatedAt: true,
-        team: { select: { id: true, name: true } },
-        policy: { select: { id: true, name: true } },
-      },
-    });
+    const execution = await runV2IdempotentAuditedMutation(
+      req,
+      apiKey.id,
+      'service:create',
+      validated,
+      tx =>
+        tx.service.create({
+          data: {
+            name: validated.name,
+            description: validated.description ?? null,
+            teamId: validated.teamId,
+            escalationPolicyId: validated.escalationPolicyId,
+            status: validated.status,
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            status: true,
+            teamId: true,
+            escalationPolicyId: true,
+            createdAt: true,
+            updatedAt: true,
+            team: { select: { id: true, name: true } },
+            policy: { select: { id: true, name: true } },
+          },
+        }),
+      created => ({
+        action: 'service.created',
+        entityType: 'SERVICE',
+        entityId: created.id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: {
+          name: created.name,
+          teamId: created.teamId,
+          escalationPolicyId: created.escalationPolicyId,
+        },
+      })
+    );
 
-    await logV2Audit({
-      action: 'service.created',
-      entityType: 'SERVICE',
-      entityId: created.id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: {
-        name: created.name,
-        teamId: created.teamId,
-        escalationPolicyId: created.escalationPolicyId,
-      },
-    });
+    const created = execution.value;
 
     const dto = {
       id: created.id,
@@ -184,8 +194,10 @@ export async function POST(req: NextRequest) {
       escalationPolicy: created.policy,
     };
 
-    return apiV2Created(dto, { headers: rlHeaders });
+    return apiV2Created(dto, {
+      headers: { ...rlHeaders, ...idempotencyResponseHeaders(execution.replayed) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

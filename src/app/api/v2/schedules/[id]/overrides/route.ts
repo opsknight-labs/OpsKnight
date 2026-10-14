@@ -14,8 +14,9 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { createScheduleOverrideMutation } from '@/lib/schedules/mutations';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -44,8 +45,9 @@ export async function GET(
 
     if (!schedule) {
       throw new AppError({
-        code: 'AUTHORIZATION_DENIED',
-        userMessage: 'You are not authorized to access this schedule.',
+        // Indistinguishable from a missing schedule: do not reveal that it exists.
+        code: 'SCHEDULE_NOT_FOUND',
+        userMessage: `Schedule with id '${id}' was not found.`,
       });
     }
 
@@ -74,9 +76,9 @@ export async function GET(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(
+export const POST = withV2Observability(async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -111,28 +113,31 @@ export async function POST(
 
     const validated = ScheduleOverrideV2Schema.parse(body);
 
-    const created = await createScheduleOverrideMutation({
-      scheduleId: id,
-      userId: validated.userId,
-      replacesUserId: validated.replacesUserId ?? null,
-      start: new Date(validated.startDate),
-      end: new Date(validated.endDate),
-    });
-
-    await logV2Audit({
-      action: 'schedule_override.created',
-      entityType: 'SCHEDULE',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: {
-        overrideId: created.id,
-        userId: created.userId,
-        replacesUserId: created.replacesUserId,
-        startDate: created.start.toISOString(),
-        endDate: created.end.toISOString(),
+    const created = await createScheduleOverrideMutation(
+      {
+        scheduleId: id,
+        userId: validated.userId,
+        replacesUserId: validated.replacesUserId ?? null,
+        start: new Date(validated.startDate),
+        end: new Date(validated.endDate),
       },
-    });
+      (tx, override) =>
+        logV2Audit({
+          action: 'schedule_override.created',
+          entityType: 'SCHEDULE',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: {
+            overrideId: override.id,
+            userId: override.userId,
+            replacesUserId: override.replacesUserId,
+            startDate: override.start.toISOString(),
+            endDate: override.end.toISOString(),
+          },
+          tx,
+        })
+    );
 
     const dto = {
       ...created,
@@ -144,4 +149,4 @@ export async function POST(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

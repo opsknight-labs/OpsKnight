@@ -1,13 +1,16 @@
 import { randomBytes } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { hashTokenV2 } from '@/lib/api-keys';
-import { isAppRole, isApiScope, type AppRole } from '@/lib/authorization';
+import { isAppRole, isApiScope, type ApiScope, type AppRole } from '@/lib/authorization';
+import { disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { AppError } from '@/lib/errors';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
-import { logV2Audit } from './audit';
+import { logV2Audit, runV2AuditedMutation } from './audit';
+import { SERVICE_ACCOUNT_DOMAIN, isServiceAccountEmail } from '@/lib/service-account-identity';
 import { invalidateV2AuthCache } from './auth';
 
-export const SERVICE_ACCOUNT_DOMAIN = 'serviceaccount.opsknight.local';
+export { SERVICE_ACCOUNT_DOMAIN };
 
 export interface CreateServiceAccountInput {
   name: string;
@@ -15,6 +18,8 @@ export interface CreateServiceAccountInput {
   description?: string;
   teamIds?: string[];
   actorId: string;
+  /** Join an existing transaction (e.g. the idempotency transaction). */
+  tx?: Prisma.TransactionClient;
 }
 
 export interface IssueServiceAccountTokenInput {
@@ -22,18 +27,56 @@ export interface IssueServiceAccountTokenInput {
   name: string;
   scopes: string[];
   expiresInDays?: number;
+  /** Explicit administrative decision to issue a token that never expires. */
+  neverExpires?: boolean;
   actorId: string;
+}
+
+/**
+ * Token lifetime policy. A non-expiring token is allowed only when the caller says so
+ * (`neverExpires`) and the deployment has not forbidden it. Lifetimes are capped so a
+ * forgotten token cannot outlive the deployment's rotation policy.
+ */
+export function resolveTokenExpiry(
+  input: Pick<IssueServiceAccountTokenInput, 'expiresInDays' | 'neverExpires'>,
+  now = Date.now()
+): Date | null {
+  const allowNonExpiring = process.env.API_V2_ALLOW_NON_EXPIRING_TOKENS !== 'false';
+  const maxDays = Number.parseInt(process.env.API_V2_TOKEN_MAX_DAYS ?? '', 10);
+
+  if (input.neverExpires && input.expiresInDays !== undefined) {
+    throw new AppError({
+      code: 'INVALID_TOKEN_EXPIRY',
+      userMessage: 'Provide either expiresInDays or neverExpires, not both.',
+    });
+  }
+  if (input.neverExpires) {
+    if (!allowNonExpiring || (Number.isFinite(maxDays) && maxDays > 0)) {
+      throw new AppError({
+        code: 'INVALID_TOKEN_EXPIRY',
+        userMessage: 'Non-expiring tokens are disabled by this deployment. Provide expiresInDays.',
+      });
+    }
+    return null;
+  }
+  if (!input.expiresInDays || input.expiresInDays <= 0) {
+    throw new AppError({
+      code: 'INVALID_TOKEN_EXPIRY',
+      userMessage: 'Choose a token lifetime: provide expiresInDays, or neverExpires: true.',
+    });
+  }
+  if (Number.isFinite(maxDays) && maxDays > 0 && input.expiresInDays > maxDays) {
+    throw new AppError({
+      code: 'INVALID_TOKEN_EXPIRY',
+      userMessage: `Token lifetime may not exceed ${maxDays} days on this deployment.`,
+    });
+  }
+  return new Date(now + input.expiresInDays * 86_400_000);
 }
 
 export async function listServiceAccounts() {
   const users = await prisma.user.findMany({
-    where: {
-      OR: [
-        { department: 'SERVICE_ACCOUNT' },
-        { jobTitle: 'Service Account' },
-        { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}` } },
-      ],
-    },
+    where: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -115,12 +158,7 @@ export async function getServiceAccount(id: string) {
     },
   });
 
-  if (
-    !user ||
-    (user.department !== 'SERVICE_ACCOUNT' &&
-      user.jobTitle !== 'Service Account' &&
-      !user.email.endsWith(`@${SERVICE_ACCOUNT_DOMAIN}`))
-  ) {
+  if (!user || !isServiceAccountEmail(user.email)) {
     throw new AppError({
       code: 'SERVICE_ACCOUNT_NOT_FOUND',
       userMessage: `Service account with id '${id}' not found.`,
@@ -144,7 +182,8 @@ export async function createServiceAccount(input: CreateServiceAccountInput) {
   if (!isAppRole(input.role)) {
     throw new AppError({
       code: 'INVALID_SERVICE_ACCOUNT_ROLE',
-      userMessage: "Service account role must be a valid system role ('ADMIN', 'RESPONDER', 'AUDITOR', or 'USER').",
+      userMessage:
+        "Service account role must be a valid system role ('ADMIN', 'RESPONDER', 'AUDITOR', or 'USER').",
     });
   }
 
@@ -152,54 +191,72 @@ export async function createServiceAccount(input: CreateServiceAccountInput) {
   const safeName = input.name.trim();
   const email = `sa_${Date.now()}_${uniqueId}@${SERVICE_ACCOUNT_DOMAIN}`;
 
-  const createdUser = await prisma.user.create({
-    data: {
-      name: safeName,
-      email,
-      role: input.role,
-      status: 'ACTIVE',
-      department: 'SERVICE_ACCOUNT',
-      jobTitle: 'Service Account',
-      ...(input.teamIds && input.teamIds.length > 0
-        ? {
-            teamMemberships: {
-              createMany: {
-                data: input.teamIds.map(teamId => ({ teamId })),
-                skipDuplicates: true,
+  if (input.teamIds && input.teamIds.length > 0) {
+    const found = await (input.tx ?? prisma).team.findMany({
+      where: { id: { in: input.teamIds } },
+      select: { id: true },
+    });
+    const missing = input.teamIds.filter(id => !found.some(team => team.id === id));
+    if (missing.length > 0) {
+      throw new AppError({
+        code: 'TEAM_NOT_FOUND',
+        userMessage: `Team(s) not found: ${missing.join(', ')}.`,
+        details: { missingTeamIds: missing },
+      });
+    }
+  }
+
+  const createdUser = await runV2AuditedMutation(
+    tx =>
+      tx.user.create({
+        data: {
+          name: safeName,
+          email,
+          role: input.role,
+          status: 'ACTIVE',
+          department: 'SERVICE_ACCOUNT',
+          jobTitle: 'Service Account',
+          ...(input.teamIds && input.teamIds.length > 0
+            ? {
+                teamMemberships: {
+                  createMany: {
+                    data: input.teamIds.map(teamId => ({ teamId })),
+                    skipDuplicates: true,
+                  },
+                },
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          teamMemberships: {
+            select: {
+              team: {
+                select: { id: true, name: true },
               },
             },
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      teamMemberships: {
-        select: {
-          team: {
-            select: { id: true, name: true },
           },
         },
+      }),
+    created => ({
+      action: 'service_account.created',
+      entityType: 'USER',
+      entityId: created.id,
+      actorId: input.actorId,
+      details: {
+        name: created.name,
+        role: created.role,
+        teamIds: input.teamIds ?? [],
       },
-    },
-  });
-
-  await logV2Audit({
-    action: 'service_account.created',
-    entityType: 'USER',
-    entityId: createdUser.id,
-    actorId: input.actorId,
-    details: {
-      name: createdUser.name,
-      role: createdUser.role,
-      teamIds: input.teamIds ?? [],
-    },
-  });
+    }),
+    input.tx
+  );
 
   return {
     id: createdUser.id,
@@ -226,18 +283,18 @@ export async function deleteServiceAccount(id: string, actorId: string) {
         where: { userId: id, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+      await logV2Audit({
+        action: 'service_account.deleted',
+        entityType: 'USER',
+        entityId: id,
+        actorId,
+        details: { name: sa.name, email: sa.email },
+        tx,
+      });
     }
   );
 
   invalidateV2AuthCache();
-
-  await logV2Audit({
-    action: 'service_account.deleted',
-    entityType: 'USER',
-    entityId: id,
-    actorId,
-    details: { name: sa.name, email: sa.email },
-  });
 
   return { success: true };
 }
@@ -254,7 +311,7 @@ export function generateServiceAccountTokenRaw() {
 }
 
 export async function issueServiceAccountToken(input: IssueServiceAccountTokenInput) {
-  await getServiceAccount(input.serviceAccountId);
+  const account = await getServiceAccount(input.serviceAccountId);
 
   if (!input.name || input.name.trim().length === 0) {
     throw new AppError({
@@ -279,44 +336,55 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
     });
   }
 
+  // Least privilege: a token may not carry scopes its service account's role could not hold,
+  // nor scopes that currently grant nothing.
+  const disallowed = disallowedScopesForRole(account.role, input.scopes as ApiScope[]);
+  if (disallowed.length > 0) {
+    throw new AppError({
+      code: 'INVALID_TOKEN_SCOPES',
+      userMessage: `Scopes not permitted for a ${account.role} service account: ${disallowed.join(', ')}.`,
+      details: { disallowedScopes: disallowed },
+    });
+  }
+
   const { token, prefix, tokenHash } = generateServiceAccountTokenRaw();
-  const expiresAt =
-    input.expiresInDays && input.expiresInDays > 0
-      ? new Date(Date.now() + input.expiresInDays * 86_400_000)
-      : null;
+  const expiresAt = resolveTokenExpiry(input);
 
-  const apiKey = await prisma.apiKey.create({
-    data: {
-      name: input.name.trim(),
-      prefix,
-      tokenHash,
-      scopes: input.scopes,
-      userId: input.serviceAccountId,
-      expiresAt,
-    },
-    select: {
-      id: true,
-      name: true,
-      prefix: true,
-      scopes: true,
-      createdAt: true,
-      expiresAt: true,
-    },
-  });
-
-  await logV2Audit({
-    action: 'service_account_token.created',
-    entityType: 'API_KEY',
-    entityId: apiKey.id,
-    actorId: input.actorId,
-    details: {
-      serviceAccountId: input.serviceAccountId,
-      tokenName: apiKey.name,
-      prefix: apiKey.prefix,
-      scopes: apiKey.scopes,
-      expiresAt: apiKey.expiresAt?.toISOString() ?? null,
-    },
-  });
+  const apiKey = await runV2AuditedMutation(
+    tx =>
+      tx.apiKey.create({
+        data: {
+          name: input.name.trim(),
+          prefix,
+          tokenHash,
+          scopes: input.scopes,
+          userId: input.serviceAccountId,
+          expiresAt,
+        },
+        select: {
+          id: true,
+          name: true,
+          prefix: true,
+          scopes: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+      }),
+    created => ({
+      action: 'service_account_token.created',
+      entityType: 'API_KEY',
+      entityId: created.id,
+      actorId: input.actorId,
+      details: {
+        serviceAccountId: input.serviceAccountId,
+        tokenName: created.name,
+        prefix: created.prefix,
+        scopes: created.scopes,
+        expiresAt: created.expiresAt?.toISOString() ?? null,
+        neverExpires: created.expiresAt === null,
+      },
+    })
+  );
 
   return {
     token, // Provided once on issuance
@@ -340,24 +408,26 @@ export async function revokeServiceAccountToken(
     });
   }
 
-  await prisma.apiKey.update({
-    where: { id: tokenId },
-    data: { revokedAt: new Date() },
-  });
+  await runV2AuditedMutation(
+    tx =>
+      tx.apiKey.update({
+        where: { id: tokenId },
+        data: { revokedAt: new Date() },
+      }),
+    () => ({
+      action: 'service_account_token.revoked',
+      entityType: 'API_KEY',
+      entityId: tokenId,
+      actorId,
+      details: {
+        serviceAccountId,
+        tokenName: apiKey.name,
+        prefix: apiKey.prefix,
+      },
+    })
+  );
 
   invalidateV2AuthCache(apiKey.tokenHash);
-
-  await logV2Audit({
-    action: 'service_account_token.revoked',
-    entityType: 'API_KEY',
-    entityId: tokenId,
-    actorId,
-    details: {
-      serviceAccountId,
-      tokenName: apiKey.name,
-      prefix: apiKey.prefix,
-    },
-  });
 
   return { success: true };
 }

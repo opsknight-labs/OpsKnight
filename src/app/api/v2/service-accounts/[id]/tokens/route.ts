@@ -10,8 +10,9 @@ import {
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function POST(
+export const POST = withV2Observability(async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -32,6 +33,7 @@ export async function POST(
       name: validated.name,
       scopes: validated.scopes,
       expiresInDays: validated.expiresInDays,
+      neverExpires: validated.neverExpires,
       actorId: actor.id,
     });
 
@@ -39,4 +41,4 @@ export async function POST(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

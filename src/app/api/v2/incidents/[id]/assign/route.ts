@@ -14,8 +14,9 @@ import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function POST(
+export const POST = withV2Observability(async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -25,7 +26,9 @@ export async function POST(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_MANAGE);
 
     const { id } = await params;
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => {
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
+    });
     const validated = IncidentAssignV2Schema.parse(body);
 
     const execution = await runV2IdempotentMutation(
@@ -110,4 +113,4 @@ export async function POST(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

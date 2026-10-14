@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import ApiActivityPanel, { type ApiAuditLogItem } from '@/components/settings/ApiActivityPanel';
 
 const mockActivities: ApiAuditLogItem[] = [
@@ -38,78 +38,103 @@ const mockActivities: ApiAuditLogItem[] = [
   },
 ];
 
+const noFilters = { q: '', entity: '', actor: '', key: '', from: '', to: '', hasCursor: false };
+
 describe('ApiActivityPanel Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('renders audit events with action, entity type, actor, and timestamp', () => {
-    render(<ApiActivityPanel activities={mockActivities} />);
+    render(<ApiActivityPanel activities={mockActivities} nextCursor={null} filters={noFilters} />);
 
     expect(screen.getByText('incident.create')).toBeDefined();
-    expect(screen.getByText('INCIDENT')).toBeDefined();
+    expect(within(screen.getByRole('table')).getByText('INCIDENT')).toBeDefined();
     expect(screen.getByText('inc_prod_alert_1')).toBeDefined();
     expect(screen.getByText('Primary On-Call')).toBeDefined();
     expect(screen.getByText('10.0.1.42')).toBeDefined();
 
     expect(screen.getByText('runbook.execution_started')).toBeDefined();
-    expect(screen.getByText('RUNBOOK')).toBeDefined();
+    expect(within(screen.getByRole('table')).getByText('RUNBOOK')).toBeDefined();
     expect(screen.getByText('Machine Token')).toBeDefined();
 
     expect(screen.getByText('service.delete')).toBeDefined();
-    expect(screen.getByText('SERVICE')).toBeDefined();
+    expect(within(screen.getByRole('table')).getByText('SERVICE')).toBeDefined();
     expect(screen.getByText('Platform Admin')).toBeDefined();
   });
 
   it('renders details JSON when present or dash placeholder when null', () => {
-    render(<ApiActivityPanel activities={mockActivities} />);
+    render(<ApiActivityPanel activities={mockActivities} nextCursor={null} filters={noFilters} />);
 
     expect(screen.getByText(/svc_auth/i)).toBeDefined();
     expect(screen.getByText(/exec_xyz_789/i)).toBeDefined();
     expect(screen.getByText('—')).toBeDefined();
   });
 
-  it('filters audit records by search keyword on action or actor', () => {
-    render(<ApiActivityPanel activities={mockActivities} />);
+  it('submits filters to the server as URL params instead of filtering in the browser', () => {
+    const { container } = render(
+      <ApiActivityPanel
+        activities={mockActivities}
+        nextCursor={null}
+        filters={{ ...noFilters, q: 'runbook', actor: 'oncall@opsknight.local' }}
+      />
+    );
 
-    const searchInput = screen.getByPlaceholderText(/search activity by action, entity id, or actor/i);
-    fireEvent.change(searchInput, { target: { value: 'runbook' } });
-
-    expect(screen.getByText('runbook.execution_started')).toBeDefined();
-    expect(screen.queryByText('incident.create')).toBeNull();
-    expect(screen.queryByText('service.delete')).toBeNull();
-  });
-
-  it('filters audit records by actor email or name', () => {
-    render(<ApiActivityPanel activities={mockActivities} />);
-
-    const searchInput = screen.getByPlaceholderText(/search activity by action, entity id, or actor/i);
-    fireEvent.change(searchInput, { target: { value: 'oncall@opsknight.local' } });
-
+    const form = container.querySelector('form') as HTMLFormElement;
+    expect(form.method).toBe('get');
+    expect((form.querySelector('input[name="tab"]') as HTMLInputElement).value).toBe('activity');
+    expect((form.querySelector('input[name="q"]') as HTMLInputElement).value).toBe('runbook');
+    expect((form.querySelector('input[name="actor"]') as HTMLInputElement).value).toBe(
+      'oncall@opsknight.local'
+    );
+    // Rows come from the server response; nothing is hidden client-side.
     expect(screen.getByText('incident.create')).toBeDefined();
-    expect(screen.queryByText('runbook.execution_started')).toBeNull();
-  });
-
-  it('displays empty state when no activity matches search criteria and allows resetting filters', () => {
-    render(<ApiActivityPanel activities={mockActivities} />);
-
-    const searchInput = screen.getByPlaceholderText(/search activity by action, entity id, or actor/i);
-    fireEvent.change(searchInput, { target: { value: 'nonexistent_event' } });
-
-    expect(screen.getByText('No matching API activity')).toBeDefined();
-
-    const resetButton = screen.getByRole('button', { name: /reset filters/i });
-    fireEvent.click(resetButton);
-
-    expect(screen.getByText('incident.create')).toBeDefined();
-    expect(screen.getByText('runbook.execution_started')).toBeDefined();
     expect(screen.getByText('service.delete')).toBeDefined();
   });
 
-  it('displays empty state when activities array is empty', () => {
-    render(<ApiActivityPanel activities={[]} />);
+  it('links to older events with the cursor and keeps active filters', () => {
+    render(
+      <ApiActivityPanel
+        activities={mockActivities}
+        nextCursor="cursor-abc"
+        filters={{ ...noFilters, q: 'incident', entity: 'INCIDENT' }}
+      />
+    );
+    const older = screen.getByRole('link', { name: /older events/i }) as HTMLAnchorElement;
+    const href = older.getAttribute('href') ?? '';
+    expect(href).toContain('tab=activity');
+    expect(href).toContain('cursor=cursor-abc');
+    expect(href).toContain('q=incident');
+    expect(href).toContain('entity=INCIDENT');
+  });
 
-    expect(screen.getByText('No recent API activity logged')).toBeDefined();
-    expect(screen.getByText(/tamper-evident audit records will stream here/i)).toBeDefined();
+  it('offers a way back to the newest events when paging', () => {
+    render(
+      <ApiActivityPanel
+        activities={mockActivities}
+        nextCursor={null}
+        filters={{ ...noFilters, hasCursor: true }}
+      />
+    );
+    expect(screen.getByRole('link', { name: /newest/i })).toBeDefined();
+    expect(screen.queryByRole('link', { name: /older events/i })).toBeNull();
+  });
+
+  it('shows a filtered empty state with a reset link', () => {
+    render(
+      <ApiActivityPanel activities={[]} nextCursor={null} filters={{ ...noFilters, q: 'nonexistent' }} />
+    );
+    expect(screen.getByText('No matching API activity')).toBeDefined();
+    expect(screen.getByRole('link', { name: /reset filters/i })).toBeDefined();
+  });
+
+  it('displays an unfiltered empty state when nothing has been recorded', () => {
+    render(<ApiActivityPanel activities={[]} nextCursor={null} filters={noFilters} />);
+    expect(screen.getByText('No API activity recorded yet')).toBeDefined();
+  });
+
+  it('states that it is audit history, not request traffic', () => {
+    render(<ApiActivityPanel activities={mockActivities} nextCursor={null} filters={noFilters} />);
+    expect(screen.getByText(/reads and rejected requests are not\s+recorded/i)).toBeDefined();
   });
 });

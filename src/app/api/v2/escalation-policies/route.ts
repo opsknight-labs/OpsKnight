@@ -23,8 +23,9 @@ import {
 } from '@/lib/escalation/policy-validation';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -85,9 +86,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withV2Observability(async function POST(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
@@ -179,7 +180,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return tx.escalationPolicy.findUnique({
+      const result = await tx.escalationPolicy.findUnique({
         where: { id: policy.id },
         include: {
           steps: {
@@ -188,19 +189,22 @@ export async function POST(req: NextRequest) {
           },
         },
       });
-    });
 
-    await logV2Audit({
-      action: 'escalation_policy.created',
-      entityType: 'ESCALATION_POLICY',
-      entityId: created!.id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: created!.name, stepCount: created!.steps.length },
+      await logV2Audit({
+        action: 'escalation_policy.created',
+        entityType: 'ESCALATION_POLICY',
+        entityId: policy.id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { name: policy.name, stepCount: validatedStepPayloads.length },
+        tx,
+      });
+
+      return result;
     });
 
     return apiV2Created(created, { headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

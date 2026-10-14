@@ -13,8 +13,9 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { integrationReadWhere } from '@/lib/authorization-filters';
 import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(req: NextRequest) {
+export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
     const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
@@ -25,9 +26,7 @@ export async function GET(req: NextRequest) {
     const serviceId = searchParams.get('serviceId')?.trim();
     const type = searchParams.get('type')?.trim();
 
-    const filters: Prisma.IntegrationWhereInput[] = [
-      integrationReadWhere(actor),
-    ];
+    const filters: Prisma.IntegrationWhereInput[] = [integrationReadWhere(actor)];
     if (serviceId) filters.push({ serviceId });
     if (type) filters.push({ type });
 
@@ -65,4 +64,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

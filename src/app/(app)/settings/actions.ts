@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
+import { disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
 import {
   getEmailConfig,
@@ -19,11 +20,9 @@ import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
 import {
-  API_SCOPES,
   CAPABILITIES,
   hasCapability,
   isApiScope,
-  isWriteApiScope,
 } from '@/lib/authorization';
 import { getCurrentUser } from '@/lib/rbac';
 import {
@@ -646,19 +645,12 @@ export async function createApiKey(
     if (requestedScopes.length === 0) {
       return { error: 'At least one valid permission scope must be selected.' };
     }
-    const canWrite = hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE);
-    if (!canWrite && requestedScopes.some(isWriteApiScope)) {
-      return { error: 'Write scopes require Responder or Admin access.' };
-    }
-    const isAdmin = hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE);
-    const adminOnlyScopes = new Set<string>([
-      API_SCOPES.ADMIN_MANAGE,
-      API_SCOPES.SERVICE_ACCOUNTS_READ,
-      API_SCOPES.SERVICE_ACCOUNTS_WRITE,
-      API_SCOPES.RESPONSE_POLICY_WRITE,
-    ]);
-    if (!isAdmin && requestedScopes.some(sc => adminOnlyScopes.has(sc))) {
-      return { error: 'Administrative scopes require Admin access.' };
+    // Issuance rules come from the shared scope registry, not a list local to this action.
+    const disallowed = disallowedScopesForRole(user.role, requestedScopes);
+    if (disallowed.length > 0) {
+      return {
+        error: `Your role cannot issue these scopes: ${disallowed.join(', ')}.`,
+      };
     }
     const finalScopes = requestedScopes;
     if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 365) {
@@ -794,7 +786,10 @@ export async function issueServiceAccountTokenAction(
     const name = (formData.get('name') as string | null)?.trim() ?? '';
     const scopes = formData.getAll('scopes').filter(Boolean) as string[];
     const expirationDaysParam = formData.get('expirationDays');
-    const expiresInDays = expirationDaysParam ? Number(expirationDaysParam) : undefined;
+    // "0" is the form's explicit "never expires" choice; an absent value is not a choice.
+    const neverExpires = expirationDaysParam === '0';
+    const expiresInDays =
+      expirationDaysParam && !neverExpires ? Number(expirationDaysParam) : undefined;
 
     if (!serviceAccountId) {
       return { error: 'Service account ID is required.' };
@@ -811,6 +806,7 @@ export async function issueServiceAccountTokenAction(
       name,
       scopes,
       expiresInDays: expiresInDays && expiresInDays > 0 ? expiresInDays : undefined,
+      neverExpires,
       actorId: user.id,
     });
 

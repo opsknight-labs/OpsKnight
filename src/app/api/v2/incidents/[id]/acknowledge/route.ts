@@ -13,8 +13,9 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { executeIdempotentIncidentLifecycleCommand } from '@/lib/incidents/idempotent-commands';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function POST(
+export const POST = withV2Observability(async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -60,7 +61,17 @@ export async function POST(
         actor: { id: actor.id },
         eventMessage: validated.note,
       },
-      idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined
+      idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined,
+      tx =>
+        logV2Audit({
+          action: 'incident.acknowledged',
+          entityType: 'INCIDENT',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: { note: validated.note ?? null },
+          tx,
+        })
     );
 
     const updated = await prisma.incident.findUnique({
@@ -76,17 +87,6 @@ export async function POST(
       },
     });
 
-    if (!execution.replayed) {
-      await logV2Audit({
-        action: 'incident.acknowledged',
-        entityType: 'INCIDENT',
-        entityId: id,
-        actorId: actor.id,
-        apiKeyId: apiKey.id,
-        details: { note: validated.note ?? null },
-      });
-    }
-
     const headers = {
       ...rlHeaders,
       ...idempotencyResponseHeaders(execution.replayed),
@@ -96,4 +96,4 @@ export async function POST(
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});

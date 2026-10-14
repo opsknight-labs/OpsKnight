@@ -7,12 +7,15 @@ import {
   enforceV2Authorization,
   enforceV2RateLimit,
   logV2Audit,
+  runV2AuditedMutation,
   TeamUpdateV2Schema,
 } from '@/lib/api-v2';
+import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
+import { withV2Observability } from '@/lib/api-v2/observability';
 
-export async function GET(
+export const GET = withV2Observability(async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -59,13 +62,15 @@ export async function GET(
       services: team.services,
     };
 
-    return apiV2Success(dto, { headers: rlHeaders });
+    return apiV2Success(dto, {
+      headers: { ...rlHeaders, ...etagHeaders(team.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function PATCH(
+export const PATCH = withV2Observability(async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -89,37 +94,45 @@ export async function PATCH(
 
     const validated = TeamUpdateV2Schema.parse(body);
 
-    const updated = await prisma.team.update({
-      where: { id },
-      data: {
-        name: validated.name,
-        description: validated.description,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const expected = parseIfMatch(req);
 
-    await logV2Audit({
-      action: 'team.updated',
-      entityType: 'TEAM',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: validated,
-    });
+    const updated = await withIfMatch(expected, () =>
+      runV2AuditedMutation(
+        tx =>
+          tx.team.update({
+            where: { id, ...ifMatchWhere(expected) },
+            data: {
+              name: validated.name,
+              description: validated.description,
+            },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          }),
+        () => ({
+          action: 'team.updated',
+          entityType: 'TEAM',
+          entityId: id,
+          actorId: actor.id,
+          apiKeyId: apiKey.id,
+          details: validated,
+        })
+      )
+    );
 
-    return apiV2Success(updated, { headers: rlHeaders });
+    return apiV2Success(updated, {
+      headers: { ...rlHeaders, ...etagHeaders(updated.updatedAt) },
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
 
-export async function DELETE(
+export const DELETE = withV2Observability(async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -164,8 +177,11 @@ export async function DELETE(
       });
     });
 
-    return apiV2Success({ success: true, message: `Team '${team.name}' deleted successfully.` }, { headers: rlHeaders });
+    return apiV2Success(
+      { success: true, message: `Team '${team.name}' deleted successfully.` },
+      { headers: rlHeaders }
+    );
   } catch (error) {
     return apiV2Error(error, req);
   }
-}
+});
