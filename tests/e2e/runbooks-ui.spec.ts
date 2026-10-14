@@ -1078,8 +1078,15 @@ test('service rule rendering stays bounded at 100, 1000 and 10000 rules', async 
     for (let i = 0; i < 5; i++) {
       const started = performance.now();
       await page.goto(`/services/${service.id}?tab=runbooks`);
-      await expect(page.getByText('20 rules on this page', { exact: true })).toBeVisible();
-      expect(await page.getByRole('link', { name: /^Render rule / }).count()).toBe(20);
+      await expect(
+        page.getByText('20 rules on this page', { exact: true }).filter({ visible: true })
+      ).toBeVisible();
+      expect(
+        await page
+          .getByRole('link', { name: /^Render rule / })
+          .filter({ visible: true })
+          .count()
+      ).toBe(20);
       latencies.push(performance.now() - started);
     }
     samples.push({
@@ -1090,14 +1097,22 @@ test('service rule rendering stays bounded at 100, 1000 and 10000 rules', async 
       p95Ms: Math.max(...latencies),
     });
   }
-  const names = await page.getByRole('link', { name: /^Render rule / }).allTextContents();
+  const names = await page
+    .getByRole('link', { name: /^Render rule / })
+    .filter({ visible: true })
+    .allTextContents();
   await page.getByRole('link', { name: 'Next rules', exact: true }).click();
   await expect(page).toHaveURL(/rulesAfter=/);
-  await expect(page.getByRole('link', { name: 'First rules', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'First rules', exact: true }).filter({ visible: true })
+  ).toBeVisible();
   expect(
-    (await page.getByRole('link', { name: /^Render rule / }).allTextContents()).some(name =>
-      names.includes(name)
-    )
+    (
+      await page
+        .getByRole('link', { name: /^Render rule / })
+        .filter({ visible: true })
+        .allTextContents()
+    ).some(name => names.includes(name))
   ).toBe(false);
   await noOverflow(page);
   const { mkdir, writeFile } = await import('node:fs/promises');

@@ -398,6 +398,7 @@ export default function ServiceRunbooks({
                               {(activeAttachVersion?.inputs.length ?? 0) > 0 && (
                                 <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
                                   <InputFields
+                                    key={activeAttachVersion?.id}
                                     definitions={activeAttachVersion?.inputs ?? []}
                                     values={{}}
                                   />
@@ -908,10 +909,11 @@ function InputFields({
   definitions: InputDefinition[];
   values: Record<string, unknown>;
 }) {
+  const [entered, setEntered] = useState<Record<string, unknown>>(values);
   if (definitions.length === 0)
     return <p className="text-xs text-muted-foreground sm:col-span-2">No inputs required.</p>;
   return definitions.map(input => {
-    const current = values[input.key] ?? input.defaultValue ?? '';
+    const current = entered[input.key] ?? input.defaultValue ?? '';
     if (input.type === 'BOOLEAN') {
       return (
         <label key={input.key} className="flex items-start gap-2 rounded-md border p-3 text-sm">
@@ -919,7 +921,10 @@ function InputFields({
             name={`input:${input.key}`}
             type="checkbox"
             value="true"
-            defaultChecked={current === true || current === 'true'}
+            checked={current === true || current === 'true'}
+            onChange={event =>
+              setEntered(previous => ({ ...previous, [input.key]: event.target.checked }))
+            }
             className="mt-0.5 h-4 w-4"
           />
           <span>
@@ -944,7 +949,10 @@ function InputFields({
           type={input.type === 'NUMBER' ? 'number' : input.type === 'URL' ? 'url' : 'text'}
           step={input.type === 'NUMBER' ? 'any' : undefined}
           required={input.required}
-          defaultValue={displayed}
+          value={displayed}
+          onChange={event =>
+            setEntered(previous => ({ ...previous, [input.key]: event.target.value }))
+          }
           placeholder={
             input.type === 'DURATION'
               ? '30s, 5m, or 1h'
