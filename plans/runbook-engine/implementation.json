@@ -1,0 +1,99 @@
+{
+  "objective": "Implement the complete October 13 Runbook Engine remediation plan across backend, configuration, UI, resilience, scale and release assurance",
+  "baseRevision": "a278116a0b03c0dac1f5e94c68f88e3814152a2c",
+  "branch": "feat/runbook-engine-remediation",
+  "worktree": ".",
+  "phase0": {
+    "status": "implemented_locally_verified",
+    "changes": [
+      "Independent readiness/liveness/startup probes, monotonic progress, container volatile health file",
+      "Single-flight heartbeat, initial-outage survival, bounded reconnect backoff",
+      "Manual trigger, dynamic target and partial inventory truthfulness",
+      "Explicit configured/historical KPIs",
+      "Versioned published artifact manifest and official installer hash verification",
+      "No hardcoded missing installer/default image; copy guarded by manifest and HTTPS endpoint",
+      "Token capture through hidden prompt/files, Compose token-file overlay",
+      "Swarm identity node placement"
+    ],
+    "regressions": "13 failing cases reproduced against original main; regressions now pass",
+    "remaining": [
+      "Published distribution and native host qualification require a release candidate"
+    ]
+  },
+  "phase1": {
+    "status": "implemented_locally_verified",
+    "changes": [
+      "Canonical rule readiness with scoped partial failure states",
+      "Four-step rule wizard, structured selectors and explicit automatic version pin confirmation",
+      "Signed local Agent policy checks with exact action/result scope, current policy/target checks and no execution",
+      "Separate configuration validation, read-only workflow test and Run now through single-use preview fences",
+      "Independent rule evidence/history/audit views and redacted version comparison"
+    ],
+    "remaining": []
+  },
+  "phase2": {
+    "status": "implemented_locally_verified",
+    "changes": [
+      "Durable per-instance lane heartbeats with independent dispatch/reconciliation evidence",
+      "Shared HEALTHY/DEGRADED/UNKNOWN worker health and scheduler recovery watchdog",
+      "Bounded startup reconnect, single-flight heartbeats, canceled long polls, preserved durable identities/spool",
+      "Worker/queue/unknown-outcome/spool Prometheus metrics and alerts"
+    ],
+    "remaining": [
+      "Expanded physical topology chaos/upgrade matrix remains NOT_TESTED"
+    ]
+  },
+  "phase3": {
+    "status": "implemented_locally_verified",
+    "changes": [
+      "ServiceAutomationRule maps to existing table preserving IDs and historical FK references",
+      "Multiple independent rules per workflow/service; duplicate copies paused trigger configuration",
+      "Existing row locks, fixed local-host write targets, independent shared target Agent identity fences retained",
+      "Measured 10/100/1000 idle simulated direct-library claims with query plan/CPU/memory/DB connections"
+    ],
+    "remaining": [
+      "Authenticated sustained fleet/backlog fairness capacity certification remains NOT_TESTED"
+    ]
+  },
+  "phase4": {
+    "status": "implemented_locally_verified",
+    "changes": [
+      "2.1 operator, author, response, reference and troubleshooting docs updated",
+      "CI adds real HTTPS Compose enrollment/execution/artifact/policy/restart smoke and measured scale artifacts",
+      "Release manifest constrains compatibility, records immutable digest/revision and verifies published architectures/downloads",
+      "Migration rollback constraints documented"
+    ],
+    "remaining": [
+      "PR and remote CI review",
+      "External published release and supported Linux host matrix NOT_TESTED"
+    ]
+  },
+  "externalEvidence": {
+    "v2.0.0Installer": "Release assets empty",
+    "defaultImage": "docker manifest inspect returned manifest unknown",
+    "supportedNativeHosts": "NOT_TESTED",
+    "publishedCompatibleArtifacts": "NOT_AVAILABLE"
+  },
+  "invariants": [
+    "Never merge PRs",
+    "Do not repeat ambiguous writes",
+    "Preserve identities, execution/suggestion history and preview/approval fences",
+    "Do not treat CI or source inspection as deployment certification",
+    "Do not overwrite other worktrees",
+    "No subagents authorized"
+  ],
+  "validation": {
+    "productionBuild": "PASS",
+    "unitComponentTests": 428,
+    "databaseTests": 118,
+    "docsLint": "PASS",
+    "liveCompose": "PASS: enrollment, signed diagnostic, output artifact, local policy, restart identity and actual dedicated worker dispatch",
+    "localKind": "PASS: Helm and Kustomize enroll, drain readiness/liveness, restart identity",
+    "browserMatrix": "PASS: 24 journeys across Chromium, Firefox and WebKit; responsive screenshots reviewed",
+    "typecheck": "PASS",
+    "lint": "PASS: modified JavaScript/TypeScript files, zero warnings",
+    "liveModes": "PASS: Manual inactive, Suggested no execution, Automatic real signed read-only execution, negative conditions, duplicate event fence",
+    "runtimeStartupRecoveryTests": 20,
+    "qualificationReport": "evidence/qualification.json"
+  }
+}

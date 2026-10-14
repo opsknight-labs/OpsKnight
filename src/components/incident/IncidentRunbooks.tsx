@@ -53,7 +53,7 @@ export default async function IncidentRunbooks({
     return null;
   await assertCanViewIncident(incidentId);
   const [bindings, executions, suggestions] = await Promise.all([
-    prisma.serviceRunbookBinding.findMany({
+    prisma.serviceAutomationRule.findMany({
       where: { serviceId, enabled: true },
       include: { runbook: true, runbookVersion: true },
       orderBy: { createdAt: 'asc' },

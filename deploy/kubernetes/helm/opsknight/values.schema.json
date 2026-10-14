@@ -88,7 +88,7 @@
           "required": ["repository", "tag", "digest", "pullPolicy"],
           "properties": {
             "repository": { "type": "string", "minLength": 1 },
-            "tag": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string" },
             "digest": { "type": "string" },
             "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
           }

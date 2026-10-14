@@ -78,6 +78,8 @@ const mockPrisma = {
     }),
   },
   authenticationPolicyImport: createMockModel(),
+  runbookPolicyCheck: createMockModel(),
+  runtimeWorkerHeartbeat: createMockModel(),
   notification: createMockModel(),
   incident: createMockModel(),
   onCallLayerUser: createMockModel(),

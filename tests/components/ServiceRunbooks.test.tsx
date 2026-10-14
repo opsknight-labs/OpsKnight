@@ -5,6 +5,9 @@ import { afterEach, expect, it, vi } from 'vitest';
 import ServiceRunbooks from '@/components/service/ServiceRunbooks';
 
 vi.mock('@/app/(app)/services/[id]/runbook-actions', () => ({
+  checkRulePolicyAction: vi.fn(),
+  pauseRuleAction: vi.fn(),
+  duplicateRuleAction: vi.fn(),
   attachRunbookAction: vi.fn(),
   detachRunbookAction: vi.fn(),
   updateRunbookBindingAction: vi.fn(),
@@ -98,4 +101,53 @@ it('provides a View Runbook link rather than an inaccurate immediate execution t
   const link = screen.getByRole('link', { name: /View Runbook/i });
   expect(link).toBeVisible();
   expect(link).toHaveAttribute('href', '/runbooks/runbook');
+});
+
+it('does not arm an incident trigger in manual mode', () => {
+  const binding = fixture();
+  binding.triggers[0].enabled = true;
+  render(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[binding]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={false}
+    />
+  );
+  expect(screen.getByText(/Inactive in Manual mode/)).toBeVisible();
+});
+it('describes a dynamic selector without calling it the control plane', () => {
+  const binding = fixture();
+  binding.defaultAgentId = null;
+  binding.agentSelector = { environment: 'production' };
+  render(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[binding]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={false}
+    />
+  );
+  expect(screen.getByText(/Dynamic selector/)).toHaveTextContent('environment=production');
+  expect(screen.queryByText(/Control plane/)).not.toBeInTheDocument();
+});
+it('keeps loaded bindings visible when only Agent inventory fails', () => {
+  render(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[fixture()]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={true}
+      loadErrors={['agents']}
+    />
+  );
+  expect(screen.getByRole('link', { name: 'Recovery' })).toBeVisible();
+  expect(screen.getByRole('alert')).toHaveTextContent('Agent inventory unavailable');
+  expect(screen.queryByText(/Failed to load attached workflows/)).not.toBeInTheDocument();
 });

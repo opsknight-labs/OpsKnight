@@ -20,7 +20,9 @@ test.beforeEach(async ({ page }) => {
   );
 });
 test.beforeAll(async () => {
-  if (new URL(process.env.DATABASE_URL!).pathname !== '/runbook_ui_test')
+  if (
+    !['/runbook_ui_test', '/rbe_engine_test'].includes(new URL(process.env.DATABASE_URL!).pathname)
+  )
     throw new Error('Dedicated test database required');
   await prisma.user.upsert({
     where: { email: EMAIL },
@@ -73,8 +75,9 @@ test('global history stays synchronized across application pages and authenticat
   const sidebar = page.locator('#app-sidebar');
   async function assertDestination(destination: (typeof destinations)[number]) {
     await expect(page).toHaveURL(new URL(destination.path, page.url()).href);
-    await expect(page.getByRole('heading', { level: 1, name: destination.title, exact: true }))
-      .toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: destination.title, exact: true })
+    ).toBeVisible();
     await expect(page.getByRole('alertdialog')).not.toBeVisible();
   }
   // Real Next links exercise the global tracker without a dirty runbook guard.
@@ -271,6 +274,17 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.keyboard.press('Escape');
   await expect(page.getByText('ui-credential-rotated', { exact: true })).not.toBeVisible();
   await expect(secretCard.getByLabel('Secret value hidden')).toBeVisible();
+  await page.goto('/runbooks/agents');
+  await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
+  const cancelledName = `UI cancelled enrollment ${Date.now()}`;
+  await page.getByLabel('Agent name', { exact: true }).fill(cancelledName);
+  await page.getByRole('button', { name: 'Create enrollment', exact: true }).click();
+  await expect(page.getByText('Copy this one-time token now', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel this enrollment', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel this enrollment', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Enrollment revoked.' })).toBeVisible();
+  await expect(page.getByText('Copy this one-time token now', { exact: true })).not.toBeVisible();
+  await expect.poll(async () => (await prisma.runbookAgent.findFirstOrThrow({ where: { name: cancelledName } })).status).toBe('REVOKED');
 });
 
 test('publish, attach, target, trigger, incident suggestion, exact approval and cancellation', async ({
@@ -330,19 +344,26 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   ).toBeVisible();
   await page.goto(`/services/${serviceId}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
-  await page.getByRole('button', { name: 'Attach Runbook', exact: true }).click();
+  await page.getByRole('button', { name: 'Create rule', exact: true }).click();
   await page.getByRole('combobox', { name: 'Choose workflow' }).click();
   await page.getByRole('option', { name: `${name} (v1)` }).click();
   await page.getByRole('combobox', { name: 'Execution mode' }).click();
   await page.getByRole('option', { name: /^Suggested/ }).click();
+  await page.getByRole('combobox', { name: 'Initial rule status' }).click();
+  await page
+    .getByRole('option', { name: 'Enable after configuration validation', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Continue to target and inputs', exact: true }).click();
   await page.getByRole('combobox', { name: 'Execution target' }).click();
   await page.getByRole('option', { name: agent.name }).click();
+  await page.getByRole('button', { name: 'Continue to trigger', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to review and save', exact: true }).click();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: `Attach ${name}`, exact: true })
     .click();
   await expect
-    .poll(async () => prisma.serviceRunbookBinding.count({ where: { serviceId, runbookId: id } }))
+    .poll(async () => prisma.serviceAutomationRule.count({ where: { serviceId, runbookId: id } }))
     .toBe(1);
   await page.keyboard.press('Escape');
   await page
@@ -363,7 +384,7 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
       })
       .getByRole('status')
   ).toHaveText('Changes saved.');
-  const binding = await prisma.serviceRunbookBinding.findFirstOrThrow({
+  const binding = await prisma.serviceAutomationRule.findFirstOrThrow({
     where: { serviceId, runbookId: id },
   });
   await expect
@@ -484,6 +505,93 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
       .filter({ visible: true })
       .first()
   ).toBeVisible();
+});
+test('independent rule wizard, paused duplicate and rule evidence stay truthful on desktop and mobile', async ({
+  page,
+}, testInfo) => {
+  await login(page);
+  const workflow = await prisma.runbook.findFirstOrThrow({
+    where: { name: { startsWith: 'UI Operational Journey' }, publishedVersionId: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    include: { publishedVersion: true },
+  });
+  const ruleName = `UI independent rule ${testInfo.project.name} ${Date.now()}`;
+  const countBefore = await prisma.serviceAutomationRule.count({
+    where: { serviceId, runbookId: workflow.id },
+  });
+  await page.goto(`/services/${serviceId}?tab=runbooks`);
+  await page.getByRole('tab', { name: /^Runbooks/ }).click();
+  await page.getByRole('button', { name: 'Create rule', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Choose workflow' }).click();
+  await page
+    .getByRole('option', {
+      name: `${workflow.name} (v${workflow.publishedVersion!.version})`,
+      exact: true,
+    })
+    .click();
+  await page.getByLabel('Rule name', { exact: true }).fill(ruleName);
+  await page.getByRole('button', { name: 'Continue to target and inputs', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to trigger', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to review and save', exact: true }).click();
+  await page.getByRole('button', { name: `Attach ${workflow.name}`, exact: true }).click();
+  await expect
+    .poll(async () => prisma.serviceAutomationRule.count({ where: { serviceId, name: ruleName } }))
+    .toBe(1);
+  const rule = await prisma.serviceAutomationRule.findFirstOrThrow({
+    where: { serviceId, name: ruleName },
+  });
+  expect(rule.enabled).toBe(false);
+  await page.keyboard.press('Escape');
+  await page.goto(`/services/${serviceId}?tab=runbooks`);
+  await page.getByRole('tab', { name: /^Runbooks/ }).click();
+  const card = page
+    .locator('.bg-card')
+    .filter({ has: page.getByRole('link', { name: ruleName, exact: true }) });
+  await expect(card.getByText('Rule paused', { exact: false })).toBeVisible();
+  await card.getByRole('button', { name: 'Duplicate paused rule', exact: true }).click();
+  await expect
+    .poll(async () =>
+      prisma.serviceAutomationRule.count({ where: { serviceId, runbookId: workflow.id } })
+    )
+    .toBe(countBefore + 2);
+  for (const width of [375, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const closeNavigation = page.getByRole('button', {
+      name: 'Close navigation menu',
+      exact: true,
+    });
+    if (width < 1024 && (await closeNavigation.isVisible())) await closeNavigation.click();
+    await page
+      .getByRole('heading', { name: 'Service Automations', exact: true })
+      .evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await noOverflow(page);
+    await page.screenshot({
+      path: `test-results/service-rules-${testInfo.project.name}-${width}.png`,
+      fullPage: true,
+    });
+    if (width === 375) {
+      await card.evaluate(element => element.scrollIntoView({ block: 'start' }));
+      await page.screenshot({
+        path: `test-results/service-rule-card-${testInfo.project.name}-${width}.png`,
+        fullPage: true,
+      });
+    }
+  }
+  await page.goto(`/services/${serviceId}/automations/${rule.id}`);
+  await expect(page.getByRole('heading', { name: ruleName, exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Validate configuration · No execution', exact: true })
+    .click();
+  await expect(page.getByRole('status')).toContainText('This check does not activate the rule');
+  await expect(page.getByRole('button', { name: 'Run now · Preview plan' })).not.toBeVisible();
+  expect(
+    (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } })).enabled
+  ).toBe(false);
+  await noOverflow(page);
+  await page.screenshot({
+    path: `test-results/rule-evidence-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
 });
 test('390px infrastructure, health and builder have no horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

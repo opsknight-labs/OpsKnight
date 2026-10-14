@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Identity and policy paths come only from the local operator's environment, never API input.
 import { createHash } from 'node:crypto';
+import { uptime } from 'node:os';
 import { gzipSync } from 'node:zlib';
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -13,6 +14,8 @@ import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
 import { getAgentVersion } from './version';
+import { recoverStartup } from './connection';
+import { evaluatePolicyCheck } from './policy-checks';
 import {
   computeReportedLastError,
   determineActiveBlockingCondition,
@@ -220,6 +223,7 @@ export async function run(options: RunAgentOptions = {}) {
   const effectiveBaseUrl = options.baseUrl ?? baseUrl;
   const effectiveDataDir = options.dataDirectory ?? dataDirectory;
   const effectiveIdentityPath = options.identityPath ?? identityPath;
+  const healthPath = process.env.OPSKNIGHT_AGENT_HEALTH_FILE ?? `${effectiveDataDir}/health.json`;
   const effectivePolicyPath = options.policyPath ?? policyPath;
   const effectiveKey = options.executionPublicKey ?? executionPublicKey;
   const pollInterval = options.pollIntervalMs ?? 2_000;
@@ -231,21 +235,48 @@ export async function run(options: RunAgentOptions = {}) {
     );
 
   const identity =
-    options.identity ?? (await loadIdentity(effectiveIdentityPath, effectiveBaseUrl));
+    options.identity ??
+    (await recoverStartup(() => loadIdentity(effectiveIdentityPath, effectiveBaseUrl), {
+      signal: options.signal,
+      report: async reason => {
+        await mkdir(dirname(healthPath), { recursive: true, mode: 0o700 });
+        const temporary = `${healthPath}.${process.pid}.tmp`;
+        await writeFile(
+          temporary,
+          JSON.stringify({
+            pid: process.pid,
+            updatedAt: Date.now(),
+            monotonicUpdatedAt: uptime(),
+            initialized: true,
+            ready: false,
+            statusReason: reason,
+          }),
+          { mode: 0o600 }
+        );
+        await rename(temporary, healthPath);
+      },
+    }));
   const { policy, hash: policyHash } =
     options.policy !== undefined
       ? { policy: options.policy, hash: options.policyHash ?? 'mock-policy-hash' }
       : await loadPolicy(effectivePolicyPath);
   const client = options.client ?? new AgentClient(effectiveBaseUrl, identity, effectiveKey);
   const spool = options.spool ?? new ResultSpool(`${effectiveDataDir}/spool`);
-  await spool.initialize();
   let active = 0;
+  let heartbeatEstablished = options.skipHeartbeat === true;
   let transientCommunicationError: string | null = null;
   let terminalAuthError: string | null = null;
   let storageError: string | null = null;
+  try {
+    await spool.initialize();
+  } catch {
+    storageError =
+      'Durable spool initialization failed. Claims are blocked until storage recovers.';
+  }
   let lastClaimError: string | null = null;
   let inFlightError: string | null = null;
   let shuttingDown = false;
+  const claimController = new AbortController();
   let activeController: AbortController | null = null;
   const abortUnfinishedExecution = () => activeController?.abort('LEASE_LOST');
 
@@ -286,6 +317,9 @@ export async function run(options: RunAgentOptions = {}) {
   };
 
   const getActiveBlockingCondition = async (): Promise<string | null> => {
+    if (!heartbeatEstablished)
+      return 'Waiting for the initial authenticated control-plane heartbeat.';
+    if (terminalAuthError) return terminalAuthError;
     if (storageError) {
       const recovered = await checkStorageHealth();
       if (!recovered) {
@@ -386,7 +420,7 @@ export async function run(options: RunAgentOptions = {}) {
     return cachedClockSkew;
   };
 
-  const heartbeat = async () => {
+  const sendHeartbeat = async () => {
     await checkClock(false);
     const effective = await probeCapabilities(policy);
     let spoolDepth = 0;
@@ -416,6 +450,46 @@ export async function run(options: RunAgentOptions = {}) {
     // Demonstrated heartbeat roundtrip clears transient communication and auth errors.
     transientCommunicationError = null;
     terminalAuthError = null;
+    heartbeatEstablished = true;
+    // Older servers do not expose policy checks. A missing endpoint never changes execution authority.
+    if (typeof client.policyChecks === 'function') {
+      try {
+        const pending = await client.policyChecks();
+        for (const check of pending?.checks ?? []) {
+          const results = evaluatePolicyCheck(check, policy, effectiveKey!, identity.agentId);
+          await client.policyChecks({ id: check.id, policyHash, results });
+        }
+      } catch {
+        /* Policy-check communication failure does not authorize or execute work. */
+      }
+    }
+  };
+  let heartbeatInFlight: Promise<void> | null = null;
+  let heartbeatFailures = 0;
+  let nextHeartbeatAt = 0;
+  const heartbeat = async () => {
+    if (heartbeatInFlight) return heartbeatInFlight;
+    if (Date.now() < nextHeartbeatAt) return;
+    heartbeatInFlight = sendHeartbeat()
+      .catch(error => {
+        heartbeatFailures += 1;
+        const delay = Math.min(30_000, 1000 * 2 ** Math.min(heartbeatFailures - 1, 5));
+        nextHeartbeatAt = Date.now() + delay + Math.floor(Math.random() * delay * 0.2);
+        if (error instanceof AgentApiError && [401, 403].includes(error.status)) {
+          terminalAuthError = `Agent authentication rejected: HTTP ${error.status}. Restore authorization or re-enroll deliberately.`;
+        } else {
+          transientCommunicationError =
+            'Control-plane heartbeat unavailable. Reconnecting with bounded backoff.';
+        }
+      })
+      .finally(() => {
+        heartbeatInFlight = null;
+      });
+    await heartbeatInFlight;
+    if (transientCommunicationError === null && terminalAuthError === null) {
+      heartbeatFailures = 0;
+      nextHeartbeatAt = Date.now() + 30_000;
+    }
   };
 
   let publishingHealth = false;
@@ -424,26 +498,33 @@ export async function run(options: RunAgentOptions = {}) {
     publishingHealth = true;
     try {
       const draining = await checkDraining();
-      await mkdir(effectiveDataDir, { recursive: true, mode: 0o700 });
-      const temporary = `${effectiveDataDir}/health.${process.pid}.tmp`;
+      await mkdir(dirname(healthPath), { recursive: true, mode: 0o700 });
+      const temporary = `${healthPath}.${process.pid}.tmp`;
       await writeFile(
         temporary,
         JSON.stringify({
           pid: process.pid,
           updatedAt: Date.now(),
-          ready: !draining && clockError === null && storageError === null,
+          monotonicUpdatedAt: uptime(),
+          initialized: true,
+          ready:
+            !draining &&
+            heartbeatEstablished &&
+            clockError === null &&
+            storageError === null &&
+            terminalAuthError === null,
           draining,
           activeAttemptCount: active,
           version: getAgentVersion(),
           storageError,
+          clockError,
+          terminalAuthError,
+          transientCommunicationError,
           lastClaimError,
         }),
         { mode: 0o600 }
       );
-      await rename(temporary, `${effectiveDataDir}/health.json`);
-      if (storageError?.startsWith('Agent data directory inaccessible')) {
-        storageError = null;
-      }
+      await rename(temporary, healthPath);
     } catch (healthErr) {
       storageError = `Agent data directory inaccessible: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}`;
     } finally {
@@ -460,13 +541,14 @@ export async function run(options: RunAgentOptions = {}) {
 
   const heartbeatTimer = options.skipHeartbeat
     ? null
-    : setInterval(() => void heartbeat().catch(() => undefined), 30_000);
+    : setInterval(() => void heartbeat().catch(() => undefined), 1_000);
   const healthTimer = options.skipHealth
     ? null
     : setInterval(() => void publishHealth().catch(() => undefined), 15_000);
 
   const shutdown = () => {
     shuttingDown = true;
+    claimController.abort('AGENT_SHUTDOWN');
     activeController?.abort('AGENT_SHUTDOWN');
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     if (healthTimer) clearInterval(healthTimer);
@@ -530,7 +612,7 @@ export async function run(options: RunAgentOptions = {}) {
 
         const readOnlyOnly = currentSpoolDepth > 0 || currentDeadLetterDepth > 0;
         try {
-          attempt = await client.claim({ readOnlyOnly });
+          attempt = await client.claim({ readOnlyOnly, signal: claimController.signal });
           // A successful claim request (even if no attempt available) proves connectivity & valid auth
           transientCommunicationError = null;
           terminalAuthError = null;
@@ -575,7 +657,7 @@ export async function run(options: RunAgentOptions = {}) {
         if (!attempt) {
           continue;
         }
-        if (await checkDraining()) {
+        if (shuttingDown || (await checkDraining())) {
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }
@@ -606,6 +688,7 @@ export async function run(options: RunAgentOptions = {}) {
         }
         if (!startResult) throw new Error('Missing start acknowledgement.');
         started = true;
+        if (shuttingDown) throw new Error('AGENT_SHUTDOWN');
         assertPolicyAllows(attempt, policy);
         if (!(await spool.markStarted(attempt.attemptId))) {
           continue;

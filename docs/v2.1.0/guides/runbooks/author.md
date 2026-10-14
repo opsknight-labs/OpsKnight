@@ -6,8 +6,13 @@ product_area: runbooks
 audience: [administrator, operator]
 verification:
   level: test
-  verified_at: 2026-10-11
-  evidence: [src/components/runbooks/RunbookBuilder.tsx, src/components/runbooks/RunbookLibrary.tsx, tests/e2e/runbooks-ui.spec.ts]
+  verified_at: 2026-10-14
+  evidence:
+    [
+      src/components/runbooks/RunbookBuilder.tsx,
+      src/components/runbooks/RunbookLibrary.tsx,
+      tests/e2e/runbooks-ui.spec.ts,
+    ]
 ---
 
 # Author and publish a Runbook
@@ -75,22 +80,38 @@ For example, a restart step can contain a read-only Systemd precheck and verific
 
 ```json
 {
-  "steps": [{
-    "key": "restart",
-    "name": "Restart API",
-    "type": "SYSTEMD",
-    "riskClass": "NON_IDEMPOTENT",
-    "requiresApproval": true,
-    "config": { "action": "restart", "unit": "api.service" },
-    "precheck": { "steps": [{
-      "key": "before", "name": "Inspect API", "type": "SYSTEMD",
-      "riskClass": "READ_ONLY", "config": { "action": "status", "unit": "api.service" }
-    }] },
-    "verification": { "steps": [{
-      "key": "after", "name": "Verify API", "type": "SYSTEMD",
-      "riskClass": "READ_ONLY", "config": { "action": "status", "unit": "api.service" }
-    }] }
-  }]
+  "steps": [
+    {
+      "key": "restart",
+      "name": "Restart API",
+      "type": "SYSTEMD",
+      "riskClass": "NON_IDEMPOTENT",
+      "requiresApproval": true,
+      "config": { "action": "restart", "unit": "api.service" },
+      "precheck": {
+        "steps": [
+          {
+            "key": "before",
+            "name": "Inspect API",
+            "type": "SYSTEMD",
+            "riskClass": "READ_ONLY",
+            "config": { "action": "status", "unit": "api.service" }
+          }
+        ]
+      },
+      "verification": {
+        "steps": [
+          {
+            "key": "after",
+            "name": "Verify API",
+            "type": "SYSTEMD",
+            "riskClass": "READ_ONLY",
+            "config": { "action": "status", "unit": "api.service" }
+          }
+        ]
+      }
+    }
+  ]
 }
 ```
 
@@ -130,3 +151,7 @@ labels come from `key=value` tags. Local write selectors must select exactly one
 healthy capable host, which is pinned for the execution. Review automatic
 budgets with your administrator; exhaustion produces a suggestion for responder
 approval. See the [reference](../../reference/runbooks) for limits and semantics.
+
+## Compare publication impact
+
+Open **Compare versions and rule impact** before publishing or changing a rule's pin. Review added/removed/changed actions, derived risk, masked configuration, prechecks, verification and input changes side by side. Rules using latest publication track future publications; pinned rules and existing executions retain their frozen versions. Comparison performs no action and cannot establish platform permission.

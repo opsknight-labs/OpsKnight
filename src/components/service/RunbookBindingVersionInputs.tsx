@@ -1,9 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { RunbookInputType, RunbookVersionState } from '@prisma/client';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/shadcn/alert-dialog';
 import { FormSelect } from '@/components/runbooks/RunbookControls';
 import RunbookTargetSelect, {
   type RunbookTargetOptions,
@@ -33,7 +42,11 @@ export default function RunbookBindingVersionInputs({
   initialVersionId,
   values,
   targets,
+  initialMode,
+  includeInputs = true,
 }: {
+  initialMode?: 'MANUAL' | 'SUGGESTED' | 'AUTOMATIC';
+  includeInputs?: boolean;
   versions: Version[];
   publishedVersionId: string;
   initialStrategy: 'LATEST_PUBLISHED' | 'PINNED';
@@ -41,6 +54,10 @@ export default function RunbookBindingVersionInputs({
   values: Record<string, unknown>;
   targets?: RunbookTargetOptions & { defaultValue: string };
 }) {
+  const [mode, setMode] = useState(initialMode ?? 'MANUAL');
+  const [confirmAutomatic, setConfirmAutomatic] = useState(false);
+  const published = versions.find(candidate => candidate.id === publishedVersionId);
+  const id = useId();
   const [strategy, setStrategy] = useState(initialStrategy);
   const [versionId, setVersionId] = useState(initialVersionId ?? publishedVersionId);
   const effectiveVersionId = strategy === 'PINNED' ? versionId : publishedVersionId;
@@ -51,12 +68,63 @@ export default function RunbookBindingVersionInputs({
 
   return (
     <>
+      {initialMode !== undefined && (
+        <div className="space-y-2">
+          <Label>Execution mode</Label>
+          <FormSelect
+            name="mode"
+            label="Execution mode"
+            value={mode}
+            onValueChange={value => {
+              if (value === 'AUTOMATIC') setConfirmAutomatic(true);
+              else setMode(value as typeof mode);
+            }}
+            options={[
+              { value: 'MANUAL', label: 'Manual · Run explicitly' },
+              { value: 'SUGGESTED', label: 'Suggested · Offer matching incident actions' },
+              { value: 'AUTOMATIC', label: 'Automatic · Exact version required' },
+            ]}
+          />
+        </div>
+      )}
+      <AlertDialog open={confirmAutomatic} onOpenChange={setConfirmAutomatic}>
+        <AlertDialogContent>
+          <AlertDialogTitle>Pin published version v{published?.version ?? '?'}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Automatic execution uses this immutable version. Review its target, inputs and approval
+            gates. Later publication will not change this rule.
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep current mode</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!published || published.state !== 'PUBLISHED'}
+              onClick={() => {
+                setMode('AUTOMATIC');
+                setStrategy('PINNED');
+                setVersionId(publishedVersionId);
+              }}
+            >
+              Pin version and select Automatic
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {mode === 'AUTOMATIC' && (
+        <>
+          <input type="hidden" name="versionStrategy" value="PINNED" />
+          <p className="text-xs text-muted-foreground">
+            Automatic mode requires a pinned published version. Configure an active incident trigger
+            before enabling automation.
+          </p>
+        </>
+      )}
       <div className="space-y-2">
         <Label htmlFor={`version-strategy-${publishedVersionId}`}>Version strategy</Label>
         <FormSelect
           name="versionStrategy"
           label="Version strategy"
           value={strategy}
+          disabled={mode === 'AUTOMATIC'}
           onValueChange={value => setStrategy(value as typeof strategy)}
           options={[
             { value: 'LATEST_PUBLISHED', label: 'Latest published' },
@@ -84,12 +152,14 @@ export default function RunbookBindingVersionInputs({
           <RunbookTargetSelect {...targets} hasAgentWrite={version?.hasAgentWrite} />
         </div>
       )}
-      <div
-        key={effectiveVersionId}
-        className="order-1 grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-4"
-      >
-        <GeneratedFields definitions={version?.inputs ?? []} values={values} />
-      </div>
+      {includeInputs && (
+        <div
+          key={effectiveVersionId}
+          className="order-1 grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-4"
+        >
+          <GeneratedFields definitions={version?.inputs ?? []} values={values} idPrefix={id} />
+        </div>
+      )}
     </>
   );
 }
@@ -97,7 +167,9 @@ export default function RunbookBindingVersionInputs({
 function GeneratedFields({
   definitions,
   values,
+  idPrefix,
 }: {
+  idPrefix: string;
   definitions: InputDefinition[];
   values: Record<string, unknown>;
 }) {
@@ -132,11 +204,12 @@ function GeneratedFields({
           : '';
     return (
       <div key={input.key} className="space-y-2">
-        <Label>
+        <Label htmlFor={`${idPrefix}-${input.key}`}>
           {input.label}
           {input.required ? ' *' : ''}
         </Label>
         <Input
+          id={`${idPrefix}-${input.key}`}
           name={`input:${input.key}`}
           type={input.type === 'NUMBER' ? 'number' : input.type === 'URL' ? 'url' : 'text'}
           step={input.type === 'NUMBER' ? 'any' : undefined}

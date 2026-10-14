@@ -1,3 +1,8 @@
+import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
+import {
+  describeBinding,
+  type RunbookResource,
+} from '@/lib/runbooks/presentation/binding-contract';
 import prisma from '@/lib/prisma';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
@@ -424,12 +429,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const canDeleteService = currentUser.role === 'ADMIN';
 
   const [
-    serviceRunbookBindingsResult,
+    serviceAutomationRulesResult,
     availableRunbooksResult,
     availableRunbookAgentsResult,
     availableRunbookAgentPoolsResult,
   ] = await Promise.allSettled([
-    prisma.serviceRunbookBinding.findMany({
+    prisma.serviceAutomationRule.findMany({
       where: { serviceId: id },
       include: {
         runbook: {
@@ -476,38 +481,41 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     }),
   ]);
 
-  const serviceRunbookBindings =
-    serviceRunbookBindingsResult.status === 'fulfilled'
-      ? serviceRunbookBindingsResult.value
-      : [];
+  const serviceAutomationRules =
+    serviceAutomationRulesResult.status === 'fulfilled' ? serviceAutomationRulesResult.value : [];
   const availableRunbooks =
-    availableRunbooksResult.status === 'fulfilled'
-      ? availableRunbooksResult.value
-      : [];
+    availableRunbooksResult.status === 'fulfilled' ? availableRunbooksResult.value : [];
   const availableRunbookAgents =
-    availableRunbookAgentsResult.status === 'fulfilled'
-      ? availableRunbookAgentsResult.value
-      : [];
+    availableRunbookAgentsResult.status === 'fulfilled' ? availableRunbookAgentsResult.value : [];
   const availableRunbookAgentPools =
     availableRunbookAgentPoolsResult.status === 'fulfilled'
       ? availableRunbookAgentPoolsResult.value
       : [];
 
-  const runbooksLoadError =
-    serviceRunbookBindingsResult.status === 'rejected' ||
-    availableRunbooksResult.status === 'rejected' ||
-    availableRunbookAgentsResult.status === 'rejected' ||
-    availableRunbookAgentPoolsResult.status === 'rejected';
+  const runbooksLoadErrors: RunbookResource[] = [];
+  if (serviceAutomationRulesResult.status === 'rejected') runbooksLoadErrors.push('bindings');
+  if (availableRunbooksResult.status === 'rejected') runbooksLoadErrors.push('library');
+  if (availableRunbookAgentsResult.status === 'rejected') runbooksLoadErrors.push('agents');
+  if (availableRunbookAgentPoolsResult.status === 'rejected') runbooksLoadErrors.push('pools');
 
-  if (serviceRunbookBindingsResult.status === 'rejected') {
+  if (serviceAutomationRulesResult.status === 'rejected') {
     logger.warn('[Service Detail] Failed to load service runbook bindings', {
-      error: serviceRunbookBindingsResult.reason,
+      error: serviceAutomationRulesResult.reason,
     });
   }
   if (availableRunbooksResult.status === 'rejected') {
     logger.warn('[Service Detail] Failed to load available runbooks', {
       error: availableRunbooksResult.reason,
     });
+  }
+
+  // Bound dependency pressure when a service has many independent rules.
+  const runbookReadiness = new Map<string, Awaited<ReturnType<typeof getBindingReadiness>>>();
+  for (let offset = 0; offset < serviceAutomationRules.length; offset += 8) {
+    const batch = await Promise.all(serviceAutomationRules.slice(offset, offset + 8).map(
+      async binding => [binding.id, await getBindingReadiness(binding)] as const
+    ));
+    for (const [ruleId, readiness] of batch) runbookReadiness.set(ruleId, readiness);
   }
 
   // SLA and Health Computations with truthful failure degradation
@@ -1293,19 +1301,30 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         defaultTab={activeTab}
         activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
-        runbooksCount={runbooksLoadError ? undefined : serviceRunbookBindings.length}
+        runbooksCount={
+          runbooksLoadErrors.includes('bindings') ? undefined : serviceAutomationRules.length
+        }
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
         escalationContent={escalationContent}
         runbooksContent={
           <ServiceRunbooks
             serviceId={service.id}
-            bindings={serviceRunbookBindings}
+            bindings={serviceAutomationRules.map(binding => ({
+              ...binding,
+              presentation: describeBinding(
+                binding,
+                availableRunbookAgents,
+                availableRunbookAgentPools,
+                runbooksLoadErrors
+              ),
+              readiness: runbookReadiness.get(binding.id),
+            }))}
             availableRunbooks={availableRunbooks}
             availableAgents={availableRunbookAgents}
             availableAgentPools={availableRunbookAgentPools}
             canManage={canManageService}
-            loadError={runbooksLoadError}
+            loadErrors={runbooksLoadErrors}
           />
         }
         integrationsContent={integrationsContent}

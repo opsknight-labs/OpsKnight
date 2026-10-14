@@ -214,6 +214,9 @@ export default async function RunbookDetailPage({
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href={`/runbooks/${id}/compare`}>Compare versions &amp; rule impact</Link>
+            </Button>
             {canPublish && runbook.draftVersion && (
               <ConfirmAction
                 action={publishDraftAction.bind(null, runbook.draftVersion.id, runbook.id)}

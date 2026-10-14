@@ -1,4 +1,4 @@
-fullnameOverride: ""
+fullnameOverride: ''
 agent:
   enabled: true
   replicaCount: 1
@@ -6,7 +6,7 @@ agent:
     enabled: false
   image:
     repository: ghcr.io/opsknight-labs/opsknight-agent
-    tag: 2.0.0
+    tag: ''
     digest: ''
     pullPolicy: IfNotPresent
   url: ''

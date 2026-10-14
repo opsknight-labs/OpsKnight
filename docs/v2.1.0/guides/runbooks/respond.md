@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [administrator, responder]
 verification:
   level: test
-  verified_at: 2026-10-11
+  verified_at: 2026-10-14
   evidence:
     [
       src/components/service/ServiceRunbooks.tsx,
@@ -46,6 +46,19 @@ Changes affect future matching events; they do not retroactively regenerate
 old suggestions. In Suggested mode, check a newly created matching incident
 for a suggestion. An existing suggestion keeps its frozen version, resolved
 inputs, and target even if its service binding is later edited.
+
+## Service rule checks
+
+In **Service → Runbooks**, create independent rules from published workflows. Manual mode never arms incident triggers. Suggested/Automatic rules require an active incident-created trigger to be armed; changing a trigger affects future incidents only. Dynamic label selectors remain explicit targets. Configured mode counts and historical execution counts do not certify operational success. Inventory outages preserve loaded rules and explain which dependencies are unavailable.
+
+Use **Rule evidence** for configuration, target, immutable version, execution history, Agent policy evidence and audit links. The checks have separate meanings:
+
+- **Validate configuration · No execution** checks the prospective configuration even while paused, without enabling it.
+- **Check Agent policy · No execution** sends a signed request to 1–10 matching online Agents and evaluates their local allowlists without running commands. Evidence is valid only for the same version, resolved configuration, current target and policy hash, for five minutes. It does not prove platform permissions or reachability.
+- **Preview read-only test** runs the complete workflow only after preview confirmation, and rejects any workflow containing writes. Publish a separate diagnostic workflow when a recovery workflow also writes.
+- **Run now · Preview plan** uses a single-use preview and explicit write confirmation. Permissions, approvals and Agent policy remain enforced at execution.
+
+New/duplicate rules default to paused. Pause stops future trigger dispatch; use execution cancellation separately for work already running. Selecting Automatic asks you to confirm the exact published version and pins it.
 
 ## Start and approve
 

@@ -144,7 +144,7 @@ async function exerciseRuntime(
   try {
     await build({
       entryPoints: ['agent/src/index.ts'],
-      outfile: join(directory, 'agent.mjs'),
+      outfile: join(directory, 'opsknight-agent.mjs'),
       bundle: true,
       platform: 'node',
       format: 'esm',
@@ -192,7 +192,7 @@ async function exerciseRuntime(
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Missing test server address.');
     const start = () => {
-      running.child = spawn(process.execPath, [join(directory, 'agent.mjs')], {
+      running.child = spawn(process.execPath, [join(directory, 'opsknight-agent.mjs')], {
         env: {
           ...process.env,
           OPSKNIGHT_URL: `http://127.0.0.1:${address.port}`,

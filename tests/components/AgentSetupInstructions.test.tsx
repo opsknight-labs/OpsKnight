@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import type { AgentDistribution } from '@/lib/runbooks/distribution-contract';
 import AgentSetupInstructions from '@/components/runbooks/AgentSetupInstructions';
 import RunbookField from '@/components/runbooks/RunbookField';
 import { Input } from '@/components/ui/shadcn/input';
@@ -71,4 +72,65 @@ it('associates generated field labels with their input', () => {
     </RunbookField>
   );
   expect(screen.getByLabelText('Service unit')).toHaveAttribute('name', 'service');
+});
+
+it('blocks copyable native installation when release assets are not verified', () => {
+  setup();
+  selectTab('Linux');
+  expect(screen.queryByText(/releases\/download\/v2.0.0\/install.sh/)).not.toBeInTheDocument();
+  expect(screen.getByText(/No verified Agent release/)).toBeVisible();
+});
+it('does not copy commands for a loopback Agent endpoint', () => {
+  setup();
+  fireEvent.change(screen.getByLabelText('OpsKnight URL from Agent'), {
+    target: { value: 'http://localhost:3000' },
+  });
+  expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled();
+});
+it('allows only the verified digest after endpoint confirmation and disables copying at expiry', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-14T12:00:00Z'));
+  const distribution: AgentDistribution = {
+    checkedAt: new Date().toISOString(),
+    installerUrl: 'https://github.com/opsknight-labs/OpsKnight/releases/download/v2.1.0/install.sh',
+    manifest: {
+      schemaVersion: 1,
+      version: '2.1.0',
+      revision: 'a'.repeat(40),
+      protocolVersions: [1],
+      policySchemaVersion: 1,
+      server: { minimum: '2.1.0', maximumExclusive: '2.1.1' },
+      image: {
+        reference: `ghcr.io/opsknight-labs/opsknight-agent@sha256:${'b'.repeat(64)}`,
+        architectures: ['linux/amd64', 'linux/arm64'],
+      },
+      installer: { filename: 'install.sh', sha256: 'c'.repeat(64) },
+    },
+  };
+  render(
+    <AgentSetupInstructions
+      token="one-time-secret-value"
+      executionPublicKey="public-pin"
+      appUrl="https://ops.company.internal"
+      distribution={distribution}
+      expiresAt="2026-10-14T12:00:02Z"
+    />
+  );
+  expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled();
+  fireEvent.click(
+    screen.getByLabelText('I confirmed this URL is reachable from the Agent host or cluster.')
+  );
+  expect(screen.getByRole('button', { name: 'Copy' })).toBeEnabled();
+  expect(screen.getByRole('tabpanel')).not.toHaveTextContent('one-time-secret-value');
+  fireEvent.change(screen.getByLabelText('Agent image'), {
+    target: { value: 'unverified:latest' },
+  });
+  expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Agent image'), {
+    target: { value: distribution.manifest.image.reference },
+  });
+  expect(screen.getByRole('button', { name: 'Copy' })).toBeEnabled();
+  act(() => vi.advanceTimersByTime(3000));
+  expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled();
+  expect(screen.getByText(/Enrollment token expired/)).toBeVisible();
 });

@@ -25,7 +25,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
     },
   });
   if (!incident) return { matched: 0, started: 0, suggested: 0 };
-  const bindings = await prisma.serviceRunbookBinding.findMany({
+  const bindings = await prisma.serviceAutomationRule.findMany({
     where: {
       serviceId: incident.serviceId,
       enabled: true,

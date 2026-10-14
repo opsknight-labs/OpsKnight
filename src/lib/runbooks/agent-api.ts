@@ -187,6 +187,7 @@ export function agentApiError(error: unknown) {
       'Request body must be valid JSON.',
       'A PEM public signing key is required.',
       'Compressed artifact must be between 1 byte and 1 MiB.',
+      'Compressed artifact must be between 1 byte and 10 MiB.',
       'Artifact checksum does not match.',
     ].includes(message)
   ) {

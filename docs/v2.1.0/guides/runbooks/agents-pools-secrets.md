@@ -6,8 +6,14 @@ product_area: runbooks
 audience: [administrator, operator]
 verification:
   level: test
-  verified_at: 2026-10-04
-  evidence: [src/app/(app)/runbooks/agents/page.tsx, src/components/runbooks/AgentEnrollmentForm.tsx, tests/e2e/runbooks-ui.spec.ts, src/lib/runbooks/secrets.ts]
+  verified_at: 2026-10-14
+  evidence:
+    [
+      src/app/(app)/runbooks/agents/page.tsx,
+      src/components/runbooks/AgentEnrollmentForm.tsx,
+      tests/e2e/runbooks-ui.spec.ts,
+      src/lib/runbooks/secrets.ts,
+    ]
 ---
 
 # Manage Agents, pools, and scoped secrets
@@ -70,3 +76,9 @@ expired leases, circuit-breaker indicators, and Agents requiring attention.
 Worker status is local to the current process; a split web process cannot
 certify the whole worker fleet. Monitor worker readiness endpoints separately.
 For recovery procedures, see [Runbook troubleshooting](../../troubleshooting/runbooks/).
+
+## Enrollment and policy evidence
+
+Setup commands are available only for a verified published server/Agent pair and a confirmed real HTTPS endpoint. Tokens are captured through a hidden prompt or protected file, expire after 15 minutes, and can be revoked by canceling enrollment. Preserve each independent Agent's identity and spool volume. Swarm Agents are pinned to the node holding their local state.
+
+A service rule's **Check Agent policy** is a signed allowlist check with no execution. It does not grant OS, Docker or Kubernetes permissions. A containerized Agent cannot inspect the host's Systemd service without explicit host integration. Follow [Agent operations](../../operate/deploy/agent-operations) for topology-specific prerequisites and separate readiness/liveness behavior.

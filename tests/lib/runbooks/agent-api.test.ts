@@ -7,6 +7,11 @@ import {
 import { RunbookPreExecutionFenceError, RunbookAgentRevokedError } from '@/lib/runbooks/errors';
 
 describe('Agent API retry contract and error mapping', () => {
+  it('treats an invalid 10 MiB artifact as terminal rather than a retryable infrastructure outage', () => {
+    expect(
+      agentApiError(new Error('Compressed artifact must be between 1 byte and 10 MiB.')).status
+    ).toBe(400);
+  });
   it('keeps unexpected infrastructure failures retryable', () => {
     expect(agentApiError(new Error('database connection pool exhausted')).status).toBe(500);
   });
@@ -78,9 +83,15 @@ describe('Agent API retry contract and error mapping', () => {
   });
 
   it('preserves HTTP 500 for genuine database, runtime, and infrastructure outages', () => {
-    expect(agentApiError(new Error('PostgreSQL connection terminated unexpectedly')).status).toBe(500);
-    expect(agentApiError(new TypeError('Cannot read property "status" of undefined')).status).toBe(500);
-    expect(agentApiError({ code: 'P2025', message: 'Record not found in prisma' }).status).toBe(500);
+    expect(agentApiError(new Error('PostgreSQL connection terminated unexpectedly')).status).toBe(
+      500
+    );
+    expect(agentApiError(new TypeError('Cannot read property "status" of undefined')).status).toBe(
+      500
+    );
+    expect(agentApiError({ code: 'P2025', message: 'Record not found in prisma' }).status).toBe(
+      500
+    );
   });
 });
 

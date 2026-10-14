@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { recordWorkerHeartbeat } from './runbooks/worker-heartbeats';
 import {
   processPendingGeneralJobs,
   processPendingJobs,
@@ -45,6 +47,11 @@ export interface JobWorkerOptions {
 }
 
 interface JobWorkerSharedState {
+  instanceId: string;
+  heartbeatTimer: NodeJS.Timeout | null;
+  heartbeatInFlight: Promise<void> | null;
+  lastRunbookReconciliationSuccessAt: Date | null;
+  lastRunbookDispatchSuccessAt: Date | null;
   timer: NodeJS.Timeout | null;
   initialized: boolean;
   activeRun: Promise<void> | null;
@@ -69,6 +76,11 @@ declare global {
 }
 
 const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
+  instanceId: randomUUID(),
+  heartbeatTimer: null,
+  heartbeatInFlight: null,
+  lastRunbookReconciliationSuccessAt: null,
+  lastRunbookDispatchSuccessAt: null,
   timer: null,
   initialized: false,
   activeRun: null,
@@ -93,6 +105,29 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
 // state to globalThis ensures /api/health?mode=readiness accurately reflects
 // the running in-process worker started by instrumentation.
 globalThis.jobWorkerGlobalState = workerState;
+workerState.instanceId ??= randomUUID();
+async function publishWorkerEvidence() {
+  if (workerState.heartbeatInFlight) return workerState.heartbeatInFlight;
+  workerState.heartbeatInFlight = recordWorkerHeartbeat({
+    instanceId: workerState.instanceId,
+    lane: workerState.workerLane,
+    role: process.env.OPSKNIGHT_PROCESS_ROLE ?? 'integrated',
+    runbookEnabled:
+      workerState.workerLane === 'runbook' ||
+      (workerState.workerLane === 'all' && !workerState.excludeRunbookJobs),
+    running: workerState.initialized,
+    lastSeenAt: new Date(),
+    lastSuccessAt: workerState.lastRunbookDispatchSuccessAt,
+    lastReconciledAt: workerState.lastRunbookReconciliationSuccessAt,
+    lastError:
+      workerState.workerLane === 'runbook' ? workerState.lastError : workerState.lastRunbookError,
+  })
+    .catch(() => logger.warn('[JobWorker] Shared worker evidence could not be persisted'))
+    .finally(() => {
+      workerState.heartbeatInFlight = null;
+    });
+  return workerState.heartbeatInFlight;
+}
 
 function readBoundedInteger(
   rawValue: string | undefined,
@@ -368,6 +403,7 @@ async function runOnce(): Promise<void> {
         workerState.lastRunbookReconciliationAt = now;
         const { reconcileRunbooks } = await import('./runbooks/reconciler');
         reconciliation = await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
+        workerState.lastRunbookReconciliationSuccessAt = new Date();
       }
       const result = await processPendingJobsByType(
         'RUNBOOK',
@@ -380,6 +416,7 @@ async function runOnce(): Promise<void> {
         logger.warn('[JobWorker] Runbook lane degraded', { failed: result.failed, reconciliation });
       } else {
         workerState.lastSuccessAt = new Date();
+        workerState.lastRunbookDispatchSuccessAt = new Date();
         workerState.lastError = null;
         workerState.lastRunbookError = null;
       }
@@ -412,26 +449,38 @@ async function runOnce(): Promise<void> {
         const { reconcileRunbooks } = await import('./runbooks/reconciler');
         await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
         workerState.lastRunbookReconciliationAt = Date.now();
+        workerState.lastRunbookReconciliationSuccessAt = new Date();
         workerState.lastRunbookError = null;
       } catch (err) {
         workerState.lastRunbookError =
           err instanceof Error ? err.message : 'Runbook reconciliation failed';
-        logger.error('[JobWorker] Runbook reconciliation failed in integrated lane', { error: err });
+        logger.error('[JobWorker] Runbook reconciliation failed in integrated lane', {
+          error: err,
+        });
       }
     }
 
     // Operational background jobs (war-room, Jira, side effects, auto-unsnooze)
     // always continue; processPendingJobs automatically fences bulk fan-out when paused.
-    const result = workerState.excludeRunbookJobs
-      ? await processPendingJobs(
-          workerState.workerConfig.batchSize,
-          workerState.workerConfig.concurrency,
-          ['RUNBOOK']
-        )
-      : await processPendingJobs(
-          workerState.workerConfig.batchSize,
-          workerState.workerConfig.concurrency
-        );
+    // Isolate dispatch evidence from unrelated background job outcomes.
+    const result = await processPendingJobs(
+      workerState.workerConfig.batchSize,
+      workerState.workerConfig.concurrency,
+      ['RUNBOOK']
+    );
+    if (!workerState.excludeRunbookJobs) {
+      const runbooks = await processPendingJobsByType(
+        'RUNBOOK',
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
+      );
+      if (runbooks.failed)
+        workerState.lastRunbookError = `${runbooks.failed} runbook job(s) failed`;
+      else workerState.lastRunbookDispatchSuccessAt = new Date();
+      result.total += runbooks.total;
+      result.processed += runbooks.processed;
+      result.failed += runbooks.failed;
+    }
 
     const laneErrors = [...escalation.errors, ...notifications.errors];
     if (escalation.jobsFailed > 0) {
@@ -468,6 +517,11 @@ async function runOnce(): Promise<void> {
     scheduleNextRun(delay);
   } catch (error) {
     workerState.lastError = error instanceof Error ? error.message : String(error);
+    if (
+      workerState.workerLane === 'runbook' ||
+      (workerState.workerLane === 'all' && !workerState.excludeRunbookJobs)
+    )
+      workerState.lastRunbookError = workerState.lastError;
     logger.error('[JobWorker] Batch failed', {
       error: workerState.lastError,
       durationMs: Date.now() - batchStartedAt,
@@ -502,6 +556,9 @@ export function startJobWorker(lane: JobWorkerLane = 'all', options: JobWorkerOp
   workerState.lastControlPlaneProbeAt = Date.now();
   workerState.lastQueueMaintenanceAt = 0;
   workerState.lastRunbookReconciliationAt = 0;
+  workerState.lastRunbookReconciliationSuccessAt = null;
+  workerState.lastRunbookDispatchSuccessAt = null;
+  workerState.lastRunbookError = null;
 
   logger.info('[JobWorker] Starting', {
     batchSize: workerState.workerConfig.batchSize,
@@ -538,6 +595,10 @@ export function startJobWorker(lane: JobWorkerLane = 'all', options: JobWorkerOp
     }
   })();
 
+  workerState.lastRunbookReconciliationSuccessAt = null;
+  void publishWorkerEvidence();
+  workerState.heartbeatTimer = setInterval(() => void publishWorkerEvidence(), 10_000);
+  workerState.heartbeatTimer.unref?.();
   // Start immediately. Subsequent iterations are paced based on queue activity.
   scheduleNextRun(0);
 }
@@ -552,6 +613,10 @@ export async function stopJobWorker(): Promise<void> {
   const wasRunning =
     workerState.initialized || workerState.timer !== null || workerState.activeRun !== null;
   workerState.initialized = false;
+  if (workerState.heartbeatTimer) clearInterval(workerState.heartbeatTimer);
+  workerState.heartbeatTimer = null;
+  await workerState.heartbeatInFlight;
+  await publishWorkerEvidence();
 
   if (workerState.timer) {
     clearTimeout(workerState.timer);

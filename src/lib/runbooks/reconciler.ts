@@ -23,6 +23,30 @@ export async function reconcileRunbooks(limit = 100) {
         },
       })
     : { count: 0 };
+  const evidenceCutoff = new Date(now.getTime() - 30 * 86400000);
+  const oldChecks = await prisma.runbookPolicyCheck.findMany({
+    where: { expiresAt: { lt: evidenceCutoff } },
+    take: Math.min(1000, Math.max(1, limit)),
+    select: { id: true },
+    orderBy: { expiresAt: 'asc' },
+  });
+  if (oldChecks.length)
+    await prisma.runbookPolicyCheck.deleteMany({
+      where: { id: { in: oldChecks.map(check => check.id) }, expiresAt: { lt: evidenceCutoff } },
+    });
+  const oldWorkers = await prisma.runtimeWorkerHeartbeat.findMany({
+    where: { lastSeenAt: { lt: evidenceCutoff } },
+    take: Math.min(1000, Math.max(1, limit)),
+    select: { instanceId: true },
+    orderBy: { lastSeenAt: 'asc' },
+  });
+  if (oldWorkers.length)
+    await prisma.runtimeWorkerHeartbeat.deleteMany({
+      where: {
+        instanceId: { in: oldWorkers.map(worker => worker.instanceId) },
+        lastSeenAt: { lt: evidenceCutoff },
+      },
+    });
   const overdueExecutions = await prisma.runbookExecution.findMany({
     where: {
       deadlineAt: { lte: now },

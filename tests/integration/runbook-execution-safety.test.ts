@@ -58,7 +58,7 @@ import { hashTokenV2 } from '@/lib/api-keys';
 async function startRunbookExecution(input: RunbookExecutionRequest) {
   const binding =
     !input.triggeredByUserId && input.bindingId
-      ? await testPrisma.serviceRunbookBinding.findUnique({ where: { id: input.bindingId } })
+      ? await testPrisma.serviceAutomationRule.findUnique({ where: { id: input.bindingId } })
       : null;
   if (binding) {
     const trigger = input.triggerId
@@ -185,7 +185,7 @@ async function createAgentTarget(
       members: { create: { agentId: agent.id } },
     },
   });
-  const binding = await testPrisma.serviceRunbookBinding.create({
+  const binding = await testPrisma.serviceAutomationRule.create({
     data: {
       serviceId: service.id,
       runbookId: runbook.id,
@@ -258,7 +258,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await testPrisma.systemSettings.create({
       data: { id: 'default', runbookAutoExecutionsPerIncident: 0 },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: {
         mode: 'AUTOMATIC',
@@ -324,7 +324,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-a' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: '${{ incident.labels.host }}' } },
     });
@@ -430,7 +430,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     );
     const incident = await createTestIncident('Confidential display metadata', target.service.id);
     const inputValues = { credential: 'secret://production-api-token', label: 'Payments' };
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { inputValues },
     });
@@ -593,7 +593,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-a' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: 'node-a' } },
     });
@@ -797,7 +797,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           { key: 'manual', name: 'Manual', type: 'MANUAL', riskClass: 'READ_ONLY', config: {} },
         ],
       });
-      await testPrisma.serviceRunbookBinding.update({
+      await testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: { mode: 'AUTOMATIC' },
       });
@@ -1179,7 +1179,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
               },
             ],
       });
-      await testPrisma.serviceRunbookBinding.create({
+      await testPrisma.serviceAutomationRule.create({
         data: {
           serviceId: service.id,
           runbookId: runbook.id,
@@ -1244,7 +1244,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         grants: { create: { agentPoolId: target.pool.id } },
       },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { inputValues: { unit: 'secret://unit-secret', unused: 'secret://not-granted' } },
     });
@@ -1294,7 +1294,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.runbook.id },
       data: { publishedVersionId: corrupted.id },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { versionStrategy: 'LATEST_PUBLISHED', runbookVersionId: null },
     });
@@ -1556,7 +1556,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         required: true,
       },
     ]);
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { inputValues: { unit: '--system' } },
     });
@@ -1676,7 +1676,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         where: { id: target.runbook.id },
         data: { publishedVersionId: version2.id },
       }),
-      testPrisma.serviceRunbookBinding.update({
+      testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: {
           versionStrategy: 'LATEST_PUBLISHED',
@@ -2345,7 +2345,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-a' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: 'node-a' } },
     });
@@ -2417,7 +2417,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-b' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: 'node-b' } },
     });

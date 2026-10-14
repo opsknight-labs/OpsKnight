@@ -60,6 +60,9 @@ const eslintConfig = defineConfig([
       'tests/lib/load-certification-suite.test.ts',
       'agent/**/*.{ts,js,mjs}',
       'tests/integration/runbook-agent-runtime.test.ts',
+      // Live deployment fixture paths are exclusively created under mkdtemp.
+      'tests/integration/runbook-live-compose.test.ts',
+      'tests/helpers/runbook-kind-smoke.ts',
       'tests/lib/runbooks/**/*.{ts,tsx}',
       'tests/e2e/**/*.{ts,tsx}',
     ],

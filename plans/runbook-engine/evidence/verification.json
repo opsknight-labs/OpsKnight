@@ -1,0 +1,42 @@
+{
+  "verifiedAt": "2026-10-14",
+  "baselineRevision": "a278116a0b03c0dac1f5e94c68f88e3814152a2c",
+  "scope": "Runbook remediation candidate. Suites overlap; counts must not be summed as unique tests.",
+  "checks": {
+    "productionBuild": "PASS; existing Next middleware/PWA/Tailwind advisories remain",
+    "typecheck": "PASS: npx tsc --noEmit --incremental false",
+    "modifiedFileLint": "PASS: ESLint, zero warnings for configured modified files",
+    "unitComponentRegression": {
+      "status": "PASS",
+      "files": 46,
+      "tests": 428
+    },
+    "database": {
+      "status": "PASS",
+      "fullRunTests": 117,
+      "focusedReadinessPolicyTests": 8,
+      "distinctCases": 118,
+      "database": "isolated rbe_engine_test"
+    },
+    "runtimeStartupRecovery": {
+      "status": "PASS",
+      "tests": 20
+    },
+    "browser": {
+      "status": "PASS",
+      "tests": 24,
+      "browsers": [
+        "Chromium",
+        "Firefox",
+        "WebKit"
+      ],
+      "productionServer": true
+    },
+    "docsLint": "PASS",
+    "deploymentTemplates": "PASS: both Helm charts, deployment layout, workflow parsing and change classification",
+    "realCompose": "live-compose.json",
+    "realKind": "live-kind.json",
+    "simulatedClaims": "scale-simulation.json"
+  },
+  "qualification": "qualification.json"
+}

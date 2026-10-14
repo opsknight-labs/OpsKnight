@@ -11,17 +11,31 @@ afterEach(async () => {
     directories.splice(0).map(directory => rm(directory, { recursive: true, force: true }))
   );
 });
-async function check(state?: unknown) {
+async function check(state?: unknown, mode = 'readiness') {
   const directory = await mkdtemp(join(tmpdir(), 'opsknight-agent-health-'));
   directories.push(directory);
   // The directory is exclusively created by mkdtemp above, never supplied externally.
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   if (state !== undefined) await writeFile(join(directory, 'health.json'), JSON.stringify(state));
-  return spawnSync(process.execPath, ['agent/healthcheck.mjs'], {
+  return spawnSync(process.execPath, ['agent/healthcheck.mjs', mode], {
     env: { ...process.env, OPSKNIGHT_AGENT_DATA_DIR: directory },
   }).status;
 }
 describe('Agent local healthcheck', () => {
+  it.each(['draining', 'clockError', 'storageError', 'terminalAuthError'])(
+    'keeps a functioning blocked Agent alive during %s',
+    async reason => {
+      const state = {
+        pid: process.pid,
+        updatedAt: Date.now(),
+        initialized: true,
+        ready: false,
+        [reason]: reason === 'draining' ? true : 'Recoverable fault',
+      };
+      expect(await check(state, 'liveness')).toBe(0);
+      expect(await check(state, 'startup')).toBe(0);
+      expect(await check(state, 'readiness')).toBe(1);
+    }
+  );
   it('accepts initialized live local progress without contacting OpsKnight', async () => {
     expect(await check({ pid: process.pid, updatedAt: Date.now(), ready: true })).toBe(0);
   });

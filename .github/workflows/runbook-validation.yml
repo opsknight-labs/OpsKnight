@@ -121,6 +121,10 @@ jobs:
           tests/lib/operational-metric-registry.test.ts
           tests/unit/encryption-registry.test.ts tests/lib/encryption-keyring-rotation.test.ts
           tests/integration/runbook-agent-runtime.test.ts
+          tests/lib/job-worker.test.ts tests/components/AgentSetupInstructions.test.tsx
+          tests/components/ServiceRunbooks.test.tsx tests/components/RunbookSelectorBuilder.test.tsx
+          tests/components/RunbookBindingVersionInputs.test.tsx tests/components/RunbookHealthTruth.test.tsx
+          tests/components/RuleWizard.test.tsx
       - name: Real PostgreSQL concurrency and execution fences
         env: { VITEST_USE_REAL_DB: '1' }
         run: >-
@@ -128,7 +132,61 @@ jobs:
           tests/integration/runbook-execution-safety.test.ts
           tests/integration/runbook-preview-authorization.test.ts
           tests/integration/runbook-lifecycle-database.test.ts
+          tests/integration/runbook-binding-readiness-database.test.ts
+          tests/integration/runbook-policy-checks-database.test.ts
+          tests/integration/runbook-worker-evidence-database.test.ts
           tests/integration/encryption-migration.test.ts
+
+  deployment-candidate:
+    needs: changes
+    if: needs.changes.outputs.runbooks == 'true'
+    name: Real HTTPS Agent enrollment and deployment candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: opsknight
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rbe_engine_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U opsknight -d rbe_engine_test"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://opsknight:test_password@localhost:5432/rbe_engine_test
+      DIRECT_URL: postgresql://opsknight:test_password@localhost:5432/rbe_engine_test
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+      OPSKNIGHT_PROCESS_ROLE: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - name: Apply isolated database migrations
+        run: npx prisma migrate deploy
+      - name: Build production candidate
+        run: npm run build
+      - name: Build local Agent candidate
+        run: docker build -f agent/Dockerfile -t opsknight-agent:rbe-local .
+      - name: Exercise trusted HTTPS enrollment, execution, artifacts, policy and identity recovery
+        env:
+          RUNBOOK_LIVE_DEPLOYMENT: 'true'
+          VITEST_USE_REAL_DB: '1'
+        run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-live-compose.test.ts
+      - name: Measure simulated 10/100/1000 Agent claim load
+        env:
+          RUNBOOK_SCALE_SIMULATION: 'true'
+          VITEST_USE_REAL_DB: '1'
+        run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-scale-simulation.test.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runbook-deployment-candidate-evidence
+          path: test-results/runbook-engine/
+          retention-days: 14
 
   native-agent-artifacts:
     name: Native Linux Agent artifacts & installer verification

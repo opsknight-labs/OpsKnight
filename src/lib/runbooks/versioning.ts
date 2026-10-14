@@ -335,7 +335,7 @@ export async function archiveRunbook(runbookId: string, actorId: string) {
       where: { id: runbookId },
       data: { archivedAt },
     });
-    await tx.serviceRunbookBinding.updateMany({
+    await tx.serviceAutomationRule.updateMany({
       where: { runbookId, enabled: true },
       data: { enabled: false },
     });

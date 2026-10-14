@@ -15,7 +15,7 @@ vi.mock('@/lib/rbac', () => ({
 }));
 vi.mock('@/lib/prisma', () => ({
   default: {
-    serviceRunbookBinding: { findMany: mocks.bindings },
+    serviceAutomationRule: { findMany: mocks.bindings },
     runbookExecution: { findMany: mocks.executions },
     runbookSuggestion: { findMany: mocks.suggestions },
   },

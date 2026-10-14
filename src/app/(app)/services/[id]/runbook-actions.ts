@@ -6,7 +6,7 @@ import { RunbookError } from '@/lib/runbooks/errors';
 import type { RunbookInput } from '@prisma/client';
 import { CAPABILITIES } from '@/lib/authorization';
 import prisma from '@/lib/prisma';
-import { assertCanModifyService, assertCapability } from '@/lib/rbac';
+import { assertCanModifyService, assertCanViewService, assertCapability } from '@/lib/rbac';
 import {
   createServiceBinding,
   detachServiceBinding,
@@ -100,8 +100,9 @@ export async function attachRunbookAction(serviceId: string, formData: FormData)
   );
   const parsed = createServiceRunbookBindingSchema.parse({
     runbookId,
+    name: String(formData.get('ruleName') ?? ''),
     runbookVersionId: strategy === 'PINNED' ? publishedVersionId || undefined : undefined,
-    enabled: true,
+    enabled: formData.get('enabled') === 'true',
     mode: formData.get('mode') ?? 'MANUAL',
     versionStrategy: strategy,
     inputValues: generatedInputValues(formData, definitions),
@@ -109,7 +110,19 @@ export async function attachRunbookAction(serviceId: string, formData: FormData)
     ...executionTarget(formData.get('executionTarget')),
   });
   try {
-    await createServiceBinding(serviceId, parsed, actor.id);
+    await createServiceBinding(
+      serviceId,
+      parsed,
+      actor.id,
+      formData.get('initialTrigger') === 'INCIDENT_CREATED'
+        ? {
+            event: 'INCIDENT_CREATED',
+            enabled: true,
+            conditionLogic: 'AND',
+            conditions: [],
+          }
+        : undefined
+    );
   } catch (error) {
     if (error instanceof RunbookError) return { error: error.userMessage };
     throw error;
@@ -124,7 +137,7 @@ export async function updateRunbookBindingAction(
 ) {
   const actor = await bindingActor(idSchema.parse(serviceId));
   const target = executionTarget(formData.get('executionTarget'));
-  const binding = await prisma.serviceRunbookBinding.findFirst({
+  const binding = await prisma.serviceAutomationRule.findFirst({
     where: { id: idSchema.parse(bindingId), serviceId },
     select: { runbookId: true },
   });
@@ -135,6 +148,7 @@ export async function updateRunbookBindingAction(
       : undefined;
   const definitions = await inputDefinitions(binding.runbookId, selectedVersionId);
   const parsed = updateServiceRunbookBindingSchema.parse({
+    name: String(formData.get('ruleName') ?? ''),
     enabled: formData.get('enabled') === 'true',
     mode: formData.get('mode'),
     versionStrategy: formData.get('versionStrategy'),
@@ -198,4 +212,126 @@ export async function configureRunbookTriggerAction(
     actor.id
   );
   revalidatePath(`/services/${serviceId}`);
+}
+
+export async function checkRulePolicyAction(serviceId: string, ruleId: string) {
+  const actor = await bindingActor(idSchema.parse(serviceId));
+  const { requestRulePolicyChecks } = await import('@/lib/runbooks/policy-checks');
+  const result = await requestRulePolicyChecks(serviceId, idSchema.parse(ruleId), actor.id);
+  revalidatePath(`/services/${serviceId}`);
+  return result;
+}
+
+export async function pauseRuleAction(serviceId: string, ruleId: string) {
+  const actor = await bindingActor(idSchema.parse(serviceId));
+  const { pauseServiceRule } = await import('@/lib/runbooks/bindings');
+  await pauseServiceRule(serviceId, idSchema.parse(ruleId), actor.id);
+  revalidatePath(`/services/${serviceId}`);
+}
+export async function duplicateRuleAction(serviceId: string, ruleId: string) {
+  const actor = await bindingActor(idSchema.parse(serviceId));
+  const { duplicateServiceRule } = await import('@/lib/runbooks/bindings');
+  await duplicateServiceRule(serviceId, idSchema.parse(ruleId), actor.id);
+  revalidatePath(`/services/${serviceId}`);
+}
+
+export async function validateRuleConfigurationAction(serviceId: string, ruleId: string) {
+  await Promise.all([
+    assertCanViewService(idSchema.parse(serviceId)),
+    assertCapability(CAPABILITIES.RUNBOOK_READ_ALL),
+  ]);
+  const rule = await prisma.serviceAutomationRule.findFirst({
+    where: { id: idSchema.parse(ruleId), serviceId },
+    include: {
+      runbook: { include: { publishedVersion: { include: { inputs: true } } } },
+      runbookVersion: { include: { inputs: true } },
+      triggers: { include: { conditions: true } },
+    },
+  });
+  if (!rule) throw new Error('Service automation rule not found.');
+  const { getBindingReadiness } = await import('@/lib/runbooks/binding-readiness');
+  // Assess the prospective configuration without activating a paused rule.
+  return getBindingReadiness({ ...rule, enabled: true });
+}
+
+async function serviceExecutionRequest(serviceId: string, ruleId: string, readOnly: boolean) {
+  const [actor] = await Promise.all([
+    assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
+    assertCanViewService(idSchema.parse(serviceId)),
+  ]);
+  const rule = await prisma.serviceAutomationRule.findFirst({
+    where: { id: idSchema.parse(ruleId), serviceId, enabled: true },
+    include: {
+      runbook: { include: { publishedVersion: { include: { inputs: true } } } },
+      runbookVersion: { include: { inputs: true } },
+    },
+  });
+  if (!rule) throw new Error('Enable and review this service rule before running it.');
+  const version =
+    rule.versionStrategy === 'PINNED' ? rule.runbookVersion : rule.runbook.publishedVersion;
+  if (!version) throw new Error('A published version is required.');
+  if (readOnly) {
+    const { flattenSteps, parseRunbookDefinition, minimumRiskForStep } =
+      await import('@/lib/runbooks/definition');
+    if (
+      flattenSteps(parseRunbookDefinition(version.definition, version.inputs)).some(
+        step => minimumRiskForStep(step) !== 'READ_ONLY'
+      )
+    )
+      throw new Error(
+        'Read-only testing requires a workflow containing only read-only actions. Publish a diagnostic workflow to test this target.'
+      );
+  }
+  return {
+    runbookId: rule.runbookId,
+    runbookVersionId: version.id,
+    bindingId: rule.id,
+    serviceId,
+    triggeredByUserId: actor.id,
+  };
+}
+
+export async function previewServiceRuleAction(
+  serviceId: string,
+  ruleId: string,
+  readOnly: boolean
+) {
+  try {
+    const { previewRunbookExecution } = await import('@/lib/runbooks/orchestrator');
+    return {
+      preview: await previewRunbookExecution(
+        await serviceExecutionRequest(serviceId, ruleId, z.boolean().parse(readOnly))
+      ),
+    };
+  } catch (error) {
+    const { toPublicAppError } = await import('@/lib/errors');
+    return { error: toPublicAppError(error).message };
+  }
+}
+
+export async function executeServiceRuleAction(
+  serviceId: string,
+  ruleId: string,
+  readOnly: boolean,
+  data: FormData
+) {
+  try {
+    const { startRunbookExecution } = await import('@/lib/runbooks/orchestrator');
+    await startRunbookExecution({
+      ...(await serviceExecutionRequest(serviceId, ruleId, z.boolean().parse(readOnly))),
+      expectedPlanDigest: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .parse(data.get('previewDigest')),
+      previewAuthorizationToken: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .parse(data.get('previewAuthorizationToken')),
+    });
+    revalidatePath(`/services/${serviceId}`);
+    revalidatePath(`/services/${serviceId}/automations/${ruleId}`);
+  } catch (error) {
+    const { toPublicAppError } = await import('@/lib/errors');
+    return { error: toPublicAppError(error).message };
+  }
 }

@@ -40,6 +40,8 @@ jobs:
     env:
       OPSKNIGHT_IMAGE: ghcr.io/opsknight-labs/opsknight:ci-test
       OPSKNIGHT_AGENT_IMAGE: ghcr.io/opsknight-labs/opsknight-agent:ci-test
+      OPSKNIGHT_AGENT_NODE_ID: syntax-validation-node
+      OPSKNIGHT_AGENT_URL: https://validation.example.invalid
       OPSKNIGHT_EXECUTION_PUBLIC_KEY: ci-pinned-public-key
     steps:
       - name: Checkout Repository

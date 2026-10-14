@@ -268,6 +268,7 @@ export const runbookInputsSchema = z
 export const createServiceRunbookBindingSchema = z
   .object({
     runbookId: z.string().cuid(),
+    name: z.string().trim().max(200).optional(),
     runbookVersionId: z.string().cuid().optional(),
     enabled: z.boolean().default(true),
     mode: z.enum(RUNBOOK_BINDING_MODES).default('MANUAL'),
@@ -299,10 +300,11 @@ export const createServiceRunbookBindingSchema = z
     }
   });
 
-export type CreateServiceRunbookBindingInput = z.infer<typeof createServiceRunbookBindingSchema>;
+export type CreateServiceRunbookBindingInput = z.input<typeof createServiceRunbookBindingSchema>;
 
 export const updateServiceRunbookBindingSchema = z
   .object({
+    name: z.string().trim().max(200).optional(),
     runbookVersionId: z.string().cuid().optional().nullable(),
     enabled: z.boolean().optional(),
     mode: z.enum(RUNBOOK_BINDING_MODES).optional(),

@@ -6,8 +6,14 @@ product_area: runbooks
 audience: [administrator, operator, developer]
 verification:
   level: source
-  verified_at: 2026-10-11
-  evidence: [src/lib/runbooks/types.ts, src/lib/runbooks/definition.ts, src/lib/runbooks/schemas.ts, src/lib/authorization.ts]
+  verified_at: 2026-10-14
+  evidence:
+    [
+      src/lib/runbooks/types.ts,
+      src/lib/runbooks/definition.ts,
+      src/lib/runbooks/schemas.ts,
+      src/lib/authorization.ts,
+    ]
 ---
 
 # Runbook reference
@@ -176,9 +182,12 @@ not an exemption from control-plane SSRF rules.
 Service and incident authorization checks apply in addition to these capabilities.
 See [permissions](./permissions) for the broader authorization model.
 
+## Rule and readiness contracts
+
+`ServiceAutomationRule` is an independent configuration identity. Multiple rules may share a service and workflow; existing database table/IDs and history references are preserved. Readiness states are PAUSED, BLOCKED, CHECKS_REQUIRED, CONFIGURATION_VALID and UNKNOWN. Online/capable Agents cannot alone produce a target-permission guarantee. Agent policy checks are signed, scoped, one-time results with an exact frozen action list; a matching fresh policy hash is required before using their evidence.
+
+Worker health states are HEALTHY, DEGRADED and UNKNOWN. Shared PostgreSQL evidence, rather than the web process's local worker state, establishes dispatch and reconciliation freshness. The scheduler watchdog only reconciles durable work and preserves unknown-write fences.
+
 ## Current boundaries
 
-First-class nested-check builder controls, paginated library/history views,
-execution-signing identity rotation, and fleet/load certification are not
-documented as completed features. Existing encryption-key migration preserves
-the execution-signing identity; it is not signing-identity rotation.
+Nested-check builder controls, signing rotation, structured selectors, independent rules and static version comparison are implemented. Version comparisons mask credential fields and list effects on latest-publication rules while pinned rules retain their versions. These features do not certify all deployment topologies or fleet capacity. The measured 10/100/1000 Agent simulation is direct-library idle claim load; it is not authenticated production network capacity or physical recovery proof. Promote only released server/Agent pairs with completed topology evidence.

@@ -8,9 +8,13 @@ import type { ExecutionPreview } from '@/lib/runbooks/execution-preview';
 export default function RunbookExecutionPreview({
   previewAction,
   executeAction,
+  previewLabel = 'Preview execution',
+  executeLabel = 'Execute this plan',
 }: {
   previewAction: () => Promise<{ preview?: ExecutionPreview; error?: string }>;
   executeAction: RunbookFormAction;
+  previewLabel?: string;
+  executeLabel?: string;
 }) {
   const [preview, setPreview] = useState<ExecutionPreview>();
   const [error, setError] = useState('');
@@ -49,7 +53,7 @@ export default function RunbookExecutionPreview({
           }
         }}
       >
-        {pending ? 'Resolving plan…' : 'Preview execution'}
+        {pending ? 'Resolving plan…' : previewLabel}
       </Button>
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -146,7 +150,7 @@ export default function RunbookExecutionPreview({
                 (preview.steps.some(step => step.risk !== 'READ_ONLY') && !confirmed)
               }
             >
-              Execute this plan
+              {executeLabel}
             </SubmitButton>
           </ActionForm>
         </section>

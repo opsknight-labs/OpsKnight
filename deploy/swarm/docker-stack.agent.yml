@@ -4,7 +4,7 @@ services:
   opsknight-agent:
     image: ${OPSKNIGHT_AGENT_IMAGE:?Set OPSKNIGHT_AGENT_IMAGE to a tested tag or digest}
     environment:
-      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:-http://opsknight-web:3000}
+      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:?Set the Agent-reachable OpsKnight endpoint}
       OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
       OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
       OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE: /run/secrets/opsknight_agent_enrollment_token
@@ -23,10 +23,13 @@ services:
       - opsknight
     deploy:
       replicas: 1
+      # A local identity volume must stay on its enrolled node.
+      placement:
+        constraints:
+          - node.id == ${OPSKNIGHT_AGENT_NODE_ID:?Set the enrolled Agent node ID; local identity must not migrate}
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 10
+        delay: 30s
       update_config:
         order: stop-first
         failure_action: rollback

@@ -6,8 +6,14 @@ product_area: runbooks
 audience: [responder, administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-11
-  evidence: [src/lib/runbooks/agent-claims.ts, src/lib/runbooks/reconciler.ts, src/app/(app)/runbooks/health/page.tsx, agent/src/lease.ts]
+  verified_at: 2026-10-14
+  evidence:
+    [
+      src/lib/runbooks/agent-claims.ts,
+      src/lib/runbooks/reconciler.ts,
+      src/app/(app)/runbooks/health/page.tsx,
+      agent/src/lease.ts,
+    ]
 ---
 
 # Troubleshoot Runbooks
@@ -80,3 +86,9 @@ recording was introduced display an unknown claim time. Troubleshooting guidance
 separates configuration errors, policy rejection, infrastructure failures,
 verification failure and uncertain writes. A failed verification does not undo a
 write; inspect the observed target state before repeating remediation.
+
+## Setup and worker evidence
+
+If installation commands cannot be copied, review the verified release manifest, confirmed Agent-reachable HTTPS URL and token expiry. Missing release assets cannot be repaired with a guessed installer URL. Revoke the enrollment and create a fresh token if it expired or was abandoned. A consumed token is not a substitute for a lost private identity.
+
+For UNKNOWN worker health, inspect durable worker heartbeats, deploy/run the runbook lane and scheduler, and confirm successful dispatch and reconciliation within 90 seconds. An empty queue is insufficient evidence. For Agent readiness failures, inspect clock, authentication, durable storage and drain reasons; liveness should remain healthy while the process makes progress. Restore the dependency before retrying. Never replay an uncertain started write automatically.

@@ -1,3 +1,4 @@
+import { startRunbookWatchdog, stopRunbookWatchdog } from './runbooks/watchdog';
 import { processPendingEscalations } from './escalation';
 import { processPendingJobs, cleanupOldJobs, runQueueMaintenance } from './jobs/queue';
 import { logger } from './logger';
@@ -854,6 +855,7 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
   initialized = true;
   logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID, profile: schedulerProfile });
 
+  startRunbookWatchdog();
   // Schedule first run immediately
   scheduleNextRun(new Date());
 }
@@ -863,6 +865,7 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
  */
 export async function stopCronScheduler() {
   initialized = false;
+  await stopRunbookWatchdog();
   if (timer) {
     clearTimeout(timer);
     timer = null;

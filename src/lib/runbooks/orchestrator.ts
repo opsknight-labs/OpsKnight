@@ -188,7 +188,7 @@ async function prepareRunbookExecution(
     });
     if (!runbook) throw new RunbookDefinitionError('Runbook not found or archived.');
     const binding = input.bindingId
-      ? await tx.serviceRunbookBinding.findFirst({
+      ? await tx.serviceAutomationRule.findFirst({
           where: {
             id: input.bindingId,
             runbookId: runbook.id,

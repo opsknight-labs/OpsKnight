@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl || new URL(databaseUrl).pathname !== '/runbook_ui_test') {
+if (
+  !databaseUrl ||
+  !['/runbook_ui_test', '/rbe_engine_test'].includes(new URL(databaseUrl).pathname)
+) {
   throw new Error('Runbook browser tests require a dedicated runbook_ui_test database.');
 }
 export default defineConfig({

@@ -7,7 +7,7 @@ audience: [operator, administrator]
 keywords: [runbook agent, enrollment, execution policy, scoped secrets, artifact output]
 verification:
   level: source
-  verified_at: 2026-10-04
+  verified_at: 2026-10-14
   evidence:
     - agent/
     - deploy/compose/docker-compose.agent.yml
@@ -22,7 +22,9 @@ Runbook Agents execute host, container, and Kubernetes actions without accepting
 
 The Agent is separate from the Runbook Worker. The worker plans and reconciles database state; the Agent is the constrained execution plane close to the target.
 
-The image healthcheck and Kubernetes startup, liveness, and readiness probes check an initialized local progress record and its running process. They do not contact OpsKnight: a temporary control-plane outage must not restart an otherwise functioning Agent or disrupt its durable result spool. Progress older than 90 seconds is unhealthy; Kubernetes permits up to five minutes for startup. An Agent reporting unavailable capabilities can still be locally healthy; review its effective capabilities in the UI before targeting it.
+Local probes have independent meanings. **Startup** accepts initialized local progress; **liveness** verifies that the process and its monotonic progress record remain alive; **readiness** requires safe claiming. Drain, clock skew, unavailable durable storage, lost authentication and a first authenticated heartbeat outage block readiness without forcing a liveness restart. Container health progress lives in `/tmp/opsknight-agent-health.json`, separately from the durable spool. Progress older than 90 seconds fails liveness; Kubernetes permits five minutes for initialization. A locally healthy Agent still requires policy, capability and target permission checks.
+
+Enrollment and transport outages reconnect with bounded exponential backoff and jitter. Authentication rejection stops retries; repair the token or identity instead. Heartbeats never overlap. The Agent blocks initial claims until an authenticated heartbeat succeeds and preserves its private identity and spool across restart. Ambiguous started writes retain UNKNOWN outcomes and require independent target inspection.
 
 ## Runbook authoring and operations UI
 
@@ -32,18 +34,24 @@ The dedicated browser suite covers publication, service attachment and target se
 
 The Runbooks library supports search, published/draft filters, and creation templates. Edit a draft through the ordered step builder and each step's configuration panel; define typed inputs in the Inputs tab. Advanced JSON is an explicit alternative, not the primary editor. Save the draft before publishing: the publish confirmation publishes only the saved version. Published versions remain immutable.
 
-Service bindings show their selected version, target, inputs, and triggers together. Use **Configure** to change them. Machine-specific write actions cannot target a multi-member `LOCAL_HOSTS` pool; choose a specific Agent instead. Incident executions show ordered step progress and approvals for the exact frozen action and parameters. Cancellation, publication, revocation, and detach operations require confirmation.
+Service automations are independent rules: multiple rules can reuse the same published workflow with different targets, inputs and triggers. **Create rule** guides version/mode, target/inputs, trigger and review; it defaults to paused. **Configure** edits a rule. **Duplicate paused rule** copies configuration into a new identity without copying execution history. **Pause rule** stops future trigger dispatch; existing executions retain their cancellation controls. Manual triggers are explicitly inactive, and dynamic selectors are shown as dynamic targets. Machine-specific write actions cannot target a multi-member `LOCAL_HOSTS` pool; choose a specific Agent instead. Incident executions show ordered step progress and approvals for the exact frozen action and parameters. Cancellation, publication, revocation, and detach operations require confirmation.
 
 **Runbooks → Agents** separates Agents, Pools, and Secrets. Pool membership and scoped secret grants are managed in their configuration panels; secret values remain masked and can be rotated without displaying the existing value. Secret-backed steps require HTTPS between the Agent and control plane. An HTTP polling Agent reports an explicit HTTPS-required error instead of receiving secret material.
 
-**Runbooks → Health** shows queue and safety indicators, Agent heartbeat/spool attention, and worker state visible to the current process. In split deployments, a web process cannot certify the whole worker fleet; monitor each worker readiness endpoint separately. Execution-signing identity rotation and fleet/load certification remain separate future work.
+**Runbooks → Health** reads durable worker instance/lane evidence from PostgreSQL. HEALTHY requires fresh successful dispatch and reconciliation; missing, stopped or incomplete evidence is UNKNOWN, including when the queue is empty. A scheduler watchdog performs bounded recovery sweeps when worker evidence is missing or degraded; it does not execute physical actions or make uncertain writes repeatable. Prometheus exposes worker health and fresh instance counts, with alert rules in `monitoring/prometheus/opsknight-alerts.yaml`.
+
+## Verified distribution and endpoint
+
+The setup UI reads an official versioned `agent-release-manifest.json`, verifies the installer hash and the server compatibility range, and selects an immutable image digest. The manifest records source revision, protocol/policy schema and architectures. Missing assets, unsupported pairs, invalid endpoints and expired enrollment tokens disable command copying. The v2.0.0 release does not contain the native Agent assets; do not invent its installer URL or assume that its image exists. Release CI validates the published OCI architectures and downloads assets from their final release URLs before considering publication successful.
+
+Confirm the actual HTTPS endpoint reachable from the Agent, independently of the application's public URL. Setup commands run a bounded HTTPS `/api/runbook-agent/v1/time` probe on the Agent host before enrollment. Install the private CA in both curl and Node trust when applicable; never disable certificate verification. Loopback/example hosts, URL credentials/query/fragment and path-prefixed endpoints are rejected by the setup UI. Agent APIs currently require the root path. If the Agent endpoint uses a different hostname from the canonical application URL, configure that exact hostname in `APP_HOST_ALIASES` on every web replica; an unrecognized host is rejected with HTTP 421.
 
 ## Safe enrollment sequence
 
 1. In **Runbooks → Agents**, create an Agent and copy its one-time token.
 2. Create or review a local `policy.json`. Start with diagnostics only.
 3. Persist `/var/lib/opsknight-agent`; it contains the private identity and result spool.
-4. Supply the token through a protected environment or Secret and start exactly one Agent.
+4. Supply the token through a protected file or Secret and start exactly one Agent. Setup commands capture it using a hidden prompt with shell tracing disabled; tokens never appear in copied command arguments. Enrollment expires after 15 minutes. Use **Cancel this enrollment** to revoke an abandoned setup.
    Also pin `OPSKNIGHT_EXECUTION_PUBLIC_KEY` from the trusted **Runbooks → Agents** page. The setup snippets include this value. Agents refuse unsigned or altered execution envelopes.
 5. Confirm the Agent becomes `ONLINE`, reports a policy hash, and has spool depth zero.
 6. Add it to a `LOCAL_HOSTS` pool for machine-local actions or a `SHARED_TARGET` pool for a common cluster/API target.
@@ -83,6 +91,7 @@ Docker and Podman share typed container actions but use independent
 `dockerContainers` / `podmanContainers` allowlists. The container image includes
 both CLIs; an inaccessible runtime is not advertised as effective. Host-native
 Agents need the appropriate CLI and narrowly scoped runtime access. For containerized Agents, managing Docker or Podman containers on the host requires providing access to the respective engine:
+
 - **Docker**: Mount the Docker socket (e.g. `/var/run/docker.sock`) into the container when Docker actions are allowlisted.
 - **Podman**: Supply a Podman service socket via `CONTAINER_HOST` (e.g. `CONTAINER_HOST=unix:///run/podman/podman.sock` with the socket mounted), or run the Agent as a native host service. Nested rootless Podman execution inside unprivileged locked-down containers (`cap_drop: ALL`, `read_only: true`, `no-new-privileges: true`) is blocked by Linux kernel user namespace restrictions; using an explicit Podman socket connection is the supported deployment approach for containerized agents. Do not expose unauthenticated TCP sockets.
 
@@ -121,14 +130,7 @@ control-plane database. Back up encryption keys and PostgreSQL together.
 
 Run from the repository root. This file starts only the Agent, connecting to an existing installation:
 
-```sh
-export OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='<single-use-token>'
-export OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
-export OPSKNIGHT_AGENT_IMAGE='ghcr.io/opsknight-labs/opsknight-agent:2.0.0'
-export OPSKNIGHT_AGENT_URL='https://opsknight.example.com'
-export OPSKNIGHT_AGENT_POLICY_PATH='../../agent/policy.container.json'
-docker compose -p opsknight-agent -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent
-```
+Copy the Compose command from the verified setup UI. It uses both `deploy/compose/docker-compose.agent.yml` and `docker-compose.agent.enrollment-file.yml`, sets `OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH` to a protected file, and pins `OPSKNIGHT_AGENT_IMAGE` to the verified digest. Both the image and `OPSKNIGHT_AGENT_URL` are required. The token file remains required while the Compose Secret references it.
 
 The standalone project has its own network. Internal application service names require an explicitly shared network; use an externally reachable URL by default. Mount the Docker socket only for approved Docker actions. Host Systemd actions should use the native service.
 
@@ -136,17 +138,7 @@ The standalone project has its own network. Internal application service names r
 
 Use the separate Agent chart to connect to an existing OpsKnight installation. It deploys only the Agent, local policy, ServiceAccount and persistent identity storage. Create the namespace before the enrollment Secret:
 
-```sh
-kubectl create namespace opsknight --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n opsknight create secret generic opsknight-agent-enrollment \
-  --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='<single-use-token>' \
-  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
-
-helm upgrade --install opsknight-agent deploy/kubernetes/helm/opsknight-agent \
-  --namespace opsknight --create-namespace \
-  --set-string agent.url='https://opsknight.example.com' \
-  --set agent.enrollmentToken.existingSecret=opsknight-agent-enrollment
-```
+Use the **Helm** command from the verified setup UI. It creates the namespace and the enrollment Secret with `--from-file=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN`, pins `agent.image.repository`/`agent.image.digest`, and sets the confirmed `agent.url`. The standalone chart rejects installation without an explicit image tag or digest. It installs only the Agent; the application Helm chart updates the whole application release.
 
 Pin `agent.image.repository` and `agent.image.digest` to an approved image. The chart requires `agent.url` and grants no Kubernetes API permissions by default. For Kubernetes actions, configure narrow namespaced `agent.rbac.rules`, `agent.kubernetes.enabled` and matching local policy. Apply an environment-specific NetworkPolicy allowing the OpsKnight endpoint and approved targets; the standalone chart does not create one. Preserve the Agent PVC and use a distinct Helm release per Agent. Existing full-stack installations may still use `agent.enabled=true` on the application chart, but that command updates the entire application release.
 
@@ -160,68 +152,53 @@ The existing `profiles/integrated-agent` and `profiles/split-agent` profiles dep
 
 Create an external Raft secret and deploy only the Agent stack. Set `SWARM_NETWORK_NAME` to an existing overlay network:
 
-```sh
-printf '%s' '<single-use-token>' | docker secret create opsknight_agent_enrollment_token -
-export OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
-export OPSKNIGHT_AGENT_IMAGE='ghcr.io/opsknight-labs/opsknight-agent:2.0.0'
-export OPSKNIGHT_AGENT_URL='https://opsknight.example.com'
-export SWARM_NETWORK_NAME=opsknight
-docker stack deploy --with-registry-auth \
-  -c deploy/swarm/docker-stack.agent.yml opsknight-agent
-```
+Use the verified **Swarm** setup command. It creates the external enrollment Secret from a protected file/stdin and requires `OPSKNIGHT_AGENT_NODE_ID`. The Agent is constrained to that node so a local state volume cannot silently become a new identity after rescheduling. Keep the node and its storage available, or explicitly migrate the stopped Agent's durable state before changing placement. A different independent Agent must have a different token and volume.
 
 This starts one Agent with persistent identity storage and does not redeploy the application. Review the policy file referenced by the stack. Keep the external enrollment Secret while the service references it.
 
 ## Native Linux service
 
-OpsKnight provides an automated, self-contained enterprise installer that supports Amazon Linux 2023, Ubuntu 22.04/24.04/26.04, Debian 12/13, RHEL 9/10, Rocky, AlmaLinux, and SLES 15 SP3+ (requires glibc ≥ 2.28; SLES 15 GA-SP2 with glibc 2.26 is unsupported) on both `x86_64` and `arm64/aarch64`. The installer provisions a bundled Node 24 LTS runtime (pinned v24.21.0), eliminating host Node.js and external repository dependencies.
+The installer validates prerequisites for Amazon Linux 2023, Ubuntu 22.04/24.04/26.04, Debian 12/13, RHEL 9/10, Rocky, AlmaLinux, and SLES 15 SP3+ (requires glibc ≥ 2.28; SLES 15 GA-SP2 with glibc 2.26 is unsupported) on both `x86_64` and `arm64/aarch64`. The installer provisions a bundled Node 24 LTS runtime (pinned v24.21.0), eliminating host Node.js and external repository dependencies.
 
 ### Standard Layout & File Permissions
 
-| Directory / File | Ownership | Permissions | Purpose |
-| :--- | :--- | :--- | :--- |
-| `/opt/opsknight-agent/` | `root:root` | `0755` | Standalone binary and bundled Node 24 runtime (`runtime/bin/node`) |
-| `/etc/opsknight-agent/policy.json` | `root:opsknight-agent` | `0644` | Local capability allowlist and action policy |
-| `/etc/opsknight-agent/agent.env` | `root:root` | `0600` | Sensitive enrollment tokens, control plane configuration, and execution keys |
-| `/var/lib/opsknight-agent/` | `opsknight-agent:opsknight-agent` | `0700` | Private identity (`identity.json`), leases, and durable spool |
+| Directory / File                   | Ownership                         | Permissions | Purpose                                                                      |
+| :--------------------------------- | :-------------------------------- | :---------- | :--------------------------------------------------------------------------- |
+| `/opt/opsknight-agent/`            | `root:root`                       | `0755`      | Standalone binary and bundled Node 24 runtime (`runtime/bin/node`)           |
+| `/etc/opsknight-agent/policy.json` | `root:opsknight-agent`            | `0644`      | Local capability allowlist and action policy                                 |
+| `/etc/opsknight-agent/agent.env`   | `root:root`                       | `0600`      | Sensitive enrollment tokens, control plane configuration, and execution keys |
+| `/var/lib/opsknight-agent/`        | `opsknight-agent:opsknight-agent` | `0700`      | Private identity (`identity.json`), leases, and durable spool                |
 
-### One-Command Installation
+### Verified native installation
 
 1. Generate a one-time enrollment token and note the execution signing public key in **Runbooks → Agents → Enroll Agent**.
-2. Run the official installer on your target host (tokens can also be passed via `--token-file` to avoid process table exposure):
-   ```bash
-   sudo ./deploy/agent/install.sh \
-     --url https://opsknight.company.com \
-     --key "<BASE64_EXECUTION_PUBLIC_KEY>" \
-     --token <ONE_TIME_ENROLLMENT_TOKEN>
-   ```
-   For staged signing key rotation, pass the plural key map via `--keys-json` (copy the exact JSON displayed in **Runbooks → Agents → Pinned execution public key**; key IDs are `"default"` and stage UUIDs, not `"active"`/`"next"`):
-   ```bash
-   sudo ./deploy/agent/install.sh \
-     --url https://opsknight.company.com \
-     --keys-json '{"default":"<BASE64_SPKI_KEY>","87ddce2f-34a1-4321-9876-abcdef012345":"<BASE64_NEXT_KEY>"}' \
-     --token <ONE_TIME_ENROLLMENT_TOKEN>
-   ```
- 3. Run diagnostic preflight checks (must run as root to inspect `root:root 0600` `agent.env`):
-   ```bash
-   sudo /opt/opsknight-agent/preflight.sh
-   ```
- 4. Enable and start the systemd service:
-   ```bash
-   sudo systemctl enable --now opsknight-agent
-   sudo systemctl status opsknight-agent
-   ```
+2. Use **Native Linux** only when the setup UI has verified published artifacts for your server. Its command downloads the verified installer, checks SHA-256 and uses `--token-file`; do not put the token in process arguments or shell history. For an internal build, supply a locally built tarball with its independently verified checksum. An internal build is not a published release certification.
+3. Run diagnostic preflight checks (must run as root to inspect `root:root 0600` `agent.env`):
+
+```bash
+sudo /opt/opsknight-agent/preflight.sh
+```
+
+4.  Enable and start the systemd service:
+
+```bash
+sudo systemctl enable --now opsknight-agent
+sudo systemctl status opsknight-agent
+```
 
 ### Transactional Upgrades & Rotation
 
 To upgrade an existing native Agent installation, re-run `install.sh` pointing to the new release or artifact tarball with verified checksum:
+
 ```bash
 sudo ./deploy/agent/install.sh \
   --url https://opsknight.company.com \
   --tarball /path/to/opsknight-agent-linux-x64.tar.gz \
   --checksum "<SHA256_HASH>"
 ```
+
 The installer executes transactionally:
+
 1. Validates the new bundle in an isolated staging directory and enforces SHA256 integrity.
 2. Drains in-flight executions before restarting an active process.
 3. Preserves existing private identity in `/var/lib/opsknight-agent` and local policy in `/etc/opsknight-agent/policy.json`.
@@ -232,6 +209,7 @@ The installer executes transactionally:
 ### Host-Native Container & Kubernetes Privileges
 
 Because `opsknight-agent.service` runs unprivileged under `NoNewPrivileges=true` and `ProtectHome=true`:
+
 - **Systemd Executor**: Grant narrow Polkit authorization rules for the unprivileged `opsknight-agent` user (e.g. in `/etc/polkit-1/rules.d/50-opsknight-agent.rules`), rather than sudoers.
 - **Docker**: Adding `opsknight-agent` to the host `docker` group (`sudo usermod -aG docker opsknight-agent`) grants root-equivalent control over the host. If your security policy prohibits Docker socket access for non-root services, prefer rootless Podman or narrow Polkit rules.
 - **Podman**: Configure rootless Podman socket access or system service connections; do not expose unauthenticated TCP sockets.
@@ -239,15 +217,15 @@ Because `opsknight-agent.service` runs unprivileged under `NoNewPrivileges=true`
 
 ### Troubleshooting Matrix
 
-| Symptom | Likely Cause | Resolution |
-| :--- | :--- | :--- |
-| `pgrep: command not found` | Missing `procps` / `procps-ng` | Run installer or install `procps-ng` (RHEL) / `procps` (Debian). |
-| `EACCES /var/lib/opsknight-agent` | Incorrect permissions on state directory | Verify `chown -R opsknight-agent:opsknight-agent /var/lib/opsknight-agent` and `chmod 0700`. |
-| `Permission denied reading agent.env` | Running preflight without root | Run `sudo /opt/opsknight-agent/preflight.sh` (`agent.env` is mode `0600 root:root`). |
-| `Agent request timestamp is outside allowed window` | Clock drift $>60\text{s}$ | Synchronize system clock via `chrony` (`chronyc tracking`) or `timedatectl`. |
-| `Unsupported architecture` | Host architecture other than `x86_64` or `arm64` | Deploy Agent on supported 64-bit x86 or ARM Graviton architecture. |
-| `Bundled node binary failed to execute` | Incompatible libc (glibc < 2.28) | Deploy on supported OS with glibc ≥ 2.28 (e.g. SLES 15 SP3+, RHEL 9+, AL2023, Ubuntu 22.04+). |
-| `Agent offline after reboot` | Unpersisted state directory or network delay | Verify `/var/lib/opsknight-agent` mounts across reboot; systemd unit waits for `network-online.target` and `time-sync.target`. |
+| Symptom                                             | Likely Cause                                     | Resolution                                                                                                                     |
+| :-------------------------------------------------- | :----------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| `pgrep: command not found`                          | Missing `procps` / `procps-ng`                   | Run installer or install `procps-ng` (RHEL) / `procps` (Debian).                                                               |
+| `EACCES /var/lib/opsknight-agent`                   | Incorrect permissions on state directory         | Verify `chown -R opsknight-agent:opsknight-agent /var/lib/opsknight-agent` and `chmod 0700`.                                   |
+| `Permission denied reading agent.env`               | Running preflight without root                   | Run `sudo /opt/opsknight-agent/preflight.sh` (`agent.env` is mode `0600 root:root`).                                           |
+| `Agent request timestamp is outside allowed window` | Clock drift $>60\text{s}$                        | Synchronize system clock via `chrony` (`chronyc tracking`) or `timedatectl`.                                                   |
+| `Unsupported architecture`                          | Host architecture other than `x86_64` or `arm64` | Deploy Agent on supported 64-bit x86 or ARM Graviton architecture.                                                             |
+| `Bundled node binary failed to execute`             | Incompatible libc (glibc < 2.28)                 | Deploy on supported OS with glibc ≥ 2.28 (e.g. SLES 15 SP3+, RHEL 9+, AL2023, Ubuntu 22.04+).                                  |
+| `Agent offline after reboot`                        | Unpersisted state directory or network delay     | Verify `/var/lib/opsknight-agent` mounts across reboot; systemd unit waits for `network-online.target` and `time-sync.target`. |
 
 ## Monitoring and recovery
 
@@ -273,7 +251,7 @@ Apply the database migrations before updating Web and Runbook Worker replicas. T
 
 The legacy all-job worker now reconciles Runbooks too. For production workload isolation, continue to use the dedicated Runbook lane: a rejected automatic binding is recorded independently and does not prevent other bindings from starting.
 
-Fault-injection tests cover Agent crash/restart during artifact upload, renewal connectivity loss, exact start retries, trigger isolation, frozen suggestions, and signed payload tampering. These tests establish correctness under those failures; they are not fleet load certification. Before sizing a large fleet, measure idle-Agent and reconnect QPS, concurrent Runbook backlog, paging latency, database connections, and artifact WAL/backup growth. Artifacts remain bounded to 1 MiB compressed each in PostgreSQL with retention cleanup; plan storage capacity accordingly.
+Fault-injection tests cover Agent crash/restart during artifact upload, renewal connectivity loss, exact start retries, trigger isolation, frozen suggestions, and signed payload tampering. These tests establish correctness under those failures; they are not fleet load certification. Before sizing a large fleet, measure idle-Agent and reconnect QPS, concurrent Runbook backlog, paging latency, database connections, and artifact WAL/backup growth. Artifacts remain bounded to 10 MiB compressed per artifact and per attempt, with at most 10 artifacts per attempt in PostgreSQL and retention cleanup; plan storage capacity accordingly.
 
 To replace a compromised Agent, revoke it in the UI, remove its identity volume, create a new enrollment, and review its secret grants. Revocation immediately prevents future signed claims. Output artifacts default to 30-day retention; set `RUNBOOK_ARTIFACT_RETENTION_DAYS` (1–3650) on the integrated runtime or dedicated Runbook Worker to match your incident-data retention policy.
 
@@ -296,3 +274,9 @@ pool execution may choose any initial member, with local-host retries pinned to 
 Corrupt spool records are quarantined independently. Dead-letter results keep Agent health
 degraded until reviewed. Dispatch markers expire after two days, beyond the maximum execution
 and signed lease lifetime, rather than reopening replay immediately after acknowledgement.
+
+## Migration and rollback
+
+Apply migrations before rolling out web, scheduler and worker replicas. The new durable heartbeat/policy-check tables are additive. `ServiceAutomationRule` maps to the existing `ServiceRunbookBinding` table, preserving rule IDs and execution/suggestion foreign keys; the old one-workflow-per-service uniqueness constraint is removed. Back up PostgreSQL before upgrading. A schema rollback must not recreate that constraint while independent duplicate rules exist. Prefer a forward fix; if reverting application binaries, pause new rules, reconcile active work, and review duplicate-rule behavior before restarting old replicas. Do not delete history or identity volumes as a rollback procedure.
+
+Before promoting a release, exercise fresh install, enroll, one signed read-only action/result artifact, restart identity preservation, drain, upgrade and rollback in the intended topology. CI source/build tests are not certification of every Linux distribution, external TLS proxy, air-gapped registry, Swarm node loss or production capacity. Record PASS/FAIL/NOT_TESTED evidence for each environment.

@@ -44,7 +44,7 @@ describe('Runbook Lifecycle Architecture Guard', () => {
 
   it('guarantees restore does not silently re-enable bindings and mandates typed confirmation', () => {
     // 1. restoreRunbook must explicitly keep all service bindings disabled
-    expect(files.lifecycle).toMatch(/serviceRunbookBinding\.updateMany\([\s\S]*?enabled:\s*false/);
+    expect(files.lifecycle).toMatch(/serviceAutomationRule\.updateMany\([\s\S]*?enabled:\s*false/);
 
     // 2. restoreRunbookAction must exist in actions.ts
     expect(files.actions).toContain('restoreRunbookAction');

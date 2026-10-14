@@ -69,7 +69,7 @@ app.kubernetes.io/component: {{ .role }}
 {{- if .Values.agent.image.digest -}}
 {{- printf "%s@%s" .Values.agent.image.repository (.Values.agent.image.digest | trimPrefix "@") -}}
 {{- else -}}
-{{- printf "%s:%s" .Values.agent.image.repository .Values.agent.image.tag -}}
+{{- printf "%s:%s" .Values.agent.image.repository (required "Set agent.image.digest or an explicitly tested agent.image.tag" .Values.agent.image.tag) -}}
 {{- end -}}
 {{- end }}
 
