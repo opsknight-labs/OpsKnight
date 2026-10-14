@@ -649,6 +649,16 @@ export async function createApiKey(
     if (!canWrite && requestedScopes.some(isWriteApiScope)) {
       return { error: 'Write scopes require Responder or Admin access.' };
     }
+    const isAdmin = hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE);
+    const adminOnlyScopes = new Set<string>([
+      API_SCOPES.ADMIN_MANAGE,
+      API_SCOPES.SERVICE_ACCOUNTS_READ,
+      API_SCOPES.SERVICE_ACCOUNTS_WRITE,
+      API_SCOPES.RESPONSE_POLICY_WRITE,
+    ]);
+    if (!isAdmin && requestedScopes.some(sc => adminOnlyScopes.has(sc))) {
+      return { error: 'Administrative scopes require Admin access.' };
+    }
     const finalScopes = requestedScopes;
     if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 365) {
       return { error: 'API keys must expire between 1 and 365 days.' };

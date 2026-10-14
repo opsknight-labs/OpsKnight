@@ -209,15 +209,15 @@ export async function DELETE(
       await tx.escalationRuleCondition.deleteMany({ where: { rule: { policyId: id } } });
       await tx.escalationRule.deleteMany({ where: { policyId: id } });
       await tx.escalationPolicy.delete({ where: { id } });
-    });
-
-    await logV2Audit({
-      action: 'escalation_policy.deleted',
-      entityType: 'ESCALATION_POLICY',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: policy.name },
+      await logV2Audit({
+        action: 'escalation_policy.deleted',
+        entityType: 'ESCALATION_POLICY',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { name: policy.name },
+        tx,
+      });
     });
 
     return apiV2Success({ success: true, message: `Escalation policy '${policy.name}' deleted successfully.` }, { headers: rlHeaders });

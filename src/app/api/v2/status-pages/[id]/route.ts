@@ -83,6 +83,20 @@ export async function PATCH(
 
     const validated = StatusPageUpdateV2Schema.parse(body);
 
+    const isDefaultSpecified = validated.isDefault !== undefined;
+    const hasConfigChanges =
+      validated.name !== undefined ||
+      validated.slug !== undefined ||
+      validated.enabled !== undefined;
+
+    if (isDefaultSpecified && hasConfigChanges) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage:
+          'Updating default status page designation and general configuration in a single request is not supported. Please update default status page designation and general configuration attributes separately.',
+      });
+    }
+
     if (existing.isDefault && validated.isDefault === false) {
       throw new AppError({
         code: 'STATUS_PAGE_DEFAULT_REPLACEMENT_REQUIRED',

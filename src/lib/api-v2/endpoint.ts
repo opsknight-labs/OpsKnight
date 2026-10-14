@@ -50,6 +50,7 @@ export type V2RouteConfig<
   querySchema?: z.ZodType<TQuery, any, any>;
   bodySchema?: z.ZodType<TBody, any, any>;
   idempotent?: boolean;
+  idempotencyRequired?: boolean;
   idempotencyScope?: string | ((ctx: { params: TParams; body: TBody }) => string);
   handler: (
     ctx: V2RouteContext<TParams, TQuery, TBody>
@@ -144,6 +145,16 @@ export function defineV2Route<
 
       // 7. Execute Handler (Idempotent vs Non-Idempotent)
       if (config.idempotent) {
+        if (config.idempotencyRequired) {
+          const idempotencyKey = req.headers.get('idempotency-key')?.trim();
+          if (!idempotencyKey) {
+            throw new AppError({
+              code: 'IDEMPOTENCY_KEY_REQUIRED',
+              userMessage: 'The Idempotency-Key header is required for this operation.',
+            });
+          }
+        }
+
         const scope =
           typeof config.idempotencyScope === 'function'
             ? config.idempotencyScope({ params, body })

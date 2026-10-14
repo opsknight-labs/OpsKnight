@@ -175,4 +175,48 @@ describe('defineV2Route Endpoint Factory', () => {
     const res = await route(req);
     expect(res.status).toBe(204);
   });
+
+  it('rejects idempotent operation when idempotencyRequired is true and header is missing', async () => {
+    const handlerSpy = vi.fn();
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
+      idempotent: true,
+      idempotencyRequired: true,
+      handler: handlerSpy,
+    });
+
+    const req = new NextRequest('http://localhost:3000/api/v2/runbooks/rb_1/execute', {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-token' },
+    });
+
+    const res = await route(req);
+    expect(res.status).toBe(400);
+    expect(handlerSpy).not.toHaveBeenCalled();
+
+    const problem = await res.json();
+    expect(problem.code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+  });
+
+  it('accepts idempotent operation when idempotencyRequired is true and header is provided', async () => {
+    const handlerSpy = vi.fn().mockResolvedValue({ status: 202, data: { executionId: 'exec_1' } });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
+      idempotent: true,
+      idempotencyRequired: true,
+      handler: handlerSpy,
+    });
+
+    const req = new NextRequest('http://localhost:3000/api/v2/runbooks/rb_1/execute', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer admin-token',
+        'idempotency-key': 'idem-test-123',
+      },
+    });
+
+    const res = await route(req);
+    expect(res.status).toBe(202);
+    expect(handlerSpy).toHaveBeenCalled();
+  });
 });

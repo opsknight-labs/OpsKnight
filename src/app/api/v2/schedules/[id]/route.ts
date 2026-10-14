@@ -161,15 +161,15 @@ export async function DELETE(
       await tx.onCallLayerUser.deleteMany({ where: { layer: { scheduleId: id } } });
       await tx.onCallLayer.deleteMany({ where: { scheduleId: id } });
       await tx.onCallSchedule.delete({ where: { id } });
-    });
-
-    await logV2Audit({
-      action: 'schedule.deleted',
-      entityType: 'SCHEDULE',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: schedule.name },
+      await logV2Audit({
+        action: 'schedule.deleted',
+        entityType: 'SCHEDULE',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { name: schedule.name },
+        tx,
+      });
     });
 
     return apiV2Success({ success: true, message: `Schedule '${schedule.name}' deleted successfully.` }, { headers: rlHeaders });

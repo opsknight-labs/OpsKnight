@@ -229,15 +229,17 @@ export async function DELETE(
       });
     }
 
-    await prisma.service.delete({ where: { id } });
-
-    await logV2Audit({
-      action: 'service.deleted',
-      entityType: 'SERVICE',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: service.name, teamId: service.teamId },
+    await prisma.$transaction(async tx => {
+      await tx.service.delete({ where: { id } });
+      await logV2Audit({
+        action: 'service.deleted',
+        entityType: 'SERVICE',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { name: service.name, teamId: service.teamId },
+        tx,
+      });
     });
 
     return apiV2Success({ success: true, message: `Service '${service.name}' deleted successfully.` }, { headers: rlHeaders });

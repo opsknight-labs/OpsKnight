@@ -379,10 +379,12 @@ const SCOPES_CONFIG = [
 export default function ApiKeysPanel({
   keys,
   canCreateWriteKeys,
+  isAdmin = false,
   appUrl,
 }: {
   keys: ApiKey[];
   canCreateWriteKeys: boolean;
+  isAdmin?: boolean;
   appUrl?: string;
 }) {
   const [state, formAction] = useActionState<State, FormData>(createApiKey, {
@@ -410,14 +412,19 @@ export default function ApiKeysPanel({
     : SCOPES_CONFIG.filter(scope => !scope.write);
 
   const [selectedKeyScopes, setSelectedKeyScopes] = useState<Set<string>>(
-    new Set(['events:write', 'incidents:read'])
+    canCreateWriteKeys
+      ? new Set(['events:write', 'incidents:read'])
+      : new Set(['incidents:read'])
   );
 
   const applyKeyPreset = (type: 'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'CLEAR') => {
     if (type === 'CLEAR') {
       setSelectedKeyScopes(new Set());
     } else if (type === 'ADMIN') {
-      setSelectedKeyScopes(new Set(visibleScopes.map(s => s.value)));
+      const allowedScopes = isAdmin
+        ? visibleScopes
+        : visibleScopes.filter(s => s.category !== 'Administration');
+      setSelectedKeyScopes(new Set(allowedScopes.map(s => s.value)));
     } else if (type === 'RESPONDER') {
       setSelectedKeyScopes(
         new Set(
@@ -1014,7 +1021,7 @@ print(response.json()["incidents"])`}
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {canCreateWriteKeys && (
+                  {isAdmin && (
                     <Button
                       type="button"
                       variant="outline"

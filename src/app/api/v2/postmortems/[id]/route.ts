@@ -95,58 +95,63 @@ export const PATCH = defineV2Route<{ id: string }>({
       publishedAt = null;
     }
 
-    const updated = await prisma.postmortem.update({
-      where: { id: existing.id },
-      data: {
-        ...(body.title !== undefined ? { title: body.title } : {}),
-        ...(body.summary !== undefined ? { summary: body.summary } : {}),
-        ...(body.rootCause !== undefined ? { rootCause: body.rootCause } : {}),
-        ...(body.resolution !== undefined
-          ? { resolution: body.resolution }
-          : body.mitigation !== undefined
-            ? { resolution: body.mitigation }
-            : {}),
-        ...(body.lessons !== undefined ? { lessons: body.lessons } : {}),
-        ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
-        ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
-      },
-      select: {
-        id: true,
-        incidentId: true,
-        title: true,
-        summary: true,
-        rootCause: true,
-        resolution: true,
-        lessons: true,
-        status: true,
-        isPublic: true,
-        publishedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        incident: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
+    const updated = await prisma.$transaction(async tx => {
+      const rec = await tx.postmortem.update({
+        where: { id: existing.id },
+        data: {
+          ...(body.title !== undefined ? { title: body.title } : {}),
+          ...(body.summary !== undefined ? { summary: body.summary } : {}),
+          ...(body.rootCause !== undefined ? { rootCause: body.rootCause } : {}),
+          ...(body.resolution !== undefined
+            ? { resolution: body.resolution }
+            : body.mitigation !== undefined
+              ? { resolution: body.mitigation }
+              : {}),
+          ...(body.lessons !== undefined ? { lessons: body.lessons } : {}),
+          ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
+          ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
+        },
+        select: {
+          id: true,
+          incidentId: true,
+          title: true,
+          summary: true,
+          rootCause: true,
+          resolution: true,
+          lessons: true,
+          status: true,
+          isPublic: true,
+          publishedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          incident: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
+      });
 
-    await logV2Audit({
-      action: 'postmortem.updated',
-      entityType: 'INCIDENT',
-      entityId: updated.incidentId,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { changes: Object.keys(body), postmortemId: updated.id },
+      await logV2Audit({
+        action: 'postmortem.updated',
+        entityType: 'INCIDENT',
+        entityId: rec.incidentId,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { changes: Object.keys(body), postmortemId: rec.id },
+        tx,
+      });
+
+      return rec;
     });
 
     return { data: updated };
@@ -175,17 +180,20 @@ export const DELETE = defineV2Route<{ id: string }>({
       });
     }
 
-    await prisma.postmortem.delete({
-      where: { id: existing.id },
-    });
+    await prisma.$transaction(async tx => {
+      await tx.postmortem.delete({
+        where: { id: existing.id },
+      });
 
-    await logV2Audit({
-      action: 'postmortem.deleted',
-      entityType: 'INCIDENT',
-      entityId: existing.incidentId,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { postmortemId: existing.id },
+      await logV2Audit({
+        action: 'postmortem.deleted',
+        entityType: 'INCIDENT',
+        entityId: existing.incidentId,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { postmortemId: existing.id },
+        tx,
+      });
     });
 
     return { status: 204 };

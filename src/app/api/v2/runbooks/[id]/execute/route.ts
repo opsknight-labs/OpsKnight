@@ -16,6 +16,7 @@ export const POST = defineV2Route<{ id: string }, any, z.infer<typeof RunbookExe
   action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
   bodySchema: RunbookExecuteV2Schema,
   idempotent: true,
+  idempotencyRequired: true,
   idempotencyScope: ({ params, body }) =>
     `runbook:execute:${params.id}:${body.incidentId ?? 'global'}`,
   handler: async ({ params, body, actor, apiKey, tx }) => {

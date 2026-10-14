@@ -153,15 +153,15 @@ export async function DELETE(
     await prisma.$transaction(async tx => {
       await tx.teamMember.deleteMany({ where: { teamId: id } });
       await tx.team.delete({ where: { id } });
-    });
-
-    await logV2Audit({
-      action: 'team.deleted',
-      entityType: 'TEAM',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { name: team.name },
+      await logV2Audit({
+        action: 'team.deleted',
+        entityType: 'TEAM',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: { name: team.name },
+        tx,
+      });
     });
 
     return apiV2Success({ success: true, message: `Team '${team.name}' deleted successfully.` }, { headers: rlHeaders });

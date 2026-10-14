@@ -85,10 +85,11 @@ function generateSampleFromSchema(schema: any): any {
       } else if (prop.format === 'date-time') {
         result[key] = '2026-10-14T12:00:00Z';
       } else if (prop.type === 'string') {
+        const lowerKey = key.toLowerCase();
         if (key === 'title') result[key] = 'High Latency on Payment Gateway';
         else if (key === 'name') result[key] = 'Production Service';
         else if (key === 'description') result[key] = 'Core transactional checkout service';
-        else if (key === 'content' || key === 'note') result[key] = 'Traffic diverted to backup cluster.';
+        else if (key === 'content' || key === 'note' || key === 'message') result[key] = 'Traffic diverted to backup cluster.';
         else if (key === 'resolutionNote') result[key] = 'Mitigated by scaling pod replicas.';
         else if (key === 'serviceId') result[key] = 'srv_123456';
         else if (key === 'teamId') result[key] = 'team_sre';
@@ -97,6 +98,12 @@ function generateSampleFromSchema(schema: any): any {
         else if (key === 'slug') result[key] = 'production-status';
         else if (key === 'timeZone') result[key] = 'UTC';
         else if (key === 'incidentId') result[key] = 'inc_123456';
+        else if (key === 'email' || lowerKey.includes('email')) result[key] = 'operator@opsknight.local';
+        else if (key === 'urgency') result[key] = 'HIGH';
+        else if (key === 'severity') result[key] = 'CRITICAL';
+        else if (key === 'status') result[key] = 'INVESTIGATING';
+        else if (lowerKey.endsWith('url')) result[key] = 'https://hooks.opsknight.local/webhook';
+        else if (lowerKey.endsWith('id')) result[key] = `${lowerKey.replace('id', '') || 'res'}_123456`;
         else result[key] = 'sample_value';
       } else if (prop.type === 'integer' || prop.type === 'number') {
         result[key] = 1;
@@ -104,7 +111,15 @@ function generateSampleFromSchema(schema: any): any {
         result[key] = true;
       } else if (prop.type === 'array') {
         if (prop.items?.type === 'string') {
-          result[key] = ['events:write', 'incidents:read'];
+          if (key === 'scopes') {
+            result[key] = ['events:write', 'incidents:read'];
+          } else if (key === 'tags') {
+            result[key] = ['production', 'p1'];
+          } else if (key.toLowerCase().endsWith('ids')) {
+            result[key] = ['id_sample_1'];
+          } else {
+            result[key] = ['sample_item'];
+          }
         } else if (prop.items?.type === 'object') {
           result[key] = [generateSampleFromSchema(prop.items)];
         } else {
@@ -456,6 +471,7 @@ export default async function ApiKeysSettingsPage() {
             canCreateWriteKeys={
               user ? hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE) : false
             }
+            isAdmin={isAdmin}
             appUrl={appUrl}
           />
         </TabsContent>

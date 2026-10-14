@@ -203,6 +203,14 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  IDEMPOTENCY_KEY_REQUIRED: {
+    status: 400,
+    category: 'validation',
+    userMessage: 'The Idempotency-Key header is required for this operation.',
+    action: 'Provide a valid Idempotency-Key header in the request.',
+    retryable: false,
+    exposure: 'public',
+  },
   IDEMPOTENCY_KEY_CONFLICT: {
     status: 409,
     category: 'conflict',
