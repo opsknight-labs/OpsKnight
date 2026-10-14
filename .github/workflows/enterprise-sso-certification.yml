@@ -17,6 +17,9 @@ on:
       - 'prisma/**'
       - 'tests/integration/*authentication*'
       - 'tests/integration/sso-upgrade*'
+      - 'tests/integration/emergency-password-database.test.ts'
+      - 'tests/integration/provider-feedback-isolation-database.test.ts'
+      - '.github/workflows/tests.yml'
       - 'scripts/certify-sso-upgrade.cjs'
       - '.github/workflows/enterprise-sso-certification.yml'
   workflow_dispatch:
