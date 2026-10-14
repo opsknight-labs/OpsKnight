@@ -16,6 +16,7 @@ type MetricsSnapshot = {
   }> | null;
   incidentCount: number | null;
   activeUsers: number | null;
+  providerFeedback: { pending: number; retried: number; quarantined: number } | null;
   notificationBacklog: { count: number; oldestAt: Date | null } | null;
   escalationBacklog: { count: number; oldestDueAt: Date | null } | null;
   rollupUpdatedAt: Date | null | undefined;
@@ -104,6 +105,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       runbookArtifactStorage,
       runbookOldestPending,
       runbookCircuitsOpen,
+      providerFeedback,
     ] = await Promise.allSettled([
       collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
         prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
@@ -237,6 +239,21 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           ) circuits
         `
       ),
+      collectWithTimeout('provider-feedback', DB_COLLECTOR_TIMEOUT_MS, async () => {
+        const rows = await prisma.$queryRaw<
+          Array<{ pending: bigint; retried: bigint; quarantined: bigint }>
+        >`
+          SELECT COUNT(*) FILTER (WHERE "quarantinedAt" IS NULL)::bigint AS pending,
+            COUNT(*) FILTER (WHERE "quarantinedAt" IS NULL AND "reconciliationAttempts" > 0)::bigint AS retried,
+            COUNT(*) FILTER (WHERE "quarantinedAt" IS NOT NULL)::bigint AS quarantined
+          FROM "NotificationProviderFeedback" WHERE "processedAt" IS NULL`;
+        const row = rows[0];
+        return {
+          pending: Number(row?.pending ?? 0),
+          retried: Number(row?.retried ?? 0),
+          quarantined: Number(row?.quarantined ?? 0),
+        };
+      }),
       collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
         const { collectIncidentCollaborationMetricsFromDB } =
           await import('@/lib/incident-collaboration/meeting-metrics');
@@ -306,9 +323,11 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         runbookCircuitsOpen.status === 'fulfilled'
           ? Number(runbookCircuitsOpen.value[0]?.count ?? 0)
           : null,
+      providerFeedback: providerFeedback.status === 'fulfilled' ? providerFeedback.value : null,
       collectedAt: Date.now(),
     };
     const degraded =
+      value.providerFeedback === null ||
       value.jobStats === null ||
       value.jobTypeStats === null ||
       value.incidentCount === null ||
@@ -392,6 +411,11 @@ async function getMetrics(req: Request) {
   }
   const ageSeconds = (date: Date | null) =>
     date ? Math.max(0, (Date.now() - date.getTime()) / 1000) : 0;
+  if (snapshot.providerFeedback) {
+    metrics.set('opsknight_provider_feedback_pending', snapshot.providerFeedback.pending);
+    metrics.set('opsknight_provider_feedback_retried', snapshot.providerFeedback.retried);
+    metrics.set('opsknight_provider_feedback_quarantined', snapshot.providerFeedback.quarantined);
+  }
   if (snapshot.notificationBacklog) {
     metrics.set('opsknight_notifications_undelivered', snapshot.notificationBacklog.count);
     metrics.set(
@@ -481,6 +505,7 @@ async function getMetrics(req: Request) {
     Number(snapshot.activeUsers === null) +
     Number(snapshot.jobStats === null) +
     Number(snapshot.jobTypeStats === null) +
+    Number(snapshot.providerFeedback === null) +
     Number(snapshot.notificationBacklog === null) +
     Number(snapshot.escalationBacklog === null) +
     Number(snapshot.rollupUpdatedAt === undefined) +

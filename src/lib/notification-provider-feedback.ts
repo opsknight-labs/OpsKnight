@@ -57,19 +57,6 @@ async function reconcileFeedback(id: string, now = new Date()) {
       AND "processedAt" IS NULL AND "quarantinedAt" IS NULL FOR UPDATE SKIP LOCKED`;
       if (!locked.length) return { processed: false, reason: 'duplicate' as const };
       const stored = await tx.notificationProviderFeedback.findUniqueOrThrow({ where: { id } });
-      if (
-        stored.reconciliationAttempts >= MAX_RECONCILIATION_ATTEMPTS ||
-        now.getTime() - stored.createdAt.getTime() >= MAX_RECEIPT_AGE_MS
-      ) {
-        await tx.notificationProviderFeedback.update({
-          where: { id },
-          data: {
-            quarantinedAt: now,
-            reconciliationReason: 'RECONCILIATION_EXHAUSTED',
-          },
-        });
-        return { processed: false, reason: 'quarantined' as const };
-      }
       await tx.notificationProviderFeedback.update({
         where: { id },
         data: {
@@ -138,10 +125,12 @@ async function reconcileFeedback(id: string, now = new Date()) {
           where: { id },
           data: {
             nextReconcileAt: new Date(
-              now.getTime() + Math.min(60_000 * 2 ** stored.reconciliationAttempts, 60 * 60_000)
+              now.getTime() +
+                Math.min(60_000 * 2 ** Math.min(stored.reconciliationAttempts, 12), 60 * 60_000)
             ),
             reconciliationReason: 'UNMATCHED_PROVIDER_MESSAGE',
-            ...(stored.reconciliationAttempts + 1 >= MAX_RECONCILIATION_ATTEMPTS
+            ...(stored.reconciliationAttempts + 1 >= MAX_RECONCILIATION_ATTEMPTS ||
+            now.getTime() - stored.createdAt.getTime() >= MAX_RECEIPT_AGE_MS
               ? { quarantinedAt: now }
               : {}),
           },
@@ -346,10 +335,6 @@ async function safelyReconcileFeedback(id: string, now = new Date()) {
               nextReconcileAt: new Date(
                 now.getTime() + Math.min(60_000 * 2 ** Math.min(attempts, 12), 60 * 60_000)
               ),
-              ...(attempts >= MAX_RECONCILIATION_ATTEMPTS ||
-              now.getTime() - row.createdAt.getTime() >= MAX_RECEIPT_AGE_MS
-                ? { quarantinedAt: now }
-                : {}),
             },
           });
         },

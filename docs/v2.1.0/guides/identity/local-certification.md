@@ -351,8 +351,14 @@ their configured idle polling interval.
 
 Missing subscription records and invalid stored event types enter terminal quarantine.
 Unmatched provider/message pairs and transient reconciliation errors use exponential
-backoff capped at one hour. A receipt is quarantined after 12 reconciliation attempts
-or when it reaches 24 hours of age at reconciliation. Quarantined events retain their
+backoff capped at one hour. The worker attempts provider-matched reconciliation before considering receipt age or
+search exhaustion. Only an unmatched provider/message pair is quarantined after twelve
+attempts or 24 hours of age at reconciliation. A valid matched receipt can complete
+after a 48-hour worker outage or more than twelve infrastructure failures. Infrastructure
+errors remain retryable with backoff capped at one hour; they do not permanently
+quarantine recoverable receipts. Invalid event types and deleted recipients remain terminal.
+An additive upgrade repair releases legacy infrastructure quarantines and matched
+receipts incorrectly quarantined by the previous age rule. Quarantined events retain their
 provider/event IDs, occurrence time, attempt count and classification for investigation;
 they are excluded from automatic replay. Processed and quarantined evidence is retained
 for 90 days and cleaned in indexed batches of at most 100 records per terminal state.
@@ -374,3 +380,14 @@ retry-state persistence too; the durably ingested event completes after storage 
 Deleted-subscriber soft bounces are quarantined while real queued critical notifications
 drain. These checks use mocked provider sends/admission with real PostgreSQL queue
 claims, transactions, receipt updates and fan-out counters.
+
+The authenticated `/api/metrics` endpoint exposes the cluster snapshot gauges
+`opsknight_provider_feedback_pending`, `opsknight_provider_feedback_retried` and
+`opsknight_provider_feedback_quarantined`. Retried is a subset of pending. These have
+no provider, event-ID or recipient labels. Their database collection uses the existing
+cached, bounded metrics collector; collection failures omit the receipt gauges and
+increment the metrics collection-error signal rather than reporting false zeroes.
+Alert on sustained retry backlog or new quarantined records and investigate the stored
+classification. The upgrade regression applies quarantine repair twice and verifies
+that delivery and bounce receipts from a 48-hour outage update transport and linked-alert
+state using their original occurrence timestamps.

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
+import { readFileSync } from 'node:fs';
 import { encrypt } from '@/lib/encryption';
 import {
   ingestNotificationProviderFeedback,
@@ -225,7 +226,7 @@ suite('provider receipt isolation against PostgreSQL', () => {
       const dead = await prisma.notificationProviderFeedback.findUniqueOrThrow({
         where: { id: failed.id },
       });
-      expect(dead.quarantinedAt).not.toBeNull();
+      expect(dead.quarantinedAt).toBeNull();
       expect(dead.reconciliationAttempts).toBe(12);
     } finally {
       await prisma.$executeRawUnsafe(
@@ -233,7 +234,83 @@ suite('provider receipt isolation against PostgreSQL', () => {
       );
       await prisma.$executeRawUnsafe('DROP FUNCTION feedback_isolation_failure()');
     }
+    await reconcileNotificationProviderFeedback(intent.id);
+    const recovered = await prisma.notificationProviderFeedback.findUniqueOrThrow({
+      where: { provider_providerEventId: { provider: 'fixture', providerEventId: key } },
+    });
+    expect(recovered.processedAt).not.toBeNull();
+    expect(recovered.quarantinedAt).toBeNull();
   });
+  it.each(['DELIVERED', 'HARD_BOUNCE'] as const)(
+    'recovers a provider-matched %s receipt after a 48-hour outage and exhausted infrastructure attempts',
+    async type => {
+      const key = `${prefix}-outage-${type}`;
+      const old = new Date(Date.now() - 48 * 60 * 60_000);
+      const notification = await prisma.notification.create({
+        data: {
+          channel: 'EMAIL',
+          status: 'SENT',
+          category: 'SECURITY',
+          recipientId: key,
+          recipientHash: key,
+          sourceId: key,
+          sourceType: 'AUTHENTICATION',
+          templateKey: 'authentication-security-alert',
+          providerMessageId: key,
+          deliveryProvider: 'fixture',
+        },
+      });
+      const alert = await prisma.authenticationAlert.create({
+        data: {
+          eventId: key,
+          recipientId: key,
+          title: 'Fixture',
+          message: 'Fixture',
+          notificationId: notification.id,
+          acceptedAt: old,
+        },
+      });
+      const receipt = await prisma.notificationProviderFeedback.create({
+        data: {
+          provider: 'fixture',
+          providerEventId: key,
+          providerMessageId: key,
+          eventType: type,
+          occurredAt: old,
+          createdAt: old,
+          reconciliationAttempts: 20,
+          reconciliationReason:
+            type === 'DELIVERED' ? 'UNMATCHED_PROVIDER_MESSAGE' : 'RECONCILIATION_ERROR',
+          quarantinedAt: old,
+        },
+      });
+      try {
+        const migration = readFileSync(
+          'prisma/migrations/20261014180000_restore_transient_provider_feedback/migration.sql',
+          'utf8'
+        );
+        // The same additive repair works on already-quarantined legacy data and repeats safely.
+        await prisma.$executeRawUnsafe(migration);
+        await prisma.$executeRawUnsafe(migration);
+        await reconcileNotificationProviderFeedback();
+        const result = await prisma.notificationProviderFeedback.findUniqueOrThrow({
+          where: { id: receipt.id },
+        });
+        expect(result.quarantinedAt).toBeNull();
+        expect(result.processedAt).not.toBeNull();
+        const transport = await prisma.notification.findUniqueOrThrow({
+          where: { id: notification.id },
+        });
+        const linked = await prisma.authenticationAlert.findUniqueOrThrow({
+          where: { id: alert.id },
+        });
+        expect(transport.status).toBe(type === 'DELIVERED' ? 'DELIVERED' : 'FAILED');
+        expect(type === 'DELIVERED' ? linked.deliveredAt : linked.failedAt).toEqual(old);
+      } finally {
+        await prisma.authenticationAlert.delete({ where: { id: alert.id } });
+      }
+    }
+  );
   it('defers a lock-contended receipt while critical delivery progresses and reconciles after release', async () => {
     const key = `${prefix}-locked`;
     const notification = await prisma.notification.create({

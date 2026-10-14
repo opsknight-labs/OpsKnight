@@ -743,3 +743,34 @@ tests across four suites after all 206 migrations, and 35 focused unit regressio
 Type checking and modified-file lint passed with zero errors/warnings; the optimized
 production build passed. Existing SSO, UI and live tenant/key/HA acceptance scope are
 unchanged. Local certification cannot replace the external acceptance gates.
+
+### Long-outage receipt recovery and operational visibility — 2026-10-14
+
+The follow-up review of `edcf401` is archived in
+`enterprise-sso-2.1-outage-recovery-audit.md`. It exposed an overly broad age/attempt
+cutoff. Valid provider-matched receipts now reconcile before unmatched-record limits
+are considered, preserving delivery and terminal-bounce evidence after a 48-hour outage.
+Infrastructure exceptions are retryable with capped backoff and bounded per-pass work;
+only known invalid data/targets or exhausted unmatched searches enter quarantine.
+A new additive migration releases previously quarantined infrastructure receipts and
+provider-matched receipts incorrectly exhausted under the preceding implementation.
+Existing permanent invalid-target/type quarantines remain terminal.
+
+Added two real PostgreSQL outage/upgrade cases, applying quarantine repair twice and
+checking original receipt timestamps on transport and linked authentication alerts.
+The failure-injection case now proves that twelve infrastructure failures do not lose
+a valid receipt and that it completes when the database trigger is removed.
+Three unlabeled Prometheus cluster gauges expose pending, retried and quarantined
+receipt counts through the existing authenticated, cached, bounded metrics collector.
+Collector failures omit these gauges and contribute to collection-error reporting;
+unit checks cover counts, label privacy and failure behavior.
+
+Final checks are completed before push. Live tenants, physical keys, real provider
+adapters and production HA acceptance remain explicitly outside local certification.
+
+Local final evidence: all 97 PostgreSQL tests passed across four suites after all 207
+migrations; all eight receipt isolation/recovery tests passed again with final assertions.
+The full unit run passed 5,769 tests (four intentional skips), followed by 47 passing
+focused metrics/notification unit checks after final failure-reporting assertions.
+Strict types, modified-file lint and the optimized production build passed. The prior
+`edcf401` commit's complete nine-check hosted matrix also completed successfully.

@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-10-14T12:14:16.486Z",
+  "measuredAt": "2026-10-14T12:29:55.998Z",
   "scope": "Isolated PostgreSQL and signed local WebAuthn fixtures. No live IdP, physical keys or email provider.",
   "recoveryAvailability": {
     "distributedUnknownAccountFailures": 400,
@@ -8,26 +8,26 @@
     "saturatedAccountBudgetDidNotBlockCompletion": true,
     "authenticatedReauthenticationReserved": true,
     "verificationReserveBoundedToThreeAttempts": true,
-    "durationMs": 1048.157083
+    "durationMs": 9978.359791
   },
   "alertFanout": {
     "activeAdministrators": 1201,
     "synchronousRecipients": 100,
-    "transactionMs": 21.838916000000154,
+    "transactionMs": 261.6845830000002,
     "finalRecipients": 1201,
     "duplicateInAppAlerts": 0,
     "concurrentWorkers": 2,
-    "totalDurationMs": 266.94820800000025
+    "totalDurationMs": 1639.9617910000015
   },
   "throttledAbuse": {
-    "requests": 32940,
+    "requests": 3000,
     "concurrency": 30,
-    "sustainedLoadMs": 30016.481583999997,
+    "sustainedLoadMs": 55554.097667,
     "sources": 4,
-    "aggregateCount": 32940,
+    "aggregateCount": 3000,
     "durableEvents": 3,
     "durableAuditRows": 3,
-    "durationMs": 30122.457292000003
+    "durationMs": 57721.026291
   },
   "fanoutCrashRecovery": {
     "actualDatabaseConnectionTerminated": true,

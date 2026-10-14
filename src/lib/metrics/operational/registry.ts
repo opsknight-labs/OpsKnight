@@ -28,6 +28,14 @@ const FORBIDDEN_LABELS = new Set([
 ]);
 
 export const OPERATIONAL_METRICS = [
+  ...(['pending', 'retried', 'quarantined'] as const).map(state => ({
+    name: `opsknight_provider_feedback_${state}` as const,
+    help: `Provider feedback receipts ${state}; retried is a subset of pending`,
+    kind: 'gauge' as const,
+    labels: [],
+    scope: 'cluster_snapshot' as const,
+    estimatedMaxSeries: 1,
+  })),
   {
     name: 'opsknight_chatops_invokes_total',
     help: 'Authenticated ChatOps invokes by provider, verb, and outcome',

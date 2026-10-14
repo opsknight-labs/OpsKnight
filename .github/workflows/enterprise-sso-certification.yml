@@ -57,7 +57,7 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
       - name: Authentication and provider unit regressions
-        run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication-console-race.test.tsx tests/components/authentication-diagnostics-delivery.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts
+        run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication-console-race.test.tsx tests/components/authentication-diagnostics-delivery.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/lib/metrics-domain.test.ts
       - name: Apply additive migrations
         run: npx prisma migrate deploy
       - name: Signed OIDC, WebAuthn, abuse availability and notification fan-out
