@@ -6,6 +6,14 @@ import { authCache, rateLimitMemoryCache } from '@/lib/api-v2/cache';
 import { authenticateV2Request } from '@/lib/api-v2/auth';
 import { hashTokenV2 } from '@/lib/api-keys';
 
+const request = (token: string, ip?: string) =>
+  new NextRequest('http://localhost:3000/api/v2/incidents', {
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(ip ? { 'x-forwarded-for': ip } : {}),
+    },
+  });
+
 describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -197,44 +205,85 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
     expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(2);
   });
 
-  it('throttles invalid modern-format API key floods at failed auth limit (60) before querying database', async () => {
+  it('keeps verifying tokens from an IP over its failed-auth budget, so a valid client behind the same NAT still works', async () => {
+    const clientIp = '198.51.100.77';
     vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
 
-    const clientIp = '198.51.100.77';
-
-    // Send 60 distinct invalid modern-format tokens from same IP
     for (let i = 0; i < 60; i++) {
-      const modernToken = `ok_live_randomtoken_${i}_${'z'.repeat(20)}`;
-      const req = new NextRequest('http://localhost:3000/api/v2/incidents', {
-        headers: {
-          authorization: `Bearer ${modernToken}`,
-          'x-forwarded-for': clientIp,
-        },
-      });
+      await expect(
+        authenticateV2Request(
+          new NextRequest('http://localhost:3000/api/v2/incidents', {
+            headers: {
+              authorization: `Bearer ok_live_randomtoken_${i}_${'z'.repeat(20)}`,
+              'x-forwarded-for': clientIp,
+            },
+          })
+        )
+      ).rejects.toThrow('The provided API key or service account token is invalid');
+    }
+    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(60);
 
-      await expect(authenticateV2Request(req)).rejects.toThrow(
-        'The provided API key or service account token is invalid'
-      );
+    // The budget is spent, yet a valid credential from the same address authenticates.
+    const validToken = `ok_live_${'v'.repeat(30)}`;
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValueOnce({
+      id: 'key_nat_1',
+      name: 'CI behind NAT',
+      prefix: validToken.slice(0, 12),
+      tokenHash: hashTokenV2(validToken),
+      scopes: ['incidents:read'],
+      userId: 'usr_nat',
+      lastUsedAt: new Date(),
+      user: {
+        id: 'usr_nat',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        department: null,
+        jobTitle: null,
+        email: 'ci@opsknight.local',
+        teamMemberships: [],
+      },
+    } as any);
+    const context = await authenticateV2Request(
+      new NextRequest('http://localhost:3000/api/v2/incidents', {
+        headers: { authorization: `Bearer ${validToken}`, 'x-forwarded-for': clientIp },
+      })
+    );
+    expect(context.apiKey.id).toBe('key_nat_1');
+  });
+
+  it('bounds concurrent verification from an over-budget IP and reports Retry-After', async () => {
+    const clientIp = '198.51.100.78';
+    const { OVER_BUDGET_IP_CONCURRENCY: max } = await import('@/lib/api-v2/rate-limit');
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+    for (let i = 0; i < 60; i++) {
+      await authenticateV2Request(
+        request(`ok_live_warm_${i}_${'w'.repeat(24)}`, clientIp)
+      ).catch(() => undefined);
     }
 
-    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(60);
+    const gates: Array<() => void> = [];
+    vi.mocked(prisma.apiKey.findFirst).mockImplementation(
+      () => new Promise(resolve => gates.push(() => resolve(null))) as any
+    );
+    const inFlight = Array.from({ length: max }, (_, i) =>
+      authenticateV2Request(request(`ok_live_busy_${i}_${'b'.repeat(24)}`, clientIp)).catch(e => e)
+    );
+    await vi.waitFor(() => expect(gates.length).toBe(max));
 
-    // 61st invalid request from same IP must be rejected by failed-auth admission limit WITHOUT querying database
-    const token61 = `ok_live_randomtoken_61_${'z'.repeat(20)}`;
-    const req61 = new NextRequest('http://localhost:3000/api/v2/incidents', {
-      headers: {
-        authorization: `Bearer ${token61}`,
-        'x-forwarded-for': clientIp,
-      },
-    });
+    const shed = await authenticateV2Request(
+      request(`ok_live_extra_${'e'.repeat(24)}`, clientIp)
+    ).catch(e => e);
+    expect(shed).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED', status: 429 });
+    expect(shed.details.retryAfter).toBeGreaterThanOrEqual(1);
 
-    await expect(authenticateV2Request(req61)).rejects.toMatchObject({
-      code: 'RATE_LIMIT_EXCEEDED',
-      status: 429,
-    });
-
-    // DB was NOT touched for 61st request
-    expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(60);
+    // Another address is unaffected while this one is saturated.
+    const otherIp = authenticateV2Request(request(`ok_live_other_${'o'.repeat(24)}`, '198.51.100.79')).catch(
+      e => e
+    );
+    await vi.waitFor(() => expect(gates.length).toBe(max + 1));
+    gates.forEach(release => release());
+    expect((await otherIp).code).toBe('API_KEY_INVALID');
+    await Promise.all(inFlight);
   });
 
   it('does not group unidentifiable 0.0.0.0 clients into a shared restrictive rate-limit bucket', async () => {
@@ -260,15 +309,7 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
   });
 
   describe('distributed and unidentified-client protections', () => {
-    const request = (token: string, ip?: string) =>
-      new NextRequest('http://localhost:3000/api/v2/incidents', {
-        headers: {
-          authorization: `Bearer ${token}`,
-          ...(ip ? { 'x-forwarded-for': ip } : {}),
-        },
-      });
-
-    it('learns the shared PostgreSQL failed-auth count, so failures spread over replicas still block', async () => {
+    it('learns the shared PostgreSQL failed-auth count, so failures spread over replicas still put the IP over budget', async () => {
       vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
       // Other replicas already recorded 59 failures for this IP in the shared counter.
       vi.mocked(prisma.rateLimit.upsert).mockResolvedValue({ count: 60 } as any);
@@ -277,13 +318,14 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
         authenticateV2Request(request(`ok_live_${'a'.repeat(30)}`, '198.51.100.150'))
       ).rejects.toMatchObject({ code: 'API_KEY_INVALID' });
 
-      // This replica saw one local failure, yet the shared count now blocks the next lookup.
-      const blocked = await authenticateV2Request(
-        request(`ok_live_${'b'.repeat(30)}`, '198.51.100.150')
-      ).catch(error => error);
-      expect(blocked).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED', status: 429 });
-      expect(blocked.details.retryAfter).toBeGreaterThanOrEqual(1);
-      expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(1);
+      // Over budget now: the IP is concurrency-bounded, and stops writing the shared counter.
+      const { isFailedAuthAdmissionBlocked } = await import('@/lib/api-v2/rate-limit');
+      expect(await isFailedAuthAdmissionBlocked('198.51.100.150')).toBe(true);
+      const upserts = vi.mocked(prisma.rateLimit.upsert).mock.calls.length;
+      await authenticateV2Request(request(`ok_live_${'b'.repeat(30)}`, '198.51.100.150')).catch(
+        () => undefined
+      );
+      expect(vi.mocked(prisma.rateLimit.upsert).mock.calls.length).toBe(upserts);
     });
 
     it('rejects malformed tokens before any database lookup', async () => {

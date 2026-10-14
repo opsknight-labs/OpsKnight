@@ -120,6 +120,9 @@ export const PATCH = withV2Observability(async function PATCH(
           data: {
             name: validated.name,
             description: validated.description,
+            // Steps are part of the policy's representation: always move the revision so a
+            // steps-only edit changes the ETag even when no parent column changed.
+            updatedAt: new Date(),
           },
         });
 

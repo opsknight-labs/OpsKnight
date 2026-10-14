@@ -117,7 +117,10 @@ export async function listServiceAccounts() {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     teams: user.teamMemberships.map(tm => tm.team),
-    activeTokensCount: user.apiKeys.length,
+    // Tokens are listed until revoked, but only unexpired ones are active.
+    activeTokensCount: user.apiKeys.filter(
+      key => !key.expiresAt || key.expiresAt.getTime() > Date.now()
+    ).length,
     tokens: user.apiKeys,
   }));
 }
@@ -310,8 +313,20 @@ export function generateServiceAccountTokenRaw() {
   };
 }
 
+function assertServiceAccountActive(status: string, serviceAccountId: string) {
+  if (status !== 'ACTIVE') {
+    throw new AppError({
+      code: 'SERVICE_ACCOUNT_DISABLED',
+      details: { serviceAccountId, status },
+    });
+  }
+}
+
 export async function issueServiceAccountToken(input: IssueServiceAccountTokenInput) {
   const account = await getServiceAccount(input.serviceAccountId);
+  // A token for a disabled account would be returned with its one-time secret and then
+  // be rejected at authentication, so refuse before generating anything.
+  assertServiceAccountActive(account.status, input.serviceAccountId);
 
   if (!input.name || input.name.trim().length === 0) {
     throw new AppError({
@@ -351,8 +366,17 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
   const expiresAt = resolveTokenExpiry(input);
 
   const apiKey = await runV2AuditedMutation(
-    tx =>
-      tx.apiKey.create({
+    async tx => {
+      // Re-check inside the transaction to narrow the window against a concurrent disable.
+      const current = await tx.user.findUnique({
+        where: { id: input.serviceAccountId },
+        select: { status: true },
+      });
+      if (!current) {
+        throw new AppError({ code: 'SERVICE_ACCOUNT_NOT_FOUND' });
+      }
+      assertServiceAccountActive(current.status, input.serviceAccountId);
+      return tx.apiKey.create({
         data: {
           name: input.name.trim(),
           prefix,
@@ -369,7 +393,8 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
           createdAt: true,
           expiresAt: true,
         },
-      }),
+      });
+    },
     created => ({
       action: 'service_account_token.created',
       entityType: 'API_KEY',

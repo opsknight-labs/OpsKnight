@@ -11,10 +11,9 @@ import { isServiceAccountIdentity } from '@/lib/service-account-identity';
 import { authCache } from './cache';
 import {
   acquireLegacyScryptSlot,
+  acquireOverBudgetIpSlot,
   acquireVerificationSlot,
   checkLegacyTokenAdmission,
-  FAILED_AUTH_ADMISSION_LIMIT,
-  failedAuthRetryAfterSeconds,
   isFailedAuthAdmissionBlocked,
   legacyAdmissionRetryAfterSeconds,
   recordFailedAuthAttempt,
@@ -86,38 +85,40 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
     });
   }
 
-  // 2. IP abuse check: only blocks IPs that have accumulated excessive failed attempts
+  // 2. Reject tokens that cannot possibly be valid before any database work.
   const clientIp = getClientIp(req);
-  const isBlocked = await isFailedAuthAdmissionBlocked(clientIp);
-  if (isBlocked) {
-    recordAuthFailure('ip_throttled');
-    throw new AppError({
-      code: 'RATE_LIMIT_EXCEEDED',
-      userMessage:
-        'Too many unauthenticated token verification attempts from this IP address. Please wait before retrying.',
-      details: { retryAfter: failedAuthRetryAfterSeconds(), limit: FAILED_AUTH_ADMISSION_LIMIT },
-    });
-  }
-
-  // 3. Reject tokens that cannot possibly be valid before any database work.
   if (!isWellFormedApiToken(token)) {
     recordAuthFailure('malformed_token');
     await recordFailedAuthAttempt(clientIp);
     throw new AppError({ code: 'API_KEY_INVALID', userMessage: INVALID_TOKEN_MESSAGE });
   }
 
-  // 4. Bound concurrent verification work for unidentified clients.
-  let releaseSlot: () => void;
-  try {
-    releaseSlot = await acquireVerificationSlot(clientIp);
-  } catch (error) {
-    recordAuthFailure('verification_busy');
-    throw error;
+  // 3. Bound verification work. An IP over its failed-auth budget is throttled to a small
+  // concurrency allowance rather than refused, so a valid credential sharing that address
+  // (a corporate NAT) keeps working while the abuse stays bounded. Unidentified clients get
+  // their own bounded lane.
+  const overBudget = await isFailedAuthAdmissionBlocked(clientIp);
+  let releaseIpSlot = () => {};
+  if (overBudget) {
+    try {
+      releaseIpSlot = acquireOverBudgetIpSlot(clientIp);
+    } catch (error) {
+      recordAuthFailure('ip_throttled');
+      throw error;
+    }
   }
+  let releaseSlot = () => {};
   try {
+    try {
+      releaseSlot = await acquireVerificationSlot(clientIp);
+    } catch (error) {
+      recordAuthFailure('verification_busy');
+      throw error;
+    }
     return await verifyTokenAgainstDatabase(token, v2Hash, clientIp, negativeCacheKey);
   } finally {
     releaseSlot();
+    releaseIpSlot();
   }
 }
 

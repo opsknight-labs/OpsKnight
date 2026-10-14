@@ -1,3 +1,4 @@
+import { issuableScopesForRole } from '@/lib/api-scope-registry';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ServiceAccountsPanel, { type ServiceAccountItem } from '@/components/settings/ServiceAccountsPanel';
@@ -209,20 +210,24 @@ describe('ServiceAccountsPanel Component', () => {
     expect(screen.getByLabelText(/token name \/ label \*/i)).toBeDefined();
     expect(screen.getByLabelText(/expiration duration/i)).toBeDefined();
 
-    // Default preset when opening is RESPONDER (10 scopes)
-    expect(screen.getByText(/selected: 10 of 31 scopes/i)).toBeDefined();
+    // Counts come from the registry: the account is an ADMIN, so every active scope is offered
+    // and reserved scopes (which grant nothing) are not.
+    const offered = issuableScopesForRole('ADMIN');
+    const total = offered.length;
+    expect(offered.some(definition => definition.status === 'reserved')).toBe(false);
+    expect(screen.getByText(new RegExp(`of ${total} scopes`, 'i'))).toBeDefined();
 
-    // Click Admin Full preset
     fireEvent.click(screen.getByRole('button', { name: 'Admin Full' }));
-    expect(screen.getByText(/selected: 31 of 31 scopes/i)).toBeDefined();
+    expect(screen.getByText(new RegExp(`selected: ${total} of ${total} scopes`, 'i'))).toBeDefined();
 
-    // Click Clear preset
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(screen.getByText(/selected: 0 of 31 scopes/i)).toBeDefined();
+    expect(screen.getByText(new RegExp(`selected: 0 of ${total} scopes`, 'i'))).toBeDefined();
 
-    // Click Read-Only preset
     fireEvent.click(screen.getByRole('button', { name: 'Read-Only' }));
-    expect(screen.getByText(/selected: 15 of 31 scopes/i)).toBeDefined();
+    const readOnly = offered.filter(definition => !definition.write).length;
+    expect(
+      screen.getByText(new RegExp(`selected: ${readOnly} of ${total} scopes`, 'i'))
+    ).toBeDefined();
   });
 
   it('submits issue token form and displays revealed token banner', async () => {

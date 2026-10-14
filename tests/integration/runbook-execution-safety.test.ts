@@ -2759,7 +2759,8 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         name: 'Runbook API Key',
         prefix: rawToken.slice(0, 12),
         tokenHash: hashTokenV2(rawToken),
-        scopes: ['runbooks:read', 'runbooks:execute'],
+        // Incident-linked execution also reads the incident, so incidents:read is required.
+        scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'],
         userId: responder.id,
       },
     });
@@ -2860,6 +2861,51 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(completedExecution?.completedAt).not.toBeNull();
   });
 
+  it('rejects incident-linked runbook execution with 403 when the token lacks incidents:read, creating no execution', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { unit: 'nginx.service', action: 'status' },
+        },
+      ],
+    });
+    const incident = await createTestIncident('Scope-limited runbook execution', target.service.id);
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    const rawToken = `ok_test_${randomUUID().replace(/-/g, '')}`;
+    await testPrisma.apiKey.create({
+      data: {
+        name: 'Runbook Only Key',
+        prefix: rawToken.slice(0, 12),
+        tokenHash: hashTokenV2(rawToken),
+        scopes: ['runbooks:read', 'runbooks:execute'],
+        userId: responder.id,
+      },
+    });
+
+    const response = await executeRunbookV2Route(
+      new NextRequest(`http://localhost:3000/api/v2/runbooks/${target.runbook.id}/execute`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': `idem-${randomUUID()}`,
+        },
+        body: JSON.stringify({ incidentId: incident.id, serviceId: target.service.id }),
+      }),
+      { params: Promise.resolve({ id: target.runbook.id }) }
+    );
+
+    expect(response.status).toBe(403);
+    const executions = await testPrisma.runbookExecution.count({
+      where: { incidentId: incident.id },
+    });
+    expect(executions).toBe(0);
+  });
+
   it('serves runbook execution over real HTTP server with Bearer auth, agent claim, and terminal verification', async () => {
     const target = await createAgentTarget({
       steps: [
@@ -2884,7 +2930,8 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         name: 'HTTP Server API Key',
         prefix: rawToken.slice(0, 12),
         tokenHash: hashTokenV2(rawToken),
-        scopes: ['runbooks:read', 'runbooks:execute'],
+        // Incident-linked execution also reads the incident, so incidents:read is required.
+        scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'],
         userId: responder.id,
       },
     });

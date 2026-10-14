@@ -10,7 +10,10 @@ import {
   StatusPageUpdateV2Schema,
 } from '@/lib/api-v2';
 import { makeDefaultStatusPage, StatusPageAdminError } from '@/lib/status-pages/admin';
-import { applyStatusPageConfigurationChange } from '@/lib/status-pages/publish-configuration';
+import {
+  applyStatusPageConfigurationChange,
+  type StatusPagePublicationState,
+} from '@/lib/status-pages/publish-configuration';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
@@ -118,9 +121,13 @@ export const PATCH = withV2Observability(async function PATCH(
         tx,
       });
 
+    // The change is committed before the public page is republished. Report the publication
+    // outcome so a client can tell "saved and live" from "saved, republish pending or failed".
+    let publication: StatusPagePublicationState | undefined;
+
     try {
       if (validated.isDefault === true && !existing.isDefault) {
-        await makeDefaultStatusPage(id, auditInTx);
+        ({ publication } = await makeDefaultStatusPage(id, auditInTx));
       }
 
       const hasConfigChanges =
@@ -129,7 +136,7 @@ export const PATCH = withV2Observability(async function PATCH(
         validated.enabled !== undefined;
 
       if (hasConfigChanges) {
-        await applyStatusPageConfigurationChange({
+        const configured = await applyStatusPageConfigurationChange({
           pageId: id,
           actor: { id: actor.id, name: apiKey.name },
           patch: {
@@ -143,6 +150,7 @@ export const PATCH = withV2Observability(async function PATCH(
             return data;
           },
         });
+        publication = configured.publication;
       }
     } catch (err) {
       if (err instanceof StatusPageAdminError) {
@@ -167,7 +175,9 @@ export const PATCH = withV2Observability(async function PATCH(
       },
     });
 
-    return apiV2Success(updated, { headers: rlHeaders });
+    return apiV2Success(publication ? { ...updated, publication } : updated, {
+      headers: rlHeaders,
+    });
   } catch (error) {
     return apiV2Error(error, req);
   }

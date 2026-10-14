@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { API_SCOPE_REGISTRY } from '@/lib/api-scope-registry';
 import ApiKeysPanel, { type ApiKey } from '@/components/settings/ApiKeysPanel';
 import { revokeApiKey } from '@/app/(app)/settings/actions';
 
@@ -54,6 +55,8 @@ const mockKeys: ApiKey[] = [
   },
 ];
 
+const title = (scope: keyof typeof API_SCOPE_REGISTRY) => API_SCOPE_REGISTRY[scope].title;
+
 describe('ApiKeysPanel Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -95,8 +98,8 @@ describe('ApiKeysPanel Component', () => {
     expect(screen.getByText('Generate New API Key')).toBeDefined();
     expect(screen.getByLabelText(/key name \/ client identifier \*/i)).toBeDefined();
     expect(screen.getByLabelText(/expiration duration/i)).toBeDefined();
-    expect(screen.getByText('Response Policy Read')).toBeDefined();
-    expect(screen.getByText('Response Policy Write')).toBeDefined();
+    expect(screen.getByText(title('response-policy:read'))).toBeDefined();
+    expect(screen.getByText(title('response-policy:write'))).toBeDefined();
 
     const dialog = screen.getByRole('dialog');
     expect(dialog.getAttribute('style')).toContain('max-width: 72rem');
@@ -106,17 +109,25 @@ describe('ApiKeysPanel Component', () => {
   it('keeps response-policy read available for admins while hiding write scope without write access', () => {
     render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={false} isAdmin={true} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
-    expect(screen.getByText('Response Policy Read')).toBeDefined();
-    expect(screen.queryByText('Response Policy Write')).toBeNull();
+    expect(screen.getByText(title('response-policy:read'))).toBeDefined();
+    expect(screen.queryByText(title('response-policy:write'))).toBeNull();
   });
 
-  it('hides all administrative scopes for non-admins', () => {
+  it('does not offer reserved scopes, which currently grant nothing', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={true} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
+    expect(screen.queryByText(title('runbooks:write'))).toBeNull();
+    expect(screen.queryByText(title('users:write'))).toBeNull();
+  });
+
+  it('hides administrative scopes for non-admins, following the registry', () => {
     render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={false} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
-    expect(screen.queryByText('Response Policy Read')).toBeNull();
-    expect(screen.queryByText('Response Policy Write')).toBeNull();
-    expect(screen.queryByText('Full Workspace Admin')).toBeNull();
-    expect(screen.queryByText('Service Accounts Read')).toBeNull();
+    // The registry lets responders mint read-only response-policy keys; writes stay admin-only.
+    expect(screen.getByText(title('response-policy:read'))).toBeDefined();
+    expect(screen.queryByText(title('response-policy:write'))).toBeNull();
+    expect(screen.queryByText(title('admin:manage'))).toBeNull();
+    expect(screen.queryByText(title('service-accounts:read'))).toBeNull();
   });
 
 

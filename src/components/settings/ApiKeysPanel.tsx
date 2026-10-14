@@ -72,7 +72,9 @@ import {
   Bot,
   Shield,
   Users,
+  type LucideIcon,
 } from 'lucide-react';
+import { ALL_API_SCOPE_DEFINITIONS, issuableScopesForRole } from '@/lib/api-scope-registry';
 
 export type ApiKey = {
   id: string;
@@ -112,279 +114,49 @@ function SubmitButton() {
   );
 }
 
-const SCOPES_CONFIG = [
-  // Events
-  {
-    value: 'events:write',
-    title: 'Events Ingestion',
-    detail: 'Send incoming alert payloads, webhooks, and telemetry',
-    icon: Send,
-    category: 'Events',
-    write: true,
-  },
-  // Incidents
-  {
-    value: 'incidents:read',
-    title: 'Incidents Read',
-    detail: 'Query active and historical incident states and timelines',
-    icon: FileText,
-    category: 'Incidents',
-    write: false,
-  },
-  {
-    value: 'incidents:write',
-    title: 'Incidents Manage',
-    detail: 'Acknowledge, resolve, update severity, and add timeline notes',
-    icon: Radio,
-    category: 'Incidents',
-    write: true,
-  },
-  // Services
-  {
-    value: 'services:read',
-    title: 'Services Read',
-    detail: 'Query service catalog definitions and dependencies',
-    icon: Layers,
-    category: 'Services',
-    write: false,
-  },
-  {
-    value: 'services:write',
-    title: 'Services Manage',
-    detail: 'Create, update, and manage services',
-    icon: Layers,
-    category: 'Services',
-    write: true,
-  },
-  // Schedules
-  {
-    value: 'schedules:read',
-    title: 'Schedules Read',
-    detail: 'Query on-call rotations, active shifts, and responder escalation',
-    icon: Calendar,
-    category: 'Schedules',
-    write: false,
-  },
-  {
-    value: 'schedules:write',
-    title: 'Schedules Manage',
-    detail: 'Create and update rotations and schedule overrides',
-    icon: Calendar,
-    category: 'Schedules',
-    write: true,
-  },
-  // Teams
-  {
-    value: 'teams:read',
-    title: 'Teams Read',
-    detail: 'Query team memberships and assigned services',
-    icon: Users,
-    category: 'Teams',
-    write: false,
-  },
-  {
-    value: 'teams:write',
-    title: 'Teams Manage',
-    detail: 'Create and update teams and team memberships',
-    icon: Users,
-    category: 'Teams',
-    write: true,
-  },
-  // Users
-  {
-    value: 'users:read',
-    title: 'Users Read',
-    detail: 'Query organization users and directory details',
-    icon: Users,
-    category: 'Users',
-    write: false,
-  },
-  {
-    value: 'users:write',
-    title: 'Users Manage',
-    detail: 'Manage user profiles and roles',
-    icon: Users,
-    category: 'Users',
-    write: true,
-  },
-  // Escalation Policies
-  {
-    value: 'escalation-policies:read',
-    title: 'Escalation Policies Read',
-    detail: 'Inspect escalation policy rules and responder chains',
-    icon: ShieldAlert,
-    category: 'Escalations',
-    write: false,
-  },
-  {
-    value: 'escalation-policies:write',
-    title: 'Escalation Policies Manage',
-    detail: 'Create and update escalation policies',
-    icon: ShieldAlert,
-    category: 'Escalations',
-    write: true,
-  },
-  // Integrations
-  {
-    value: 'integrations:read',
-    title: 'Integrations Read',
-    detail: 'View active inbound and outbound integration status',
-    icon: Code2,
-    category: 'Integrations',
-    write: false,
-  },
-  {
-    value: 'integrations:write',
-    title: 'Integrations Manage',
-    detail: 'Manage integrations and webhook targets',
-    icon: Code2,
-    category: 'Integrations',
-    write: true,
-  },
-  // Notifications
-  {
-    value: 'notifications:read',
-    title: 'Notifications Read',
-    detail: 'Query notification delivery logs and alert history',
-    icon: Send,
-    category: 'Notifications',
-    write: false,
-  },
-  {
-    value: 'notifications:write',
-    title: 'Notifications Retry',
-    detail: 'Retry pending or failed notifications',
-    icon: Send,
-    category: 'Notifications',
-    write: true,
-  },
-  // Status Pages
-  {
-    value: 'status-pages:read',
-    title: 'Status Pages Read',
-    detail: 'Query public status page configurations and components',
-    icon: FileText,
-    category: 'Status Pages',
-    write: false,
-  },
-  {
-    value: 'status-pages:write',
-    title: 'Status Pages Manage',
-    detail: 'Update status pages, publish announcements and maintenance',
-    icon: FileText,
-    category: 'Status Pages',
-    write: true,
-  },
-  // Runbooks
-  {
-    value: 'runbooks:read',
-    title: 'Runbooks Read',
-    detail: 'Inspect automated remediation runbook definitions',
-    icon: Terminal,
-    category: 'Runbooks',
-    write: false,
-  },
-  {
-    value: 'runbooks:execute',
-    title: 'Runbooks Execute',
-    detail: 'Execute automated runbooks with parameter validation',
-    icon: Terminal,
-    category: 'Runbooks',
-    write: true,
-  },
-  {
-    value: 'runbooks:write',
-    title: 'Runbooks Manage',
-    detail: 'Create, edit, and publish runbooks',
-    icon: Terminal,
-    category: 'Runbooks',
-    write: true,
-  },
-  // Governance & Analytics
-  {
-    value: 'audit:read',
-    title: 'Audit Logs Read',
-    detail: 'Query tamper-evident audit logs and security events',
-    icon: Shield,
-    category: 'Governance',
-    write: false,
-  },
-  {
-    value: 'reports:read',
-    title: 'Reports & Metrics',
-    detail: 'Retrieve SLA metrics, MTTR, MTTD, and analytics',
-    icon: Clock,
-    category: 'Governance',
-    write: false,
-  },
-  {
-    value: 'postmortems:read',
-    title: 'Postmortems Read',
-    detail: 'View incident retrospectives and root cause analyses',
-    icon: FileText,
-    category: 'Governance',
-    write: false,
-  },
-  {
-    value: 'postmortems:write',
-    title: 'Postmortems Manage',
-    detail: 'Create and update postmortem documents',
-    icon: FileText,
-    category: 'Governance',
-    write: true,
-  },
-  // Admin & Response Policy
-  {
-    value: 'service-accounts:read',
-    title: 'Service Accounts Read',
-    detail: 'Query machine identities and active tokens',
-    icon: Bot,
-    category: 'Administration',
-    write: false,
-  },
-  {
-    value: 'service-accounts:write',
-    title: 'Service Accounts Manage',
-    detail: 'Create service accounts and issue tokens',
-    icon: Bot,
-    category: 'Administration',
-    write: true,
-  },
-  {
-    value: 'response-policy:read',
-    title: 'Response Policy Read',
-    detail: 'Inspect response policy classifications and SLAs',
-    icon: ShieldAlert,
-    category: 'Administration',
-    write: false,
-  },
-  {
-    value: 'response-policy:write',
-    title: 'Response Policy Write',
-    detail: 'Publish and restore response-policy versions',
-    icon: ShieldAlert,
-    category: 'Administration',
-    write: true,
-  },
-  {
-    value: 'admin:manage',
-    title: 'Full Workspace Admin',
-    detail: 'Full administrative access across all OpsKnight endpoints',
-    icon: Shield,
-    category: 'Administration',
-    write: true,
-  },
-];
+const SCOPE_CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Events: Send,
+  Incidents: Radio,
+  Services: Layers,
+  Schedules: Calendar,
+  Teams: Users,
+  Users: Users,
+  Escalations: ShieldAlert,
+  Integrations: Code2,
+  Notifications: Send,
+  'Status pages': FileText,
+  Runbooks: Terminal,
+  Governance: Shield,
+  Administration: Bot,
+};
+
+/**
+ * Scopes offered for new keys. Derived from the shared registry (never a local list) and
+ * limited to scopes the REST surface currently enforces.
+ */
+const SCOPES_CONFIG = ALL_API_SCOPE_DEFINITIONS.filter(
+  definition => definition.status === 'active'
+).map(definition => ({
+  value: definition.scope as string,
+  title: definition.title,
+  detail: definition.description,
+  icon: SCOPE_CATEGORY_ICONS[definition.category] ?? Key,
+  category: definition.category,
+  write: definition.write,
+}));
 
 export default function ApiKeysPanel({
   keys,
   canCreateWriteKeys,
   isAdmin = false,
+  role,
   appUrl,
 }: {
   keys: ApiKey[];
   canCreateWriteKeys: boolean;
   isAdmin?: boolean;
+  /** The viewer's role; decides which scopes may be issued. Derived from the flags when omitted. */
+  role?: string;
   appUrl?: string;
 }) {
   const [state, formAction] = useActionState<State, FormData>(createApiKey, {
@@ -407,13 +179,11 @@ export default function ApiKeysPanel({
     }
   }, [state?.success, state?.token]);
 
+  const effectiveRole = role ?? (isAdmin ? 'ADMIN' : canCreateWriteKeys ? 'RESPONDER' : 'USER');
+  const issuable = new Set<string>(issuableScopesForRole(effectiveRole).map(d => d.scope));
   const visibleScopes = SCOPES_CONFIG.filter(scope => {
-    if (scope.category === 'Administration' && !isAdmin) {
-      return false;
-    }
-    if (scope.write && !canCreateWriteKeys) {
-      return false;
-    }
+    if (!issuable.has(scope.value)) return false;
+    if (scope.write && !canCreateWriteKeys) return false;
     return true;
   });
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { ALL_API_SCOPE_DEFINITIONS, issuableScopesForRole } from '@/lib/api-scope-registry';
 import { useState, useMemo, useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -89,52 +90,18 @@ export type ServiceAccountItem = {
   tokens: ServiceAccountToken[];
 };
 
-export const ALL_V2_SCOPES = [
-  // Events
-  { value: 'events:write', title: 'Events Ingestion', category: 'Events', write: true },
-  // Incidents
-  { value: 'incidents:read', title: 'Incidents Read', category: 'Incidents', write: false },
-  { value: 'incidents:write', title: 'Incidents Manage', category: 'Incidents', write: true },
-  // Services
-  { value: 'services:read', title: 'Services Read', category: 'Services', write: false },
-  { value: 'services:write', title: 'Services Manage', category: 'Services', write: true },
-  // Schedules
-  { value: 'schedules:read', title: 'Schedules Read', category: 'Schedules', write: false },
-  { value: 'schedules:write', title: 'Schedules Manage', category: 'Schedules', write: true },
-  // Teams
-  { value: 'teams:read', title: 'Teams Read', category: 'Teams', write: false },
-  { value: 'teams:write', title: 'Teams Manage', category: 'Teams', write: true },
-  // Users
-  { value: 'users:read', title: 'Users Read', category: 'Users', write: false },
-  { value: 'users:write', title: 'Users Manage', category: 'Users', write: true },
-  // Escalation Policies
-  { value: 'escalation-policies:read', title: 'Escalation Policies Read', category: 'Escalations', write: false },
-  { value: 'escalation-policies:write', title: 'Escalation Policies Manage', category: 'Escalations', write: true },
-  // Integrations
-  { value: 'integrations:read', title: 'Integrations Read', category: 'Integrations', write: false },
-  { value: 'integrations:write', title: 'Integrations Manage', category: 'Integrations', write: true },
-  // Notifications
-  { value: 'notifications:read', title: 'Notifications Read', category: 'Notifications', write: false },
-  { value: 'notifications:write', title: 'Notifications Retry/Manage', category: 'Notifications', write: true },
-  // Status Pages
-  { value: 'status-pages:read', title: 'Status Pages Read', category: 'Status Pages', write: false },
-  { value: 'status-pages:write', title: 'Status Pages Manage', category: 'Status Pages', write: true },
-  // Runbooks
-  { value: 'runbooks:read', title: 'Runbooks Read', category: 'Runbooks', write: false },
-  { value: 'runbooks:execute', title: 'Runbooks Execute', category: 'Runbooks', write: true },
-  { value: 'runbooks:write', title: 'Runbooks Manage', category: 'Runbooks', write: true },
-  // Audit & Analytics
-  { value: 'audit:read', title: 'Audit Logs Read', category: 'Governance', write: false },
-  { value: 'reports:read', title: 'Metrics & Reports Read', category: 'Governance', write: false },
-  { value: 'postmortems:read', title: 'Postmortems Read', category: 'Governance', write: false },
-  { value: 'postmortems:write', title: 'Postmortems Manage', category: 'Governance', write: true },
-  // Service Accounts & Admin
-  { value: 'service-accounts:read', title: 'Service Accounts Read', category: 'Administration', write: false },
-  { value: 'service-accounts:write', title: 'Service Accounts Manage', category: 'Administration', write: true },
-  { value: 'response-policy:read', title: 'Response Policy Read', category: 'Administration', write: false },
-  { value: 'response-policy:write', title: 'Response Policy Write', category: 'Administration', write: true },
-  { value: 'admin:manage', title: 'Full Workspace Admin', category: 'Administration', write: true },
-];
+/**
+ * Every scope currently enforced by the REST v2 surface, derived from the shared registry so
+ * the UI, issuance validation and documentation cannot drift. Reserved scopes are not offered.
+ */
+export const ALL_V2_SCOPES = ALL_API_SCOPE_DEFINITIONS.filter(
+  definition => definition.status === 'active'
+).map(definition => ({
+  value: definition.scope as string,
+  title: definition.title,
+  category: definition.category,
+  write: definition.write,
+}));
 
 function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
   const { pending } = useFormStatus();
@@ -177,6 +144,13 @@ export default function ServiceAccountsPanel({
   // Issue Token Dialog
   const [issueTokenTargetId, setIssueTokenTargetId] = useState<string | null>(null);
   const [tokenExpiry, setTokenExpiry] = useState('90');
+  // Only offer scopes the target account's role may hold; the server enforces the same rule.
+  const issueTarget = serviceAccounts.find(sa => sa.id === issueTokenTargetId) ?? null;
+  const offeredScopes = useMemo(() => {
+    if (!issueTarget) return ALL_V2_SCOPES;
+    const allowed = new Set<string>(issuableScopesForRole(issueTarget.role).map(d => d.scope));
+    return ALL_V2_SCOPES.filter(scope => allowed.has(scope.value));
+  }, [issueTarget]);
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(
     new Set(['events:write', 'incidents:read'])
   );
@@ -277,24 +251,27 @@ export default function ServiceAccountsPanel({
     if (type === 'CLEAR') {
       setSelectedScopes(new Set());
     } else if (type === 'ADMIN') {
-      setSelectedScopes(new Set(ALL_V2_SCOPES.map(s => s.value)));
+      setSelectedScopes(new Set(offeredScopes.map(s => s.value)));
     } else if (type === 'RESPONDER') {
+      const offered = new Set(offeredScopes.map(s => s.value));
       setSelectedScopes(
-        new Set([
-          'events:write',
-          'incidents:read',
-          'incidents:write',
-          'services:read',
-          'schedules:read',
-          'runbooks:read',
-          'runbooks:execute',
-          'notifications:read',
-          'teams:read',
-          'users:read',
-        ])
+        new Set(
+          [
+            'events:write',
+            'incidents:read',
+            'incidents:write',
+            'services:read',
+            'schedules:read',
+            'runbooks:read',
+            'runbooks:execute',
+            'notifications:read',
+            'teams:read',
+            'users:read',
+          ].filter(value => offered.has(value))
+        )
       );
     } else if (type === 'READ_ONLY') {
-      setSelectedScopes(new Set(ALL_V2_SCOPES.filter(s => !s.write).map(s => s.value)));
+      setSelectedScopes(new Set(offeredScopes.filter(s => !s.write).map(s => s.value)));
     }
   };
 
@@ -732,8 +709,10 @@ export default function ServiceAccountsPanel({
 
           <form
             action={formData => {
+              // Never submit a scope that is not offered for this account's role.
+              const offered = new Set(offeredScopes.map(scope => scope.value));
               for (const sc of selectedScopes) {
-                formData.append('scopes', sc);
+                if (offered.has(sc)) formData.append('scopes', sc);
               }
               issueTokenAction(formData);
             }}
@@ -799,7 +778,7 @@ export default function ServiceAccountsPanel({
                 <div>
                   <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
                   <p className="text-[11px] text-muted-foreground">
-                    Selected: {selectedScopes.size} of {ALL_V2_SCOPES.length} scopes
+                    Selected: {offeredScopes.filter(scope => selectedScopes.has(scope.value)).length} of {offeredScopes.length} scopes
                   </p>
                 </div>
 
@@ -844,7 +823,7 @@ export default function ServiceAccountsPanel({
               </div>
 
               <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3 max-h-72 overflow-y-auto pr-1">
-                {ALL_V2_SCOPES.map(scope => {
+                {offeredScopes.map(scope => {
                   const isChecked = selectedScopes.has(scope.value);
                   return (
                     <div

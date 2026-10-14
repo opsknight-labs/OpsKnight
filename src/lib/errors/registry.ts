@@ -478,6 +478,14 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  SERVICE_ACCOUNT_DISABLED: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'This service account is disabled, so it cannot be issued new tokens.',
+    action: 'Re-enable the service account before issuing a token.',
+    retryable: false,
+    exposure: 'public',
+  },
   SERVICE_ACCOUNT_NOT_FOUND: {
     status: 404,
     category: 'not_found',

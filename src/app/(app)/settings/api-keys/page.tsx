@@ -21,6 +21,7 @@ import { Key, ShieldCheck, Bot, Activity, Terminal, Code2, Clock, ShieldAlert } 
 import { getAppUrl } from '@/lib/app-url';
 import { listServiceAccounts } from '@/lib/api-v2/service-accounts';
 import { getOpenApiV2Spec } from '@/lib/api-v2/openapi';
+import { findOperation } from '@/lib/api-v2/openapi-registry';
 import { getVerifiedSampleBody } from '@/lib/api-v2/endpoint-samples';
 import {
   API_ACTIVITY_PAGE_SIZE,
@@ -29,52 +30,9 @@ import {
   parseApiActivityFilters,
 } from '@/lib/api-v2/activity-query';
 
+/** Required scope for an operation, from the same registry that drives the OpenAPI document. */
 function getEndpointScope(method: string, path: string): string {
-  const m = method.toUpperCase();
-  if (path.startsWith('/incidents')) {
-    return m === 'GET' ? 'incidents:read' : 'incidents:write';
-  }
-  if (path.startsWith('/services')) {
-    return m === 'GET' ? 'services:read' : 'services:write';
-  }
-  if (path.startsWith('/teams')) {
-    return m === 'GET' ? 'teams:read' : 'teams:write';
-  }
-  if (path.startsWith('/users')) {
-    return m === 'GET' ? 'users:read' : 'users:write';
-  }
-  if (path.startsWith('/schedules')) {
-    return m === 'GET' ? 'schedules:read' : 'schedules:write';
-  }
-  if (path.startsWith('/escalation-policies')) {
-    return m === 'GET' ? 'escalation-policies:read' : 'escalation-policies:write';
-  }
-  if (path.startsWith('/integrations')) {
-    return m === 'GET' ? 'integrations:read' : 'integrations:write';
-  }
-  if (path.startsWith('/notifications')) {
-    return m === 'GET' ? 'notifications:read' : 'notifications:write';
-  }
-  if (path.startsWith('/status-pages')) {
-    return m === 'GET' ? 'status-pages:read' : 'status-pages:write';
-  }
-  if (path.startsWith('/runbooks')) {
-    if (path.endsWith('/execute') && m === 'POST') return 'runbooks:execute';
-    return m === 'GET' ? 'runbooks:read' : 'runbooks:write';
-  }
-  if (path.startsWith('/service-accounts')) {
-    return m === 'GET' ? 'service-accounts:read' : 'service-accounts:write';
-  }
-  if (path.startsWith('/audit')) {
-    return 'audit:read';
-  }
-  if (path.startsWith('/reports')) {
-    return 'reports:read';
-  }
-  if (path.startsWith('/postmortems')) {
-    return m === 'GET' ? 'postmortems:read' : 'postmortems:write';
-  }
-  return m === 'GET' ? 'incidents:read' : 'incidents:write';
+  return findOperation(method, path)?.scope ?? 'admin:manage';
 }
 
 function generateSampleFromSchema(schema: any): any {
@@ -476,6 +434,7 @@ export default async function ApiKeysSettingsPage({
               user ? hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE) : false
             }
             isAdmin={isAdmin}
+            role={user?.role}
             appUrl={appUrl}
           />
         </TabsContent>

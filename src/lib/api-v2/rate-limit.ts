@@ -120,6 +120,14 @@ export const UNIDENTIFIED_VERIFICATION_CONCURRENCY = envInt(
   16
 );
 export const UNIDENTIFIED_QUEUE_WAIT_MS = envInt('API_V2_UNIDENTIFIED_AUTH_QUEUE_MS', 250);
+/**
+ * An IP over its failed-authentication budget is not refused outright: several
+ * integrations can share one NAT address, and a valid credential must keep working
+ * while another client behind it misbehaves. Over-budget IPs instead keep verifying
+ * through a small per-IP concurrency allowance, which bounds the database work they
+ * can cause without deciding anything about the credential they present.
+ */
+export const OVER_BUDGET_IP_CONCURRENCY = envInt('API_V2_OVER_BUDGET_IP_CONCURRENCY', 4);
 export const LEGACY_SCRYPT_CONCURRENCY = envInt('API_V2_LEGACY_SCRYPT_CONCURRENCY', 2);
 export const LEGACY_UNIDENTIFIED_LIMIT = envInt('API_V2_LEGACY_UNIDENTIFIED_LIMIT', 30);
 
@@ -246,12 +254,44 @@ export function acquireLegacyScryptSlot(): () => void {
   return release;
 }
 
+declare global {
+  var __v2OverBudgetIpSlots: Map<string, number> | undefined;
+}
+const overBudgetIpSlots = (globalThis.__v2OverBudgetIpSlots ??= new Map<string, number>());
+
+/**
+ * Concurrency allowance for an IP that has exhausted its failed-auth budget.
+ * Returns a release function; throws a 429 with Retry-After only when this IP
+ * already has its allowance of verifications in flight.
+ */
+export function acquireOverBudgetIpSlot(clientIp: string): () => void {
+  const ip = clientIp.trim();
+  const active = overBudgetIpSlots.get(ip) ?? 0;
+  if (active >= OVER_BUDGET_IP_CONCURRENCY) {
+    throw overloaded(
+      'Too many unauthenticated token verification attempts from this IP address. Please wait before retrying.',
+      failedAuthRetryAfterSeconds(),
+      FAILED_AUTH_ADMISSION_LIMIT
+    );
+  }
+  overBudgetIpSlots.set(ip, active + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const remaining = (overBudgetIpSlots.get(ip) ?? 1) - 1;
+    if (remaining <= 0) overBudgetIpSlots.delete(ip);
+    else overBudgetIpSlots.set(ip, remaining);
+  };
+}
+
 function failedAuthKey(ip: string, windowStart: number): string {
   return `v2:failed-auth-ip:${ip}:${windowStart}`;
 }
 
 /**
- * Whether an identified client IP has exhausted its failed-authentication budget.
+ * Whether an identified client IP has exhausted its failed-authentication budget
+ * (see acquireOverBudgetIpSlot for what that changes).
  *
  * The shared PostgreSQL counter is authoritative. Every replica folds the
  * post-increment shared count into local memory whenever it records a failure,
@@ -290,6 +330,11 @@ export async function recordFailedAuthAttempt(clientIp: string): Promise<void> {
 
   const localCount = (rateLimitMemoryCache.get(memKey) ?? 0) + 1;
   let count = localCount;
+  if (localCount > FAILED_AUTH_ADMISSION_LIMIT) {
+    // Already over budget on this replica: more shared writes add database load, not information.
+    rateLimitMemoryCache.set(memKey, count, FAILED_AUTH_ADMISSION_WINDOW_MS);
+    return;
+  }
   try {
     const shared = await incrementSharedCounter(
       `api:v2:failed-auth:${ip}`,

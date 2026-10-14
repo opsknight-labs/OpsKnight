@@ -23,7 +23,8 @@ Status of the audit of PR #863 (commit `c92c651`), written against the working t
 | Item | State | Evidence |
 | --- | --- | --- |
 | Unidentified clients no longer bypass all limiting | Done | Concurrency lane for unidentified verifications; separate legacy-scrypt budget; unit tests in `api-v2-legacy-token-dos-protection.test.ts` |
-| Failed-auth block uses the shared PostgreSQL counter | Done | Each replica folds the post-increment shared count into local memory when it records a failure. A replica that never saw a failure for an IP can admit that IP's first lookup, so an attacker spread over N replicas gets at most N attempts beyond the limit per window. Unit-tested with a mocked shared count |
+| Valid credentials are not refused because of other clients on the same IP | Done | An IP over its failed-auth budget is no longer rejected outright. It keeps verifying through a small per-IP concurrency allowance (`API_V2_OVER_BUDGET_IP_CONCURRENCY`, default 4) and stops writing the shared counter, so a valid integration behind the same NAT still authenticates while the database work the abuser can cause stays bounded. Unit tests: a valid token succeeds from an over-budget IP; the allowance sheds with 429 and `Retry-After`; other IPs are unaffected. Under a sustained flood the allowance can be saturated by the abuser, so a legitimate client on that IP may still see 429s; that residual risk needs the NAT load test below |
+| Failed-auth counting uses the shared PostgreSQL counter | Done | Each replica folds the post-increment shared count into local memory when it records a failure. A replica that never saw a failure for an IP can admit that IP's first lookup, so an attacker spread over N replicas gets at most N attempts beyond the limit per window. Unit-tested with a mocked shared count |
 | Malformed tokens rejected before any database lookup | Done | Unit test asserts `apiKey.findFirst` is not called |
 | Per-process legacy `scrypt` concurrency ceiling | Done | `API_V2_LEGACY_SCRYPT_CONCURRENCY` (default 2) |
 | `Retry-After` on pre-auth 429s | Done | `details.retryAfter` is set on every pre-auth rate-limit error |
@@ -32,7 +33,7 @@ Status of the audit of PR #863 (commit `c92c651`), written against the working t
 | Topology tests (Cloudflare, Nginx, Traefik, Compose, Kubernetes) | **Not yet run** | Needs real ingress; route handlers do not expose the socket address, so `TRUST_PROXY_HEADERS=true` remains an operator assertion that only the ingress can reach the app |
 | PostgreSQL connection pressure under a failed-auth flood | **Not yet run** | Needs load environment |
 
-New environment variables: `TRUSTED_PROXY_HEADER`, `API_V2_UNIDENTIFIED_AUTH_CONCURRENCY` (16), `API_V2_LEGACY_SCRYPT_CONCURRENCY` (2), `API_V2_LEGACY_UNIDENTIFIED_LIMIT` (30 per minute).
+New environment variables: `TRUSTED_PROXY_HEADER`, `API_V2_UNIDENTIFIED_AUTH_CONCURRENCY` (16), `API_V2_LEGACY_SCRYPT_CONCURRENCY` (2), `API_V2_LEGACY_UNIDENTIFIED_LIMIT` (30 per minute), `API_V2_OVER_BUDGET_IP_CONCURRENCY` (4).
 
 Behaviour change to announce: deployments that relied on `CF-Connecting-IP` being honoured by default must set `TRUSTED_PROXY_HEADER=cf-connecting-ip`. Direct Docker deployments with no trusted proxy still resolve every client to the unidentified bucket and are protected by the concurrency and legacy-budget controls, not by a per-client quota.
 
@@ -45,6 +46,7 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | `POST /incidents/{id}/assign` no longer unassigns on an empty or invalid-JSON body | Done | Empty body is a validation error; unassign is an explicit `null` |
 | Notification retry reports a lost race as 409 | Done | Compare-and-set loser re-reads status and returns `NOTIFICATION_NOT_RETRYABLE` |
 | Escalation policy and delete protection compared with the UI actions | Reviewed | Both are admin-only and block deleting a policy used by services |
+| Incident-linked runbook execution integration tests | Fixed, **not run** | The two PostgreSQL tests used keys without `incidents:read`, which the route now requires, so they received 403. Their keys now carry `incidents:read`, and a new negative test asserts 403 and no execution row without it. These need PostgreSQL and were not run locally |
 | Same-initial-state parity suite (UI path vs REST path, compare rows/outbox) | **Not yet run** | Needs the database integration environment |
 
 ## Phase 3: atomicity and audit
@@ -55,7 +57,7 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | Crash, rollback and cross-replica replay scenarios | **Not yet run** | Needs the database integration environment |
 | Every mutating operation has a declared retry contract | Done | `mutation-contract.ts` classifies all 28 POST/PATCH/DELETE operations (required / supported / natural / never). `api-v2-mutation-contract.test.ts` fails if a route has no entry, or if an entry claims idempotency or ETag support the route source does not implement |
 | `Idempotency-Key` supported on the remaining creates | Done | teams, services, schedules, status-page announcements and service accounts now replay (same key → original result, `Idempotency-Replayed: true`, one audit record). Token issuance is deliberately `never` because the response holds a one-time secret |
-| Optimistic concurrency (ETag / If-Match → 412) | Done | teams, services, schedules, escalation policies, integrations. The version check is in the UPDATE's WHERE clause. Unit tests cover the contract and header parsing only; **a two-writer race against PostgreSQL is not yet run** |
+| Optimistic concurrency (ETag / If-Match → 412) | Done | teams, services, schedules, escalation policies, integrations. ETags are now strong validators (`"<updatedAt ms>"`); a weak `W/` tag in `If-Match` gets 412 because it cannot match under strong comparison (RFC 9110). The escalation-policy update always moves `updatedAt`, so a steps-only edit changes the ETag. The version check is in the UPDATE's WHERE clause. The validator covers the resource's own state; related data embedded only for reading (services using a policy) is not covered. Unit tests cover header parsing and the contract; **a two-writer race against PostgreSQL, and proof that a steps-only edit changes the stored `updatedAt`, are not yet run** |
 | One mapping for database failures | Done | `database-errors.ts`: P2002/P2003 → 409, P2025 → 404, P2034 → retryable 409, connectivity/pool timeout → retryable 503 with `Retry-After`; driver detail is never exposed. Unit-tested per code |
 | Idempotency retention after expiry (7 days), key reuse with a different body, concurrent requests on different replicas | Documented; **not yet run** | Retention follows the completed-job cleanup window; needs the database integration environment |
 
@@ -65,8 +67,9 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | --- | --- | --- |
 | `GET /audit-logs` returns redacted, bounded `details` | Done | `audit-projection.ts` (shared logger redaction + depth/width/length bounds); invalid `entityType` is a 400 instead of a 500. Unit tests |
 | Runbook step configuration never returned | Done | `GET /runbooks/{id}` returns step summaries only (no commands, URLs, env, secret refs). **Behaviour change**: the `config` field is gone. Unit tests |
-| Single scope registry for issuance and docs | Done | `api-scope-registry.ts` (typed `Record<ApiScope, …>`); API-key and service-account issuance, the docs table and the OpenAPI description derive from it. `runbooks:write` and `users:write` grant nothing on v2 and are marked reserved / not issuable. The settings UI panels still hold their own scope lists (`ServiceAccountsPanel.tsx`, `ApiKeysPanel.tsx`, `api-keys/page.tsx`) and are **not yet** migrated |
+| Single scope registry for issuance and docs | Done | `api-scope-registry.ts` (typed `Record<ApiScope, …>`); API-key and service-account issuance, the docs table and the OpenAPI description derive from it. `runbooks:write` and `users:write` grant nothing on v2 and are marked reserved / not issuable. The settings UI now derives from it too: both panels list only active scopes issuable by the viewer's role (service-account tokens by the target account's role), and the Explorer's required-scope labels come from the operation registry. Component tests compute counts from the registry |
 | Service-account token lifetime is an explicit decision | Done | `expiresInDays` or `neverExpires: true` is required; `API_V2_ALLOW_NON_EXPIRING_TOKENS=false` and `API_V2_TOKEN_MAX_DAYS` let a deployment forbid or cap. Last-use is already returned in token metadata. Unit tests |
+| Disabled service accounts cannot be issued tokens | Done | `SERVICE_ACCOUNT_DISABLED` (409), checked before generating a secret and again inside the issuing transaction. A disable that lands between the check and the insert can still leave a token that authentication then rejects; no privilege results. Active-token counts now exclude expired tokens. Unit tests |
 | Service-account identity and the browser boundary | Done | Identity is the reserved email domain only (profile text such as job title no longer counts); credentials and OIDC sign-in refuse such accounts. Tokens may not carry scopes the account's role cannot issue; team ids are validated |
 | Detail endpoints no longer reveal whether an inaccessible object exists | Done for schedules (detail, on-call, overrides) and runbook execution against an incident; the latter now uses `incidentReadWhere`. **Behaviour change**: executing a runbook against an incident also needs `incidents:read` |
 | Role × scope × operation matrix | Done | `api-v2-authorization-matrix.test.ts` asserts, for all 63 operations and 4 roles: no scope → denied, disabled principal → denied, USER never gets a global mutation, only ADMIN administers service accounts; the full decision table is a committed snapshot. This tests the policy function, **not** per-route resource filtering with real data (cross-team object tests exist for a subset in `api-v2-cross-team.test.ts`) |
@@ -90,8 +93,16 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | API Activity filtered and paginated in the database | Done | `activity-query.ts` builds the `where`; keyset pagination; filters for action, actor, API key, resource type and date range live in the URL. Query unit tests and panel component tests |
 | Activity is labelled as audit history, not traffic | Done | Panel text; reads and rejected requests are not recorded |
 | Never-expiring service-account token is a deliberate choice | Done | Warning shown when selected |
+| Credential inventory pagination (keys, service accounts, teams) | Not done | The page still loads all of them for the viewer |
 | Tab data loaded only for the active tab | Not done | Tabs switch client-side; lazy loading needs per-tab navigation |
 | Browser tests at mobile/laptop/large widths, keyboard and dialog flows | **Not yet run** | No browser run in this audit |
+
+## Status-page publication
+
+| Item | State | Evidence |
+| --- | --- | --- |
+| Client can tell "saved and live" from "saved, republish pending or failed" | Done | `PATCH /status-pages/{id}` returns `publication` (`LIVE`, `PUBLISHING`, `FAILED`, `DISABLED`, revision, last error). The change and its audit record commit first; republishing happens after the commit, and a failure is recorded for background reconciliation |
+| Recovery after a crash right after the default-page commit, a failed publish of the new default, a failed republish of the demoted page | **Not yet run** | Needs PostgreSQL and the projector; the existing integration tests were not run locally |
 
 ## Phase 7: observability and availability
 
@@ -111,4 +122,6 @@ The before/after regression report against `main` (API v1, Events API, SSO, noti
 
 ## Verification run
 
-Node 20, `npx tsc --noEmit` clean after deleting `tsconfig.tsbuildinfo`. `vitest run -c vitest.unit.config.ts --no-file-parallelism` (766 files) passed except one expectation in `api-v2-cross-team.test.ts` (on-call route now answers 404 instead of 403 for an inaccessible schedule), which is still to be reconciled with the test. Database integration tests were not run locally. The default `vitest run` also picks up `tests/docs/tooling/*.test.mjs` (written for `node --test`) and the database integration files, which fail to load or need PostgreSQL; those are environmental and were not counted. `node --test tests/docs/tooling/` was run: the only failure attributable to this change (docs frontmatter) was fixed; the remaining failure (`public-reference-freshness`, stale configuration reference around `AUTH_LOCAL_LOGIN_ENABLED` / `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`) concerns unrelated settings. The new environment variables from this audit are not yet in the configuration reference.
+Node 20, 2026-10-14, after the previous round of changes (a later round, covering the review of `07ef9a2bf`, is re-checked below): `npx tsc --noEmit` clean (tsbuildinfo deleted first); `vitest run -c vitest.unit.config.ts --no-file-parallelism`: 769 files, 5956 tests passed, 4 skipped; `vitest run tests/architecture`: 91 files passed; `eslint` on changed files: 0 errors. Not run: database integration tests (`tests/integration/*` need PostgreSQL), browser tests, the k6 load matrix, a full OpenAPI validator and generated-client smoke tests. The default `vitest run` also loads `tests/docs/tooling/*.test.mjs` (written for `node --test`) and the integration files; those fail to load or need PostgreSQL and are not counted. `node --test tests/docs/tooling/`: 48 of 49 pass after the frontmatter fix; the remaining failure (`public-reference-freshness`, stale configuration reference around `AUTH_LOCAL_LOGIN_ENABLED` / `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`) concerns unrelated settings. The new environment variables from this audit are not yet in the configuration reference.
+
+Round two (review of `07ef9a2bf`): `npx tsc --noEmit` clean; targeted suites for the changed areas pass (auth abuse tests, concurrency, service-account lifecycle, settings panels, API v2 contracts and the architecture guard). The full unit suite is re-run before each push.

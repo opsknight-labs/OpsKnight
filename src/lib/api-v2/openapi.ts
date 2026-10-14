@@ -276,6 +276,18 @@ function buildBaseSpec(): Record<string, unknown> {
             description: { type: 'string', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
+            publication: {
+              type: 'object',
+              description:
+                'Present on PATCH. The change is committed before the public page is republished; this reports whether the page is live, still publishing, or failed and awaiting background reconciliation.',
+              properties: {
+                status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
+                revision: { type: 'string' },
+                lastError: { type: 'string', nullable: true },
+                stale: { type: 'boolean' },
+              },
+              required: ['status', 'revision'],
+            },
           },
           required: ['id', 'name', 'slug', 'isDefault', 'enabled', 'createdAt', 'updatedAt'],
         },
