@@ -806,3 +806,8 @@ console checks passed in all three browsers. The reproducible owned-fixture harn
 Secret-free password hashing, browser and receipt-metrics reports accompany this change.
 Live tenants, physical keys, real provider adapters and production HA acceptance remain
 pending as previously agreed. No PR is opened.
+
+The production-browser gate also exposed a WebKit hydration race: the server-rendered
+identity name could accept input before React initialized it. Setup fields now remain
+disabled until hydration, matching the recovery method selector. The test continues to
+exercise the actual form rather than adding sleeps or bypassing the browser flow.

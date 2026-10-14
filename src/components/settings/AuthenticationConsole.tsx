@@ -285,8 +285,8 @@ export default function AuthenticationConsole({
           <ShieldAlert className="h-4 w-4" />
           <AlertTitle>Recovery readiness is degraded</AlertTitle>
           <AlertDescription>
-            Required remains enforced. Enroll and independently drill replacement keys immediately.
-            A compromised key can always be revoked.
+            Required remains enforced. Create and independently drill replacement recovery identities
+            immediately. A compromised credential can always be revoked.
           </AlertDescription>
         </Alert>
       )}
@@ -949,7 +949,7 @@ export default function AuthenticationConsole({
                         checked={originRepairConfirmed}
                         onChange={event => setOriginRepairConfirmed(event.target.checked)}
                       />
-                      I confirm the pinned origin is the trusted URL used for these enrolled keys.
+                      I confirm the pinned origin is the trusted URL used for these recovery identities.
                     </label>
                     <Button
                       disabled={pending || !originRepairConfirmed}
@@ -977,6 +977,7 @@ export default function AuthenticationConsole({
                 <input
                   className={inputClass}
                   value={displayName}
+                  disabled={pending}
                   onChange={event => setDisplayName(event.target.value)}
                   maxLength={80}
                 />
@@ -985,6 +986,7 @@ export default function AuthenticationConsole({
                 <input
                   type="checkbox"
                   checked={independent}
+                  disabled={pending}
                   onChange={event => setIndependent(event.target.checked)}
                 />
                 This identity uses a separately held vault password or hardware key, with custody
@@ -1057,6 +1059,7 @@ export default function AuthenticationConsole({
                 <input
                   className={inputClass}
                   value={keyName}
+                  disabled={pending}
                   onChange={event => setKeyName(event.target.value)}
                   maxLength={80}
                 />
