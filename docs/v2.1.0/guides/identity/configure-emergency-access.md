@@ -15,26 +15,26 @@ verification:
 
 # Configure independent emergency access
 
-For administrators and security-key custodians. Emergency identities are separate principals, never responders, normal Users, SCIM users, JIT identities or trusted devices.
+For administrators and recovery custodians. Emergency identities are separate principals, never responders, normal Users, SCIM users, JIT identities or trusted devices.
 
 ## Prerequisites and custody
 
-Use the canonical public HTTPS origin and a browser with WebAuthn hardware-key support. Hold two separately controlled identities and hardware keys outside the IdP failure path. Keep backup keys and account identifiers in a tested external recovery procedure. Synced passkeys and backup-eligible credentials are rejected. User verification (for example a key PIN) is required.
+Use the canonical public HTTPS origin. Hold two separately controlled identities outside the IdP failure path; each can use a generated vault password or a hardware security key. Two passwords, two hardware identities, or one of each are supported. Hardware enrollment requires a browser with WebAuthn support. Keep backup keys and account identifiers in a tested external recovery procedure. Synced passkeys and backup-eligible credentials are rejected. User verification (for example a key PIN) is required.
 
-The server stores public keys only. With privacy-preserving attestation, it cannot cryptographically prove that two registrations represent different physical keys or different custodians. The custody confirmation is an operator obligation: use distinct independently held hardware, and test each in a separate browser session. Changing the public RP hostname requires deliberate re-enrollment; existing credentials are bound to that RP.
+For hardware identities, the server stores public keys only. For password identities, it stores only a salted scrypt hash; the generated 256-bit password is returned once to the freshly authenticated custodian. With privacy-preserving attestation, it cannot cryptographically prove that two registrations represent different physical keys or different custodians. The custody confirmation is an operator obligation: use distinct independently held hardware, and test each in a separate browser session. Changing the public RP hostname requires deliberate re-enrollment; existing credentials are bound to that RP.
 
 ![Emergency identity and hardware-key enrollment](../../assets/enterprise-emergency-access.png)
 
 ## Enroll and drill
 
 1. Sign in freshly as an administrator. Open **Settings → System → Emergency Access**.
-2. Create an identity with a recognizable custodian label and confirm independent key custody. Record its generated account identifier externally.
-3. Enter a key label, choose **Enroll hardware key**, and complete the browser ceremony with user verification. Add a backup key before the final drill.
-4. Open `/login/emergency` in a separate browser. Enter the account identifier and choose **Sign in with hardware key**.
+2. Create an identity with a recognizable custodian label and choose the recovery method and confirm independent custody. Record its generated account identifier externally.
+3. For a hardware identity, enter a key label, choose **Enroll hardware key**, and complete the user-verification ceremony. For a password identity, copy the one-time generated password into a vault accessible without the IdP; acknowledge secure storage. It cannot be retrieved again.
+4. Open `/login/emergency` in a separate browser. Choose the recovery method and enter its account identifier; authenticate with the key or generated recovery password.
 5. Verify that only the restricted recovery console opens. It must not open incidents, ordinary settings or a normal User session.
 6. Repeat with a second independently held identity. Return to Emergency Access and confirm both are verified for their current credential versions.
 
-Enrollment alone does not establish readiness. A successful hardware-key sign-in marks an identity active and verifies the current credential version. Any enrolled/revoked key invalidates the drill and revokes sessions for that identity. Drill again after changes and at least every 90 days.
+Enrollment alone does not establish readiness. A successful independent sign-in using the configured method marks an identity active and verifies the current credential version. Any enrolled/revoked key, password rotation or method change invalidates the drill and revokes sessions for that identity. Drill again after changes and at least every 90 days.
 
 ## Session limits, alerts and key maintenance
 
@@ -66,7 +66,7 @@ the public reverse proxy. See [lockout recovery](sso-lockout-recovery/) for repa
 
 1. Sign out of ordinary OpsKnight sessions and open a separate browser profile.
 2. Open `/login/emergency` at the recorded origin, enter the identifier, and use
-   the assigned hardware key with its PIN/user-verification prompt.
+   the assigned generated password or hardware key with its PIN/user-verification prompt.
 3. Confirm the restricted recovery console opens. Attempt an incident URL and
    confirm it redirects to normal sign-in. An emergency principal is not a User.
 4. Return to Emergency Access, confirm the identity’s successful current drill,
@@ -204,3 +204,38 @@ metadata because the old field did not distinguish acceptance from delivery.
 Review the original provider evidence separately when auditing historical delivery.
 Accepted messages without confirmation and other terminal delivery metadata use
 bounded 90-day retention; security audit and in-app evidence remain independent.
+
+
+## Password custody, rotation and method changes
+
+Generated recovery passwords belong to `EmergencyAccount`, never a normal `User`.
+They work when normal password login is disabled under SSO Required, but issue only
+the restricted recovery cookie and cannot open an ordinary application session.
+The public login screen lets the custodian choose a method locally; it does not expose
+an account-discovery endpoint. Unknown identifiers, wrong passwords and disabled
+accounts return the same password-authentication failure. PostgreSQL network/account
+limits apply before hashing, with a separate current-session reauthentication budget.
+
+Hashing uses Node's built-in scrypt at N=32768, r=8, p=3 (32 MiB), random 128-bit salt
+and constant-time comparison. This is an [OWASP documented alternative](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+when Argon2id is unavailable; it avoids adding native binaries across supported images.
+At most two KDF operations run per web process, without an unbounded waiting queue.
+Independent passwords contain 256 random bits. Do not save them in a vault whose only
+unlock route depends on the same SSO service being repaired.
+
+For rotation or a method change, use the identity's control in Emergency Access and
+confirm that its existing sessions and readiness will be revoked. Switching to hardware
+requires new enrollment and a drill; switching to password displays a newly generated
+secret once and requires a new password drill. Both preserve the emergency identity ID.
+Under SSO Required, first establish two ready alternatives before voluntarily removing
+a ready identity's credential. If actually compromised, explicitly confirm compromise;
+the old credential/session is revoked immediately, the policy remains enforced and a
+degraded-recovery alert demands prompt replacement. This also applies to disabling a
+compromised password identity. Never reuse the original normal administrator password
+as an independent recovery secret. The imported legacy-password bridge remains separate.
+
+Password reauthentication rotates the recovery cookie, preserves the original one-hour
+absolute expiry and enforces the existing fifteen-minute idle timeout. Sensitive writes
+still require five-minute freshness. Concurrent rotation or disablement is checked again
+inside the PostgreSQL authorization transaction after password verification; a password
+verified against an older credential version cannot create a surviving session.

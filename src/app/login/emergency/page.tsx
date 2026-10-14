@@ -30,8 +30,8 @@ export default async function EmergencyLoginPage() {
         <EmergencyLogin legacyAvailable={Boolean(policy.legacyEmergencyEmail)} />
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <KeyRound className="h-4 w-4 shrink-0" />
-          Use a separately held hardware key. Your organization’s SSO and synced passkeys cannot
-          unlock recovery.
+          Use a separately held hardware key or an independently vaulted recovery password. Your
+          organization’s SSO and synced passkeys cannot unlock recovery.
         </p>
       </div>
       <Link className="text-sm underline" href="/login">

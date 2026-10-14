@@ -139,6 +139,17 @@ async function reconcileFeedback(id: string, now = new Date()) {
       }
       // Serialize distinct receipts for the same notification as well.
       await tx.$queryRaw`SELECT id FROM "Notification" WHERE id = ${notification.id} FOR UPDATE`;
+      // Provider-result persistence can win between lookup and lock acquisition.
+      // Fence the message identity again before applying any receipt side effects.
+      const currentMessage = await tx.notification.findFirst({
+        where: {
+          id: notification.id,
+          providerMessageId: event.providerMessageId,
+          OR: [{ deliveryProvider: event.provider }, { deliveryProvider: null }],
+        },
+        select: { id: true },
+      });
+      if (!currentMessage) throw new Error('Provider message changed during reconciliation.');
       if (notification.recipientType === 'SUBSCRIBER' && notification.recipientId) {
         // Lock the target so deletion cannot race the soft-bounce counter update.
         const targets = await tx.$queryRaw<Array<{ id: string }>>`
@@ -284,13 +295,70 @@ export async function reconcileNotificationProviderFeedback(
   notificationId?: string,
   now = new Date()
 ) {
+  if (!notificationId) {
+    // A persisted send result is the durable retry trigger if immediate correlation fails.
+    // This scans notifications explicitly awaiting receipt correlation, not all quarantine.
+    const pending = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Notification" WHERE "feedbackPending" = true ORDER BY id LIMIT 100`;
+    const deadline = Date.now() + REPLAY_BUDGET_MS;
+    for (const row of pending) {
+      if (Date.now() >= deadline) break;
+      try {
+        await reconcileNotificationProviderFeedback(row.id, now);
+      } catch {
+        logger.warn('notification.feedback_evidence_replay_deferred', { notificationId: row.id });
+      }
+    }
+  }
   const notification = notificationId
     ? await prisma.notification.findUnique({
         where: { id: notificationId },
-        select: { providerMessageId: true },
+        select: { id: true, providerMessageId: true, deliveryProvider: true },
       })
     : null;
   if (notificationId && !notification?.providerMessageId) return;
+  let correlationProvider = notification?.deliveryProvider;
+  if (notification?.providerMessageId) {
+    const evidence =
+      notification.deliveryProvider ??
+      (
+        await prisma.notificationDeliveryAttempt.findFirst({
+          where: {
+            notificationId: notification.id,
+            providerMessageId: notification.providerMessageId,
+          },
+          orderBy: { ordinal: 'desc' },
+          select: { provider: true },
+        })
+      )?.provider;
+    correlationProvider = evidence;
+    if (evidence) {
+      const quarantined = await prisma.notificationProviderFeedback.findMany({
+        where: {
+          providerMessageId: notification.providerMessageId,
+          provider: evidence,
+          processedAt: null,
+          quarantinedAt: { not: null },
+          reconciliationReason: 'UNMATCHED_PROVIDER_MESSAGE',
+        },
+        take: 100,
+        select: { id: true },
+        orderBy: { quarantinedAt: 'asc' },
+      });
+      if (quarantined.length)
+        await prisma.notificationProviderFeedback.updateMany({
+          where: {
+            id: { in: quarantined.map(row => row.id) },
+            providerMessageId: notification.providerMessageId,
+            provider: evidence,
+            processedAt: null,
+            reconciliationReason: 'UNMATCHED_PROVIDER_MESSAGE',
+          },
+          data: { quarantinedAt: null, nextReconcileAt: now },
+        });
+    }
+  }
+
   const rows = await prisma.notificationProviderFeedback.findMany({
     where: {
       processedAt: null,
@@ -307,6 +375,30 @@ export async function reconcileNotificationProviderFeedback(
   for (const row of rows) {
     if (Date.now() >= deadline) break;
     await safelyReconcileFeedback(row.id, now);
+  }
+  if (notificationId && notification?.providerMessageId) {
+    // Retain the signal while another bounded page of matchable quarantine remains.
+    const remaining = correlationProvider
+      ? await prisma.notificationProviderFeedback.findFirst({
+          where: {
+            providerMessageId: notification.providerMessageId,
+            provider: correlationProvider,
+            processedAt: null,
+            quarantinedAt: { not: null },
+            reconciliationReason: 'UNMATCHED_PROVIDER_MESSAGE',
+          },
+          select: { id: true },
+        })
+      : null;
+    if (!remaining)
+      await prisma.notification.updateMany({
+        where: {
+          id: notificationId,
+          providerMessageId: notification.providerMessageId,
+          deliveryProvider: notification.deliveryProvider,
+        },
+        data: { feedbackPending: false },
+      });
   }
 }
 

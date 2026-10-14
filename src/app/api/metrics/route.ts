@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { collectProviderFeedbackMetrics } from '@/lib/provider-feedback-metrics';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { withRequestContext } from '@/lib/logger';
@@ -239,21 +240,11 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           ) circuits
         `
       ),
-      collectWithTimeout('provider-feedback', DB_COLLECTOR_TIMEOUT_MS, async () => {
-        const rows = await prisma.$queryRaw<
-          Array<{ pending: bigint; retried: bigint; quarantined: bigint }>
-        >`
-          SELECT COUNT(*) FILTER (WHERE "quarantinedAt" IS NULL)::bigint AS pending,
-            COUNT(*) FILTER (WHERE "quarantinedAt" IS NULL AND "reconciliationAttempts" > 0)::bigint AS retried,
-            COUNT(*) FILTER (WHERE "quarantinedAt" IS NOT NULL)::bigint AS quarantined
-          FROM "NotificationProviderFeedback" WHERE "processedAt" IS NULL`;
-        const row = rows[0];
-        return {
-          pending: Number(row?.pending ?? 0),
-          retried: Number(row?.retried ?? 0),
-          quarantined: Number(row?.quarantined ?? 0),
-        };
-      }),
+      collectWithTimeout(
+        'provider-feedback',
+        DB_COLLECTOR_TIMEOUT_MS,
+        collectProviderFeedbackMetrics
+      ),
       collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
         const { collectIncidentCollaborationMetricsFromDB } =
           await import('@/lib/incident-collaboration/meeting-metrics');

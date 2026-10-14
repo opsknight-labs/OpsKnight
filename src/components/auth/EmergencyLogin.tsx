@@ -6,6 +6,8 @@ import { authenticationRequest } from '@/components/settings/AuthenticationConso
 import { Button } from '@/components/ui/shadcn/button';
 
 export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: boolean }) {
+  const [method, setMethod] = useState<'WEBAUTHN' | 'PASSWORD'>('WEBAUTHN');
+  const [recoveryPassword, setRecoveryPassword] = useState('');
   const [accountId, setAccountId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,6 +37,17 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
         onSubmit={event => {
           event.preventDefault();
           void perform(async () => {
+            if (method === 'PASSWORD') {
+              try {
+                await authenticationRequest(
+                  { action: 'passwordLogin', accountId, password: recoveryPassword },
+                  '/api/auth/emergency'
+                );
+              } finally {
+                setRecoveryPassword('');
+              }
+              return;
+            }
             const options = await authenticationRequest<{
               options: PublicKeyCredentialRequestOptionsJSON;
               challengeId: string;
@@ -50,6 +63,21 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
         }}
       >
         <label className="block space-y-1">
+          <span>Recovery method</span>
+          <select
+            className={fieldClass}
+            value={method}
+            disabled={pending}
+            onChange={event => {
+              setMethod(event.target.value as 'PASSWORD' | 'WEBAUTHN');
+              setRecoveryPassword('');
+            }}
+          >
+            <option value="WEBAUTHN">Hardware security key</option>
+            <option value="PASSWORD">Recovery password</option>
+          </select>
+        </label>
+        <label className="block space-y-1">
           <span>Emergency account identifier</span>
           <input
             className={fieldClass}
@@ -61,8 +89,23 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
             disabled={pending}
           />
         </label>
+        {method === 'PASSWORD' && (
+          <label className="block space-y-1">
+            <span>Recovery password</span>
+            <input
+              className={fieldClass}
+              type="password"
+              autoComplete="current-password"
+              required
+              value={recoveryPassword}
+              onChange={event => setRecoveryPassword(event.target.value)}
+              disabled={pending}
+              maxLength={256}
+            />
+          </label>
+        )}
         <Button disabled={pending || !accountId} type="submit">
-          Sign in with hardware key
+          {method === 'PASSWORD' ? 'Sign in to recovery' : 'Sign in with hardware key'}
         </Button>
       </form>
       {legacyAvailable && (

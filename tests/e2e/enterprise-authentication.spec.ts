@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 // Run only against a disposable, migrated installation with an active fixture admin.
 // SSO_E2E_BASE_URL=http://localhost:3005 SSO_E2E_ADMIN_EMAIL=... SSO_E2E_ADMIN_PASSWORD=...
@@ -98,7 +100,9 @@ test('enterprise console and independent hardware recovery work in a real browse
     });
     const name = `Browser recovery drill ${Date.now()}`;
     await page.getByRole('textbox', { name: 'Emergency identity name', exact: true }).fill(name);
-    await page.getByRole('checkbox', { name: /separately held hardware keys/ }).check();
+    await page
+      .getByRole('checkbox', { name: /separately held vault password or hardware key/ })
+      .check();
     await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
     const identity = page
       .locator('li:visible')
@@ -390,5 +394,145 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     }
   } finally {
     await context.close().catch(() => {});
+  }
+});
+
+test('independent password recovery, one-time secret and rotation work across browsers', async ({
+  browser,
+  browserName,
+}) => {
+  test.skip(
+    !process.env.SSO_E2E_BASE_URL || process.env.SSO_E2E_PASSWORD_RECOVERY !== '1',
+    'Requires disposable password-recovery fixture.'
+  );
+  test.setTimeout(90000);
+  const origin = process.env.SSO_E2E_BASE_URL!;
+  const normal = await browser.newContext({ ignoreHTTPSErrors: true });
+  const recovery = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const page = await normal.newPage();
+    await page.goto(`${origin}/login`);
+    await page.getByLabel('Email', { exact: true }).fill(process.env.SSO_E2E_ADMIN_EMAIL!);
+    await page.getByLabel('Password', { exact: true }).fill(process.env.SSO_E2E_ADMIN_PASSWORD!);
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.waitForURL(url => !url.pathname.startsWith('/login'), {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.goto(`${origin}/settings/system/emergency`);
+    const name = `Password browser ${browserName} ${Date.now()}`;
+    await page.getByRole('textbox', { name: 'Emergency identity name', exact: true }).fill(name);
+    await page
+      .getByRole('combobox', { name: 'Recovery method', exact: true })
+      .selectOption('PASSWORD');
+    await page
+      .getByRole('checkbox', { name: /separately held vault password or hardware key/ })
+      .check();
+    const createdResponse = page.waitForResponse(
+      response =>
+        response.url().endsWith('/api/auth/control') && response.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
+    const created = (await (await createdResponse).json()).data as { id: string; password: string };
+    expect(created.password).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    await expect(page.getByText(created.password, { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'I stored it securely' }).click();
+    await expect(page.getByText(created.password, { exact: true })).toHaveCount(0);
+    const identity = page
+      .locator('li:visible')
+      .filter({ has: page.getByText(`${name} —`, { exact: false }) })
+      .first();
+    await expect(identity).toContainText('drill required');
+    const rp = await recovery.newPage();
+    await rp.goto(`${origin}/login/emergency`);
+    await rp
+      .getByRole('combobox', { name: 'Recovery method', exact: true })
+      .selectOption('PASSWORD');
+    await rp.getByLabel('Emergency account identifier').fill(created.id);
+    await rp.getByLabel('Recovery password', { exact: true }).fill(created.password);
+    const signedIn = rp.waitForResponse(
+      response =>
+        response.url().endsWith('/api/auth/emergency') && response.request().method() === 'POST'
+    );
+    await rp.getByRole('button', { name: 'Sign in to recovery', exact: true }).click();
+    const loginExpiresAt = (await (await signedIn).headerValue('set-cookie'))?.match(
+      /expires=([^;]+)/i
+    )?.[1];
+    expect(loginExpiresAt).toBeTruthy();
+    await rp.waitForURL(`${origin}/recovery`, { waitUntil: 'domcontentloaded' });
+    const cookie = (await recovery.cookies()).find(value =>
+      value.name.endsWith('opsknight-emergency')
+    );
+    expect(cookie?.httpOnly).toBe(true);
+    expect(cookie?.secure).toBe(true);
+    expect(cookie?.sameSite).toBe('Strict');
+    const fixtureContainer = process.env.SSO_E2E_POSTGRES_CONTAINER;
+    if (fixtureContainer && browserName === 'chromium') {
+      if (!/^opsknight-sso-browser-cert-[a-f0-9]{8}$/.test(fixtureContainer))
+        throw new Error('Only the owned disposable browser database can be restarted');
+      await promisify(execFile)('docker', ['restart', fixtureContainer]);
+    }
+    await expect
+      .poll(async () => (await recovery.request.get(`${origin}/api/auth/control`)).status(), {
+        timeout: 30000,
+      })
+      .toBe(200);
+    await rp.getByRole('tab', { name: 'Emergency Access', exact: true }).click();
+    await rp.getByLabel('Recovery password for fresh verification').fill(created.password);
+    const reauthenticated = rp.waitForResponse(
+      response =>
+        response.url().endsWith('/api/auth/emergency') && response.request().method() === 'POST'
+    );
+    await rp.getByRole('button', { name: 'Verify recovery password again' }).click();
+    expect((await reauthenticated).status()).toBe(200);
+    expect(
+      (await (await reauthenticated).headerValue('set-cookie'))?.match(/expires=([^;]+)/i)?.[1]
+    ).toBe(loginExpiresAt);
+    const freshCookie = (await recovery.cookies()).find(value =>
+      value.name.endsWith('opsknight-emergency')
+    );
+    expect(freshCookie?.value).not.toBe(cookie?.value);
+    // Browsers adjust whole-second Expires using each response's Date header.
+    expect(Math.abs(freshCookie!.expires - cookie!.expires)).toBeLessThanOrEqual(1);
+    expect((await recovery.request.get(`${origin}/api/auth/control`)).status()).toBe(200);
+    expect([401, 403]).toContain((await recovery.request.get(`${origin}/api/incidents`)).status());
+    await page.reload();
+    await expect(identity).toContainText('drill verified');
+    await identity.getByRole('checkbox', { name: /changing this credential revokes/ }).check();
+    const rotatedResponse = page.waitForResponse(
+      response =>
+        response.url().endsWith('/api/auth/control') && response.request().method() === 'POST'
+    );
+    await identity.getByRole('button', { name: 'Rotate password', exact: true }).click();
+    const rotated = (await (await rotatedResponse).json()).data as { id: string; password: string };
+    expect(rotated.password).not.toBe(created.password);
+    expect((await recovery.request.get(`${origin}/api/auth/control`)).status()).toBe(403);
+    await page.getByRole('button', { name: 'I stored it securely' }).click();
+    await expect(identity).toContainText('drill required');
+    await page.setViewportSize({ width: 390, height: 1000 });
+    const closeNavigation = page.getByRole('button', {
+      name: 'Close navigation menu',
+      exact: true,
+    });
+    if (await closeNavigation.isVisible()) await closeNavigation.click();
+    await page.waitForFunction(
+      () =>
+        (document.querySelector('.sidebar-mobile')?.getBoundingClientRect().right ?? Infinity) <= 1
+    );
+    await identity.scrollIntoViewIfNeeded();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true);
+    if (process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR)
+      await page.screenshot({
+        path: `${process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR}/password-recovery-${browserName}-390.png`,
+        fullPage: false,
+      });
+    await normal.request.post(`${origin}/api/auth/control`, {
+      headers: { Origin: origin },
+      data: { action: 'disableEmergency', accountId: created.id },
+    });
+  } finally {
+    await recovery.close();
+    await normal.close();
   }
 });

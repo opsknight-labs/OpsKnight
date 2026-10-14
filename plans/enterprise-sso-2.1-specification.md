@@ -430,3 +430,16 @@ Before considering this work complete, I want these guarantees:
 My recommended sequence is: backend policy → session security → emergency recovery → safe rollout workflow → admin UI → full testing and docs certification.
 
 The result should be a genuinely enterprise-ready authentication system, not just an improved SSO settings page.
+
+## Selectable emergency authentication amendment — 2026-10-14
+
+Independent recovery identities support `PASSWORD` or `WEBAUTHN`. Existing records retain
+`WEBAUTHN`; normal Users, OIDC identities and sessions are not converted. Generated
+passwords are returned once and stored as salted scrypt hashes. Two distinct active
+identities, each drilled with its current configured method/origin in the preceding
+90 days, satisfy the existing readiness requirement in any method combination.
+Emergency password login grants only the restricted recovery capability and preserves
+one-hour maximum, fifteen-minute idle and five-minute sensitive-write freshness limits.
+Credential changes revoke existing sessions and readiness; required-mode guards and
+explicit compromise handling apply to either method. There is no environment switch
+or automatic fallback for normal SSO Required authentication.

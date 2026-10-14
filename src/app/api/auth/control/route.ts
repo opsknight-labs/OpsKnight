@@ -23,6 +23,7 @@ import {
 } from '@/lib/auth-control/oidc-revisions';
 import {
   createEmergencyAccount,
+  changeEmergencyMethod,
   disableEmergencyAccount,
   registrationOptions,
   retireLegacyEmergency,
@@ -84,6 +85,17 @@ const schema = z.discriminatedUnion('action', [
       action: z.literal('createEmergency'),
       displayName: z.string().trim().min(1).max(80),
       independenceConfirmed: z.literal(true),
+      authenticationMethod: z.enum(['PASSWORD', 'WEBAUTHN']).default('WEBAUTHN'),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('changeEmergencyMethod'),
+      confirmation: z.literal('CHANGE RECOVERY CREDENTIAL'),
+      accountId: id,
+      method: z.enum(['PASSWORD', 'WEBAUTHN']),
+      compromised: z.boolean(),
+      expectedVersion: z.number().int().positive(),
     })
     .strict(),
   z.object({ action: z.literal('enroll'), accountId: id }).strict(),
@@ -106,7 +118,13 @@ const schema = z.discriminatedUnion('action', [
     .strict(),
   z.object({ action: z.literal('revokeSession'), sessionId: id }).strict(),
   z.object({ action: z.literal('revoke'), credentialId: id, compromised: z.boolean() }).strict(),
-  z.object({ action: z.literal('disableEmergency'), accountId: id }).strict(),
+  z
+    .object({
+      action: z.literal('disableEmergency'),
+      accountId: id,
+      compromised: z.boolean().default(false),
+    })
+    .strict(),
   z.object({ action: z.literal('retireLegacy') }).strict(),
   z.object({ action: z.literal('claims'), revisionId: id, claims: z.record(z.unknown()) }).strict(),
   z
@@ -184,9 +202,14 @@ export async function POST(request: NextRequest) {
     await assertAuthenticationOrigin(
       request,
       actor.kind !== 'admin' ||
-        ['enroll', 'verifyEnrollment', 'revoke', 'disableEmergency', 'createEmergency'].includes(
-          input.action
-        )
+        [
+          'enroll',
+          'verifyEnrollment',
+          'revoke',
+          'disableEmergency',
+          'createEmergency',
+          'changeEmergencyMethod',
+        ].includes(input.action)
     );
     if (
       !(await consumeAuthRateLimit('auth-control', `${actor.kind}:${actor.id}`, 60, 300000)).allowed
@@ -235,7 +258,22 @@ export async function POST(request: NextRequest) {
         return json(await stageRollback(actor, input.revisionId));
       case 'createEmergency':
         return json(
-          await createEmergencyAccount(actor, input.displayName, input.independenceConfirmed)
+          await createEmergencyAccount(
+            actor,
+            input.displayName,
+            input.independenceConfirmed,
+            input.authenticationMethod
+          )
+        );
+      case 'changeEmergencyMethod':
+        return json(
+          await changeEmergencyMethod(
+            actor,
+            input.accountId,
+            input.method,
+            input.compromised,
+            input.expectedVersion
+          )
         );
       case 'enroll': {
         const result = await registrationOptions(actor, input.accountId);
@@ -265,7 +303,7 @@ export async function POST(request: NextRequest) {
         await revokeEmergencyCredential(actor, input.credentialId, input.compromised);
         return json({ success: true });
       case 'disableEmergency':
-        await disableEmergencyAccount(actor, input.accountId);
+        await disableEmergencyAccount(actor, input.accountId, input.compromised);
         return json({ success: true });
       case 'retireLegacy':
         await retireLegacyEmergency(actor);

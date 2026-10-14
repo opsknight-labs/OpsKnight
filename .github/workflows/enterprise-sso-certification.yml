@@ -57,11 +57,11 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
       - name: Authentication and provider unit regressions
-        run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication-console-race.test.tsx tests/components/authentication-diagnostics-delivery.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/lib/metrics-domain.test.ts
+        run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication-console-race.test.tsx tests/components/authentication-diagnostics-delivery.test.tsx tests/components/emergency-password-login.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/lib/metrics-domain.test.ts
       - name: Apply additive migrations
         run: npx prisma migrate deploy
       - name: Signed OIDC, WebAuthn, abuse availability and notification fan-out
-        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts tests/integration/provider-feedback-isolation-database.test.ts
+        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts tests/integration/provider-feedback-isolation-database.test.ts tests/integration/emergency-password-database.test.ts
 
       - name: Emergency edge admission fixture
         run: python3 scripts/certify-sso-edge.py
@@ -109,3 +109,29 @@ jobs:
         with:
           name: enterprise-sso-authentication-load
           path: plans/certification/enterprise-sso-2.1-authentication-load.json
+
+  browser:
+    name: Emergency recovery browser certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://certifier:unused-setup-fixture@127.0.0.1:1/enterprise_sso_test
+      DIRECT_URL: postgresql://certifier:unused-setup-fixture@127.0.0.1:1/enterprise_sso_test
+      SSO_CERT_CAPTURE_DIR: ${{ runner.temp }}/enterprise-authentication-captures
+      LOG_LEVEL: error
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: '22'
+          generate-prisma: 'true'
+      - name: Install certification browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Production HTTPS recovery, password rotation and database restart
+        run: python3 scripts/certify-enterprise-authentication-browser.py --build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-authentication-browser-captures
+          path: ${{ runner.temp }}/enterprise-authentication-captures
+          if-no-files-found: ignore

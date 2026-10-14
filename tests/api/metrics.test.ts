@@ -15,6 +15,8 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     $queryRaw: vi.fn(),
+    $executeRaw: vi.fn(),
+    $transaction: vi.fn(),
     backgroundJob: {
       groupBy: vi.fn(),
     },
@@ -33,6 +35,9 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMetricsCache();
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async operation => (operation as (tx: typeof prisma) => Promise<unknown>)(prisma) as never
+    );
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
     process.env = { ...originalEnv };
   });
@@ -92,7 +97,7 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
   it('exports receipt lifecycle counts without recipient or provider-event labels', async () => {
     process.env.PROMETHEUS_SCRAPE_TOKEN = 'receipt-metric-test';
     vi.mocked(prisma.$queryRaw).mockImplementation((async (query: unknown) => {
-      if (String(query).includes('NotificationProviderFeedback'))
+      if (JSON.stringify(query).includes('NotificationProviderFeedback'))
         return [{ pending: BigInt(7), retried: BigInt(3), quarantined: BigInt(2) }];
       return [];
     }) as never);
@@ -111,7 +116,7 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
   it('omits receipt gauges when their collector fails instead of reporting a false zero', async () => {
     process.env.PROMETHEUS_SCRAPE_TOKEN = 'receipt-metric-test';
     vi.mocked(prisma.$queryRaw).mockImplementation((async (query: unknown) => {
-      if (String(query).includes('NotificationProviderFeedback'))
+      if (JSON.stringify(query).includes('NotificationProviderFeedback'))
         throw new Error('receipt collector unavailable');
       return [];
     }) as never);

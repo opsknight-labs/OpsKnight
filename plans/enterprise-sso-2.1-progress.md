@@ -774,3 +774,35 @@ The full unit run passed 5,769 tests (four intentional skips), followed by 47 pa
 focused metrics/notification unit checks after final failure-reporting assertions.
 Strict types, modified-file lint and the optimized production build passed. The prior
 `edcf401` commit's complete nine-check hosted matrix also completed successfully.
+
+
+### Selectable emergency credentials and late receipt evidence — 2026-10-14
+
+Implemented the follow-up review archived in
+`enterprise-sso-2.1-selectable-recovery-audit.md` on the existing feature branch.
+Independent emergency identities now choose PASSWORD or WEBAUTHN. Generated passwords
+are displayed once, stored only as salted scrypt hashes and authenticated through the
+restricted emergency session. Ordinary User passwords cannot bypass SSO Required.
+Two current independent drills remain mandatory, including mixed credential methods.
+Rotation, method changes and disablement use version checks and revoke old sessions;
+compromise handling records degraded readiness and mandatory audit events.
+The console follows existing controls and provides explicit secret storage confirmation,
+per-account change confirmation, readiness status and password reauthentication.
+
+Late provider/message evidence now durably schedules bounded reopening of only
+UNMATCHED_PROVIDER_MESSAGE quarantine. Invalid/deleted-target quarantine stays terminal.
+A partial pending index bounds notification scans, and provider identity is rechecked
+under the notification lock. Exact receipt metrics have database-side deadlines in
+addition to the cached scrape collector. The 100,000-row backlog report includes
+EXPLAIN ANALYZE and concurrent successful critical-mail dispatch; timings are local,
+not production capacity claims.
+
+Final local evidence: 111 PostgreSQL tests passed across five suites after all 209
+migrations; the complete unit suite passed 5,773 tests with four intentional skips.
+The optimized production build and seven production HTTPS browser checks passed;
+two hardware checks intentionally skip outside Chromium. Password recovery and mobile
+console checks passed in all three browsers. The reproducible owned-fixture harness is
+`scripts/certify-enterprise-authentication-browser.py --build` and now runs in CI.
+Secret-free password hashing, browser and receipt-metrics reports accompany this change.
+Live tenants, physical keys, real provider adapters and production HA acceptance remain
+pending as previously agreed. No PR is opened.

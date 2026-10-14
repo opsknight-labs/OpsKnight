@@ -216,6 +216,8 @@ export async function authenticationDashboard(
     emergencyAccounts: accounts.map(account => ({
       id: account.id,
       displayName: account.displayName,
+      authenticationMethod: account.authenticationMethod,
+      credentialVersion: account.credentialVersion,
       status: account.status,
       verifiedAt: account.verifiedAt?.toISOString() ?? null,
       lastUsedAt: account.lastUsedAt?.toISOString() ?? null,

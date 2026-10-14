@@ -2462,7 +2462,8 @@ export async function deliverCentralNotification(
         sentAt: result.skipped ? null : finishedAt,
         failedAt: null,
         errorMsg: result.skipped ? (result.error ?? null) : null,
-        providerMessageId: result.providerMessageId,
+        providerMessageId: result.providerMessageId ?? null,
+        feedbackPending: Boolean(result.providerMessageId),
         deliveryProvider:
           (result as { selectedProvider?: string }).selectedProvider || currentProvider,
         ...terminalPayload(candidate.category),

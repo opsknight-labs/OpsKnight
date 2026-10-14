@@ -10,6 +10,7 @@ import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 import { recoveryOrigin } from './origin';
+import { verifyEmergencyPassword } from './emergency-password';
 import { securityEvent } from './security-events';
 
 export const EMERGENCY_COOKIE =
@@ -131,7 +132,12 @@ export async function emergencyLoginOptions(accountId: string, ip: string, reaut
     where: { id: accountId },
     include: { credentials: { where: { revokedAt: null } } },
   });
-  if (!account || account.status === 'DISABLED' || account.credentials.length === 0) {
+  if (
+    !account ||
+    account.authenticationMethod !== 'WEBAUTHN' ||
+    account.status === 'DISABLED' ||
+    account.credentials.length === 0
+  ) {
     await recordEmergencyFailure(accountId, 'ACCOUNT_OR_CREDENTIAL_UNAVAILABLE');
     throw new Error('Emergency authentication unavailable. Check the account identifier and key.');
   }
@@ -218,6 +224,7 @@ export async function verifyEmergencyLogin(
         });
         if (
           !account ||
+          account.authenticationMethod !== 'WEBAUTHN' ||
           account.status === 'DISABLED' ||
           account.credentialVersion !== flow.credentialVersion ||
           !credential ||
@@ -268,7 +275,15 @@ export async function verifyEmergencyLogin(
             verifiedOrigin: origin,
             verifiedAt: { gte: new Date(Date.now() - 90 * 86400000) },
             verifiedCredentialVersion: { equals: tx.emergencyAccount.fields.credentialVersion },
-            credentials: { some: { revokedAt: null, deviceType: 'singleDevice', backedUp: false } },
+            OR: [
+              { authenticationMethod: 'PASSWORD', passwordHash: { not: null } },
+              {
+                authenticationMethod: 'WEBAUTHN',
+                credentials: {
+                  some: { revokedAt: null, deviceType: 'singleDevice', backedUp: false },
+                },
+              },
+            ],
           },
         });
         if (readyCount >= 2)
@@ -423,4 +438,120 @@ export async function revokeEmergencySession(token: string) {
         { reason: 'logout' }
       );
   });
+}
+
+export async function passwordEmergencyLogin(
+  accountId: string,
+  password: string,
+  ip: string,
+  reauthToken?: string
+) {
+  let throttled = false;
+  try {
+    if (!(await consumeAuthRateLimit('emergency:password:network', ip, 30, 300000)).allowed) {
+      throttled = true;
+      throw new Error('THROTTLED');
+    }
+    const previous = reauthToken !== undefined ? await getEmergencySession(reauthToken) : null;
+    if (reauthToken !== undefined && (!previous || previous.emergencyAccountId !== accountId))
+      throw new Error('SESSION_INVALID');
+    const account = await prisma.emergencyAccount.findUnique({ where: { id: accountId } });
+    if (
+      account &&
+      !(
+        await consumeAuthRateLimit(
+          previous ? 'emergency:password:reauth' : 'emergency:password:account',
+          previous?.id ?? accountId,
+          previous ? 10 : 20,
+          300000
+        )
+      ).allowed
+    ) {
+      throttled = true;
+      throw new Error('THROTTLED');
+    }
+    const valid = await verifyEmergencyPassword(
+      password,
+      account?.authenticationMethod === 'PASSWORD' ? account.passwordHash : null
+    );
+    if (
+      !account ||
+      !valid ||
+      account.status === 'DISABLED' ||
+      account.authenticationMethod !== 'PASSWORD'
+    )
+      throw new Error('INVALID_CREDENTIAL');
+    const origin = await recoveryOrigin();
+    const token = secret();
+    return await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(210012002::bigint)`;
+      await tx.$queryRaw`SELECT id FROM "EmergencyAccount" WHERE id = ${account.id} FOR UPDATE`;
+      const current = await tx.emergencyAccount.findUniqueOrThrow({ where: { id: account.id } });
+      if (
+        current.status === 'DISABLED' ||
+        current.authenticationMethod !== 'PASSWORD' ||
+        current.credentialVersion !== account.credentialVersion ||
+        current.passwordHash !== account.passwordHash
+      )
+        throw new Error('CREDENTIAL_CHANGED');
+      let expiresAt = new Date(Date.now() + 3600000);
+      if (previous) {
+        const session = await tx.emergencySession.findUniqueOrThrow({ where: { id: previous.id } });
+        if (
+          session.revokedAt ||
+          session.tokenHash !== digest(reauthToken!) ||
+          session.credentialVersion !== current.credentialVersion ||
+          session.expiresAt.getTime() <= Date.now() ||
+          Date.now() - session.lastActivityAt.getTime() >= 900000
+        )
+          throw new Error('SESSION_EXPIRED');
+        expiresAt = session.expiresAt;
+        await tx.emergencySession.update({
+          where: { id: session.id },
+          data: {
+            tokenHash: digest(token),
+            authenticatedAt: new Date(),
+            lastActivityAt: new Date(),
+          },
+        });
+      } else
+        await tx.emergencySession.create({
+          data: {
+            emergencyAccountId: current.id,
+            credentialVersion: current.credentialVersion,
+            tokenHash: digest(token),
+            expiresAt,
+          },
+        });
+      await tx.emergencyAccount.update({
+        where: { id: current.id },
+        data: {
+          status: 'ACTIVE',
+          verifiedAt: new Date(),
+          lastUsedAt: new Date(),
+          verifiedCredentialVersion: current.credentialVersion,
+          verifiedOrigin: origin,
+        },
+      });
+      const { emergencyReadiness } = await import('./emergency-management');
+      if ((await emergencyReadiness(tx)).length >= 2)
+        await tx.authenticationPolicy.updateMany({
+          where: { id: 'default', recoveryDegradedAt: { not: null } },
+          data: { recoveryDegradedAt: null },
+        });
+      await securityEvent(
+        tx,
+        previous ? 'auth.emergency.reauthenticated' : 'auth.emergency.login.success',
+        current.id,
+        { method: 'PASSWORD' }
+      );
+      return { token, expiresAt };
+    });
+  } catch {
+    if (throttled) await recordEmergencyThrottle('verification');
+    else await recordEmergencyFailure('', 'PASSWORD_VERIFICATION_FAILED');
+    throw new Error(
+      'Emergency sign-in failed. Verify your recovery credentials or use another custodian.'
+    );
+  }
 }

@@ -12,6 +12,7 @@ import {
   emergencyLoginOptions,
   verifyEmergencyLogin,
   legacyEmergencyLogin,
+  passwordEmergencyLogin,
   deliberateEmergencyActivity,
   revokeEmergencySession,
 } from '@/lib/auth-control/emergency';
@@ -27,6 +28,20 @@ const responseSchema = z.custom<AuthenticationResponseJSON>(value =>
   )
 );
 const schema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('passwordLogin'),
+      accountId: z.string().min(1).max(128),
+      password: z.string().min(1).max(256),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('passwordReauth'),
+      accountId: z.string().min(1).max(128),
+      password: z.string().min(1).max(256),
+    })
+    .strict(),
   z
     .object({
       action: z.literal('options'),
@@ -75,7 +90,12 @@ export async function POST(request: NextRequest) {
       });
       return response;
     }
-    if (input.action === 'verify' || input.action === 'legacy') {
+    if (
+      input.action === 'verify' ||
+      input.action === 'legacy' ||
+      input.action === 'passwordLogin' ||
+      input.action === 'passwordReauth'
+    ) {
       const result =
         input.action === 'verify'
           ? await verifyEmergencyLogin(
@@ -84,7 +104,14 @@ export async function POST(request: NextRequest) {
               input.response,
               ip
             )
-          : await legacyEmergencyLogin(input.email, input.password, ip);
+          : input.action === 'legacy'
+            ? await legacyEmergencyLogin(input.email, input.password, ip)
+            : await passwordEmergencyLogin(
+                input.accountId,
+                input.password,
+                ip,
+                input.action === 'passwordReauth' ? token : undefined
+              );
       const response = jsonApiOk(
         { success: true, expiresAt: result.expiresAt.toISOString(), recoveryUrl: '/recovery' },
         { headers: noStore }

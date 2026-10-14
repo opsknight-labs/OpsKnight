@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { Prisma } from '@prisma/client';
+import {
+  collectProviderFeedbackMetrics,
+  providerFeedbackMetricsQuery,
+} from '@/lib/provider-feedback-metrics';
 import { encrypt } from '@/lib/encryption';
 import {
   ingestNotificationProviderFeedback,
@@ -457,6 +462,261 @@ suite('provider receipt isolation against PostgreSQL', () => {
         where: { providerEventId: { startsWith: `${prefix}-retention-` } },
       })
     ).toBe(0);
+  });
+  it('reconsiders only provider-matched unmatched quarantine when a notification is committed later', async () => {
+    const key = `${prefix}-late-quarantine`;
+    await prisma.notificationProviderFeedback.createMany({
+      data: ['UNMATCHED_PROVIDER_MESSAGE', 'RECIPIENT_DELETED', 'INVALID_EVENT_TYPE'].map(
+        reason => ({
+          provider: 'fixture',
+          providerEventId: `${key}-${reason}`,
+          providerMessageId: key,
+          eventType: 'DELIVERED',
+          occurredAt: new Date(),
+          quarantinedAt: new Date(),
+          reconciliationReason: reason,
+          reconciliationAttempts: 12,
+        })
+      ),
+    });
+    const notification = await prisma.notification.create({
+      data: {
+        channel: 'EMAIL',
+        status: 'SENT',
+        category: 'SECURITY',
+        recipientId: key,
+        recipientHash: key,
+        sourceId: key,
+        providerMessageId: key,
+        deliveryProvider: 'wrong-provider',
+      },
+    });
+    await reconcileNotificationProviderFeedback(notification.id);
+    expect(
+      await prisma.notificationProviderFeedback.count({
+        where: { providerMessageId: key, quarantinedAt: { not: null } },
+      })
+    ).toBe(3);
+    await prisma.notification.update({
+      where: { id: notification.id },
+      data: { deliveryProvider: 'fixture' },
+    });
+    await reconcileNotificationProviderFeedback(notification.id);
+    const recovered = await prisma.notificationProviderFeedback.findUniqueOrThrow({
+      where: {
+        provider_providerEventId: {
+          provider: 'fixture',
+          providerEventId: `${key}-UNMATCHED_PROVIDER_MESSAGE`,
+        },
+      },
+    });
+    expect(recovered.processedAt).not.toBeNull();
+    expect(recovered.quarantinedAt).toBeNull();
+    expect(
+      await prisma.notificationProviderFeedback.count({
+        where: { providerMessageId: key, quarantinedAt: { not: null } },
+      })
+    ).toBe(2);
+  });
+  it('clears an obsolete provider message ID when a later accepted submission has no message ID', async () => {
+    const key = `${prefix}-no-provider-id`;
+    const intent = await critical(key);
+    await prisma.notification.update({
+      where: { id: intent.id },
+      data: {
+        status: 'FAILED',
+        attempts: 1,
+        providerMessageId: `${key}-obsolete`,
+        deliveryProvider: 'obsolete',
+        nextAttemptAt: new Date(0),
+      },
+    });
+    mocks.sendEmail.mockResolvedValue({ success: true, selectedProvider: 'fixture' });
+    expect(await deliverCentralNotification(intent.id)).toMatchObject({ success: true });
+    const result = await prisma.notification.findUniqueOrThrow({ where: { id: intent.id } });
+    expect(result.status).toBe('SENT');
+    expect(result.providerMessageId).toBeNull();
+    expect(result.feedbackPending).toBe(false);
+    await ingestNotificationProviderFeedback({
+      provider: 'obsolete',
+      providerEventId: key,
+      providerMessageId: `${key}-obsolete`,
+      type: 'DELIVERED',
+      occurredAt: new Date(),
+    });
+    expect(
+      (
+        await prisma.notificationProviderFeedback.findUniqueOrThrow({
+          where: { provider_providerEventId: { provider: 'obsolete', providerEventId: key } },
+        })
+      ).processedAt
+    ).toBeNull();
+  });
+  it('fences a provider result changing after receipt lookup but before the notification lock', async () => {
+    const key = `${prefix}-provider-race`;
+    const notification = await prisma.notification.create({
+      data: {
+        channel: 'EMAIL',
+        status: 'SENT',
+        category: 'SECURITY',
+        recipientId: key,
+        recipientHash: key,
+        sourceId: key,
+        sourceType: 'AUTHENTICATION',
+        templateKey: 'authentication-security-alert',
+        providerMessageId: key,
+        deliveryProvider: 'fixture',
+      },
+    });
+    const transaction = prisma.$transaction.bind(prisma);
+    const intercept = vi.spyOn(prisma, '$transaction').mockImplementationOnce((async (
+      callback: (tx: Prisma.TransactionClient) => Promise<unknown>
+    ) =>
+      transaction(async tx => {
+        const delegate = new Proxy(tx.notification, {
+          get(target, field) {
+            if (field !== 'findUnique') return Reflect.get(target, field);
+            return async (args: Prisma.NotificationFindUniqueArgs) => {
+              const found = await target.findUnique(args);
+              await prisma.notification.update({
+                where: { id: notification.id },
+                data: { providerMessageId: `${key}-replacement`, deliveryProvider: 'replacement' },
+              });
+              return found;
+            };
+          },
+        });
+        const fenced = new Proxy(tx, {
+          get(target, field) {
+            return field === 'notification' ? delegate : Reflect.get(target, field);
+          },
+        });
+        return callback(fenced);
+      })) as never);
+    try {
+      await ingestNotificationProviderFeedback({
+        provider: 'fixture',
+        providerEventId: key,
+        providerMessageId: key,
+        type: 'DELIVERED',
+        occurredAt: new Date(),
+      });
+    } finally {
+      intercept.mockRestore();
+    }
+    expect(
+      (await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })).status
+    ).toBe('SENT');
+    expect(
+      (
+        await prisma.notificationProviderFeedback.findUniqueOrThrow({
+          where: { provider_providerEventId: { provider: 'fixture', providerEventId: key } },
+        })
+      ).processedAt
+    ).toBeNull();
+  });
+  it('recovers late quarantine evidence even when the immediate post-send correlation query fails', async () => {
+    const key = `${prefix}-durable-late-evidence`;
+    await ingestNotificationProviderFeedback({
+      provider: 'fixture',
+      providerEventId: key,
+      providerMessageId: key,
+      type: 'DELIVERED',
+      occurredAt: new Date(),
+    });
+    const stored = await prisma.notificationProviderFeedback.findUniqueOrThrow({
+      where: { provider_providerEventId: { provider: 'fixture', providerEventId: key } },
+    });
+    await prisma.notificationProviderFeedback.update({
+      where: { id: stored.id },
+      data: {
+        createdAt: new Date(Date.now() - 48 * 60 * 60_000),
+        nextReconcileAt: new Date(0),
+      },
+    });
+    await reconcileNotificationProviderFeedback();
+    expect(
+      (await prisma.notificationProviderFeedback.findUniqueOrThrow({ where: { id: stored.id } }))
+        .quarantinedAt
+    ).not.toBeNull();
+    const intent = await critical(key);
+    mocks.sendEmail.mockResolvedValue({
+      success: true,
+      providerMessageId: key,
+      selectedProvider: 'fixture',
+    });
+    const query = vi
+      .spyOn(prisma.notificationProviderFeedback, 'findMany')
+      .mockRejectedValueOnce(new Error('injected post-send query failure'));
+    try {
+      expect(await deliverCentralNotification(intent.id)).toMatchObject({ success: true });
+    } finally {
+      query.mockRestore();
+    }
+    expect(
+      (await prisma.notification.findUniqueOrThrow({ where: { id: intent.id } })).feedbackPending
+    ).toBe(true);
+    await processCentralNotificationQueue({ trafficClasses: ['CRITICAL'], concurrency: 1 });
+    const recovered = await prisma.notificationProviderFeedback.findUniqueOrThrow({
+      where: { id: stored.id },
+    });
+    expect(recovered.quarantinedAt).toBeNull();
+    expect(recovered.processedAt).not.toBeNull();
+    expect(
+      (await prisma.notification.findUniqueOrThrow({ where: { id: intent.id } })).feedbackPending
+    ).toBe(false);
+  });
+  it('benchmarks exact receipt metrics against a 100000-row backlog while critical mail drains', async () => {
+    const key = `${prefix}-benchmark`;
+    await prisma.$executeRaw`INSERT INTO "NotificationProviderFeedback" (id,provider,"providerEventId","eventType","occurredAt","createdAt","reconciliationAttempts","quarantinedAt")
+      SELECT ${key} || '-' || i, 'fixture', ${key} || '-' || i, 'DELIVERED', NOW(), NOW(), CASE WHEN i % 2 = 0 THEN 1 ELSE 0 END,
+        CASE WHEN i % 4 = 0 THEN NOW() ELSE NULL END FROM generate_series(1,100000) i`;
+    try {
+      await prisma.$executeRawUnsafe('ANALYZE "NotificationProviderFeedback"');
+      const explain = await prisma.$queryRaw<Array<{ 'QUERY PLAN': unknown }>>(
+        Prisma.sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${providerFeedbackMetricsQuery}`
+      );
+      const intent = await critical(`${key}-critical`);
+      mocks.sendEmail.mockResolvedValue({
+        success: true,
+        providerMessageId: `${key}-sent`,
+        selectedProvider: 'fixture',
+      });
+      const startedAt = performance.now();
+      const [counts, delivery] = await Promise.all([
+        collectProviderFeedbackMetrics(),
+        processCentralNotificationQueue({ trafficClasses: ['CRITICAL'], concurrency: 1 }),
+      ]);
+      expect(counts.pending).toBeGreaterThanOrEqual(74900);
+      expect(counts.quarantined).toBeGreaterThanOrEqual(25000);
+      expect(delivery.succeeded).toBeGreaterThanOrEqual(1);
+      expect(
+        (await prisma.notification.findUniqueOrThrow({ where: { id: intent.id } })).status
+      ).toBe('SENT');
+      mkdirSync('plans/certification', { recursive: true });
+      writeFileSync(
+        'plans/certification/enterprise-sso-2.1-receipt-metrics.json',
+        JSON.stringify(
+          {
+            measuredAt: new Date().toISOString(),
+            rows: 100000,
+            scope:
+              'Isolated PostgreSQL; mocked provider send/admission; concurrent real queue dispatch and exact metric collector',
+            concurrentDurationMs: performance.now() - startedAt,
+            counts,
+            explain,
+            criticalDrained: true,
+            serverStatementTimeoutMs: 500,
+          },
+          null,
+          2
+        ) + '\n'
+      );
+    } finally {
+      await prisma.notificationProviderFeedback.deleteMany({
+        where: { providerEventId: { startsWith: key } },
+      });
+    }
   });
   it('quarantines exhausted and old unmatched events and retains searchable evidence for ninety days', async () => {
     const now = new Date();

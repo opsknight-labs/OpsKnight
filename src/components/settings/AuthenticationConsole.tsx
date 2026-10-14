@@ -148,6 +148,13 @@ export default function AuthenticationConsole({
   const hydrated = useHydrated();
   const [busy, setPending] = useState(false);
   const [message, setMessage] = useState('');
+  const [credentialChangeConfirmed, setCredentialChangeConfirmed] = useState<string | null>(null);
+  const [emergencyMethod, setEmergencyMethod] = useState<'PASSWORD' | 'WEBAUTHN'>('WEBAUTHN');
+  const [generatedRecovery, setGeneratedRecovery] = useState<{
+    id: string;
+    password: string;
+  } | null>(null);
+  const [recoveryReauthPassword, setRecoveryReauthPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [independent, setIndependent] = useState(false);
   const [keyName, setKeyName] = useState('Primary hardware key');
@@ -725,7 +732,7 @@ export default function AuthenticationConsole({
                   </h2>
                   <p className="text-sm">
                     Current mode: {data.mode.replaceAll('_', ' ')}. Sign in again or verify your
-                    emergency key within five minutes before activation.
+                    emergency credential within five minutes before activation.
                   </p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block space-y-1 text-sm">
@@ -913,7 +920,8 @@ export default function AuthenticationConsole({
                 Emergency Access
               </h2>
               <p className="text-sm">
-                Enroll separately held hardware keys. Sign in at{' '}
+                Create an independently vaulted password or enroll separately held hardware keys.
+                Sign in at{' '}
                 <Link
                   className="underline"
                   href="/login/emergency"
@@ -979,18 +987,63 @@ export default function AuthenticationConsole({
                   checked={independent}
                   onChange={event => setIndependent(event.target.checked)}
                 />
-                This identity uses separately held hardware keys and recovery custody independent of
-                the other emergency identity and external IdP.
+                This identity uses a separately held vault password or hardware key, with custody
+                independent of the other emergency identity and external IdP.
               </label>
+              <label className="block space-y-1 text-sm">
+                <span>Recovery method</span>
+                <select
+                  className={inputClass}
+                  value={emergencyMethod}
+                  onChange={event =>
+                    setEmergencyMethod(event.target.value as 'PASSWORD' | 'WEBAUTHN')
+                  }
+                  disabled={pending}
+                >
+                  <option value="WEBAUTHN">Hardware security key</option>
+                  <option value="PASSWORD">Generated vault password</option>
+                </select>
+              </label>
+              {generatedRecovery && (
+                <div
+                  role="status"
+                  className="space-y-3 rounded-md border border-amber-500 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-100"
+                >
+                  <p>
+                    Store this password in an independently accessible vault. It is displayed once;
+                    complete a recovery sign-in drill before relying on this identity.
+                  </p>
+                  <p>
+                    Account: <code className="break-all">{generatedRecovery.id}</code>
+                  </p>
+                  <code className="block break-all select-all">{generatedRecovery.password}</code>
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      void perform(async () => {
+                        await navigator.clipboard.writeText(generatedRecovery.password);
+                      })
+                    }
+                  >
+                    Copy password
+                  </Button>
+                  <Button variant="outline" onClick={() => setGeneratedRecovery(null)}>
+                    I stored it securely
+                  </Button>
+                </div>
+              )}
               <Button
-                disabled={pending || !displayName || !independent}
+                disabled={pending || Boolean(generatedRecovery) || !displayName || !independent}
                 onClick={() =>
                   void perform(async () => {
-                    await authenticationRequest({
+                    const created = await authenticationRequest<{ id: string; password?: string }>({
                       action: 'createEmergency',
+                      authenticationMethod: emergencyMethod,
                       displayName,
                       independenceConfirmed: true,
                     });
+                    if (created.password)
+                      setGeneratedRecovery({ id: created.id, password: created.password });
                     setDisplayName('');
                     setIndependent(false);
                     await refresh();
@@ -1014,8 +1067,8 @@ export default function AuthenticationConsole({
                   checked={compromised}
                   onChange={event => setCompromised(event.target.checked)}
                 />
-                A key being revoked is confirmed compromised. This may reduce recovery readiness;
-                drill a replacement promptly.
+                The recovery credential being revoked or rotated is confirmed compromised. This may
+                reduce recovery readiness; drill a replacement promptly.
               </label>
               <ul className="space-y-4">
                 {data.emergencyAccounts.map(account => (
@@ -1024,8 +1077,8 @@ export default function AuthenticationConsole({
                     key={account.id}
                   >
                     <p className="font-medium">
-                      {account.displayName} — {account.status};{' '}
-                      {account.ready ? 'drill verified' : 'drill required'}
+                      {account.displayName} — {account.authenticationMethod ?? 'WEBAUTHN'} —{' '}
+                      {account.status}; {account.ready ? 'drill verified' : 'drill required'}
                     </p>
                     <p>
                       Account identifier: <code className="break-all">{account.id}</code>
@@ -1036,7 +1089,11 @@ export default function AuthenticationConsole({
                     </p>
                     <Button
                       variant="outline"
-                      disabled={pending || account.status === 'DISABLED'}
+                      disabled={
+                        pending ||
+                        account.status === 'DISABLED' ||
+                        account.authenticationMethod === 'PASSWORD'
+                      }
                       onClick={() =>
                         void perform(async () => {
                           const options = await authenticationRequest<{
@@ -1061,6 +1118,71 @@ export default function AuthenticationConsole({
                     >
                       Enroll hardware key
                     </Button>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={credentialChangeConfirmed === account.id}
+                        onChange={event =>
+                          setCredentialChangeConfirmed(event.target.checked ? account.id : null)
+                        }
+                        disabled={pending}
+                      />
+                      I understand changing this credential revokes its existing sessions and
+                      readiness; a new independent sign-in drill is required.
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {(['PASSWORD', 'WEBAUTHN'] as const).map(method => (
+                        <Button
+                          key={method}
+                          variant="outline"
+                          disabled={
+                            pending ||
+                            Boolean(generatedRecovery) ||
+                            credentialChangeConfirmed !== account.id ||
+                            account.status === 'DISABLED'
+                          }
+                          onClick={() =>
+                            void perform(async () => {
+                              const changed = await authenticationRequest<{
+                                id: string;
+                                password?: string;
+                              }>({
+                                action: 'changeEmergencyMethod',
+                                confirmation: 'CHANGE RECOVERY CREDENTIAL',
+                                accountId: account.id,
+                                method,
+                                compromised,
+                                expectedVersion: account.credentialVersion,
+                              });
+                              setCredentialChangeConfirmed(null);
+                              if (changed.password)
+                                setGeneratedRecovery({
+                                  id: changed.id,
+                                  password: changed.password,
+                                });
+                              if (data.actor.kind === 'emergency' && data.actor.id === account.id) {
+                                if (changed.password) {
+                                  setMessage(
+                                    'Your old session has been revoked. Store the new password above, then open emergency sign-in for a new drill.'
+                                  );
+                                  return;
+                                }
+                                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Disabling this identity revokes its session and requires a fresh document.
+                                window.location.assign('/login/emergency');
+                                return;
+                              }
+                              await refresh();
+                            })
+                          }
+                        >
+                          {method === 'PASSWORD'
+                            ? account.authenticationMethod === 'PASSWORD'
+                              ? 'Rotate password'
+                              : 'Use vault password'
+                            : 'Reset to hardware key'}
+                        </Button>
+                      ))}
+                    </div>
                     <Button
                       variant="outline"
                       disabled={pending || account.status === 'DISABLED'}
@@ -1069,7 +1191,13 @@ export default function AuthenticationConsole({
                           await authenticationRequest({
                             action: 'disableEmergency',
                             accountId: account.id,
+                            compromised,
                           });
+                          if (data.actor.kind === 'emergency' && data.actor.id === account.id) {
+                            // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Disabling this identity revokes its session and requires a fresh document.
+                            window.location.assign('/login/emergency');
+                            return;
+                          }
                           await refresh();
                         })
                       }
@@ -1098,7 +1226,7 @@ export default function AuthenticationConsole({
                                 });
                                 if (data.actor.kind !== 'admin' && data.actor.id === account.id) {
                                   // A successful revocation invalidates this identity's current capability.
-                                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Clear authenticated recovery state after revoking the current identity.
+                                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Disabling this identity revokes its session and requires a fresh document.
                                   window.location.assign('/login/emergency');
                                   return;
                                 }
@@ -1137,35 +1265,76 @@ export default function AuthenticationConsole({
               )}
               {data.actor.kind !== 'admin' && (
                 <div className="space-y-3 text-sm">
-                  {data.actor.kind === 'emergency' && (
-                    <Button
-                      variant="outline"
-                      disabled={pending}
-                      onClick={() =>
-                        void perform(async () => {
-                          const options = await authenticationRequest<{
-                            options: PublicKeyCredentialRequestOptionsJSON;
-                            challengeId: string;
-                          }>(
-                            { action: 'options', accountId: data.actor.id, reauthenticate: true },
-                            '/api/auth/emergency'
-                          );
-                          const response = await (
-                            await import('@simplewebauthn/browser')
-                          ).startAuthentication({ optionsJSON: options.options });
-                          await authenticationRequest(
-                            { action: 'verify', challengeId: options.challengeId, response },
-                            '/api/auth/emergency'
-                          );
-                          setMessage(
-                            'Emergency credential verified again. The absolute session expiry is unchanged.'
-                          );
-                        })
-                      }
-                    >
-                      Verify emergency credential again
-                    </Button>
-                  )}
+                  {data.actor.kind === 'emergency' &&
+                    data.emergencyAccounts.find(account => account.id === data.actor.id)
+                      ?.authenticationMethod === 'PASSWORD' && (
+                      <form
+                        className="flex flex-wrap gap-2"
+                        onSubmit={event => {
+                          event.preventDefault();
+                          void perform(async () => {
+                            try {
+                              await authenticationRequest(
+                                {
+                                  action: 'passwordReauth',
+                                  accountId: data.actor.id,
+                                  password: recoveryReauthPassword,
+                                },
+                                '/api/auth/emergency'
+                              );
+                              await refresh();
+                            } finally {
+                              setRecoveryReauthPassword('');
+                            }
+                          });
+                        }}
+                      >
+                        <input
+                          aria-label="Recovery password for fresh verification"
+                          className={inputClass}
+                          type="password"
+                          autoComplete="current-password"
+                          required
+                          value={recoveryReauthPassword}
+                          onChange={event => setRecoveryReauthPassword(event.target.value)}
+                          disabled={pending}
+                        />
+                        <Button type="submit" disabled={pending}>
+                          Verify recovery password again
+                        </Button>
+                      </form>
+                    )}
+                  {data.actor.kind === 'emergency' &&
+                    data.emergencyAccounts.find(account => account.id === data.actor.id)
+                      ?.authenticationMethod !== 'PASSWORD' && (
+                      <Button
+                        variant="outline"
+                        disabled={pending}
+                        onClick={() =>
+                          void perform(async () => {
+                            const options = await authenticationRequest<{
+                              options: PublicKeyCredentialRequestOptionsJSON;
+                              challengeId: string;
+                            }>(
+                              { action: 'options', accountId: data.actor.id, reauthenticate: true },
+                              '/api/auth/emergency'
+                            );
+                            const response = await (
+                              await import('@simplewebauthn/browser')
+                            ).startAuthentication({ optionsJSON: options.options });
+                            await authenticationRequest(
+                              { action: 'verify', challengeId: options.challengeId, response },
+                              '/api/auth/emergency'
+                            );
+                            setMessage(
+                              'Emergency credential verified again. The absolute session expiry is unchanged.'
+                            );
+                          })
+                        }
+                      >
+                        Verify emergency credential again
+                      </Button>
+                    )}
                   {data.actor.kind === 'legacy' && (
                     <Link className="underline" href="/login/emergency">
                       Sign in again for fresh legacy verification

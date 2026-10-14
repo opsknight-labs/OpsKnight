@@ -325,7 +325,7 @@ Never map a broad all-employees group to `ADMIN`.
 
 ## Roll out safely
 
-1. Enroll and drill two independently held hardware-key emergency identities.
+1. Create and drill two independently held emergency identities, using generated vault passwords, hardware keys, or one of each.
 2. Assign a small provider-side pilot group.
 3. Test allowed, unassigned, wrong-domain, deactivated, and existing-account
    users.

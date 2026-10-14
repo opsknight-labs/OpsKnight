@@ -391,3 +391,49 @@ Alert on sustained retry backlog or new quarantined records and investigate the 
 classification. The upgrade regression applies quarantine repair twice and verifies
 that delivery and bounce receipts from a 48-hour outage update transport and linked-alert
 state using their original occurrence timestamps.
+
+
+### Selectable password or hardware emergency identities
+
+The password integration suite exercises generated salted hashes, account separation,
+generic failures, two independent drills, SSO Required password-login denial for ordinary
+users, recovery-only login during that policy, absolute/idle session limits, separate
+reauthentication admission, compromise rotation/degradation, method changes, competing
+rotations and verification racing with rotation or disablement. A readiness fixture
+combines password evidence with hardware evidence; signed WebAuthn verification remains
+covered by the existing independent-hardware suite.
+
+Receipt certification includes quarantined unmatched events becoming provider-matched
+only after a notification is committed. Only `UNMATCHED_PROVIDER_MESSAGE` quarantine is
+eligible for that bounded, provider-checked reopening; deleted-recipient and invalid-type
+quarantines remain terminal. A 100,000-row PostgreSQL backlog benchmark captures
+`EXPLAIN (ANALYZE, BUFFERS)` and concurrent critical-mail dispatch in
+`plans/certification/enterprise-sso-2.1-receipt-metrics.json`. Exact receipt counts now run
+with PostgreSQL statement/lock deadlines (500/100 ms), a 250 ms transaction acquisition
+limit and the existing metrics cache. The JS scrape timeout is not the only work bound.
+Do not generalize local timings to production capacity without deployment-specific load tests.
+
+
+Run the production-browser certification with Docker, OpenSSL, Node 22 and the
+repository dependencies installed:
+
+```sh
+npx playwright install --with-deps chromium firefox webkit
+python3 scripts/certify-enterprise-authentication-browser.py --build
+```
+
+The harness creates a disposable PostgreSQL database, applies all migrations, builds
+for its own HTTPS origin, runs the production server and removes its processes and
+container afterward. A fresh build is mandatory because the public origin is embedded
+in the browser bundle. It does not use your application database or contact live
+identity/email providers. `SSO_CERT_CAPTURE_DIR` optionally retains screenshots after
+the generated secret has been dismissed. These flags configure certification only.
+
+The recorded local run passed seven browser checks with two intentional hardware
+skips (virtual WebAuthn is Chromium-only). Password recovery and console responsiveness
+passed in Chromium, Firefox and WebKit, including cookie restriction, one-time display,
+rotation revocation and preservation of the original HTTP expiry during reauthentication.
+Chromium also recovered after restarting the owned PostgreSQL fixture. The secret-free
+report is `plans/certification/enterprise-sso-2.1-password-browser.json`.
+Live IdP tenants, physical keys, real mail providers and production HA acceptance remain
+pending; this local evidence does not certify those external environments.

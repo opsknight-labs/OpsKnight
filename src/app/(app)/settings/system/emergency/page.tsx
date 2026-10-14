@@ -14,8 +14,8 @@ export default async function EmergencyAdministrationPage() {
     <div className="space-y-6">
       <SettingsPageHeader
         title="Emergency Access"
-        description="Manage independently held recovery keys, verify custody, and rehearse authentication recovery."
-        badge={<Badge variant="neutral">Hardware keys</Badge>}
+        description="Manage independent recovery passwords and hardware keys, verify custody, and rehearse authentication recovery."
+        badge={<Badge variant="neutral">Independent recovery</Badge>}
       />
       <Link href="/settings/system?section=sso" className="text-sm underline">
         SSO / Authentication

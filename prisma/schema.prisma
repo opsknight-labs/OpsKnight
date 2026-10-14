@@ -1737,6 +1737,7 @@ model Notification {
   failedAt               DateTime?
   reconciliationDeadline DateTime?
   errorMsg               String?
+  feedbackPending        Boolean @default(false)
   deliveryProvider       String?
   providerMessageId      String?                       @unique
   attempts               Int                           @default(0)
@@ -1747,6 +1748,8 @@ model Notification {
   content                NotificationContent?          @relation(fields: [contentId], references: [id], onDelete: SetNull)
   fanout                 NotificationFanout?           @relation(fields: [fanoutId], references: [id], onDelete: SetNull)
 
+  // idx_notification_feedback_pending is a managed partial index (WHERE feedbackPending=true)
+  // in migration 20261014193000; Prisma 5 cannot express its predicate.
   @@index([incidentId])
   @@index([userId])
   @@index([userId, createdAt])
@@ -1872,6 +1875,7 @@ model NotificationProviderFeedback {
   @@index([processedAt, quarantinedAt, nextReconcileAt], map: "idx_feedback_replay_due")
   @@index([processedAt, id], map: "idx_feedback_processed_retention")
   @@index([quarantinedAt, id], map: "idx_feedback_quarantine_retention")
+  @@index([providerMessageId, provider, reconciliationReason, quarantinedAt], map: "idx_feedback_quarantined_message")
   @@index([eventType, occurredAt])
 }
 
@@ -3901,6 +3905,8 @@ model RunbookPreviewAuthorization {
 model EmergencyAccount {
   id                        String                @id @default(cuid())
   displayName               String
+  authenticationMethod      String @default("WEBAUTHN")
+  passwordHash              String?
   status                    String                @default("ENROLLING")
   enrolledAt                DateTime              @default(now())
   verifiedAt                DateTime?

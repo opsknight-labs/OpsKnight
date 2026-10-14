@@ -30,7 +30,7 @@ Changing any of those while upgrading is a separate security operation.
 - Local login disabled becomes **SSO Required**. Existing OIDC sessions remain
   permitted when their provider version is unchanged. Ordinary password sessions
   are cut off. A configured legacy break-glass administrator uses `/login/emergency`
-  rather than ordinary login, then replaces that bridge with independent keys.
+  rather than ordinary login, then replaces that bridge with independent password or hardware-key identities.
 - A zero-user installation remains bootstrappable in **Password Only**.
 - The administrator's User ID, ADMIN ownership, teams, incident history and identity
   links are preserved. Existing link approvals retain their expiry, generation,
@@ -144,3 +144,22 @@ an upgraded copy of the actual deployment before production cutover.
 See [Local certification and failure rehearsal](./local-certification/) for exact
 released-version evidence, read/HTTP probes, the Kind cutover, database interruption
 and restored-database rollback results.
+
+
+## Preserve existing hardware identities when adding passwords
+
+The additive emergency-method migration defaults every existing identity to WEBAUTHN;
+existing public keys, identity IDs and session references remain intact. No ordinary
+User password is copied into an emergency identity. Select PASSWORD explicitly when
+creating a new independent identity, save its generated secret once and complete its
+own login drill. Two passwords, two hardware identities or one of each satisfy Required
+only when both identities have current origin/version-bound drills.
+
+Apply the migrations using the same stop-all/migrate-once/start-new release procedure
+above for Compose, Swarm and Kubernetes, including integrated and split runtimes.
+No new application environment toggle enables passwords. Keep web replicas on the
+same schema and code; workers do not serve recovery login. Rehearse recovery through
+the deployment ingress during an IdP outage and after database recovery, and verify
+ordinary User password login remains denied under Required. Never resume older binaries
+against a database with newer authentication writes; restore the tested backup and
+release together if rollback is required.

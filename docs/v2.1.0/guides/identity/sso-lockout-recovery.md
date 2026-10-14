@@ -6,7 +6,7 @@ product_area: identity
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-13
+  verified_at: 2026-10-14
   evidence:
     - src/components/settings/AuthenticationConsole.tsx
     - src/lib/auth-control
@@ -15,7 +15,7 @@ verification:
 
 # Recover from SSO lockout
 
-For security-key custodians and deployment operators during an IdP or provider-configuration failure.
+For emergency-identity custodians and deployment operators during an IdP or provider-configuration failure.
 
 ## Before starting
 
@@ -23,9 +23,9 @@ Use the recorded public HTTPS origin and emergency account identifier. Ensure Po
 
 ## Repair while preserving Required
 
-1. Open `/login/emergency`, enter the emergency identifier and verify the independent hardware key.
+1. Open `/login/emergency`, choose its configured recovery method, enter the emergency identifier and use the generated vault password or independent hardware key.
 2. Confirm `/recovery` opens the restricted authentication console. No ordinary User or trusted-device session is created.
-3. Reverify the key when prompted for the five-minute freshness limit. Stage corrected issuer/client/secret/claim settings. Production remains unchanged.
+3. Reauthenticate with the configured recovery method when prompted for the five-minute freshness limit. Stage corrected issuer/client/secret/claim settings. Production remains unchanged.
 4. Select the existing active administrator, explicitly approve ownership for a new binding, and test the staged connection through the IdP.
 5. Preview readiness and activate the tested revision as **SSO Required**. Both independent current drills must remain valid.
 6. Verify normal administrator SSO in another browser, review alerts/audit events and sign out of recovery.
@@ -36,9 +36,9 @@ If the IdP cannot be restored, a fresh emergency principal can use **Restore pas
 
 Sign in through ordinary password login in a separate browser. Review the policy change and security alerts, repair the IdP, repeat administrator verification and independent drills, and deliberately re-enforce SSO. This workflow enables ordinary password access by an explicit audited action; an IdP error never causes automatic fallback.
 
-## Lost keys and database recovery
+## Lost credentials and database recovery
 
-Use the other independently held identity or its backup key. Enroll replacements and drill before reducing readiness. If all keys are lost and the imported bridge has been retired, application-level recovery is unavailable: use the separately governed infrastructure/database recovery procedure and review every change. Do not delete import markers, enable legacy variables or claim the emergency subsystem works without its database.
+Use the other independently held identity or its backup key. Enroll replacements and drill before reducing readiness. If all independent recovery credentials are lost and the imported bridge has been retired, application-level recovery is unavailable: use the separately governed infrastructure/database recovery procedure and review every change. Do not delete import markers, enable legacy variables or claim the emergency subsystem works without its database.
 
 Before downgrading application code, evaluate how the older version interprets environment login controls and existing password hashes. Preserve backups and security events. A restored snapshot can restore previously revoked state, so rotate credentials and sessions after restoring a backup. See [Emergency troubleshooting](../../troubleshooting/login/emergency-access/).
 
@@ -56,10 +56,10 @@ WebAuthn origin validation, session expiry, or PostgreSQL authorization checks.
    replicas. A deployment-variable conflict must be repaired outside the app;
    changing one database setting cannot fix divergent environment variables.
 4. Open `/login/emergency` on the pinned origin and authenticate with an
-   independent key. Only recovery endpoints/static assets receive the pinned
+   independent password or hardware key. Only recovery endpoints/static assets receive the pinned
    host-routing exception; incident and ordinary administration routes do not.
 5. In **Emergency Access**, review the origin conflict and confirm **Repair pinned
-   application URL**. This fresh-key operation changes only the database App URL,
+   application URL**. This fresh-authentication operation changes only the database App URL,
    increments policy version, and emits `auth.recovery.origin.repaired`.
 6. Wait for all active web observations to converge (approximately two minutes).
    Re-test normal SSO, independent drills, callback URLs, and alert links. Remove
@@ -104,3 +104,15 @@ requires a fresh independent emergency session, an explicit deployment-managed
 policy version. It preserves SSO Required and commits the settings change, policy
 version and mandatory audit/alert together. Missing settings never grant authority
 or trigger an automatic policy downgrade.
+
+
+## Generated emergency password is lost or exposed
+
+A generated password cannot be retrieved from the server. Use another freshly
+authenticated recovery identity or administrator to rotate it in **Emergency Access**.
+Store the replacement once in a separately accessible vault and repeat the independent
+drill. Rotation and method changes immediately revoke that identity's existing sessions
+and readiness. Under Required, drill enough replacement identities before reducing
+coverage. Confirm compromise only when the credential is actually compromised; that
+path revokes immediately and alerts administrators that recovery coverage is degraded.
+A normal User password cannot authenticate an emergency identity.

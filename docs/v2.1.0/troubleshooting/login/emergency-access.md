@@ -1,12 +1,12 @@
 ---
 title: Troubleshoot emergency access
-description: Diagnose hardware-key enrollment, drill, session and alert failures.
+description: Diagnose emergency password, hardware-key enrollment, drill, session and alert failures.
 type: troubleshooting
 product_area: identity
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-12
+  verified_at: 2026-10-14
   evidence:
     [src/lib/auth-control/emergency.ts, tests/integration/emergency-authentication-database.test.ts]
 ---
@@ -23,7 +23,7 @@ A counter rollback, revoked key or changed credential version rejects the signat
 
 ## Readiness disappears
 
-Enrollment/revocation invalidates that identity's previous drill and all its sessions. Sign in again with a remaining active key. Disabled identities and drills older than 90 days do not count. Required activation needs two independently held ready identities; repeat drills after changes. A browser login test for SSO is separate from both hardware drills and discovery health.
+Enrollment/revocation invalidates that identity's previous drill and all its sessions. Sign in again using the identity's current configured credential. Disabled identities and drills older than 90 days do not count. Required activation needs two independently held ready identities; repeat drills after changes. A browser login test for SSO is separate from both independent recovery drills and discovery health.
 
 ## Session ends while the page stays open
 
@@ -74,3 +74,20 @@ old hardware credentials. Database outage, missing policy, and missing encryptio
 keys remain infrastructure incidents. Restore from governed backups and account
 for previously revoked state reappearing. Test the repaired public ingress on each
 replica before closing the incident.
+
+
+## Independent emergency password fails
+
+Select **Password** and use the emergency account identifier and generated recovery
+secret, not an ordinary user's email/password. Passwords are displayed once during
+creation or rotation and cannot be recovered from their salted hash. Check the vault
+copy and current method with an authorized custodian; a rotated password or disabled
+identity fails immediately. Failure messages do not confirm whether an account exists.
+Network/account limits and bounded password-hashing concurrency may require a short
+retry; reauthentication has its own session budget. Never disable these checks.
+Use another independently held identity if the vault depends on the unavailable IdP.
+
+Reauthentication requires the current recovery cookie, keeps the original one-hour
+expiry and does not turn a recovery principal into an ordinary User. If rotation
+revoked the session, start a new sign-in with the replacement credential. A new password
+identity counts toward Required only after its independent sign-in drill succeeds.

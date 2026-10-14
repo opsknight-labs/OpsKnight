@@ -8,26 +8,35 @@ import prisma from '@/lib/prisma';
 import { lockControlActor, type ControlActor } from './actor';
 import { recoveryOrigin } from './origin';
 import { digest, secret } from './emergency';
+import { generateEmergencyPassword } from './emergency-password';
 import { securityEvent } from './security-events';
 
 export async function createEmergencyAccount(
   actor: ControlActor,
   displayName: string,
-  independenceConfirmed: boolean
+  independenceConfirmed: boolean,
+  authenticationMethod: 'WEBAUTHN' | 'PASSWORD' = 'WEBAUTHN'
 ) {
   if (!independenceConfirmed)
-    throw new Error('Confirm that this identity uses independently held hardware keys.');
+    throw new Error('Confirm independent custody of this recovery credential outside the IdP.');
+  const generated = authenticationMethod === 'PASSWORD' ? await generateEmergencyPassword() : null;
   return prisma.$transaction(async tx => {
     await lockControlActor(tx, actor);
     if ((await tx.emergencyAccount.count({ where: { status: { not: 'DISABLED' } } })) >= 20)
       throw new Error('Disable obsolete emergency identities before creating another.');
     const account = await tx.emergencyAccount.create({
-      data: { displayName, independenceConfirmedAt: new Date() },
+      data: {
+        displayName,
+        independenceConfirmedAt: new Date(),
+        authenticationMethod,
+        passwordHash: generated?.hash,
+      },
     });
     await securityEvent(tx, 'auth.emergency.enrolled', account.id, {
+      method: authenticationMethod,
       authorizedBy: `${actor.kind}:${actor.id}`,
     });
-    return { id: account.id, displayName: account.displayName };
+    return { id: account.id, displayName: account.displayName, password: generated?.password };
   });
 }
 
@@ -37,7 +46,8 @@ export async function registrationOptions(actor: ControlActor, accountId: string
     where: { id: accountId },
     include: { credentials: { where: { revokedAt: null } } },
   });
-  if (!account || account.status === 'DISABLED') throw new Error('Emergency account unavailable.');
+  if (!account || account.status === 'DISABLED' || account.authenticationMethod !== 'WEBAUTHN')
+    throw new Error('Emergency account unavailable.');
   if (account.credentials.length >= 10)
     throw new Error(
       'Revoke obsolete keys before enrolling another (ten active keys per identity).'
@@ -60,7 +70,11 @@ export async function registrationOptions(actor: ControlActor, accountId: string
   const challenge = await prisma.$transaction(async tx => {
     await lockControlActor(tx, actor);
     const current = await tx.emergencyAccount.findUniqueOrThrow({ where: { id: accountId } });
-    if (current.status === 'DISABLED' || current.credentialVersion !== account.credentialVersion)
+    if (
+      current.authenticationMethod !== 'WEBAUTHN' ||
+      current.status === 'DISABLED' ||
+      current.credentialVersion !== account.credentialVersion
+    )
       throw new Error('Emergency identity changed. Reload.');
     return tx.emergencyChallenge.create({
       data: {
@@ -117,7 +131,11 @@ async function verifyRegistrationInternal(
     const account = await tx.emergencyAccount.findUniqueOrThrow({
       where: { id: flow.emergencyAccountId },
     });
-    if (account.status === 'DISABLED' || account.credentialVersion !== flow.credentialVersion)
+    if (
+      account.authenticationMethod !== 'WEBAUTHN' ||
+      account.status === 'DISABLED' ||
+      account.credentialVersion !== flow.credentialVersion
+    )
       throw new Error('Emergency credentials changed. Begin enrollment again.');
     const consumed = await tx.emergencyChallenge.updateMany({
       where: { id: flow.id, consumedAt: null, expiresAt: { gt: new Date() } },
@@ -177,7 +195,9 @@ export async function emergencyReadiness(
   return accounts.filter(
     account =>
       account.verifiedCredentialVersion === account.credentialVersion &&
-      account.credentials.length > 0
+      (account.authenticationMethod === 'PASSWORD'
+        ? Boolean(account.passwordHash)
+        : account.credentials.length > 0)
   );
 }
 
@@ -240,7 +260,11 @@ export async function revokeEmergencyCredential(
   });
 }
 
-export async function disableEmergencyAccount(actor: ControlActor, accountId: string) {
+export async function disableEmergencyAccount(
+  actor: ControlActor,
+  accountId: string,
+  compromised = false
+) {
   await prisma.$transaction(async tx => {
     await lockControlActor(tx, actor);
     const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
@@ -248,13 +272,15 @@ export async function disableEmergencyAccount(actor: ControlActor, accountId: st
     if (
       policy.mode === 'SSO_REQUIRED' &&
       ready.some(account => account.id === accountId) &&
-      ready.length <= 2
+      ready.length <= 2 &&
+      !compromised
     )
       throw new Error('Verify a replacement emergency identity before disabling this one.');
     await tx.emergencyAccount.update({
       where: { id: accountId },
       data: {
         status: 'DISABLED',
+        passwordHash: null,
         credentialVersion: { increment: 1 },
         verifiedAt: null,
         verifiedCredentialVersion: null,
@@ -268,7 +294,23 @@ export async function disableEmergencyAccount(actor: ControlActor, accountId: st
       where: { emergencyAccountId: accountId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (
+      policy.mode === 'SSO_REQUIRED' &&
+      ready.some(value => value.id === accountId) &&
+      ready.length <= 2
+    ) {
+      await tx.authenticationPolicy.update({
+        where: { id: 'default' },
+        data: { recoveryDegradedAt: new Date() },
+      });
+      await securityEvent(tx, 'auth.emergency.recovery.degraded', accountId, {
+        compromised,
+        urgentRemediation: true,
+        remainingReadyIdentities: ready.length - 1,
+      });
+    }
     await securityEvent(tx, 'auth.emergency.disabled', accountId, {
+      compromised,
       authorizedBy: `${actor.kind}:${actor.id}`,
     });
   });
@@ -316,4 +358,72 @@ export async function verifyRegistration(
     });
     throw error;
   }
+}
+
+/** Changes require fresh authorization and cannot silently remove required recovery coverage. */
+export async function changeEmergencyMethod(
+  actor: ControlActor,
+  accountId: string,
+  method: 'PASSWORD' | 'WEBAUTHN',
+  compromised: boolean,
+  expectedVersion: number
+) {
+  const generated = method === 'PASSWORD' ? await generateEmergencyPassword() : null;
+  return prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor);
+    const account = await tx.emergencyAccount.findUniqueOrThrow({ where: { id: accountId } });
+    if (account.status === 'DISABLED' || account.credentialVersion !== expectedVersion)
+      throw new Error('Emergency identity changed. Reload before rotating.');
+    const ready = await emergencyReadiness(tx);
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    const affected = ready.some(value => value.id === accountId);
+    if (policy.mode === 'SSO_REQUIRED' && affected && ready.length <= 2 && !compromised)
+      throw new Error(
+        'Drill a replacement independent identity before rotating this credential. Confirm compromise only for an actual compromise.'
+      );
+    await tx.emergencyCredential.updateMany({
+      where: { emergencyAccountId: accountId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await tx.emergencyAccount.update({
+      where: { id: accountId },
+      data: {
+        authenticationMethod: method,
+        passwordHash: generated?.hash ?? null,
+        status: 'ENROLLING',
+        credentialVersion: { increment: 1 },
+        verifiedAt: null,
+        verifiedCredentialVersion: null,
+        verifiedOrigin: null,
+      },
+    });
+    await tx.emergencySession.updateMany({
+      where: { emergencyAccountId: accountId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (policy.mode === 'SSO_REQUIRED' && affected && ready.length <= 2) {
+      await tx.authenticationPolicy.update({
+        where: { id: 'default' },
+        data: { recoveryDegradedAt: new Date() },
+      });
+      await securityEvent(tx, 'auth.emergency.recovery.degraded', accountId, {
+        compromised,
+        urgentRemediation: true,
+        remainingReadyIdentities: ready.length - 1,
+      });
+    }
+    await securityEvent(
+      tx,
+      method === 'PASSWORD' && account.authenticationMethod === 'PASSWORD'
+        ? 'auth.emergency.password.rotated'
+        : 'auth.emergency.method.changed',
+      accountId,
+      {
+        method,
+        compromised,
+        authorizedBy: `${actor.kind}:${actor.id}`,
+      }
+    );
+    return { id: accountId, password: generated?.password };
+  });
 }
