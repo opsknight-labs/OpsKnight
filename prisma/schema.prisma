@@ -3608,6 +3608,7 @@ model RunbookExecutionSigningKey {
 }
 
 model RunbookSuggestion {
+  triggerRevision Int?
   id               String                 @id @default(cuid())
   incidentId       String
   bindingId        String
@@ -3634,6 +3635,7 @@ model RunbookSuggestion {
 }
 
 model RunbookExecution {
+  triggerRevision Int?
   id                        String                 @id @default(cuid())
   runbookId                 String
   runbookVersionId          String

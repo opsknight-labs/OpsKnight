@@ -612,6 +612,20 @@ while true; do
     TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
     current=$(echo "${replicas}" | cut -d'/' -f1)
     desired=$(echo "${replicas}" | cut -d'/' -f2)
+    # Replica counts include old tasks during start-first rolling updates.
+    # Wait for the service update generation to finish before verifying secret bytes.
+    update_state=$(docker service inspect "$name" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}')
+    case "$update_state" in
+      paused|rollback_paused|rollback_completed)
+        echo "[FATAL] Service $name update failed: $update_state" >&2
+        docker service ps "$name" --no-trunc >&2
+        exit 1
+        ;;
+      updating|rollback_started)
+        PENDING=$((PENDING + 1))
+        continue
+        ;;
+    esac
     if [ "${current}" != "${desired}" ]; then
       PENDING=$((PENDING + 1))
     fi

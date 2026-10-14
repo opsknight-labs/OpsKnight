@@ -98,6 +98,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
                 bindingId: binding.id,
                 runbookVersionId: versionId,
                 triggerId: trigger.id,
+                triggerRevision: trigger.revision,
                 sourceEventId,
                 fingerprint,
                 planSnapshot: {
@@ -191,6 +192,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
                   bindingId: binding.id,
                   runbookVersionId: versionId,
                   triggerId: trigger.id,
+                  triggerRevision: trigger.revision,
                   sourceEventId,
                   fingerprint,
                   planSnapshot: {

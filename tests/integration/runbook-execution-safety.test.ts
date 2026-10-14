@@ -270,6 +270,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { env: 'prod' } },
     });
+    await testPrisma.runbookTrigger.updateMany({
+      where: { bindingId: target.binding.id },
+      data: { revision: 3 },
+    });
     expect(await evaluateIncidentTriggers(incident.id, 'budget-event')).toMatchObject({
       matched: 1,
       started: 0,
@@ -283,6 +287,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         where: { incidentId: incident.id, type: 'RUNBOOK_SUGGESTED' },
       })
     ).toBe(1);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
     expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).planSnapshot).toMatchObject({
       agentSelector: { env: 'prod' },
       definitionChecksum: target.version.checksum,
@@ -299,6 +304,17 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       suggested: 0,
     });
     expect(await testPrisma.runbookSuggestion.count()).toBe(1);
+    const execution = await testPrisma.runbookExecution.findFirstOrThrow();
+    expect(execution.triggerRevision).toBe(3);
+    await testPrisma.runbookTrigger.updateMany({
+      where: { bindingId: target.binding.id },
+      data: { revision: 4 },
+    });
+    expect(
+      (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } }))
+        .triggerRevision
+    ).toBe(3);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
   });
 
   it('resolves incident label targeting and fences removal of the pinned source-pool member', async () => {

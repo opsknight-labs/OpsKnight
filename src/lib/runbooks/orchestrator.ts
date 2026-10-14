@@ -208,6 +208,7 @@ async function prepareRunbookExecution(
     if (input.triggerId && !input.bindingId) {
       throw new RunbookDefinitionError('A trigger execution requires its service binding.');
     }
+    let evaluatedTriggerRevision: number | null = null;
     if (mode === 'AUTOMATIC') {
       if (
         !binding ||
@@ -257,6 +258,7 @@ async function prepareRunbookExecution(
           'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
         );
       }
+      evaluatedTriggerRevision = trigger.revision;
     }
     const suggestion = input.suggestionId
       ? await tx.runbookSuggestion.findFirst({
@@ -752,6 +754,7 @@ async function prepareRunbookExecution(
         bindingId: input.bindingId,
         triggerFingerprint: input.triggerFingerprint ?? suggestion?.fingerprint,
         triggerId: input.triggerId ?? suggestion?.triggerId,
+        triggerRevision: evaluatedTriggerRevision ?? suggestion?.triggerRevision,
         triggeredByType: input.triggeredByUserId ? 'USER' : 'TRIGGER',
         triggeredByUserId: input.triggeredByUserId,
         inputValues: asJson(resolvedInputs),

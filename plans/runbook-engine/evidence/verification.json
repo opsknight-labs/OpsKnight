@@ -89,5 +89,36 @@
     },
     "scope": "Previous candidate results retained as historical evidence; not claims about this correction pass."
   },
-  "correctionPassBaseRevision": "62a36d1d51024680657e93b68bd79c499f9f3673"
+  "correctionPassBaseRevision": "62a36d1d51024680657e93b68bd79c499f9f3673",
+  "followupReview": {
+    "baseRevision": "6761aef4f9a9dbf73236a246e8aa2ecf7a7d363a",
+    "changes": [
+      "Swarm convergence waits for completed task updates and rejects paused/rolled-back states",
+      "Every-replica secret assertions fail closed and mask values",
+      "Suggestions and triggered executions retain evaluated trigger revision; legacy evidence stays NULL"
+    ],
+    "localChecks": {
+      "runbookDeploymentUnit": {
+        "files": 37,
+        "tests": 343,
+        "status": "PASS"
+      },
+      "swarmShellBehavior": {
+        "tests": 4,
+        "status": "PASS"
+      },
+      "databaseExecutionAndReview": {
+        "files": 2,
+        "tests": 65,
+        "status": "PASS"
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "shellSyntax": "PASS",
+      "documentation": "PASS"
+    },
+    "browserEvidence": "Both complete browser CI jobs passed on 6761aef4f; no UI changes in this follow-up. New head is revalidated by CI.",
+    "swarmRootCause": "Replica counts reached desired values while UpdateStatus was updating; deployment returned before keyring-bearing replacement tasks converged.",
+    "remoteCI": "Pending after follow-up push; use exact-head PR checks."
+  }
 }

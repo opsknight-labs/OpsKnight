@@ -275,7 +275,7 @@ jobs:
             local actual
             actual="$(service_env_value "${service}" "${key}")"
             if [ "${actual}" != "${expected}" ]; then
-              echo "❌ ${service} expected ${key}=${expected}, got '${actual}'" >&2
+              echo "❌ ${service} environment ${key} mismatch (values masked)" >&2
               exit 1
             fi
           }
@@ -296,7 +296,7 @@ jobs:
             local path="$2"
             local expected="$3"
             local container_id actual
-            local timeout=60
+            local timeout=180
             local elapsed=0
             while [ "${elapsed}" -lt "${timeout}" ]; do
               local all_match=1
@@ -319,12 +319,10 @@ jobs:
               sleep 2
               elapsed=$((elapsed + 2))
             done
-            container_id="$(container_for_service "${service}")"
-            actual="$(docker exec "${container_id}" sh -c "cat '${path}'" 2>/dev/null || true)"
-            if [ "${actual}" != "${expected}" ]; then
-              echo "❌ ${service} secret ${path} did not match expected value (expected '${expected}', got '${actual}')" >&2
-              exit 1
-            fi
+            echo "❌ ${service} secret ${path} mismatch or incomplete replica replacement (values masked)" >&2
+            docker service inspect "${service}" --format '{{json .UpdateStatus}}' >&2
+            docker service ps "${service}" --no-trunc >&2
+            exit 1
           }
 
           assert_runtime_secret_delivery() {
