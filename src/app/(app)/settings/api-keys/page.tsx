@@ -9,9 +9,8 @@ import ServiceAccountsPanel, {
 } from '@/components/settings/ServiceAccountsPanel';
 import ApiExplorerPanel, { type ApiEndpointDoc } from '@/components/settings/ApiExplorerPanel';
 import ApiActivityPanel, { type ApiAuditLogItem } from '@/components/settings/ApiActivityPanel';
-import ApiKeysWorkspaceTabs, {
-  WORKSPACE_TABS,
-} from '@/components/settings/ApiKeysWorkspaceTabs';
+import ApiKeysWorkspaceTabs from '@/components/settings/ApiKeysWorkspaceTabs';
+import { normalizeWorkspaceTab } from '@/lib/api-keys-workspace';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -182,10 +181,7 @@ export default async function ApiKeysSettingsPage({
 }) {
   const query = (await searchParams) ?? {};
   const rawTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
-  const requestedTab = rawTab === 'api-explorer' ? 'explorer' : rawTab;
-  const activeTab = (WORKSPACE_TABS as readonly string[]).includes(requestedTab ?? '')
-    ? (requestedTab as (typeof WORKSPACE_TABS)[number])
-    : 'api-keys';
+  const activeTab = normalizeWorkspaceTab(rawTab) ?? 'api-keys';
   const activityFilters = parseApiActivityFilters(query);
   const [session, appUrl] = await Promise.all([
     getServerSession(await getAuthOptions()),

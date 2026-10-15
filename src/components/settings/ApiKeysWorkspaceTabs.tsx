@@ -1,12 +1,17 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, useTransition, type ReactNode } from 'react';
+import React, { useState, useMemo, useEffect, useTransition, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { Key, Bot, Code2, Activity } from 'lucide-react';
 
-export const WORKSPACE_TABS = ['api-keys', 'service-accounts', 'explorer', 'activity'] as const;
-export type WorkspaceTabId = (typeof WORKSPACE_TABS)[number];
+import {
+  WORKSPACE_TABS,
+  type WorkspaceTabId,
+  normalizeWorkspaceTab,
+} from '@/lib/api-keys-workspace';
+
+export { WORKSPACE_TABS, type WorkspaceTabId, normalizeWorkspaceTab };
 
 export interface ApiKeysWorkspaceTabsProps {
   initialTab?: WorkspaceTabId;
@@ -38,19 +43,15 @@ export default function ApiKeysWorkspaceTabs({
   // Resolve external tab from URL query params
   const externalTab = useMemo<WorkspaceTabId>(() => {
     const raw = searchParams?.get('tab');
-    const normalized = raw === 'api-explorer' ? 'explorer' : raw;
-    if (normalized && (WORKSPACE_TABS as readonly string[]).includes(normalized)) {
-      return normalized as WorkspaceTabId;
-    }
-    return initialTab;
+    return normalizeWorkspaceTab(raw) ?? initialTab;
   }, [searchParams, initialTab]);
 
   const [activeTab, setActiveTab] = useState<WorkspaceTabId>(externalTab);
+  const [prevExternalTab, setPrevExternalTab] = useState<WorkspaceTabId>(externalTab);
 
-  // Synchronize during render when external searchParams change (React recommended pattern)
-  const prevExternalTabRef = useRef<WorkspaceTabId>(externalTab);
-  if (prevExternalTabRef.current !== externalTab) {
-    prevExternalTabRef.current = externalTab;
+  // Synchronize during render when external searchParams change (React official recommended pattern)
+  if (prevExternalTab !== externalTab) {
+    setPrevExternalTab(externalTab);
     setActiveTab(externalTab);
   }
 
@@ -59,10 +60,9 @@ export default function ApiKeysWorkspaceTabs({
     const handlePopState = () => {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
-        const raw = urlParams.get('tab');
-        const normalized = raw === 'api-explorer' ? 'explorer' : raw;
-        if (normalized && (WORKSPACE_TABS as readonly string[]).includes(normalized)) {
-          setActiveTab(normalized as WorkspaceTabId);
+        const normalized = normalizeWorkspaceTab(urlParams.get('tab'));
+        if (normalized) {
+          setActiveTab(normalized);
         } else {
           setActiveTab(initialTab);
         }
