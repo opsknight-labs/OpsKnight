@@ -22,6 +22,7 @@ import {
   XCircle,
   Layers,
   Terminal,
+  UserCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
@@ -176,6 +177,34 @@ export default async function SystemSettingsPage() {
           />
         }
       />
+    );
+
+    const scimTab = (
+      <SettingsSection
+        title="SCIM 2.0 User Provisioning"
+        description="Automate identity lifecycle, role provisioning, and account deactivation directly from Okta, Entra ID, or any SCIM 2.0 compliant identity provider."
+        action={
+          <div className="flex items-center gap-2">
+            <div
+              className={`p-1.5 rounded-md ${scimConfig.enabled && scimConfig.hasSecretToken ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}
+            >
+              <UserCheck className="h-4 w-4" />
+            </div>
+            <Badge
+              variant={scimConfig.enabled && scimConfig.hasSecretToken ? 'success' : 'neutral'}
+              className="text-xs"
+            >
+              {scimConfig.enabled && scimConfig.hasSecretToken ? 'Active' : 'Not Configured'}
+            </Badge>
+          </div>
+        }
+      >
+        <ScimSettingsSection
+          key="scim-settings-dedicated"
+          initialConfig={scimConfig}
+          tenantUrl={scimTenantUrl}
+        />
+      </SettingsSection>
     );
 
     const retentionTab = <RetentionPolicySettings />;
@@ -436,6 +465,19 @@ export default async function SystemSettingsPage() {
               subtext: ssoEnabled ? String(oidcConfig?.providerType ?? 'oidc') : 'Not configured',
             },
             {
+              label: 'SCIM 2.0',
+              value: scimConfig.enabled && scimConfig.hasSecretToken ? 'Active' : 'Disabled',
+              icon: <UserCheck className="h-4 w-4" />,
+              valueClassName:
+                scimConfig.enabled && scimConfig.hasSecretToken
+                  ? 'text-emerald-300'
+                  : 'text-primary-foreground/70',
+              subtext:
+                scimConfig.enabled && scimConfig.hasSecretToken
+                  ? 'Lifecycle provisioning ready'
+                  : 'Not configured',
+            },
+            {
               label: 'Data Retention',
               value: 'Active',
               icon: <Database className="h-4 w-4" />,
@@ -479,6 +521,7 @@ export default async function SystemSettingsPage() {
         <SystemSettingsTabs
           appUrlTab={appUrlTab}
           ssoTab={ssoTab}
+          scimTab={scimTab}
           retentionTab={retentionTab}
           envTab={envTab}
           ssoEnabled={ssoEnabled}

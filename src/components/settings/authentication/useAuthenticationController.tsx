@@ -133,6 +133,18 @@ export function useAuthenticationController({
       );
     }
   }, []);
+
+  useEffect(() => {
+    if (data.revisions.length > 0) {
+      if (!revisionId || !data.revisions.some(r => r.id === revisionId)) {
+        const tested = data.revisions.find(r => r.testedAt);
+        const candidate = tested ?? data.revisions[0];
+        if (candidate) {
+          setRevisionId(candidate.id);
+        }
+      }
+    }
+  }, [data.revisions, revisionId, setRevisionId]);
   const [adminId, setAdminId] = useState(
     data.actor.kind === 'admin'
       ? data.actor.id

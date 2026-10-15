@@ -61,15 +61,20 @@ export default function AuthenticationPolicyWorkspace() {
     pending && { code: 'busy', message: 'Wait for current operation to finish.' },
     draftDirty && {
       code: 'draft',
-      message: 'Stage your draft changes before testing sign-in.',
+      message: 'Stage your draft changes in Connection before testing sign-in.',
       resolutionTarget: 'connection',
-      resolutionLabel: 'Go to draft',
+      resolutionLabel: 'Go to draft to stage',
     },
-    !revisionId && { code: 'revision', message: 'Select a staged configuration first.' },
-    !adminId && { code: 'admin', message: 'Select an administrator to verify.' },
+    !revisionId && {
+      code: 'revision',
+      message: 'Select a saved configuration from the selector above, or stage a new draft.',
+      resolutionTarget: 'connection',
+      resolutionLabel: 'Stage new configuration',
+    },
+    !adminId && { code: 'admin', message: 'Choose an administrator to verify from the selector.' },
     data.freshAuthenticationRequired && {
       code: 'fresh',
-      message: 'Authenticate again before starting a sensitive operation.',
+      message: 'Re-authenticate your administrator session before continuing.',
     },
   ]);
 
@@ -295,13 +300,15 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 draftDirty && {
                   code: 'draft',
-                  message: 'Stage your draft before previewing its enforcement impact.',
+                  message: 'Stage your draft in Connection before previewing its enforcement impact.',
                   resolutionTarget: 'connection',
-                  resolutionLabel: 'Stage draft',
+                  resolutionLabel: 'Stage draft in Connection',
                 },
                 !revisionId && {
                   code: 'revision',
-                  message: 'Stage or select a saved configuration first.',
+                  message: 'Select a saved configuration from the selector above, or stage a new draft.',
+                  resolutionTarget: 'connection',
+                  resolutionLabel: 'Stage in Connection',
                 },
               ])}
               onResolve={setActiveTab}
@@ -382,8 +389,9 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 draftDirty && {
                   code: 'draft',
-                  message: 'Stage draft changes and repeat the real administrator sign-in test.',
+                  message: 'Stage draft changes and repeat the administrator sign-in test.',
                   resolutionTarget: 'connection',
+                  resolutionLabel: 'Stage in Connection',
                 },
                 !impact && { code: 'preview', message: 'Preview enforcement impact before activation.' },
                 !confirmation && { code: 'confirm', message: 'Confirm that you reviewed the impact.' },
@@ -399,6 +407,7 @@ export default function AuthenticationPolicyWorkspace() {
                   code: 'origin',
                   message: 'Repair conflicting deployment URLs before activation.',
                   resolutionTarget: 'diagnostics',
+                  resolutionLabel: 'View Origin Diagnostics',
                 },
                 ...(mode === 'SSO_REQUIRED'
                   ? (impact?.blockers ?? []).map((message, index) => ({
