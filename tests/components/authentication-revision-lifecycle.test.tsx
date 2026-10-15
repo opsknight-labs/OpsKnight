@@ -161,6 +161,25 @@ describe('revision lifecycle in the console', () => {
     expect(new URLSearchParams(window.location.search).get('revisionId')).toBe('draft-2');
   });
 
+  it('clears the selection and URL after deleting the final draft, then stages without a source', async () => {
+    renderConsole(dashboard({ revisions: [revision('draft-1')] }), 'policy', 'draft-1');
+    fireEvent.click(screen.getByRole('button', { name: /Delete draft/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete draft' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Saved configuration to activate')).toHaveValue('')
+    );
+    expect(new URLSearchParams(window.location.search).get('revisionId')).toBeNull();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), { button: 0 });
+    fireEvent.change(await screen.findByLabelText('Client ID', { exact: true }), {
+      target: { value: 'replacement-client' },
+    });
+    fireEvent.change(screen.getByLabelText(/Client secret/), { target: { value: 'secret' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Stage configuration' })[0]);
+    await waitFor(() => expect(requests.some(body => body.action === 'stage')).toBe(true));
+    expect(requests.find(body => body.action === 'stage')?.sourceRevisionId).toBeUndefined();
+  });
+
   it('never stages from a deleted source revision', async () => {
     renderConsole(dashboard(), 'connection', 'draft-1');
     // Another administrator deletes the selected draft; the next refresh must recover.
