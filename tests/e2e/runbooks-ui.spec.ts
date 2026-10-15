@@ -1401,28 +1401,32 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
   expect(await prisma.runbookExecution.count({ where: { bindingId: rule.id } })).toBe(0);
   // Dismissal updates the database before its server-action refresh commits.
   await expect(page.getByRole('button', { name: 'Dismiss', exact: true })).not.toBeVisible();
-  await page.goto(`/services/${service.id}?tab=runbooks`);
+  // Inspect history in a second tab so the completed action's redirect cannot
+  // interrupt an unrelated top-level navigation (notably in WebKit).
+  const history = await page.context().newPage();
+  await history.goto(`/services/${service.id}?tab=runbooks`);
   await expect(
-    page.getByRole('link', { name: 'View archived rule evidence', exact: true })
+    history.getByRole('link', { name: 'View archived rule evidence', exact: true })
   ).not.toBeVisible();
-  await page
+  await history
     .getByLabel('Rule history', { exact: true })
     .filter({ visible: true })
     .selectOption('archived');
-  await page
+  await history
     .getByLabel('Search rules', { exact: true })
     .filter({ visible: true })
     .fill('Detached response');
-  await page.getByRole('button', { name: 'Search rule history', exact: true }).click();
+  await history.getByRole('button', { name: 'Search rule history', exact: true }).click();
   await expect(
-    page.getByText('Rule detached · Archived history', { exact: true }).filter({ visible: true })
+    history.getByText('Rule detached · Archived history', { exact: true }).filter({ visible: true })
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Duplicate paused rule', exact: true })
+    history.getByRole('button', { name: 'Duplicate paused rule', exact: true })
   ).not.toBeVisible();
-  await page.getByRole('link', { name: 'View archived rule evidence', exact: true }).click();
-  await expect(page.getByRole('list', { name: 'Rule lifecycle' })).toBeVisible();
+  await history.getByRole('link', { name: 'View archived rule evidence', exact: true }).click();
+  await expect(history.getByRole('list', { name: 'Rule lifecycle' })).toBeVisible();
   await expect(
-    page.getByText('Detached; activation unavailable', { exact: true }).filter({ visible: true })
+    history.getByText('Detached; activation unavailable', { exact: true }).filter({ visible: true })
   ).toBeVisible();
+  await history.close();
 });

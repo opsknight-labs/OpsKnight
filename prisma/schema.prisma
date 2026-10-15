@@ -3772,6 +3772,7 @@ model RunbookStepAttempt {
   @@index([targetAgentId])
   @@index([targetAgentPoolId])
   @@index([claimedAgentId])
+  @@index([outputArtifactId])
   @@index([leaseExpiresAt])
 }
 
@@ -3914,7 +3915,7 @@ model RunbookArtifact {
   createdAt DateTime @default(now())
 
   @@index([attemptId, createdAt])
-  @@index([createdAt])
+  @@index([createdAt, id])
 }
 
 // Opaque preview capabilities: only the token hash is stored. Scope IDs are retained for audit.

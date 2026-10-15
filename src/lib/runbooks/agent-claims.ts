@@ -159,6 +159,8 @@ export async function claimAgentAttempt(
     try {
       const claimedAttempt = await prisma.$transaction(
         async tx => {
+          await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
+          await tx.$executeRaw`SET LOCAL lock_timeout = '1000ms'`;
           const now = new Date();
           const agent = await tx.runbookAgent.findFirst({
             where: { id: agentId, status: { in: ['ONLINE', 'DEGRADED'] } },
@@ -179,6 +181,18 @@ export async function claimAgentAttempt(
             status: 'PENDING',
             availableAt: { lte: now },
             claimDeadlineAt: { gt: now },
+            // Do not hydrate thousands of unsafe shared-host writes before reaching
+            // newer eligible work. Keep the per-candidate guard below as well.
+            AND: [
+              {
+                OR: [
+                  { targetAgentId: { not: null } },
+                  { executionStep: { riskClass: 'READ_ONLY' } },
+                  { targetAgentPool: { mode: { not: 'LOCAL_HOSTS' } } },
+                  { targetAgentPool: { members: { none: { agentId: { not: agentId } } } } },
+                ],
+              },
+            ],
             OR: [
               { targetAgentId: agentId },
               {
@@ -539,7 +553,7 @@ export async function claimAgentAttempt(
               .map(([key]) => key),
           };
         },
-        { isolationLevel: 'ReadCommitted' }
+        { isolationLevel: 'ReadCommitted', timeout: 10_000, maxWait: 1000 }
       );
       return claimedAttempt ? await signExecutionEnvelope(claimedAttempt) : null;
     } catch (error) {

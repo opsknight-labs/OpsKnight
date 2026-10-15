@@ -1,0 +1,93 @@
+{
+  "measuredAt": "2026-10-15T14:52:35.953Z",
+  "topology": "Isolated PostgreSQL, direct library operations; no physical actions or authenticated fleet capacity claim",
+  "data": {
+    "inventory": 10000,
+    "purged": {
+      "count": 100,
+      "bytes": 100,
+      "hasMore": true,
+      "skipped": false
+    },
+    "elapsedMs": 339.7577079999992,
+    "concurrentRecovery": "TIMED_OUT accurately; history preserved",
+    "queryPlan": [
+      {
+        "QUERY PLAN": [
+          {
+            "Plan": {
+              "Node Type": "Limit",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.29,
+              "Total Cost": 10.4,
+              "Plan Rows": 100,
+              "Plan Width": 38,
+              "Actual Startup Time": 0.008,
+              "Actual Total Time": 0.023,
+              "Actual Rows": 100,
+              "Actual Loops": 1,
+              "Shared Hit Blocks": 5,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "RunbookArtifact_createdAt_id_idx",
+                  "Relation Name": "RunbookArtifact",
+                  "Alias": "RunbookArtifact",
+                  "Startup Cost": 0.29,
+                  "Total Cost": 1011.79,
+                  "Plan Rows": 10000,
+                  "Plan Width": 38,
+                  "Actual Startup Time": 0.008,
+                  "Actual Total Time": 0.019,
+                  "Actual Rows": 100,
+                  "Actual Loops": 1,
+                  "Index Cond": "(\"createdAt\" < (now() - '30 days'::interval))",
+                  "Rows Removed by Index Recheck": 0,
+                  "Shared Hit Blocks": 5,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 52,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.263,
+            "Triggers": [],
+            "Execution Time": 0.035
+          }
+        ]
+      }
+    ]
+  }
+}

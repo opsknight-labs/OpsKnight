@@ -1141,6 +1141,31 @@ export const OPERATIONAL_METRICS = [
     scope: 'cluster_snapshot',
     estimatedMaxSeries: 1,
   },
+  ...(['rows', 'bytes'] as const).map(unit => ({
+    name: `opsknight_runbook_artifact_purge_${unit}_total` as const,
+    help: `Expired artifact ${unit} removed by bounded maintenance batches`,
+    kind: 'counter' as const,
+    labels: [],
+    scope: 'counter' as const,
+    estimatedMaxSeries: 1,
+  })),
+  {
+    name: 'opsknight_runbook_artifact_purge_batches_total',
+    help: 'Artifact maintenance batches by outcome',
+    kind: 'counter',
+    labels: ['result'],
+    scope: 'counter',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_runbook_artifact_purge_duration_seconds',
+    help: 'Bounded artifact maintenance batch duration',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
+  },
 ] as const satisfies readonly MetricDefinition[];
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];

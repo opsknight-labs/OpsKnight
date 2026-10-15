@@ -16,13 +16,7 @@ export function agentKustomization(agentId: string, url: string, image: string) 
     namespace: 'opsknight',
     nameSuffix: identity.suffix,
     labels: [{ pairs: { 'app.kubernetes.io/instance': identity.name }, includeSelectors: true }],
-    resources: [
-      'deployment.yaml',
-      'policy.yaml',
-      'service-account.yaml',
-      'pvc.yaml',
-      'enrollment.yaml',
-    ],
+    resources: ['deployment.yaml', 'policy.yaml', 'service-account.yaml', 'pvc.yaml'],
     images: [
       {
         name: 'ghcr.io/opsknight-labs/opsknight-agent',
@@ -37,6 +31,11 @@ export function agentKustomization(agentId: string, url: string, image: string) 
         target: { kind: 'Deployment', name: 'opsknight-agent' },
         patch: JSON.stringify([
           { op: 'replace', path: '/spec/template/spec/containers/0/env/0/value', value: url },
+          {
+            op: 'replace',
+            path: '/spec/template/spec/volumes/2/secret/secretName',
+            value: identity.enrollmentSecret,
+          },
         ]),
       },
     ],

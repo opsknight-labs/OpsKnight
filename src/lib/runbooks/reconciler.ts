@@ -300,19 +300,6 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
   await db.runbookAgentRequestNonce.deleteMany({
     where: { createdAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
   });
-  const retention = await db.systemSettings.findUnique({
-    where: { id: 'default' },
-    select: { runbookArtifactRetentionDays: true },
-  });
-  const configuredRetentionDays =
-    retention?.runbookArtifactRetentionDays ??
-    Number.parseInt(process.env.RUNBOOK_ARTIFACT_RETENTION_DAYS ?? '30', 10);
-  const artifactRetentionDays = Number.isFinite(configuredRetentionDays)
-    ? Math.min(3650, Math.max(1, configuredRetentionDays))
-    : 30;
-  const artifactsDeleted = await db.runbookArtifact.deleteMany({
-    where: { createdAt: { lt: new Date(now.getTime() - artifactRetentionDays * 86_400_000) } },
-  });
   const localRunning = await db.runbookExecutionStep.findMany({
     where: {
       status: 'RUNNING',
@@ -407,7 +394,6 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
     recovered: recoveryIds.length,
     localRecovered,
     agentsOffline: offline.count,
-    artifactsDeleted: artifactsDeleted.count,
     previewAuthorizationsDeleted: previewAuthorizationsDeleted.count,
   };
 }

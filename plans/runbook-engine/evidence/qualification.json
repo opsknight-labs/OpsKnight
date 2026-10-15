@@ -129,8 +129,9 @@
     "assessedAt": "2026-10-15",
     "baseRevision": "6246302034633c2de8f50a9b00a7e0058f7d6c10",
     "policyCertification": "Real PostgreSQL 1/10/50/100 Agent durable certification and fail-closed activation PASS; no actions executed by these policy tests",
-    "multiAgentInstall": "Shared UI generator and disjoint-resource rendering PASS; exact-head same-cluster lifecycle certification PENDING CI. Local Docker unavailable.",
+    "multiAgentInstall": "0df984c8d live Helm/Kustomize independent-Agent lifecycle PASS. Swarm initial enrollment/jobs PASS; clean-exit upgrade stalls. Restart-policy follow-up pending exact-head CI.",
     "schema": "219 migrations applied on fresh and upgrade databases, including SSO, configuration revision and retention; schema-retention-20261015.json",
-    "releaseBoundary": "No new published-host, physical-failure or sustained-workload pass is asserted."
+    "releaseBoundary": "No new published-host, physical-failure or sustained-workload pass is asserted.",
+    "operationalBacklog": "10000 artifacts and 10000 ineligible writes, concurrent recovery isolation, 20000-rule search measured; candidate evidence only"
   }
 }

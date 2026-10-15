@@ -144,7 +144,7 @@ Pin `agent.image.repository` and `agent.image.digest` to an approved image. The 
 
 ## Kustomize
 
-The Agent setup UI generates an Agent-only temporary overlay with the selected URL and image. It includes the Agent Deployment, policy, ServiceAccount/RBAC and PVC; copy its commands from **Runbooks → Agents → Add Agent → Kustomize** and run from the repository root. Create the namespace and external enrollment Secret first. Kubernetes permissions and runtime policy remain diagnostics-only until explicitly configured. Apply an environment-specific egress policy when required.
+The Agent setup UI generates an Agent-only credential-free overlay with the selected URL and image. It includes the Agent Deployment, policy, ServiceAccount/RBAC and PVC; copy its commands from **Runbooks → Agents → Add Agent → Kustomize** and run from the repository root. Create the namespace and external enrollment Secret first. Kubernetes permissions and runtime policy remain diagnostics-only until explicitly configured. Apply an environment-specific egress policy when required.
 
 The existing `profiles/integrated-agent` and `profiles/split-agent` profiles deploy the application stack together with the Agent. Use those only when intentionally deploying or updating the whole stack. Neither profile generates enrollment tokens.
 
@@ -255,7 +255,7 @@ The legacy all-job worker now reconciles Runbooks too. For production workload i
 
 Fault-injection tests cover Agent crash/restart during artifact upload, renewal connectivity loss, exact start retries, trigger isolation, frozen suggestions, and signed payload tampering. These tests establish correctness under those failures; they are not fleet load certification. Before sizing a large fleet, measure idle-Agent and reconnect QPS, concurrent Runbook backlog, paging latency, database connections, and artifact WAL/backup growth. Artifacts remain bounded to 10 MiB compressed per artifact and per attempt, with at most 10 artifacts per attempt in PostgreSQL and retention cleanup; plan storage capacity accordingly.
 
-To replace a compromised Agent, revoke it in the UI, remove its identity volume, create a new enrollment, and review its secret grants. Revocation immediately prevents future signed claims. Output artifacts default to 30-day retention; set `RUNBOOK_ARTIFACT_RETENTION_DAYS` (1–3650) on the integrated runtime or dedicated Runbook Worker to match your incident-data retention policy.
+To replace a compromised Agent, revoke it in the UI, remove its identity volume, create a new enrollment, and review its secret grants. Revocation immediately prevents future signed claims. Output artifacts default to 30-day retention. Administrators can set 1–3650 days under **Runbooks → Agents → Security**, with audit and explicit permanent-deletion acknowledgement. Until an override is saved, `RUNBOOK_ARTIFACT_RETENTION_DAYS` on the scheduler/integrated runtime supplies the fallback. A separate maintenance connection deletes at most 100 rows and 16 MiB per minute, using indexed scans and short statement/lock deadlines. Large backlogs drain gradually without sharing the execution-recovery pool; include one additional connection per scheduler/integrated replica in capacity budgets. Monitor `opsknight_runbook_artifact_purge_rows_total`, `opsknight_runbook_artifact_purge_bytes_total`, `opsknight_runbook_artifact_purge_batches_total` and `opsknight_runbook_artifact_purge_duration_seconds`. Execution history remains.
 
 ## Secret transport and host targeting
 
@@ -295,7 +295,7 @@ The scheduler watchdog shares the transaction/connection holding its PostgreSQL 
 
 Create one enrollment for each independent Agent. The setup UI uses `opsknight-agent-<Agent ID>` for Compose projects, Swarm stacks and Helm releases, and a corresponding Kustomize suffix. Enrollment Secrets, selectors and persistent volumes are isolated. You can install more than one Agent in the same scope without editing generated names. Swarm identities remain pinned to their selected node.
 
-Choose **Install new independent Agent** for a new enrollment. Keep the generated deployment name with its identity volume. For Kustomize, retain the generated overlay in a protected directory: it includes the consumed enrollment credential and the install configuration.
+Choose **Install new independent Agent** for a new enrollment. Keep the generated deployment name with its identity volume. Kustomize creates its enrollment Secret directly from the temporary token file, then removes that file. Only credential-free manifests are retained under `${XDG_STATE_HOME:-$HOME/.local/state}/opsknight/agents/<deployment-name>`. Use that overlay for removal and delete the separately created enrollment Secret explicitly. No Secret YAML is saved in the repository.
 
 From **Inspect Agent → Upgrade installed Agent**, choose **Upgrade this installed Agent, preserving identity**. Confirm the existing deployment name before copying. Installations made with earlier instructions may use `opsknight-agent`; enter that original name. Compose retains its project volume, Swarm updates only the existing service, Helm upgrades an existing release with its values and PVC, and Kustomize updates only that Deployment image. No new enrollment token is required. Persist the Kustomize image change in the saved overlay before applying it again.
 

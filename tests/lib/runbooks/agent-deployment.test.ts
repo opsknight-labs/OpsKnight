@@ -1,4 +1,11 @@
-import { mkdtempSync, copyFileSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  copyFileSync,
+  writeFileSync,
+  rmSync,
+  readdirSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -13,18 +20,6 @@ it('renders disjoint Kubernetes selectors, identities, policy, Secrets and PVC r
     try {
       for (const file of ['deployment.yaml', 'policy.yaml', 'service-account.yaml', 'pvc.yaml'])
         copyFileSync(`deploy/kubernetes/kustomize/components/agent/${file}`, join(directory, file));
-      writeFileSync(
-        join(directory, 'enrollment.yaml'),
-        YAML.stringify({
-          apiVersion: 'v1',
-          kind: 'Secret',
-          metadata: { name: 'opsknight-agent-enrollment', namespace: 'opsknight' },
-          stringData: {
-            'enrollment-token': 'fixture',
-            OPSKNIGHT_EXECUTION_PUBLIC_KEY: 'public-pin',
-          },
-        })
-      );
       writeFileSync(
         join(directory, 'kustomization.yaml'),
         JSON.stringify(
@@ -122,6 +117,7 @@ it('preserves the configured endpoint when Docker renders the Agent Swarm stack'
   expect(render.status, render.stderr).toBe(0);
   const stack = YAML.parse(render.stdout);
   expect(stack.services['opsknight-agent'].environment.OPSKNIGHT_URL).toBe(endpoint);
+  expect(stack.services['opsknight-agent'].deploy.restart_policy.condition).toBe('any');
   // The endpoint must still be required, including when explicitly empty.
   const missing = spawnSync(
     'docker',
@@ -134,4 +130,63 @@ it('preserves the configured endpoint when Docker renders the Agent Swarm stack'
   );
   expect(missing.status).not.toBe(0);
   expect(missing.stderr).toContain('OPSKNIGHT_AGENT_URL');
+});
+
+it('creates the Kustomize enrollment Secret separately and leaves only credential-free state outside the repository', async () => {
+  const { agentSetupCommands } = await import('@/lib/runbooks/agent-setup-commands');
+  const directory = mkdtempSync(join(tmpdir(), 'agent-state-test-'));
+  const commands = agentSetupCommands({
+    agentId: 'cmv90000000000000000000001',
+    image: 'fixture:verified',
+    url: 'https://ops.example.com',
+    policyPath: 'agent/policy.container.json',
+    executionPublicKey: 'public-pin',
+  });
+  try {
+    const result = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
+curl() { return 0; }
+kubectl() {
+  case "$*" in
+    'create namespace '*) printf 'namespace-fixture';;
+    'apply -f -') cat >/dev/null;;
+    *'create secret generic '*)
+      for arg in "$@"; do
+        case "$arg" in --from-file=enrollment-token=*)
+          [ "$(cat "\${arg#--from-file=enrollment-token=}")" = 'fixture-bootstrap-credential' ] || return 1;;
+        esac
+      done
+      printf 'Secret created separately';;
+    'apply -k '*) [ ! -e "$3/enrollment.yaml" ] || return 1;;
+    *) return 1;;
+  esac
+}
+${commands.kustomize}
+[ ! -e "$agent_credential_dir/enrollment-token" ] || rm -rf "$agent_credential_dir"
+`,
+      ],
+      {
+        input: 'fixture-bootstrap-credential\n',
+        encoding: 'utf8',
+        env: { ...process.env, XDG_STATE_HOME: directory },
+      }
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).not.toContain('fixture-bootstrap-credential');
+    const files = readdirSync(directory, { recursive: true, withFileTypes: true }).filter(entry =>
+      entry.isFile()
+    );
+    expect(files.length).toBe(5);
+    for (const file of files) {
+      const content = readFileSync(join(file.parentPath, file.name), 'utf8');
+      expect(content).not.toContain('fixture-bootstrap-credential');
+      expect(content).not.toContain(Buffer.from('fixture-bootstrap-credential').toString('base64'));
+      expect(content).not.toContain('kind: Secret');
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

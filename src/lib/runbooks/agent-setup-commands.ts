@@ -100,14 +100,16 @@ helm upgrade --install ${deployment.name} deploy/kubernetes/helm/opsknight-agent
   ${helmImage} \\
   --set-string agent.enrollmentToken.existingSecret=${shellQuote(deployment.enrollmentSecret)}`;
   const kustomize = `${captureToken}
+trap 'rm -rf "$agent_credential_dir"' EXIT
 ${namespace}
-# Keep this overlay for upgrades and removal; it contains a one-time credential.
-agent_setup_dir=${shellQuote(`./${deployment.name}`)}
+# Store only credential-free manifests outside the repository.
+agent_state_root="\${XDG_STATE_HOME:-$HOME/.local/state}/opsknight/agents"
+mkdir -p "$agent_state_root"
+agent_setup_dir="$agent_state_root/${deployment.name}"
 mkdir -m 0700 "$agent_setup_dir"
-kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
+kubectl -n opsknight create secret generic ${deployment.enrollmentSecret} \\
   --from-file=enrollment-token="$agent_credential_dir/enrollment-token" \\
-  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)} \\
-  --dry-run=client -o yaml > "$agent_setup_dir/enrollment.yaml"
+  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 cp deploy/kubernetes/kustomize/components/agent/deployment.yaml deploy/kubernetes/kustomize/components/agent/policy.yaml deploy/kubernetes/kustomize/components/agent/service-account.yaml deploy/kubernetes/kustomize/components/agent/pvc.yaml "$agent_setup_dir/"
 printf '%s' ${shellQuote(kustomization)} > "$agent_setup_dir/kustomization.yaml"
 kubectl apply -k "$agent_setup_dir"`;

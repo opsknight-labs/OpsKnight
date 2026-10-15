@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testPrisma, resetDatabase, createTestUser } from '../helpers/test-db';
-import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
+import { purgeExpiredRunbookArtifacts } from '@/lib/runbooks/artifact-cleanup';
 import { updateRunbookArtifactRetentionAction } from '@/app/(app)/runbooks/actions';
 import { CAPABILITIES } from '@/lib/authorization';
 const authority = vi.hoisted(() => ({ id: '', check: vi.fn() }));
@@ -73,7 +73,7 @@ suite('administrator evidence retention policy', () => {
       },
     });
     expect(await testPrisma.runbookArtifact.count()).toBe(2);
-    await reconcileRunbooks(10);
+    await purgeExpiredRunbookArtifacts(testPrisma);
     expect(await testPrisma.runbookArtifact.count()).toBe(1);
     expect(
       await testPrisma.runbookExecution.findUnique({ where: { id: execution.id } })

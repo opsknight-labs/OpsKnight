@@ -89,6 +89,7 @@ export async function smokeAgentFleet(
         KUBECONFIG: kubeconfig,
         CURL_CA_BUNDLE: join(directory, 'tls.crt'),
         SWARM_NETWORK_NAME: network,
+        XDG_STATE_HOME: join(directory, 'agent-state'),
       };
       const names = enrollments.map(enrollment => agentDeploymentIdentity(enrollment.agent.id));
       try {
@@ -222,7 +223,19 @@ export async function smokeAgentFleet(
             env,
             timeout: 120_000,
           });
-        else await script(`kubectl delete -k './${names[0].name}' --wait=true`, '', env);
+        else {
+          await run(
+            'kubectl',
+            [
+              'delete',
+              '-k',
+              join(env.XDG_STATE_HOME, 'opsknight/agents', names[0].name),
+              '--wait=true',
+            ],
+            { env, timeout: 120_000 }
+          );
+          await kubectl(['delete', 'secret', names[0].enrollmentSecret, '--ignore-not-found']);
+        }
         await runFor(1);
         evidence.push({
           platform,
@@ -318,12 +331,13 @@ export async function smokeAgentFleet(
             await kubectl(['delete', 'secret', identity.enrollmentSecret, '--ignore-not-found']);
             await kubectl(['delete', 'pvc', `${identity.name}-agent`, '--ignore-not-found']);
           } else {
-            await script(
-              `kubectl delete -k './${identity.name}' --ignore-not-found`,
-              '',
-              env
-            ).catch(() => undefined);
-            await run('rm', ['-rf', `./${identity.name}`]);
+            const overlay = join(env.XDG_STATE_HOME, 'opsknight/agents', identity.name);
+            await run('kubectl', ['delete', '-k', overlay, '--ignore-not-found'], {
+              env,
+              timeout: 120_000,
+            }).catch(() => undefined);
+            await kubectl(['delete', 'secret', identity.enrollmentSecret, '--ignore-not-found']);
+            await run('rm', ['-rf', overlay]);
           }
         }
       }

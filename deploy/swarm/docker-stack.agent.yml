@@ -28,7 +28,7 @@ services:
         constraints:
           - node.id == ${OPSKNIGHT_AGENT_NODE_ID:?Set the enrolled Agent node ID; local identity must not migrate}
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 30s
       update_config:
         order: stop-first

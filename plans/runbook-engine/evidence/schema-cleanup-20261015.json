@@ -1,0 +1,23 @@
+{
+  "measuredAt": "2026-10-15T14:55:33.082Z",
+  "results": [
+    {
+      "database": "rbe_engine_test",
+      "migrations": 220,
+      "indexes": [
+        "RunbookArtifact_createdAt_id_idx",
+        "RunbookStepAttempt_outputArtifactId_idx"
+      ]
+    },
+    {
+      "database": "rbe_schema_fresh_20261015",
+      "migrations": 220,
+      "indexes": [
+        "RunbookArtifact_createdAt_id_idx",
+        "RunbookStepAttempt_outputArtifactId_idx"
+      ]
+    }
+  ],
+  "schemaComparison": "No difference detected between migrated databases",
+  "limitation": "Existing migrated local fresh/upgrade fixtures; not physical deployment upgrade certification"
+}

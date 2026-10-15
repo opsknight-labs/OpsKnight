@@ -242,8 +242,8 @@ function calculateRuntimeCapacity(customEnv) {
 
   const directWorkerConnections =
     mode === 'integrated'
-      ? 0
-      : schedulerReplicas * schedulerPool +
+      ? integratedReplicas
+      : schedulerReplicas * (schedulerPool + 1) +
         generalReplicas * generalPool +
         criticalReplicas * criticalPool +
         bulkReplicas * bulkPool +
@@ -278,7 +278,8 @@ function calculateRuntimeCapacity(customEnv) {
           ? {
               replicas: schedulerReplicas,
               pool: schedulerPool,
-              total: schedulerReplicas * schedulerPool,
+              total: schedulerReplicas * (schedulerPool + 1),
+              artifactMaintenanceConnections: schedulerReplicas,
             }
           : null,
       generalWorker:

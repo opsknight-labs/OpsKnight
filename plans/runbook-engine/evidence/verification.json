@@ -366,5 +366,25 @@
       "modifiedSourceLint": "PASS"
     },
     "remoteCI": "Pending follow-up push; fleet smoke and exact-head browser/Swarm certification still required."
+  },
+  "operationalBacklogFollowup": {
+    "assessedAt": "2026-10-15",
+    "retention": "Separate 1-connection maintenance pool; 100-row/16-MiB batch each minute; independent advisory lock, 1-second SQL/100-ms lock/2.5-second transaction limits; 10000-artifact concurrent recovery and slow-delete isolation regressions PASS",
+    "claims": "10000 unsafe shared-host writes reproduced a 5-second timeout before the fix. SQL eligibility filtering and explicit bounded transaction now reach a newer safe diagnostic; no physical action performed. See claim-ineligible-backlog-20261015.json",
+    "search": "20000 rules, active/archived selective, broad, missing and workflow-name substring searches measured with actual Prisma SQL EXPLAIN ANALYZE; see rule-search-backlog-20261015.json. No speculative search index added.",
+    "kustomize": "Secret created directly from private temporary file; cleanup trap; retained credential-free overlay outside repository. Plaintext/base64 credential-remnant test PASS.",
+    "fleet": "0df984c8d live Helm and Kustomize: two independent Agents, distinct signed claims, restart, upgrade and removal isolation PASS in both runs. Swarm enrollment/initial jobs PASS but service upgrade stalls after clean exit; restart condition updated to any, pending exact-head CI.",
+    "limits": [
+      "No production fleet capacity assertion",
+      "Physical HA, published native distribution and sustained authenticated permissioned write workloads remain unqualified"
+    ],
+    "validation": {
+      "targetedUnits": "364 passed, 3 skipped; later 44 deployment/registry cases passed (overlapping)",
+      "database": "61 execution/backlog/retention cases plus 58 revision/concurrency/authorization/retention cases, and a final 4-case backlog run with query plans and purge timeout isolation; counts overlap",
+      "schema": "220 applied migrations; upgraded fresh/upgrade fixtures match; schema-cleanup-20261015.json",
+      "ci": "Pending new source commit; previous 0df984c8d has 39 successful checks, two fleet failures and one WebKit navigation-race failure; no approval asserted",
+      "webkit": "Archived suggestion dismissal/search/lifecycle journey: 3 consecutive local WebKit repetitions PASS; uses existing production build for unchanged UI behavior",
+      "node": "14 CI runner contracts and 7 deployment/capacity documentation contracts PASS"
+    }
   }
 }
