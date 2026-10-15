@@ -9,7 +9,6 @@ import { createApiKey, revokeApiKey } from '@/app/(app)/settings/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
-import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +47,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
 import OneTimeSecretBanner from './OneTimeSecretBanner';
+import ScopeSelectorGrouped from './ScopeSelectorGrouped';
 import {
   Key,
   XCircle,
@@ -204,33 +204,6 @@ export default function ApiKeysPanel({
       ? new Set(['events:write', 'incidents:read'])
       : new Set(['incidents:read'])
   );
-
-  const applyKeyPreset = (type: 'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'CLEAR') => {
-    if (type === 'CLEAR') {
-      setSelectedKeyScopes(new Set());
-    } else if (type === 'ADMIN') {
-      setSelectedKeyScopes(new Set(visibleScopes.map(s => s.value)));
-    } else if (type === 'RESPONDER') {
-      setSelectedKeyScopes(
-        new Set(
-          [
-            'events:write',
-            'incidents:read',
-            'incidents:write',
-            'services:read',
-            'schedules:read',
-            'runbooks:read',
-            'runbooks:execute',
-            'notifications:read',
-            'teams:read',
-            'users:read',
-          ].filter(s => visibleScopes.some(v => v.value === s))
-        )
-      );
-    } else if (type === 'READ_ONLY') {
-      setSelectedKeyScopes(new Set(visibleScopes.filter(s => !s.write).map(s => s.value)));
-    }
-  };
 
   const handleRevoke = async (keyId: string) => {
     setIsRevoking(true);
@@ -767,115 +740,14 @@ print(response.json()["incidents"])`}
               </div>
             </div>
 
-            {/* Granular Permission Scopes */}
-            <div className="space-y-2.5 rounded-xl border border-border/80 bg-muted/20 p-3.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
-                  <p className="text-[11px] text-muted-foreground">
-                    Selected: {selectedKeyScopes.size} of {visibleScopes.length} scopes (least privilege principle).
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {isAdmin && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => applyKeyPreset('ADMIN')}
-                      className="h-7 text-[10px] px-2"
-                    >
-                      Admin Full
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyKeyPreset('RESPONDER')}
-                    className="h-7 text-[10px] px-2"
-                  >
-                    Responder
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyKeyPreset('READ_ONLY')}
-                    className="h-7 text-[10px] px-2"
-                  >
-                    Read-Only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyKeyPreset('CLEAR')}
-                    className="h-7 text-[10px] px-2"
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
-
-              {/* Hidden inputs to guarantee all selected scopes are sent with formData */}
-              {Array.from(selectedKeyScopes).map(sc => (
-                <input key={sc} type="hidden" name="scopes" value={sc} />
-              ))}
-
-              <div className="grid min-w-0 gap-2 sm:grid-cols-2 max-h-72 overflow-y-auto pr-1">
-                {visibleScopes.map(scope => {
-                  const Icon = scope.icon;
-                  const isChecked = selectedKeyScopes.has(scope.value);
-                  return (
-                    <div
-                      key={scope.value}
-                      onClick={e => {
-                        if ((e.target as HTMLElement).closest('button, input')) return;
-                        setSelectedKeyScopes(prev => {
-                          const next = new Set(prev);
-                          if (next.has(scope.value)) next.delete(scope.value);
-                          else next.add(scope.value);
-                          return next;
-                        });
-                      }}
-                      className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border p-3 text-xs cursor-pointer transition-all ${
-                        isChecked
-                          ? 'border-primary/50 bg-primary/5'
-                          : 'border-border/80 bg-background hover:border-primary/40'
-                      }`}
-                    >
-                      <Checkbox
-                        checked={isChecked}
-                        id={`scope-${scope.value}`}
-                        className="mt-0.5 shrink-0"
-                        onCheckedChange={checked => {
-                          setSelectedKeyScopes(prev => {
-                            const next = new Set(prev);
-                            if (checked) next.add(scope.value);
-                            else next.delete(scope.value);
-                            return next;
-                          });
-                        }}
-                      />
-                      <div className="grid min-w-0 cursor-pointer gap-1 sm:grid-cols-[minmax(8rem,0.8fr)_minmax(0,1.4fr)_auto] sm:items-center">
-                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
-                        </span>
-                        <span className="min-w-0 text-[11px] leading-relaxed text-muted-foreground">
-                          {scope.detail}
-                        </span>
-                        <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
-                          {scope.value}
-                        </code>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {/* Granular Permission Scopes - Grouped by Domain Category with Search and Posture Badges */}
+            <ScopeSelectorGrouped
+              availableScopes={visibleScopes}
+              selectedScopes={selectedKeyScopes}
+              onChange={setSelectedKeyScopes}
+              isAdmin={isAdmin}
+              name="scopes"
+            />
 
             <DialogFooter className="pt-2">
               <Button
