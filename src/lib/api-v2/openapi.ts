@@ -1475,7 +1475,7 @@ function buildBaseSpec(): Record<string, unknown> {
                   properties: {
                     incidentId: { type: 'string', nullable: true },
                     serviceId: { type: 'string', nullable: true },
-                    bindingId: { type: 'string', nullable: true },
+                    bindingId: { type: 'string', nullable: true, description: 'Select an enabled service rule. Required when multiple rules match; detached rules cannot execute.' },
                     parameters: { type: 'object' },
                   },
                 },

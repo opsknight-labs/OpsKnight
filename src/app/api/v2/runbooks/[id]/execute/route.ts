@@ -5,6 +5,7 @@ import { previewRunbookExecution, startRunbookExecution } from '@/lib/runbooks/o
 import { AppError } from '@/lib/errors';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import type { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 
 export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof RunbookExecuteV2Schema>>({
   action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
@@ -16,6 +17,20 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
   handler: async ({ params, body, actor, apiKey, tx }) => {
     const db = tx ?? prisma;
     const { id } = params;
+    const findBinding = async ({ where }: { where: Prisma.ServiceAutomationRuleWhereInput }) => {
+      const matches = await db.serviceAutomationRule.findMany({
+        where: { ...where, detachedAt: null },
+        orderBy: { id: 'asc' },
+        take: 2,
+      });
+      if (matches.length > 1)
+        throw new AppError({
+          code: 'RUNBOOK_DEFINITION_INVALID',
+          userMessage:
+            'Multiple service rules match this Runbook. Specify bindingId to select the reviewed rule.',
+        });
+      return matches[0] ?? null;
+    };
 
     const runbook = await db.runbook.findUnique({
       where: { id },
@@ -61,7 +76,7 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
       resolvedServiceId = incident.serviceId;
 
       // Establish the correct runbook-service binding
-      const binding = await db.serviceRunbookBinding.findFirst({
+      const binding = await findBinding({
         where: {
           ...(body.bindingId ? { id: body.bindingId } : {}),
           runbookId: id,
@@ -82,7 +97,7 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
         resolvedRunbookVersionId = binding.runbookVersionId;
       }
     } else if (body.bindingId) {
-      const binding = await db.serviceRunbookBinding.findFirst({
+      const binding = await findBinding({
         where: {
           id: body.bindingId,
           runbookId: id,
@@ -105,7 +120,7 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
       }
     } else if (body.serviceId) {
       resolvedServiceId = body.serviceId;
-      const binding = await db.serviceRunbookBinding.findFirst({
+      const binding = await findBinding({
         where: {
           runbookId: id,
           serviceId: body.serviceId,

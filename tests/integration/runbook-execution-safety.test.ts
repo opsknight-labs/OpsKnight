@@ -2811,7 +2811,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     const incident = await createTestIncident('Incident linked execution', target.service.id);
 
     // Resolve service boundary and binding like the v2 API endpoint
-    const binding = await testPrisma.serviceRunbookBinding.findFirst({
+    const binding = await testPrisma.serviceAutomationRule.findFirst({
       where: {
         runbookId: target.runbook.id,
         serviceId: incident.serviceId,
@@ -3091,7 +3091,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       }
     });
 
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
     const port = (server.address() as AddressInfo).port;
     const serverUrl = `http://127.0.0.1:${port}/api/v2/runbooks/${target.runbook.id}/execute`;
 
@@ -3149,10 +3149,8 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       expect(dbRecord?.completedAt).not.toBeNull();
     } finally {
       await new Promise<void>((resolve, reject) =>
-        server.close((err) => (err ? reject(err) : resolve()))
+        server.close(err => (err ? reject(err) : resolve()))
       );
     }
   });
 });
-
-

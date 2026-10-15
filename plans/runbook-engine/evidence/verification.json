@@ -412,7 +412,8 @@
       "liveFleetAssertions": "Inspect the running task mount and require fresh readiness/liveness before and after upgrades/restarts. Bound generated-command process groups, including stuck Bash cleanup children.",
       "ruleConcurrency": "All configuration mutations acquire Runbook then rule locks; execution preparation and suggestions hold shared locks through creation. Pause cannot commit before an already-locked start finishes; a pause-first start revalidates and rejects.",
       "optimisticEdits": "UI configuration and trigger actions require the displayed configuration revision. Stale saves return a reload/review conflict. Form instances refresh with the revision.",
-      "navigation": "Synchronously guard the selected/pending destination. Pointer, repeated selection and keyboard interaction regressions pass; shallow navigation and cancellation remain covered."
+      "navigation": "Synchronously guard the selected/pending destination. Pointer, repeated selection and keyboard interaction regressions pass; shallow navigation and cancellation remain covered.",
+      "apiV2Integration": "Adapt the newly merged execution endpoint to ServiceAutomationRule, exclude detached rules, and require bindingId when multiple enabled rules match. Preserve outer transaction support. Nine focused endpoint tests and the real PostgreSQL/HTTP regressions pass."
     },
     "localValidation": {
       "targetedUnit": {
@@ -421,23 +422,26 @@
         "files": 39
       },
       "postgresql": {
-        "passed": 104,
+        "passed": 108,
         "files": 4,
         "includes": [
           "Both deterministic pause/start orderings with observed PostgreSQL lock waits",
           "Concurrent administrator saves and stale configuration/trigger UI actions",
-          "Existing execution safety, lifecycle and trigger revision regressions"
+          "Existing execution safety, lifecycle and trigger revision regressions",
+          "API v2 bearer authentication, idempotent replay and actual HTTP route execution after rebasing onto API modernization"
         ]
       },
       "typecheck": "PASS",
       "modifiedSourceLint": "PASS: zero errors and warnings",
       "fullApplicationUnit": {
-        "passed": 5935,
+        "passed": 6227,
         "skipped": 7,
-        "files": 788
-      }
+        "files": 815
+      },
+      "migrations": "PASS: 223 migrations applied to isolated PostgreSQL; validator reports zero errors and 40 existing warnings"
     },
     "deploymentQualification": "PENDING final-head CI. Local Docker daemon unavailable; static rendering and probe unit coverage do not establish a live Swarm pass. Prior-head evidence passed Compose, Helm and Kustomize and failed Swarm.",
-    "releaseQualification": "Beta. Physical approved writes, physical HA/failover/partition/disk faults, official public installer distribution, sustained authenticated fleet capacity and human accessibility qualification remain NOT_TESTED."
+    "releaseQualification": "Beta. Physical approved writes, physical HA/failover/partition/disk faults, official public installer distribution, sustained authenticated fleet capacity and human accessibility qualification remain NOT_TESTED.",
+    "baseRevision": "e635e31a3"
   }
 }
