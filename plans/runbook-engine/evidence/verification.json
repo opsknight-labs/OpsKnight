@@ -542,5 +542,20 @@
     },
     "hostedCI": "Required checks must pass on the committed candidate head; prior-head passes and local checks are not substituted.",
     "releaseQualification": "BETA. Physical approved-write/failure/HA tests, public release distribution, sustained authenticated capacity and independent human accessibility/usability qualification remain NOT_TESTED."
+  },
+  "maintenanceAlertClosure": {
+    "auditedHead": "22930f4c245041dd29a6c2b5f892a230e15bb946",
+    "verifiedAt": "2026-10-15",
+    "changes": "Six warning alerts cover nonce/artifact stalled maintenance, expired age backlog and repeated failed transactions. Backlog joins recent successful batch evidence per scrape job/instance to suppress stale former leaders. Added bounded artifact expired-age projection.",
+    "validation": {
+      "promtool": "3.15.0; 18 bundled rules valid; six firing/recovery scenarios pass",
+      "postgresql": "3 tests in nonce maintenance and artifact retention pass, including deliberate deletion contention, replay rejection, separate recovery, artifact age beyond retention and reset after draining",
+      "unit": "15 targeted tests pass",
+      "ciContracts": "9 Node tests pass",
+      "typecheck": "pass",
+      "lint": "zero warnings for modified TypeScript and CommonJS (CommonJS explicitly included with --no-ignore)",
+      "documentation": "v2.1 links and frontmatter pass; scheduler/integrated metrics scraping prerequisites documented"
+    },
+    "limitations": "Hosted checks must complete for the pushed commit. Physical HA, sustained authenticated workload, public release distributions and human UX review remain separate qualification gates; no production certification claimed."
   }
 }

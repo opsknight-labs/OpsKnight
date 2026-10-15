@@ -213,6 +213,37 @@ failed batches preserve its previous observation. Growing age or failure counts
 need investigation of maintenance throughput and database health. They do not
 mean that valid nonce replay protection has been disabled.
 
+## Maintenance alerts
+
+The bundled [Prometheus rules](https://github.com/opsknight-labs/OpsKnight/blob/main/monitoring/prometheus/opsknight-alerts.yaml)
+include nonce and artifact maintenance alerts for:
+
+- **Stalled:** no successful batch in the last five minutes while execution
+  workers report healthy, sustained for five minutes (nonces) or ten minutes
+  (artifacts). Missing maintenance samples also trigger this check.
+- **Lagging:** oldest expired data observed by an active maintenance process
+  exceeds five minutes (nonces) or one hour (artifacts), sustained for five minutes.
+- **Failing:** at least three failed transactions over ten minutes, sustained
+  for two minutes. Advisory-lock skips are separate from transaction failures.
+
+Scrape each scheduler process's authenticated `/api/metrics` endpoint as well as
+the web endpoint (or every integrated replica when using the integrated role):
+maintenance counters and age observations are process-local. Keep the
+Prometheus `job` and `instance` labels for matching. Load these rules per
+OpsKnight deployment; aggregate the workers of that deployment together, without
+combining unrelated deployments. Backlog alerts require recent successful batches
+from the same process, so a former leader's stale age gauge does not keep them
+firing. Existing worker-health alerts cover missing or degraded execution workers.
+
+`opsknight_runbook_artifact_purge_oldest_expired_age_seconds` measures age beyond
+the configured retention cutoff before the last successful batch, matching the
+nonce observation semantics. Empty successful batches reset age to zero; skipped
+and failed batches preserve it. An empty backlog is healthy even if no rows are
+deleted. Investigate database latency, locks and maintenance logs before changing
+cadence or capacity. Never clear replay protection by truncating recent nonces.
+The rule tests cover healthy idle maintenance, missing/stopped cleanup, backlog,
+repeated failures, a stale former leader and recovery after the backlog drains.
+
 ## Current boundaries
 
 Nested-check builder controls, signing rotation, structured selectors, independent rules and static version comparison are implemented. Version comparisons mask credential fields and list effects on latest-publication rules while pinned rules retain their versions. These features do not certify all deployment topologies or fleet capacity. The measured 10/100/1000 Agent simulation is direct-library idle claim load; it is not authenticated production network capacity or physical recovery proof. Promote only released server/Agent pairs with completed topology evidence.

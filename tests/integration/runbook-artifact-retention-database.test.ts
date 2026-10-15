@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testPrisma, resetDatabase, createTestUser } from '../helpers/test-db';
 import { purgeExpiredRunbookArtifacts } from '@/lib/runbooks/artifact-cleanup';
 import { updateRunbookArtifactRetentionAction } from '@/app/(app)/runbooks/actions';
+import { runtimeOperationalMetrics } from '@/lib/metrics/operational/registry';
 import { CAPABILITIES } from '@/lib/authorization';
 const authority = vi.hoisted(() => ({ id: '', check: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -74,6 +75,17 @@ suite('administrator evidence retention policy', () => {
     });
     expect(await testPrisma.runbookArtifact.count()).toBe(2);
     await purgeExpiredRunbookArtifacts(testPrisma);
+    expect(
+      runtimeOperationalMetrics().get(
+        'opsknight_runbook_artifact_purge_oldest_expired_age_seconds'
+      )?.[0].value
+    ).toBeGreaterThan(2 * 86_400);
+    await purgeExpiredRunbookArtifacts(testPrisma);
+    expect(
+      runtimeOperationalMetrics().get(
+        'opsknight_runbook_artifact_purge_oldest_expired_age_seconds'
+      )?.[0].value
+    ).toBe(0);
     expect(await testPrisma.runbookArtifact.count()).toBe(1);
     expect(
       await testPrisma.runbookExecution.findUnique({ where: { id: execution.id } })

@@ -1174,6 +1174,14 @@ export const OPERATIONAL_METRICS = [
     scope: 'counter',
     estimatedMaxSeries: 1,
   },
+  {
+    name: 'opsknight_runbook_artifact_purge_oldest_expired_age_seconds',
+    help: 'Oldest artifact age beyond retention observed before the last successful maintenance batch',
+    kind: 'gauge',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
   ...(['rows', 'bytes'] as const).map(unit => ({
     name: `opsknight_runbook_artifact_purge_${unit}_total` as const,
     help: `Expired artifact ${unit} removed by bounded maintenance batches`,

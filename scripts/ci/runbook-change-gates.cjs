@@ -35,6 +35,7 @@ function classifyChanges(paths) {
     }
     // Shared libraries include authorization, encryption, Prisma, and worker dependencies.
     if (
+      path.startsWith('monitoring/prometheus/') ||
       path.startsWith('agent/') ||
       path.startsWith('src/lib/') ||
       path.startsWith('src/components/runbooks/') ||

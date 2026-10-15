@@ -17,7 +17,12 @@ afterEach(async () => {
 it('bounds nonce cadence, preserves minute artifact cadence and skips overlapping maintenance ticks', async () => {
   vi.useFakeTimers();
   mocks.purge.mockResolvedValue({});
-  let release!: (value: { count: number; bytes: number; skipped: boolean }) => void;
+  let release!: (value: {
+    count: number;
+    bytes: number;
+    skipped: boolean;
+    oldestExpiredAgeSeconds: number;
+  }) => void;
   mocks.transaction.mockImplementationOnce(
     () =>
       new Promise(resolve => {
@@ -32,7 +37,7 @@ it('bounds nonce cadence, preserves minute artifact cadence and skips overlappin
   await vi.advanceTimersByTimeAsync(4000);
   expect(mocks.transaction).toHaveBeenCalledTimes(1);
   expect(mocks.purge).toHaveBeenCalledTimes(59);
-  release({ count: 0, bytes: 0, skipped: false });
+  release({ count: 0, bytes: 0, skipped: false, oldestExpiredAgeSeconds: 0 });
   await vi.advanceTimersByTimeAsync(0);
   expect(mocks.purge).toHaveBeenCalledTimes(60);
   await stopRunbookArtifactCleanup();

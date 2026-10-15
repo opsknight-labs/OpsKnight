@@ -18,6 +18,8 @@ test('Runbook code, Agent code and browser journeys run only Runbook jobs', () =
   for (const path of [
     'src/lib/runbooks/orchestrator.ts',
     'agent/src/executor.ts',
+    'monitoring/prometheus/opsknight-alerts.yaml',
+    'monitoring/prometheus/runbook-maintenance.test.yml',
     'tests/e2e/runbooks-ui.spec.ts',
     'src/components/runbooks/RunbookControls.tsx',
   ]) {

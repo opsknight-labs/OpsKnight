@@ -36,6 +36,54 @@ groups:
           severity: warning
         annotations:
           summary: Pending runbook work is not being claimed promptly
+      - alert: OpsKnightRunbookNonceMaintenanceStalled
+        expr: (sum(increase(opsknight_runbook_nonce_purge_batches_total{result="success"}[5m])) or vector(0)) == 0 and on() max(opsknight_runbook_worker_health{status="healthy"}) == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: No successful Runbook nonce maintenance batches while workers report healthy
+          description: Inspect maintenance logs, database latency and locks. Do not truncate replay nonces or bypass retention controls.
+      - alert: OpsKnightRunbookNonceMaintenanceLagging
+        expr: max(opsknight_runbook_nonce_purge_oldest_expired_age_seconds and on(job, instance) (increase(opsknight_runbook_nonce_purge_batches_total{result="success"}[5m]) > 0)) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Expired Runbook nonce data remains beyond the maintenance lag threshold
+          description: Inspect maintenance logs, database latency and locks. Do not truncate replay nonces or bypass retention controls.
+      - alert: OpsKnightRunbookNonceMaintenanceFailing
+        expr: sum(increase(opsknight_runbook_nonce_purge_batches_total{result="failed"}[10m])) >= 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Runbook nonce maintenance repeatedly fails
+          description: Inspect maintenance logs, database latency and locks. Do not truncate replay nonces or bypass retention controls.
+      - alert: OpsKnightRunbookArtifactMaintenanceStalled
+        expr: (sum(increase(opsknight_runbook_artifact_purge_batches_total{result="success"}[5m])) or vector(0)) == 0 and on() max(opsknight_runbook_worker_health{status="healthy"}) == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: No successful Runbook artifact maintenance batches while workers report healthy
+          description: Inspect maintenance logs, database latency and locks. Do not truncate replay nonces or bypass retention controls.
+      - alert: OpsKnightRunbookArtifactMaintenanceLagging
+        expr: max(opsknight_runbook_artifact_purge_oldest_expired_age_seconds and on(job, instance) (increase(opsknight_runbook_artifact_purge_batches_total{result="success"}[5m]) > 0)) > 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Expired Runbook artifact data remains beyond the maintenance lag threshold
+          description: Inspect maintenance logs, database latency and locks. Do not truncate replay nonces or bypass retention controls.
+      - alert: OpsKnightRunbookArtifactMaintenanceFailing
+        expr: sum(increase(opsknight_runbook_artifact_purge_batches_total{result="failed"}[10m])) >= 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Runbook artifact maintenance repeatedly fails
+          description: Inspect maintenance logs, database latency and locks. Do not truncate replay nonces or bypass retention controls.
   - name: opsknight.critical-path
     rules:
       - alert: OpsKnightMetricsCollectorsFailing

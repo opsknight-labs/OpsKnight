@@ -5,6 +5,7 @@ import { purgeExpiredAgentNonces } from './nonce-cleanup';
 import {
   addOperationalMetric,
   observeOperationalHistogram,
+  setOperationalGauge,
 } from '@/lib/metrics/operational/registry';
 import { logger } from '@/lib/logger';
 
@@ -22,7 +23,8 @@ export async function purgeExpiredRunbookArtifacts(
         await tx.$executeRaw`SET LOCAL lock_timeout = '100ms'`;
         const [lock] = await tx.$queryRaw<Array<{ acquired: boolean }>>`
         SELECT pg_try_advisory_xact_lock(864, 2) AS acquired`;
-        if (!lock?.acquired) return { count: 0, bytes: 0, hasMore: false, skipped: true };
+        if (!lock?.acquired)
+          return { count: 0, bytes: 0, hasMore: false, skipped: true, oldestExpiredAgeSeconds: 0 };
         const retention = await tx.systemSettings.findUnique({
           where: { id: 'default' },
           select: { runbookArtifactRetentionDays: true },
@@ -32,8 +34,12 @@ export async function purgeExpiredRunbookArtifacts(
           Number.parseInt(process.env.RUNBOOK_ARTIFACT_RETENTION_DAYS ?? '30', 10);
         const days = Number.isFinite(configured) ? Math.min(3650, Math.max(1, configured)) : 30;
         const cutoff = new Date(Date.now() - days * 86_400_000);
-        const candidates = await tx.$queryRaw<Array<{ id: string; sizeBytes: number }>>`
-        SELECT "id", "sizeBytes" FROM "RunbookArtifact"
+        const candidates = await tx.$queryRaw<
+          Array<{ id: string; sizeBytes: number; expiredAgeSeconds: number }>
+        >`
+        SELECT "id", "sizeBytes", GREATEST(0,
+          EXTRACT(EPOCH FROM (${cutoff}::timestamp - "createdAt")))::double precision AS "expiredAgeSeconds"
+        FROM "RunbookArtifact"
         WHERE "createdAt" < ${cutoff} ORDER BY "createdAt", "id"
         LIMIT ${ARTIFACT_PURGE_BATCH_SIZE} FOR UPDATE SKIP LOCKED`;
         const ids: string[] = [];
@@ -54,6 +60,7 @@ export async function purgeExpiredRunbookArtifacts(
           hasMore:
             candidates.length === ARTIFACT_PURGE_BATCH_SIZE || ids.length < candidates.length,
           skipped: false,
+          oldestExpiredAgeSeconds: candidates[0]?.expiredAgeSeconds ?? 0,
         };
       },
       { timeout: 2500, maxWait: 500 }
@@ -63,6 +70,11 @@ export async function purgeExpiredRunbookArtifacts(
     addOperationalMetric('opsknight_runbook_artifact_purge_batches_total', 1, {
       result: result.skipped ? 'skipped' : 'success',
     });
+    if (!result.skipped)
+      setOperationalGauge(
+        'opsknight_runbook_artifact_purge_oldest_expired_age_seconds',
+        result.oldestExpiredAgeSeconds
+      );
     return result;
   } catch (error) {
     addOperationalMetric('opsknight_runbook_artifact_purge_batches_total', 1, { result: 'failed' });
