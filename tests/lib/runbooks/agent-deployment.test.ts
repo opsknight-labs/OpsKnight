@@ -101,3 +101,37 @@ rm -rf "$agent_credential_dir"
   expect(result.stdout).toContain('Node prompt preserved');
   expect(result.stdout).not.toContain('fixture-token');
 });
+
+it('preserves the configured endpoint when Docker renders the Agent Swarm stack', () => {
+  const endpoint = 'https://ops.example.com:8443';
+  const environment = {
+    ...process.env,
+    OPSKNIGHT_AGENT_URL: endpoint,
+    OPSKNIGHT_AGENT_IMAGE: 'fixture:verified',
+    OPSKNIGHT_AGENT_NODE_ID: 'fixture-node',
+  };
+  const render = spawnSync(
+    'docker',
+    ['stack', 'config', '-c', 'deploy/swarm/docker-stack.agent.yml'],
+    {
+      env: environment,
+      encoding: 'utf8',
+      timeout: 10_000,
+    }
+  );
+  expect(render.status, render.stderr).toBe(0);
+  const stack = YAML.parse(render.stdout);
+  expect(stack.services['opsknight-agent'].environment.OPSKNIGHT_URL).toBe(endpoint);
+  // The endpoint must still be required, including when explicitly empty.
+  const missing = spawnSync(
+    'docker',
+    ['stack', 'config', '-c', 'deploy/swarm/docker-stack.agent.yml'],
+    {
+      env: { ...environment, OPSKNIGHT_AGENT_URL: '' },
+      encoding: 'utf8',
+      timeout: 10_000,
+    }
+  );
+  expect(missing.status).not.toBe(0);
+  expect(missing.stderr).toContain('OPSKNIGHT_AGENT_URL');
+});

@@ -4,7 +4,7 @@ services:
     pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
-      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:?Set the Agent-reachable OpsKnight endpoint}
+      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:?Set the OpsKnight endpoint reachable by this Agent}
       OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
       OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
       OPSKNIGHT_AGENT_ENROLLMENT_TOKEN: ${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN:-}

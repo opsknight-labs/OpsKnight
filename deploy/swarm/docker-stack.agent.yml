@@ -4,7 +4,7 @@ services:
   opsknight-agent:
     image: ${OPSKNIGHT_AGENT_IMAGE:?Set OPSKNIGHT_AGENT_IMAGE to a tested tag or digest}
     environment:
-      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:?Set the Agent-reachable OpsKnight endpoint}
+      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:?Set the OpsKnight endpoint reachable by this Agent}
       OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
       OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
       OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE: /run/secrets/opsknight_agent_enrollment_token

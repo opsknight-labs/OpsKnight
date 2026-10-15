@@ -76,6 +76,7 @@ export async function smokeAgentFleet(
   const network = `rbe-fleet-${crypto.randomUUID().slice(0, 8)}`;
   await run('docker', ['network', 'create', '--driver', 'overlay', '--attachable', network]);
   const evidence: unknown[] = [];
+  const failures: Error[] = [];
   try {
     for (const platform of ['swarm', 'helm', 'kustomize'] as const) {
       const enrollments = await Promise.all(
@@ -282,7 +283,12 @@ export async function smokeAgentFleet(
           `test-results/runbook-engine/live-agent-fleet-${platform}-failure.json`,
           report
         );
-        throw error;
+        let reason =
+          error instanceof Error ? error.message : 'Fleet lifecycle certification failed';
+        for (const enrollment of enrollments)
+          reason = reason.replaceAll(enrollment.token, '[REDACTED]');
+        failures.push(new Error(`${platform}: ${reason}`));
+        evidence.push({ platform, status: 'FAIL', reason });
       } finally {
         for (const identity of names) {
           if (platform === 'swarm') {
@@ -340,4 +346,6 @@ export async function smokeAgentFleet(
       2
     )
   );
+  if (failures.length)
+    throw new AggregateError(failures, 'Agent fleet lifecycle certification failed');
 }
