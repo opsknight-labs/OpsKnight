@@ -619,6 +619,7 @@ while true; do
       paused|rollback_paused|rollback_completed)
         echo "[FATAL] Service $name update failed: $update_state" >&2
         docker service ps "$name" --no-trunc >&2
+        docker service logs "$name" --since 5m --tail 50 >&2 || true
         exit 1
         ;;
       updating|rollback_started)

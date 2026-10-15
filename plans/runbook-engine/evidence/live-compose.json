@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T04:08:56.252Z",
+  "measuredAt": "2026-10-15T04:01:53.437Z",
   "topology": "Local production Next server, real PostgreSQL, trusted self-signed HTTPS proxy, locked-down Compose Agent",
-  "image": "opsknight-agent:rbe-local",
+  "image": "opsknight-agent:rbe-seventh-local",
   "gates": {
     "enrollment": "PASS",
     "signedDiagnostic": "PASS",
@@ -19,6 +19,5 @@
   "limitations": [
     "Local built candidate, not a published release",
     "No external TLS proxy or native Linux host certification"
-  ],
-  "candidateImageId": "sha256:bbc6d31608dfdae280e7461d5ab2a5b5940617b01c7d53333e8e6673512ed26b"
+  ]
 }

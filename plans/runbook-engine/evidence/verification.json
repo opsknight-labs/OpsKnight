@@ -210,7 +210,9 @@
       "Rule configuration revision fences mode, version, inputs and target changes in Suggested and budget-fallback suggestion creation",
       "Automatic evaluator supplies configuration revision to execution preflight",
       "Automatic activation and readiness explicitly reject pools over 10 online Agents",
-      "Added secret-free live HTTPS execution/job/worker state diagnostics"
+      "Added secret-free live HTTPS execution/job/worker state diagnostics",
+      "Execution claim row locks bind IDs as a primitive text array, fixing production-only SQL-fragment serialization as JSON",
+      "Swarm rollback failures include bounded service logs alongside task generation diagnostics"
     ],
     "localChecks": {
       "fullUnitSuiteAfterSsoRebase": {
@@ -237,8 +239,33 @@
       "productionBuild": "PASS",
       "typecheck": "PASS",
       "modifiedSourceLint": "PASS",
-      "browser": "RUNNING"
+      "browser": {
+        "status": "PASS",
+        "tests": 36,
+        "skipped": 0,
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ]
+      },
+      "executionSafetyAfterClaimFix": {
+        "status": "PASS",
+        "tests": 57,
+        "scope": "Rerun of the execution suite included in the earlier 104; counts overlap"
+      },
+      "agentApiAndSwarmUnits": {
+        "status": "PASS",
+        "tests": 14
+      },
+      "liveHttpsCompose": {
+        "status": "PASS",
+        "tests": 1,
+        "evidence": "live-compose.json",
+        "scope": "Independent containerized Agent with enrollment, signed manual and Automatic execution, artifact upload, policy checks and restart identity"
+      },
+      "documentation": "PASS"
     },
-    "remoteCI": "Pending next push. Rebased base has failing live HTTPS execution smoke; state diagnostics added to identify terminal status without exposing credentials. No claim of deployment certification."
+    "remoteCI": "Pending final claim-fix push; use exact-head PR checks. No merge approval or general production certification is implied."
   }
 }

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import { Prisma, type RunbookStepType } from '@prisma/client';
+import type { Prisma, RunbookStepType } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
 import {
@@ -412,9 +412,10 @@ export async function claimAgentAttempt(
             }
             return null;
           }
+          // Bind primitive IDs directly; bundled SQL-fragment objects can become JSON parameters.
           const lockedCandidates = await tx.$queryRaw<Array<{ id: string }>>`
             SELECT "id" FROM "RunbookStepAttempt"
-            WHERE "id" IN (${Prisma.join(eligible.map(candidate => candidate.id))})
+            WHERE "id" = ANY(${eligible.map(candidate => candidate.id)}::text[])
               AND "status" = 'PENDING'
             ORDER BY "createdAt", "id"
             LIMIT 1 FOR UPDATE SKIP LOCKED
