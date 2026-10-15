@@ -133,4 +133,15 @@ describe('paginated diagnostic interactions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Authority expired');
     expect(screen.getByRole('button', { name: 'Retry this page' })).toBeEnabled();
   });
+  it('propagates refresh failure beside the refresh button and inside the local error panel', async () => {
+    const onRefresh = vi.fn().mockRejectedValue(new Error('Summary database is partitioned'));
+    render(<AuthenticationDiagnostics {...props} onRefresh={onRefresh} />);
+    const button = screen.getByRole('button', { name: 'Refresh diagnostics' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(screen.getAllByText('Summary database is partitioned').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByRole('button', { name: 'Retry this page' })).toBeInTheDocument();
+  });
 });

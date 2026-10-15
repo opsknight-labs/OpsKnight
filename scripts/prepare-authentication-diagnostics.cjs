@@ -67,54 +67,83 @@ EXCEPTION WHEN OTHERS THEN RETURN NULL;
 END;
 $$;`);
   let total = 0;
-  const deadline = Date.now() + 15 * 60 * 1000;
-  for (let pass = 0; pass < 10; pass++) {
-    let after = '';
+  const timeoutMs = Number(process.env.AUTH_DIAGNOSTIC_DEADLINE_MS) || 15 * 60 * 1000;
+  const deadline = Date.now() + timeoutMs;
+  let pass = 0;
+  let delayMs = 250;
+  let cancelled = false;
+  const onSignal = () => {
+    cancelled = true;
+  };
+  process.once('SIGTERM', onSignal);
+  process.once('SIGINT', onSignal);
+  try {
     while (true) {
-      if (Date.now() >= deadline)
-        throw new Error('Diagnostic backfill deadline exceeded; readiness remains blocked.');
-      const rows = await prisma.$transaction(
-        async tx => {
-          await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '250ms'");
-          await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '2s'");
-          return tx.$queryRawUnsafe(
-            `WITH batch AS (
-          SELECT id FROM "UserDevice" WHERE id > $1 AND "deviceId" LIKE 'session:%'
-            AND "sessionDiagnosticProjectedAt" IS NULL
-          ORDER BY id LIMIT 250 FOR UPDATE SKIP LOCKED
-        ) UPDATE "UserDevice" d SET
-          "sessionPolicyVersion" = COALESCE(d."sessionPolicyVersion", pg_temp.auth_diagnostic_version(d.token)),
-          "sessionExpiresAt" = COALESCE(d."sessionExpiresAt", pg_temp.auth_diagnostic_expiry(d.token)),
-          "sessionDiagnosticProjectedAt" = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
-        FROM batch WHERE d.id = batch.id RETURNING d.id`,
-            after
-          );
-        },
-        { timeout: 5000 }
-      );
-      if (!rows.length) break;
-      after = rows
-        .map(row => row.id)
-        .sort()
-        .at(-1);
-      total += rows.length;
-      await new Promise(resolve => setTimeout(resolve, 25));
-    }
-    const [remaining] = await prisma.$queryRawUnsafe(`SELECT EXISTS (
-      SELECT 1 FROM "UserDevice" WHERE "deviceId" LIKE 'session:%' AND "sessionDiagnosticProjectedAt" IS NULL
-    ) AS pending`);
-    if (!remaining.pending) {
+      if (cancelled) throw new Error('Diagnostic backfill was cancelled.');
+      if (Date.now() >= deadline) {
+        throw new Error(
+          'Historical session projection is incomplete after bounded reconciliation; readiness remains blocked. Retry after contention subsides.'
+        );
+      }
+      pass++;
+      let after = '';
+      while (true) {
+        if (cancelled) throw new Error('Diagnostic backfill was cancelled.');
+        if (Date.now() >= deadline)
+          throw new Error('Diagnostic backfill deadline exceeded; readiness remains blocked.');
+        const rows = await prisma.$transaction(
+          async tx => {
+            await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '250ms'");
+            await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '2s'");
+            return tx.$queryRawUnsafe(
+              `WITH batch AS (
+            SELECT id FROM "UserDevice" WHERE id > $1 AND "deviceId" LIKE 'session:%'
+              AND "sessionDiagnosticProjectedAt" IS NULL
+            ORDER BY id LIMIT 250 FOR UPDATE SKIP LOCKED
+          ) UPDATE "UserDevice" d SET
+            "sessionPolicyVersion" = COALESCE(d."sessionPolicyVersion", pg_temp.auth_diagnostic_version(d.token)),
+            "sessionExpiresAt" = COALESCE(d."sessionExpiresAt", pg_temp.auth_diagnostic_expiry(d.token)),
+            "sessionDiagnosticProjectedAt" = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+          FROM batch WHERE d.id = batch.id RETURNING d.id`,
+              after
+            );
+          },
+          { timeout: 5000 }
+        );
+        if (!rows.length) break;
+        after = rows
+          .map(row => row.id)
+          .sort()
+          .at(-1);
+        total += rows.length;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      const [remaining] = await prisma.$queryRawUnsafe(`SELECT EXISTS (
+        SELECT 1 FROM "UserDevice" WHERE "deviceId" LIKE 'session:%' AND "sessionDiagnosticProjectedAt" IS NULL
+      ) AS pending`);
+      if (!remaining.pending) {
+        console.log(
+          `Authentication diagnostic projection complete: ${total} rows processed across ${pass} pass(es).`
+        );
+        return;
+      }
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        throw new Error(
+          'Historical session projection is incomplete after bounded reconciliation; readiness remains blocked. Retry after contention subsides.'
+        );
+      }
+      const waitTime = Math.min(delayMs, remainingMs);
       console.log(
-        `Authentication diagnostic projection complete: ${total} rows processed across ${pass + 1} pass(es).`
+        `Historical sessions remain locked or were added during preparation; reconciling (pass ${pass}, retrying in ${waitTime}ms, ${Math.ceil(remainingMs / 1000)}s remaining).`
       );
-      return;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      delayMs = Math.min(Math.round(delayMs * 1.5), 2000);
     }
-    console.log('Historical sessions remain locked or were added during preparation; reconciling.');
-    await new Promise(resolve => setTimeout(resolve, 500));
+  } finally {
+    process.removeListener('SIGTERM', onSignal);
+    process.removeListener('SIGINT', onSignal);
   }
-  throw new Error(
-    'Historical session projection is incomplete after bounded reconciliation; readiness remains blocked. Retry after contention subsides.'
-  );
 }
 
 async function main() {

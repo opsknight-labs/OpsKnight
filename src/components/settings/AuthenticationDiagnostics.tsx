@@ -173,21 +173,28 @@ export default function AuthenticationDiagnostics({
             Investigate access, delivery and deployment evidence.
           </p>
         </div>
-        <Button
-          variant="outline"
-          disabled={pending || loading}
-          onClick={() => {
-            setRefreshError('');
-            refresh();
-            void onRefresh().catch(failure =>
-              setRefreshError(
-                failure instanceof Error ? failure.message : 'Summary refresh unavailable.'
-              )
-            );
-          }}
-        >
-          Refresh diagnostics
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {refreshError && (
+            <span role="alert" className="text-xs text-destructive">
+              {refreshError}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            disabled={pending || loading}
+            onClick={() => {
+              setRefreshError('');
+              refresh();
+              void onRefresh().catch(failure =>
+                setRefreshError(
+                  failure instanceof Error ? failure.message : 'Summary refresh unavailable.'
+                )
+              );
+            }}
+          >
+            Refresh diagnostics
+          </Button>
+        </div>
       </header>
       <dl
         className="grid gap-4 border-y border-border py-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -263,7 +270,7 @@ export default function AuthenticationDiagnostics({
             role="alert"
             className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm"
           >
-            <p>{error ?? refreshError}</p>
+            <p>{error || refreshError}</p>
             <Button variant="outline" size="sm" onClick={refresh}>
               Retry this page
             </Button>

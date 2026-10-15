@@ -1316,12 +1316,11 @@ export async function captureQueueSnapshot(
 
   let containerStats = '';
   try {
-    const { stdout } = await execFileAsync('docker', [
-      'stats',
-      '--no-stream',
-      '--format',
-      '{{.Name}}: CPU {{.CPUPerc}}, Mem {{.MemUsage}}',
-    ]);
+    const { stdout } = await execFileAsync(
+      'docker',
+      ['stats', '--no-stream', '--format', '{{.Name}}: CPU {{.CPUPerc}}, Mem {{.MemUsage}}'],
+      { timeout: 3000 }
+    );
     containerStats = stdout
       .trim()
       .split('\n')

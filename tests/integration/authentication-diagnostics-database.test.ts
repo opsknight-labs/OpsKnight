@@ -454,6 +454,125 @@ suite('authentication diagnostics with real PostgreSQL', () => {
         .sessionDiagnosticProjectedAt
     ).toEqual(before);
   }, 45000);
+  it('reconciles successfully when a row lock is held for 10–12 seconds, exceeding initial pass limits', async () => {
+    const row = await prisma.userDevice.create({
+      data: {
+        userId: actor.id,
+        id: 'diagnostic-sustained-lock',
+        deviceId: 'session:sustained-lock',
+        platform: 'session:STANDARD',
+        token: '{"issuedUnderPolicyVersion": 1, "expiresAt": "2027-01-01T00:00:00.000Z"}',
+      },
+    });
+    let release!: () => void;
+    let locked!: () => void;
+    const acquired = new Promise<void>(resolve => {
+      locked = resolve;
+    });
+    const releaseLock = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const locker = prisma.$transaction(
+      async tx => {
+        await tx.$queryRaw`SELECT id FROM "UserDevice" WHERE id=${row.id} FOR UPDATE`;
+        locked();
+        await releaseLock;
+      },
+      { timeout: 30000 }
+    );
+    await acquired;
+    const releaseTimer = setTimeout(() => {
+      release();
+    }, 10500);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(process.execPath, ['scripts/prepare-authentication-diagnostics.cjs'], {
+          env: {
+            ...process.env,
+            DIRECT_DATABASE_URL: process.env.DATABASE_URL,
+            AUTH_DIAGNOSTIC_DEADLINE_MS: '60000',
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let output = '';
+        child.stdout.on('data', chunk => {
+          output += String(chunk);
+        });
+        child.stderr.on('data', chunk => {
+          output += String(chunk);
+        });
+        child.once('error', reject);
+        child.once('exit', code =>
+          code === 0
+            ? resolve()
+            : reject(new Error(`Preparation failed with code ${code}. Output: ${output}`))
+        );
+      });
+    } finally {
+      clearTimeout(releaseTimer);
+      release();
+      await locker;
+    }
+    const restored = await prisma.userDevice.findUniqueOrThrow({ where: { id: row.id } });
+    expect(restored.sessionDiagnosticProjectedAt).toBeInstanceOf(Date);
+    expect(restored.sessionPolicyVersion).toBe(1);
+    expect(restored.sessionExpiresAt?.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+  }, 45000);
+  it('blocks readiness on permanent contention and restarts successfully after lock clears', async () => {
+    const row = await prisma.userDevice.create({
+      data: {
+        userId: actor.id,
+        id: 'diagnostic-permanent-contention',
+        deviceId: 'session:permanent-contention',
+        platform: 'session:STANDARD',
+        token: '{"issuedUnderPolicyVersion": 2}',
+      },
+    });
+    let release!: () => void;
+    let locked!: () => void;
+    const acquired = new Promise<void>(resolve => {
+      locked = resolve;
+    });
+    const releaseLock = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const locker = prisma.$transaction(
+      async tx => {
+        await tx.$queryRaw`SELECT id FROM "UserDevice" WHERE id=${row.id} FOR UPDATE`;
+        locked();
+        await releaseLock;
+      },
+      { timeout: 30000 }
+    );
+    await acquired;
+    try {
+      const failureCode = await new Promise<number | null>(resolve => {
+        const child = spawn(process.execPath, ['scripts/prepare-authentication-diagnostics.cjs'], {
+          env: {
+            ...process.env,
+            DIRECT_DATABASE_URL: process.env.DATABASE_URL,
+            AUTH_DIAGNOSTIC_DEADLINE_MS: '2000',
+          },
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
+        child.once('exit', code => resolve(code));
+      });
+      expect(failureCode).not.toBe(0);
+      const unprojected = await prisma.userDevice.findUniqueOrThrow({ where: { id: row.id } });
+      expect(unprojected.sessionDiagnosticProjectedAt).toBeNull();
+    } finally {
+      release();
+      await locker;
+    }
+    await promisify(execFile)(
+      process.execPath,
+      ['scripts/prepare-authentication-diagnostics.cjs'],
+      { env: { ...process.env, DIRECT_DATABASE_URL: process.env.DATABASE_URL }, timeout: 30000 }
+    );
+    const completed = await prisma.userDevice.findUniqueOrThrow({ where: { id: row.id } });
+    expect(completed.sessionDiagnosticProjectedAt).toBeInstanceOf(Date);
+    expect(completed.sessionPolicyVersion).toBe(2);
+  }, 45000);
   it('reports self revocation by exact registered session, not merely by user identity', async () => {
     const own = 'diagnostic-revoke-current';
     const other = 'diagnostic-revoke-other';

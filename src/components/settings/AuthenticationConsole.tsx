@@ -220,9 +220,7 @@ function AuthenticationWorkspace() {
               data={data}
               pending={pending}
               onLoadHistory={loadAuthenticationAlertHistory}
-              onRefresh={async () => {
-                await perform(refresh);
-              }}
+              onRefresh={refresh}
               onRetry={(alertId, expectedGeneration) =>
                 perform(async () => {
                   await authenticationRequest({
