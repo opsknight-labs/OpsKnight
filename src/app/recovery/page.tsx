@@ -39,7 +39,7 @@ export default async function RecoveryPage() {
               <div className="space-y-1">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                    Authentication Recovery Console
+                    Authentication recovery console
                   </h1>
                   <Badge variant="warning" className="text-xs font-semibold">
                     Recovery Mode
@@ -72,7 +72,8 @@ export default async function RecoveryPage() {
               <div>
                 <p className="text-xs font-semibold text-foreground">Freshness Protection</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                  Sensitive policy modifications require credential re-verification within 2 hours.
+                  Sensitive changes require verifying your recovery credential again after five
+                  minutes.
                 </p>
               </div>
             </div>

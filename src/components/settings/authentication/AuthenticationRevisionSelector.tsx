@@ -184,12 +184,14 @@ export default function AuthenticationRevisionSelector({
       <select
         aria-label={label}
         value={selected?.id ?? ''}
-        disabled={pending || data.revisions.length === 0}
+        disabled={pending}
         onChange={event => select(event.target.value)}
         className="block h-11 w-full min-w-0 truncate rounded-xl border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
       >
         {data.revisions.length === 0 && (
-          <option value="">No saved configurations yet — stage the draft first</option>
+          <option value="" disabled>
+            No saved configurations yet — stage the draft first
+          </option>
         )}
         {activeRevisions.length > 0 && (
           <optgroup label="Active">

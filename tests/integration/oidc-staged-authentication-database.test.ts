@@ -335,7 +335,7 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
         issueCode(flow.url, variant),
         flow.browserToken
       );
-      if (accepted) await expect(result).resolves.toBe(staged.revisionId);
+      if (accepted) await expect(result).resolves.toMatchObject({ revisionId: staged.revisionId });
       else await expect(result).rejects.toThrow('test failed');
     } finally {
       await prisma.oidcRevision.delete({ where: { id: staged.revisionId } });
@@ -376,7 +376,7 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
           flow.browserToken
         );
         if (variant === 'overage') await expect(result).rejects.toThrow('test failed');
-        else await expect(result).resolves.toBe(staged.revisionId);
+        else await expect(result).resolves.toMatchObject({ revisionId: staged.revisionId });
       } finally {
         await prisma.oidcIdentity.deleteMany({ where: { issuer: runtime.issuer } });
         await prisma.oidcRevision.delete({ where: { id: staged.revisionId } });
@@ -416,7 +416,8 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
           issueCode(flow.url, variant),
           flow.browserToken
         );
-        if (variant === 'missing-verification') await expect(result).resolves.toBe(revisionId);
+        if (variant === 'missing-verification')
+          await expect(result).resolves.toMatchObject({ revisionId: revisionId });
         else await expect(result).rejects.toThrow('test failed');
       } finally {
         await prisma.oidcIdentity.deleteMany({ where: { issuer: runtime.issuer } });
@@ -457,7 +458,7 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
         flow.browserToken
       );
       if (succeeds) {
-        await expect(result).resolves.toBe(staged.revisionId);
+        await expect(result).resolves.toMatchObject({ revisionId: staged.revisionId });
         const proof = await prisma.oidcRevisionTest.findFirstOrThrow({
           where: { revisionId: staged.revisionId },
         });
@@ -750,6 +751,10 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
   });
 
   it('allows deleting an unactivated staged candidate revision and its tests, but rejects deleting active revision', async () => {
+    // Earlier recovery tests rotate this administrator's token version; act as the current session.
+    actor.tokenVersion = (
+      await prisma.user.findUniqueOrThrow({ where: { id: actor.id } })
+    ).tokenVersion;
     const staged1 = await stageOidcRevision(actor, {
       issuer: runtime.issuer,
       clientId: 'test-delete-1',
