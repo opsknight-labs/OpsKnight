@@ -55,18 +55,23 @@ export default function AuthenticationRecoveryWorkspace() {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 id="emergency-access-title" className="text-lg font-semibold tracking-tight text-foreground">
+              <h2
+                id="emergency-access-title"
+                className="text-lg font-semibold tracking-tight text-foreground"
+              >
                 Emergency Access
               </h2>
               <Badge
                 variant={data.verifiedEmergencyAccounts >= 2 ? 'success' : 'warning'}
                 className="text-xs font-semibold"
               >
-                {data.verifiedEmergencyAccounts} Verified {data.verifiedEmergencyAccounts === 1 ? 'Identity' : 'Identities'}
+                {data.verifiedEmergencyAccounts} Verified{' '}
+                {data.verifiedEmergencyAccounts === 1 ? 'Identity' : 'Identities'}
               </Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Create an independently vaulted password or enroll separately held hardware keys. Sign in at{' '}
+              Create an independently vaulted password or enroll separately held hardware keys. Sign
+              in at{' '}
               <Link
                 className="underline text-primary hover:text-primary/80 font-medium inline-flex items-center gap-0.5"
                 href="/login/emergency"
@@ -77,7 +82,8 @@ export default function AuthenticationRecoveryWorkspace() {
                 <ExternalLink className="h-3 w-3" />
               </Link>{' '}
               in a fresh browser session to verify each identity. There is no Remember Me. Recovery
-              sessions last at most one hour and expire after 15 minutes without deliberate interaction.
+              sessions last at most one hour and expire after 15 minutes without deliberate
+              interaction.
             </p>
           </div>
         </div>
@@ -195,9 +201,7 @@ export default function AuthenticationRecoveryWorkspace() {
         <div className="space-y-4 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs text-sm">
           <div className="flex items-center gap-2 border-b border-border/70 pb-3">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold text-sm text-foreground">
-              Recovery Session Actions
-            </h3>
+            <h3 className="font-semibold text-sm text-foreground">Recovery Session Actions</h3>
           </div>
 
           {/* Fresh reauth for password */}

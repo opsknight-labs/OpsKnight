@@ -55,7 +55,7 @@ describe('authentication policy administration guards', () => {
   it('requires a fresh server-established sign-in rather than a refreshed cookie', async () => {
     vi.mocked(getServerSession).mockResolvedValue({
       ...freshSession(),
-      authenticatedAt: Date.now() - 301000,
+      authenticatedAt: Date.now() - 7201000,
     });
     await expect(changeAuthenticationMode(input)).rejects.toThrow('Sign in again');
     vi.mocked(getServerSession).mockResolvedValue({

@@ -42,13 +42,19 @@ function DurationField({
   const isDefaultActive = !isCustomActive && value === null;
 
   return (
-    <fieldset disabled={disabled} className="min-w-0 space-y-3 rounded-xl border border-border/80 bg-muted/20 p-4 transition-all hover:border-border">
+    <fieldset
+      disabled={disabled}
+      className="min-w-0 space-y-3 rounded-xl border border-border/80 bg-muted/20 p-4 transition-all hover:border-border"
+    >
       <div className="flex items-center justify-between gap-2">
         <legend className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           <Timer className="h-4 w-4 text-primary" />
           <span>{label}</span>
         </legend>
-        <Badge variant={isDefaultActive ? 'neutral' : 'outline'} className="text-[10px] font-medium py-0">
+        <Badge
+          variant={isDefaultActive ? 'neutral' : 'outline'}
+          className="text-[10px] font-medium py-0"
+        >
           {isDefaultActive ? 'Inherited Default' : isCustomActive ? 'Custom Value' : 'Preset'}
         </Badge>
       </div>
@@ -158,8 +164,8 @@ export default function AuthenticationSessionPolicyForm() {
             OpsKnight session limits
           </h3>
           <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-            These govern OpsKnight sessions. They do not configure Microsoft Entra Conditional Access
-            or another provider’s sign-in frequency.
+            These govern OpsKnight sessions. They do not configure Microsoft Entra Conditional
+            Access or another provider’s sign-in frequency.
           </p>
         </div>
       </div>

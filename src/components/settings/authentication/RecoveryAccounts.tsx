@@ -71,10 +71,10 @@ export default function RecoveryAccounts() {
 
   const coverageBlocked = Boolean(
     account?.ready &&
-      data.mode === 'SSO_REQUIRED' &&
-      data.verifiedEmergencyAccounts <= 2 &&
-      operation?.kind !== 'enroll' &&
-      !compromised
+    data.mode === 'SSO_REQUIRED' &&
+    data.verifiedEmergencyAccounts <= 2 &&
+    operation?.kind !== 'enroll' &&
+    !compromised
   );
 
   const availability = actionAvailability('Recovery change', [
@@ -201,7 +201,8 @@ export default function RecoveryAccounts() {
           <KeyRound className="h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm font-medium text-foreground">No recovery identities yet</p>
           <p className="mt-1 text-xs text-muted-foreground max-w-md">
-            Create the first identity and store its credential independently of your identity provider.
+            Create the first identity and store its credential independently of your identity
+            provider.
           </p>
           <Button
             size="sm"
@@ -256,7 +257,8 @@ export default function RecoveryAccounts() {
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {value.authenticationMethod === 'PASSWORD' ? 'Vault password' : 'Hardware key'} ·{' '}
+                    {value.authenticationMethod === 'PASSWORD' ? 'Vault password' : 'Hardware key'}{' '}
+                    ·{' '}
                     {value.status === 'DISABLED'
                       ? 'Disabled'
                       : value.ready
@@ -266,7 +268,9 @@ export default function RecoveryAccounts() {
                   <p className="text-[11px] text-muted-foreground/80 mt-0.5 flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     Last drill:{' '}
-                    {value.verifiedAt ? new Date(value.verifiedAt).toLocaleString() : 'Not recorded'}
+                    {value.verifiedAt
+                      ? new Date(value.verifiedAt).toLocaleString()
+                      : 'Not recorded'}
                   </p>
                 </div>
               </div>
@@ -309,7 +313,10 @@ export default function RecoveryAccounts() {
           </DialogHeader>
 
           {messageError && message && (
-            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2"
+            >
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>{message}</span>
             </div>
@@ -350,8 +357,8 @@ export default function RecoveryAccounts() {
                 disabled={pending}
               />
               <span className="text-xs text-foreground/90 leading-relaxed font-medium">
-                This identity has custody independent of the other emergency identity and the external
-                IdP.
+                This identity has custody independent of the other emergency identity and the
+                external IdP.
               </span>
             </label>
           </div>
@@ -373,12 +380,14 @@ export default function RecoveryAccounts() {
                 onClick={() =>
                   void (async () => {
                     const success = await perform(async () => {
-                      const result = await authenticationRequest<{ id: string; password?: string }>({
-                        action: 'createEmergency',
-                        authenticationMethod: method,
-                        displayName: name.trim(),
-                        independenceConfirmed: true,
-                      });
+                      const result = await authenticationRequest<{ id: string; password?: string }>(
+                        {
+                          action: 'createEmergency',
+                          authenticationMethod: method,
+                          displayName: name.trim(),
+                          independenceConfirmed: true,
+                        }
+                      );
                       setCreating(false);
                       if (result.password) {
                         setGeneratedRecovery({ id: result.id, password: result.password });
@@ -518,7 +527,13 @@ export default function RecoveryAccounts() {
                           <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="font-medium">
                             {credential.displayName} ·{' '}
-                            <span className={credential.revokedAt ? 'text-muted-foreground' : 'text-emerald-600 dark:text-emerald-400 font-semibold'}>
+                            <span
+                              className={
+                                credential.revokedAt
+                                  ? 'text-muted-foreground'
+                                  : 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                              }
+                            >
                               {credential.revokedAt ? 'Revoked' : 'Active'}
                             </span>
                           </span>
@@ -577,7 +592,10 @@ export default function RecoveryAccounts() {
           </DialogHeader>
 
           {messageError && message && (
-            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2"
+            >
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>{message}</span>
             </div>

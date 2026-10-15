@@ -122,7 +122,7 @@ export default function AuthenticationPolicySettings({
             className="mt-1"
           />
           I understand that changing this policy rejects sessions that use a disallowed sign-in
-          method. Sign in again within five minutes before confirming.
+          method. Sign in again first if your last sign-in was more than two hours ago.
         </label>
         <button
           type="submit"

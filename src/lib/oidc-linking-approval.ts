@@ -16,12 +16,14 @@ export type CurrentProviderTrustContext = {
 };
 
 export type OidcLinkingApprovalState =
-  | 'not-approved'
-  | 'approved'
-  | 'expired'
-  | 'revoked'
-  | 'consumed'
-  | 'stale';
+  'not-approved' | 'approved' | 'expired' | 'revoked' | 'consumed' | 'stale';
+
+/**
+ * Account-level first-link state. `linked` means linked to the *active* provider trust
+ * boundary; `provider-changed` means only identities from a previous issuer or client
+ * registration exist, so the account needs approval to link to the current provider.
+ */
+export type OidcLinkingState = OidcLinkingApprovalState | 'linked' | 'provider-changed';
 
 /**
  * Single source of truth for whether a first-time OIDC linking approval is

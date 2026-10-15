@@ -16,6 +16,8 @@ import { assertAuthenticationOrigin } from '@/lib/auth-control/origin';
 import {
   activateOidcRevision,
   beginOidcRevisionTest,
+  deleteOidcRevision,
+  cleanupStagedRevisions,
   enforcementPreview,
   OIDC_TEST_COOKIE,
   stageOidcRevision,
@@ -81,6 +83,8 @@ const schema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('rollback'), revisionId: id }).strict(),
+  z.object({ action: z.literal('deleteRevision'), revisionId: id }).strict(),
+  z.object({ action: z.literal('cleanupRevisions'), revisionIds: z.array(id).max(200) }).strict(),
   z
     .object({
       action: z.literal('createEmergency'),
@@ -258,6 +262,10 @@ export async function POST(request: NextRequest) {
         );
       case 'rollback':
         return json(await stageRollback(actor, input.revisionId));
+      case 'deleteRevision':
+        return json(await deleteOidcRevision(actor, input.revisionId));
+      case 'cleanupRevisions':
+        return json(await cleanupStagedRevisions(actor, input.revisionIds));
       case 'createEmergency':
         return json(
           await createEmergencyAccount(

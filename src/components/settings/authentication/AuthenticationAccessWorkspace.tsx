@@ -7,14 +7,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import AuthenticationRoleRules from '../AuthenticationRoleRules';
 import AuthenticationUserDirectory from '../AuthenticationUserDirectory';
-import {
-  Users,
-  AlertTriangle,
-  CheckCircle2,
-  Sparkles,
-  Code2,
-  ChevronDown,
-} from 'lucide-react';
+import { Users, AlertTriangle, CheckCircle2, Sparkles, Code2, ChevronDown } from 'lucide-react';
 
 export default function AuthenticationAccessWorkspace() {
   const {
@@ -61,7 +54,8 @@ export default function AuthenticationAccessWorkspace() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Configure automated user onboarding, allowed email domains, and identity claim-to-role mappings.
+            Configure automated user onboarding, allowed email domains, and identity claim-to-role
+            mappings.
           </p>
         </div>
       </header>
@@ -70,13 +64,19 @@ export default function AuthenticationAccessWorkspace() {
       <div className="rounded-xl border bg-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm text-foreground">Just-In-Time (JIT) Provisioning</span>
-            <Badge variant={configuration.autoProvision ? 'success' : 'neutral'} className="text-[10px]">
+            <span className="font-semibold text-sm text-foreground">
+              Just-In-Time (JIT) Provisioning
+            </span>
+            <Badge
+              variant={configuration.autoProvision ? 'success' : 'neutral'}
+              className="text-[10px]"
+            >
               {configuration.autoProvision ? 'Active' : 'Disabled'}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Automatically register a local user account when an authorized employee signs in via SSO for the first time.
+            Automatically register a local user account when an authorized employee signs in via SSO
+            for the first time.
           </p>
         </div>
         <label className="flex items-center gap-2.5 text-sm font-medium shrink-0 cursor-pointer">
@@ -98,7 +98,9 @@ export default function AuthenticationAccessWorkspace() {
             <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
               Allowed domains (comma separated; Google enforces signed hd)
             </span>
-            <Badge variant="outline" className="text-[10px]">Security Filter</Badge>
+            <Badge variant="outline" className="text-[10px]">
+              Security Filter
+            </Badge>
           </div>
           <input
             className={inputClass}
@@ -119,7 +121,10 @@ export default function AuthenticationAccessWorkspace() {
               setDomainText(event.target.value);
             }}
           />
-          <span id="auth-domains-help" className="block text-xs text-muted-foreground leading-relaxed">
+          <span
+            id="auth-domains-help"
+            className="block text-xs text-muted-foreground leading-relaxed"
+          >
             {fieldErrors.allowedDomains ??
               'Optional. Add each permitted domain separated by a comma. Google validates signed hosted-domain claims.'}
           </span>
@@ -137,7 +142,10 @@ export default function AuthenticationAccessWorkspace() {
           disabled={busy || !hydrated}
         />
         {fieldErrors.roleMapping && (
-          <p role="alert" className="text-xs text-destructive font-medium flex items-center gap-1.5 pt-1">
+          <p
+            role="alert"
+            className="text-xs text-destructive font-medium flex items-center gap-1.5 pt-1"
+          >
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             {fieldErrors.roleMapping}
           </p>
@@ -177,7 +185,9 @@ export default function AuthenticationAccessWorkspace() {
             <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
               Profile claim mapping (department, jobTitle, avatarUrl)
             </span>
-            <Badge variant="outline" className="text-[10px] font-mono">JSON Mapping</Badge>
+            <Badge variant="outline" className="text-[10px] font-mono">
+              JSON Mapping
+            </Badge>
           </div>
           <textarea
             className={`${inputClass} font-mono text-xs`}
@@ -208,9 +218,7 @@ export default function AuthenticationAccessWorkspace() {
       <div className="rounded-xl border bg-muted/20 p-4 sm:p-5 space-y-4 shadow-xs">
         <div className="flex items-center gap-2 pb-2 border-b">
           <Code2 className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-bold text-foreground">
-            Sample Claims Evaluation Sandbox
-          </h3>
+          <h3 className="text-sm font-bold text-foreground">Sample Claims Evaluation Sandbox</h3>
         </div>
         <label className="block space-y-1.5 text-sm">
           <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
@@ -265,7 +273,10 @@ export default function AuthenticationAccessWorkspace() {
         </AuthenticationActionGuard>
 
         {claimResult && !draftDirty && (
-          <div className="space-y-3 rounded-xl border border-border bg-card p-4 text-xs shadow-xs" role="status">
+          <div
+            className="space-y-3 rounded-xl border border-border bg-card p-4 text-xs shadow-xs"
+            role="status"
+          >
             <div className="flex items-center gap-2 font-semibold text-foreground">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               <span>
@@ -299,6 +310,8 @@ export default function AuthenticationAccessWorkspace() {
       </div>
 
       {data.actor.kind === 'admin' && <AuthenticationUserDirectory />}
+
+      {/* Read-only SCIM status; the dedicated SCIM section is the single place to edit it. */}
       {scimSection}
     </section>
   );

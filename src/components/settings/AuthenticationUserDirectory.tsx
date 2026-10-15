@@ -1,9 +1,23 @@
 'use client';
+
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Search, Users, Loader2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/shadcn/dropdown-menu';
+import { Search, Users, Loader2, AlertCircle, ExternalLink, MoreHorizontal } from 'lucide-react';
+import OidcLinkingApprovalButton from '@/components/users/OidcLinkingApprovalButton';
+import type { OidcLinkingState } from '@/lib/oidc-linking-approval';
+
 type User = {
   id: string;
   name: string | null;
@@ -11,8 +25,12 @@ type User = {
   role: string;
   roleSource: string;
   issuers: string[];
+  linkingState: OidcLinkingState;
+  approvalExpiresAt?: string | null;
 };
+
 export default function AuthenticationUserDirectory() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [after, setAfter] = useState<string>();
@@ -20,6 +38,7 @@ export default function AuthenticationUserDirectory() {
   const [history, setHistory] = useState<Array<string | undefined>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -47,6 +66,7 @@ export default function AuthenticationUserDirectory() {
       controller.abort();
     };
   }, [query, after]);
+
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
       <div className="flex flex-col gap-3 border-b bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -74,6 +94,34 @@ export default function AuthenticationUserDirectory() {
           />
         </label>
       </div>
+
+      {/* Yellow informational note: First-link approval guidance & link to Users directory */}
+      <div className="border-b bg-amber-50/70 p-4 dark:bg-amber-950/20">
+        <div className="flex items-start gap-3 rounded-lg border border-amber-300/70 bg-amber-100/50 p-3.5 text-amber-950 dark:border-amber-800/60 dark:bg-amber-900/30 dark:text-amber-100">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="flex-1 text-xs space-y-1">
+            <p className="font-semibold text-amber-900 dark:text-amber-200">
+              First-Link Approval for Existing Accounts
+            </p>
+            <p className="leading-relaxed text-amber-800 dark:text-amber-300">
+              Existing accounts require administrator approval before signing in with SSO for the
+              first time. Linking status below is checked against the{' '}
+              <strong>currently active provider</strong>; an identity from a previous issuer or app
+              registration does not count. Approve first-time linking with the button on each
+              account, or manage approvals from the{' '}
+              <Link
+                href="/users"
+                className="font-semibold underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-100 inline-flex items-center gap-0.5"
+              >
+                Users directory
+                <ExternalLink className="h-3 w-3 inline ml-0.5" />
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
+      </div>
+
       {loading && (
         <p role="status" className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -102,9 +150,64 @@ export default function AuthenticationUserDirectory() {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{user.role}</Badge>
                 <Badge variant="neutral">{user.roleSource}</Badge>
-                <span className="text-xs text-muted-foreground">
-                  {user.issuers.length ? 'Identity linked' : 'First-link approval required'}
-                </span>
+
+                {/* Direct inline first-link action / status */}
+                <OidcLinkingApprovalButton
+                  userId={user.id}
+                  userName={user.name || user.email}
+                  initialState={user.linkingState}
+                  variant="button"
+                  onStateChange={nextState => {
+                    // Update just this row with the server-confirmed result; no directory reload.
+                    setUsers(prev =>
+                      prev.map(u =>
+                        u.id === user.id
+                          ? {
+                              ...u,
+                              linkingState: nextState,
+                              approvalExpiresAt:
+                                nextState === 'approved' ? u.approvalExpiresAt : null,
+                            }
+                          : u
+                      )
+                    );
+                  }}
+                />
+                {user.linkingState === 'approved' && user.approvalExpiresAt && (
+                  <span className="text-[11px] text-muted-foreground">
+                    until {new Date(user.approvalExpiresAt).toLocaleDateString()}
+                  </span>
+                )}
+
+                {/* Actions dropdown menu matching the user page UI */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="sr-only">Actions for {user.name || user.email}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-64 p-1.5 rounded-xl border shadow-xl"
+                  >
+                    <DropdownMenuLabel className="px-2 py-1.5 text-xs text-muted-foreground font-semibold">
+                      Account & Identity
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator className="my-1" />
+                    <DropdownMenuItem
+                      onClick={() => router.push(`/users?q=${encodeURIComponent(user.email)}`)}
+                      className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium"
+                    >
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      <span>Manage in Users directory</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </li>
           ))}

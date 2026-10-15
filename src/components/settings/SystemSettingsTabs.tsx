@@ -2,13 +2,14 @@
 
 import React, { type ReactNode } from 'react';
 import DetailTabs from '@/components/ui/DetailTabs';
-import { Globe, Shield, Database, Key, HeartPulse, ArrowRight } from 'lucide-react';
+import { Globe, Shield, UserCheck, Database, Key, HeartPulse, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 
 interface Props {
   appUrlTab: ReactNode;
   ssoTab: ReactNode;
+  scimTab?: ReactNode;
   retentionTab: ReactNode;
   envTab: ReactNode;
   ssoEnabled: boolean;
@@ -21,6 +22,7 @@ interface Props {
 export default function SystemSettingsTabs({
   appUrlTab,
   ssoTab,
+  scimTab,
   retentionTab,
   envTab,
   ssoEnabled,
@@ -45,22 +47,32 @@ export default function SystemSettingsTabs({
       id: 'sso',
       label: 'SSO / Authentication',
       icon: <Shield className="h-3.5 w-3.5" />,
-      badge:
-        ssoEnabled && scimEnabled ? (
-          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
-            SSO & SCIM
-          </span>
-        ) : ssoEnabled ? (
-          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
-            Enabled
-          </span>
-        ) : scimEnabled ? (
-          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
-            SCIM Active
-          </span>
-        ) : undefined,
+      badge: ssoEnabled ? (
+        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+          Enabled
+        </span>
+      ) : undefined,
       content: ssoTab,
     },
+    ...(scimTab
+      ? [
+          {
+            id: 'scim',
+            label: 'SCIM Provisioning',
+            icon: <UserCheck className="h-3.5 w-3.5" />,
+            badge: scimEnabled ? (
+              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                Active
+              </span>
+            ) : (
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground">
+                SCIM 2.0
+              </span>
+            ),
+            content: scimTab,
+          },
+        ]
+      : []),
     {
       id: 'retention',
       label: 'Data Retention',
