@@ -201,22 +201,8 @@ export default function RecoveryAccounts() {
           <KeyRound className="h-10 w-10 text-muted-foreground/50 mb-3" />
           <p className="text-sm font-medium text-foreground">No recovery identities yet</p>
           <p className="mt-1 text-xs text-muted-foreground max-w-md">
-            Create the first identity and store its credential independently of your identity provider.
+            Create the first identity using the button above and store its credential independently of your identity provider.
           </p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-4 gap-1.5"
-            onClick={() => {
-              setMessage('');
-              setName('');
-              setIndependent(false);
-              setCreating(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            Create emergency identity
-          </Button>
         </div>
       ) : (
         <ul className="divide-y divide-border/70 rounded-xl border border-border/80 bg-card shadow-xs overflow-hidden">
