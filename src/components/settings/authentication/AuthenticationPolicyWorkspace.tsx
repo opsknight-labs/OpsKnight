@@ -142,7 +142,9 @@ export default function AuthenticationPolicyWorkspace() {
               }}
             >
               <option value="SSO_OPTIONAL" disabled={data.mode === 'SSO_REQUIRED'}>
-                SSO Optional
+                {data.mode === 'SSO_REQUIRED'
+                  ? 'SSO Optional — use “Change to Password Only or SSO Optional” below'
+                  : 'SSO Optional'}
               </option>
               <option value="SSO_REQUIRED">SSO Required</option>
             </select>
@@ -152,6 +154,31 @@ export default function AuthenticationPolicyWorkspace() {
                 : 'SSO Optional permits local password fallbacks and progressive onboarding.'}
             </span>
           </label>
+          {data.mode === 'SSO_REQUIRED' && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                SSO Required is active. Activation never relaxes it; moving back to SSO Optional is
+                a separate, deliberate policy change.
+              </span>
+              {data.actor.kind === 'admin' ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs font-semibold"
+                  onClick={() => {
+                    const panel = document.getElementById('auth-policy-mode-change');
+                    if (panel instanceof HTMLDetailsElement) panel.open = true;
+                    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                >
+                  Switch to SSO Optional
+                </Button>
+              ) : (
+                <span>Sign out of recovery and sign in as an administrator to change it.</span>
+              )}
+            </div>
+          )}
 
           {/* Enforcement Impact Preview */}
           <div className="space-y-3 pt-1">
@@ -289,7 +316,10 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 data.freshAuthenticationRequired && {
                   code: 'fresh',
-                  message: 'Sign in again or verify your recovery credential before activating.',
+                  message:
+                    data.actor.kind === 'admin'
+                      ? 'Your last sign-in was more than two hours ago. Sign out and sign in again to continue.'
+                      : 'Verify your recovery credential again before activating.',
                 },
                 data.originConflict && {
                   code: 'origin',
@@ -359,7 +389,10 @@ export default function AuthenticationPolicyWorkspace() {
 
       {/* Emergency Rollback or Manual Policy Change Accordion */}
       {data.actor.kind === 'admin' && (
-        <details className="group rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all open:ring-1 open:ring-border">
+        <details
+          id="auth-policy-mode-change"
+          className="group scroll-mt-24 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all open:ring-1 open:ring-border"
+        >
           <summary className="flex cursor-pointer items-center justify-between font-semibold text-sm text-foreground list-none select-none">
             <span className="flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-amber-500" />
@@ -431,7 +464,8 @@ export default function AuthenticationPolicyWorkspace() {
                   },
                 data.freshAuthenticationRequired && {
                   code: 'fresh',
-                  message: 'Sign in again before changing authentication policy.',
+                  message:
+                    'Your last sign-in was more than two hours ago. Sign out and sign in again to change the policy.',
                 },
               ])}
             >

@@ -403,6 +403,16 @@ describe('enterprise authentication experience', () => {
       screen.queryByLabelText('Maximum session lifetime custom value')
     ).not.toBeInTheDocument();
   });
+  it('explains how to leave SSO Required instead of only greying out SSO Optional', () => {
+    renderConsole('policy', { ...fixtureDashboard, mode: 'SSO_REQUIRED' });
+    expect(screen.getByRole('option', { name: /SSO Optional — use/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to SSO Optional' }));
+    const panel = document.getElementById('auth-policy-mode-change') as HTMLDetailsElement;
+    expect(panel.open).toBe(true);
+    expect(within(panel).getByRole('combobox', { name: /New authentication mode/ })).toHaveValue(
+      'SSO_OPTIONAL'
+    );
+  });
   it('protects unstaged changes when leaving through an outer settings tab', () => {
     renderConsole();
     fireEvent.change(screen.getByLabelText('Client ID'), { target: { value: 'unsaved' } });

@@ -23,20 +23,12 @@ import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/serv
 
 export default function AuthenticationRecoveryWorkspace() {
   const {
-    restoreScope,
-    setRestoreScope,
     originRepairConfirmed,
     setOriginRepairConfirmed,
     data,
-    adminId,
-    setAdminId,
     setMessage,
     recoveryReauthPassword,
     setRecoveryReauthPassword,
-    password,
-    setPassword,
-    restoreConfirmed,
-    setRestoreConfirmed,
     router,
     refresh,
     pending,
@@ -196,6 +188,22 @@ export default function AuthenticationRecoveryWorkspace() {
         </div>
       )}
 
+      {/* Self-service password access for a normally signed-in administrator */}
+      {data.actor.kind === 'admin' && (
+        <div className="space-y-3 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs text-sm">
+          <div className="flex items-center gap-2 border-b border-border/70 pb-3">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <h3 className="font-semibold text-sm text-foreground">Password access recovery</h3>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Set a password for your own administrator account, for example before an identity
+            provider outage or while your current SSO session is still active. To restore another
+            administrator, sign in with an emergency recovery account.
+          </p>
+          <PasswordAccessRecovery />
+        </div>
+      )}
+
       {/* Recovery Actor Mode Active Banner & Controls */}
       {data.actor.kind !== 'admin' && (
         <div className="space-y-4 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs text-sm">
@@ -294,134 +302,7 @@ export default function AuthenticationRecoveryWorkspace() {
             </Link>
           )}
 
-          {/* Accordion: Restore ordinary admin access */}
-          <details className="group rounded-xl border border-border/80 bg-muted/20 p-4 transition-all open:ring-1 open:ring-border">
-            <summary className="flex cursor-pointer items-center justify-between font-semibold text-xs sm:text-sm text-foreground list-none select-none">
-              <span className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-primary" />
-                Restore ordinary administrator access during an IdP outage
-              </span>
-              <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-90" />
-            </summary>
-            <div className="mt-4 space-y-4 border-t border-border/60 pt-4 text-sm">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                This explicitly switches to Password Only and replaces the selected existing
-                administrator’s password. It revokes old sessions and reset links. Prefer repairing
-                and testing a staged provider when the IdP is available.
-              </p>
-
-              <label className="block space-y-1.5 text-xs font-medium">
-                <span className="text-foreground">Password recovery scope</span>
-                <select
-                  className={inputClass}
-                  value={restoreScope}
-                  onChange={event => {
-                    setRestoreScope(event.target.value as typeof restoreScope);
-                    setRestoreConfirmed(false);
-                  }}
-                >
-                  <option value="ADMIN_ONLY">Only this administrator · one hour</option>
-                  <option value="INSTANCE">Entire instance · Password Only</option>
-                </select>
-                <p className="text-muted-foreground text-[11px] pt-0.5">
-                  Instance recovery reactivates all existing local passwords and revokes OIDC
-                  sessions. Choose it only when deliberately abandoning SSO enforcement.
-                </p>
-              </label>
-
-              <AuthenticationAdminPicker
-                label="Administrator to restore"
-                value={adminId}
-                onChange={setAdminId}
-                initialAdmins={data.users.filter(
-                  user => user.role === 'ADMIN' && user.status === 'ACTIVE'
-                )}
-                disabled={data.actor.kind === 'legacy'}
-                disabledReason="Legacy recovery cannot select an administrator. Use an independent recovery identity to restore administrator access."
-              />
-
-              <label className="block space-y-1.5 text-xs font-medium">
-                <span className="text-foreground">New strong administrator password</span>
-                <input
-                  className={inputClass}
-                  type="password"
-                  placeholder="Enter a new strong password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={event => setPassword(event.target.value)}
-                />
-              </label>
-
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 rounded border-border text-primary focus:ring-ring"
-                  checked={restoreConfirmed}
-                  onChange={event => setRestoreConfirmed(event.target.checked)}
-                />
-                <span className="text-xs text-muted-foreground leading-snug">
-                  I authorize the selected password recovery scope for this existing administrator.
-                  Other users’ local passwords stay blocked in administrator-only recovery.
-                </span>
-              </label>
-
-              <AuthenticationActionGuard
-                availability={actionAvailability('Restore password access', [
-                  pending && { code: 'busy', message: 'Wait for the current operation.' },
-                  !restoreConfirmed && {
-                    code: 'confirm',
-                    message: 'Authorize the selected password recovery scope.',
-                  },
-                  !adminId && {
-                    code: 'admin',
-                    message: 'Select the existing administrator to restore.',
-                  },
-                  !password && {
-                    code: 'password',
-                    message: 'Enter a new strong administrator password.',
-                  },
-                  data.actor.kind === 'legacy' && {
-                    code: 'legacy',
-                    message: 'Use an independent recovery identity to restore an administrator.',
-                  },
-                  data.freshAuthenticationRequired && {
-                    code: 'fresh',
-                    message: 'Verify your recovery credential again before restoring access.',
-                  },
-                ])}
-              >
-                <Button
-                  size="sm"
-                  className="gap-2"
-                  onClick={() =>
-                    void perform(async () => {
-                      await authenticationRequest({
-                        action: 'restorePassword',
-                        adminUserId: adminId,
-                        password,
-                        expectedVersion: data.policyVersion,
-                        confirmation:
-                          restoreScope === 'INSTANCE'
-                            ? 'RESTORE INSTANCE PASSWORD ACCESS'
-                            : 'RESTORE PASSWORD ACCESS',
-                        scope: restoreScope,
-                      });
-                      setPassword('');
-                      if (data.actor.kind === 'emergency') await refresh();
-                      setMessage(
-                        restoreScope === 'INSTANCE'
-                          ? 'Password Only restored instance-wide. Existing local passwords can sign in.'
-                          : 'Temporary password sign-in enabled only for the restored administrator for one hour. SSO policy stays unchanged.'
-                      );
-                    })
-                  }
-                >
-                  <Lock className="h-4 w-4" />
-                  Restore password access
-                </Button>
-              </AuthenticationActionGuard>
-            </div>
-          </details>
+          <PasswordAccessRecovery />
 
           {/* Sign out of recovery session */}
           <div className="pt-2 border-t border-border/60">
@@ -444,5 +325,183 @@ export default function AuthenticationRecoveryWorkspace() {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Restores password sign-in for an administrator. In an emergency recovery session any active
+ * administrator may be selected; a normally signed-in administrator can restore only their own
+ * account (enforced by the server as well).
+ */
+function PasswordAccessRecovery() {
+  const {
+    restoreScope,
+    setRestoreScope,
+    data,
+    adminId,
+    setAdminId,
+    setMessage,
+    password,
+    setPassword,
+    restoreConfirmed,
+    setRestoreConfirmed,
+    router,
+    refresh,
+    pending,
+    perform,
+    inputClass,
+  } = useAuthenticationWorkspace();
+  const selfService = data.actor.kind === 'admin';
+  const targetId = selfService ? data.actor.id : adminId;
+  const self = data.users.find(user => user.id === data.actor.id);
+
+  return (
+    <details className="group rounded-xl border border-border/80 bg-muted/20 p-4 transition-all open:ring-1 open:ring-border">
+      <summary className="flex cursor-pointer items-center justify-between font-semibold text-xs sm:text-sm text-foreground list-none select-none">
+        <span className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-primary" />
+          {selfService
+            ? 'Restore password access for your account'
+            : 'Restore ordinary administrator access during an IdP outage'}
+        </span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-90" />
+      </summary>
+      <div className="mt-4 space-y-4 border-t border-border/60 pt-4 text-sm">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {restoreScope === 'INSTANCE'
+            ? 'This switches the whole instance to Password Only, replaces the administrator’s password, and signs out SSO sessions and old reset links.'
+            : 'This replaces the administrator’s password and allows password sign-in for that administrator only, for one hour. The SSO policy for everyone else is unchanged.'}{' '}
+          The administrator is signed out everywhere and signs in again with the new password.
+          Prefer repairing and testing a staged provider when the IdP is available.
+        </p>
+
+        <label className="block space-y-1.5 text-xs font-medium">
+          <span className="text-foreground">Password recovery scope</span>
+          <select
+            className={inputClass}
+            value={restoreScope}
+            onChange={event => {
+              setRestoreScope(event.target.value as typeof restoreScope);
+              setRestoreConfirmed(false);
+            }}
+          >
+            <option value="ADMIN_ONLY">Only this administrator · one hour</option>
+            <option value="INSTANCE">Entire instance · Password Only</option>
+          </select>
+          <p className="text-muted-foreground text-[11px] pt-0.5">
+            Instance recovery reactivates all existing local passwords and revokes OIDC sessions.
+            Choose it only when deliberately abandoning SSO enforcement.
+          </p>
+        </label>
+
+        {selfService ? (
+          <div className="space-y-1 text-xs">
+            <span className="font-medium text-foreground">Administrator to restore</span>
+            <p className="rounded-lg border bg-background px-3 py-2 text-foreground break-all">
+              {self ? `${self.name || self.email} · ${self.email}` : 'Your account'}
+            </p>
+          </div>
+        ) : (
+          <AuthenticationAdminPicker
+            label="Administrator to restore"
+            value={adminId}
+            onChange={setAdminId}
+            initialAdmins={data.users.filter(
+              user => user.role === 'ADMIN' && user.status === 'ACTIVE'
+            )}
+            disabled={data.actor.kind === 'legacy'}
+            disabledReason="Legacy recovery cannot select an administrator. Use an independent recovery identity to restore administrator access."
+          />
+        )}
+
+        <label className="block space-y-1.5 text-xs font-medium">
+          <span className="text-foreground">New strong administrator password</span>
+          <input
+            className={inputClass}
+            type="password"
+            placeholder="Enter a new strong password"
+            autoComplete="new-password"
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+          />
+        </label>
+
+        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="mt-0.5 rounded border-border text-primary focus:ring-ring"
+            checked={restoreConfirmed}
+            onChange={event => setRestoreConfirmed(event.target.checked)}
+          />
+          <span className="text-xs text-muted-foreground leading-snug">
+            I authorize the selected password recovery scope for this existing administrator. Other
+            users’ local passwords stay blocked in administrator-only recovery.
+          </span>
+        </label>
+
+        <AuthenticationActionGuard
+          availability={actionAvailability('Restore password access', [
+            pending && { code: 'busy', message: 'Wait for the current operation.' },
+            !restoreConfirmed && {
+              code: 'confirm',
+              message: 'Authorize the selected password recovery scope.',
+            },
+            !targetId && {
+              code: 'admin',
+              message: 'Select the existing administrator to restore.',
+            },
+            !password && {
+              code: 'password',
+              message: 'Enter a new strong administrator password.',
+            },
+            data.actor.kind === 'legacy' && {
+              code: 'legacy',
+              message: 'Use an independent recovery identity to restore an administrator.',
+            },
+            data.freshAuthenticationRequired && {
+              code: 'fresh',
+              message: selfService
+                ? 'Your last sign-in was more than two hours ago. Sign in again to continue.'
+                : 'Verify your recovery credential again before restoring access.',
+            },
+          ])}
+        >
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={() =>
+              void perform(async () => {
+                await authenticationRequest({
+                  action: 'restorePassword',
+                  adminUserId: targetId,
+                  password,
+                  expectedVersion: data.policyVersion,
+                  confirmation:
+                    restoreScope === 'INSTANCE'
+                      ? 'RESTORE INSTANCE PASSWORD ACCESS'
+                      : 'RESTORE PASSWORD ACCESS',
+                  scope: restoreScope,
+                });
+                setPassword('');
+                if (selfService) {
+                  // Restoring rotates this administrator's sessions, including the current one.
+                  router.replace('/login?passwordRestored=1');
+                  return;
+                }
+                if (data.actor.kind === 'emergency') await refresh();
+                setMessage(
+                  restoreScope === 'INSTANCE'
+                    ? 'Password Only restored instance-wide. Existing local passwords can sign in.'
+                    : 'Temporary password sign-in enabled only for the restored administrator for one hour. SSO policy stays unchanged.'
+                );
+              })
+            }
+          >
+            <Lock className="h-4 w-4" />
+            Restore password access
+          </Button>
+        </AuthenticationActionGuard>
+      </div>
+    </details>
   );
 }

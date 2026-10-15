@@ -18,7 +18,15 @@ export async function restorePasswordAccess(
   confirmation: string,
   scope: 'ADMIN_ONLY' | 'INSTANCE' = 'ADMIN_ONLY'
 ) {
-  if (actor.kind === 'admin') throw new Error('Use an independent emergency session for recovery.');
+  // A normally signed-in administrator may restore password access only for their own
+  // account (for example while their SSO session outlives an IdP outage). Restoring another
+  // administrator would let one admin take over another's identity, so that stays limited
+  // to independent emergency recovery. Freshness, session validity and current permissions
+  // are enforced by lockControlActor below.
+  if (actor.kind === 'admin' && actor.id !== adminUserId)
+    throw new Error(
+      'You can restore password access only for your own account. Use an emergency recovery session to restore another administrator.'
+    );
   if (
     confirmation !==
     (scope === 'INSTANCE' ? 'RESTORE INSTANCE PASSWORD ACCESS' : 'RESTORE PASSWORD ACCESS')
@@ -84,6 +92,7 @@ export async function restorePasswordAccess(
       ordinaryPasswordLoginEnabled: true,
       recoveryScope: scope,
       otherLocalPasswordsEnabled: scope === 'INSTANCE',
+      initiatedBy: actor.kind === 'admin' ? 'administrator-self-service' : actor.kind,
     });
     return { mode: restored.mode, version: restored.version };
   });
