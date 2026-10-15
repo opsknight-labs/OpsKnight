@@ -22,15 +22,27 @@ async function waitForRuntimeDatabase(
   let attempts = 0;
   while (now() < deadline) {
     attempts++;
+    let timer;
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Runtime query deadline reached.')),
+            Math.max(1, deadline - now())
+          );
+        }),
+      ]);
       report('Runtime database connection is ready.');
       return;
     } catch {
       // Do not print connection strings, driver messages or credentials.
       if (attempts === 1 || attempts % 10 === 0)
         report('Waiting for runtime database connectivity.');
+    } finally {
+      clearTimeout(timer);
     }
+    if (now() >= deadline) break;
     await sleep(Math.min(pollMs, Math.max(1, deadline - now())));
   }
   throw new Error('Runtime database connection did not become ready before the startup deadline.');
@@ -54,7 +66,19 @@ async function main() {
       timeoutMs: Number(process.env.OPSKNIGHT_RUNTIME_DATABASE_READY_TIMEOUT_MS || 60_000),
     });
   } finally {
-    await prisma.$disconnect();
+    // A blackholed backend may keep disconnect waiting on the outstanding probe.
+    // Bound cleanup too; this is a short-lived startup process, never an app client.
+    let timer;
+    try {
+      await Promise.race([
+        prisma.$disconnect(),
+        new Promise(resolve => {
+          timer = setTimeout(resolve, 2000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 if (require.main === module)
@@ -62,6 +86,6 @@ if (require.main === module)
     console.error(
       'Runtime database readiness gate failed; refusing to start application processes.'
     );
-    process.exitCode = 1;
+    process.exit(1);
   });
 module.exports = { waitForRuntimeDatabase };

@@ -322,7 +322,8 @@
       "Deployment invariants follow the extracted shared command generator",
       "Fleet fixture allows its isolated IP endpoint in app host validation; TLS certificate includes that IP",
       "Archived history browser journey waits for dismissal refresh to commit before navigation",
-      "Container startup gates runtime SQL connectivity after direct schema readiness, preventing authentication initialization from racing a new PgBouncer endpoint"
+      "Container startup gates runtime SQL connectivity after direct schema readiness, preventing authentication initialization from racing a new PgBouncer endpoint",
+      "Runtime probe queries and client cleanup have explicit deadlines, including an unresolved-query/blackhole regression"
     ],
     "localChecks": {
       "targetedUnits": {
@@ -333,7 +334,7 @@
       },
       "nodeCiContracts": {
         "status": "PASS",
-        "tests": 13
+        "tests": 14
       },
       "typecheck": "PASS",
       "modifiedTypeScriptLint": "PASS",

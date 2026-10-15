@@ -52,3 +52,17 @@ test('fails closed at the deadline without leaking driver messages', async () =>
   assert.ok(!output.join('').includes('secret'));
   assert.ok(!output.join('').includes('private-host'));
 });
+
+test(
+  'bounds a query that never resolves, including a blackholed backend',
+  { timeout: 1000 },
+  async () => {
+    await assert.rejects(
+      waitForRuntimeDatabase(
+        { $queryRaw: () => new Promise(() => {}) },
+        { timeoutMs: 25, report: () => undefined }
+      ),
+      /startup deadline/
+    );
+  }
+);
