@@ -3,6 +3,7 @@
 import { ALL_API_SCOPE_DEFINITIONS, issuableScopesForRole } from '@/lib/api-scope-registry';
 import { useState, useMemo, useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   createServiceAccountAction,
@@ -31,13 +32,6 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/shadcn/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import {
   AlertDialog,
@@ -51,16 +45,14 @@ import {
 } from '@/components/ui/shadcn/alert-dialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
-import CopyButton from './CopyButton';
+import OneTimeSecretBanner from './OneTimeSecretBanner';
 import {
   Bot,
   Key,
   Plus,
   Trash2,
   ShieldAlert,
-  CheckCircle2,
   Search,
-  X,
   Loader2,
   ChevronDown,
   ChevronRight,
@@ -119,18 +111,33 @@ function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: st
   );
 }
 
+function accountsHref(inventory: { q: string; role: string }, cursor?: string | null): string {
+  const params = new URLSearchParams({ tab: 'service-accounts' });
+  if (inventory.q) params.set('sq', inventory.q);
+  if (inventory.role !== 'ALL') params.set('srole', inventory.role);
+  if (cursor) params.set('scursor', cursor);
+  return `?${params.toString()}`;
+}
+
 export default function ServiceAccountsPanel({
   serviceAccounts,
   availableTeams,
   isAdmin,
+  inventory = { q: '', role: 'ALL', hasCursor: false, nextCursor: null, total: undefined },
 }: {
   serviceAccounts: ServiceAccountItem[];
   availableTeams: { id: string; name: string }[];
   isAdmin: boolean;
+  /** Server-side inventory state: filters live in the URL and paging runs in the database. */
+  inventory?: {
+    q: string;
+    role: string;
+    hasCursor: boolean;
+    nextCursor: string | null;
+    total?: number;
+  };
 }) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set());
 
   // Create Service Account Dialog
@@ -201,16 +208,9 @@ export default function ServiceAccountsPanel({
     });
   };
 
-  const filteredAccounts = useMemo(() => {
-    return serviceAccounts.filter(sa => {
-      const matchesSearch =
-        searchQuery === '' ||
-        sa.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sa.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRole = roleFilter === 'ALL' || sa.role === roleFilter;
-      return matchesSearch && matchesRole;
-    });
-  }, [serviceAccounts, searchQuery, roleFilter]);
+  // Rows arrive already filtered and paged by the server (see lib/service-account-inventory).
+  const filteredAccounts = serviceAccounts;
+  const isFiltered = Boolean(inventory.q) || inventory.role !== 'ALL';
 
   const handleDeleteAccount = async () => {
     if (!deleteAccountId) return;
@@ -278,67 +278,62 @@ export default function ServiceAccountsPanel({
   return (
     <div className="space-y-6">
       {/* 1. Revealed Secret Token Banner */}
-      {(issueTokenState?.token || revealedToken) && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 space-y-4 shadow-sm animate-in fade-in-0 duration-200">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <span>Service Account Access Token Issued</span>
-            </div>
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Machine Token
-            </Badge>
-          </div>
-
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Please copy this secret token immediately. It allows programmatic access to OpsKnight REST API v2 on behalf of this service account. For security reasons,{' '}
-            <strong className="text-foreground">it will never be displayed again</strong>.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-emerald-500/25 bg-background p-2.5 shadow-2xs">
-            <code className="flex-1 text-xs font-mono font-bold text-foreground break-all px-2 select-all">
-              {issueTokenState?.token || revealedToken}
-            </code>
-            <CopyButton text={(issueTokenState?.token || revealedToken)!} />
-          </div>
-        </div>
+      {revealedToken && (
+        <OneTimeSecretBanner
+          title="Service Account Access Token Issued"
+          badge="Machine Token"
+          secret={revealedToken}
+          onDismiss={() => setRevealedToken(null)}
+          description={
+            <>
+              This token allows programmatic access to OpsKnight REST API v2 on behalf of this
+              service account. Copy it now:{' '}
+              <strong className="text-foreground">it will never be displayed again</strong>.
+            </>
+          }
+        />
       )}
 
       {/* 2. Control Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search service accounts by name or email..."
-              className="h-9 text-xs pl-8 bg-background"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+          <form
+            method="get"
+            aria-label="Filter service accounts"
+            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1"
+          >
+            <input type="hidden" name="tab" value="service-accounts" />
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                name="sq"
+                defaultValue={inventory.q}
+                aria-label="Search service accounts"
+                placeholder="Search service accounts by name or email..."
+                className="h-9 text-xs pl-8 bg-background"
+              />
+            </div>
+            <select
+              name="srole"
+              defaultValue={inventory.role}
+              aria-label="Role"
+              className="h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[140px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="ALL">All roles</option>
+              <option value="ADMIN">Admin</option>
+              <option value="RESPONDER">Responder</option>
+              <option value="AUDITOR">Auditor</option>
+              <option value="USER">User (scoped)</option>
+            </select>
+            <Button type="submit" variant="outline" size="sm" className="h-9">
+              Apply
+            </Button>
+            {(isFiltered || inventory.hasCursor) && (
+              <Button asChild variant="ghost" size="sm" className="h-9">
+                <Link href="?tab=service-accounts">Reset</Link>
+              </Button>
             )}
-          </div>
-
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="h-9 text-xs w-[140px] bg-background">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Roles</SelectItem>
-              <SelectItem value="ADMIN">Admin</SelectItem>
-              <SelectItem value="RESPONDER">Responder</SelectItem>
-              <SelectItem value="USER">User (Scoped)</SelectItem>
-            </SelectContent>
-          </Select>
+          </form>
         </div>
 
         {isAdmin && (
@@ -357,14 +352,14 @@ export default function ServiceAccountsPanel({
       {filteredAccounts.length === 0 ? (
         <EmptyState
           icon={Bot}
-          title={searchQuery || roleFilter !== 'ALL' ? 'No matching service accounts' : 'No service accounts configured'}
+          title={isFiltered ? 'No matching service accounts' : 'No service accounts configured'}
           description={
-            searchQuery || roleFilter !== 'ALL'
+            isFiltered
               ? 'Try adjusting your search query or role filters.'
               : 'Service accounts provide non-human machine identities with granular RBAC and scoped API access for Kubernetes, Terraform, and CI/CD pipelines.'
           }
           action={
-            isAdmin && !searchQuery && roleFilter === 'ALL' ? (
+            isAdmin && !isFiltered ? (
               <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5">
                 <Plus className="h-4 w-4" />
                 Create Service Account
@@ -576,6 +571,26 @@ export default function ServiceAccountsPanel({
               </Card>
             );
           })}
+          {(inventory.hasCursor || inventory.nextCursor) && (
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {inventory.total !== undefined ? `${inventory.total} accounts match · ` : ''}
+                showing {filteredAccounts.length}
+              </span>
+              <div className="flex gap-2">
+                {inventory.hasCursor && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={accountsHref(inventory)}>Newest</Link>
+                  </Button>
+                )}
+                {inventory.nextCursor && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={accountsHref(inventory, inventory.nextCursor)}>Older accounts</Link>
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

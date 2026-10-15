@@ -31,6 +31,7 @@ Status of the audit of PR #863 (commit `c92c651`), written against the working t
 | Proxy trust: CF-Connecting-IP only when selected | Done | `TRUSTED_PROXY_HEADER`; X-Forwarded-For read from the right by raw position; `TRUSTED_PROXIES` accepts CIDRs and is enforced when the peer address is known. Unit tests include spoofed headers |
 | Positive-auth cache stays removed | Unchanged | Revocation test already in the suite |
 | Topology tests (Cloudflare, Nginx, Traefik, Compose, Kubernetes) | **Not yet run** | Needs real ingress; route handlers do not expose the socket address, so `TRUST_PROXY_HEADERS=true` remains an operator assertion that only the ingress can reach the app |
+| Valid credentials keep working while their address floods invalid tokens | **Measured: failed, fix unmeasured** | Local k6 on the production image, 2 replicas behind nginx: with a 300 rps invalid flood from the same address, 60% of a 24 rps valid probe got an admission 429 (threshold 5%); direct deployment at 200 rps: 57%. No server errors, no 401/403 for valid clients. A priority lane for recently verified credentials was added afterwards (hint only; the database still decides every request) and is unit-tested, **but the flood runs were not repeated** because the image rebuild stalled on a saturated Docker VM |
 | PostgreSQL connection pressure under a failed-auth flood | **Not yet run** | Needs load environment |
 
 New environment variables: `TRUSTED_PROXY_HEADER`, `API_V2_UNIDENTIFIED_AUTH_CONCURRENCY` (16), `API_V2_LEGACY_SCRYPT_CONCURRENCY` (2), `API_V2_LEGACY_UNIDENTIFIED_LIMIT` (30 per minute), `API_V2_OVER_BUDGET_IP_CONCURRENCY` (4).
@@ -54,10 +55,10 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | Item | State | Evidence |
 | --- | --- | --- |
 | Audit record commits with the business change on every v2 mutation route | Done | `runV2AuditedMutation` plus in-transaction hooks (incident lifecycle/create/patch, schedule override, status page create/update/make-default, notification requeue). A scan of `src/app/api/v2` finds no `logV2Audit` call without a transaction. Unit tests prove the audit uses the mutation's transaction client and that an audit failure fails the mutation |
-| Crash, rollback and cross-replica replay scenarios | **Not yet run** | Needs the database integration environment |
+| Rollback and concurrent-retry scenarios against PostgreSQL | Done (local) | `tests/integration/api-v2-runtime.test.ts` on PostgreSQL 16: injected audit-insert failure (DB trigger) rolls the mutation back; 5 concurrent notification retries give one 200, four 409 and one audit row; concurrent creates with one `Idempotency-Key` give one resource and one audit row; key reuse with a different body is 409. Load check on 2 replicas: audit counts equal mutation counts. Process-crash and replica-kill scenarios **not yet run** |
 | Every mutating operation has a declared retry contract | Done | `mutation-contract.ts` classifies all 28 POST/PATCH/DELETE operations (required / supported / natural / never). `api-v2-mutation-contract.test.ts` fails if a route has no entry, or if an entry claims idempotency or ETag support the route source does not implement |
 | `Idempotency-Key` supported on the remaining creates | Done | teams, services, schedules, status-page announcements and service accounts now replay (same key → original result, `Idempotency-Replayed: true`, one audit record). Token issuance is deliberately `never` because the response holds a one-time secret |
-| Optimistic concurrency (ETag / If-Match → 412) | Done | teams, services, schedules, escalation policies, integrations. ETags are now strong validators (`"<updatedAt ms>"`); a weak `W/` tag in `If-Match` gets 412 because it cannot match under strong comparison (RFC 9110). The escalation-policy update always moves `updatedAt`, so a steps-only edit changes the ETag. The version check is in the UPDATE's WHERE clause. The validator covers the resource's own state; related data embedded only for reading (services using a policy) is not covered. Unit tests cover header parsing and the contract; **a two-writer race against PostgreSQL, and proof that a steps-only edit changes the stored `updatedAt`, are not yet run** |
+| Optimistic concurrency (ETag / If-Match → 412) | Done | teams, services, schedules, escalation policies, integrations. ETags are now strong validators (`"<updatedAt ms>"`); a weak `W/` tag in `If-Match` gets 412 because it cannot match under strong comparison (RFC 9110). The escalation-policy update always moves `updatedAt`, so a steps-only edit changes the ETag. The version check is in the UPDATE's WHERE clause. The validator covers the resource's own state; related data embedded only for reading (services using a policy) is not covered. Unit tests cover header parsing and the contract; two-writer race, 20 rapid consecutive writes (every validator distinct), stale and weak `If-Match`, and a steps-only policy edit changing the ETag were run against PostgreSQL (`api-v2-runtime.test.ts`); under load, 473 two-writer races produced exactly one winner each |
 | One mapping for database failures | Done | `database-errors.ts`: P2002/P2003 → 409, P2025 → 404, P2034 → retryable 409, connectivity/pool timeout → retryable 503 with `Retry-After`; driver detail is never exposed. Unit-tested per code |
 | Idempotency retention after expiry (7 days), key reuse with a different body, concurrent requests on different replicas | Documented; **not yet run** | Retention follows the completed-job cleanup window; needs the database integration environment |
 
@@ -93,8 +94,9 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | API Activity filtered and paginated in the database | Done | `activity-query.ts` builds the `where`; keyset pagination; filters for action, actor, API key, resource type and date range live in the URL. Query unit tests and panel component tests |
 | Activity is labelled as audit history, not traffic | Done | Panel text; reads and rejected requests are not recorded |
 | Never-expiring service-account token is a deliberate choice | Done | Warning shown when selected |
-| Credential inventory pagination (keys, service accounts, teams) | Not done | The page still loads all of them for the viewer |
-| Tab data loaded only for the active tab | Not done | Tabs switch client-side; lazy loading needs per-tab navigation |
+| Credential inventory pagination (keys, service accounts) | Done | Filters and keyset cursors in the URL, evaluated in the database (`api-key-inventory.ts`, `service-account-inventory.ts`); header counts are aggregates. Real-PostgreSQL test pages through 60 keys exactly once and checks status filters |
+| Tab data loaded only for the active tab | Done | Tabs are links; only the active tab's list, spec or activity is queried |
+| One-time secrets need explicit acknowledgement | Done | `OneTimeSecretBanner`: checkbox then "Dismiss and clear"; code samples use the same local state |
 | Browser tests at mobile/laptop/large widths, keyboard and dialog flows | **Not yet run** | No browser run in this audit |
 
 ## Status-page publication
@@ -102,7 +104,19 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | Item | State | Evidence |
 | --- | --- | --- |
 | Client can tell "saved and live" from "saved, republish pending or failed" | Done | `PATCH /status-pages/{id}` returns `publication` (`LIVE`, `PUBLISHING`, `FAILED`, `DISABLED`, revision, last error). The change and its audit record commit first; republishing happens after the commit, and a failure is recorded for background reconciliation |
+| `PATCH` publication field against PostgreSQL | Done (local) | Runtime test asserts `publication` is returned and the audit row committed |
 | Recovery after a crash right after the default-page commit, a failed publish of the new default, a failed republish of the demoted page | **Not yet run** | Needs PostgreSQL and the projector; the existing integration tests were not run locally |
+
+## Findings from running against a real database
+
+Both were invisible to unit tests with mocked Prisma and are fixed:
+
+1. Audit details are stored under `details.metadata`; the API Activity query originally matched top-level paths and would have shown nothing.
+2. The audit writer redacts any key containing `key`, so `apiKeyId` was stored as `[REDACTED]` and no change was attributable to a credential. The field is now `apiClientId` (token labels use `label`).
+
+## Local runtime evidence (2026-10-15)
+
+PostgreSQL 16 in Docker, Node 20. Full `vitest.int.config.ts` run on a quiet machine: 449 of 454 passed. The 5 failures: 4 in `runbook-agent-runtime.test.ts` (the spawned agent never submits; no child output; not diagnosed, and not a REST v2 test; the reviewer reported these passing on Linux CI) and 1 fixture error in a new test, fixed; the 19 `api-v2-runtime` tests then passed. The runbook execution tests, including the new missing-`incidents:read` negative test, pass (61/61). The production Docker image builds with the bundled fonts.
 
 ## Phase 7: observability and availability
 
@@ -124,4 +138,4 @@ The before/after regression report against `main` (API v1, Events API, SSO, noti
 
 Node 20, 2026-10-14, after the previous round of changes (a later round, covering the review of `07ef9a2bf`, is re-checked below): `npx tsc --noEmit` clean (tsbuildinfo deleted first); `vitest run -c vitest.unit.config.ts --no-file-parallelism`: 769 files, 5956 tests passed, 4 skipped; `vitest run tests/architecture`: 91 files passed; `eslint` on changed files: 0 errors. Not run: database integration tests (`tests/integration/*` need PostgreSQL), browser tests, the k6 load matrix, a full OpenAPI validator and generated-client smoke tests. The default `vitest run` also loads `tests/docs/tooling/*.test.mjs` (written for `node --test`) and the integration files; those fail to load or need PostgreSQL and are not counted. `node --test tests/docs/tooling/`: 48 of 49 pass after the frontmatter fix; the remaining failure (`public-reference-freshness`, stale configuration reference around `AUTH_LOCAL_LOGIN_ENABLED` / `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`) concerns unrelated settings. The new environment variables from this audit are not yet in the configuration reference.
 
-Round two (review of `07ef9a2bf`): `npx tsc --noEmit` clean; targeted suites for the changed areas pass (auth abuse tests, concurrency, service-account lifecycle, settings panels, API v2 contracts and the architecture guard). The full unit suite is re-run before each push.
+Round three (review of `469cb67a`, local certification): `tsc` and the unit suite are re-run before the push. Round two (review of `07ef9a2bf`): `npx tsc --noEmit` clean; targeted suites for the changed areas pass (auth abuse tests, concurrency, service-account lifecycle, settings panels, API v2 contracts and the architecture guard). The full unit suite is re-run before each push.

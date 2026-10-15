@@ -2,7 +2,9 @@ import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import ApiKeysPanel, { type ApiKey } from '@/components/settings/ApiKeysPanel';
-import ServiceAccountsPanel, { type ServiceAccountItem } from '@/components/settings/ServiceAccountsPanel';
+import ServiceAccountsPanel, {
+  type ServiceAccountItem,
+} from '@/components/settings/ServiceAccountsPanel';
 import ApiExplorerPanel, { type ApiEndpointDoc } from '@/components/settings/ApiExplorerPanel';
 import ApiActivityPanel, { type ApiAuditLogItem } from '@/components/settings/ApiActivityPanel';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
@@ -21,8 +23,21 @@ import { Key, ShieldCheck, Bot, Activity, Terminal, Code2, Clock, ShieldAlert } 
 import { getAppUrl } from '@/lib/app-url';
 import { listServiceAccounts } from '@/lib/api-v2/service-accounts';
 import { getOpenApiV2Spec } from '@/lib/api-v2/openapi';
-import { findOperation } from '@/lib/api-v2/openapi-registry';
+import { findOperation, V2_OPERATIONS } from '@/lib/api-v2/openapi-registry';
 import { getVerifiedSampleBody } from '@/lib/api-v2/endpoint-samples';
+import {
+  buildKeyInventoryWhere,
+  encodeInventoryCursor,
+  KEY_INVENTORY_PAGE_SIZE,
+  parseKeyInventoryFilters,
+} from '@/lib/api-key-inventory';
+import {
+  buildServiceAccountWhere,
+  parseServiceAccountFilters,
+  SERVICE_ACCOUNT_PAGE_SIZE,
+} from '@/lib/service-account-inventory';
+import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
+import Link from 'next/link';
 import {
   API_ACTIVITY_PAGE_SIZE,
   buildApiActivityWhere,
@@ -54,7 +69,8 @@ function generateSampleFromSchema(schema: any): any {
         if (key === 'title') result[key] = 'High Latency on Payment Gateway';
         else if (key === 'name') result[key] = 'Production Service';
         else if (key === 'description') result[key] = 'Core transactional checkout service';
-        else if (key === 'content' || key === 'note' || key === 'message') result[key] = 'Traffic diverted to backup cluster.';
+        else if (key === 'content' || key === 'note' || key === 'message')
+          result[key] = 'Traffic diverted to backup cluster.';
         else if (key === 'resolutionNote') result[key] = 'Mitigated by scaling pod replicas.';
         else if (key === 'serviceId') result[key] = 'srv_123456';
         else if (key === 'teamId') result[key] = 'team_sre';
@@ -63,12 +79,14 @@ function generateSampleFromSchema(schema: any): any {
         else if (key === 'slug') result[key] = 'production-status';
         else if (key === 'timeZone') result[key] = 'UTC';
         else if (key === 'incidentId') result[key] = 'inc_123456';
-        else if (key === 'email' || lowerKey.includes('email')) result[key] = 'operator@opsknight.local';
+        else if (key === 'email' || lowerKey.includes('email'))
+          result[key] = 'operator@opsknight.local';
         else if (key === 'urgency') result[key] = 'HIGH';
         else if (key === 'severity') result[key] = 'CRITICAL';
         else if (key === 'status') result[key] = 'INVESTIGATING';
         else if (lowerKey.endsWith('url')) result[key] = 'https://hooks.opsknight.local/webhook';
-        else if (lowerKey.endsWith('id')) result[key] = `${lowerKey.replace('id', '') || 'res'}_123456`;
+        else if (lowerKey.endsWith('id'))
+          result[key] = `${lowerKey.replace('id', '') || 'res'}_123456`;
         else result[key] = 'sample_value';
       } else if (prop.type === 'integer' || prop.type === 'number') {
         result[key] = 1;
@@ -120,12 +138,21 @@ const sanitizeAuditDetails = (rawDetails: unknown): Record<string, unknown> | nu
   if (!rawDetails || typeof rawDetails !== 'object' || Array.isArray(rawDetails)) {
     return null;
   }
-  const d = rawDetails as Record<string, unknown>;
+  // Audit rows keep caller-supplied details under `metadata`; flatten it so those fields are
+  // shown, with the envelope's own top-level fields taking precedence.
+  const envelope = rawDetails as Record<string, unknown>;
+  const metadata =
+    envelope.metadata && typeof envelope.metadata === 'object' && !Array.isArray(envelope.metadata)
+      ? (envelope.metadata as Record<string, unknown>)
+      : {};
+  const d: Record<string, unknown> = { ...metadata, ...envelope };
   const safe: Record<string, unknown> = {};
   const safeKeys = [
     'requestId',
     'entityId',
     'tokenName',
+    'label',
+    'apiClientId',
     'prefix',
     'scopes',
     'action',
@@ -172,16 +199,56 @@ export default async function ApiKeysSettingsPage({
   const timeZone = getUserTimeZone(user ?? undefined);
   const isAdmin = user ? hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE) : false;
 
-  const rawKeys = user
-    ? await prisma.apiKey.findMany({
-        where: user.role === 'ADMIN' ? undefined : { userId: user.id },
-        include: { user: { select: { email: true } } },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
-
   const now = new Date();
   const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  // Credential inventory runs in the database: counts are always computed (they feed the
+  // header and tab labels), but a list is loaded only for the tab being viewed, one page at a
+  // time, with filters and the cursor taken from the URL.
+  const keyFilters = parseKeyInventoryFilters(query);
+  const keyScope = user ? (user.role === 'ADMIN' ? {} : { userId: user.id }) : null;
+  const allKeysWhere = keyScope ? buildKeyInventoryWhere(keyScope, { status: 'ALL' }, now) : null;
+  const [totalKeys, activeKeysCount, expiringSoonCount] = keyScope
+    ? await Promise.all([
+        prisma.apiKey.count({ where: allKeysWhere! }),
+        prisma.apiKey.count({ where: buildKeyInventoryWhere(keyScope, { status: 'ACTIVE' }, now) }),
+        prisma.apiKey.count({
+          where: {
+            AND: [
+              allKeysWhere!,
+              { revokedAt: null, expiresAt: { gt: now, lte: thirtyDaysFromNow } },
+            ],
+          },
+        }),
+      ])
+    : [0, 0, 0];
+
+  let rawKeys: Array<
+    Awaited<
+      ReturnType<typeof prisma.apiKey.findMany<{ include: { user: { select: { email: true } } } }>>
+    >[number]
+  > = [];
+  let nextKeyCursor: string | null = null;
+  let matchingKeys: number | undefined;
+  if (keyScope && activeTab === 'api-keys') {
+    const [rows, matches] = await Promise.all([
+      prisma.apiKey.findMany({
+        where: buildKeyInventoryWhere(keyScope, keyFilters, now),
+        include: { user: { select: { email: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: KEY_INVENTORY_PAGE_SIZE + 1,
+      }),
+      prisma.apiKey.count({
+        where: buildKeyInventoryWhere(keyScope, { ...keyFilters, cursor: undefined }, now),
+      }),
+    ]);
+    matchingKeys = matches;
+    rawKeys = rows.slice(0, KEY_INVENTORY_PAGE_SIZE);
+    nextKeyCursor =
+      rows.length > KEY_INVENTORY_PAGE_SIZE
+        ? encodeInventoryCursor(rawKeys[rawKeys.length - 1])
+        : null;
+  }
 
   const formattedKeys: ApiKey[] = rawKeys.map(key => ({
     id: key.id,
@@ -198,14 +265,14 @@ export default async function ApiKeysSettingsPage({
     expired: !!key.expiresAt && key.expiresAt <= now,
   }));
 
-  const activeKeysCount = formattedKeys.filter(k => !k.revokedAt && !k.expired).length;
-  const expiringSoonCount = rawKeys.filter(
-    k => !k.revokedAt && k.expiresAt && k.expiresAt > now && k.expiresAt <= thirtyDaysFromNow
-  ).length;
-
   // Enforce server-side authorization: never query or serialize administrative records for non-admins
+  const serviceAccountFilters = parseServiceAccountFilters(query);
   let rawServiceAccounts: Awaited<ReturnType<typeof listServiceAccounts>> = [];
   let teams: { id: string; name: string }[] = [];
+  let totalServiceAccounts = 0;
+  let totalMachineTokens = 0;
+  let nextServiceAccountCursor: string | null = null;
+  let matchingServiceAccounts: number | undefined;
   let rawAuditLogs: Array<{
     id: string;
     action: string;
@@ -217,15 +284,46 @@ export default async function ApiKeysSettingsPage({
     details: unknown;
     ip: string | null;
   }> = [];
-
   let nextActivityCursor: string | null = null;
 
   if (isAdmin) {
-    const [saRes, teamsRes, auditRes] = await Promise.all([
-      listServiceAccounts(),
-      prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    // Header counts are cheap aggregates; unexpired, unrevoked tokens only.
+    [totalServiceAccounts, totalMachineTokens] = await Promise.all([
+      prisma.user.count({
+        where: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+      }),
+      prisma.apiKey.count({
+        where: {
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          user: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+        },
+      }),
+    ]);
+
+    if (activeTab === 'service-accounts') {
+      const [accounts, teamsRes, matches] = await Promise.all([
+        listServiceAccounts({
+          where: buildServiceAccountWhere(serviceAccountFilters),
+          take: SERVICE_ACCOUNT_PAGE_SIZE + 1,
+        }),
+        prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+        prisma.user.count({
+          where: buildServiceAccountWhere({ ...serviceAccountFilters, cursor: undefined }),
+        }),
+      ]);
+      matchingServiceAccounts = matches;
+      teams = teamsRes;
+      rawServiceAccounts = accounts.slice(0, SERVICE_ACCOUNT_PAGE_SIZE);
+      nextServiceAccountCursor =
+        accounts.length > SERVICE_ACCOUNT_PAGE_SIZE
+          ? encodeInventoryCursor(rawServiceAccounts[rawServiceAccounts.length - 1])
+          : null;
+    }
+
+    if (activeTab === 'activity') {
       // Filtered, ordered and paginated in the database; one extra row signals another page.
-      prisma.auditLog.findMany({
+      const auditRes = await prisma.auditLog.findMany({
         where: buildApiActivityWhere(activityFilters),
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: API_ACTIVITY_PAGE_SIZE + 1,
@@ -240,18 +338,14 @@ export default async function ApiKeysSettingsPage({
           details: true,
           ip: true,
         },
-      }),
-    ]);
-
-    rawServiceAccounts = saRes;
-    teams = teamsRes;
-
-    const hasMoreActivity = auditRes.length > API_ACTIVITY_PAGE_SIZE;
-    rawAuditLogs = auditRes.slice(0, API_ACTIVITY_PAGE_SIZE);
-    nextActivityCursor =
-      hasMoreActivity && rawAuditLogs.length > 0
-        ? encodeActivityCursor(rawAuditLogs[rawAuditLogs.length - 1])
-        : null;
+      });
+      const hasMoreActivity = auditRes.length > API_ACTIVITY_PAGE_SIZE;
+      rawAuditLogs = auditRes.slice(0, API_ACTIVITY_PAGE_SIZE);
+      nextActivityCursor =
+        hasMoreActivity && rawAuditLogs.length > 0
+          ? encodeActivityCursor(rawAuditLogs[rawAuditLogs.length - 1])
+          : null;
+    }
   }
 
   // Format Service Accounts
@@ -276,22 +370,20 @@ export default async function ApiKeysSettingsPage({
     })),
   }));
 
-  const totalMachineTokens = formattedServiceAccounts.reduce(
-    (sum, sa) => sum + sa.activeTokensCount,
-    0
-  );
-
   // Parse OpenAPI spec into Endpoint documentation with schema-derived sample request bodies & required scopes
+  const endpointCount = V2_OPERATIONS.length;
   const spec = getOpenApiV2Spec() as { paths?: Record<string, Record<string, any>> };
   const endpoints: ApiEndpointDoc[] = [];
-  if (spec?.paths) {
+  // The spec and its sample bodies are only built for the Explorer tab.
+  if (activeTab === 'explorer' && spec?.paths) {
     for (const [pathKey, pathItem] of Object.entries(spec.paths)) {
       for (const method of ['get', 'post', 'patch', 'put', 'delete'] as const) {
         const op = pathItem[method];
         if (op) {
           const verifiedSample = getVerifiedSampleBody(method, pathKey);
           const reqSchema = op.requestBody?.content?.['application/json']?.schema;
-          const sampleBody = verifiedSample ?? (reqSchema ? generateSampleFromSchema(reqSchema) : undefined);
+          const sampleBody =
+            verifiedSample ?? (reqSchema ? generateSampleFromSchema(reqSchema) : undefined);
 
           endpoints.push({
             method: method.toUpperCase() as any,
@@ -350,7 +442,7 @@ export default async function ApiKeysSettingsPage({
               variant="outline"
               className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-xs"
             >
-              {endpoints.length} Endpoints Live
+              {endpointCount} Endpoints Live
             </Badge>
           </>
         }
@@ -365,7 +457,7 @@ export default async function ApiKeysSettingsPage({
                 },
                 {
                   label: 'Service Accounts',
-                  value: `${formattedServiceAccounts.length}`,
+                  value: `${totalServiceAccounts}`,
                   icon: <Bot className="h-3.5 w-3.5" />,
                   subtext: 'Machine identities',
                 },
@@ -377,7 +469,7 @@ export default async function ApiKeysSettingsPage({
                 },
                 {
                   label: 'API v2 Routes',
-                  value: `${endpoints.length}`,
+                  value: `${endpointCount}`,
                   icon: <Terminal className="h-3.5 w-3.5" />,
                   subtext: 'Enterprise endpoints',
                 },
@@ -397,7 +489,7 @@ export default async function ApiKeysSettingsPage({
                 },
                 {
                   label: 'API v2 Routes',
-                  value: `${endpoints.length}`,
+                  value: `${endpointCount}`,
                   icon: <Terminal className="h-3.5 w-3.5" />,
                   subtext: 'Enterprise endpoints',
                 },
@@ -406,23 +498,35 @@ export default async function ApiKeysSettingsPage({
       />
 
       {/* Unified 4-Tab Developer Workspace */}
-      <Tabs defaultValue={activeTab} className="space-y-6">
-        <TabsList className="h-10 bg-muted/70 p-1 border border-border/80 rounded-xl">
-          <TabsTrigger value="api-keys" className="text-xs font-semibold gap-1.5 px-3.5">
-            <Key className="h-3.5 w-3.5" />
-            API Keys ({formattedKeys.length})
+      <Tabs value={activeTab} className="space-y-6">
+        <TabsList className="h-auto max-w-full flex-wrap justify-start bg-muted/70 p-1 border border-border/80 rounded-xl">
+          <TabsTrigger value="api-keys" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
+            <Link href="?tab=api-keys" scroll={false} prefetch={false}>
+              <Key className="h-3.5 w-3.5" />
+              API Keys ({totalKeys})
+            </Link>
           </TabsTrigger>
-          <TabsTrigger value="service-accounts" className="text-xs font-semibold gap-1.5 px-3.5">
-            <Bot className="h-3.5 w-3.5" />
-            Service Accounts {isAdmin ? `(${formattedServiceAccounts.length})` : ''}
+          <TabsTrigger
+            value="service-accounts"
+            className="text-xs font-semibold gap-1.5 px-3.5"
+            asChild
+          >
+            <Link href="?tab=service-accounts" scroll={false} prefetch={false}>
+              <Bot className="h-3.5 w-3.5" />
+              Service Accounts {isAdmin ? `(${totalServiceAccounts})` : ''}
+            </Link>
           </TabsTrigger>
-          <TabsTrigger value="explorer" className="text-xs font-semibold gap-1.5 px-3.5">
-            <Code2 className="h-3.5 w-3.5" />
-            API Explorer ({endpoints.length})
+          <TabsTrigger value="explorer" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
+            <Link href="?tab=explorer" scroll={false} prefetch={false}>
+              <Code2 className="h-3.5 w-3.5" />
+              API Explorer ({endpointCount})
+            </Link>
           </TabsTrigger>
-          <TabsTrigger value="activity" className="text-xs font-semibold gap-1.5 px-3.5">
-            <Activity className="h-3.5 w-3.5" />
-            API Activity
+          <TabsTrigger value="activity" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
+            <Link href="?tab=activity" scroll={false} prefetch={false}>
+              <Activity className="h-3.5 w-3.5" />
+              API Activity
+            </Link>
           </TabsTrigger>
         </TabsList>
 
@@ -430,6 +534,13 @@ export default async function ApiKeysSettingsPage({
         <TabsContent value="api-keys" className="space-y-4">
           <ApiKeysPanel
             keys={formattedKeys}
+            inventory={{
+              q: keyFilters.q ?? '',
+              status: keyFilters.status,
+              hasCursor: Boolean(keyFilters.cursor),
+              nextCursor: nextKeyCursor,
+              total: matchingKeys,
+            }}
             canCreateWriteKeys={
               user ? hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE) : false
             }
@@ -446,6 +557,13 @@ export default async function ApiKeysSettingsPage({
               serviceAccounts={formattedServiceAccounts}
               availableTeams={teams}
               isAdmin={isAdmin}
+              inventory={{
+                q: serviceAccountFilters.q ?? '',
+                role: serviceAccountFilters.role,
+                hasCursor: Boolean(serviceAccountFilters.cursor),
+                nextCursor: nextServiceAccountCursor,
+                total: matchingServiceAccounts,
+              }}
             />
           ) : (
             <Card className="border-border/80 shadow-xs">
@@ -455,16 +573,20 @@ export default async function ApiKeysSettingsPage({
                     <ShieldAlert className="h-5 w-5" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-bold">Administrator Access Required</CardTitle>
+                    <CardTitle className="text-sm font-bold">
+                      Administrator Access Required
+                    </CardTitle>
                     <CardDescription className="text-xs">
-                      Service accounts and machine credentials can only be managed by workspace administrators.
+                      Service accounts and machine credentials can only be managed by workspace
+                      administrators.
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-5">
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  To provision automated machine identities or CI/CD tokens for Kubernetes, Terraform, or GitHub Actions, contact your OpsKnight workspace administrator.
+                  To provision automated machine identities or CI/CD tokens for Kubernetes,
+                  Terraform, or GitHub Actions, contact your OpsKnight workspace administrator.
                 </p>
               </CardContent>
             </Card>
@@ -500,16 +622,21 @@ export default async function ApiKeysSettingsPage({
                     <ShieldAlert className="h-5 w-5" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-bold">Administrator Access Required</CardTitle>
+                    <CardTitle className="text-sm font-bold">
+                      Administrator Access Required
+                    </CardTitle>
                     <CardDescription className="text-xs">
-                      Organization-wide API activity and gateway audit logs are restricted to administrators.
+                      Organization-wide API activity and gateway audit logs are restricted to
+                      administrators.
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-5">
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Audit log streaming contains security-sensitive access metadata across all teams and services. Contact your workspace administrator to request audit trail extracts.
+                  Audit log streaming contains security-sensitive access metadata across all teams
+                  and services. Contact your workspace administrator to request audit trail
+                  extracts.
                 </p>
               </CardContent>
             </Card>

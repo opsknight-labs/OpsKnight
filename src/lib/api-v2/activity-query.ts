@@ -72,6 +72,9 @@ export function buildApiActivityWhere(filters: ApiActivityFilters): Prisma.Audit
       OR: [
         { action: { startsWith: 'api_key.' } },
         { action: { startsWith: 'service_account' } },
+        // emitAuditEvent stores caller details under `details.metadata`; the flat path covers
+        // rows written before that envelope existed.
+        { details: { path: ['metadata', 'apiGateway'], equals: 'api_v2' } },
         { details: { path: ['apiGateway'], equals: 'api_v2' } },
       ],
     },
@@ -89,7 +92,14 @@ export function buildApiActivityWhere(filters: ApiActivityFilters): Prisma.Audit
       ],
     });
   }
-  if (filters.apiKeyId) and.push({ details: { path: ['apiKeyId'], equals: filters.apiKeyId } });
+  if (filters.apiKeyId) {
+    and.push({
+      OR: [
+        { details: { path: ['metadata', 'apiClientId'], equals: filters.apiKeyId } },
+        { details: { path: ['apiClientId'], equals: filters.apiKeyId } },
+      ],
+    });
+  }
   if (filters.from || filters.to) {
     and.push({
       createdAt: {

@@ -14,6 +14,8 @@ import { sanitizeContext, sanitizeString } from '@/lib/logger';
 // carry no secret material.
 const SAFE_KEYS = new Set([
   'apiKeyId',
+  'apiClientId',
+  'label',
   'keyId',
   'tokenId',
   'tokenName',

@@ -13,13 +13,21 @@ import { V2_OPERATIONS } from './openapi-registry';
  * point they are decided. All label values come from fixed vocabularies.
  */
 
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+}
+
 const matchers = [...V2_OPERATIONS]
   .map(definition => ({
     method: definition.method.toUpperCase(),
     operationId: definition.operationId,
     params: (definition.path.match(/\{/g) ?? []).length,
     pattern: new RegExp(
-      '^/api/v2' + definition.path.replace(/\{\w+\}/g, '[^/]+').replace(/\//g, '\\/') + '/?$'
+      '^/api/v2' +
+        // Escape every regex metacharacter (including backslash and `.`) in the literal
+        // segments, then substitute each {param} with a single-segment wildcard.
+        definition.path.split(/\{\w+\}/).map(escapeRegExp).join('[^/]+') +
+        '/?$'
     ),
   }))
   // Prefer the most literal route when a path could match several templates.

@@ -74,10 +74,15 @@ export function resolveTokenExpiry(
   return new Date(now + input.expiresInDays * 86_400_000);
 }
 
-export async function listServiceAccounts() {
+export async function listServiceAccounts(
+  options: { where?: Prisma.UserWhereInput; take?: number } = {}
+) {
   const users = await prisma.user.findMany({
-    where: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
-    orderBy: { createdAt: 'desc' },
+    where: options.where ?? {
+      email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    ...(options.take ? { take: options.take } : {}),
     select: {
       id: true,
       name: true,
@@ -402,7 +407,7 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
       actorId: input.actorId,
       details: {
         serviceAccountId: input.serviceAccountId,
-        tokenName: created.name,
+        label: created.name,
         prefix: created.prefix,
         scopes: created.scopes,
         expiresAt: created.expiresAt?.toISOString() ?? null,
@@ -446,7 +451,7 @@ export async function revokeServiceAccountToken(
       actorId,
       details: {
         serviceAccountId,
-        tokenName: apiKey.name,
+        label: apiKey.name,
         prefix: apiKey.prefix,
       },
     })

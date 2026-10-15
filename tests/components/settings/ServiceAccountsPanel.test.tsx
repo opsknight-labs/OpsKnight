@@ -126,34 +126,55 @@ describe('ServiceAccountsPanel Component', () => {
     expect(screen.queryByText('New Service Account')).toBeNull();
   });
 
-  it('filters service accounts by search query', () => {
-    render(
+  it('sends search and role to the server as URL params instead of filtering in the browser', () => {
+    const { container } = render(
       <ServiceAccountsPanel
         serviceAccounts={mockAccounts}
         availableTeams={mockTeams}
         isAdmin={true}
+        inventory={{ q: 'Pager', role: 'RESPONDER', hasCursor: false, nextCursor: null }}
       />
     );
-
-    const searchInput = screen.getByPlaceholderText(/search service accounts by name or email/i);
-    fireEvent.change(searchInput, { target: { value: 'Pager' } });
-
+    const form = container.querySelector(
+      'form[aria-label="Filter service accounts"]'
+    ) as HTMLFormElement;
+    expect(form.method).toBe('get');
+    expect((form.querySelector('input[name="tab"]') as HTMLInputElement).value).toBe(
+      'service-accounts'
+    );
+    expect((form.querySelector('input[name="sq"]') as HTMLInputElement).value).toBe('Pager');
+    expect((form.querySelector('select[name="srole"]') as HTMLSelectElement).value).toBe('RESPONDER');
+    // Rows are exactly what the server returned.
     expect(screen.getByText('Pager Monitoring Relay')).toBeDefined();
-    expect(screen.queryByText('CI/CD Automation Bot')).toBeNull();
+    expect(screen.getByText('CI/CD Automation Bot')).toBeDefined();
   });
 
-  it('displays empty state when no accounts match search filter', () => {
+  it('pages with a cursor and keeps the active filters', () => {
     render(
       <ServiceAccountsPanel
         serviceAccounts={mockAccounts}
         availableTeams={mockTeams}
         isAdmin={true}
+        inventory={{ q: 'bot', role: 'ADMIN', hasCursor: true, nextCursor: 'c9', total: 60 }}
       />
     );
+    const href = screen.getByRole('link', { name: /older accounts/i }).getAttribute('href') ?? '';
+    expect(href).toContain('tab=service-accounts');
+    expect(href).toContain('scursor=c9');
+    expect(href).toContain('sq=bot');
+    expect(href).toContain('srole=ADMIN');
+    expect(screen.getByText(/60 accounts match/)).toBeDefined();
+  });
 
-    const searchInput = screen.getByPlaceholderText(/search service accounts by name or email/i);
-    fireEvent.change(searchInput, { target: { value: 'nonexistent-bot' } });
-
+  it('displays a filtered empty state with a reset link', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={[]}
+        availableTeams={mockTeams}
+        isAdmin={true}
+        inventory={{ q: 'nonexistent-bot', role: 'ALL', hasCursor: false, nextCursor: null }}
+      />
+    );
     expect(screen.getByText(/no matching service accounts/i)).toBeDefined();
   });
 

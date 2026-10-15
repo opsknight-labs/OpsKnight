@@ -1,6 +1,6 @@
 import { AppError } from '@/lib/errors';
 import { checkRateLimit, incrementSharedCounter } from '@/lib/rate-limit';
-import { rateLimitMemoryCache } from './cache';
+import { rateLimitMemoryCache, verifiedCredentialHints } from './cache';
 import { recordRateLimitDecision } from './observability';
 
 export type V2OperationClass = 'READ' | 'WRITE' | 'SEARCH_EXPORT';
@@ -128,6 +128,14 @@ export const UNIDENTIFIED_QUEUE_WAIT_MS = envInt('API_V2_UNIDENTIFIED_AUTH_QUEUE
  * can cause without deciding anything about the credential they present.
  */
 export const OVER_BUDGET_IP_CONCURRENCY = envInt('API_V2_OVER_BUDGET_IP_CONCURRENCY', 4);
+/**
+ * Priority lane for credentials that recently verified (see verifiedCredentialHints). They are
+ * still authenticated against the database on every request and still bound by the
+ * per-credential rate limit; the lane only keeps them from queueing behind a flood of
+ * unknown tokens. An attacker cannot place a random token here, only a credential that is
+ * actually valid.
+ */
+export const PRIORITY_VERIFICATION_CONCURRENCY = envInt('API_V2_PRIORITY_AUTH_CONCURRENCY', 64);
 export const LEGACY_SCRYPT_CONCURRENCY = envInt('API_V2_LEGACY_SCRYPT_CONCURRENCY', 2);
 export const LEGACY_UNIDENTIFIED_LIMIT = envInt('API_V2_LEGACY_UNIDENTIFIED_LIMIT', 30);
 
@@ -207,10 +215,15 @@ class ConcurrencyLane {
 }
 
 declare global {
+  var __v2PriorityLane: ConcurrencyLane | undefined;
   var __v2UnidentifiedLane: ConcurrencyLane | undefined;
   var __v2LegacyScryptLane: ConcurrencyLane | undefined;
 }
 
+const priorityLane = (globalThis.__v2PriorityLane ??= new ConcurrencyLane(
+  () => PRIORITY_VERIFICATION_CONCURRENCY,
+  256
+));
 const unidentifiedLane = (globalThis.__v2UnidentifiedLane ??= new ConcurrencyLane(
   () => UNIDENTIFIED_VERIFICATION_CONCURRENCY,
   64
@@ -233,6 +246,31 @@ export async function acquireVerificationSlot(clientIp: string): Promise<() => v
       'Too many concurrent authentication attempts. Please retry shortly.',
       1,
       UNIDENTIFIED_VERIFICATION_CONCURRENCY
+    );
+  }
+  return release;
+}
+
+export function hasVerifiedCredentialHint(tokenHash: string): boolean {
+  return verifiedCredentialHints.get(tokenHash) === true;
+}
+
+export function rememberVerifiedCredential(tokenHash: string): void {
+  verifiedCredentialHints.set(tokenHash, true);
+}
+
+export function forgetVerifiedCredential(tokenHash: string): void {
+  verifiedCredentialHints.delete(tokenHash);
+}
+
+/** Admission for a request carrying a recently verified credential. */
+export async function acquirePriorityVerificationSlot(): Promise<() => void> {
+  const release = await priorityLane.acquire(UNIDENTIFIED_QUEUE_WAIT_MS);
+  if (!release) {
+    throw overloaded(
+      'Too many concurrent authentication attempts. Please retry shortly.',
+      1,
+      PRIORITY_VERIFICATION_CONCURRENCY
     );
   }
   return release;

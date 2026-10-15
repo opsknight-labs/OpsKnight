@@ -15,7 +15,9 @@ export async function logV2Audit(params: {
   const auditDetails: Record<string, unknown> = {
     ...(params.details ?? {}),
     apiGateway: 'api_v2',
-    apiKeyId: params.apiKeyId ?? null,
+    // Not named `apiKeyId`: the audit writer redacts any key matching /key/, which would
+    // replace the very identifier that attributes the change to a credential.
+    apiClientId: params.apiKeyId ?? null,
   };
 
   try {

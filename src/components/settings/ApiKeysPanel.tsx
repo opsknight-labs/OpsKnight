@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState, useState, useMemo, useEffect } from 'react';
+import { useActionState, useState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createApiKey, revokeApiKey } from '@/app/(app)/settings/actions';
 import { Button } from '@/components/ui/shadcn/button';
@@ -31,13 +32,6 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/shadcn/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import {
@@ -52,15 +46,13 @@ import {
 } from '@/components/ui/shadcn/alert-dialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
-import CopyButton from './CopyButton';
+import OneTimeSecretBanner from './OneTimeSecretBanner';
 import {
   Key,
-  CheckCircle2,
   XCircle,
   Loader2,
   Terminal,
   Plus,
-  X,
   Code2,
   Clock,
   ShieldAlert,
@@ -145,18 +137,38 @@ const SCOPES_CONFIG = ALL_API_SCOPE_DEFINITIONS.filter(
   write: definition.write,
 }));
 
+function keysHref(
+  inventory: { q: string; status: string },
+  cursor?: string | null
+): string {
+  const params = new URLSearchParams({ tab: 'api-keys' });
+  if (inventory.q) params.set('kq', inventory.q);
+  if (inventory.status !== 'ALL') params.set('kstatus', inventory.status);
+  if (cursor) params.set('kcursor', cursor);
+  return `?${params.toString()}`;
+}
+
 export default function ApiKeysPanel({
   keys,
   canCreateWriteKeys,
   isAdmin = false,
   role,
   appUrl,
+  inventory = { q: '', status: 'ALL', hasCursor: false, nextCursor: null, total: undefined },
 }: {
   keys: ApiKey[];
   canCreateWriteKeys: boolean;
   isAdmin?: boolean;
   /** The viewer's role; decides which scopes may be issued. Derived from the flags when omitted. */
   role?: string;
+  /** Server-side inventory state: filters live in the URL and paging runs in the database. */
+  inventory?: {
+    q: string;
+    status: string;
+    hasCursor: boolean;
+    nextCursor: string | null;
+    total?: number;
+  };
   appUrl?: string;
 }) {
   const [state, formAction] = useActionState<State, FormData>(createApiKey, {
@@ -170,12 +182,17 @@ export default function ApiKeysPanel({
   const [revokeKeyId, setRevokeKeyId] = useState<string | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED' | 'EXPIRED'>('ALL');
+
+  // The secret is held in local state so dismissing the banner removes it from the page,
+  // including from the code samples below.
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
 
   useEffect(() => {
     if (state?.success) {
       setCreateDialogOpen(false);
+    }
+    if (state?.token) {
+      setRevealedSecret(state.token);
     }
   }, [state?.success, state?.token]);
 
@@ -237,103 +254,69 @@ export default function ApiKeysPanel({
     }
   };
 
-  // Filtered keys
-  const filteredKeys = useMemo(() => {
-    return keys.filter(key => {
-      const isRevoked = Boolean(key.revokedAt);
-      const isExpired = Boolean(key.expired);
-      const isActive = !isRevoked && !isExpired;
-
-      const matchesSearch =
-        searchQuery === '' ||
-        key.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        key.prefix.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (key.ownerEmail && key.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' && isActive) ||
-        (statusFilter === 'REVOKED' && isRevoked) ||
-        (statusFilter === 'EXPIRED' && isExpired);
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [keys, searchQuery, statusFilter]);
+  // Rows arrive already filtered and paged by the server (see lib/api-key-inventory).
+  const filteredKeys = keys;
+  const isFiltered = Boolean(inventory.q) || inventory.status !== 'ALL';
 
   const baseUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://api.opsknight.com';
 
   return (
     <div className="space-y-6">
       {/* 1. Reveal Token Banner / Modal if just created */}
-      {state?.token && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 space-y-4 shadow-sm animate-in fade-in-0 duration-200">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <span>API Key Generated Successfully</span>
-            </div>
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Secret Token
-            </Badge>
-          </div>
-
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Please copy this key now and store it in a secure password manager or CI/CD secret
-            vault. For security reasons,{' '}
-            <strong className="text-foreground">
-              you will not be able to view this token again
-            </strong>
-            .
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-emerald-500/25 bg-background p-2.5 shadow-2xs">
-            <code className="flex-1 text-xs font-mono font-bold text-foreground break-all px-2 select-all">
-              {state.token}
-            </code>
-            <CopyButton text={state.token} />
-          </div>
-        </div>
+      {revealedSecret && (
+        <OneTimeSecretBanner
+          title="API Key Generated Successfully"
+          badge="Secret Token"
+          secret={revealedSecret}
+          onDismiss={() => setRevealedSecret(null)}
+          description={
+            <>
+              Copy this key now and store it in a password manager or CI/CD secret vault. For
+              security reasons,{' '}
+              <strong className="text-foreground">you will not be able to view this token again</strong>.
+            </>
+          }
+        />
       )}
 
       {/* 2. Action and Filter Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
-          {/* Search Bar */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by name, prefix, or owner..."
-              className="h-9 text-xs bg-background"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={v => setStatusFilter(v as typeof statusFilter)}
+          <form
+            method="get"
+            aria-label="Filter API keys"
+            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1"
           >
-            <SelectTrigger className="h-9 text-xs w-[140px] bg-background">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Statuses</SelectItem>
-              <SelectItem value="ACTIVE">Active Only</SelectItem>
-              <SelectItem value="REVOKED">Revoked</SelectItem>
-              <SelectItem value="EXPIRED">Expired</SelectItem>
-            </SelectContent>
-          </Select>
+            <input type="hidden" name="tab" value="api-keys" />
+            <div className="relative flex-1 min-w-[200px]">
+              <Input
+                name="kq"
+                defaultValue={inventory.q}
+                aria-label="Search keys"
+                placeholder="Search by name, prefix, or owner..."
+                className="h-9 text-xs bg-background"
+              />
+            </div>
+            <select
+              name="kstatus"
+              defaultValue={inventory.status}
+              aria-label="Key status"
+              className="h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[140px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="ALL">All statuses</option>
+              <option value="ACTIVE">Active only</option>
+              <option value="REVOKED">Revoked</option>
+              <option value="EXPIRED">Expired</option>
+            </select>
+            <Button type="submit" variant="outline" size="sm" className="h-9">
+              Apply
+            </Button>
+            {(isFiltered || inventory.hasCursor) && (
+              <Button asChild variant="ghost" size="sm" className="h-9">
+                <Link href="?tab=api-keys">Reset</Link>
+              </Button>
+            )}
+          </form>
         </div>
 
         <Button
@@ -350,27 +333,16 @@ export default function ApiKeysPanel({
       {filteredKeys.length === 0 ? (
         <EmptyState
           icon={Key}
-          title={
-            searchQuery || statusFilter !== 'ALL'
-              ? 'No matching API keys'
-              : 'No API keys configured'
-          }
+          title={isFiltered ? 'No matching API keys' : 'No API keys configured'}
           description={
-            searchQuery || statusFilter !== 'ALL'
+            isFiltered
               ? 'Try adjusting your search terms or status filters.'
               : 'Generate your first API key above to enable webhook alert ingestion, CI/CD automation, and incident management.'
           }
           action={
-            searchQuery || statusFilter !== 'ALL' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('ALL');
-                }}
-              >
-                Reset Filters
+            isFiltered ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="?tab=api-keys">Reset filters</Link>
               </Button>
             ) : (
               <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5">
@@ -387,7 +359,10 @@ export default function ApiKeysPanel({
               <div>
                 <CardTitle className="text-sm font-bold">Configured API Keys</CardTitle>
                 <CardDescription className="text-xs">
-                  {filteredKeys.length} {filteredKeys.length === 1 ? 'key' : 'keys'} in view
+                  {inventory.total !== undefined
+                    ? `${inventory.total} ${inventory.total === 1 ? 'key' : 'keys'} match`
+                    : `${filteredKeys.length} ${filteredKeys.length === 1 ? 'key' : 'keys'}`}
+                  {' · '}showing {filteredKeys.length}
                 </CardDescription>
               </div>
             </div>
@@ -503,6 +478,20 @@ export default function ApiKeysPanel({
               </Table>
             </div>
           </CardContent>
+          {(inventory.hasCursor || inventory.nextCursor) && (
+            <div className="flex items-center justify-end gap-2 border-t border-border/60 px-4 py-3">
+              {inventory.hasCursor && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={keysHref(inventory)}>Newest</Link>
+                </Button>
+              )}
+              {inventory.nextCursor && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={keysHref(inventory, inventory.nextCursor)}>Older keys</Link>
+                </Button>
+              )}
+            </div>
+          )}
         </Card>
       )}
 
@@ -564,7 +553,7 @@ export default function ApiKeysPanel({
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
                     {`curl -X POST ${baseUrl}/api/events \\
-  -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}" \\
+  -H "Authorization: Bearer ${revealedSecret || 'ok_live_your_api_key'}" \\
   -H "Content-Type: application/json" \\
   -d '{
     "event_action": "trigger",
@@ -590,7 +579,7 @@ export default function ApiKeysPanel({
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
                     {`curl -X GET "${baseUrl}/api/incidents?status=OPEN&limit=25" \\
-  -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}"`}
+  -H "Authorization: Bearer ${revealedSecret || 'ok_live_your_api_key'}"`}
                   </pre>
                 </div>
               </div>
@@ -607,7 +596,7 @@ export default function ApiKeysPanel({
                     {`const response = await fetch('${baseUrl}/api/events', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
+    'Authorization': 'Bearer ${revealedSecret || 'ok_live_your_api_key'}',
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
@@ -639,7 +628,7 @@ console.log(result);`}
                   <pre className="leading-relaxed">
                     {`const response = await fetch('${baseUrl}/api/incidents?status=OPEN&limit=25', {
   headers: {
-    'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
+    'Authorization': 'Bearer ${revealedSecret || 'ok_live_your_api_key'}',
   },
 });
 
@@ -663,7 +652,7 @@ console.log(data.incidents);`}
 response = requests.post(
     "${baseUrl}/api/events",
     headers={
-        "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
+        "Authorization": "Bearer ${revealedSecret || 'ok_live_your_api_key'}",
         "Content-Type": "application/json",
     },
     json={
@@ -697,7 +686,7 @@ print(response.json())`}
 response = requests.get(
     "${baseUrl}/api/incidents",
     headers={
-        "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
+        "Authorization": "Bearer ${revealedSecret || 'ok_live_your_api_key'}",
     },
     params={
         "status": "OPEN",

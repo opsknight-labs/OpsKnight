@@ -69,5 +69,18 @@ declare global {
   var __v2RateLimitCache: MemoryLruCache<number> | undefined;
 }
 
+declare global {
+  var __v2VerifiedCredentialHints: MemoryLruCache<true> | undefined;
+}
+
+/**
+ * Hash-only hints of credentials that verified successfully on this replica recently.
+ * A hint is never an authorization decision: a hinted request is still checked against the
+ * database every time. It only chooses the admission lane (see rate-limit.ts), so a valid
+ * client keeps working while an unrelated client floods invalid tokens from the same address.
+ */
+export const verifiedCredentialHints = (globalThis.__v2VerifiedCredentialHints ??=
+  new MemoryLruCache<true>(10_000, 10 * 60_000));
+
 export const authCache = (globalThis.__v2AuthCache ??= new MemoryLruCache(5000, 60_000));
 export const rateLimitMemoryCache = (globalThis.__v2RateLimitCache ??= new MemoryLruCache(10_000, 60_000));

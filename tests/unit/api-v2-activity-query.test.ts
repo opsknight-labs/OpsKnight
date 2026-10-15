@@ -12,6 +12,7 @@ describe('API activity query', () => {
       OR: [
         { action: { startsWith: 'api_key.' } },
         { action: { startsWith: 'service_account' } },
+        { details: { path: ['metadata', 'apiGateway'], equals: 'api_v2' } },
         { details: { path: ['apiGateway'], equals: 'api_v2' } },
       ],
     });
@@ -53,7 +54,12 @@ describe('API activity query', () => {
     const where = buildApiActivityWhere(
       parseApiActivityFilters({ actor: 'sa', key: 'key_2', from: '2026-10-01', to: '2026-10-02' })
     ) as { AND: Array<Record<string, unknown>> };
-    expect(where.AND).toContainEqual({ details: { path: ['apiKeyId'], equals: 'key_2' } });
+    expect(where.AND).toContainEqual({
+      OR: [
+        { details: { path: ['metadata', 'apiClientId'], equals: 'key_2' } },
+        { details: { path: ['apiClientId'], equals: 'key_2' } },
+      ],
+    });
     expect(where.AND).toContainEqual({
       createdAt: {
         gte: new Date('2026-10-01T00:00:00.000Z'),

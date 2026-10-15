@@ -423,3 +423,98 @@ describe('API v2 Pre-Authentication Legacy Token DoS Protection', () => {
     });
   });
 });
+
+describe('priority admission for recently verified credentials', () => {
+  const ip = '198.51.100.200';
+  const validToken = `ok_live_${'p'.repeat(30)}`;
+  const record = () =>
+    ({
+      id: 'key_prio',
+      name: 'prio',
+      prefix: validToken.slice(0, 12),
+      tokenHash: hashTokenV2(validToken),
+      scopes: ['incidents:read'],
+      userId: 'usr_prio',
+      lastUsedAt: new Date(),
+      user: {
+        id: 'usr_prio',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        department: null,
+        jobTitle: null,
+        email: 'prio@opsknight.local',
+        teamMemberships: [],
+      },
+    }) as any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.rateLimit.upsert).mockReset();
+    authCache.clear();
+    rateLimitMemoryCache.clear();
+  });
+
+  async function flushOverBudget() {
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+    for (let i = 0; i < 61; i++) {
+      await authenticateV2Request(request(`ok_live_burn_${i}_${'b'.repeat(24)}`, ip)).catch(
+        () => undefined
+      );
+    }
+  }
+
+  it('keeps a verified credential working while the address floods with the allowance saturated', async () => {
+    const { verifiedCredentialHints } = await import('@/lib/api-v2/cache');
+    verifiedCredentialHints.clear();
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValueOnce(record());
+    await authenticateV2Request(request(validToken, ip)); // becomes a known-good hint
+
+    await flushOverBudget();
+    const { OVER_BUDGET_IP_CONCURRENCY: max } = await import('@/lib/api-v2/rate-limit');
+
+    // Saturate the over-budget allowance with in-flight unknown-token lookups.
+    const gates: Array<() => void> = [];
+    vi.mocked(prisma.apiKey.findFirst).mockImplementation(
+      () => new Promise(resolve => gates.push(() => resolve(null))) as any
+    );
+    const flood = Array.from({ length: max }, (_, i) =>
+      authenticateV2Request(request(`ok_live_flood_${i}_${'f'.repeat(24)}`, ip)).catch(e => e)
+    );
+    await vi.waitFor(() => expect(gates.length).toBe(max));
+    const shed = await authenticateV2Request(
+      request(`ok_live_unknown_${'u'.repeat(24)}`, ip)
+    ).catch(e => e);
+    expect(shed).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED' });
+
+    // The hinted credential is not queued behind the flood.
+    vi.mocked(prisma.apiKey.findFirst).mockImplementation((async () => record()) as any);
+    const context = await authenticateV2Request(request(validToken, ip));
+    expect(context.apiKey.id).toBe('key_prio');
+
+    gates.forEach(release => release());
+    await Promise.all(flood);
+  });
+
+  it('still consults the database for a hinted credential, so revocation is immediate', async () => {
+    const { verifiedCredentialHints } = await import('@/lib/api-v2/cache');
+    verifiedCredentialHints.clear();
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValueOnce(record());
+    await authenticateV2Request(request(validToken, ip));
+    expect(verifiedCredentialHints.get(hashTokenV2(validToken))).toBe(true);
+
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null); // revoked
+    await expect(authenticateV2Request(request(validToken, ip))).rejects.toMatchObject({
+      code: 'API_KEY_INVALID',
+    });
+    // The hint is dropped, so the revoked token gets no priority afterwards.
+    expect(verifiedCredentialHints.get(hashTokenV2(validToken))).toBeUndefined();
+  });
+
+  it('never grants the priority lane to an unknown token', async () => {
+    const { verifiedCredentialHints } = await import('@/lib/api-v2/cache');
+    verifiedCredentialHints.clear();
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+    await authenticateV2Request(request(`ok_live_nobody_${'n'.repeat(24)}`, ip)).catch(() => undefined);
+    expect(verifiedCredentialHints.size).toBe(0);
+  });
+});

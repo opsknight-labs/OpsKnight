@@ -12,11 +12,15 @@ import { authCache } from './cache';
 import {
   acquireLegacyScryptSlot,
   acquireOverBudgetIpSlot,
+  acquirePriorityVerificationSlot,
   acquireVerificationSlot,
   checkLegacyTokenAdmission,
+  forgetVerifiedCredential,
+  hasVerifiedCredentialHint,
   isFailedAuthAdmissionBlocked,
   legacyAdmissionRetryAfterSeconds,
   recordFailedAuthAttempt,
+  rememberVerifiedCredential,
 } from './rate-limit';
 
 export { hashTokenV2 } from '@/lib/api-keys';
@@ -97,6 +101,26 @@ export async function authenticateV2Request(req: NextRequest): Promise<V2AuthCon
   // concurrency allowance rather than refused, so a valid credential sharing that address
   // (a corporate NAT) keeps working while the abuse stays bounded. Unidentified clients get
   // their own bounded lane.
+  //
+  // A credential that verified recently on this replica is admitted through a priority lane
+  // instead. That is a hint only: the database still decides on every request, so revocation
+  // stays immediate, and an unknown token can never use the lane.
+  const hinted = hasVerifiedCredentialHint(v2Hash);
+  if (hinted) {
+    let releasePriority = () => {};
+    try {
+      try {
+        releasePriority = await acquirePriorityVerificationSlot();
+      } catch (error) {
+        recordAuthFailure('verification_busy');
+        throw error;
+      }
+      return await verifyTokenAgainstDatabase(token, v2Hash, clientIp, negativeCacheKey);
+    } finally {
+      releasePriority();
+    }
+  }
+
   const overBudget = await isFailedAuthAdmissionBlocked(clientIp);
   let releaseIpSlot = () => {};
   if (overBudget) {
@@ -217,6 +241,7 @@ async function verifyTokenAgainstDatabase(
   }
 
   if (!apiKeyRecord || !apiKeyRecord.user) {
+    forgetVerifiedCredential(v2Hash);
     recordAuthFailure('invalid_token');
     authCache.set(negativeCacheKey, true, 30_000);
     await recordFailedAuthAttempt(clientIp);
@@ -229,6 +254,7 @@ async function verifyTokenAgainstDatabase(
   const user = apiKeyRecord.user;
   const actor = authorizationActorFromUser(user);
   if (!actor) {
+    forgetVerifiedCredential(v2Hash);
     recordAuthFailure('inactive_principal');
     authCache.set(negativeCacheKey, true, 30_000);
     await recordFailedAuthAttempt(clientIp);
@@ -259,6 +285,7 @@ async function verifyTokenAgainstDatabase(
     apiKey: apiKeyIdentity,
     actor: fullActor,
   };
+  rememberVerifiedCredential(v2Hash);
 
   // Debounced lastUsedAt update (at most once every 5 minutes in background)
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000);
