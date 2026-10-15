@@ -135,6 +135,34 @@ export function clearRecoveryBudget(): void {
   }
 }
 
+export function purgeCachesAndReload(options: { clearBudget?: boolean } = {}): void {
+  if (options.clearBudget !== false) {
+    clearRecoveryBudget();
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'PURGE_STATIC_CACHES' });
+      }
+      if ('caches' in window) {
+        void window.caches
+          .keys()
+          .then(keys => {
+            return Promise.all(
+              keys
+                .filter(name => /next-static|static-js|pages/i.test(name))
+                .map(name => window.caches.delete(name))
+            );
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // Ignore cache clearing errors during reload
+    }
+    window.location.reload();
+  }
+}
+
 export default function ChunkLoadErrorHandler() {
   const [recoveryRequired, setRecoveryRequired] = useState<{
     reason: string;
@@ -153,7 +181,7 @@ export default function ChunkLoadErrorHandler() {
 
       const allowed = tryConsumeRecoveryBudget(reason);
       if (allowed) {
-        window.location.reload();
+        purgeCachesAndReload({ clearBudget: false });
       } else if (!navigator.webdriver) {
         setRecoveryRequired({ reason });
       }
@@ -256,8 +284,7 @@ export default function ChunkLoadErrorHandler() {
               variant="default"
               className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-medium cursor-pointer"
               onClick={() => {
-                clearRecoveryBudget();
-                window.location.reload();
+                purgeCachesAndReload();
               }}
             >
               <RefreshCw className="h-3.5 w-3.5" />

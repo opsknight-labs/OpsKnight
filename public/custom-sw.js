@@ -678,7 +678,17 @@ self.addEventListener('install', () => {});
 self.addEventListener('activate', event => {
   event.waitUntil(
     (async () => {
-      const dynamicCachePatterns = ['pages', 'pages-rsc', 'pages-rsc-prefetch', 'start-url', 'apis', 'static-data-assets', 'cross-origin'];
+      const dynamicCachePatterns = [
+        'pages',
+        'pages-rsc',
+        'pages-rsc-prefetch',
+        'start-url',
+        'apis',
+        'static-data-assets',
+        'cross-origin',
+        'next-static-assets',
+        'static-js-assets',
+      ];
       try {
         const cacheNames = await caches.keys();
         await Promise.all(
@@ -713,6 +723,23 @@ self.addEventListener('message', event => {
   if (!event.data) return;
   if (event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+  if (event.data.type === 'PURGE_STATIC_CACHES') {
+    event.waitUntil(
+      (async () => {
+        try {
+          const names = await caches.keys();
+          await Promise.all(
+            names
+              .filter(name => /next-static|static-js|pages/i.test(name))
+              .map(name => caches.delete(name))
+          );
+        } catch (error) {
+          console.warn('[Service Worker] Failed to purge static asset caches', error);
+        }
+      })()
+    );
     return;
   }
   if (event.data.type === 'SET_ACTIVE_PRINCIPAL') {

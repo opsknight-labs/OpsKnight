@@ -2,7 +2,8 @@
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ErrorState from './ErrorState';
-import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
+import { getUserFacingErrorMessage, isChunkLoadError } from '@/lib/user-facing-error';
+import { purgeCachesAndReload } from '@/components/ChunkLoadErrorHandler';
 import { logger } from '@/lib/logger';
 
 interface Props {
@@ -18,7 +19,7 @@ interface State {
 
 /**
  * ErrorBoundary component to catch React errors and display fallback UI
- * 
+ *
  * @example
  * <ErrorBoundary fallback={<ErrorState title="Something went wrong" />}>
  *   <YourComponent />
@@ -43,9 +44,10 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
 
     // Handle Event objects and other non-Error types
-    const errorMessage = error && typeof error === 'object' && 'type' in error && 'target' in error
-      ? 'An unexpected error occurred. Please try again.'
-      : String(error) || 'An unexpected error occurred.';
+    const errorMessage =
+      error && typeof error === 'object' && 'type' in error && 'target' in error
+        ? 'An unexpected error occurred. Please try again.'
+        : String(error) || 'An unexpected error occurred.';
 
     return {
       hasError: true,
@@ -55,13 +57,15 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
     // Convert non-Error objects to Error instances for logging
-    const errorObj = error instanceof Error
-      ? error
-      : new Error(String(error) || 'Unknown error');
+    const errorObj = error instanceof Error ? error : new Error(String(error) || 'Unknown error');
 
     // Log error to console in development
     if (process.env.NODE_ENV === 'development') {
-      logger.error('ErrorBoundary caught an error', { component: 'ErrorBoundary', error: errorObj, errorInfo });
+      logger.error('ErrorBoundary caught an error', {
+        component: 'ErrorBoundary',
+        error: errorObj,
+        errorInfo,
+      });
     }
 
     // Call optional error handler (only if it's an Error instance)
@@ -79,12 +83,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
-      const rawMessage = this.state.error?.message?.toLowerCase() || '';
-      const isChunkError =
-        rawMessage.includes('loading chunk') ||
-        rawMessage.includes('chunkloaderror') ||
-        rawMessage.includes('failed to fetch dynamically imported module') ||
-        rawMessage.includes('error loading dynamically imported module');
+      const isChunkError = isChunkLoadError(this.state.error);
 
       return (
         <ErrorState
@@ -99,7 +98,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           retryText={isChunkError ? 'Reload Application' : 'Try Again'}
           onRetry={() => {
             if (isChunkError && typeof window !== 'undefined') {
-              window.location.reload();
+              purgeCachesAndReload();
             } else {
               this.setState({ hasError: false, error: null });
             }
@@ -111,9 +110,3 @@ export default class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
-
-
-
-
-
-

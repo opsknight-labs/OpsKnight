@@ -88,4 +88,33 @@ describe('toUserFacingError', () => {
       fields: undefined,
     });
   });
+
+  it('recognizes ChunkLoadError and provides update recovery guidance', () => {
+    const error = new Error('ChunkLoadError: Loading chunk 92296 failed');
+    error.name = 'ChunkLoadError';
+
+    expect(toUserFacingError(error)).toEqual({
+      title: 'A new version of OpsKnight is available',
+      description:
+        'An application asset failed to load. Please reload the page to load the latest version.',
+      action: 'Reload page',
+      retryable: true,
+    });
+  });
+
+  it('recognizes dynamic import failures and script chunk load failures', () => {
+    expect(
+      toUserFacingError(
+        new Error(
+          'Failed to fetch dynamically imported module: /_next/static/chunks/app/(app)/analytics/page-492eec96906d1756.js'
+        )
+      )
+    ).toEqual({
+      title: 'A new version of OpsKnight is available',
+      description:
+        'An application asset failed to load. Please reload the page to load the latest version.',
+      action: 'Reload page',
+      retryable: true,
+    });
+  });
 });

@@ -23,7 +23,40 @@ const TECHNICAL_ERROR_PATTERNS = [
   /ECONN(?:REFUSED|RESET)/i,
   /stack trace/i,
   /\bat .+\(.+:\d+:\d+\)/,
+  /loading chunk/i,
+  /chunkloaderror/i,
+  /dynamically imported module/i,
 ];
+
+export const CHUNK_LOAD_ERROR_PATTERNS = [
+  /loading chunk/i,
+  /chunkloaderror/i,
+  /failed to fetch dynamically imported module/i,
+  /error loading dynamically imported module/i,
+  /css chunk load failed/i,
+  /loading css chunk/i,
+  /importing a module script failed/i,
+];
+
+export function isChunkLoadError(error: unknown): boolean {
+  if (!error) return false;
+  if (error instanceof Error) {
+    if (error.name === 'ChunkLoadError') return true;
+    if (CHUNK_LOAD_ERROR_PATTERNS.some(p => p.test(error.message))) return true;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { name?: unknown; message?: unknown; error?: unknown };
+    if (typeof candidate.name === 'string' && candidate.name === 'ChunkLoadError') return true;
+    const msg = candidate.message;
+    if (typeof msg === 'string' && CHUNK_LOAD_ERROR_PATTERNS.some(p => p.test(msg))) return true;
+    const err = candidate.error;
+    if (typeof err === 'string' && CHUNK_LOAD_ERROR_PATTERNS.some(p => p.test(err))) return true;
+  }
+  if (typeof error === 'string') {
+    return CHUNK_LOAD_ERROR_PATTERNS.some(p => p.test(error));
+  }
+  return false;
+}
 
 const GENERIC_AUTHORIZATION_CODES = new Set<AppErrorCode>([
   'AUTHORIZATION_DENIED',
@@ -55,10 +88,7 @@ function legacyPublicText(error: unknown): string {
   return '';
 }
 
-function typedUserFacingError(
-  error: unknown,
-  fallback: string
-): UserFacingError | undefined {
+function typedUserFacingError(error: unknown, fallback: string): UserFacingError | undefined {
   const structured = extractStructuredError(error);
   if (!structured?.code) return undefined;
 
@@ -139,6 +169,16 @@ export function toUserFacingError(
   // compatibility display only; they never determine auth/conflict/network/etc.
   const typed = typedUserFacingError(error, fallback);
   if (typed) return typed;
+
+  if (isChunkLoadError(error)) {
+    return {
+      title: 'A new version of OpsKnight is available',
+      description:
+        'An application asset failed to load. Please reload the page to load the latest version.',
+      action: 'Reload page',
+      retryable: true,
+    };
+  }
 
   const message = legacyPublicText(error);
   if (message && !isTechnicalMessage(message)) {
