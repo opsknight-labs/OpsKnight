@@ -3153,4 +3153,105 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       );
     }
   });
+  it.each([true, false])(
+    'honors HTTP parameter contracts without silent input changes (bound: %s)',
+    async bound => {
+      const { runbook, version } = await createPublishedRunbook(
+        {
+          steps: [
+            {
+              key: 'wait',
+              name: 'Wait',
+              type: 'WAIT',
+              riskClass: 'READ_ONLY',
+              config: { durationSeconds: 0 },
+            },
+          ],
+        },
+        [{ key: 'environment', label: 'Environment', type: 'STRING', required: true, sequence: 0 }]
+      );
+      const service = await createTestService('Parameter contract');
+      const actor = await createTestUser({ role: 'RESPONDER' });
+      const binding = bound
+        ? await testPrisma.serviceAutomationRule.create({
+            data: {
+              serviceId: service.id,
+              runbookId: runbook.id,
+              runbookVersionId: version.id,
+              versionStrategy: 'PINNED',
+              mode: 'MANUAL',
+              inputValues: { environment: 'production' },
+            },
+          })
+        : null;
+      const token = `ok_test_${randomUUID().replace(/-/g, '')}`;
+      await testPrisma.apiKey.create({
+        data: {
+          name: 'Parameter HTTP fixture',
+          prefix: token.slice(0, 12),
+          tokenHash: hashTokenV2(token),
+          scopes: ['runbooks:read', 'runbooks:execute'],
+          userId: actor.id,
+        },
+      });
+      const server = createServer(async (req, res) => {
+        try {
+          let body = '';
+          for await (const chunk of req) body += String(chunk);
+          const headers = Object.fromEntries(
+            Object.entries(req.headers).flatMap(([key, value]) =>
+              value ? [[key, Array.isArray(value) ? value.join(', ') : value]] : []
+            )
+          );
+          const response = await executeRunbookV2Route(
+            new NextRequest(
+              `http://127.0.0.1:${(server.address() as AddressInfo).port}${req.url}`,
+              { method: 'POST', headers, body }
+            ),
+            { params: Promise.resolve({ id: runbook.id }) }
+          );
+          res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
+          res.end(await response.text());
+        } catch {
+          res.writeHead(500);
+          res.end('Fixture error');
+        }
+      });
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v2/runbooks/${runbook.id}/execute`;
+      const send = (parameters?: Record<string, unknown>) =>
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${token}`,
+            'idempotency-key': randomUUID(),
+          },
+          body: JSON.stringify({
+            ...(binding ? { bindingId: binding.id } : {}),
+            ...(parameters ? { parameters } : {}),
+          }),
+        });
+      try {
+        // Bound overrides are rejected even when well typed. Unbound inputs must satisfy the published schema.
+        const invalid = await send(bound ? { environment: 'staging' } : { environment: 42 });
+        expect(invalid.status).toBe(400);
+        if (bound)
+          expect((await invalid.json()).detail).toContain('Service rules use their saved inputs');
+        expect(await testPrisma.runbookExecution.count()).toBe(0);
+        const valid = await send(bound ? undefined : { environment: 'staging' });
+        expect(valid.status).toBe(202);
+        const payload = (await valid.json()) as { data: { executionId: string } };
+        const execution = await testPrisma.runbookExecution.findUniqueOrThrow({
+          where: { id: payload.data.executionId },
+        });
+        expect(execution.inputValues).toEqual({ environment: bound ? 'production' : 'staging' });
+        expect(execution.bindingId).toBe(binding?.id ?? null);
+      } finally {
+        await new Promise<void>((resolve, reject) =>
+          server.close(error => (error ? reject(error) : resolve()))
+        );
+      }
+    }
+  );
 });

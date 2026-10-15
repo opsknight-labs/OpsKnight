@@ -188,6 +188,31 @@ See [permissions](./permissions) for the broader authorization model.
 
 Worker health states are HEALTHY, DEGRADED and UNKNOWN. Shared PostgreSQL evidence, rather than the web process's local worker state, establishes dispatch and reconciliation freshness. The scheduler watchdog only reconciles durable work and preserves unknown-write fences.
 
+## Bounded nonce maintenance
+
+Replay nonces are purged independently of execution recovery, using the same
+isolated one-connection maintenance pool as artifact retention. A nonce batch
+selects at most 1,000 expired IDs through the `createdAt` index and uses
+`FOR UPDATE SKIP LOCKED`, its own advisory lock, a one-second statement deadline,
+a 100 ms lock deadline and a 2.5-second transaction deadline. Slow batches skip
+scheduler ticks; they do not overlap or run an unbounded backlog-draining loop.
+Nonce batches run at most once per second; artifact batches retain their
+one-minute cadence. These limits bound work, rather than certify fleet capacity.
+
+Nonce retention covers both sides of the five-minute signature window plus
+one minute of margin. Purging uses the database clock and preserves recent
+nonces, including accepted future-dated requests. Signed requests outside the
+window remain invalid after their stored nonce expires.
+
+Monitor `opsknight_runbook_nonce_purge_rows_total`,
+`opsknight_runbook_nonce_purge_batches_total{result="failed"}`,
+`opsknight_runbook_nonce_purge_duration_seconds` and
+`opsknight_runbook_nonce_purge_oldest_expired_age_seconds`. The age gauge records
+the oldest expired candidate before the last successful batch; skipped or
+failed batches preserve its previous observation. Growing age or failure counts
+need investigation of maintenance throughput and database health. They do not
+mean that valid nonce replay protection has been disabled.
+
 ## Current boundaries
 
 Nested-check builder controls, signing rotation, structured selectors, independent rules and static version comparison are implemented. Version comparisons mask credential fields and list effects on latest-publication rules while pinned rules retain their versions. These features do not certify all deployment topologies or fleet capacity. The measured 10/100/1000 Agent simulation is direct-library idle claim load; it is not authenticated production network capacity or physical recovery proof. Promote only released server/Agent pairs with completed topology evidence.

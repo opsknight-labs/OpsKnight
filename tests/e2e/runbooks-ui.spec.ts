@@ -406,6 +406,15 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.getByRole('combobox', { name: 'Trigger condition field' }).click();
   await page.getByRole('option', { name: 'Incident urgency', exact: true }).click();
   await page.locator('input[name="conditionValue"]').fill('HIGH');
+  const triggerForm = page
+    .getByRole('dialog')
+    .locator('form')
+    .filter({
+      has: page.getByRole('button', { name: 'Save trigger', exact: true }),
+    });
+  const triggerRevision = Number(
+    await triggerForm.locator('[name="expectedConfigurationRevision"]').inputValue()
+  );
   await page.getByRole('button', { name: 'Save trigger', exact: true }).click();
   await expect(
     page
@@ -422,6 +431,37 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await expect
     .poll(async () => prisma.runbookTrigger.count({ where: { bindingId: binding.id } }))
     .toBe(1);
+  // A refreshed revision proves the server tree was applied; feedback must survive it.
+  await expect(triggerForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
+    String(triggerRevision + 1)
+  );
+  await expect(triggerForm.getByRole('status')).toHaveText('Changes saved.');
+  expect(
+    (
+      await prisma.runbookTrigger.findFirstOrThrow({
+        where: { bindingId: binding.id },
+        include: { conditions: true },
+      })
+    ).conditions
+  ).toEqual(expect.arrayContaining([expect.objectContaining({ value: 'HIGH' })]));
+  const configurationForm = page
+    .getByRole('dialog')
+    .locator('form')
+    .filter({
+      has: page.getByRole('button', { name: 'Save binding', exact: true }),
+    });
+  await configurationForm.locator('[name="ruleName"]').fill('Browser verified rule');
+  const configurationRevision = Number(
+    await configurationForm.locator('[name="expectedConfigurationRevision"]').inputValue()
+  );
+  await configurationForm.getByRole('button', { name: 'Save binding', exact: true }).click();
+  await expect(configurationForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
+    String(configurationRevision + 1)
+  );
+  await expect(configurationForm.getByRole('status')).toHaveText('Changes saved.');
+  expect(
+    (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } })).name
+  ).toBe('Browser verified rule');
   await page.keyboard.press('Escape');
   const trigger = await prisma.runbookTrigger.findFirstOrThrow({
     where: { bindingId: binding.id },

@@ -268,7 +268,6 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       },
       body: JSON.stringify({
         incidentId: 'inc_100',
-        parameters: { cluster: 'prod-eu' },
       }),
     });
 
@@ -293,7 +292,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
         bindingId: 'bind_rb1_svcalpha',
         incidentId: 'inc_100',
         triggeredByUserId: 'usr_responder_1',
-        inputValues: { cluster: 'prod-eu' },
+        inputValues: {},
       }),
       expect.anything()
     );
@@ -307,7 +306,7 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
         bindingId: 'bind_rb1_svcalpha',
         incidentId: 'inc_100',
         triggeredByUserId: 'usr_responder_1',
-        inputValues: { cluster: 'prod-eu' },
+        inputValues: {},
         expectedPlanDigest: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
         previewAuthorizationToken: 'token1234567890token1234567890token1234567890token1234567890',
       }),
@@ -398,4 +397,33 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
       }
     }
   );
+  it('rejects bound-rule parameters instead of silently using different saved inputs', async () => {
+    vi.mocked(prisma.runbook.findUnique).mockResolvedValue({
+      id: 'rb_1',
+      name: 'Bound rule',
+      archivedAt: null,
+      publishedVersionId: 'ver_1',
+    } as Runbook);
+    vi.mocked(prisma.serviceAutomationRule.findMany).mockResolvedValue([
+      {
+        id: 'bound_rule',
+        serviceId: 'service_1',
+        enabled: true,
+        versionStrategy: 'PINNED',
+        runbookVersionId: 'ver_1',
+      },
+    ] as ServiceAutomationRule[]);
+    const response = await executeRunbookRoute(
+      new NextRequest('http://localhost:3000/api/v2/runbooks/rb_1/execute', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': 'bound-override' },
+        body: JSON.stringify({ bindingId: 'bound_rule', parameters: { environment: 'staging' } }),
+      }),
+      { params: Promise.resolve({ id: 'rb_1' }) }
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).detail).toContain('Service rules use their saved inputs');
+    expect(previewRunbookExecution).not.toHaveBeenCalled();
+    expect(startRunbookExecution).not.toHaveBeenCalled();
+  });
 });

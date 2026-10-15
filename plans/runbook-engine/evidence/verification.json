@@ -443,5 +443,104 @@
     "deploymentQualification": "PENDING final-head CI. Local Docker daemon unavailable; static rendering and probe unit coverage do not establish a live Swarm pass. Prior-head evidence passed Compose, Helm and Kustomize and failed Swarm.",
     "releaseQualification": "Beta. Physical approved writes, physical HA/failover/partition/disk faults, official public installer distribution, sustained authenticated fleet capacity and human accessibility qualification remain NOT_TESTED.",
     "baseRevision": "e635e31a3"
+  },
+  "freshAuditClosure": {
+    "auditedHead": "19adac7ec7f39f0cf14c07b8540df30acd2b1b54",
+    "verifiedAt": "2026-10-15",
+    "saveFeedback": "Stable ActionForm identities retain feedback while revision-keyed field groups refresh inputs. Browser assertions require persisted trigger conditions/configuration, updated expected revisions and success messages after refresh.",
+    "apiInputContract": "Bound or inferred service rules reject non-empty per-execution parameters with HTTP 400 before preview/start. Saved inputs remain authoritative. Unbound inputs are validated against the published version and frozen into the execution. Real PostgreSQL/TCP HTTP cases cover both paths.",
+    "nonceMaintenance": {
+      "recoveryPath": "Nonce deletion removed from reconciliation",
+      "batchLimit": 1000,
+      "cadenceSeconds": 1,
+      "overlap": "Skipped ticks while a batch is active; no draining loop",
+      "pool": "Shared with artifact maintenance, one isolated connection per scheduler/integrated process",
+      "bounds": "1000ms statement, 100ms lock, 2500ms transaction, 500ms connection wait; createdAt index; SKIP LOCKED; separate advisory lock",
+      "retention": "Both sides of the five-minute request window plus one minute; database UTC clock",
+      "metrics": "Rows, batch outcomes, duration and observed oldest expired age",
+      "proof": "10000 expired nonces; at most 1000 removed. Fresh/future-dated replay rejected concurrently; stale signed requests remain invalid after their record is deleted. Deliberately stalled delete rolls back while new authentication and recovery under a separate deadline succeed."
+    },
+    "swarmRuntime": {
+      "change": "Isolated lifecycle CI job pins Docker Engine 29.9.1 through the commit-pinned official setup action; asserts actual engine version and preserves strict health/rollback/convergence gates",
+      "reason": "Repeated older-daemon secret remount EBUSY failures; upstream moby/moby#52235",
+      "scope": "Ephemeral GitHub lifecycle job; no local/shared Docker daemon changes; runtime success still requires hosted CI"
+    },
+    "localVerification": {
+      "unit": {
+        "passed": 6230,
+        "skipped": 7,
+        "files": 816
+      },
+      "postgresql": {
+        "passed": 117,
+        "files": 7,
+        "additionalNonceProofRun": "2 passed, overlapping"
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS, zero warnings",
+      "productionBuild": "PASS",
+      "browser": {
+        "passed": 36,
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ],
+        "server": "Local production build; dedicated runbook_ui_test PostgreSQL database",
+        "durationMinutes": 11.7
+      },
+      "nodeCIContracts": {
+        "passed": 9
+      },
+      "workflowYaml": "PASS"
+    },
+    "priorHeadLiveFleet": {
+      "head": "19adac7ec",
+      "run": "https://github.com/opsknight-labs/OpsKnight/actions/runs/38773082264",
+      "artifact": "runbook-deployment-candidate-evidence/live-agent-fleet.json",
+      "result": {
+        "measuredAt": "2026-10-15T17:11:22.429Z",
+        "evidence": [
+          {
+            "platform": "compose",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          },
+          {
+            "platform": "swarm",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          },
+          {
+            "platform": "helm",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          },
+          {
+            "platform": "kustomize",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          }
+        ],
+        "limitations": [
+          "Locally built candidate with a test CA",
+          "Single-node disposable Swarm and Kind; physical HA and published distribution remain unqualified"
+        ]
+      }
+    },
+    "hostedCI": "Required checks must pass on the committed candidate head; prior-head passes and local checks are not substituted.",
+    "releaseQualification": "BETA. Physical approved-write/failure/HA tests, public release distribution, sustained authenticated capacity and independent human accessibility/usability qualification remain NOT_TESTED."
   }
 }

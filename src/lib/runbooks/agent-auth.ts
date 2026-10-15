@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { getExecutionSigningKey } from './execution-signing';
 import { RunbookAgentNotFoundError, RunbookAgentRevokedError } from './errors';
 
-const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
+import { AGENT_SIGNATURE_WINDOW_MS as SIGNATURE_WINDOW_MS } from './agent-request-window';
 
 export function sha256(value: string | Buffer): string {
   return crypto.createHash('sha256').update(value).digest('hex');

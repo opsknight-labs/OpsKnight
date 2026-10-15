@@ -871,78 +871,80 @@ export default function ServiceRunbooks({
                             </div>
                           )}
                           <ActionForm
-                            key={`configuration-${binding.id}-${binding.configurationRevision}`}
+                            key={`configuration-${binding.id}`}
                             action={updateRunbookBindingAction.bind(null, serviceId, binding.id)}
                             className="grid gap-3 lg:grid-cols-4"
                           >
-                            <input
-                              type="hidden"
-                              name="expectedConfigurationRevision"
-                              value={binding.configurationRevision}
-                            />
-                            <RunbookBindingVersionInputs
-                              initialMode={binding.mode}
-                              runbookId={binding.runbookId}
-                              versions={[
-                                ...new Map(
-                                  [
-                                    ...(availableRunbooks
-                                      .find(item => item.id === binding.runbookId)
-                                      ?.versions.map(version => ({
-                                        ...version,
-                                        inputs: version.inputs ?? [],
-                                      })) ?? []),
-                                    ...(binding.runbookVersion ? [binding.runbookVersion] : []),
-                                    ...(binding.runbook.publishedVersion
-                                      ? [binding.runbook.publishedVersion]
-                                      : []),
-                                  ].map(version => [version.id, version])
-                                ).values(),
-                              ].map(version => ({
-                                ...version,
-                                hasAgentWrite: hasAgentWrites(version.definition),
-                              }))}
-                              publishedVersionId={binding.runbook.publishedVersionId ?? ''}
-                              initialStrategy={binding.versionStrategy}
-                              initialVersionId={binding.runbookVersionId}
-                              values={binding.inputValues as Record<string, unknown>}
-                              targets={{
-                                agents: availableAgents,
-                                pools: availableAgentPools,
-                                defaultValue: binding.defaultAgentId
-                                  ? `agent:${binding.defaultAgentId}`
-                                  : binding.defaultAgentPoolId
-                                    ? `pool:${binding.defaultAgentPoolId}`
-                                    : 'none',
-                              }}
-                            />
-                            <RunbookSelectorBuilder initialValue={binding.agentSelector} />
-                            <AutomaticTargetGuard />
-                            <Field label="Rule name">
-                              <Input
-                                name="ruleName"
-                                defaultValue={binding.name ?? ''}
-                                maxLength={200}
+                            <div key={binding.configurationRevision} className="contents">
+                              <input
+                                type="hidden"
+                                name="expectedConfigurationRevision"
+                                value={binding.configurationRevision}
                               />
-                            </Field>
-                            <Field label="Status">
-                              <FormSelect
-                                name="enabled"
-                                label="Binding status"
-                                defaultValue={String(binding.enabled)}
-                                options={[
-                                  { value: 'true', label: 'Enabled' },
-                                  { value: 'false', label: 'Disabled' },
-                                ]}
+                              <RunbookBindingVersionInputs
+                                initialMode={binding.mode}
+                                runbookId={binding.runbookId}
+                                versions={[
+                                  ...new Map(
+                                    [
+                                      ...(availableRunbooks
+                                        .find(item => item.id === binding.runbookId)
+                                        ?.versions.map(version => ({
+                                          ...version,
+                                          inputs: version.inputs ?? [],
+                                        })) ?? []),
+                                      ...(binding.runbookVersion ? [binding.runbookVersion] : []),
+                                      ...(binding.runbook.publishedVersion
+                                        ? [binding.runbook.publishedVersion]
+                                        : []),
+                                    ].map(version => [version.id, version])
+                                  ).values(),
+                                ].map(version => ({
+                                  ...version,
+                                  hasAgentWrite: hasAgentWrites(version.definition),
+                                }))}
+                                publishedVersionId={binding.runbook.publishedVersionId ?? ''}
+                                initialStrategy={binding.versionStrategy}
+                                initialVersionId={binding.runbookVersionId}
+                                values={binding.inputValues as Record<string, unknown>}
+                                targets={{
+                                  agents: availableAgents,
+                                  pools: availableAgentPools,
+                                  defaultValue: binding.defaultAgentId
+                                    ? `agent:${binding.defaultAgentId}`
+                                    : binding.defaultAgentPoolId
+                                      ? `pool:${binding.defaultAgentPoolId}`
+                                      : 'none',
+                                }}
                               />
-                            </Field>
-                            <div className="order-2 flex gap-2 lg:col-span-4">
-                              <SubmitButton variant="outline">
-                                <Settings2 className="mr-1.5 h-3.5 w-3.5" />{' '}
-                                {binding.mode === 'AUTOMATIC'
-                                  ? 'Save and pause Automatic rule'
-                                  : 'Save binding'}
-                              </SubmitButton>
+                              <RunbookSelectorBuilder initialValue={binding.agentSelector} />
+                              <AutomaticTargetGuard />
+                              <Field label="Rule name">
+                                <Input
+                                  name="ruleName"
+                                  defaultValue={binding.name ?? ''}
+                                  maxLength={200}
+                                />
+                              </Field>
+                              <Field label="Status">
+                                <FormSelect
+                                  name="enabled"
+                                  label="Binding status"
+                                  defaultValue={String(binding.enabled)}
+                                  options={[
+                                    { value: 'true', label: 'Enabled' },
+                                    { value: 'false', label: 'Disabled' },
+                                  ]}
+                                />
+                              </Field>
+                              <div className="order-2 flex gap-2 lg:col-span-4">
+                                <SubmitButton variant="outline">
+                                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                  {binding.mode === 'AUTOMATIC'
+                                    ? 'Save and pause Automatic rule'
+                                    : 'Save binding'}
+                                </SubmitButton>
+                              </div>
                             </div>
                           </ActionForm>
                           <ConfirmAction
@@ -952,57 +954,61 @@ export default function ServiceRunbooks({
                             label="Detach Runbook"
                           />
                           <ActionForm
-                            key={`trigger-${binding.id}-${binding.configurationRevision}`}
+                            key={`trigger-${binding.id}`}
                             action={configureRunbookTriggerAction.bind(null, serviceId, binding.id)}
                             className="mt-4 grid gap-3 border-t pt-4 lg:grid-cols-3"
                           >
-                            <input
-                              type="hidden"
-                              name="expectedConfigurationRevision"
-                              value={binding.configurationRevision}
-                            />
-                            <Field label="Trigger event">
-                              <FormSelect
-                                name="event"
-                                label="Trigger event"
-                                defaultValue="INCIDENT_CREATED"
-                                options={[{ value: 'INCIDENT_CREATED', label: 'Incident created' }]}
+                            <div key={binding.configurationRevision} className="contents">
+                              <input
+                                type="hidden"
+                                name="expectedConfigurationRevision"
+                                value={binding.configurationRevision}
                               />
-                            </Field>
-                            <Field label="Condition logic">
-                              <FormSelect
-                                name="conditionLogic"
-                                label="Condition logic"
-                                defaultValue={binding.triggers?.[0]?.conditionLogic ?? 'AND'}
-                                options={[
-                                  { value: 'AND', label: 'Match all' },
-                                  { value: 'OR', label: 'Match any' },
-                                ]}
-                              />
-                            </Field>
-                            <div className="flex items-end">
-                              <SubmitButton variant="outline" pendingLabel="Saving trigger…">
-                                {binding.mode === 'AUTOMATIC'
-                                  ? 'Save trigger and pause Automatic rule'
-                                  : 'Save trigger'}
-                              </SubmitButton>
-                            </div>
-                            <div className="space-y-3 lg:col-span-3">
-                              <Label>Conditions</Label>
-                              {(binding.triggers?.[0]?.conditions ?? []).map(condition => (
-                                <TriggerConditionRow
-                                  key={condition.id}
-                                  field={condition.field}
-                                  operator={condition.operator}
-                                  value={condition.value}
+                              <Field label="Trigger event">
+                                <FormSelect
+                                  name="event"
+                                  label="Trigger event"
+                                  defaultValue="INCIDENT_CREATED"
+                                  options={[
+                                    { value: 'INCIDENT_CREATED', label: 'Incident created' },
+                                  ]}
                                 />
-                              ))}
-                              <TriggerConditionRow />
-                              <p className="text-xs text-muted-foreground">
-                                Leave the final field empty to add no condition. Comma-separate
-                                values for “in” operators. Automatic mode still stops at approval
-                                gates.
-                              </p>
+                              </Field>
+                              <Field label="Condition logic">
+                                <FormSelect
+                                  name="conditionLogic"
+                                  label="Condition logic"
+                                  defaultValue={binding.triggers?.[0]?.conditionLogic ?? 'AND'}
+                                  options={[
+                                    { value: 'AND', label: 'Match all' },
+                                    { value: 'OR', label: 'Match any' },
+                                  ]}
+                                />
+                              </Field>
+                              <div className="flex items-end">
+                                <SubmitButton variant="outline" pendingLabel="Saving trigger…">
+                                  {binding.mode === 'AUTOMATIC'
+                                    ? 'Save trigger and pause Automatic rule'
+                                    : 'Save trigger'}
+                                </SubmitButton>
+                              </div>
+                              <div className="space-y-3 lg:col-span-3">
+                                <Label>Conditions</Label>
+                                {(binding.triggers?.[0]?.conditions ?? []).map(condition => (
+                                  <TriggerConditionRow
+                                    key={condition.id}
+                                    field={condition.field}
+                                    operator={condition.operator}
+                                    value={condition.value}
+                                  />
+                                ))}
+                                <TriggerConditionRow />
+                                <p className="text-xs text-muted-foreground">
+                                  Leave the final field empty to add no condition. Comma-separate
+                                  values for “in” operators. Automatic mode still stops at approval
+                                  gates.
+                                </p>
+                              </div>
                             </div>
                           </ActionForm>
                         </ConfigureSheet>

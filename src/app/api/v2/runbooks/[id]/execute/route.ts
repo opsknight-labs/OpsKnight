@@ -135,6 +135,13 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
       }
     }
 
+    if (resolvedBindingId && Object.keys(body.parameters).length > 0)
+      throw new AppError({
+        code: 'RUNBOOK_DEFINITION_INVALID',
+        userMessage:
+          'Service rules use their saved inputs. Per-execution parameters are not accepted for a bound rule. Update and review the rule configuration, or execute the Runbook without a service rule.',
+      });
+
     // 1. Preview execution boundary and generate authorized execution plan
     const preview = await previewRunbookExecution(
       {

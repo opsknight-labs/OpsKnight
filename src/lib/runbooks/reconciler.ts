@@ -297,9 +297,6 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
     where: { status: { in: ['ONLINE', 'DEGRADED'] }, lastHeartbeatAt: { lt: staleAgentCutoff } },
     data: { status: 'OFFLINE' },
   });
-  await db.runbookAgentRequestNonce.deleteMany({
-    where: { createdAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
-  });
   const localRunning = await db.runbookExecutionStep.findMany({
     where: {
       status: 'RUNNING',

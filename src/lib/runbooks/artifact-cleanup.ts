@@ -1,7 +1,7 @@
 import 'server-only';
-import { PrismaClient } from '@prisma/client';
-import { configurePrismaDatasource, selectPrismaDatasourceUrl } from '@/lib/prisma-datasource';
-import { getOpsKnightProcessRole } from '@/lib/runtime-role';
+import type { PrismaClient } from '@prisma/client';
+import { getRunbookMaintenanceClient, disconnectRunbookMaintenanceClient } from './maintenance-db';
+import { purgeExpiredAgentNonces } from './nonce-cleanup';
 import {
   addOperationalMetric,
   observeOperationalHistogram,
@@ -10,19 +10,10 @@ import { logger } from '@/lib/logger';
 
 export const ARTIFACT_PURGE_BATCH_SIZE = 100;
 export const ARTIFACT_PURGE_BATCH_BYTES = 16 * 1024 * 1024;
-let maintenanceClient: PrismaClient | null = null;
-function getMaintenanceClient() {
-  // Maintenance cannot consume the scheduler/recovery connection pool.
-  return (maintenanceClient ??= new PrismaClient({
-    datasourceUrl: configurePrismaDatasource(
-      selectPrismaDatasourceUrl(getOpsKnightProcessRole()),
-      '1'
-    ),
-  }));
-}
-
 /** One bounded transaction per minute; never called by execution reconciliation. */
-export async function purgeExpiredRunbookArtifacts(db: PrismaClient = getMaintenanceClient()) {
+export async function purgeExpiredRunbookArtifacts(
+  db: PrismaClient = getRunbookMaintenanceClient()
+) {
   const started = performance.now();
   try {
     const result = await db.$transaction(
@@ -85,29 +76,40 @@ export async function purgeExpiredRunbookArtifacts(db: PrismaClient = getMainten
 }
 let timer: NodeJS.Timeout | null = null;
 let active: Promise<void> | null = null;
+let nextArtifactBatchAt = 0;
 function tick() {
   if (active) return;
-  active = purgeExpiredRunbookArtifacts()
-    .then(() => undefined)
-    .catch(() => {
-      logger.warn(
-        '[RunbookArtifactCleanup] Batch deferred; inspect maintenance metrics and database health'
-      );
-    })
-    .finally(() => {
-      active = null;
-    });
+  active = (async () => {
+    // A failed artifact batch must not prevent nonce maintenance, or vice versa.
+    const artifactDue = Date.now() >= nextArtifactBatchAt;
+    if (artifactDue) nextArtifactBatchAt = Date.now() + 60_000;
+    const batches = artifactDue
+      ? [purgeExpiredRunbookArtifacts, purgeExpiredAgentNonces]
+      : [purgeExpiredAgentNonces];
+    for (const purge of batches) {
+      try {
+        await purge();
+      } catch {
+        logger.warn(
+          '[RunbookMaintenance] Batch deferred; inspect maintenance metrics and database health'
+        );
+      }
+    }
+  })().finally(() => {
+    active = null;
+  });
 }
 export function startRunbookArtifactCleanup() {
   if (timer) return;
-  // Let startup recovery run first. Never drain a backlog in a tight loop.
-  timer = setInterval(tick, 60_000);
+  nextArtifactBatchAt = Date.now() + 60_000;
+  // Nonces are high-volume request records: allow one bounded batch per second.
+  // Artifacts retain their one-minute cadence. Slow batches skip ticks rather than overlap.
+  timer = setInterval(tick, 1000);
   timer.unref?.();
 }
 export async function stopRunbookArtifactCleanup() {
   if (timer) clearInterval(timer);
   timer = null;
   await active;
-  await maintenanceClient?.$disconnect();
-  maintenanceClient = null;
+  await disconnectRunbookMaintenanceClient();
 }

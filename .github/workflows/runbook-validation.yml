@@ -135,6 +135,7 @@ jobs:
           tests/integration/runbook-binding-readiness-database.test.ts
           tests/integration/runbook-artifact-retention-database.test.ts
           tests/integration/runbook-operational-backlog-database.test.ts
+          tests/integration/runbook-nonce-maintenance-database.test.ts
           tests/integration/runbook-policy-checks-database.test.ts
           tests/integration/runbook-worker-evidence-database.test.ts
           tests/integration/runbook-review-regressions-database.test.ts

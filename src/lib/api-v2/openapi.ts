@@ -1476,7 +1476,7 @@ function buildBaseSpec(): Record<string, unknown> {
                     incidentId: { type: 'string', nullable: true },
                     serviceId: { type: 'string', nullable: true },
                     bindingId: { type: 'string', nullable: true, description: 'Select an enabled service rule. Required when multiple rules match; detached rules cannot execute.' },
-                    parameters: { type: 'object' },
+                    parameters: { type: 'object', description: 'Inputs for an unbound execution, validated against the published version. Omit for service rules: their saved inputs are authoritative and non-empty parameters return HTTP 400.' },
                   },
                 },
               },
