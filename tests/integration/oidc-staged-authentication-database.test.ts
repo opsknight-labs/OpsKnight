@@ -751,23 +751,33 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
   });
 
   it('allows deleting an unactivated staged candidate revision and its tests, but rejects deleting active revision', async () => {
-    // Earlier recovery tests rotate this administrator's token version; act as the current session.
-    actor.tokenVersion = (
-      await prisma.user.findUniqueOrThrow({ where: { id: actor.id } })
-    ).tokenVersion;
-    const staged1 = await stageOidcRevision(actor, {
+    // Password recovery above rotated the administrator's token version and advanced the
+    // session cutoff, so sign in again: a session issued under the current policy.
+    const [admin, policy] = await Promise.all([
+      prisma.user.findUniqueOrThrow({ where: { id: actor.id } }),
+      prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } }),
+    ]);
+    const current: ControlActor = {
+      kind: 'admin',
+      id: actor.id,
+      tokenVersion: admin.tokenVersion,
+      authenticatedAt: Date.now(),
+      method: 'credentials',
+      issuedUnderPolicyVersion: policy.version,
+    };
+    const staged1 = await stageOidcRevision(current, {
       issuer: runtime.issuer,
       clientId: 'test-delete-1',
       clientSecret: 'test-secret',
     });
-    const staged2 = await stageOidcRevision(actor, {
+    const staged2 = await stageOidcRevision(current, {
       issuer: runtime.issuer,
       clientId: 'test-delete-2',
       clientSecret: 'test-secret',
     });
 
     // Delete single staged revision
-    const deleteResult = await deleteOidcRevision(actor, staged1.revisionId);
+    const deleteResult = await deleteOidcRevision(current, staged1.revisionId);
     expect(deleteResult.ok).toBe(true);
     expect(await prisma.oidcRevision.findUnique({ where: { id: staged1.revisionId } })).toBeNull();
 
@@ -777,17 +787,17 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     ).toBeTruthy();
 
     // A second delete of the same draft reports the conflict instead of failing obscurely.
-    await expect(deleteOidcRevision(actor, staged1.revisionId)).rejects.toThrow(
+    await expect(deleteOidcRevision(current, staged1.revisionId)).rejects.toThrow(
       'already deleted in another session'
     );
 
     // Bulk cleanup deletes only the confirmed, still-eligible drafts.
-    const staged3 = await stageOidcRevision(actor, {
+    const staged3 = await stageOidcRevision(current, {
       issuer: runtime.issuer,
       clientId: 'test-delete-3',
       clientSecret: 'test-secret',
     });
-    const cleanupResult = await cleanupStagedRevisions(actor, [
+    const cleanupResult = await cleanupStagedRevisions(current, [
       staged2.revisionId,
       staged1.revisionId,
     ]);
