@@ -1,6 +1,17 @@
 'use client';
-import { CheckCircle2, Circle, AlertTriangle } from 'lucide-react';
+import {
+  CheckCircle2,
+  AlertTriangle,
+  Shield,
+  Globe,
+  KeyRound,
+  Clock,
+  Link2,
+  Sparkles,
+  ArrowRight,
+} from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import type { authenticationDashboard, AuthenticationSection } from '@/lib/auth-control/dashboard';
 import { readableDuration } from './authentication/AuthenticationSessionPolicyForm';
 
@@ -109,106 +120,209 @@ export default function AuthenticationOverview({
   ];
   return (
     <section id="authentication-0" className={className} aria-labelledby="auth-overview-title">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 id="auth-overview-title" className="text-lg font-semibold">
-            {configured ? 'Authentication overview' : 'Configure Enterprise SSO'}
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+      <header className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <Shield className="h-4 w-4" />
+            </div>
+            <h2 id="auth-overview-title" className="text-base sm:text-lg font-bold text-foreground">
+              {configured ? 'Authentication overview' : 'Configure Enterprise SSO'}
+            </h2>
+            <Badge
+              variant={data.mode === 'SSO_REQUIRED' ? 'success' : 'neutral'}
+              className="text-xs"
+            >
+              {data.mode.replaceAll('_', ' ')}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
             {configured
               ? 'Current configuration, recorded verification and recovery readiness.'
               : 'Prepare a tested sign-in path before changing access. Draft changes remain inactive until activation.'}
           </p>
         </div>
-        <Button onClick={() => onNavigate(next.target as AuthenticationSection)}>
+        <Button onClick={() => onNavigate(next.target as AuthenticationSection)} size="sm">
           {next.label}
         </Button>
       </header>
-      <p className="text-sm text-muted-foreground">{next.reason}</p>
-      <dl className="grid gap-x-8 gap-y-5 border-y border-border py-5 sm:grid-cols-2 lg:grid-cols-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:text-sm [&_dd]:font-medium">
-        <div>
-          <dt>Authentication mode</dt>
-          <dd>{data.mode.replaceAll('_', ' ')}</dd>
-        </div>
-        <div>
-          <dt>
-            {data.mode === 'PASSWORD_ONLY'
-              ? 'Stored identity provider'
-              : 'Active identity provider'}
-          </dt>
-          <dd>
-            {data.activeProvider
-              ? providerLabel
-              : data.providerCompatibilityWarning
-                ? 'Historical configuration · review required'
-                : 'Not configured'}
-          </dd>
-        </div>
-        <div>
-          <dt>Independent recovery</dt>
-          <dd>{data.verifiedEmergencyAccounts} current successful drills</dd>
-        </div>
-        <div>
-          <dt>Last recorded administrator verification</dt>
-          <dd>
-            {active?.testedAt
-              ? new Date(active.testedAt).toLocaleString()
-              : 'No verified active configuration recorded'}
-          </dd>
-        </div>
-        <div>
-          <dt>Effective maximum session lifetime</dt>
-          <dd>{readableDuration(data.effectiveSessionPolicy?.maximumAgeSeconds)}</dd>
-        </div>
-        <div>
-          <dt>Effective idle timeout</dt>
-          <dd>{readableDuration(data.effectiveSessionPolicy?.idleTimeoutSeconds)}</dd>
-        </div>
-        {data.activeProvider && (
-          <div className="sm:col-span-2 lg:col-span-3">
-            <dt>Configured issuer</dt>
-            <dd className="[overflow-wrap:anywhere]">{data.activeProvider.issuer}</dd>
+
+      {/* Recommended Action Card */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-0.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">
+              Next Step
+            </span>
           </div>
-        )}
-      </dl>
-      {!configured && (
-        <ol aria-label="SSO setup progress" className="divide-y divide-border">
-          {steps.map((step, index) => (
-            <li key={step.title} className="flex items-start gap-3 py-4">
-              {step.state === 'Verified' || step.state === 'Active' ? (
-                <CheckCircle2
-                  className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300"
-                  aria-hidden="true"
-                />
-              ) : step.state === 'Needs attention' ? (
-                <AlertTriangle
-                  className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300"
-                  aria-hidden="true"
-                />
-              ) : (
-                <Circle
-                  className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">
-                  {index + 1}. {step.title}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{step.state}</p>
-              </div>
-              <Button
-                variant="link"
-                size="sm"
-                onClick={() => onNavigate(step.target as AuthenticationSection)}
+          <p className="text-xs sm:text-sm text-foreground font-medium leading-relaxed">
+            {next.reason}
+          </p>
+        </div>
+        <Button
+          onClick={() => onNavigate(next.target as AuthenticationSection)}
+          size="sm"
+          variant="outline"
+          className="shrink-0 gap-1.5 h-8 text-xs border-primary/30 hover:bg-primary/10"
+        >
+          <span>{next.label}</span>
+          <ArrowRight className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {/* Grid of Metric/Stat Cards */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Active Configuration Summary
+        </h3>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 transition-all hover:bg-muted/40">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              Authentication mode
+            </dt>
+            <dd className="text-sm font-bold text-foreground">
+              <Badge
+                variant={data.mode === 'SSO_REQUIRED' ? 'success' : 'neutral'}
+                className="text-xs"
               >
-                Review<span className="sr-only"> {step.title}</span>
-              </Button>
-            </li>
-          ))}
-        </ol>
+                {data.mode.replaceAll('_', ' ')}
+              </Badge>
+            </dd>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 transition-all hover:bg-muted/40">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-primary" />
+              {data.mode === 'PASSWORD_ONLY'
+                ? 'Stored identity provider'
+                : 'Active identity provider'}
+            </dt>
+            <dd className="text-sm font-bold text-foreground">
+              {data.activeProvider
+                ? providerLabel
+                : data.providerCompatibilityWarning
+                  ? 'Historical configuration · review required'
+                  : 'Not configured'}
+            </dd>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 transition-all hover:bg-muted/40">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5 text-primary" />
+              Independent recovery
+            </dt>
+            <dd className="text-sm font-bold text-foreground">
+              {data.verifiedEmergencyAccounts} current successful drills
+            </dd>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 transition-all hover:bg-muted/40">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+              Last recorded administrator verification
+            </dt>
+            <dd className="text-xs font-medium text-foreground">
+              {active?.testedAt
+                ? new Date(active.testedAt).toLocaleString()
+                : 'No verified active configuration recorded'}
+            </dd>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 transition-all hover:bg-muted/40">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-primary" />
+              Effective maximum session lifetime
+            </dt>
+            <dd className="text-sm font-bold text-foreground">
+              {readableDuration(data.effectiveSessionPolicy?.maximumAgeSeconds)}
+            </dd>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 transition-all hover:bg-muted/40">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-primary" />
+              Effective idle timeout
+            </dt>
+            <dd className="text-sm font-bold text-foreground">
+              {readableDuration(data.effectiveSessionPolicy?.idleTimeoutSeconds)}
+            </dd>
+          </div>
+          {data.activeProvider && (
+            <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 transition-all hover:bg-muted/40 sm:col-span-2 lg:col-span-3">
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-primary" />
+                Configured issuer
+              </dt>
+              <dd className="text-xs font-mono font-medium text-foreground [overflow-wrap:anywhere]">
+                {data.activeProvider.issuer}
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
+
+      {/* Configuration Roadmap */}
+      {!configured && (
+        <div className="space-y-3 pt-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Configuration Roadmap
+          </h3>
+          <ol aria-label="SSO setup progress" className="space-y-2">
+            {steps.map((step, index) => (
+              <li
+                key={step.title}
+                className="flex items-center justify-between gap-3 p-3.5 rounded-xl border bg-muted/20 hover:bg-muted/40 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                      step.state === 'Verified' || step.state === 'Active'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : step.state === 'Needs attention'
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {step.state === 'Verified' || step.state === 'Active' ? (
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    ) : step.state === 'Needs attention' ? (
+                      <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <span>{index + 1}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{step.title}</p>
+                    <p className="text-xs text-muted-foreground">{step.state}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge
+                    variant={
+                      step.state === 'Verified' || step.state === 'Active'
+                        ? 'success'
+                        : step.state === 'Needs attention'
+                          ? 'outline'
+                          : 'neutral'
+                    }
+                    className="text-[10px]"
+                  >
+                    {step.state}
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2.5 text-xs gap-1"
+                    onClick={() => onNavigate(step.target as AuthenticationSection)}
+                  >
+                    Review<span className="sr-only"> {step.title}</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
-      <p className="text-xs text-muted-foreground">
+
+      <p className="text-xs text-muted-foreground pt-2">
         Your original administrator and incident ownership are preserved. Emergency identities are
         separate from normal users. Recorded checks are evidence of their timestamp, not a live IdP
         availability guarantee.

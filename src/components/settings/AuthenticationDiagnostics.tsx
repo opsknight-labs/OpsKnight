@@ -1,7 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Activity, MailWarning, Monitor, ShieldCheck } from 'lucide-react';
+import {
+  Activity,
+  MailWarning,
+  Monitor,
+  ShieldCheck,
+  RefreshCw,
+  AlertTriangle,
+  Clock,
+  Send,
+  Layers,
+  Info,
+  RotateCcw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import type {
   authenticationDashboard,
@@ -20,6 +32,7 @@ import { useDiagnosticPage } from './authentication/useDiagnosticPage';
 
 type Dashboard = Awaited<ReturnType<typeof authenticationDashboard>>;
 type View = DiagnosticQuery['view'];
+
 const views = [
   {
     id: 'sessions',
@@ -50,8 +63,10 @@ const views = [
       'Compare current web observations with historical reports. A missing observation does not prove an outage.',
   },
 ] as const;
+
 type Position = { current?: string; previous: Array<string | undefined>; page: number };
 const firstPosition = (): Position => ({ current: undefined, previous: [], page: 0 });
+
 export default function AuthenticationDiagnostics({
   data,
   pending,
@@ -100,6 +115,7 @@ export default function AuthenticationDiagnostics({
   }));
   const [selected, setSelected] = useState<DiagnosticItem | null>(null);
   const [refreshError, setRefreshError] = useState('');
+
   useEffect(() => {
     const sync = () => {
       const next = views.find(
@@ -113,6 +129,7 @@ export default function AuthenticationDiagnostics({
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
+
   // eslint-disable-next-line security/detect-object-injection -- Key is a closed, server-defined enum.
   const query = queries[view];
   // eslint-disable-next-line security/detect-object-injection -- Key is a closed, server-defined enum.
@@ -122,6 +139,7 @@ export default function AuthenticationDiagnostics({
     after: position.current,
   });
   const current = views.find(item => item.id === view)!;
+
   const navigate = (next: View) => {
     setView(next);
     setSelected(null);
@@ -129,6 +147,7 @@ export default function AuthenticationDiagnostics({
     search.set('authView', next);
     window.history.replaceState(null, '', `${pathname}?${search}`);
   };
+
   const pagination = (label: string) => (
     <DiagnosticsPagination
       label={label}
@@ -162,25 +181,35 @@ export default function AuthenticationDiagnostics({
       }
     />
   );
+
   return (
     <section aria-labelledby="auth-diagnostics-title" className="min-w-0 space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="auth-diagnostics-title" className="text-lg font-semibold">
-            Authentication diagnostics
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Investigate access, delivery and deployment evidence.
-          </p>
+      {/* Header */}
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-primary/10 p-2.5 text-primary shrink-0">
+            <Activity className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 id="auth-diagnostics-title" className="text-lg font-semibold tracking-tight text-foreground">
+              Authentication diagnostics
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+              Investigate access, delivery and deployment evidence.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {refreshError && (
-            <span role="alert" className="text-xs text-destructive">
+            <span role="alert" className="text-xs font-medium text-destructive flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {refreshError}
             </span>
           )}
           <Button
             variant="outline"
+            size="sm"
+            className="gap-1.5"
             disabled={pending || loading}
             onClick={() => {
               setRefreshError('');
@@ -192,26 +221,71 @@ export default function AuthenticationDiagnostics({
               );
             }}
           >
+            <RefreshCw className={`h-3.5 w-3.5 ${pending || loading ? 'animate-spin' : ''}`} />
             Refresh diagnostics
           </Button>
         </div>
       </header>
+
+      {/* Operational Metric Cards */}
       <dl
-        className="grid gap-4 border-y border-border py-4 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-3 grid-cols-2 lg:grid-cols-4"
         aria-label="Current authentication operations"
       >
         {[
-          ['Failed security emails', data.failedEmailAlertCount],
-          ['Emails awaiting acceptance', data.pendingEmailAlerts],
-          ['Awaiting delivery confirmation', data.acceptedEmailAlertCount],
-          ['Fan-out work pending', data.pendingEmailFanoutJobs],
-        ].map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
+          {
+            label: 'Failed security emails',
+            value: data.failedEmailAlertCount,
+            icon: AlertTriangle,
+            highlight: data.failedEmailAlertCount > 0,
+          },
+          {
+            label: 'Emails awaiting acceptance',
+            value: data.pendingEmailAlerts,
+            icon: Clock,
+            highlight: false,
+          },
+          {
+            label: 'Awaiting delivery confirmation',
+            value: data.acceptedEmailAlertCount,
+            icon: Send,
+            highlight: false,
+          },
+          {
+            label: 'Fan-out work pending',
+            value: data.pendingEmailFanoutJobs,
+            icon: Layers,
+            highlight: false,
+          },
+        ].map(item => (
+          <div
+            key={item.label}
+            className={`rounded-xl border p-4 shadow-2xs transition-all ${
+              item.highlight
+                ? 'border-rose-500/30 bg-rose-500/10 dark:bg-rose-950/20'
+                : 'border-border/80 bg-card'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-xs font-medium text-muted-foreground">{item.label}</dt>
+              <item.icon
+                className={`h-4 w-4 shrink-0 ${
+                  item.highlight ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/70'
+                }`}
+              />
+            </div>
+            <dd
+              className={`mt-2 text-2xl font-bold tracking-tight tabular-nums ${
+                item.highlight ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'
+              }`}
+            >
+              {item.value}
+            </dd>
           </div>
         ))}
       </dl>
+
+      {/* Diagnostic View Tabs */}
       <div
         role="tablist"
         aria-label="Diagnostic views"
@@ -225,7 +299,11 @@ export default function AuthenticationDiagnostics({
             aria-selected={view === item.id}
             aria-controls="diagnostic-view-panel"
             tabIndex={view === item.id ? 0 : -1}
-            className={`flex items-center gap-2 rounded-md border px-3 py-3 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${view === item.id ? 'border-primary bg-primary/5 font-semibold' : 'border-border text-muted-foreground hover:bg-muted/50'}`}
+            className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left text-xs sm:text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
+              view === item.id
+                ? 'border-primary bg-primary/10 text-foreground font-semibold shadow-xs ring-1 ring-primary/20'
+                : 'border-border/80 bg-card/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+            }`}
             onClick={() => navigate(item.id)}
             onKeyDown={event => {
               let next: number | undefined;
@@ -243,19 +321,28 @@ export default function AuthenticationDiagnostics({
               }
             }}
           >
-            <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {item.label}
+            <item.icon
+              className={`h-4 w-4 shrink-0 ${view === item.id ? 'text-primary' : 'text-muted-foreground'}`}
+              aria-hidden="true"
+            />
+            <span className="truncate">{item.label}</span>
           </button>
         ))}
       </div>
+
+      {/* Main Diagnostic Panel */}
       <div
         role="tabpanel"
         id="diagnostic-view-panel"
         aria-labelledby={`diagnostic-tab-${view}`}
         aria-busy={loading}
-        className="min-w-0 space-y-4"
+        className="min-w-0 space-y-4 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs"
       >
-        <p className="text-sm text-muted-foreground">{current.description}</p>
+        <div className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-muted/20 p-3 text-xs text-muted-foreground">
+          <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <p className="leading-relaxed">{current.description}</p>
+        </div>
+
         <DiagnosticFilters
           key={view}
           query={query}
@@ -264,46 +351,71 @@ export default function AuthenticationDiagnostics({
             setPositions(previous => ({ ...previous, [view]: firstPosition() }));
           }}
         />
+
         {pagination('Top diagnostic pagination')}
+
         {(error || refreshError) && (
           <div
             role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm"
+            className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive space-y-3"
           >
-            <p>{error || refreshError}</p>
-            <Button variant="outline" size="sm" onClick={refresh}>
-              Retry this page
-            </Button>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 font-semibold text-xs sm:text-sm">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+              <span>{error || refreshError}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-destructive/30 hover:bg-destructive/15 text-destructive gap-1.5"
+                onClick={refresh}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Retry this page
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
               Filters and page navigation are retained. If a cursor expired, choose First page to
               start a new snapshot.
             </p>
           </div>
         )}
+
         {loading && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Loading {current.label.toLowerCase()}…
-          </p>
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+            <p role="status">Loading {current.label.toLowerCase()}…</p>
+          </div>
         )}
+
         {!loading && !error && !page?.items.length && (
-          <div className="py-10 text-center">
-            <h3 className="font-medium">No matching records</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12 px-4 text-center">
+            <Activity className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <h3 className="font-semibold text-sm text-foreground">No matching records</h3>
+            <p className="mt-1 text-xs text-muted-foreground max-w-sm">
               Try another time range or clear the filters. No exact lifetime count is required to
               browse history.
             </p>
           </div>
         )}
-        {page && <DiagnosticTable items={page.items} onInspect={setSelected} />}
+
+        {page && page.items.length > 0 && (
+          <div className="rounded-xl border border-border/80 bg-background overflow-hidden shadow-2xs">
+            <DiagnosticTable items={page.items} onInspect={setSelected} />
+          </div>
+        )}
+
         {pagination('Bottom diagnostic pagination')}
+
         {page && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
             Live pagination started {new Date(page.snapshotAt).toLocaleString()}. Active sessions
             can leave later pages when used, renewed or revoked. This is not an immutable sign-in
             history. Start again to see current activity.
           </p>
         )}
       </div>
+
       {selected && (
         <DiagnosticDetails
           key={selected.id}
