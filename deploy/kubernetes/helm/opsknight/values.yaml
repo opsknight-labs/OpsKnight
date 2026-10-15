@@ -215,7 +215,7 @@ agent:
     enabled: false
   image:
     repository: ghcr.io/opsknight-labs/opsknight-agent
-    tag: '2.0.0'
+    tag: ''
     digest: ''
     pullPolicy: IfNotPresent
   # Empty uses the in-cluster OpsKnight Service URL.

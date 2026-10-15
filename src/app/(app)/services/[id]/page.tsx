@@ -1,3 +1,10 @@
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
+import { getBindingReadiness, type BindingReadiness } from '@/lib/runbooks/binding-readiness';
+import {
+  describeBinding,
+  type RunbookResource,
+} from '@/lib/runbooks/presentation/binding-contract';
 import prisma from '@/lib/prisma';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
@@ -90,7 +97,18 @@ const INCIDENTS_PER_PAGE = 20;
 
 type ServiceDetailPageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ page?: string; tab?: string; error?: string; saved?: string }>;
+  searchParams?: Promise<{
+    page?: string;
+    tab?: string;
+    error?: string;
+    saved?: string;
+    rulesAfter?: string;
+    rulesState?: string;
+    rulesSearch?: string;
+    ruleCatalog?: string;
+    ruleTargets?: string;
+    rulesCheck?: string;
+  }>;
 };
 
 function getWebhookUrl(
@@ -169,6 +187,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);
+  const rulesState = resolvedSearchParams?.rulesState === 'archived' ? 'archived' : 'active';
+  const rulesSearch = (resolvedSearchParams?.rulesSearch ?? '').slice(0, 100);
+  const rulesAfter = resolvedSearchParams?.rulesAfter?.slice(0, 512);
+  const catalogQuery = (resolvedSearchParams?.ruleCatalog ?? '').slice(0, 100);
+  const targetQuery = (resolvedSearchParams?.ruleTargets ?? '').slice(0, 100);
   const activeTab = resolvedSearchParams?.tab || 'incidents';
   const errorCode = resolvedSearchParams?.error;
   const isSaved = resolvedSearchParams?.saved === '1';
@@ -180,6 +203,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     notFound();
   }
   const actor = await getCurrentAuthorizationActor();
+  const canReadRunbooks = hasCapability(actor.role, CAPABILITIES.RUNBOOK_READ_ALL);
+  const loadRunbookView = canReadRunbooks && activeTab === 'runbooks';
   const incidentAccess = incidentReadWhere(actor);
 
   let canManageService = false;
@@ -424,90 +449,100 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const canDeleteService = currentUser.role === 'ADMIN';
 
   const [
-    serviceRunbookBindingsResult,
+    serviceAutomationRulesResult,
     availableRunbooksResult,
     availableRunbookAgentsResult,
     availableRunbookAgentPoolsResult,
   ] = await Promise.allSettled([
-    prisma.serviceRunbookBinding.findMany({
-      where: { serviceId: id },
-      include: {
-        runbook: {
-          include: { publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } } },
-        },
-        runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
-        executions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+    loadRunbookView
+      ? getServiceRulePage(id, rulesAfter, prisma, { state: rulesState, search: rulesSearch })
+      : Promise.resolve({ rules: [], hasNext: false, nextCursor: undefined }),
+    loadRunbookView
+      ? prisma.runbook.findMany({
+          where: {
+            archivedAt: null,
+            publishedVersionId: { not: null },
+            name: { contains: catalogQuery, mode: 'insensitive' },
+          },
+          take: 50,
           select: {
             id: true,
-            status: true,
-            startedAt: true,
-            completedAt: true,
-            createdAt: true,
+            name: true,
+            description: true,
+            publishedVersionId: true,
+            publishedVersion: { select: { id: true, version: true, state: true } },
+            versions: {
+              take: 20,
+              where: { state: { in: ['PUBLISHED', 'RETIRED'] } },
+              select: { id: true, version: true, state: true },
+              orderBy: { version: 'desc' },
+            },
           },
-        },
-        _count: {
-          select: { executions: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.runbook.findMany({
-      where: { archivedAt: null, publishedVersionId: { not: null } },
-      include: {
-        publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        versions: {
-          include: { inputs: { orderBy: { sequence: 'asc' } } },
-          orderBy: { version: 'desc' },
-        },
-      },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.runbookAgent.findMany({
-      where: { status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] } },
-      select: { id: true, name: true, hostname: true, status: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.runbookAgentPool.findMany({
-      select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
-      orderBy: { name: 'asc' },
-    }),
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    loadRunbookView
+      ? prisma.runbookAgent.findMany({
+          where: {
+            status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] },
+            name: { contains: targetQuery, mode: 'insensitive' },
+          },
+          take: 100,
+          select: { id: true, name: true, hostname: true, status: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    loadRunbookView
+      ? prisma.runbookAgentPool.findMany({
+          where: { name: { contains: targetQuery, mode: 'insensitive' } },
+          take: 100,
+          select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
   ]);
 
-  const serviceRunbookBindings =
-    serviceRunbookBindingsResult.status === 'fulfilled'
-      ? serviceRunbookBindingsResult.value
+  const serviceAutomationRules =
+    serviceAutomationRulesResult.status === 'fulfilled'
+      ? serviceAutomationRulesResult.value.rules
       : [];
   const availableRunbooks =
-    availableRunbooksResult.status === 'fulfilled'
-      ? availableRunbooksResult.value
-      : [];
+    availableRunbooksResult.status === 'fulfilled' ? availableRunbooksResult.value : [];
   const availableRunbookAgents =
-    availableRunbookAgentsResult.status === 'fulfilled'
-      ? availableRunbookAgentsResult.value
-      : [];
+    availableRunbookAgentsResult.status === 'fulfilled' ? availableRunbookAgentsResult.value : [];
   const availableRunbookAgentPools =
     availableRunbookAgentPoolsResult.status === 'fulfilled'
       ? availableRunbookAgentPoolsResult.value
       : [];
 
-  const runbooksLoadError =
-    serviceRunbookBindingsResult.status === 'rejected' ||
-    availableRunbooksResult.status === 'rejected' ||
-    availableRunbookAgentsResult.status === 'rejected' ||
-    availableRunbookAgentPoolsResult.status === 'rejected';
+  const runbooksLoadErrors: RunbookResource[] = [];
+  if (serviceAutomationRulesResult.status === 'rejected') runbooksLoadErrors.push('bindings');
+  if (availableRunbooksResult.status === 'rejected') runbooksLoadErrors.push('library');
+  if (availableRunbookAgentsResult.status === 'rejected') runbooksLoadErrors.push('agents');
+  if (availableRunbookAgentPoolsResult.status === 'rejected') runbooksLoadErrors.push('pools');
 
-  if (serviceRunbookBindingsResult.status === 'rejected') {
+  if (serviceAutomationRulesResult.status === 'rejected') {
     logger.warn('[Service Detail] Failed to load service runbook bindings', {
-      error: serviceRunbookBindingsResult.reason,
+      error: serviceAutomationRulesResult.reason,
     });
   }
   if (availableRunbooksResult.status === 'rejected') {
     logger.warn('[Service Detail] Failed to load available runbooks', {
       error: availableRunbooksResult.reason,
     });
+  }
+
+  // Deep target/policy assessment is explicit and bounded to the visible page.
+  const runbookReadiness = new Map<string, BindingReadiness>();
+  if (loadRunbookView && resolvedSearchParams?.rulesCheck === '1') {
+    for (let offset = 0; offset < serviceAutomationRules.length; offset += 8) {
+      const batch = await Promise.all(
+        serviceAutomationRules
+          .slice(offset, offset + 8)
+          .map(async binding => [binding.id, await getBindingReadiness(binding)] as const)
+      );
+      for (const [ruleId, readiness] of batch) runbookReadiness.set(ruleId, readiness);
+    }
   }
 
   // SLA and Health Computations with truthful failure degradation
@@ -1293,20 +1328,57 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         defaultTab={activeTab}
         activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
-        runbooksCount={runbooksLoadError ? undefined : serviceRunbookBindings.length}
+        runbooksCount={
+          runbooksLoadErrors.includes('bindings') ? undefined : serviceAutomationRules.length
+        }
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
         escalationContent={escalationContent}
         runbooksContent={
-          <ServiceRunbooks
-            serviceId={service.id}
-            bindings={serviceRunbookBindings}
-            availableRunbooks={availableRunbooks}
-            availableAgents={availableRunbookAgents}
-            availableAgentPools={availableRunbookAgentPools}
-            canManage={canManageService}
-            loadError={runbooksLoadError}
-          />
+          !canReadRunbooks ? (
+            <p className="p-4 text-sm">Runbook access requires additional permission.</p>
+          ) : !loadRunbookView ? (
+            <Link href={`/services/${id}?tab=runbooks`}>Load service Runbooks</Link>
+          ) : (
+            <ServiceRunbooks
+              serviceId={service.id}
+              rulesState={rulesState}
+              rulesSearch={rulesSearch}
+              pagination={{
+                after: rulesAfter,
+                hasNext:
+                  serviceAutomationRulesResult.status === 'fulfilled' &&
+                  serviceAutomationRulesResult.value.hasNext,
+                nextCursor:
+                  serviceAutomationRulesResult.status === 'fulfilled'
+                    ? serviceAutomationRulesResult.value.nextCursor
+                    : undefined,
+              }}
+              catalogQuery={catalogQuery}
+              targetQuery={targetQuery}
+              bindings={serviceAutomationRules.map(binding => ({
+                ...binding,
+                presentation: describeBinding(
+                  binding,
+                  availableRunbookAgents,
+                  availableRunbookAgentPools,
+                  runbooksLoadErrors
+                ),
+                readiness: runbookReadiness.get(binding.id),
+              }))}
+              availableRunbooks={availableRunbooks.map(workflow => ({
+                ...workflow,
+                versions: workflow.versions.map(version => ({ ...version, metadataOnly: true })),
+                publishedVersion: workflow.publishedVersion
+                  ? { ...workflow.publishedVersion, metadataOnly: true }
+                  : null,
+              }))}
+              availableAgents={availableRunbookAgents}
+              availableAgentPools={availableRunbookAgentPools}
+              canManage={canManageService}
+              loadErrors={runbooksLoadErrors}
+            />
+          )
         }
         integrationsContent={integrationsContent}
         notificationsContent={notificationsContent}

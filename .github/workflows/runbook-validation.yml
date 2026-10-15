@@ -29,10 +29,32 @@ jobs:
         with:
           fetch-depth: 0
       - name: Test change classification
-        run: node --test tests/ci/runbook-change-gates.test.cjs
+        run: node --test tests/ci/runbook-change-gates.test.cjs tests/ci/runtime-database-readiness.test.cjs
       - name: Detect affected checks
         id: gates
         run: node scripts/ci/runbook-change-gates.cjs
+
+  maintenance-alerts:
+    needs: changes
+    if: needs.changes.outputs.runbooks == 'true'
+    name: Runbook maintenance alert rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify pinned Prometheus tooling and test maintenance alerts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir=$(mktemp -d)
+          archive=prometheus-3.15.0.linux-amd64.tar.gz
+          release=https://github.com/prometheus/prometheus/releases/download/v3.15.0
+          curl --fail --location --retry 3 "$release/$archive" --output "$tool_dir/$archive"
+          curl --fail --location --retry 3 "$release/sha256sums.txt" --output "$tool_dir/sha256sums.txt"
+          (cd "$tool_dir" && sha256sum --ignore-missing --check sha256sums.txt)
+          tar -xzf "$tool_dir/$archive" -C "$tool_dir" --strip-components=1 prometheus-3.15.0.linux-amd64/promtool
+          "$tool_dir/promtool" check rules monitoring/prometheus/opsknight-alerts.yaml
+          "$tool_dir/promtool" test rules monitoring/prometheus/runbook-maintenance.test.yml
 
   runbook-ui:
     needs: changes
@@ -117,10 +139,14 @@ jobs:
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1
           tests/lib/runbooks tests/lib/client-navigation-guard.test.ts tests/components/RunbookBuilder.test.tsx tests/components/RunbookExecutionPreview.test.tsx tests/lib/deployment-config-unit.test.ts
-          tests/api/runbook-artifacts.test.ts tests/api/metrics.test.ts
+          tests/api/runbook-artifacts.test.ts tests/api/runbook-version-configuration.test.ts tests/api/metrics.test.ts
           tests/lib/operational-metric-registry.test.ts
           tests/unit/encryption-registry.test.ts tests/lib/encryption-keyring-rotation.test.ts
           tests/integration/runbook-agent-runtime.test.ts
+          tests/lib/job-worker.test.ts tests/components/AgentSetupInstructions.test.tsx
+          tests/components/ServiceRunbooks.test.tsx tests/components/RunbookSelectorBuilder.test.tsx
+          tests/components/RunbookBindingVersionInputs.test.tsx tests/components/RunbookHealthTruth.test.tsx
+          tests/components/RuleWizard.test.tsx tests/components/SelectorFormValidation.test.tsx
       - name: Real PostgreSQL concurrency and execution fences
         env: { VITEST_USE_REAL_DB: '1' }
         run: >-
@@ -128,7 +154,81 @@ jobs:
           tests/integration/runbook-execution-safety.test.ts
           tests/integration/runbook-preview-authorization.test.ts
           tests/integration/runbook-lifecycle-database.test.ts
+          tests/integration/runbook-binding-readiness-database.test.ts
+          tests/integration/runbook-artifact-retention-database.test.ts
+          tests/integration/runbook-operational-backlog-database.test.ts
+          tests/integration/runbook-nonce-maintenance-database.test.ts
+          tests/integration/runbook-policy-checks-database.test.ts
+          tests/integration/runbook-worker-evidence-database.test.ts
+          tests/integration/runbook-review-regressions-database.test.ts
           tests/integration/encryption-migration.test.ts
+
+  deployment-candidate:
+    needs: changes
+    if: needs.changes.outputs.runbooks == 'true'
+    name: Real HTTPS Agent enrollment and deployment candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: opsknight
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rbe_engine_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U opsknight -d rbe_engine_test"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://opsknight:test_password@localhost:5432/rbe_engine_test
+      DIRECT_URL: postgresql://opsknight:test_password@localhost:5432/rbe_engine_test
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+      OPSKNIGHT_PROCESS_ROLE: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - name: Apply isolated database migrations
+        run: npx prisma migrate deploy
+      - name: Build production candidate
+        run: npm run build
+      - name: Build local Agent candidate
+        run: docker build -f agent/Dockerfile -t opsknight-agent:rbe-local .
+      - name: Prepare disposable same-cluster Agent fleet certification
+        run: |
+          command -v helm
+          command -v kubectl
+          curl --fail --silent --show-error --location https://github.com/kubernetes-sigs/kind/releases/download/v0.30.0/kind-linux-amd64 -o /tmp/rbe-kind
+          curl --fail --silent --show-error --location https://github.com/kubernetes-sigs/kind/releases/download/v0.30.0/kind-linux-amd64.sha256sum -o /tmp/rbe-kind.sha256sum
+          expected=$(awk '{print $1}' /tmp/rbe-kind.sha256sum)
+          printf '%s  %s\n' "$expected" /tmp/rbe-kind | sha256sum --check -
+          sudo install -m 0755 /tmp/rbe-kind /usr/local/bin/kind
+          docker swarm init --advertise-addr 127.0.0.1
+          kind create cluster --name rbe-engine-cert --wait 120s
+      - name: Exercise trusted HTTPS enrollment, execution, artifacts, policy and identity recovery
+        env:
+          RUNBOOK_LIVE_DEPLOYMENT: 'true'
+          RUNBOOK_FLEET_SMOKE: 'true'
+          RUNBOOK_FLEET_HOST: '172.17.0.1'
+          VITEST_USE_REAL_DB: '1'
+        run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-live-compose.test.ts
+      - name: Remove disposable fleet cluster
+        if: always()
+        run: kind delete cluster --name rbe-engine-cert
+      - name: Measure simulated 10/100/1000 Agent claim load
+        env:
+          RUNBOOK_SCALE_SIMULATION: 'true'
+          VITEST_USE_REAL_DB: '1'
+        run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-scale-simulation.test.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runbook-deployment-candidate-evidence
+          path: test-results/runbook-engine/
+          retention-days: 14
 
   native-agent-artifacts:
     name: Native Linux Agent artifacts & installer verification
@@ -265,16 +365,18 @@ jobs:
           sudo systemctl enable --now opsknight-agent
           echo "Waiting for live agent enrollment and identity generation..."
           ENROLLED=false
-          for i in $(seq 1 15); do
-            if sudo test -f /var/lib/opsknight-agent/identity.json && sudo test -f /var/lib/opsknight-agent/health.json; then
+          for i in $(seq 1 60); do
+            if sudo test -f /var/lib/opsknight-agent/identity.json && sudo grep -q '"ready":true' /var/lib/opsknight-agent/health.json; then
               ENROLLED=true
               break
             fi
             sleep 1
           done
           if [[ "$ENROLLED" != "true" ]]; then
-            echo "Agent service failed to generate identity within 15s. Journal logs:"
-            sudo journalctl -u opsknight-agent -n 50 --no-pager
+            echo "Agent service failed to generate identity within 60s. Journal logs:"
+            sudo systemctl status opsknight-agent --no-pager || true
+            sudo cat /var/lib/opsknight-agent/health.json || true
+            sudo journalctl -u opsknight-agent -n 100 --no-pager
             exit 1
           fi
 
@@ -472,6 +574,13 @@ jobs:
           sudo systemctl disable opsknight-agent
           pkill -f "Mock OpsKnight control-plane" || true
           rm -rf /tmp/keys-staged.json /tmp/priv-default.pem /tmp/priv-staged.pem /tmp/broken-agent.tar.gz /tmp/broken-staging
+
+      - name: Diagnose native Agent failure
+        if: failure()
+        run: |
+          sudo systemctl status opsknight-agent --no-pager || true
+          sudo journalctl -u opsknight-agent -n 100 --no-pager || true
+          sudo cat /var/lib/opsknight-agent/health.json || true
 
   deployment-manifests:
     needs: changes

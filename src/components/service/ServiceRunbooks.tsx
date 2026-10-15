@@ -1,4 +1,6 @@
 'use client';
+import { useVersionConfiguration } from '@/components/runbooks/useVersionConfiguration';
+import type { BindingReadiness } from '@/lib/runbooks/binding-readiness';
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -30,8 +32,13 @@ import {
   FormSelect,
 } from '@/components/runbooks/RunbookControls';
 import RunbookTargetSelect from '@/components/runbooks/RunbookTargetSelect';
-import { Textarea } from '@/components/ui/shadcn/textarea';
+import RunbookSelectorBuilder from '@/components/runbooks/RunbookSelectorBuilder';
+import AutomaticTargetGuard from '@/components/runbooks/AutomaticTargetGuard';
+import RuleWizard from '@/components/runbooks/RuleWizard';
 import {
+  checkRulePolicyAction,
+  pauseRuleAction,
+  duplicateRuleAction,
   attachRunbookAction,
   detachRunbookAction,
   updateRunbookBindingAction,
@@ -51,14 +58,21 @@ import { Input } from '@/components/ui/shadcn/input';
 import RunbookBindingVersionInputs from './RunbookBindingVersionInputs';
 import Field from '@/components/runbooks/RunbookField';
 import { cn } from '@/lib/utils';
+import {
+  describeBinding,
+  type BindingPresentation,
+  type RunbookResource,
+} from '@/lib/runbooks/presentation/binding-contract';
 
-export type ServiceRunbookBinding = Prisma.ServiceRunbookBindingGetPayload<{
+export type ServiceRunbookBinding = Prisma.ServiceAutomationRuleGetPayload<{
   include: {
     runbook: { include: { publishedVersion: { include: { inputs: true } } } };
     runbookVersion: { include: { inputs: true } };
     triggers: { include: { conditions: true } };
   };
 }> & {
+  presentation?: BindingPresentation;
+  readiness?: BindingReadiness;
   executions?: Array<{
     id: string;
     status: string;
@@ -71,12 +85,23 @@ export type ServiceRunbookBinding = Prisma.ServiceRunbookBindingGetPayload<{
   };
 };
 
-export type AvailableRunbook = Prisma.RunbookGetPayload<{
-  include: {
-    publishedVersion: { include: { inputs: true } };
-    versions: { include: { inputs: true } };
-  };
-}>;
+type CatalogVersion = {
+  id: string;
+  version: number;
+  state: import('@prisma/client').RunbookVersionState;
+  inputs?: RunbookInput[];
+  definition?: unknown;
+  hasAgentWrite?: boolean;
+  metadataOnly?: boolean;
+};
+export type AvailableRunbook = {
+  id: string;
+  name: string;
+  description: string;
+  publishedVersionId: string | null;
+  publishedVersion: CatalogVersion | null;
+  versions: CatalogVersion[];
+};
 
 export type ServiceRunbookAgent = {
   id: string;
@@ -100,7 +125,18 @@ export default function ServiceRunbooks({
   availableAgentPools,
   canManage,
   loadError,
+  loadErrors = [],
+  pagination,
+  catalogQuery = '',
+  targetQuery = '',
+  rulesState = 'active',
+  rulesSearch = '',
 }: {
+  pagination?: { after?: string; nextCursor?: string; hasNext: boolean };
+  catalogQuery?: string;
+  targetQuery?: string;
+  rulesState?: 'active' | 'archived';
+  rulesSearch?: string;
   serviceId: string;
   bindings: ServiceRunbookBinding[];
   availableRunbooks: AvailableRunbook[];
@@ -108,15 +144,14 @@ export default function ServiceRunbooks({
   availableAgentPools: ServiceRunbookAgentPool[];
   canManage: boolean;
   loadError?: boolean;
+  loadErrors?: RunbookResource[];
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [modeFilter, setModeFilter] = useState<'ALL' | 'AUTOMATIC' | 'MANUAL' | 'SUGGESTED'>('ALL');
+  const [selectedAttachVersionId, setSelectedAttachVersionId] = useState<string | null>(null);
   const [selectedAttachId, setSelectedAttachId] = useState<string>('');
 
-  const unattached = useMemo(
-    () => availableRunbooks.filter(r => !bindings.some(b => b.runbookId === r.id)),
-    [availableRunbooks, bindings]
-  );
+  const unattached = availableRunbooks;
 
   // Set default selected unattached runbook if not set
   const activeAttachRunbook = useMemo(() => {
@@ -126,6 +161,17 @@ export default function ServiceRunbooks({
     return unattached[0] || null;
   }, [unattached, selectedAttachId]);
 
+  const selectedMetadata = activeAttachRunbook?.versions.find(
+    version => version.id === (selectedAttachVersionId ?? activeAttachRunbook.publishedVersionId)
+  );
+  const loadedVersion = useVersionConfiguration(
+    selectedMetadata?.metadataOnly ? selectedMetadata.id : null,
+    activeAttachRunbook?.id
+  );
+  const activeAttachVersion = selectedMetadata?.metadataOnly
+    ? loadedVersion.data
+    : selectedMetadata;
+
   // Client-side instant 0ms search & filter
   const filteredBindings = useMemo(() => {
     return bindings.filter(binding => {
@@ -134,7 +180,7 @@ export default function ServiceRunbooks({
       }
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
-      const name = binding.runbook?.name?.toLowerCase() ?? '';
+      const name = `${binding.name ?? ''} ${binding.runbook?.name ?? ''}`.toLowerCase();
       const desc = binding.runbook?.description?.toLowerCase() ?? '';
       const agent =
         availableAgents.find(a => a.id === binding.defaultAgentId)?.name?.toLowerCase() ?? '';
@@ -150,13 +196,17 @@ export default function ServiceRunbooks({
     0
   );
 
-  if (loadError) {
+  const configurationAvailable = !loadErrors.some(resource =>
+    ['library', 'agents', 'pools'].includes(resource)
+  );
+  if (loadError || loadErrors.includes('bindings')) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
         <AlertCircle className="mx-auto h-8 w-8 text-destructive" />
         <h3 className="mt-2 text-sm font-semibold text-foreground">Service runbooks unavailable</h3>
         <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
-          Failed to load attached workflows from the database. Workflow bindings and triggers could not be retrieved. Please check database connectivity or refresh the page.
+          Attached workflows could not be retrieved. Refresh to retry; the cause has been recorded
+          in server logs.
         </p>
       </div>
     );
@@ -164,17 +214,115 @@ export default function ServiceRunbooks({
 
   return (
     <div className="space-y-6">
+      {loadErrors.length > 0 && (
+        <div role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">
+          {loadErrors.includes('agents') && (
+            <p>Agent inventory unavailable. Existing workflows remain visible.</p>
+          )}
+          {loadErrors.includes('pools') && <p>Pool inventory unavailable.</p>}
+          {loadErrors.includes('library') && <p>Runbook library unavailable.</p>}
+          <p>
+            Configuration changes are temporarily unavailable because their dependencies could not
+            be checked.
+          </p>
+          <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+            Retry loading
+          </Button>
+        </div>
+      )}
+      <form
+        method="get"
+        className="flex flex-wrap items-end gap-2"
+        aria-label="Search service rule history"
+      >
+        <input type="hidden" name="tab" value="runbooks" />
+        <label>
+          Rule history
+          <select
+            name="rulesState"
+            aria-label="Rule history"
+            defaultValue={rulesState}
+            className="ml-2 rounded border bg-background p-2"
+          >
+            <option value="active">Attached rules</option>
+            <option value="archived">Archived rules</option>
+          </select>
+        </label>
+        <label>
+          Search rules
+          <Input name="rulesSearch" defaultValue={rulesSearch} maxLength={100} />
+        </label>
+        <Button type="submit" variant="outline">
+          Search rule history
+        </Button>
+      </form>
+      <form
+        method="get"
+        className="flex flex-wrap items-end gap-2"
+        aria-label="Search rule configuration options"
+      >
+        <input type="hidden" name="tab" value="runbooks" />
+        <input type="hidden" name="rulesState" value={rulesState} />
+        <input type="hidden" name="rulesSearch" value={rulesSearch} />
+        <label>
+          Workflow search
+          <Input name="ruleCatalog" defaultValue={catalogQuery} maxLength={100} />
+        </label>
+        <label>
+          Agent / pool search
+          <Input name="ruleTargets" defaultValue={targetQuery} maxLength={100} />
+        </label>
+        <Button type="submit" variant="outline">
+          Search options
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Showing up to 50 workflows, 20 versions per workflow and 100 matching targets. Search to
+          narrow options.
+        </p>
+      </form>
+      {pagination && (
+        <nav
+          aria-label="Automation rule pages"
+          className="flex flex-wrap items-center gap-3 text-sm"
+        >
+          <span>{bindings.length} rules on this page</span>
+          {pagination.after && (
+            <Link
+              href={`/services/${serviceId}?tab=runbooks&rulesState=${rulesState}&rulesSearch=${encodeURIComponent(rulesSearch)}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
+            >
+              First rules
+            </Link>
+          )}
+          {pagination.hasNext && (
+            <Link
+              href={`/services/${serviceId}?tab=runbooks&rulesAfter=${encodeURIComponent(pagination.nextCursor ?? '')}&rulesState=${rulesState}&rulesSearch=${encodeURIComponent(rulesSearch)}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
+            >
+              Next rules
+            </Link>
+          )}
+        </nav>
+      )}
+      <Button asChild variant="outline">
+        <Link
+          href={`/services/${serviceId}?tab=runbooks&rulesCheck=1&rulesAfter=${encodeURIComponent(pagination?.after ?? '')}&rulesState=${rulesState}&rulesSearch=${encodeURIComponent(rulesSearch)}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
+        >
+          Check visible rule readiness
+        </Link>
+      </Button>
       {/* Elevated Header with Live KPI Overview */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Service Runbooks</h2>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">
+              Service Automations
+            </h2>
             <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5">
-              {bindings.length} {bindings.length === 1 ? 'attached' : 'attached'}
+              {bindings.length} {pagination ? 'on this page' : 'attached'}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Attach automated diagnostic scripts, recovery playbooks, and safe operational procedures.
+            Attach automated diagnostic scripts, recovery playbooks, and safe operational
+            procedures.
           </p>
         </div>
 
@@ -186,14 +334,14 @@ export default function ServiceRunbooks({
             </Link>
           </Button>
 
-          {canManage && unattached.length > 0 && (
+          {canManage && configurationAvailable && unattached.length > 0 && (
             <ConfigureSheet
-              title="Attach Runbook to Service"
+              title="Create Service Automation Rule"
               description="Select a workflow from your library and configure service-specific inputs and execution target."
               trigger={
                 <Button size="sm" className="h-9 gap-1.5 shadow-xs">
                   <Plus className="h-4 w-4" />
-                  <span>Attach Runbook</span>
+                  <span>Create rule</span>
                 </Button>
               }
             >
@@ -204,7 +352,10 @@ export default function ServiceRunbooks({
                     name="selectedRunbook"
                     label="Choose workflow"
                     value={activeAttachRunbook?.id ?? ''}
-                    onValueChange={setSelectedAttachId}
+                    onValueChange={value => {
+                      setSelectedAttachId(value);
+                      setSelectedAttachVersionId(null);
+                    }}
                     options={unattached.map(r => ({
                       value: r.id,
                       label: `${r.name} (v${r.publishedVersion?.version ?? '1'})`,
@@ -216,7 +367,7 @@ export default function ServiceRunbooks({
                   <ActionForm
                     key={activeAttachRunbook.id}
                     action={attachRunbookAction.bind(null, serviceId)}
-                    className="grid gap-3.5 rounded-lg border bg-muted/20 p-4 lg:grid-cols-3"
+                    className="space-y-3 rounded-lg border bg-muted/20 p-4"
                   >
                     <input
                       type="hidden"
@@ -238,66 +389,155 @@ export default function ServiceRunbooks({
                       )}
                     </div>
 
-                    <Field label="Execution mode">
-                      <FormSelect
-                        name="mode"
-                        label="Execution mode"
-                        defaultValue="MANUAL"
-                        options={[
-                          { value: 'MANUAL', label: 'Manual (Operator triggered)' },
-                          { value: 'SUGGESTED', label: 'Suggested (Recommended on incidents)' },
-                          { value: 'AUTOMATIC', label: 'Automatic (Requires pinned version)' },
-                        ]}
-                      />
-                    </Field>
+                    <RuleWizard
+                      steps={[
+                        {
+                          title: 'Version and mode',
+                          content: (
+                            <>
+                              <RunbookBindingVersionInputs
+                                initialMode="MANUAL"
+                                runbookId={activeAttachRunbook.id}
+                                versions={[
+                                  ...new Map(
+                                    [
+                                      ...activeAttachRunbook.versions,
+                                      ...(activeAttachRunbook.publishedVersion
+                                        ? [activeAttachRunbook.publishedVersion]
+                                        : []),
+                                    ].map(version => [version.id, version])
+                                  ).values(),
+                                ].map(version => ({
+                                  ...version,
+                                  hasAgentWrite:
+                                    version.hasAgentWrite ?? hasAgentWrites(version.definition),
+                                  inputs: version.inputs ?? [],
+                                }))}
+                                publishedVersionId={activeAttachRunbook.publishedVersionId ?? ''}
+                                initialStrategy="LATEST_PUBLISHED"
+                                initialVersionId={null}
+                                values={{}}
+                                includeInputs={false}
+                                onVersionChange={setSelectedAttachVersionId}
+                              />
 
-                    <Field label="Version strategy">
-                      <FormSelect
-                        name="versionStrategy"
-                        label="Version strategy"
-                        defaultValue="LATEST_PUBLISHED"
-                        options={[
-                          { value: 'LATEST_PUBLISHED', label: 'Latest published (Auto-tracks release)' },
-                          { value: 'PINNED', label: 'Pinned (Fixed version)' },
-                        ]}
-                      />
-                    </Field>
+                              <Field label="Rule name">
+                                <Input
+                                  name="ruleName"
+                                  placeholder="Production recovery"
+                                  maxLength={200}
+                                />
+                              </Field>
+                              <Field label="Initial status">
+                                <FormSelect
+                                  name="enabled"
+                                  label="Initial rule status"
+                                  defaultValue="false"
+                                  options={[
+                                    {
+                                      value: 'false',
+                                      label: 'Save paused · Review checks before enabling',
+                                    },
+                                    {
+                                      value: 'true',
+                                      label: 'Enable Manual/Suggested · Automatic saves paused',
+                                    },
+                                  ]}
+                                />
+                              </Field>
+                            </>
+                          ),
+                        },
+                        {
+                          title: 'Target and inputs',
+                          content: (
+                            <>
+                              <Field label="Execution target">
+                                <RunbookTargetSelect
+                                  agents={availableAgents}
+                                  pools={availableAgentPools}
+                                  hasAgentWrite={
+                                    activeAttachVersion
+                                      ? (activeAttachVersion.hasAgentWrite ??
+                                        hasAgentWrites(
+                                          'definition' in activeAttachVersion
+                                            ? activeAttachVersion.definition
+                                            : undefined
+                                        ))
+                                      : false
+                                  }
+                                />
+                              </Field>
 
-                    <Field label="Execution target">
-                      <RunbookTargetSelect
-                        agents={availableAgents}
-                        pools={availableAgentPools}
-                        hasAgentWrite={
-                          activeAttachRunbook.publishedVersion
-                            ? hasAgentWrites(activeAttachRunbook.publishedVersion.definition)
-                            : false
-                        }
-                      />
-                    </Field>
+                              {selectedMetadata?.metadataOnly && !activeAttachVersion && (
+                                <p data-form-invalid="true" role="status">
+                                  {loadedVersion.error
+                                    ? 'Version configuration unavailable. Reload to retry.'
+                                    : 'Loading selected version configuration…'}
+                                </p>
+                              )}
+                              <RunbookSelectorBuilder />
+                              <AutomaticTargetGuard />
 
-                    <Field label="Agent selector (JSON)">
-                      <Textarea
-                        name="agentSelector"
-                        aria-label="Agent selector"
-                        defaultValue="{}"
-                        className="font-mono text-xs"
-                      />
-                    </Field>
-
-                    {(activeAttachRunbook.publishedVersion?.inputs.length ?? 0) > 0 && (
-                      <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
-                        <InputFields
-                          definitions={activeAttachRunbook.publishedVersion?.inputs ?? []}
-                          values={{}}
-                        />
-                      </div>
-                    )}
-
-                    <div className="lg:col-span-3 pt-2">
-                      <SubmitButton pendingLabel="Attaching…">
-                        Attach {activeAttachRunbook.name}
-                      </SubmitButton>
-                    </div>
+                              {(activeAttachVersion?.inputs?.length ?? 0) > 0 && (
+                                <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
+                                  <InputFields
+                                    key={activeAttachVersion?.id}
+                                    definitions={activeAttachVersion?.inputs ?? []}
+                                    values={{}}
+                                  />
+                                </div>
+                              )}
+                            </>
+                          ),
+                        },
+                        {
+                          title: 'Trigger',
+                          content: (
+                            <>
+                              <Field label="Initial trigger">
+                                <FormSelect
+                                  name="initialTrigger"
+                                  label="Initial trigger"
+                                  defaultValue="none"
+                                  options={[
+                                    { value: 'none', label: 'No trigger · Not armed' },
+                                    {
+                                      value: 'INCIDENT_CREATED',
+                                      label: 'Incident created · Every new incident',
+                                    },
+                                  ]}
+                                />
+                              </Field>
+                              <p className="text-sm text-muted-foreground">
+                                Manual mode never arms a trigger. Incident-created triggers apply to
+                                future events. After saving, use Configure to narrow conditions
+                                before enabling automation.
+                              </p>
+                            </>
+                          ),
+                        },
+                        {
+                          title: 'Review and save',
+                          content: (
+                            <>
+                              <p className="text-sm">
+                                Automatic rules always save paused. Activate separately from Rule
+                                evidence after fresh policy checks. Review the selected immutable
+                                version, execution mode, target and inputs before saving.
+                                Configuration checks do not prove platform permissions. Save paused
+                                to review configuration and Agent policy evidence first.
+                              </p>
+                              <div className="lg:col-span-3 pt-2">
+                                <SubmitButton pendingLabel="Attaching…">
+                                  Attach {activeAttachRunbook.name}
+                                </SubmitButton>
+                              </div>
+                            </>
+                          ),
+                        },
+                      ]}
+                    />
                   </ActionForm>
                 )}
               </div>
@@ -319,21 +559,21 @@ export default function ServiceRunbooks({
           <div className="rounded-xl border bg-card/60 p-3.5 shadow-2xs backdrop-blur-xs">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
               <Zap className="h-4 w-4 text-indigo-500" />
-              <span>Automated</span>
+              <span>Configured automatic{pagination ? ' · This page' : ''}</span>
             </div>
             <div className="mt-1.5 text-2xl font-bold text-foreground">{autoCount}</div>
           </div>
           <div className="rounded-xl border bg-card/60 p-3.5 shadow-2xs backdrop-blur-xs">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
               <Play className="h-4 w-4 text-blue-500" />
-              <span>Manual</span>
+              <span>Configured manual{pagination ? ' · This page' : ''}</span>
             </div>
             <div className="mt-1.5 text-2xl font-bold text-foreground">{manualCount}</div>
           </div>
           <div className="rounded-xl border bg-card/60 p-3.5 shadow-2xs backdrop-blur-xs">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
               <Clock className="h-4 w-4 text-amber-500" />
-              <span>Executions</span>
+              <span>Historical executions{pagination ? ' · This page' : ''}</span>
             </div>
             <div className="mt-1.5 text-2xl font-bold text-foreground">{totalExecutions}</div>
           </div>
@@ -381,8 +621,31 @@ export default function ServiceRunbooks({
       {/* Bindings List */}
       <div className="space-y-4">
         {filteredBindings.map(binding => {
-          const boundAgent = availableAgents.find(a => a.id === binding.defaultAgentId);
-          const boundPool = availableAgentPools.find(p => p.id === binding.defaultAgentPoolId);
+          if (binding.detachedAt)
+            return (
+              <Card key={binding.id}>
+                <CardHeader>
+                  <CardTitle>{binding.name || binding.runbook.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p>Rule detached · Archived history</p>
+                  <p className="text-muted-foreground">
+                    This rule cannot execute. Its configuration, suggestions and execution evidence
+                    are retained.
+                  </p>
+                  <Link
+                    href={`/services/${serviceId}/automations/${binding.id}`}
+                    className="underline"
+                  >
+                    View archived rule evidence
+                  </Link>
+                </CardContent>
+              </Card>
+            );
+
+          const presentation =
+            binding.presentation ??
+            describeBinding(binding, availableAgents, availableAgentPools, loadErrors);
           const lastExecution = binding.executions?.[0];
 
           return (
@@ -396,14 +659,14 @@ export default function ServiceRunbooks({
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
                       <Link
                         href={`/runbooks/${binding.runbookId}`}
-                        className="hover:underline flex items-center gap-1.5 text-foreground group-hover:text-primary transition-colors"
+                        className="hover:underline flex items-center gap-1.5 break-words min-w-0 text-foreground group-hover:text-primary transition-colors"
                       >
-                        {binding.runbook.name}
+                        {binding.name || binding.runbook.name}
                         <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100" />
                       </Link>
                     </CardTitle>
                     {binding.runbook.description && (
-                      <CardDescription className="text-xs line-clamp-2">
+                      <CardDescription className="text-xs whitespace-normal break-words">
                         {binding.runbook.description}
                       </CardDescription>
                     )}
@@ -449,8 +712,8 @@ export default function ServiceRunbooks({
                     <Badge variant="outline" className="text-[11px] font-medium gap-1">
                       {binding.versionStrategy === 'PINNED' ? (
                         <>
-                          <Shield className="h-3 w-3 text-muted-foreground" />
-                          v{binding.runbookVersion?.version ?? '?'} (Pinned)
+                          <Shield className="h-3 w-3 text-muted-foreground" />v
+                          {binding.runbookVersion?.version ?? '?'} (Pinned)
                         </>
                       ) : (
                         'Latest published'
@@ -484,196 +747,275 @@ export default function ServiceRunbooks({
               </CardHeader>
 
               <CardContent className="space-y-3.5 pt-0">
-                {/* Target and Trigger Contract Information */}
-                <div className="rounded-lg border bg-muted/30 p-2.5">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Target:{' '}
-                    {boundAgent?.name ??
-                      boundPool?.name ??
-                      (binding.defaultAgentId
-                        ? 'Unavailable Agent'
-                        : binding.defaultAgentPoolId
-                          ? 'Unavailable pool'
-                          : 'Control plane')}{' '}
-                    · Trigger:{' '}
-                    {binding.triggers && binding.triggers.some(trigger => trigger.enabled)
-                      ? binding.triggers
-                          .filter(trigger => trigger.enabled)
-                          .map(
-                            trigger =>
-                              `${trigger.event.replaceAll('_', ' ')} · ${trigger.conditions.length} conditions`
-                          )
-                          .join('; ')
-                      : 'Manual only'}
+                {!binding.readiness && (
+                  <p className="text-xs text-muted-foreground">
+                    {binding.enabled
+                      ? 'Target and policy readiness not assessed. Open Rule evidence or check this page.'
+                      : 'Rule paused · Target checks not run.'}
                   </p>
-                </div>
-
-                {/* Input Summary */}
-                <InputSummary
-                  definitions={
-                    binding.runbookVersion?.inputs ?? binding.runbook.publishedVersion?.inputs ?? []
-                  }
-                  values={binding.inputValues as Record<string, unknown>}
-                />
-
-                {/* Actions Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-                  <div className="flex items-center gap-2">
-                    <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
-                      <Link href={`/runbooks/${binding.runbookId}`}>
-                        <BookOpen className="h-3.5 w-3.5" />
-                        <span>View Runbook</span>
-                      </Link>
-                    </Button>
-
-                    {canManage && (
-                      <ConfigureSheet
-                        title={`Configure ${binding.runbook.name}`}
-                        description="Review version, inputs, target and trigger policy before saving."
-                        trigger={
-                          <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                            <Settings2 className="h-3.5 w-3.5" />
-                            <span>Configure</span>
-                          </Button>
-                        }
+                )}
+                {binding.readiness && (
+                  <section
+                    aria-label="Rule readiness"
+                    className="rounded-lg border p-3 text-xs space-y-2"
+                  >
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant={binding.readiness.state === 'BLOCKED' ? 'danger' : 'outline'}>
+                        {binding.readiness.state.replaceAll('_', ' ')}
+                      </Badge>
+                      <span>
+                        {binding.readiness.eligibleAgents === null
+                          ? binding.readiness.state === 'PAUSED'
+                            ? 'Target checks paused'
+                            : binding.readiness.checks.some(
+                                  check => check.code === 'INCIDENT_CONTEXT_REQUIRED'
+                                )
+                              ? 'Target requires incident context'
+                              : 'Target check unavailable'
+                          : `${binding.readiness.eligibleAgents} matching online Agents`}{' '}
+                        · checked {new Date(binding.readiness.checkedAt).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    {binding.readiness.checks
+                      .filter(check => check.state === 'blocked')
+                      .slice(0, 3)
+                      .map(check => (
+                        <p key={check.code}>{check.message}</p>
+                      ))}
+                  </section>
+                )}
+                <Button asChild variant="outline">
+                  <Link href={`/services/${serviceId}/automations/${binding.id}`}>
+                    Rule evidence
+                  </Link>
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Target: {presentation.target} · Trigger: {presentation.trigger}
+                </p>
+                <details className="space-y-3">
+                  <summary className="cursor-pointer text-sm font-medium">Manage rule</summary>
+                  {canManage && configurationAvailable && (
+                    <ActionForm action={checkRulePolicyAction.bind(null, serviceId, binding.id)}>
+                      <SubmitButton
+                        variant="outline"
+                        pendingLabel="Requesting read-only policy check…"
                       >
-                        <ActionForm
-                          action={updateRunbookBindingAction.bind(null, serviceId, binding.id)}
-                          className="grid gap-3 lg:grid-cols-4"
-                        >
-                          <Field label="Mode">
-                            <FormSelect
-                              name="mode"
-                              label="Execution mode"
-                              defaultValue={binding.mode}
-                              options={[
-                                { value: 'MANUAL', label: 'Manual' },
-                                { value: 'SUGGESTED', label: 'Suggested' },
-                                { value: 'AUTOMATIC', label: 'Automatic · requires pinned version' },
-                              ]}
-                            />
-                          </Field>
-                          <RunbookBindingVersionInputs
-                            versions={
-                              availableRunbooks
-                                .find(item => item.id === binding.runbookId)
-                                ?.versions.map(version => ({
-                                  id: version.id,
-                                  version: version.version,
-                                  state: version.state,
-                                  hasAgentWrite: hasAgentWrites(version.definition),
-                                  inputs: version.inputs.map(input => ({
-                                    key: input.key,
-                                    label: input.label,
-                                    type: input.type,
-                                    required: input.required,
-                                    defaultValue: input.defaultValue,
-                                    description: input.description,
-                                  })),
-                                })) ?? []
-                            }
-                            publishedVersionId={binding.runbook.publishedVersionId ?? ''}
-                            initialStrategy={binding.versionStrategy}
-                            initialVersionId={binding.runbookVersionId}
-                            values={binding.inputValues as Record<string, unknown>}
-                            targets={{
-                              agents: availableAgents,
-                              pools: availableAgentPools,
-                              defaultValue: binding.defaultAgentId
-                                ? `agent:${binding.defaultAgentId}`
-                                : binding.defaultAgentPoolId
-                                  ? `pool:${binding.defaultAgentPoolId}`
-                                  : 'none',
-                            }}
-                          />
-                          <Field label="Agent selector (JSON)">
-                            <Textarea
-                              name="agentSelector"
-                              aria-label="Agent selector"
-                              defaultValue={JSON.stringify(binding.agentSelector ?? {})}
-                            />
-                          </Field>
-                          <Field label="Status">
-                            <FormSelect
-                              name="enabled"
-                              label="Binding status"
-                              defaultValue={String(binding.enabled)}
-                              options={[
-                                { value: 'true', label: 'Enabled' },
-                                { value: 'false', label: 'Disabled' },
-                              ]}
-                            />
-                          </Field>
-                          <div className="order-2 flex gap-2 lg:col-span-4">
-                            <SubmitButton variant="outline">
-                              <Settings2 className="mr-1.5 h-3.5 w-3.5" /> Save binding
-                            </SubmitButton>
-                          </div>
-                        </ActionForm>
-                        <ConfirmAction
-                          action={detachRunbookAction.bind(null, serviceId, binding.id)}
-                          title={`Detach ${binding.runbook.name}?`}
-                          description="This service will no longer offer or trigger the Runbook. Existing execution history is retained."
-                          label="Detach Runbook"
-                        />
-                        <ActionForm
-                          action={configureRunbookTriggerAction.bind(null, serviceId, binding.id)}
-                          className="mt-4 grid gap-3 border-t pt-4 lg:grid-cols-3"
-                        >
-                          <Field label="Trigger event">
-                            <FormSelect
-                              name="event"
-                              label="Trigger event"
-                              defaultValue="INCIDENT_CREATED"
-                              options={[{ value: 'INCIDENT_CREATED', label: 'Incident created' }]}
-                            />
-                          </Field>
-                          <Field label="Condition logic">
-                            <FormSelect
-                              name="conditionLogic"
-                              label="Condition logic"
-                              defaultValue={binding.triggers?.[0]?.conditionLogic ?? 'AND'}
-                              options={[
-                                { value: 'AND', label: 'Match all' },
-                                { value: 'OR', label: 'Match any' },
-                              ]}
-                            />
-                          </Field>
-                          <div className="flex items-end">
-                            <SubmitButton variant="outline" pendingLabel="Saving trigger…">
-                              Save trigger
-                            </SubmitButton>
-                          </div>
-                          <div className="space-y-3 lg:col-span-3">
-                            <Label>Conditions</Label>
-                            {(binding.triggers?.[0]?.conditions ?? []).map(condition => (
-                              <TriggerConditionRow
-                                key={condition.id}
-                                field={condition.field}
-                                operator={condition.operator}
-                                value={condition.value}
-                              />
-                            ))}
-                            <TriggerConditionRow />
-                            <p className="text-xs text-muted-foreground">
-                              Leave the final field empty to add no condition. Comma-separate values for
-                              “in” operators. Automatic mode still stops at approval gates.
-                            </p>
-                          </div>
-                        </ActionForm>
-                      </ConfigureSheet>
-                    )}
-                  </div>
-
-                  {canManage && (
-                    <ConfirmAction
-                      action={detachRunbookAction.bind(null, serviceId, binding.id)}
-                      title={`Detach ${binding.runbook.name}?`}
-                      description="This service will no longer offer or trigger the Runbook. Existing execution history is retained."
-                      label="Detach"
-                    />
+                        Check Agent policy · No execution
+                      </SubmitButton>
+                      <p className="text-xs text-muted-foreground">
+                        The Agent checks this frozen configuration against its local policy. This
+                        does not run a step or verify target-side permissions.
+                      </p>
+                    </ActionForm>
                   )}
-                </div>
+                  {canManage && (
+                    <div className="flex flex-wrap gap-2">
+                      {binding.enabled && (
+                        <ConfirmAction
+                          action={pauseRuleAction.bind(null, serviceId, binding.id)}
+                          label="Pause rule"
+                          title="Pause this automation rule?"
+                          description="This stops future triggering. Existing executions retain their own cancellation and approval controls."
+                        />
+                      )}
+                      <ActionForm action={duplicateRuleAction.bind(null, serviceId, binding.id)}>
+                        <SubmitButton variant="outline">Duplicate paused rule</SubmitButton>
+                      </ActionForm>
+                    </div>
+                  )}
+                  {/* Input Summary */}
+                  <InputSummary
+                    definitions={
+                      binding.runbookVersion?.inputs ??
+                      binding.runbook.publishedVersion?.inputs ??
+                      []
+                    }
+                    values={binding.inputValues as Record<string, unknown>}
+                  />
+
+                  {/* Actions Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                    <div className="flex items-center gap-2">
+                      <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
+                        <Link href={`/runbooks/${binding.runbookId}`}>
+                          <BookOpen className="h-3.5 w-3.5" />
+                          <span>View Runbook</span>
+                        </Link>
+                      </Button>
+
+                      {canManage && configurationAvailable && (
+                        <ConfigureSheet
+                          title={`Configure ${binding.runbook.name}`}
+                          description="Review version, inputs, target and trigger policy before saving."
+                          trigger={
+                            <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                              <Settings2 className="h-3.5 w-3.5" />
+                              <span>Configure</span>
+                            </Button>
+                          }
+                        >
+                          {binding.mode === 'AUTOMATIC' && (
+                            <div
+                              role="note"
+                              className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+                            >
+                              Saving configuration or trigger conditions pauses this Automatic rule
+                              immediately.{' '}
+                              <Link
+                                className="underline"
+                                href={`/services/${serviceId}/automations/${binding.id}`}
+                              >
+                                Recheck policy and reactivate from Rule evidence
+                              </Link>{' '}
+                              after every save. Suggestions and execution history are retained.
+                            </div>
+                          )}
+                          <ActionForm
+                            key={`configuration-${binding.id}`}
+                            action={updateRunbookBindingAction.bind(null, serviceId, binding.id)}
+                            className="grid gap-3 lg:grid-cols-4"
+                          >
+                            <div key={binding.configurationRevision} className="contents">
+                              <input
+                                type="hidden"
+                                name="expectedConfigurationRevision"
+                                value={binding.configurationRevision}
+                              />
+                              <RunbookBindingVersionInputs
+                                initialMode={binding.mode}
+                                runbookId={binding.runbookId}
+                                versions={[
+                                  ...new Map(
+                                    [
+                                      ...(availableRunbooks
+                                        .find(item => item.id === binding.runbookId)
+                                        ?.versions.map(version => ({
+                                          ...version,
+                                          inputs: version.inputs ?? [],
+                                        })) ?? []),
+                                      ...(binding.runbookVersion ? [binding.runbookVersion] : []),
+                                      ...(binding.runbook.publishedVersion
+                                        ? [binding.runbook.publishedVersion]
+                                        : []),
+                                    ].map(version => [version.id, version])
+                                  ).values(),
+                                ].map(version => ({
+                                  ...version,
+                                  hasAgentWrite: hasAgentWrites(version.definition),
+                                }))}
+                                publishedVersionId={binding.runbook.publishedVersionId ?? ''}
+                                initialStrategy={binding.versionStrategy}
+                                initialVersionId={binding.runbookVersionId}
+                                values={binding.inputValues as Record<string, unknown>}
+                                targets={{
+                                  agents: availableAgents,
+                                  pools: availableAgentPools,
+                                  defaultValue: binding.defaultAgentId
+                                    ? `agent:${binding.defaultAgentId}`
+                                    : binding.defaultAgentPoolId
+                                      ? `pool:${binding.defaultAgentPoolId}`
+                                      : 'none',
+                                }}
+                              />
+                              <RunbookSelectorBuilder initialValue={binding.agentSelector} />
+                              <AutomaticTargetGuard />
+                              <Field label="Rule name">
+                                <Input
+                                  name="ruleName"
+                                  defaultValue={binding.name ?? ''}
+                                  maxLength={200}
+                                />
+                              </Field>
+                              <Field label="Status">
+                                <FormSelect
+                                  name="enabled"
+                                  label="Binding status"
+                                  defaultValue={String(binding.enabled)}
+                                  options={[
+                                    { value: 'true', label: 'Enabled' },
+                                    { value: 'false', label: 'Disabled' },
+                                  ]}
+                                />
+                              </Field>
+                              <div className="order-2 flex gap-2 lg:col-span-4">
+                                <SubmitButton variant="outline">
+                                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                  {binding.mode === 'AUTOMATIC'
+                                    ? 'Save and pause Automatic rule'
+                                    : 'Save binding'}
+                                </SubmitButton>
+                              </div>
+                            </div>
+                          </ActionForm>
+                          <ConfirmAction
+                            action={detachRunbookAction.bind(null, serviceId, binding.id)}
+                            title={`Detach ${binding.runbook.name}?`}
+                            description="This rule will be archived and disabled. Pending suggestions cannot be started. Suggestion history, configuration and execution links are retained."
+                            label="Detach Runbook"
+                          />
+                          <ActionForm
+                            key={`trigger-${binding.id}`}
+                            action={configureRunbookTriggerAction.bind(null, serviceId, binding.id)}
+                            className="mt-4 grid gap-3 border-t pt-4 lg:grid-cols-3"
+                          >
+                            <div key={binding.configurationRevision} className="contents">
+                              <input
+                                type="hidden"
+                                name="expectedConfigurationRevision"
+                                value={binding.configurationRevision}
+                              />
+                              <Field label="Trigger event">
+                                <FormSelect
+                                  name="event"
+                                  label="Trigger event"
+                                  defaultValue="INCIDENT_CREATED"
+                                  options={[
+                                    { value: 'INCIDENT_CREATED', label: 'Incident created' },
+                                  ]}
+                                />
+                              </Field>
+                              <Field label="Condition logic">
+                                <FormSelect
+                                  name="conditionLogic"
+                                  label="Condition logic"
+                                  defaultValue={binding.triggers?.[0]?.conditionLogic ?? 'AND'}
+                                  options={[
+                                    { value: 'AND', label: 'Match all' },
+                                    { value: 'OR', label: 'Match any' },
+                                  ]}
+                                />
+                              </Field>
+                              <div className="flex items-end">
+                                <SubmitButton variant="outline" pendingLabel="Saving trigger…">
+                                  {binding.mode === 'AUTOMATIC'
+                                    ? 'Save trigger and pause Automatic rule'
+                                    : 'Save trigger'}
+                                </SubmitButton>
+                              </div>
+                              <div className="space-y-3 lg:col-span-3">
+                                <Label>Conditions</Label>
+                                {(binding.triggers?.[0]?.conditions ?? []).map(condition => (
+                                  <TriggerConditionRow
+                                    key={condition.id}
+                                    field={condition.field}
+                                    operator={condition.operator}
+                                    value={condition.value}
+                                  />
+                                ))}
+                                <TriggerConditionRow />
+                                <p className="text-xs text-muted-foreground">
+                                  Leave the final field empty to add no condition. Comma-separate
+                                  values for “in” operators. Automatic mode still stops at approval
+                                  gates.
+                                </p>
+                              </div>
+                            </div>
+                          </ActionForm>
+                        </ConfigureSheet>
+                      )}
+                    </div>
+                  </div>
+                </details>
               </CardContent>
             </Card>
           );
@@ -725,18 +1067,25 @@ function InputFields({
   definitions: InputDefinition[];
   values: Record<string, unknown>;
 }) {
+  const [entered, setEntered] = useState<Record<string, unknown>>(values);
   if (definitions.length === 0)
     return <p className="text-xs text-muted-foreground sm:col-span-2">No inputs required.</p>;
   return definitions.map(input => {
-    const current = values[input.key] ?? input.defaultValue ?? '';
+    const current = entered[input.key] ?? input.defaultValue ?? '';
     if (input.type === 'BOOLEAN') {
       return (
         <label key={input.key} className="flex items-start gap-2 rounded-md border p-3 text-sm">
           <input
             name={`input:${input.key}`}
+            data-review-sensitive={/password|secret|token|credential|api.?key|private.?key/i.test(
+              input.key
+            )}
             type="checkbox"
             value="true"
-            defaultChecked={current === true || current === 'true'}
+            checked={current === true || current === 'true'}
+            onChange={event =>
+              setEntered(previous => ({ ...previous, [input.key]: event.target.checked }))
+            }
             className="mt-0.5 h-4 w-4"
           />
           <span>
@@ -758,10 +1107,17 @@ function InputFields({
       <Field key={input.key} label={`${input.label}${input.required ? ' *' : ''}`}>
         <Input
           name={`input:${input.key}`}
+          data-review-sensitive={
+            input.type === 'SECRET_REF' ||
+            /password|secret|token|credential|api.?key|private.?key/i.test(input.key)
+          }
           type={input.type === 'NUMBER' ? 'number' : input.type === 'URL' ? 'url' : 'text'}
           step={input.type === 'NUMBER' ? 'any' : undefined}
           required={input.required}
-          defaultValue={displayed}
+          value={displayed}
+          onChange={event =>
+            setEntered(previous => ({ ...previous, [input.key]: event.target.value }))
+          }
           placeholder={
             input.type === 'DURATION'
               ? '30s, 5m, or 1h'
@@ -894,7 +1250,8 @@ function hasAgentWrites(definition: unknown): boolean {
           key: 'check',
           name: 'check',
           type: step.type as import('@/lib/runbooks/types').RunbookStepType,
-          riskClass: (step.riskClass as import('@/lib/runbooks/types').RunbookRiskClass) ?? 'READ_ONLY',
+          riskClass:
+            (step.riskClass as import('@/lib/runbooks/types').RunbookRiskClass) ?? 'READ_ONLY',
           config: step.config ?? {},
         });
         const declaredRisk = step.riskClass;

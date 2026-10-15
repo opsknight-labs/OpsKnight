@@ -49,6 +49,7 @@ const { mockPrisma, mockAssertCapability } = vi.hoisted(() => {
       count: vi.fn(),
       findFirst: vi.fn(),
     },
+    runtimeWorkerHeartbeat: { findMany: vi.fn() },
     runbookSecret: {
       count: vi.fn(),
     },
@@ -73,35 +74,51 @@ describe('Runbook Presentation Contracts & Helpers', () => {
   describe('resolveEffectiveAgentStatus', () => {
     it('returns ONLINE when heartbeat is fresh', () => {
       const recent = new Date(now.getTime() - (HEARTBEAT_FRESHNESS_MS - 5000));
-      expect(resolveEffectiveAgentStatus({ status: 'ONLINE', lastHeartbeatAt: recent }, now)).toBe('ONLINE');
+      expect(resolveEffectiveAgentStatus({ status: 'ONLINE', lastHeartbeatAt: recent }, now)).toBe(
+        'ONLINE'
+      );
     });
 
     it('returns OFFLINE when ONLINE heartbeat has lapsed', () => {
       const stale = new Date(now.getTime() - (HEARTBEAT_FRESHNESS_MS + 5000));
-      expect(resolveEffectiveAgentStatus({ status: 'ONLINE', lastHeartbeatAt: stale }, now)).toBe('OFFLINE');
+      expect(resolveEffectiveAgentStatus({ status: 'ONLINE', lastHeartbeatAt: stale }, now)).toBe(
+        'OFFLINE'
+      );
     });
 
     it('returns OFFLINE when ONLINE heartbeat is null', () => {
-      expect(resolveEffectiveAgentStatus({ status: 'ONLINE', lastHeartbeatAt: null }, now)).toBe('OFFLINE');
+      expect(resolveEffectiveAgentStatus({ status: 'ONLINE', lastHeartbeatAt: null }, now)).toBe(
+        'OFFLINE'
+      );
     });
 
     it('returns DEGRADED when DEGRADED heartbeat is fresh', () => {
       const recent = new Date(now.getTime() - 10000);
-      expect(resolveEffectiveAgentStatus({ status: 'DEGRADED', lastHeartbeatAt: recent }, now)).toBe('DEGRADED');
+      expect(
+        resolveEffectiveAgentStatus({ status: 'DEGRADED', lastHeartbeatAt: recent }, now)
+      ).toBe('DEGRADED');
     });
 
     it('returns OFFLINE when DEGRADED heartbeat has lapsed', () => {
       const stale = new Date(now.getTime() - (HEARTBEAT_FRESHNESS_MS + 10000));
-      expect(resolveEffectiveAgentStatus({ status: 'DEGRADED', lastHeartbeatAt: stale }, now)).toBe('OFFLINE');
+      expect(resolveEffectiveAgentStatus({ status: 'DEGRADED', lastHeartbeatAt: stale }, now)).toBe(
+        'OFFLINE'
+      );
     });
 
     it('preserves OFFLINE status regardless of heartbeat', () => {
-      expect(resolveEffectiveAgentStatus({ status: 'OFFLINE', lastHeartbeatAt: now }, now)).toBe('OFFLINE');
+      expect(resolveEffectiveAgentStatus({ status: 'OFFLINE', lastHeartbeatAt: now }, now)).toBe(
+        'OFFLINE'
+      );
     });
 
     it('preserves ENROLLING and REVOKED statuses regardless of heartbeat', () => {
-      expect(resolveEffectiveAgentStatus({ status: 'ENROLLING', lastHeartbeatAt: null }, now)).toBe('ENROLLING');
-      expect(resolveEffectiveAgentStatus({ status: 'REVOKED', lastHeartbeatAt: null }, now)).toBe('REVOKED');
+      expect(resolveEffectiveAgentStatus({ status: 'ENROLLING', lastHeartbeatAt: null }, now)).toBe(
+        'ENROLLING'
+      );
+      expect(resolveEffectiveAgentStatus({ status: 'REVOKED', lastHeartbeatAt: null }, now)).toBe(
+        'REVOKED'
+      );
     });
   });
 
@@ -174,10 +191,7 @@ describe('Runbook Presentation Contracts & Helpers', () => {
       expect(where).toEqual({
         steps: {
           some: {
-            OR: [
-              { status: 'UNKNOWN' },
-              { attempts: { some: { status: 'UNKNOWN' } } },
-            ],
+            OR: [{ status: 'UNKNOWN' }, { attempts: { some: { status: 'UNKNOWN' } } }],
           },
         },
       });
@@ -241,9 +255,7 @@ describe('Runbook Presentation Summaries', () => {
       deadLetterDepth: 0,
       activeJobs: 3,
     };
-    mockPrisma.$queryRaw
-      .mockResolvedValueOnce([{ now: dbNow }])
-      .mockResolvedValueOnce([mockFleet]);
+    mockPrisma.$queryRaw.mockResolvedValueOnce([{ now: dbNow }]).mockResolvedValueOnce([mockFleet]);
 
     const summary = await getRunbookFleetSummary();
     expect(summary).toEqual(mockFleet);
@@ -298,7 +310,18 @@ describe('Runbook Presentation Summaries', () => {
     expect(health.fleet.unhealthy).toBe(2);
   });
 
-  it('getRunbookHealthSummary evaluates HEALTHY when no defects exist and fleet is enrolled', async () => {
+  it('getRunbookHealthSummary requires fresh shared dispatch and reconciliation evidence for HEALTHY', async () => {
+    mockPrisma.runtimeWorkerHeartbeat.findMany.mockResolvedValue([
+      {
+        instanceId: 'test-worker',
+        lane: 'runbook',
+        running: true,
+        lastSeenAt: dbNow,
+        lastSuccessAt: dbNow,
+        lastReconciledAt: dbNow,
+        lastError: null,
+      },
+    ]);
     const mockFleet = {
       enrolled: 5,
       online: 5,
@@ -316,9 +339,7 @@ describe('Runbook Presentation Summaries', () => {
       if (sql.includes('RunbookAgent')) return [mockFleet];
       return [{ count: 0 }];
     });
-    mockPrisma.runbookStepAttempt.count
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0);
+    mockPrisma.runbookStepAttempt.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
     mockPrisma.runbookStepAttempt.findFirst.mockResolvedValueOnce(null);
 
     const health = await getRunbookHealthSummary();
@@ -343,9 +364,7 @@ describe('Runbook Presentation Summaries', () => {
       if (sql.includes('RunbookAgent')) return [mockFleet];
       return [{ count: 0 }];
     });
-    mockPrisma.runbookStepAttempt.count
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0);
+    mockPrisma.runbookStepAttempt.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
     mockPrisma.runbookStepAttempt.findFirst.mockResolvedValueOnce(null);
 
     const health = await getRunbookHealthSummary();
@@ -406,9 +425,7 @@ describe('/api/runbooks/options route handler', () => {
   });
 
   it('fetches services bounded to 30 options', async () => {
-    mockPrisma.service.findMany.mockResolvedValueOnce([
-      { id: 'srv-1', name: 'Payment API' },
-    ]);
+    mockPrisma.service.findMany.mockResolvedValueOnce([{ id: 'srv-1', name: 'Payment API' }]);
 
     const req = new NextRequest('http://localhost/api/runbooks/options?kind=service&q=payment');
     const res = await optionsRouteHandler(req);
@@ -418,9 +435,7 @@ describe('/api/runbooks/options route handler', () => {
   });
 
   it('fetches runbooks bounded to 30 options', async () => {
-    mockPrisma.runbook.findMany.mockResolvedValueOnce([
-      { id: 'rb-1', name: 'Restart Service' },
-    ]);
+    mockPrisma.runbook.findMany.mockResolvedValueOnce([{ id: 'rb-1', name: 'Restart Service' }]);
 
     const req = new NextRequest('http://localhost/api/runbooks/options?kind=runbook&q=restart');
     const res = await optionsRouteHandler(req);
@@ -430,9 +445,7 @@ describe('/api/runbooks/options route handler', () => {
   });
 
   it('fetches unrevoked agents bounded to 30 options', async () => {
-    mockPrisma.runbookAgent.findMany.mockResolvedValueOnce([
-      { id: 'ag-1', name: 'worker-01' },
-    ]);
+    mockPrisma.runbookAgent.findMany.mockResolvedValueOnce([{ id: 'ag-1', name: 'worker-01' }]);
 
     const req = new NextRequest('http://localhost/api/runbooks/options?kind=agent&q=worker');
     const res = await optionsRouteHandler(req);
@@ -448,9 +461,7 @@ describe('/api/runbooks/options route handler', () => {
   });
 
   it('requires RUNBOOK_SECRET_MANAGE and bounds targets to 15 agents + 15 pools', async () => {
-    mockPrisma.runbookAgent.findMany.mockResolvedValueOnce([
-      { id: 'ag-1', name: 'agent-alpha' },
-    ]);
+    mockPrisma.runbookAgent.findMany.mockResolvedValueOnce([{ id: 'ag-1', name: 'agent-alpha' }]);
     mockPrisma.runbookAgentPool.findMany.mockResolvedValueOnce([
       { id: 'pool-1', name: 'pool-beta' },
     ]);
@@ -460,8 +471,12 @@ describe('/api/runbooks/options route handler', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(mockAssertCapability).toHaveBeenCalledWith(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
-    expect(mockPrisma.runbookAgent.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 15 }));
-    expect(mockPrisma.runbookAgentPool.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 15 }));
+    expect(mockPrisma.runbookAgent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 15 })
+    );
+    expect(mockPrisma.runbookAgentPool.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 15 })
+    );
     expect(body.options).toEqual([
       { value: 'pool:pool-1', label: 'Pool · pool-beta' },
       { value: 'agent:ag-1', label: 'Agent · agent-alpha' },
@@ -469,15 +484,15 @@ describe('/api/runbooks/options route handler', () => {
   });
 
   it('resolves selected item if not present in search results', async () => {
-    mockPrisma.service.findMany.mockResolvedValueOnce([
-      { id: 'srv-1', name: 'Auth API' },
-    ]);
+    mockPrisma.service.findMany.mockResolvedValueOnce([{ id: 'srv-1', name: 'Auth API' }]);
     mockPrisma.service.findUnique.mockResolvedValueOnce({
       id: 'srv-99',
       name: 'Old Service Out Of View',
     });
 
-    const req = new NextRequest('http://localhost/api/runbooks/options?kind=service&q=auth&selected=srv-99');
+    const req = new NextRequest(
+      'http://localhost/api/runbooks/options?kind=service&q=auth&selected=srv-99'
+    );
     const res = await optionsRouteHandler(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -512,7 +527,9 @@ describe('/api/runbooks/options route handler', () => {
       name: 'EU-Central Legacy',
     });
 
-    const req = new NextRequest('http://localhost/api/runbooks/options?kind=pool&q=prod&selected=pool-99');
+    const req = new NextRequest(
+      'http://localhost/api/runbooks/options?kind=pool&q=prod&selected=pool-99'
+    );
     const res = await optionsRouteHandler(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -536,7 +553,9 @@ describe('/api/runbooks/options route handler', () => {
       status: 'REVOKED',
     });
 
-    const req = new NextRequest('http://localhost/api/runbooks/options?kind=agent-history&q=worker&selected=ag-99');
+    const req = new NextRequest(
+      'http://localhost/api/runbooks/options?kind=agent-history&q=worker&selected=ag-99'
+    );
     const res = await optionsRouteHandler(req);
     expect(res.status).toBe(200);
     const body = await res.json();

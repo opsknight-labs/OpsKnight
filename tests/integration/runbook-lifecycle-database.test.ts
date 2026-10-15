@@ -121,7 +121,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
 
     // Concurrently attach a service binding and attempt delete
     const [bindResult, deleteResult] = await Promise.allSettled([
-      testPrisma.serviceRunbookBinding.create({
+      testPrisma.serviceAutomationRule.create({
         data: {
           runbookId: runbook.id,
           serviceId: service.id,
@@ -138,7 +138,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
       expect(bindResult.status).toBe('rejected');
       const record = await testPrisma.runbook.findUnique({ where: { id: runbook.id } });
       expect(record).toBeNull();
-      const binding = await testPrisma.serviceRunbookBinding.findFirst({
+      const binding = await testPrisma.serviceAutomationRule.findFirst({
         where: { runbookId: runbook.id },
       });
       expect(binding).toBeNull();
@@ -286,7 +286,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     expect(archiveResult.status).toBe('fulfilled');
 
     // Invariant: An active binding MUST NEVER be left enabled on an archived runbook!
-    const bindings = await testPrisma.serviceRunbookBinding.findMany({
+    const bindings = await testPrisma.serviceAutomationRule.findMany({
       where: { runbookId: runbook.id },
     });
     expect(bindings.every(b => !b.enabled)).toBe(true);
@@ -640,7 +640,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     );
 
     // Create MANUAL and AUTOMATIC bindings that are enabled
-    await testPrisma.serviceRunbookBinding.createMany({
+    await testPrisma.serviceAutomationRule.createMany({
       data: [
         {
           runbookId: runbook.id,
@@ -663,7 +663,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     await archiveRunbook(runbook.id, actor.id);
 
     // Invariant 1: Archive disables ALL bindings
-    const bindingsAfterArchive = await testPrisma.serviceRunbookBinding.findMany({
+    const bindingsAfterArchive = await testPrisma.serviceAutomationRule.findMany({
       where: { runbookId: runbook.id },
     });
     expect(bindingsAfterArchive.every(b => !b.enabled)).toBe(true);
@@ -672,7 +672,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     await restoreRunbook(runbook.id, actor.id);
 
     // Invariant 2: Restoration leaves ALL bindings disabled for safety
-    const bindingsAfterRestore = await testPrisma.serviceRunbookBinding.findMany({
+    const bindingsAfterRestore = await testPrisma.serviceAutomationRule.findMany({
       where: { runbookId: runbook.id },
     });
     expect(bindingsAfterRestore.length).toBe(2);

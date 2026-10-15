@@ -465,6 +465,7 @@ model ProviderWorkerLease {
 }
 
 model User {
+  policyChecks RunbookPolicyCheck[]
   id                           String     @id @default(cuid())
   name                         String
   email                        String     @unique
@@ -515,7 +516,7 @@ model User {
   runbooksCreated             Runbook[]                    @relation("RunbookCreatedBy")
   runbookVersionsCreated      RunbookVersion[]             @relation("RunbookVersionCreatedBy")
   runbookVersionsPublished    RunbookVersion[]             @relation("RunbookVersionPublishedBy")
-  runbookBindingsCreated      ServiceRunbookBinding[]      @relation("ServiceRunbookBindingCreatedBy")
+  runbookBindingsCreated      ServiceAutomationRule[]      @relation("ServiceRunbookBindingCreatedBy")
   runbookTriggersCreated      RunbookTrigger[]             @relation("RunbookTriggerCreatedBy")
   runbookExecutionsTriggered  RunbookExecution[]           @relation("RunbookExecutionTriggeredBy")
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
@@ -650,7 +651,7 @@ model Service {
   warRoomCustomBridgeUrl          String?
   slaDefinitions                  SLADefinition[]
   serviceObjectives               ServiceObjective[]
-  runbookBindings                 ServiceRunbookBinding[]
+  runbookBindings                 ServiceAutomationRule[]
   runbookExecutions               RunbookExecution[]
   createdAt                       DateTime                        @default(now())
   updatedAt                       DateTime                        @updatedAt
@@ -2524,6 +2525,7 @@ model MetricRollup {
 }
 
 model SystemSettings {
+  runbookArtifactRetentionDays Int?
   id                                   String   @id @default("default")
   runbookAutoExecutionsPerIncident     Int      @default(3)
   runbookAutoWritesPerIncident         Int      @default(3)
@@ -3462,7 +3464,7 @@ model Runbook {
   draftVersion     RunbookVersion?         @relation("RunbookDraft", fields: [draftVersionId], references: [id], onDelete: SetNull)
   publishedVersion RunbookVersion?         @relation("RunbookPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
   versions         RunbookVersion[]        @relation("RunbookVersions")
-  bindings         ServiceRunbookBinding[]
+  bindings         ServiceAutomationRule[]
   executions       RunbookExecution[]
 
   createdAt DateTime @default(now())
@@ -3470,6 +3472,7 @@ model Runbook {
 }
 
 model RunbookVersion {
+  policyChecks RunbookPolicyCheck[]
   id            String              @id @default(cuid())
   runbookId     String
   version       Int
@@ -3488,7 +3491,7 @@ model RunbookVersion {
   createdBy          User?                   @relation("RunbookVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   publishedBy        User?                   @relation("RunbookVersionPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
   inputs             RunbookInput[]
-  bindings           ServiceRunbookBinding[]
+  bindings           ServiceAutomationRule[]
   executions         RunbookExecution[]
   suggestions        RunbookSuggestion[]
 
@@ -3520,7 +3523,11 @@ model RunbookInput {
   @@index([runbookVersionId])
 }
 
-model ServiceRunbookBinding {
+model ServiceAutomationRule {
+  configurationRevision Int @default(1)
+  detachedAt DateTime?
+  policyChecks RunbookPolicyCheck[]
+  name               String                 @default("")
   id                 String                 @id @default(cuid())
   serviceId          String
   runbookId          String
@@ -3547,12 +3554,17 @@ model ServiceRunbookBinding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([serviceId, runbookId])
+  @@index([serviceId, runbookId])
+  @@index([serviceId, createdAt, id])
+  @@index([serviceId, id])
+  // Retain the existing physical table and foreign keys; IDs are stable rule IDs.
+  @@map("ServiceRunbookBinding")
   @@index([serviceId])
   @@index([runbookId])
 }
 
 model RunbookTrigger {
+  revision       Int                   @default(1)
   id             String                @id @default(cuid())
   bindingId      String
   event          RunbookTriggerEvent
@@ -3560,7 +3572,7 @@ model RunbookTrigger {
   enabled        Boolean               @default(true)
   createdById    String?
 
-  binding     ServiceRunbookBinding     @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  binding     ServiceAutomationRule     @relation(fields: [bindingId], references: [id], onDelete: Cascade)
   createdBy   User?                     @relation("RunbookTriggerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   conditions  RunbookTriggerCondition[]
   executions  RunbookExecution[]
@@ -3600,6 +3612,7 @@ model RunbookExecutionSigningKey {
 }
 
 model RunbookSuggestion {
+  triggerRevision Int?
   id               String                 @id @default(cuid())
   incidentId       String
   bindingId        String
@@ -3613,7 +3626,7 @@ model RunbookSuggestion {
   planSnapshot     Json?
 
   incident       Incident              @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  binding        ServiceRunbookBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  binding        ServiceAutomationRule @relation(fields: [bindingId], references: [id], onDelete: Cascade)
   runbookVersion RunbookVersion        @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
   trigger        RunbookTrigger        @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
@@ -3626,6 +3639,7 @@ model RunbookSuggestion {
 }
 
 model RunbookExecution {
+  triggerRevision Int?
   id                        String                 @id @default(cuid())
   runbookId                 String
   runbookVersionId          String
@@ -3654,7 +3668,7 @@ model RunbookExecution {
   runbookVersion          RunbookVersion         @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
   incident                Incident?              @relation(fields: [incidentId], references: [id], onDelete: SetNull)
   service                 Service?               @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  binding                 ServiceRunbookBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
+  binding                 ServiceAutomationRule? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
   trigger                 RunbookTrigger?        @relation(fields: [triggerId], references: [id], onDelete: SetNull)
   resolvedTargetAgent     RunbookAgent?          @relation("RunbookExecutionTargetAgent", fields: [resolvedTargetAgentId], references: [id], onDelete: Restrict)
   resolvedTargetAgentPool RunbookAgentPool?      @relation("RunbookExecutionTargetAgentPool", fields: [resolvedTargetAgentPoolId], references: [id], onDelete: Restrict)
@@ -3758,10 +3772,12 @@ model RunbookStepAttempt {
   @@index([targetAgentId])
   @@index([targetAgentPoolId])
   @@index([claimedAgentId])
+  @@index([outputArtifactId])
   @@index([leaseExpiresAt])
 }
 
 model RunbookAgent {
+  policyChecks RunbookPolicyCheck[]
   id                  String             @id @default(cuid())
   name                String
   hostname            String?
@@ -3789,7 +3805,7 @@ model RunbookAgent {
   createdBy          User?                      @relation("RunbookAgentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   revokedBy          User?                      @relation("RunbookAgentRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
   poolMemberships    RunbookAgentPoolMember[]
-  bindings           ServiceRunbookBinding[]
+  bindings           ServiceAutomationRule[]
   targetedExecutions RunbookExecution[]         @relation("RunbookExecutionTargetAgent")
   targetedAttempts   RunbookStepAttempt[]       @relation("RunbookAttemptTargetAgent")
   claimedAttempts    RunbookStepAttempt[]       @relation("RunbookAttemptClaimedAgent")
@@ -3825,7 +3841,7 @@ model RunbookAgentPool {
 
   createdBy          User?                    @relation("RunbookAgentPoolCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   members            RunbookAgentPoolMember[]
-  bindings           ServiceRunbookBinding[]
+  bindings           ServiceAutomationRule[]
   targetedExecutions RunbookExecution[]       @relation("RunbookExecutionTargetAgentPool")
   targetedAttempts   RunbookStepAttempt[]     @relation("RunbookAttemptTargetAgentPool")
   secretGrants       RunbookSecretGrant[]
@@ -3899,7 +3915,7 @@ model RunbookArtifact {
   createdAt DateTime @default(now())
 
   @@index([attemptId, createdAt])
-  @@index([createdAt])
+  @@index([createdAt, id])
 }
 
 // Opaque preview capabilities: only the token hash is stored. Scope IDs are retained for audit.
@@ -4108,4 +4124,44 @@ model AuthenticationReplicaObservation {
   lastSeenAt  DateTime @updatedAt
 
   @@index([lastSeenAt, id], map: "AuthenticationReplicaObservation_page_idx")
+}
+
+// Internal process evidence: a heartbeat is not a guarantee of target authorization.
+model RuntimeWorkerHeartbeat {
+  instanceId       String   @id
+  lane             String
+  role             String
+  runbookEnabled   Boolean  @default(false)
+  running          Boolean  @default(true)
+  lastSeenAt       DateTime @default(now())
+  lastSuccessAt    DateTime?
+  lastReconciledAt DateTime?
+  lastError        String?
+  startedAt        DateTime @default(now())
+
+  @@index([runbookEnabled, running, lastSeenAt])
+}
+
+model RunbookPolicyCheck {
+  id          String   @id @default(cuid())
+  ruleId      String
+  agentId     String
+  versionId   String
+  checksum    String
+  steps       Json
+  status      String   @default("PENDING")
+  policyHash  String?
+  results     Json     @default("[]")
+  expiresAt   DateTime
+  checkedAt   DateTime?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  rule      ServiceAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  agent     RunbookAgent           @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  version   RunbookVersion         @relation(fields: [versionId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  createdBy User?                  @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([agentId, status, expiresAt])
+  @@index([ruleId, createdAt])
 }

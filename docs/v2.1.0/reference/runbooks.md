@@ -6,8 +6,14 @@ product_area: runbooks
 audience: [administrator, operator, developer]
 verification:
   level: source
-  verified_at: 2026-10-11
-  evidence: [src/lib/runbooks/types.ts, src/lib/runbooks/definition.ts, src/lib/runbooks/schemas.ts, src/lib/authorization.ts]
+  verified_at: 2026-10-15
+  evidence:
+    [
+      src/lib/runbooks/types.ts,
+      src/lib/runbooks/definition.ts,
+      src/lib/runbooks/schemas.ts,
+      src/lib/authorization.ts,
+    ]
 ---
 
 # Runbook reference
@@ -176,9 +182,78 @@ not an exemption from control-plane SSRF rules.
 Service and incident authorization checks apply in addition to these capabilities.
 See [permissions](./permissions) for the broader authorization model.
 
+## Rule and readiness contracts
+
+`ServiceAutomationRule` is an independent configuration identity. Multiple rules may share a service and workflow; existing database table/IDs and history references are preserved. Readiness states are PAUSED, BLOCKED, CHECKS_REQUIRED, CONFIGURATION_VALID and UNKNOWN. Online/capable Agents cannot alone produce a target-permission guarantee. Agent policy checks are signed, scoped, one-time results with an exact frozen action list; a matching fresh policy hash is required before using their evidence.
+
+Worker health states are HEALTHY, DEGRADED and UNKNOWN. Shared PostgreSQL evidence, rather than the web process's local worker state, establishes dispatch and reconciliation freshness. The scheduler watchdog only reconciles durable work and preserves unknown-write fences.
+
+## Bounded nonce maintenance
+
+Replay nonces are purged independently of execution recovery, using the same
+isolated one-connection maintenance pool as artifact retention. A nonce batch
+selects at most 1,000 expired IDs through the `createdAt` index and uses
+`FOR UPDATE SKIP LOCKED`, its own advisory lock, a one-second statement deadline,
+a 100 ms lock deadline and a 2.5-second transaction deadline. Slow batches skip
+scheduler ticks; they do not overlap or run an unbounded backlog-draining loop.
+Nonce batches run at most once per second; artifact batches retain their
+one-minute cadence. These limits bound work, rather than certify fleet capacity.
+
+Nonce retention covers both sides of the five-minute signature window plus
+one minute of margin. Purging uses the database clock and preserves recent
+nonces, including accepted future-dated requests. Signed requests outside the
+window remain invalid after their stored nonce expires.
+
+Monitor `opsknight_runbook_nonce_purge_rows_total`,
+`opsknight_runbook_nonce_purge_batches_total{result="failed"}`,
+`opsknight_runbook_nonce_purge_duration_seconds` and
+`opsknight_runbook_nonce_purge_oldest_expired_age_seconds`. The age gauge records
+the oldest expired candidate before the last successful batch; skipped or
+failed batches preserve its previous observation. Growing age or failure counts
+need investigation of maintenance throughput and database health. They do not
+mean that valid nonce replay protection has been disabled.
+
+## Maintenance alerts
+
+The bundled [Prometheus rules](https://github.com/opsknight-labs/OpsKnight/blob/main/monitoring/prometheus/opsknight-alerts.yaml)
+include nonce and artifact maintenance alerts for:
+
+- **Stalled:** no successful batch in the last five minutes while execution
+  workers report healthy, sustained for five minutes (nonces) or ten minutes
+  (artifacts). Missing maintenance samples also trigger this check.
+- **Lagging:** oldest expired data observed by an active maintenance process
+  exceeds five minutes (nonces) or one hour (artifacts), sustained for five minutes.
+- **Failing:** at least three failed transactions over ten minutes, sustained
+  for two minutes. Advisory-lock skips are separate from transaction failures.
+
+Scrape each scheduler process's authenticated `/api/metrics` endpoint as well as
+the web endpoint (or every integrated replica when using the integrated role):
+maintenance counters and age observations are process-local. Keep the
+Prometheus `job` and `instance` labels for matching. Load these rules per
+OpsKnight deployment; aggregate the workers of that deployment together, without
+combining unrelated deployments. Backlog alerts require recent successful batches
+from the same process, so a former leader's stale age gauge does not keep them
+firing. Existing worker-health alerts cover missing or degraded execution workers.
+
+`opsknight_runbook_artifact_purge_oldest_expired_age_seconds` measures age beyond
+the configured retention cutoff before the last successful batch, matching the
+nonce observation semantics. Empty successful batches reset age to zero; skipped
+and failed batches preserve it. An empty backlog is healthy even if no rows are
+deleted. Investigate database latency, locks and maintenance logs before changing
+cadence or capacity. Never clear replay protection by truncating recent nonces.
+The rule tests cover healthy idle maintenance, missing/stopped cleanup, backlog,
+repeated failures, a stale former leader and recovery after the backlog drains.
+
 ## Current boundaries
 
-First-class nested-check builder controls, paginated library/history views,
-execution-signing identity rotation, and fleet/load certification are not
-documented as completed features. Existing encryption-key migration preserves
-the execution-signing identity; it is not signing-identity rotation.
+Nested-check builder controls, signing rotation, structured selectors, independent rules and static version comparison are implemented. Version comparisons mask credential fields and list effects on latest-publication rules while pinned rules retain their versions. These features do not certify all deployment topologies or fleet capacity. The measured 10/100/1000 Agent simulation is direct-library idle claim load; it is not authenticated production network capacity or physical recovery proof. Promote only released server/Agent pairs with completed topology evidence.
+
+
+Runbooks remains **Beta** in v2.1. Configuration checks, policy evidence, browser
+journeys and candidate deployment tests each establish a limited property.
+Release qualification still requires the published server/Agent pair, physical
+write and recovery evidence on the intended Systemd/container/Kubernetes targets,
+HA and fault scenarios, sustained authenticated workload measurements, and human
+accessibility review. Candidate builds, simulations and a successful preview
+cannot substitute for those environment-specific results. Follow
+[Agent operations](../operate/deploy/agent-operations) for deployment prerequisites.

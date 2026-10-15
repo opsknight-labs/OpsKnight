@@ -1,0 +1,23 @@
+{
+  "measuredAt": "2026-10-15T04:01:53.437Z",
+  "topology": "Local production Next server, real PostgreSQL, trusted self-signed HTTPS proxy, locked-down Compose Agent",
+  "image": "opsknight-agent:rbe-seventh-local",
+  "gates": {
+    "enrollment": "PASS",
+    "signedDiagnostic": "PASS",
+    "outputArtifact": "PASS",
+    "localPolicyCheck": "PASS",
+    "restartIdentity": "PASS",
+    "manualTriggerInactive": "PASS",
+    "suggestedDoesNotExecute": "PASS",
+    "automaticReadOnlyExecution": "PASS",
+    "negativeTriggerCondition": "PASS",
+    "duplicateEventFenced": "PASS",
+    "dedicatedWorkerDispatch": "PASS"
+  },
+  "artifacts": 1,
+  "limitations": [
+    "Local built candidate, not a published release",
+    "No external TLS proxy or native Linux host certification"
+  ]
+}

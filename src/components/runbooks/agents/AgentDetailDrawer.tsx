@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { AlertTriangle, KeyRound, Terminal } from 'lucide-react';
 import {
   Sheet,
@@ -12,16 +13,9 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
-import {
-  ActionForm,
-  ConfirmAction,
-  SubmitButton,
-} from '../RunbookControls';
+import { ActionForm, ConfirmAction, SubmitButton } from '../RunbookControls';
 import { formatDateTime } from '@/lib/timezone';
-import {
-  revokeAgentAction,
-  updateSchedulingLabelsAction,
-} from '@/app/(app)/runbooks/actions';
+import { revokeAgentAction, updateSchedulingLabelsAction } from '@/app/(app)/runbooks/actions';
 
 export type AgentItemData = {
   id: string;
@@ -71,7 +65,8 @@ export function AgentDetailDrawer({
           </div>
           <SheetTitle className="text-xl font-bold tracking-tight">{agent.name}</SheetTitle>
           <SheetDescription className="text-xs text-muted-foreground">
-            {agent.hostname || 'Awaiting enrollment handshake'} · {agent.platform || 'Platform pending'} · v{agent.version || '—'}
+            {agent.hostname || 'Awaiting enrollment handshake'} ·{' '}
+            {agent.platform || 'Platform pending'} · v{agent.version || '—'}
           </SheetDescription>
         </SheetHeader>
 
@@ -98,7 +93,9 @@ export function AgentDetailDrawer({
           </div>
           <div>
             <span className="text-muted-foreground block text-[11px]">Active Jobs</span>
-            <span className="font-semibold text-foreground">{agent.activeAttemptCount} running</span>
+            <span className="font-semibold text-foreground">
+              {agent.activeAttemptCount} running
+            </span>
           </div>
           <div>
             <span className="text-muted-foreground block text-[11px]">Queue & Spool</span>
@@ -153,7 +150,9 @@ export function AgentDetailDrawer({
                 return (
                   <div key={index} className="p-3 text-xs space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-foreground">{String(e.name || 'Runtime')}</span>
+                      <span className="font-semibold text-foreground">
+                        {String(e.name || 'Runtime')}
+                      </span>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-muted-foreground">
                           configured {e.configured ? '✓' : '—'}
@@ -193,7 +192,9 @@ export function AgentDetailDrawer({
           </div>
           <div className="break-all font-mono text-[11px] text-muted-foreground">
             {Array.isArray(agent.trustedSigningKeys) && agent.trustedSigningKeys.length > 0
-              ? agent.trustedSigningKeys.filter((k): k is string => typeof k === 'string').join(', ')
+              ? agent.trustedSigningKeys
+                  .filter((k): k is string => typeof k === 'string')
+                  .join(', ')
               : 'No rotation acknowledgement recorded'}
           </div>
         </div>
@@ -223,6 +224,14 @@ export function AgentDetailDrawer({
           </details>
         )}
 
+        {canManage && agent.status !== 'REVOKED' && (
+          <Link
+            href={`/runbooks/agents/${agent.id}/setup`}
+            className="text-sm text-primary underline"
+          >
+            Upgrade installed Agent · preserve identity
+          </Link>
+        )}
         {/* Revoke Agent Security Guard */}
         {canManage && agent.status !== 'REVOKED' && (
           <div className="pt-4 border-t">

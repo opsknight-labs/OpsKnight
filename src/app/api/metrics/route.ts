@@ -6,6 +6,7 @@ import { withRequestContext } from '@/lib/logger';
 import { timingSafeEqual } from 'crypto';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { OperationalMetricSnapshot } from '@/lib/metrics/operational/registry';
+import { getRunbookWorkerEvidence } from '@/lib/runbooks/worker-heartbeats';
 
 type MetricsSnapshot = {
   jobStats: Array<{ status: string; count: number }> | null;
@@ -32,6 +33,7 @@ type MetricsSnapshot = {
   runbookArtifactStorage: { count: number; bytes: number } | null;
   runbookOldestPendingAt: Date | null | undefined;
   runbookCircuitsOpen: number | null;
+  runbookWorkers: Awaited<ReturnType<typeof getRunbookWorkerEvidence>> | null;
   collectedAt: number;
 };
 
@@ -107,6 +109,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       runbookOldestPending,
       runbookCircuitsOpen,
       providerFeedback,
+      runbookWorkers,
     ] = await Promise.allSettled([
       collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
         prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
@@ -245,6 +248,9 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         DB_COLLECTOR_TIMEOUT_MS,
         collectProviderFeedbackMetrics
       ),
+      collectWithTimeout('runbook-workers', DB_COLLECTOR_TIMEOUT_MS, () =>
+        getRunbookWorkerEvidence(new Date())
+      ),
       collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
         const { collectIncidentCollaborationMetricsFromDB } =
           await import('@/lib/incident-collaboration/meeting-metrics');
@@ -315,6 +321,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           ? Number(runbookCircuitsOpen.value[0]?.count ?? 0)
           : null,
       providerFeedback: providerFeedback.status === 'fulfilled' ? providerFeedback.value : null,
+      runbookWorkers: runbookWorkers.status === 'fulfilled' ? runbookWorkers.value : null,
       collectedAt: Date.now(),
     };
     const degraded =
@@ -336,7 +343,8 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       value.runbookAgentWork === null ||
       value.runbookArtifactStorage === null ||
       value.runbookOldestPendingAt === undefined ||
-      value.runbookCircuitsOpen === null;
+      value.runbookCircuitsOpen === null ||
+      value.runbookWorkers === null;
     // A JS timeout cannot cancel every Prisma operation. Back off degraded
     // collectors so repeated scrapes cannot create an unbounded query storm.
     metricsCache = { value, expiresAt: Date.now() + (degraded ? 60_000 : 10_000) };
@@ -490,6 +498,19 @@ async function getMetrics(req: Request) {
   if (snapshot.runbookCircuitsOpen !== null) {
     metrics.set('opsknight_runbook_service_circuits_open', snapshot.runbookCircuitsOpen);
   }
+  for (const status of ['HEALTHY', 'DEGRADED', 'UNKNOWN'])
+    metrics.set(
+      'opsknight_runbook_worker_health',
+      (snapshot.runbookWorkers?.status ?? 'UNKNOWN') === status ? 1 : 0,
+      { status: status.toLowerCase() }
+    );
+  if (snapshot.runbookWorkers) {
+    metrics.set('opsknight_runbook_worker_instances', snapshot.runbookWorkers.instances);
+    metrics.set(
+      'opsknight_runbook_worker_healthy_instances',
+      snapshot.runbookWorkers.healthyInstances
+    );
+  }
 
   const collectionErrors =
     Number(snapshot.incidentCount === null) +
@@ -510,7 +531,8 @@ async function getMetrics(req: Request) {
     Number(snapshot.runbookAgentWork === null) +
     Number(snapshot.runbookArtifactStorage === null) +
     Number(snapshot.runbookOldestPendingAt === undefined) +
-    Number(snapshot.runbookCircuitsOpen === null);
+    Number(snapshot.runbookCircuitsOpen === null) +
+    Number(snapshot.runbookWorkers === null);
   metrics.set('opsknight_metrics_collection_errors', collectionErrors);
   metrics.set('opsknight_metrics_cache_hits_total', metricsCacheHits);
   metrics.set('opsknight_metrics_cache_misses_total', metricsCacheMisses);

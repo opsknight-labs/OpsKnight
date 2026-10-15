@@ -1,0 +1,137 @@
+{
+  "assessedAt": "2026-10-14",
+  "baselineRevision": "a278116a0b03c0dac1f5e94c68f88e3814152a2c",
+  "scope": "Local remediation candidate; no production or universal platform certification",
+  "statusSemantics": "PASS applies only to named checks in the recorded topology. A full gate remains NOT_TESTED while required acceptance environments are missing.",
+  "checks": [
+    {
+      "gate": "G1",
+      "topology": "Native Linux x64/arm64 official release",
+      "status": "NOT_TESTED",
+      "reason": "Official public distribution and supported-host x64/arm64 matrix remain NOT_TESTED; native systemd CI fixture checks now pass.",
+      "implemented": [
+        "Linux x64 CI systemd enrollment, initial readiness, key rotation and upgrade/rollback PASS at 4c80c1f1ef5031940c35d4ce500913cb7b903dcc"
+      ]
+    },
+    {
+      "gate": "G2",
+      "topology": "Local Docker Compose + real PostgreSQL + production Next server + private CA HTTPS proxy + separate production runbook worker",
+      "status": "PASS",
+      "evidence": "live-compose.json",
+      "limits": [
+        "Locally built candidate, not a public registry pull",
+        "No published app-agent upgrade matrix"
+      ]
+    },
+    {
+      "gate": "G3",
+      "topology": "Swarm node evacuation, reboot, manager reconvergence",
+      "status": "NOT_TESTED",
+      "implemented": [
+        "Required node affinity for local state",
+        "No finite restart attempt abandonment",
+        "Token-file secret enrollment"
+      ]
+    },
+    {
+      "gate": "G4",
+      "topology": "Kind standalone Helm candidate",
+      "status": "PASS",
+      "evidence": "live-kind.json",
+      "limits": [
+        "Enroll, independent probes, drain and identity restart only",
+        "Helm rollback and namespaced remediation permissions NOT_TESTED"
+      ]
+    },
+    {
+      "gate": "G5",
+      "topology": "Kind Agent-only Kustomize candidate",
+      "status": "PASS",
+      "evidence": "live-kind.json",
+      "limits": [
+        "Custom CA test overlay and locally loaded image",
+        "Production NetworkPolicy and registry pull NOT_TESTED"
+      ]
+    },
+    {
+      "gate": "G6",
+      "topology": "Local private CA HTTPS proxy with explicit hostname alias",
+      "status": "PASS",
+      "evidence": "live-compose.json",
+      "limits": [
+        "External ingress, TLS rotation, split DNS and air-gapped registry NOT_TESTED",
+        "Secret transport through arbitrary reverse proxies NOT_TESTED"
+      ]
+    },
+    {
+      "gate": "G7",
+      "topology": "Real Agent-backed read-only Manual/Suggested/Automatic execution",
+      "status": "PASS",
+      "evidence": "live-compose.json",
+      "limits": [
+        "Read-only local candidate only",
+        "Production write workflows require target-specific approval and permission evidence"
+      ]
+    },
+    {
+      "gate": "G8",
+      "topology": "PostgreSQL concurrency, plan authorization and lifecycle fences",
+      "status": "PASS",
+      "evidence": "118 original distinct database cases plus 5 review regressions covering version/input authority, bounded rule pages, recovery deduplication and three-session advisory locking.",
+      "limits": [
+        "Database and browser simulations do not certify all physical write outcomes"
+      ]
+    },
+    {
+      "gate": "G9",
+      "topology": "Runtime crash/spool/lease fault harness and Kind drain",
+      "status": "PASS",
+      "evidence": "20 runtime/startup tests; live-kind.json",
+      "limits": [
+        "Real ENOSPC/EIO, all-worker crash, DB failover and multi-node partitions NOT_TESTED"
+      ]
+    },
+    {
+      "gate": "G10",
+      "topology": "Chromium/Firefox/WebKit browser journeys, mobile/keyboard/theme/zoom checks",
+      "status": "PASS",
+      "evidence": "27 browser journeys; updated responsive screenshots and three browser rule-render reports",
+      "limits": [
+        "Human screen-reader evaluation NOT_TESTED"
+      ]
+    },
+    {
+      "gate": "G11",
+      "topology": "10/100/1000 idle simulated Agent direct-library claims",
+      "status": "PASS",
+      "evidence": "scale-simulation.json and rule-page-scale.json",
+      "limits": [
+        "Not authenticated network load or production fleet capacity",
+        "Sustained backlog/failover/starvation capacity NOT_TESTED",
+        "Rule-page measurements cover fixture Agent inventory and read-only queries, not physical action throughput."
+      ]
+    },
+    {
+      "gate": "G12",
+      "topology": "Published distribution and full release qualification",
+      "status": "NOT_TESTED",
+      "implemented": [
+        "Compatibility manifest generation and installer hash checks",
+        "Immutable OCI reference/revision and architecture checks",
+        "Published URL byte verification workflow",
+        "2.1 operator docs, changelog and migration rollback guidance"
+      ],
+      "reason": "No release published; external supported-host/upgrade matrix remains incomplete."
+    }
+  ],
+  "releaseDecision": "NOT_CERTIFIED_FOR_GENERAL_RELEASE: named local candidate checks pass; remaining environment and publication gates must be completed before a release claim.",
+  "latestSourceFollowup": {
+    "assessedAt": "2026-10-15",
+    "baseRevision": "6246302034633c2de8f50a9b00a7e0058f7d6c10",
+    "policyCertification": "Real PostgreSQL 1/10/50/100 Agent durable certification and fail-closed activation PASS; no actions executed by these policy tests",
+    "multiAgentInstall": "0df984c8d live Helm/Kustomize independent-Agent lifecycle PASS. Swarm initial enrollment/jobs PASS; clean-exit upgrade stalls. Restart-policy follow-up pending exact-head CI.",
+    "schema": "219 migrations applied on fresh and upgrade databases, including SSO, configuration revision and retention; schema-retention-20261015.json",
+    "releaseBoundary": "No new published-host, physical-failure or sustained-workload pass is asserted.",
+    "operationalBacklog": "10000 artifacts and 10000 ineligible writes, concurrent recovery isolation, 20000-rule search measured; candidate evidence only"
+  }
+}

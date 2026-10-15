@@ -68,6 +68,21 @@ Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict
 
 ---
 
+### Engine version used for lifecycle certification
+
+The Swarm lifecycle CI job pins Docker Engine **29.9.1** in its own ephemeral
+daemon before creating the Swarm or any test services. The setup action extracts
+the official CLI/Engine release images, avoiding delays in its archive release index. This current patch release includes security updates and contains
+[the upstream secret/config remount fix](https://github.com/moby/moby/pull/52235).
+Older affected engines can intermittently fail service updates with
+`unable to remount dir as readonly` / `device or resource busy`, even when the
+application exits cleanly. Use a maintained Engine release containing that fix
+for secret-rotation and update qualification. CI records the actual daemon,
+containerd and kernel versions; this pin does not certify other host versions.
+Health checks and rollback/convergence checks remain enabled. See the
+[official Engine 29 release notes](https://docs.docker.com/engine/release-notes/29/)
+for the pinned patch and the original 29.4.1 remount fix.
+
 ## 2. Firewall & Network Port Requirements
 
 Ensure the following ports are open between nodes in your Docker Swarm cluster:

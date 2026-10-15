@@ -79,7 +79,13 @@ export default function ServiceDetailTabs({
   ];
 
   return (
-    <DetailTabs tabs={tabItems} defaultTab={defaultTab} actions={actions} className="space-y-6">
+    <DetailTabs
+      tabs={tabItems}
+      defaultTab={defaultTab}
+      navigationMode="server"
+      actions={actions}
+      className="space-y-6"
+    >
       <DetailTabContent value="incidents" className="mt-0 space-y-6">
         {incidentsContent}
       </DetailTabContent>

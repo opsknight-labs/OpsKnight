@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [responder, administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-04
+  verified_at: 2026-10-15
   evidence: [src/lib/runbooks/orchestrator.ts, src/lib/runbooks/agent-claims.ts, src/lib/runbooks/suggestion-plan.ts, prisma/schema.prisma]
 ---
 
@@ -33,6 +33,11 @@ permissions, capabilities, signed execution envelopes, and leases all constrain 
 Latest-published bindings follow future publications; pinned bindings retain
 the chosen version. A suggestion freezes its resolved plan when generated,
 so later binding edits do not silently change what an existing suggestion starts.
+
+Detaching a service rule archives and disables it. Historical suggestions retain
+their rule and trigger identity, show **Rule detached**, and can be dismissed;
+they cannot be previewed or executed. Pausing stops future dispatch without
+canceling work that has already started.
 
 ## Risk and approval
 

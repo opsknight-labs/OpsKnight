@@ -106,6 +106,7 @@ export interface RunbookExecutionRequest {
   inputValues?: Record<string, unknown>;
   triggeredByUserId?: string;
   triggerFingerprint?: string;
+  expectedRuleRevision?: number;
   triggerId?: string;
   sourceEventId?: string;
   expectedPlanDigest?: string;
@@ -135,6 +136,7 @@ const automaticExecutionSchema = z
     serviceId: z.string().cuid(),
     bindingId: z.string().cuid(),
     triggerId: z.string().cuid(),
+    expectedRuleRevision: z.number().int().positive(),
     triggerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     sourceEventId: z.string().min(1).max(200),
     inputValues: z.record(z.string(), z.unknown()).optional(),
@@ -187,12 +189,16 @@ async function prepareRunbookExecution(
       include: { publishedVersion: true },
     });
     if (!runbook) throw new RunbookDefinitionError('Runbook not found or archived.');
+    // Retain the rule lock through execution creation, fencing pause/edit/detach.
+    if (input.bindingId)
+      await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${input.bindingId} AND "runbookId" = ${input.runbookId} FOR SHARE`;
     const binding = input.bindingId
-      ? await tx.serviceRunbookBinding.findFirst({
+      ? await tx.serviceAutomationRule.findFirst({
           where: {
             id: input.bindingId,
             runbookId: runbook.id,
             enabled: true,
+            detachedAt: null,
             ...(input.serviceId ? { serviceId: input.serviceId } : {}),
             ...(input.triggerId
               ? { triggers: { some: { id: input.triggerId, enabled: true } } }
@@ -208,12 +214,14 @@ async function prepareRunbookExecution(
     if (input.triggerId && !input.bindingId) {
       throw new RunbookDefinitionError('A trigger execution requires its service binding.');
     }
+    let evaluatedTriggerRevision: number | null = null;
     if (mode === 'AUTOMATIC') {
       if (
         !binding ||
         binding.mode !== 'AUTOMATIC' ||
         binding.versionStrategy !== 'PINNED' ||
-        binding.runbookVersionId !== input.runbookVersionId
+        binding.runbookVersionId !== input.runbookVersionId ||
+        binding.configurationRevision !== input.expectedRuleRevision
       ) {
         throw new RunbookDefinitionError(
           'AUTOMATION_NOT_AUTHORIZED: An enabled AUTOMATIC binding pinned to this version is required.'
@@ -257,6 +265,7 @@ async function prepareRunbookExecution(
           'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
         );
       }
+      evaluatedTriggerRevision = trigger.revision;
     }
     const suggestion = input.suggestionId
       ? await tx.runbookSuggestion.findFirst({
@@ -752,6 +761,7 @@ async function prepareRunbookExecution(
         bindingId: input.bindingId,
         triggerFingerprint: input.triggerFingerprint ?? suggestion?.fingerprint,
         triggerId: input.triggerId ?? suggestion?.triggerId,
+        triggerRevision: evaluatedTriggerRevision ?? suggestion?.triggerRevision,
         triggeredByType: input.triggeredByUserId ? 'USER' : 'TRIGGER',
         triggeredByUserId: input.triggeredByUserId,
         inputValues: asJson(resolvedInputs),

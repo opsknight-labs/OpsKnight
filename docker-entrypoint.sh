@@ -82,6 +82,7 @@ if [ "${OPSKNIGHT_SKIP_MIGRATIONS:-}" = "true" ] || [ "${SKIP_MIGRATIONS:-}" = "
     if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
         export DATABASE_URL="${WEB_DATABASE_URL:-$RUNTIME_DATABASE_URL}"
     fi
+    node scripts/wait-for-runtime-database.cjs
     echo "🚀 Starting application..."
     export NEXT_RUNTIME=nodejs
     exec node server.js
@@ -197,6 +198,7 @@ if [ "${OPSKNIGHT_MIGRATION_ONLY:-}" = "true" ]; then
     exit 0
 fi
 
+node scripts/wait-for-runtime-database.cjs
 echo "🚀 Starting application..."
 export NEXT_RUNTIME=nodejs
 exec node server.js

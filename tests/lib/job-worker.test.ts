@@ -66,6 +66,10 @@ import {
   stopJobWorker,
 } from '@/lib/job-worker';
 import { certifyNotificationControlPlane } from '@/lib/provider-admission';
+import { recordWorkerHeartbeat } from '@/lib/runbooks/worker-heartbeats';
+vi.mock('@/lib/runbooks/worker-heartbeats', () => ({
+  recordWorkerHeartbeat: vi.fn().mockResolvedValue(undefined),
+}));
 
 type WorkerResult = { processed: number; failed: number; total: number };
 
@@ -74,6 +78,27 @@ function testEnv(values: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 describe('dedicated job worker', () => {
+  it('publishes real runbook dispatch and reconciliation success even when idle', async () => {
+    startJobWorker('runbook');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(recordWorkerHeartbeat).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        lane: 'runbook',
+        running: true,
+        lastSuccessAt: expect.any(Date),
+        lastReconciledAt: expect.any(Date),
+        lastError: null,
+      })
+    );
+  });
+  it('does not use critical-lane success to certify failed runbook dispatch', async () => {
+    vi.mocked(processPendingJobsByType).mockResolvedValue({ processed: 0, failed: 1, total: 1 });
+    startJobWorker();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(recordWorkerHeartbeat).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lastSuccessAt: null, lastError: '1 runbook job(s) failed' })
+    );
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -148,7 +173,8 @@ describe('dedicated job worker', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
-    expect(processPendingJobs).toHaveBeenCalledWith(100, 15);
+    expect(processPendingJobs).toHaveBeenCalledWith(100, 15, ['RUNBOOK']);
+    expect(processPendingJobsByType).toHaveBeenCalledWith('RUNBOOK', 100, 15);
     expect(runQueueMaintenance).not.toHaveBeenCalled();
     expect(getJobWorkerStatus().running).toBe(true);
   });

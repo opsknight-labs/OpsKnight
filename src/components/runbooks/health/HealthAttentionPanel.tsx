@@ -1,12 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import {
-  ArrowRight,
-  Bot,
-  CheckCircle2,
-  ShieldAlert,
-  ZapOff,
-} from 'lucide-react';
+import { ArrowRight, Bot, CheckCircle2, ShieldAlert, ZapOff } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 
@@ -24,14 +18,27 @@ export type HealthAttentionPanelProps = {
   issues: HealthIssue[];
   agentsCount: number;
   totalUnhealthy?: number;
+  health?: 'HEALTHY' | 'DEGRADED' | 'UNKNOWN';
 };
 
 export function HealthAttentionPanel({
   issues,
   agentsCount,
   totalUnhealthy,
+  health = 'UNKNOWN',
 }: HealthAttentionPanelProps) {
-  if (!agentsCount && !issues.length) return <div className="rounded-lg border bg-muted/30 p-4 text-sm"><h3 className="font-semibold">No Agents configured</h3><p className="text-muted-foreground">Fleet health is unknown until an Agent reports a heartbeat.</p><Link className="text-primary hover:underline" href="/runbooks/agents">Enroll an Agent</Link></div>;
+  if (!agentsCount && !issues.length)
+    return (
+      <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+        <h3 className="font-semibold">No Agents configured</h3>
+        <p className="text-muted-foreground">
+          Fleet health is unknown until an Agent reports a heartbeat.
+        </p>
+        <Link className="text-primary hover:underline" href="/runbooks/agents">
+          Enroll an Agent
+        </Link>
+      </div>
+    );
   const hasIssues = issues.length > 0;
 
   return (
@@ -44,26 +51,40 @@ export function HealthAttentionPanel({
               {issues.length} {issues.length === 1 ? 'Action Required' : 'Actions Required'}
             </Badge>
           ) : (
-            <Badge variant="success" className="text-xs px-2 py-0">
-              All Systems Operational
+            <Badge
+              variant={health === 'UNKNOWN' ? 'outline' : 'success'}
+              className="text-xs px-2 py-0"
+            >
+              {health === 'UNKNOWN' ? 'Worker evidence unavailable' : 'No observed alerts'}
             </Badge>
           )}
         </h3>
       </div>
 
       {!hasIssues ? (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs">
+        <div
+          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border p-4 text-xs ${health === 'HEALTHY' ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-border bg-muted/30'}`}
+        >
           <div className="flex items-start gap-3">
-            <div className="rounded-full bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400 shrink-0">
-              <CheckCircle2 className="h-5 w-5" />
+            <div
+              className={`rounded-full p-2 shrink-0 ${health === 'HEALTHY' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground bg-muted'}`}
+            >
+              {health === 'HEALTHY' ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                <ShieldAlert className="h-5 w-5" />
+              )}
             </div>
             <div className="space-y-0.5">
               <h4 className="font-semibold text-sm text-foreground">
-                No critical automation issues
+                {health === 'HEALTHY'
+                  ? 'No observed automation alerts'
+                  : 'Automation health requires verification'}
               </h4>
               <p className="text-muted-foreground leading-relaxed">
-                All {agentsCount} enrolled Agents have active heartbeats, queue dispatch is nominal,
-                and no circuit breakers or expired leases require operator intervention.
+                {health === 'UNKNOWN'
+                  ? 'Worker health is not verified. Agent heartbeats and an empty queue do not establish dispatch readiness.'
+                  : 'No alerts were observed in available worker, queue and Agent evidence. Target permissions still require workflow-specific checks.'}
               </p>
             </div>
           </div>
@@ -109,7 +130,12 @@ export function HealthAttentionPanel({
               </div>
 
               {issue.actionHref && (
-                <Button asChild size="sm" variant="outline" className="h-8 text-xs shrink-0 self-start sm:self-center gap-1">
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs shrink-0 self-start sm:self-center gap-1"
+                >
                   <Link href={issue.actionHref}>
                     <span>{issue.actionLabel || 'Investigate'}</span>
                     <ArrowRight className="h-3 w-3" />

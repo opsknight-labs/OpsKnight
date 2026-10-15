@@ -214,7 +214,13 @@ export const RunbookExecuteV2Schema = z.object({
   incidentId: z.string().trim().optional().nullable(),
   serviceId: z.string().trim().optional().nullable(),
   bindingId: z.string().trim().optional().nullable(),
-  parameters: z.record(z.string(), z.any()).optional().default({}),
+  parameters: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .default({})
+    .describe(
+      'Inputs for unbound execution only; service rules use saved inputs and reject non-empty per-execution parameters.'
+    ),
 });
 
 export const ServiceAccountCreateV2Schema = z.object({

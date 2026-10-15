@@ -35,6 +35,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       runbook: { select: { id: true, name: true, slug: true } },
       runbookVersion: { select: { id: true, version: true, checksum: true } },
       service: { select: { id: true, name: true } },
+      binding: { select: { id: true, name: true, serviceId: true } },
       resolvedTargetAgentPool: { select: { id: true, name: true, mode: true } },
       resolvedTargetAgent: { select: { id: true, name: true, hostname: true } },
       triggeredByUser: { select: { id: true, name: true } },
@@ -160,6 +161,14 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
           <CardContent className="text-xs text-muted-foreground">
             {TRIGGER_LABELS[execution.triggeredByType]}
             {execution.triggeredByUser ? ` · ${execution.triggeredByUser.name}` : ''}
+            {execution.binding && (
+              <Link
+                className="block mt-2 text-primary underline"
+                href={`/services/${execution.binding.serviceId}/automations/${execution.binding.id}`}
+              >
+                Source rule: {execution.binding.name || execution.binding.id}
+              </Link>
+            )}
           </CardContent>
         </Card>
 

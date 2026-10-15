@@ -1,3 +1,8 @@
+import {
+  startRunbookArtifactCleanup,
+  stopRunbookArtifactCleanup,
+} from './runbooks/artifact-cleanup';
+import { startRunbookWatchdog, stopRunbookWatchdog } from './runbooks/watchdog';
 import { processPendingEscalations } from './escalation';
 import { processPendingJobs, cleanupOldJobs, runQueueMaintenance } from './jobs/queue';
 import { logger } from './logger';
@@ -854,6 +859,8 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
   initialized = true;
   logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID, profile: schedulerProfile });
 
+  startRunbookWatchdog();
+  startRunbookArtifactCleanup();
   // Schedule first run immediately
   scheduleNextRun(new Date());
 }
@@ -863,6 +870,8 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
  */
 export async function stopCronScheduler() {
   initialized = false;
+  await stopRunbookWatchdog();
+  await stopRunbookArtifactCleanup();
   if (timer) {
     clearTimeout(timer);
     timer = null;

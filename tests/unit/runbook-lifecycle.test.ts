@@ -36,7 +36,7 @@ type MockTx = {
     create?: ReturnType<typeof vi.fn>;
     updateMany?: ReturnType<typeof vi.fn>;
   };
-  serviceRunbookBinding: {
+  serviceAutomationRule: {
     updateMany: ReturnType<typeof vi.fn>;
   };
 };
@@ -53,7 +53,7 @@ vi.mock('@/lib/prisma', () => ({
       deleteMany: vi.fn(),
       create: vi.fn(),
     },
-    serviceRunbookBinding: {
+    serviceAutomationRule: {
       updateMany: vi.fn(),
     },
     $transaction: vi.fn((callback: (tx: MockTx) => Promise<unknown>) =>
@@ -68,7 +68,7 @@ vi.mock('@/lib/prisma', () => ({
           deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
           create: vi.fn().mockResolvedValue({ id: 'ver_dup_1', version: 1 }),
         },
-        serviceRunbookBinding: {
+        serviceAutomationRule: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
       })
@@ -278,7 +278,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               delete: vi.fn(),
             },
             runbookVersion: { deleteMany: vi.fn() },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -306,7 +306,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               delete: vi.fn(),
             },
             runbookVersion: { deleteMany: vi.fn() },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -334,7 +334,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               delete: vi.fn(),
             },
             runbookVersion: { deleteMany: vi.fn() },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -362,7 +362,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
             },
             runbookVersion: { deleteMany: vi.fn() },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -389,7 +389,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
             },
             runbookVersion: { deleteMany: vi.fn() },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -430,7 +430,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
             runbookVersion: {
               deleteMany: vi.fn(),
             },
-            serviceRunbookBinding: {
+            serviceAutomationRule: {
               updateMany: vi.fn().mockResolvedValue({ count: 2 }),
             },
           };
@@ -442,7 +442,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
       expect(result.archivedAt).toBeNull();
 
       // Invariant: All bindings must be explicitly set to enabled: false upon restore
-      expect(txPassed?.serviceRunbookBinding.updateMany).toHaveBeenCalledWith({
+      expect(txPassed?.serviceAutomationRule.updateMany).toHaveBeenCalledWith({
         where: {
           runbookId: 'rb_1',
         },
@@ -529,7 +529,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               delete: vi.fn(),
             },
             runbookVersion: { deleteMany: vi.fn() },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -561,7 +561,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               }),
               deleteMany: vi.fn(),
             },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -605,7 +605,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               }),
               updateMany: vi.fn(),
             },
-            serviceRunbookBinding: {
+            serviceAutomationRule: {
               updateMany: vi.fn(),
             },
           };
@@ -650,7 +650,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               }),
               deleteMany: vi.fn(),
             },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never
@@ -682,7 +682,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               }),
               deleteMany: vi.fn(),
             },
-            serviceRunbookBinding: { updateMany: vi.fn() },
+            serviceAutomationRule: { updateMany: vi.fn() },
           };
           return callback(tx);
         }) as never

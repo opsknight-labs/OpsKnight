@@ -1,0 +1,37 @@
+{
+  "measuredAt": "2026-10-15T03:41:52.204Z",
+  "baseRevision": "a278116a0b03c0dac1f5e94c68f88e3814152a2c",
+  "integratedMain": "4be1e13bd51e361b52ad97b77dcbcb4343ba4ae8",
+  "topology": "Isolated native PostgreSQL 15 on loopback; no shared Docker or production database changes",
+  "postgresVersion": "15.18",
+  "status": "PASS",
+  "seededUpgradeRule": {
+    "id": "rbe-upgrade-rule",
+    "configurationRevision": 1,
+    "enabled": true,
+    "detachedAt": null,
+    "slug": "rbe-upgrade-workflow",
+    "name": "RBE upgrade fixture"
+  },
+  "results": [
+    {
+      "topology": "upgrade",
+      "appliedMigrations": 218,
+      "tables": {
+        "emergency": true,
+        "policy": true,
+        "heartbeat": true
+      }
+    },
+    {
+      "topology": "fresh",
+      "appliedMigrations": 218,
+      "tables": {
+        "emergency": true,
+        "policy": true,
+        "heartbeat": true
+      }
+    }
+  ],
+  "scope": "Schema migration ordering and preservation of seeded service/workflow/rule identity. Does not certify stopped-runtime SSO cutover, physical deployment failover or public release distribution."
+}

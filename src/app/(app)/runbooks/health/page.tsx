@@ -1,4 +1,8 @@
-import { getRunbookDatabaseNow, getRunbookHealthSummary, getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import {
+  getRunbookDatabaseNow,
+  getRunbookHealthSummary,
+  getRunbookNavigationSummary,
+} from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
@@ -21,13 +25,34 @@ export default async function RunbookHealthPage() {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const user = await getCurrentUser();
   const userTimeZone = getUserTimeZone(user);
-  const [now, health, navigation] = await Promise.all([getRunbookDatabaseNow(), getRunbookHealthSummary(), getRunbookNavigationSummary()]);
+  const [now, health, navigation] = await Promise.all([
+    getRunbookDatabaseNow(),
+    getRunbookHealthSummary(),
+    getRunbookNavigationSummary(),
+  ]);
   const [pending, agents, artifacts] = await Promise.all([
     prisma.runbookStepAttempt.count({ where: { status: 'PENDING' } }),
     prisma.runbookAgent.findMany({
       take: 20,
-      where: { status: { not: 'REVOKED' }, OR: [{ status: { not: 'ONLINE' } }, { lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: new Date(now.getTime() - 90000) } }, { lastError: { not: '' } }, { deadLetterDepth: { gt: 0 } }] },
-      select: { id: true, name: true, status: true, lastHeartbeatAt: true, lastError: true, spoolDepth: true, deadLetterDepth: true },
+      where: {
+        status: { not: 'REVOKED' },
+        OR: [
+          { status: { not: 'ONLINE' } },
+          { lastHeartbeatAt: null },
+          { lastHeartbeatAt: { lt: new Date(now.getTime() - 90000) } },
+          { lastError: { not: '' } },
+          { deadLetterDepth: { gt: 0 } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        lastHeartbeatAt: true,
+        lastError: true,
+        spoolDepth: true,
+        deadLetterDepth: true,
+      },
       orderBy: { name: 'asc' },
     }),
     prisma.runbookArtifact.aggregate({ _count: { id: true }, _sum: { sizeBytes: true } }),
@@ -46,13 +71,25 @@ export default async function RunbookHealthPage() {
 
   const deadLetters = health.fleet.deadLetterDepth;
 
-  const attention =
-    health.health === 'DEGRADED';
+  const attention = health.health === 'DEGRADED';
 
   const localWorker = getJobWorkerStatus();
 
   // Synthesize actionable issues for first-order operator review
   const issues: HealthIssue[] = [];
+  if (health.workers.status !== 'HEALTHY' || health.workers.redundancy === 'UNCONFIGURED')
+    issues.push({
+      id: 'worker-evidence',
+      type: 'queue',
+      severity: health.workers.status === 'DEGRADED' ? 'danger' : 'warning',
+      title:
+        health.workers.redundancy === 'UNCONFIGURED'
+          ? 'Worker redundancy is unverified'
+          : 'Runbook worker evidence missing or degraded',
+      description: health.workers.reason,
+      actionHref: '/api/health?mode=readiness',
+      actionLabel: 'Inspect worker deployment',
+    });
 
   if (health.fleet.unhealthy > 0) {
     const total = health.fleet.unhealthy;
@@ -76,7 +113,8 @@ export default async function RunbookHealthPage() {
       type: 'circuit',
       severity: 'danger',
       title: `${circuits} ${circuits === 1 ? 'Service' : 'Services'} at Circuit Threshold`,
-      description: 'Multiple automated runs failed within 15 minutes. Execution halted to prevent cascading failure.',
+      description:
+        'Multiple automated runs failed within 15 minutes. Execution halted to prevent cascading failure.',
       actionHref: '/runbooks/executions?status=FAILED',
       actionLabel: 'Inspect Failures',
     });
@@ -100,7 +138,8 @@ export default async function RunbookHealthPage() {
       type: 'lease',
       severity: 'warning',
       title: `${expiredLeases} Expired Execution ${expiredLeases === 1 ? 'Lease' : 'Leases'}`,
-      description: 'Active step lease expired before completion report. System will re-queue or self-fence.',
+      description:
+        'Active step lease expired before completion report. System will re-queue or self-fence.',
       actionHref: '/runbooks/executions',
       actionLabel: 'Inspect Queue',
     });
@@ -118,12 +157,11 @@ export default async function RunbookHealthPage() {
     });
   }
 
-  const runbookWorkerError =
-    localWorker.running
-      ? (localWorker.lane === 'runbook'
-          ? localWorker.lastError
-          : localWorker.lastRunbookError)
-      : null;
+  const runbookWorkerError = localWorker.running
+    ? localWorker.lane === 'runbook'
+      ? localWorker.lastError
+      : localWorker.lastRunbookError
+    : null;
 
   if (runbookWorkerError) {
     issues.push({
@@ -159,8 +197,14 @@ export default async function RunbookHealthPage() {
           {
             label: 'Healthy Fleet',
             value: `${health.fleet.enrolled - health.fleet.unhealthy}/${health.fleet.enrolled}`,
-            tone: !health.fleet.enrolled ? 'default' : health.fleet.unhealthy === 0 ? 'success' : 'danger',
-            subtext: health.fleet.enrolled ? `${health.fleet.unhealthy} require attention` : 'No Agents configured',
+            tone: !health.fleet.enrolled
+              ? 'default'
+              : health.fleet.unhealthy === 0
+                ? 'success'
+                : 'danger',
+            subtext: health.fleet.enrolled
+              ? `${health.fleet.unhealthy} require attention`
+              : 'No Agents configured',
           },
           {
             label: 'Queue Pending',
@@ -170,9 +214,17 @@ export default async function RunbookHealthPage() {
           },
           {
             label: 'Safety Controls',
-            value: attention ? `${issues.length} ${issues.length === 1 ? 'Alert' : 'Alerts'}` : health.health === 'UNKNOWN' ? 'Unknown' : 'Nominal',
+            value: attention
+              ? `${issues.length} ${issues.length === 1 ? 'Alert' : 'Alerts'}`
+              : health.health === 'UNKNOWN'
+                ? 'Unknown'
+                : 'Nominal',
             tone: attention ? 'warning' : health.health === 'UNKNOWN' ? 'default' : 'success',
-            subtext: attention ? 'Action required' : health.health === 'UNKNOWN' ? 'Status unknown' : 'Zero tripped',
+            subtext: attention
+              ? 'Action required'
+              : health.health === 'UNKNOWN'
+                ? 'Status unknown'
+                : 'Zero tripped',
           },
         ]}
       />
@@ -182,6 +234,7 @@ export default async function RunbookHealthPage() {
 
       {/* 1. What Needs Attention? */}
       <HealthAttentionPanel
+        health={health.health}
         issues={issues}
         agentsCount={health.fleet.enrolled}
         totalUnhealthy={health.fleet.unhealthy}

@@ -4,7 +4,7 @@ services:
   opsknight-agent:
     image: ${OPSKNIGHT_AGENT_IMAGE:?Set OPSKNIGHT_AGENT_IMAGE to a tested tag or digest}
     environment:
-      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:-http://opsknight-web:3000}
+      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:?Set the OpsKnight endpoint reachable by this Agent}
       OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
       OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
       OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE: /run/secrets/opsknight_agent_enrollment_token
@@ -16,17 +16,24 @@ services:
         target: /etc/opsknight-agent/policy.json
     volumes:
       - opsknight_agent_data:/var/lib/opsknight-agent
+      # Swarm converts volumes into Mounts; the separate tmpfs field is ignored.
+      # Engine tmpfs mounts default to mode 1777 and noexec/nosuid/nodev.
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 16777216
     read_only: true
-    tmpfs:
-      - /tmp:size=16m,mode=1777,noexec,nosuid
     networks:
       - opsknight
     deploy:
       replicas: 1
+      # A local identity volume must stay on its enrolled node.
+      placement:
+        constraints:
+          - node.id == ${OPSKNIGHT_AGENT_NODE_ID:?Set the enrolled Agent node ID; local identity must not migrate}
       restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 10
+        condition: any
+        delay: 30s
       update_config:
         order: stop-first
         failure_action: rollback
@@ -37,6 +44,7 @@ services:
 secrets:
   opsknight_agent_enrollment_token:
     external: true
+    name: ${OPSKNIGHT_AGENT_ENROLLMENT_SECRET:-opsknight_agent_enrollment_token}
 
 configs:
   opsknight_agent_policy:

@@ -76,7 +76,8 @@ describe('Agent active blocking condition evaluation', () => {
     ).toBe('Execution claims paused because Agent is draining.');
 
     // 4. Clock skew
-    const constClockError = 'Agent clock differs from OpsKnight by 75s. Execution claims paused until clock is synchronized.';
+    const constClockError =
+      'Agent clock differs from OpsKnight by 75s. Execution claims paused until clock is synchronized.';
     expect(
       determineActiveBlockingCondition({
         clockError: constClockError,
@@ -92,12 +93,16 @@ describe('Agent active blocking condition evaluation', () => {
 describe('Agent error precedence and lifecycle recovery', () => {
   it('correctly classifies transient communication errors vs operational outcomes', () => {
     expect(isTransientCommunicationError('Agent API temporarily unavailable.')).toBe(true);
-    expect(isTransientCommunicationError('fetch failed: connect ECONNREFUSED 127.0.0.1:3000')).toBe(true);
+    expect(isTransientCommunicationError('fetch failed: connect ECONNREFUSED 127.0.0.1:3000')).toBe(
+      true
+    );
     expect(isTransientCommunicationError('socket hang up')).toBe(true);
     expect(isTransientCommunicationError('HTTP 502 Bad Gateway')).toBe(true);
     expect(isTransientCommunicationError('HTTP 504 Gateway Timeout')).toBe(true);
     expect(isTransientCommunicationError(null)).toBe(false);
-    expect(isTransientCommunicationError('LOCAL_POLICY_DENIED: KUBERNETES is not enabled')).toBe(false);
+    expect(isTransientCommunicationError('LOCAL_POLICY_DENIED: KUBERNETES is not enabled')).toBe(
+      false
+    );
     expect(isTransientCommunicationError('Execution lease renewal failed.')).toBe(false);
   });
 
@@ -448,7 +453,9 @@ describe('Real Agent Loop Recovery & Regressions', () => {
       ...overrides,
     };
     delete (payload as Record<string, unknown>).signature;
-    const signature = sign(null, Buffer.from(canonicalEnvelope(payload)), keys.privateKey).toString('base64');
+    const signature = sign(null, Buffer.from(canonicalEnvelope(payload)), keys.privateKey).toString(
+      'base64'
+    );
     return { ...payload, signature } as ClaimedAttempt;
   }
 
@@ -461,9 +468,80 @@ describe('Real Agent Loop Recovery & Regressions', () => {
       leaseExpiresAt: attempt.leaseExpiresAt,
       cancelRequested: false,
     };
-    const signature = sign(null, Buffer.from(canonicalEnvelope(payload)), keys.privateKey).toString('base64');
+    const signature = sign(null, Buffer.from(canonicalEnvelope(payload)), keys.privateKey).toString(
+      'base64'
+    );
     return { ...payload, signature };
   }
+
+  it('survives initial control-plane unavailability without claiming work', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'agent-startup-outage-'));
+    try {
+      const client = {
+        heartbeat: vi.fn().mockRejectedValue(new Error('fetch failed')),
+        checkServerClock: vi.fn().mockRejectedValue(new Error('fetch failed')),
+        claim: vi.fn().mockResolvedValue(null),
+      } as unknown as AgentClient;
+      await expect(
+        run({
+          baseUrl: 'https://ops.example.com',
+          dataDirectory: directory,
+          identity,
+          policy,
+          executionPublicKey: publicKeySpki,
+          client,
+          maxIterations: 2,
+          pollIntervalMs: 1,
+          skipHealth: true,
+        })
+      ).resolves.toBeUndefined();
+      expect(client.claim).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps periodic heartbeat single-flight when a round trip exceeds the interval', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'agent-single-flight-'));
+    vi.useFakeTimers();
+    const capabilityProbe = vi
+      .spyOn(await import('../../../agent/src/capabilities'), 'probeCapabilities')
+      .mockResolvedValue({ capabilities: ['RUNBOOK_BASH'], report: [] });
+    try {
+      let release!: () => void;
+      const pending = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const client = {
+        heartbeat: vi.fn().mockResolvedValueOnce(undefined).mockReturnValueOnce(pending),
+        checkServerClock: vi.fn().mockResolvedValue({ skewSeconds: 0 }),
+        claim: vi.fn().mockResolvedValue(null),
+      } as unknown as AgentClient;
+      await run({
+        baseUrl: 'https://ops.example.com',
+        dataDirectory: directory,
+        identity,
+        policy,
+        executionPublicKey: publicKeySpki,
+        client,
+        maxIterations: 1,
+        skipHealth: true,
+        onIteration: async index => {
+          if (index !== 0) return;
+          await vi.advanceTimersByTimeAsync(31_000);
+          await vi.waitFor(() => expect(client.heartbeat).toHaveBeenCalledTimes(2));
+          await vi.advanceTimersByTimeAsync(35_000);
+          expect(client.heartbeat).toHaveBeenCalledTimes(2);
+          release();
+          await Promise.resolve();
+        },
+      });
+    } finally {
+      capabilityProbe.mockRestore();
+      vi.useRealTimers();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 
   it('handles LOCAL_POLICY_DENIED on one job, persists FAILED outcome, and allows subsequent valid job to succeed', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'agent-loop-policy-'));
@@ -513,9 +591,13 @@ describe('Real Agent Loop Recovery & Regressions', () => {
           return createSignedStart(validAttempt);
         }),
         renew: vi.fn(),
-        submit: vi.fn().mockImplementation(async (result: { attemptId: string; status: string; errorCode?: string }) => {
-          submittedResults.push(result);
-        }),
+        submit: vi
+          .fn()
+          .mockImplementation(
+            async (result: { attemptId: string; status: string; errorCode?: string }) => {
+              submittedResults.push(result);
+            }
+          ),
         heartbeat: vi.fn(),
         checkServerClock: vi.fn().mockResolvedValue({ skewSeconds: 0 }),
         uploadArtifact: vi.fn(),
@@ -581,9 +663,11 @@ describe('Real Agent Loop Recovery & Regressions', () => {
         }),
         start: vi.fn().mockImplementation(async () => createSignedStart(validAttempt)),
         renew: vi.fn(),
-        submit: vi.fn().mockImplementation(async (result: { attemptId: string; status: string }) => {
-          submittedResults.push(result);
-        }),
+        submit: vi
+          .fn()
+          .mockImplementation(async (result: { attemptId: string; status: string }) => {
+            submittedResults.push(result);
+          }),
         heartbeat: vi.fn(),
         checkServerClock: vi.fn().mockResolvedValue({ skewSeconds: 0 }),
         uploadArtifact: vi.fn(),
@@ -668,4 +752,3 @@ describe('Real Agent Loop Recovery & Regressions', () => {
     }
   });
 });
-

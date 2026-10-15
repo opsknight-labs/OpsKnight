@@ -1,0 +1,191 @@
+{
+  "measuredAt": "2026-10-14T03:55:46.316Z",
+  "topology": "Local PostgreSQL, direct library claims, 16 concurrent requests; no network authentication or external mutation workload",
+  "baselineRevision": "a278116a0b03c0dac1f5e94c68f88e3814152a2c",
+  "samples": [
+    {
+      "agents": 10,
+      "concurrency": 16,
+      "elapsedMs": 69.22529200000008,
+      "requestsPerSecond": 144.45587315110188,
+      "p50Ms": 66.22800000000007,
+      "p95Ms": 68.8025419999999,
+      "p99Ms": 68.8025419999999,
+      "cpuMicroseconds": {
+        "user": 116727,
+        "system": 8686
+      },
+      "memoryBytes": {
+        "rss": 195035136,
+        "heapTotal": 98697216,
+        "heapUsed": 61769608,
+        "external": 4435317,
+        "arrayBuffers": 630331
+      },
+      "databaseConnections": 11,
+      "outcome": "No pending work claimed or physical actions executed"
+    },
+    {
+      "agents": 100,
+      "concurrency": 16,
+      "elapsedMs": 138.24695800000018,
+      "requestsPerSecond": 723.3432217727343,
+      "p50Ms": 20.071874999999864,
+      "p95Ms": 33.02108299999986,
+      "p99Ms": 36.007499999999936,
+      "cpuMicroseconds": {
+        "user": 368049,
+        "system": 34167
+      },
+      "memoryBytes": {
+        "rss": 198492160,
+        "heapTotal": 100270080,
+        "heapUsed": 64821624,
+        "external": 4262816,
+        "arrayBuffers": 467078
+      },
+      "databaseConnections": 11,
+      "outcome": "No pending work claimed or physical actions executed"
+    },
+    {
+      "agents": 1000,
+      "concurrency": 16,
+      "elapsedMs": 1970.3087920000003,
+      "requestsPerSecond": 507.5346585572156,
+      "p50Ms": 28.48329100000001,
+      "p95Ms": 51.79616699999997,
+      "p99Ms": 69.83691700000008,
+      "cpuMicroseconds": {
+        "user": 4131824,
+        "system": 384061
+      },
+      "memoryBytes": {
+        "rss": 198082560,
+        "heapTotal": 134365184,
+        "heapUsed": 102517064,
+        "external": 4262816,
+        "arrayBuffers": 467078
+      },
+      "databaseConnections": 11,
+      "outcome": "No pending work claimed or physical actions executed"
+    }
+  ],
+  "queryPlan": [
+    {
+      "QUERY PLAN": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 8.18,
+            "Total Cost": 8.18,
+            "Plan Rows": 1,
+            "Plan Width": 40,
+            "Actual Startup Time": 0.269,
+            "Actual Total Time": 0.27,
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 9,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 1,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Sort",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 8.18,
+                "Total Cost": 8.18,
+                "Plan Rows": 1,
+                "Plan Width": 40,
+                "Actual Startup Time": 0.268,
+                "Actual Total Time": 0.268,
+                "Actual Rows": 0,
+                "Actual Loops": 1,
+                "Sort Key": [
+                  "\"createdAt\"",
+                  "id"
+                ],
+                "Sort Method": "quicksort",
+                "Sort Space Used": 25,
+                "Sort Space Type": "Memory",
+                "Shared Hit Blocks": 9,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 1,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Forward",
+                    "Index Name": "RunbookStepAttempt_status_updatedAt_idx",
+                    "Relation Name": "RunbookStepAttempt",
+                    "Alias": "RunbookStepAttempt",
+                    "Startup Cost": 0.14,
+                    "Total Cost": 8.17,
+                    "Plan Rows": 1,
+                    "Plan Width": 40,
+                    "Actual Startup Time": 0.141,
+                    "Actual Total Time": 0.141,
+                    "Actual Rows": 0,
+                    "Actual Loops": 1,
+                    "Index Cond": "(status = 'PENDING'::\"RunbookAttemptStatus\")",
+                    "Rows Removed by Index Recheck": 0,
+                    "Filter": "(\"availableAt\" <= now())",
+                    "Rows Removed by Filter": 0,
+                    "Shared Hit Blocks": 3,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 1,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 32,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 1.155,
+          "Triggers": [],
+          "Execution Time": 0.313
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Not production fleet capacity certification",
+    "Only idle/no-work dispatch measured",
+    "No HA/network or Kubernetes control-plane load represented"
+  ]
+}

@@ -298,7 +298,7 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
 
     // Safety rule: All service bindings are explicitly kept disabled upon restoration.
     // An operator must intentionally review and re-enable each binding.
-    await tx.serviceRunbookBinding.updateMany({
+    await tx.serviceAutomationRule.updateMany({
       where: { runbookId },
       data: { enabled: false },
     });

@@ -80,7 +80,7 @@ async function incidentExecutionRequest(
     assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
     assertCanViewIncident(idSchema.parse(incidentId)),
   ]);
-  const binding = await prisma.serviceRunbookBinding.findFirst({
+  const binding = await prisma.serviceAutomationRule.findFirst({
     where: {
       id: idSchema.parse(bindingId),
       enabled: true,

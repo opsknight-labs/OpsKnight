@@ -59,3 +59,16 @@ it('disables an expired preview and allows a newly issued preview to execute', a
     (screen.getByRole('button', { name: 'Execute this plan' }) as HTMLButtonElement).disabled
   ).toBe(false);
 });
+
+it('shows a disabled preview without resolving or executing a detached rule', async () => {
+  const previewAction = vi.fn(async () => ({}));
+  const executeAction = vi.fn(async () => {});
+  render(
+    <RunbookExecutionPreview disabled previewAction={previewAction} executeAction={executeAction} />
+  );
+  const button = screen.getByRole('button', { name: 'Preview execution' }) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  fireEvent.click(button);
+  expect(previewAction).not.toHaveBeenCalled();
+  expect(executeAction).not.toHaveBeenCalled();
+});

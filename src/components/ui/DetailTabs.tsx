@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, type ReactNode } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import React, { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +21,7 @@ export type DetailTabsProps = {
   activeTab?: string;
   onTabChange?: (tabId: string) => void;
   syncWithUrl?: boolean;
+  navigationMode?: 'shallow' | 'server';
   urlParamName?: string;
   layout?: 'grid' | 'auto';
   className?: string;
@@ -36,6 +37,7 @@ export default function DetailTabs({
   activeTab: controlledActiveTab,
   onTabChange,
   syncWithUrl = true,
+  navigationMode = 'shallow',
   urlParamName = 'tab',
   layout = 'grid',
   className,
@@ -44,6 +46,7 @@ export default function DetailTabs({
   actions,
   children,
 }: DetailTabsProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -65,10 +68,16 @@ export default function DetailTabs({
 
   // Optimistic local state for instantaneous 0ms tab switching & zero lag
   const [selectedTab, setSelectedTab] = useState(resolvedUrlTab);
+  const [previousUrlTab, setPreviousUrlTab] = useState(resolvedUrlTab);
+  const selection = useRef(resolvedUrlTab);
 
-  // Synchronize internal state if controlled tab or external URL query param changes
-  useEffect(() => {
+  // Reset URL-derived state before committing a stale tab on external navigation.
+  if (previousUrlTab !== resolvedUrlTab) {
+    setPreviousUrlTab(resolvedUrlTab);
     setSelectedTab(resolvedUrlTab);
+  }
+  useEffect(() => {
+    selection.current = resolvedUrlTab;
   }, [resolvedUrlTab]);
 
   // Listen to popstate (browser back/forward) to update optimistic state
@@ -80,8 +89,10 @@ export default function DetailTabs({
         const urlParams = new URLSearchParams(window.location.search);
         const urlTab = urlParams.get(urlParamName);
         if (urlTab && validTabIds.has(urlTab)) {
+          selection.current = urlTab;
           setSelectedTab(urlTab);
         } else {
+          selection.current = initialTab;
           setSelectedTab(initialTab);
         }
       }
@@ -92,6 +103,8 @@ export default function DetailTabs({
   }, [syncWithUrl, urlParamName, validTabIds, initialTab]);
 
   const handleTabChange = (nextTabId: string) => {
+    // Mouse/focus activation can arrive before React commits the selected value.
+    if (nextTabId === selection.current) return;
     if (syncWithUrl && typeof window !== 'undefined') {
       const change = new CustomEvent('opsknight:settings-navigation', {
         cancelable: true,
@@ -100,6 +113,7 @@ export default function DetailTabs({
       if (!window.dispatchEvent(change)) return;
     }
     // 1. Instant 0ms local state update (immediate visual tab highlight & content switch)
+    selection.current = nextTabId;
     setSelectedTab(nextTabId);
 
     if (onTabChange) {
@@ -119,7 +133,8 @@ export default function DetailTabs({
         const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
 
         // Use window.history.replaceState for instant URL bar update without triggering blocking RSC re-fetch
-        window.history.replaceState(null, '', newUrl);
+        if (navigationMode === 'server') router.replace(newUrl, { scroll: false });
+        else window.history.replaceState(null, '', newUrl);
       }
     }
   };

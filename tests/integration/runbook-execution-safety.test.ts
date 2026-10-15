@@ -1,5 +1,5 @@
 /* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma, RunbookInputType } from '@prisma/client';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -10,7 +10,12 @@ import {
   computeTriggerFingerprint,
   parseRunbookDefinition,
 } from '@/lib/runbooks/definition';
-import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
+import * as ruleLocks from '@/lib/runbooks/locking';
+import {
+  pauseServiceRule,
+  createServiceBinding,
+  updateServiceBinding,
+} from '@/lib/runbooks/bindings';
 import {
   advanceExecution,
   startRunbookExecution as startAuthorizedExecution,
@@ -58,7 +63,7 @@ import { hashTokenV2 } from '@/lib/api-keys';
 async function startRunbookExecution(input: RunbookExecutionRequest) {
   const binding =
     !input.triggeredByUserId && input.bindingId
-      ? await testPrisma.serviceRunbookBinding.findUnique({ where: { id: input.bindingId } })
+      ? await testPrisma.serviceAutomationRule.findUnique({ where: { id: input.bindingId } })
       : null;
   if (binding) {
     const trigger = input.triggerId
@@ -81,6 +86,7 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
       runbookVersionId,
       sourceEventId,
       triggerId: trigger.id,
+      expectedRuleRevision: binding.configurationRevision,
       triggerFingerprint: computeTriggerFingerprint({
         sourceEventId,
         bindingId: binding.id,
@@ -185,7 +191,7 @@ async function createAgentTarget(
       members: { create: { agentId: agent.id } },
     },
   });
-  const binding = await testPrisma.serviceRunbookBinding.create({
+  const binding = await testPrisma.serviceAutomationRule.create({
     data: {
       serviceId: service.id,
       runbookId: runbook.id,
@@ -201,6 +207,106 @@ async function createAgentTarget(
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase(), 30000);
   afterAll(async () => testPrisma.$disconnect());
+
+  it.each(['pause', 'start'] as const)(
+    'serializes pause against Automatic start when %s locks first',
+    async winner => {
+      const target = await createAgentTarget({
+        steps: [
+          {
+            key: 'wait',
+            name: 'Wait',
+            type: 'WAIT',
+            riskClass: 'READ_ONLY',
+            config: { durationSeconds: 0 },
+          },
+        ],
+      });
+      const incident = await createTestIncident('Pause race', target.service.id);
+      const trigger = await testPrisma.runbookTrigger.create({
+        data: { bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
+      });
+      const sourceEventId = crypto.randomUUID();
+      const request = {
+        runbookId: target.runbook.id,
+        runbookVersionId: target.version.id,
+        serviceId: target.service.id,
+        bindingId: target.binding.id,
+        incidentId: incident.id,
+        triggerId: trigger.id,
+        expectedRuleRevision: target.binding.configurationRevision,
+        sourceEventId,
+        triggerFingerprint: computeTriggerFingerprint({
+          sourceEventId,
+          bindingId: target.binding.id,
+          runbookVersionId: target.version.id,
+        }),
+      };
+      let release!: () => void;
+      let acquired!: () => void;
+      const gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const locked = new Promise<void>(resolve => {
+        acquired = resolve;
+      });
+      const originalShare = ruleLocks.lockRunbookForShare;
+      const originalUpdate = ruleLocks.lockServiceRuleForUpdate;
+      const spy =
+        winner === 'pause'
+          ? vi
+              .spyOn(ruleLocks, 'lockServiceRuleForUpdate')
+              .mockImplementationOnce(async (...args) => {
+                await originalUpdate(...args);
+                acquired();
+                await gate;
+              })
+          : vi.spyOn(ruleLocks, 'lockRunbookForShare').mockImplementationOnce(async (...args) => {
+              const result = await originalShare(...args);
+              acquired();
+              await gate;
+              return result;
+            });
+      const start = () => startTriggeredRunbookExecution(request);
+      const pause = () => pauseServiceRule(target.service.id, target.binding.id, target.actor.id);
+      try {
+        const first = winner === 'pause' ? pause() : start();
+        await locked;
+        const second = winner === 'pause' ? start() : pause();
+        // Attach rejection handling before releasing the deliberately held lock.
+        const settled = Promise.allSettled([first, second]);
+        let blocked = false;
+        const deadline = Date.now() + 3000;
+        while (Date.now() < deadline) {
+          const [row] = await testPrisma.$queryRaw<
+            { count: bigint }[]
+          >`SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%Runbook%'`;
+          if (Number(row.count) > 0) {
+            blocked = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        release();
+        const results = await settled;
+        expect(blocked).toBe(true);
+        expect(results[0].status).toBe('fulfilled');
+        expect(results[1].status).toBe(winner === 'pause' ? 'rejected' : 'fulfilled');
+        expect(await testPrisma.runbookExecution.count()).toBe(winner === 'pause' ? 0 : 1);
+        expect(
+          (
+            await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+              where: { id: target.binding.id },
+            })
+          ).enabled
+        ).toBe(false);
+        await expect(start()).rejects.toThrow(/boundary|AUTOMATION_NOT_AUTHORIZED/);
+      } finally {
+        release();
+        spy.mockRestore();
+      }
+    }
+  );
 
   it('previews without creating work and executes only an unchanged plan', async () => {
     const { runbook, version } = await createPublishedRunbook({
@@ -258,7 +364,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await testPrisma.systemSettings.create({
       data: { id: 'default', runbookAutoExecutionsPerIncident: 0 },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: {
         mode: 'AUTOMATIC',
@@ -269,6 +375,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await testPrisma.runbookAgent.update({
       where: { id: target.agent.id },
       data: { labels: { env: 'prod' } },
+    });
+    await testPrisma.runbookTrigger.updateMany({
+      where: { bindingId: target.binding.id },
+      data: { revision: 3 },
     });
     expect(await evaluateIncidentTriggers(incident.id, 'budget-event')).toMatchObject({
       matched: 1,
@@ -283,6 +393,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         where: { incidentId: incident.id, type: 'RUNBOOK_SUGGESTED' },
       })
     ).toBe(1);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
     expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).planSnapshot).toMatchObject({
       agentSelector: { env: 'prod' },
       definitionChecksum: target.version.checksum,
@@ -299,6 +410,17 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       suggested: 0,
     });
     expect(await testPrisma.runbookSuggestion.count()).toBe(1);
+    const execution = await testPrisma.runbookExecution.findFirstOrThrow();
+    expect(execution.triggerRevision).toBe(3);
+    await testPrisma.runbookTrigger.updateMany({
+      where: { bindingId: target.binding.id },
+      data: { revision: 4 },
+    });
+    expect(
+      (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } }))
+        .triggerRevision
+    ).toBe(3);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
   });
 
   it('resolves incident label targeting and fences removal of the pinned source-pool member', async () => {
@@ -324,7 +446,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-a' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: '${{ incident.labels.host }}' } },
     });
@@ -430,7 +552,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     );
     const incident = await createTestIncident('Confidential display metadata', target.service.id);
     const inputValues = { credential: 'secret://production-api-token', label: 'Payments' };
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { inputValues },
     });
@@ -593,7 +715,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-a' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: 'node-a' } },
     });
@@ -797,7 +919,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           { key: 'manual', name: 'Manual', type: 'MANUAL', riskClass: 'READ_ONLY', config: {} },
         ],
       });
-      await testPrisma.serviceRunbookBinding.update({
+      await testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: { mode: 'AUTOMATIC' },
       });
@@ -1179,7 +1301,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
               },
             ],
       });
-      await testPrisma.serviceRunbookBinding.create({
+      await testPrisma.serviceAutomationRule.create({
         data: {
           serviceId: service.id,
           runbookId: runbook.id,
@@ -1244,7 +1366,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         grants: { create: { agentPoolId: target.pool.id } },
       },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { inputValues: { unit: 'secret://unit-secret', unused: 'secret://not-granted' } },
     });
@@ -1294,7 +1416,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.runbook.id },
       data: { publishedVersionId: corrupted.id },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { versionStrategy: 'LATEST_PUBLISHED', runbookVersionId: null },
     });
@@ -1556,7 +1678,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         required: true,
       },
     ]);
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { inputValues: { unit: '--system' } },
     });
@@ -1676,7 +1798,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         where: { id: target.runbook.id },
         data: { publishedVersionId: version2.id },
       }),
-      testPrisma.serviceRunbookBinding.update({
+      testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: {
           versionStrategy: 'LATEST_PUBLISHED',
@@ -2345,7 +2467,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-a' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: 'node-a' } },
     });
@@ -2417,7 +2539,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: target.agent.id },
       data: { labels: { host: 'node-b' } },
     });
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: 'node-b' } },
     });
@@ -2689,7 +2811,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     const incident = await createTestIncident('Incident linked execution', target.service.id);
 
     // Resolve service boundary and binding like the v2 API endpoint
-    const binding = await testPrisma.serviceRunbookBinding.findFirst({
+    const binding = await testPrisma.serviceAutomationRule.findFirst({
       where: {
         runbookId: target.runbook.id,
         serviceId: incident.serviceId,
@@ -2969,7 +3091,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       }
     });
 
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
     const port = (server.address() as AddressInfo).port;
     const serverUrl = `http://127.0.0.1:${port}/api/v2/runbooks/${target.runbook.id}/execute`;
 
@@ -3027,10 +3149,109 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       expect(dbRecord?.completedAt).not.toBeNull();
     } finally {
       await new Promise<void>((resolve, reject) =>
-        server.close((err) => (err ? reject(err) : resolve()))
+        server.close(err => (err ? reject(err) : resolve()))
       );
     }
   });
+  it.each([true, false])(
+    'honors HTTP parameter contracts without silent input changes (bound: %s)',
+    async bound => {
+      const { runbook, version } = await createPublishedRunbook(
+        {
+          steps: [
+            {
+              key: 'wait',
+              name: 'Wait',
+              type: 'WAIT',
+              riskClass: 'READ_ONLY',
+              config: { durationSeconds: 0 },
+            },
+          ],
+        },
+        [{ key: 'environment', label: 'Environment', type: 'STRING', required: true, sequence: 0 }]
+      );
+      const service = await createTestService('Parameter contract');
+      const actor = await createTestUser({ role: 'RESPONDER' });
+      const binding = bound
+        ? await testPrisma.serviceAutomationRule.create({
+            data: {
+              serviceId: service.id,
+              runbookId: runbook.id,
+              runbookVersionId: version.id,
+              versionStrategy: 'PINNED',
+              mode: 'MANUAL',
+              inputValues: { environment: 'production' },
+            },
+          })
+        : null;
+      const token = `ok_test_${randomUUID().replace(/-/g, '')}`;
+      await testPrisma.apiKey.create({
+        data: {
+          name: 'Parameter HTTP fixture',
+          prefix: token.slice(0, 12),
+          tokenHash: hashTokenV2(token),
+          scopes: ['runbooks:read', 'runbooks:execute'],
+          userId: actor.id,
+        },
+      });
+      const server = createServer(async (req, res) => {
+        try {
+          let body = '';
+          for await (const chunk of req) body += String(chunk);
+          const headers = Object.fromEntries(
+            Object.entries(req.headers).flatMap(([key, value]) =>
+              value ? [[key, Array.isArray(value) ? value.join(', ') : value]] : []
+            )
+          );
+          const response = await executeRunbookV2Route(
+            new NextRequest(
+              `http://127.0.0.1:${(server.address() as AddressInfo).port}${req.url}`,
+              { method: 'POST', headers, body }
+            ),
+            { params: Promise.resolve({ id: runbook.id }) }
+          );
+          res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
+          res.end(await response.text());
+        } catch {
+          res.writeHead(500);
+          res.end('Fixture error');
+        }
+      });
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v2/runbooks/${runbook.id}/execute`;
+      const send = (parameters?: Record<string, unknown>) =>
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${token}`,
+            'idempotency-key': randomUUID(),
+          },
+          body: JSON.stringify({
+            ...(binding ? { bindingId: binding.id } : {}),
+            ...(parameters ? { parameters } : {}),
+          }),
+        });
+      try {
+        // Bound overrides are rejected even when well typed. Unbound inputs must satisfy the published schema.
+        const invalid = await send(bound ? { environment: 'staging' } : { environment: 42 });
+        expect(invalid.status).toBe(400);
+        if (bound)
+          expect((await invalid.json()).detail).toContain('Service rules use their saved inputs');
+        expect(await testPrisma.runbookExecution.count()).toBe(0);
+        const valid = await send(bound ? undefined : { environment: 'staging' });
+        expect(valid.status).toBe(202);
+        const payload = (await valid.json()) as { data: { executionId: string } };
+        const execution = await testPrisma.runbookExecution.findUniqueOrThrow({
+          where: { id: payload.data.executionId },
+        });
+        expect(execution.inputValues).toEqual({ environment: bound ? 'production' : 'staging' });
+        expect(execution.bindingId).toBe(binding?.id ?? null);
+      } finally {
+        await new Promise<void>((resolve, reject) =>
+          server.close(error => (error ? reject(error) : resolve()))
+        );
+      }
+    }
+  );
 });
-
-

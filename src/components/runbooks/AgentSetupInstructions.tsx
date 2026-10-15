@@ -1,53 +1,38 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
+import {
+  validateAgentEndpoint,
+  type AgentDistribution,
+} from '@/lib/runbooks/distribution-contract';
+import { agentDeploymentIdentity, isAgentDeploymentName } from '@/lib/runbooks/agent-deployment';
+import { agentSetupCommands } from '@/lib/runbooks/agent-setup-commands';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-function imageParts(image: string) {
-  const digestSeparator = image.indexOf('@');
-  if (digestSeparator > 0)
-    return {
-      repository: image.slice(0, digestSeparator),
-      digest: image.slice(digestSeparator + 1),
-    };
-  const tagSeparator = image.lastIndexOf(':');
-  const hasTag = tagSeparator > image.lastIndexOf('/');
-  return {
-    repository: hasTag ? image.slice(0, tagSeparator) : image,
-    tag: hasTag ? image.slice(tagSeparator + 1) : '2.0.0',
-  };
-}
-
-function helmImageArguments(image: string): string {
-  const digestSeparator = image.indexOf('@');
-  if (digestSeparator > 0) {
-    return `--set-string agent.image.repository=${shellQuote(image.slice(0, digestSeparator))} \\
-  --set-string agent.image.digest=${shellQuote(image.slice(digestSeparator + 1))}`;
-  }
-  const lastSlash = image.lastIndexOf('/');
-  const tagSeparator = image.lastIndexOf(':');
-  const hasTag = tagSeparator > lastSlash;
-  return `--set-string agent.image.repository=${shellQuote(hasTag ? image.slice(0, tagSeparator) : image)} \\
-  --set-string agent.image.tag=${shellQuote(hasTag ? image.slice(tagSeparator + 1) : '2.0.0')}`;
-}
-
-function SetupBlock({ value }: { value: string }) {
+function SetupBlock({ value, disabled = false }: { value: string; disabled?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
   async function copy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2_000);
+    setError('');
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2_000);
+    } catch {
+      setError('Clipboard access failed. Select and copy the command text.');
+    }
   }
   return (
     <div className="relative">
+      {error && (
+        <p role="alert" className="mb-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-4 pr-24 text-xs leading-5">
         <code>{value}</code>
       </pre>
@@ -57,6 +42,7 @@ function SetupBlock({ value }: { value: string }) {
         variant="outline"
         className="absolute right-2 top-2"
         onClick={copy}
+        disabled={disabled}
       >
         {copied ? <Check /> : <Copy />}
         {copied ? 'Copied' : 'Copy'}
@@ -66,96 +52,73 @@ function SetupBlock({ value }: { value: string }) {
 }
 
 export default function AgentSetupInstructions({
-  token,
   executionPublicKey,
+  agentId,
   appUrl,
+  distribution,
+  expiresAt,
+  initialOperation = 'install',
 }: {
   token: string;
+  agentId: string;
   executionPublicKey: string;
   appUrl?: string;
+  distribution?: AgentDistribution | null;
+  expiresAt?: string;
+  initialOperation?: 'install' | 'upgrade';
 }) {
-  const [image, setImage] = useState('ghcr.io/opsknight-labs/opsknight-agent:2.0.0');
-  const [url, setUrl] = useState(appUrl || 'https://opsknight.company.com');
-  const nativeUrl = appUrl || 'https://opsknight.company.com';
+  const deployment = agentDeploymentIdentity(agentId);
+  const [operation, setOperation] = useState<'install' | 'upgrade'>(initialOperation);
+  const [deploymentName, setDeploymentName] = useState(deployment.name);
+  const validDeploymentName = isAgentDeploymentName(deploymentName);
+  const [expired, setExpired] = useState(() =>
+    expiresAt ? Date.parse(expiresAt) <= Date.now() : false
+  );
+  useEffect(() => {
+    if (!expiresAt) return;
+    const update = () => setExpired(Date.parse(expiresAt) <= Date.now());
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [expiresAt]);
+  const [image, setImage] = useState(distribution?.manifest.image.reference ?? '');
+  const [url, setUrl] = useState(appUrl && !validateAgentEndpoint(appUrl) ? appUrl : '');
+  const [endpointConfirmed, setEndpointConfirmed] = useState(false);
+  const endpointError = validateAgentEndpoint(url);
+  const copyBlocked =
+    (operation === 'install' && expired) ||
+    (operation === 'upgrade' && !validDeploymentName) ||
+    Boolean(endpointError) ||
+    !endpointConfirmed ||
+    !distribution ||
+    image !== distribution.manifest.image.reference;
 
   const [policyPath, setPolicyPath] = useState('../../agent/policy.container.json');
-  const snippets = useMemo(() => {
-    const helmImage = helmImageArguments(image);
-    const parsedImage = imageParts(image);
-    const namespace =
-      'kubectl create namespace opsknight --dry-run=client -o yaml | kubectl apply -f -';
-    const kustomization = JSON.stringify({
-      apiVersion: 'kustomize.config.k8s.io/v1beta1',
-      kind: 'Kustomization',
-      namespace: 'opsknight',
-      resources: ['deployment.yaml', 'policy.yaml', 'service-account.yaml', 'pvc.yaml'],
-      images: [
-        {
-          name: 'ghcr.io/opsknight-labs/opsknight-agent',
-          newName: parsedImage.repository,
-          ...(parsedImage.digest ? { digest: parsedImage.digest } : { newTag: parsedImage.tag }),
-        },
-      ],
-      patches: [
-        {
-          target: { kind: 'Deployment', name: 'opsknight-agent' },
-          patch: JSON.stringify([
-            { op: 'replace', path: '/spec/template/spec/containers/0/env/0/value', value: url },
-          ]),
-        },
-      ],
-    });
-    const compose = `export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
-export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
-export OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${shellQuote(token)}
-export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
-
-docker compose -p opsknight-agent -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent`;
-    const swarm = `printf '%s' ${shellQuote(token)} | docker secret create opsknight_agent_enrollment_token -
-export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
-export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
-export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-
-# Use an existing overlay network reachable from this Agent.
-export SWARM_NETWORK_NAME=opsknight
-docker stack deploy --with-registry-auth \\
-  -c deploy/swarm/docker-stack.agent.yml opsknight-agent`;
-    const helm = `${namespace}
-kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
-  --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${shellQuote(token)} \\
-  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-
-helm upgrade --install opsknight-agent deploy/kubernetes/helm/opsknight-agent \\
-  --namespace opsknight --create-namespace \\
-  --set agent.enabled=true \\
-  --set-string agent.url=${shellQuote(url)} \\
-  ${helmImage} \\
-  --set agent.enrollmentToken.existingSecret=opsknight-agent-enrollment`;
-    const kustomize = `${namespace}
-kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
-  --from-literal=enrollment-token=${shellQuote(token)} \\
-  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-
-# Build an Agent-only overlay with the selected URL and image.
-agent_setup_dir=$(mktemp -d)
-cp deploy/kubernetes/kustomize/components/agent/deployment.yaml deploy/kubernetes/kustomize/components/agent/policy.yaml deploy/kubernetes/kustomize/components/agent/service-account.yaml deploy/kubernetes/kustomize/components/agent/pvc.yaml "$agent_setup_dir/"
-printf '%s' ${shellQuote(kustomization)} > "$agent_setup_dir/kustomization.yaml"
-kubectl apply -k "$agent_setup_dir"
-rm -rf "$agent_setup_dir"`;
-    const effectiveNativeUrl = url || nativeUrl;
-    const linux = `# 1. Download official release installer (replace v2.0.0 with your release version tag if different)
-curl -fsSL https://github.com/opsknight-labs/OpsKnight/releases/download/v2.0.0/install.sh -o install.sh
-sudo bash install.sh \\
-  --url ${shellQuote(effectiveNativeUrl)} \\
-  --key ${shellQuote(executionPublicKey)} \\
-  --token ${shellQuote(token)}
-
-# 2. Run preflight diagnostics and verify service
-sudo /opt/opsknight-agent/preflight.sh
-sudo systemctl enable --now opsknight-agent`;
-    return { compose, swarm, helm, kustomize, linux };
-  }, [image, policyPath, token, url, nativeUrl, executionPublicKey]);
+  const snippets = useMemo(
+    () =>
+      agentSetupCommands({
+        agentId,
+        image,
+        url,
+        policyPath,
+        executionPublicKey,
+        distribution,
+        operation,
+        deploymentName: validDeploymentName ? deploymentName : deployment.name,
+      }),
+    [
+      agentId,
+      image,
+      url,
+      policyPath,
+      executionPublicKey,
+      distribution,
+      operation,
+      deploymentName,
+      validDeploymentName,
+      deployment.name,
+    ]
+  );
 
   return (
     <div className="space-y-4 rounded-lg border bg-background p-4">
@@ -169,6 +132,46 @@ sudo systemctl enable --now opsknight-agent`;
           </p>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Enrollment deployment name: <code>{deployment.name}</code>. Keep this name with the
+        persisted Agent identity.
+      </p>
+      <label className="block text-sm">
+        Deployment operation
+        <select
+          aria-label="Deployment operation"
+          value={operation}
+          onChange={event => setOperation(event.target.value as 'install' | 'upgrade')}
+          className="ml-2 rounded border bg-background p-2"
+        >
+          <option value="install">Install new independent Agent</option>
+          <option value="upgrade">Upgrade this installed Agent, preserving identity</option>
+        </select>
+      </label>
+      {operation === 'upgrade' && (
+        <label className="block text-sm">
+          Existing deployment name
+          <Input
+            aria-label="Existing deployment name"
+            value={deploymentName}
+            maxLength={45}
+            onChange={event => setDeploymentName(event.target.value)}
+          />
+          <span className="text-xs text-muted-foreground">
+            Match the saved installation name. Older installations may use opsknight-agent. Changing
+            the Compose project name creates a different volume.
+          </span>
+        </label>
+      )}
+      {!validDeploymentName && operation === 'upgrade' && (
+        <p role="alert">
+          Use a deployment name of at most 45 lowercase letters, numbers or hyphens.
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        To replace a lost or compromised identity, revoke the old Agent and create a new enrollment.
+        Use its new deployment name and a new volume; never reuse or copy the old identity.
+      </p>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="agent-setup-image">Agent image</Label>
@@ -180,7 +183,14 @@ sudo systemctl enable --now opsknight-agent`;
         </div>
         <div className="space-y-1">
           <Label htmlFor="agent-setup-url">OpsKnight URL from Agent</Label>
-          <Input id="agent-setup-url" value={url} onChange={event => setUrl(event.target.value)} />
+          <Input
+            id="agent-setup-url"
+            value={url}
+            onChange={event => {
+              setUrl(event.target.value);
+              setEndpointConfirmed(false);
+            }}
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="agent-setup-policy">Compose policy path</Label>
@@ -191,6 +201,81 @@ sudo systemctl enable --now opsknight-agent`;
           />
         </div>
       </div>
+      {expired && operation === 'install' && (
+        <p role="alert" className="text-sm text-destructive">
+          Enrollment token expired. Create a new enrollment before installing.
+        </p>
+      )}
+      {!distribution && (
+        <p role="alert" className="text-sm text-amber-700">
+          No verified Agent release is available for this server. Install commands cannot be copied
+          until compatible published artifacts are available.
+        </p>
+      )}
+      {distribution && (
+        <p className="text-xs text-muted-foreground">
+          Verified release {distribution.manifest.version} · protocol{' '}
+          {distribution.manifest.protocolVersions.join(', ')} · installer checksum checked. Image
+          digest is pinned.
+        </p>
+      )}
+      {distribution && image !== distribution.manifest.image.reference && (
+        <p role="alert" className="text-sm text-destructive">
+          This image differs from the verified release digest. Restore the verified digest to enable
+          copying.
+        </p>
+      )}
+      {endpointError && (
+        <p role="alert" className="text-sm text-destructive">
+          {endpointError}
+        </p>
+      )}
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={endpointConfirmed}
+          onChange={event => setEndpointConfirmed(event.target.checked)}
+        />
+        I confirmed this URL is reachable from the Agent host or cluster.
+      </label>
+      <p className="text-xs text-muted-foreground">
+        Container diagnostics describe the container. Host Systemd, container sockets and Kubernetes
+        permissions require explicit provisioning; binary availability does not prove target
+        authorization.
+      </p>
+      <details className="rounded border p-3 text-sm">
+        <summary className="cursor-pointer font-medium">
+          Installation preflight and diagnostics
+        </summary>
+        <ol className="mt-2 list-decimal space-y-2 pl-5">
+          <li>
+            Endpoint and certificate trust: the generated curl command must succeed from the Agent
+            host. Install the private CA in that host and container trust store if needed; do not
+            disable TLS verification.
+          </li>
+          <li>
+            Image compatibility: copying is enabled only for the verified server-compatible image
+            digest and checked installer checksum.
+          </li>
+          <li>
+            Enrollment: a new installation consumes one token once. An upgrade uses the existing
+            identity and requires no new token.
+          </li>
+          <li>
+            Persistence: retain this deployment name, its identity volume or PVC and its node pin.
+            Never mount one identity into two running Agents.
+          </li>
+          <li>
+            Policy: inspect runtime capabilities and local policy in the Agent drawer. An online
+            heartbeat alone does not grant execution authority.
+          </li>
+          <li>
+            First heartbeat: return to the Agent fleet and confirm the selected Agent is Online with
+            a recent authenticated heartbeat. If degraded, inspect its error, spool and dead-letter
+            diagnostics.
+          </li>
+        </ol>
+      </details>
       <Tabs defaultValue="compose" className="space-y-3">
         <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="compose">Compose</TabsTrigger>
@@ -200,27 +285,34 @@ sudo systemctl enable --now opsknight-agent`;
           <TabsTrigger value="linux">Linux</TabsTrigger>
         </TabsList>
         <TabsContent value="compose">
-          <SetupBlock value={snippets.compose} />
+          <SetupBlock disabled={copyBlocked} value={snippets.compose} />
         </TabsContent>
         <TabsContent value="swarm">
-          <SetupBlock value={snippets.swarm} />
+          <SetupBlock disabled={copyBlocked} value={snippets.swarm} />
         </TabsContent>
         <TabsContent value="helm">
-          <SetupBlock value={snippets.helm} />
+          <SetupBlock disabled={copyBlocked} value={snippets.helm} />
         </TabsContent>
         <TabsContent value="kustomize">
-          <SetupBlock value={snippets.kustomize} />
+          <SetupBlock disabled={copyBlocked} value={snippets.kustomize} />
         </TabsContent>
         <TabsContent value="linux">
-          <SetupBlock value={snippets.linux} />
+          {distribution ? (
+            <SetupBlock disabled={copyBlocked} value={snippets.linux} />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Native installation is unavailable until official installer assets are published and
+              verified.
+            </p>
+          )}
         </TabsContent>
       </Tabs>
       <p className="text-xs text-muted-foreground">
         These commands deploy only the Agent and require an existing OpsKnight installation. Run
         them from the repository root. Use an Agent-reachable HTTPS URL. Secret-backed steps require
-        HTTPS, including container Agents; internal HTTP URLs only support steps without secrets.
-        Keep the enrollment Secret while the deployment references it; the consumed token cannot
-        enroll again. Persisted identity is used after enrollment.
+        HTTPS, including container Agents. All generated setup commands require HTTPS. Keep the
+        enrollment Secret while the deployment references it; the consumed token cannot enroll
+        again. Persisted identity is used after enrollment.
       </p>
     </div>
   );

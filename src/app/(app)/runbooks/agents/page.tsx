@@ -1,5 +1,10 @@
+import { getAgentDistribution } from '@/lib/runbooks/distribution';
 import Link from 'next/link';
-import { getRunbookDatabaseNow, getRunbookFleetSummary, getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import {
+  getRunbookDatabaseNow,
+  getRunbookFleetSummary,
+  getRunbookNavigationSummary,
+} from '@/lib/runbooks/presentation/summaries';
 import { resolveEffectiveAgentStatus } from '@/lib/runbooks/presentation/contracts';
 import { SearchableRunbookSelect } from '@/components/runbooks/SearchableRunbookSelect';
 import { KeyRound, Network } from 'lucide-react';
@@ -53,6 +58,7 @@ import {
   updateSchedulingLabelsAction,
   rotateExecutionSigningIdentityAction,
   updateIncidentRemediationBudgetAction,
+  updateRunbookArtifactRetentionAction,
 } from '../actions';
 
 export const revalidate = 0;
@@ -63,17 +69,28 @@ export default async function RunbookAgentsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
-  const [permissions, user, appUrl] = await Promise.all([
+  const [permissions, user, appUrl, distribution] = await Promise.all([
     getUserPermissions(),
     getCurrentUser(),
     getAppUrl(),
+    getAgentDistribution(),
   ]);
   const userTimeZone = getUserTimeZone(user);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
-  const [now, fleet, navigation, poolTotal, secretTotal] = await Promise.all([getRunbookDatabaseNow(), getRunbookFleetSummary(), getRunbookNavigationSummary(), prisma.runbookAgentPool.count(), canManageSecrets ? prisma.runbookSecret.count() : Promise.resolve(0)]);
-  const tab = ['agents', 'pools', 'secrets', 'security'].includes(query.tab) && (query.tab !== 'secrets' || canManageSecrets) ? query.tab : 'agents';
+  const [now, fleet, navigation, poolTotal, secretTotal] = await Promise.all([
+    getRunbookDatabaseNow(),
+    getRunbookFleetSummary(),
+    getRunbookNavigationSummary(),
+    prisma.runbookAgentPool.count(),
+    canManageSecrets ? prisma.runbookSecret.count() : Promise.resolve(0),
+  ]);
+  const tab =
+    ['agents', 'pools', 'secrets', 'security'].includes(query.tab) &&
+    (query.tab !== 'secrets' || canManageSecrets)
+      ? query.tab
+      : 'agents';
   const onlineSince = new Date(now.getTime() - 90000);
   const activePoolId = typeof query.poolId === 'string' ? query.poolId : '';
   const memberPage = Math.max(1, Math.min(10000, Number(query.memberPage) || 1));
@@ -170,80 +187,100 @@ export default async function RunbookAgentsPage({
     }
   }
 
-  const agentWhere: Prisma.RunbookAgentWhereInput = conditions.length > 0 ? { AND: conditions } : {};
+  const agentWhere: Prisma.RunbookAgentWhereInput =
+    conditions.length > 0 ? { AND: conditions } : {};
   const agentTotal = await prisma.runbookAgent.count({ where: agentWhere });
   const panelTotal = tab === 'pools' ? poolTotal : tab === 'secrets' ? secretTotal : agentTotal;
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(panelTotal / RUNBOOK_PAGE_SIZE)));
-  const signingKeys = canManage && tab === 'security'
-    ? await prisma.runbookExecutionSigningKey.findMany({
-        where: { state: { not: 'RETIRED' } },
-        select: { id: true, publicKey: true, state: true, retiredAt: true },
-        orderBy: { createdAt: 'asc' },
-      })
-    : [];
-  const budget = tab === 'security' ? await prisma.systemSettings.findUnique({ where: { id: 'default' } }) : null;
-  const [agents, pools, secrets, signingKey, activePoolMembers, activeSecretGrants] = await Promise.all([
-    tab === 'agents' ? prisma.runbookAgent.findMany({
-      where: agentWhere,
-      skip: (page - 1) * RUNBOOK_PAGE_SIZE,
-      take: RUNBOOK_PAGE_SIZE,
-      include: {
-        poolMemberships: { include: { pool: true }, take: 20 },
-        _count: { select: { poolMemberships: true } },
-      },
-      orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    }) : Promise.resolve([]),
-    tab === 'pools' ? prisma.runbookAgentPool.findMany({
-      skip: (page - 1) * RUNBOOK_PAGE_SIZE, take: RUNBOOK_PAGE_SIZE,
-      include: {
-        members: { take: 20, orderBy: { id: 'asc' }, include: { agent: { select: { id: true, name: true } } } },
-        _count: { select: { bindings: true, members: true } },
-      },
-      orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    }) : Promise.resolve([]),
-    canManageSecrets && tab === 'secrets'
-      ? prisma.runbookSecret.findMany({
-          skip: (page - 1) * RUNBOOK_PAGE_SIZE, take: RUNBOOK_PAGE_SIZE,
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            createdAt: true,
-            updatedAt: true,
-            _count: { select: { grants: true } },
-            grants: {
-              take: 20, orderBy: { id: 'asc' },
-              include: { agent: { select: { name: true } }, agentPool: { select: { name: true } } },
-            },
-          },
-          orderBy: { name: 'asc' },
-        })
-      : Promise.resolve([]),
+  const signingKeys =
     canManage && tab === 'security'
-      ? prisma.runbookExecutionSigningKey.findFirst({
-          where: { state: 'ACTIVE' },
-          select: { publicKey: true },
+      ? await prisma.runbookExecutionSigningKey.findMany({
+          where: { state: { not: 'RETIRED' } },
+          select: { id: true, publicKey: true, state: true, retiredAt: true },
+          orderBy: { createdAt: 'asc' },
         })
-      : Promise.resolve(null),
-    tab === 'pools' && activePoolId && memberPage > 1
-      ? prisma.runbookAgentPoolMember.findMany({
-          where: { poolId: activePoolId },
-          skip: (memberPage - 1) * 20,
-          take: 20,
-          orderBy: { id: 'asc' },
-          include: { agent: { select: { id: true, name: true } } },
-        })
-      : Promise.resolve(null),
-    canManageSecrets && tab === 'secrets' && activeSecretId && grantPage > 1
-      ? prisma.runbookSecretGrant.findMany({
-          where: { secretId: activeSecretId },
-          skip: (grantPage - 1) * 20,
-          take: 20,
-          orderBy: { id: 'asc' },
-          include: { agent: { select: { name: true } }, agentPool: { select: { name: true } } },
-        })
-      : Promise.resolve(null),
-  ]);
+      : [];
+  const budget =
+    tab === 'security'
+      ? await prisma.systemSettings.findUnique({ where: { id: 'default' } })
+      : null;
+  const [agents, pools, secrets, signingKey, activePoolMembers, activeSecretGrants] =
+    await Promise.all([
+      tab === 'agents'
+        ? prisma.runbookAgent.findMany({
+            where: agentWhere,
+            skip: (page - 1) * RUNBOOK_PAGE_SIZE,
+            take: RUNBOOK_PAGE_SIZE,
+            include: {
+              poolMemberships: { include: { pool: true }, take: 20 },
+              _count: { select: { poolMemberships: true } },
+            },
+            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          })
+        : Promise.resolve([]),
+      tab === 'pools'
+        ? prisma.runbookAgentPool.findMany({
+            skip: (page - 1) * RUNBOOK_PAGE_SIZE,
+            take: RUNBOOK_PAGE_SIZE,
+            include: {
+              members: {
+                take: 20,
+                orderBy: { id: 'asc' },
+                include: { agent: { select: { id: true, name: true } } },
+              },
+              _count: { select: { bindings: true, members: true } },
+            },
+            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          })
+        : Promise.resolve([]),
+      canManageSecrets && tab === 'secrets'
+        ? prisma.runbookSecret.findMany({
+            skip: (page - 1) * RUNBOOK_PAGE_SIZE,
+            take: RUNBOOK_PAGE_SIZE,
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              createdAt: true,
+              updatedAt: true,
+              _count: { select: { grants: true } },
+              grants: {
+                take: 20,
+                orderBy: { id: 'asc' },
+                include: {
+                  agent: { select: { name: true } },
+                  agentPool: { select: { name: true } },
+                },
+              },
+            },
+            orderBy: { name: 'asc' },
+          })
+        : Promise.resolve([]),
+      canManage && tab === 'security'
+        ? prisma.runbookExecutionSigningKey.findFirst({
+            where: { state: 'ACTIVE' },
+            select: { publicKey: true },
+          })
+        : Promise.resolve(null),
+      tab === 'pools' && activePoolId && memberPage > 1
+        ? prisma.runbookAgentPoolMember.findMany({
+            where: { poolId: activePoolId },
+            skip: (memberPage - 1) * 20,
+            take: 20,
+            orderBy: { id: 'asc' },
+            include: { agent: { select: { id: true, name: true } } },
+          })
+        : Promise.resolve(null),
+      canManageSecrets && tab === 'secrets' && activeSecretId && grantPage > 1
+        ? prisma.runbookSecretGrant.findMany({
+            where: { secretId: activeSecretId },
+            skip: (grantPage - 1) * 20,
+            take: 20,
+            orderBy: { id: 'asc' },
+            include: { agent: { select: { name: true } }, agentPool: { select: { name: true } } },
+          })
+        : Promise.resolve(null),
+    ]);
 
   const agentListData = agents.map(agent => {
     const effectiveStatus = resolveEffectiveAgentStatus(agent, now);
@@ -272,11 +309,7 @@ export default async function RunbookAgentsPage({
 
   const agentPanel = (
     <section className="space-y-4">
-      <AgentFleetTable
-        agents={agentListData}
-        userTimeZone={userTimeZone}
-        canManage={canManage}
-      />
+      <AgentFleetTable agents={agentListData} userTimeZone={userTimeZone} canManage={canManage} />
     </section>
   );
 
@@ -322,6 +355,44 @@ export default async function RunbookAgentsPage({
               />
             </Field>
             <SubmitButton>Save remediation budgets</SubmitButton>
+          </ActionForm>
+        </details>
+      )}
+      {permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE) && (
+        <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
+          <summary className="cursor-pointer font-semibold text-sm">
+            Execution artifact retention
+          </summary>
+          <ActionForm action={updateRunbookArtifactRetentionAction} className="mt-3 space-y-3">
+            <Field label="Artifact retention days">
+              <Input
+                name="days"
+                type="number"
+                min={1}
+                max={3650}
+                required
+                defaultValue={
+                  budget?.runbookArtifactRetentionDays ??
+                  Math.min(
+                    3650,
+                    Math.max(
+                      1,
+                      Number.parseInt(process.env.RUNBOOK_ARTIFACT_RETENTION_DAYS ?? '30', 10) || 30
+                    )
+                  )
+                }
+              />
+            </Field>
+            <p className="text-sm text-muted-foreground">
+              The next reconciliation permanently deletes artifact contents older than this policy.
+              Execution records remain, but deleted output cannot be recovered. Export evidence
+              before shortening retention.
+            </p>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="confirm" required />I understand this policy permanently
+              deletes expired evidence.
+            </label>
+            <SubmitButton>Save artifact retention policy</SubmitButton>
           </ActionForm>
         </details>
       )}
@@ -374,7 +445,6 @@ export default async function RunbookAgentsPage({
             ))}
         </details>
       )}
-
     </section>
   );
 
@@ -414,7 +484,8 @@ export default async function RunbookAgentsPage({
       )}
       <div className="grid gap-4 md:grid-cols-2">
         {pools.map(pool => {
-          const members = pool.id === activePoolId && activePoolMembers ? activePoolMembers : pool.members;
+          const members =
+            pool.id === activePoolId && activePoolMembers ? activePoolMembers : pool.members;
           const currentMemberPage = pool.id === activePoolId ? memberPage : 1;
           return (
             <Card key={pool.id} className="rounded-xl">
@@ -477,14 +548,37 @@ export default async function RunbookAgentsPage({
                       )}
                     </div>
                   ))}
-                  {canManage && <ActionForm action={addAgentToPoolAction} className="space-y-3">
-                    <input type="hidden" name="poolId" value={pool.id} />
-                    <SearchableRunbookSelect kind="agent" name="agentId" label="Agent to add" required />
-                    <SubmitButton>Add Agent</SubmitButton>
-                  </ActionForm>}
-                  <p className="text-xs text-muted-foreground">Members {members.length} of {pool._count.members}</p>
-                  {currentMemberPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage - 1}`}>Previous members</Link>}
-                  {currentMemberPage * 20 < pool._count.members && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage + 1}`}>Next members</Link>}
+                  {canManage && (
+                    <ActionForm action={addAgentToPoolAction} className="space-y-3">
+                      <input type="hidden" name="poolId" value={pool.id} />
+                      <SearchableRunbookSelect
+                        kind="agent"
+                        name="agentId"
+                        label="Agent to add"
+                        required
+                      />
+                      <SubmitButton>Add Agent</SubmitButton>
+                    </ActionForm>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Members {members.length} of {pool._count.members}
+                  </p>
+                  {currentMemberPage > 1 && (
+                    <Link
+                      className="text-primary text-xs"
+                      href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage - 1}`}
+                    >
+                      Previous members
+                    </Link>
+                  )}
+                  {currentMemberPage * 20 < pool._count.members && (
+                    <Link
+                      className="text-primary text-xs"
+                      href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage + 1}`}
+                    >
+                      Next members
+                    </Link>
+                  )}
                   {pool._count.members === 0 && <EmptyState title="No members" size="sm" />}
                 </ConfigureSheet>
               </CardContent>
@@ -530,14 +624,20 @@ export default async function RunbookAgentsPage({
             <Field label="Description">
               <Input name="description" aria-label="Secret description" />
             </Field>
-            <SearchableRunbookSelect kind="target" name="target" label="Initial secret grant" required />
+            <SearchableRunbookSelect
+              kind="target"
+              name="target"
+              label="Initial secret grant"
+              required
+            />
             <SubmitButton>Create encrypted secret</SubmitButton>
           </ActionForm>
         </ConfigureSheet>
       )}
       <div className="grid gap-4 md:grid-cols-2">
         {secrets.map(secret => {
-          const grants = secret.id === activeSecretId && activeSecretGrants ? activeSecretGrants : secret.grants;
+          const grants =
+            secret.id === activeSecretId && activeSecretGrants ? activeSecretGrants : secret.grants;
           const currentGrantPage = secret.id === activeSecretId ? grantPage : 1;
           return (
             <Card key={secret.id} className="rounded-xl">
@@ -550,8 +650,8 @@ export default async function RunbookAgentsPage({
                   ••••••••••••••••
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Created {formatDateTime(secret.createdAt, userTimeZone, { format: 'date' })} · Updated{' '}
-                  {formatDateTime(secret.updatedAt, userTimeZone, { format: 'date' })}
+                  Created {formatDateTime(secret.createdAt, userTimeZone, { format: 'date' })} ·
+                  Updated {formatDateTime(secret.updatedAt, userTimeZone, { format: 'date' })}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Granted to{' '}
@@ -568,9 +668,25 @@ export default async function RunbookAgentsPage({
                     </Button>
                   }
                 >
-                  <p className="text-xs text-muted-foreground">Grants {grants.length} of {secret._count.grants}</p>
-                  {currentGrantPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage - 1}`}>Previous grants</Link>}
-                  {currentGrantPage * 20 < secret._count.grants && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage + 1}`}>Next grants</Link>}
+                  <p className="text-xs text-muted-foreground">
+                    Grants {grants.length} of {secret._count.grants}
+                  </p>
+                  {currentGrantPage > 1 && (
+                    <Link
+                      className="text-primary text-xs"
+                      href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage - 1}`}
+                    >
+                      Previous grants
+                    </Link>
+                  )}
+                  {currentGrantPage * 20 < secret._count.grants && (
+                    <Link
+                      className="text-primary text-xs"
+                      href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage + 1}`}
+                    >
+                      Next grants
+                    </Link>
+                  )}
                   {grants.map(grant => (
                     <div
                       key={grant.id}
@@ -593,7 +709,12 @@ export default async function RunbookAgentsPage({
                       action={grantRunbookSecretAction.bind(null, secret.id)}
                       className="space-y-3"
                     >
-                      <SearchableRunbookSelect kind="target" name="target" label="Grant to target" required />
+                      <SearchableRunbookSelect
+                        kind="target"
+                        name="target"
+                        label="Grant to target"
+                        required
+                      />
                       <SubmitButton>Grant access</SubmitButton>
                     </ActionForm>
                   )}
@@ -643,7 +764,11 @@ export default async function RunbookAgentsPage({
               description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
               trigger={<Button>Add Agent</Button>}
             >
-              <AgentEnrollmentForm userTimeZone={userTimeZone} appUrl={appUrl} />
+              <AgentEnrollmentForm
+                userTimeZone={userTimeZone}
+                appUrl={appUrl}
+                distribution={distribution}
+              />
             </ConfigureSheet>
           ) : undefined
         }
@@ -686,15 +811,12 @@ export default async function RunbookAgentsPage({
       {tab === 'agents' && query.attention === '1' && (
         <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
           <div className="flex items-center gap-2">
-            <span className="font-semibold">Filtered by Health: Agents requiring operator attention</span>
-            <span className="text-amber-700 dark:text-amber-300">
-              ({agentTotal} matching)
+            <span className="font-semibold">
+              Filtered by Health: Agents requiring operator attention
             </span>
+            <span className="text-amber-700 dark:text-amber-300">({agentTotal} matching)</span>
           </div>
-          <Link
-            href="/runbooks/agents"
-            className="font-medium text-primary hover:underline ml-2"
-          >
+          <Link href="/runbooks/agents" className="font-medium text-primary hover:underline ml-2">
             Show all agents
           </Link>
         </div>
@@ -702,11 +824,25 @@ export default async function RunbookAgentsPage({
 
       {/* Tabbed Infrastructure Modules */}
       <nav aria-label="Infrastructure sections" className="flex gap-2 overflow-x-auto">
-        {['agents', 'pools', ...(canManageSecrets ? ['secrets'] : []), 'security'].map(section => <Link key={section} href={`/runbooks/agents?tab=${section}`} aria-current={tab === section ? 'page' : undefined} className={`rounded-md px-4 py-2 text-sm capitalize ${tab === section ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>{section}</Link>)}
+        {['agents', 'pools', ...(canManageSecrets ? ['secrets'] : []), 'security'].map(section => (
+          <Link
+            key={section}
+            href={`/runbooks/agents?tab=${section}`}
+            aria-current={tab === section ? 'page' : undefined}
+            className={`rounded-md px-4 py-2 text-sm capitalize ${tab === section ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+          >
+            {section}
+          </Link>
+        ))}
       </nav>
-      {tab === 'agents' ? agentPanel : tab === 'pools' ? poolPanel : tab === 'secrets' ? secretPanel : securityPanel}
+      {tab === 'agents'
+        ? agentPanel
+        : tab === 'pools'
+          ? poolPanel
+          : tab === 'secrets'
+            ? secretPanel
+            : securityPanel}
       {tab !== 'security' && <RunbookPagination page={page} total={panelTotal} query={query} />}
-
     </div>
   );
 }

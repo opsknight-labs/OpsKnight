@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No changes yet.
+### Runbook engine remediation
+
+- Restricted service Runbook data to authorized Runbooks views, replaced the full catalog payload with metadata and authorized selected-version fetches, and made deep readiness checks explicit.
+- Automatic rules now save paused and activate separately with fresh policy evidence and explicit match-all trigger confirmation. Agent partitions fail readiness while preserving liveness; secret-dependent preflight checks report uncertainty. Watchdog reconciliation reuses the lock connection for minimum-pool deployments.
+
+- Fixed pinned-version/input drift during rule creation, bounded service rule readiness with cursor pagination, and coordinated watchdog recovery with idempotent jobs.
+- Historical version comparison supports older versions; invalid selectors return inline errors and disable saving. Worker health now discloses expected redundancy, and rule cards group secondary controls under Manage rule.
+
+- Independent service automation rules with a guided paused-first setup, typed selectors, explicit automatic version pins, configuration validation, signed Agent policy checks, and single-use execution previews.
+- Rule history and origin links, credential-masked version comparison, truthful configured/historical counts, and scoped inventory failure handling.
+- Separate Agent startup/liveness/readiness probes, bounded reconnect, single-flight heartbeats, durable identity handling and node-affine Swarm state.
+- Shared durable worker health and a scheduler reconciliation watchdog, with Prometheus worker/queue/uncertain-outcome/spool alerts.
+- Verified release manifests and immutable image selection; setup no longer advertises missing artifacts or puts enrollment tokens in copied commands.
+- Additive heartbeat/policy-check migrations and a rule-model migration preserving historical IDs. Independent duplicate rules prevent blindly recreating the old uniqueness constraint during rollback.
+- Updated 2.1 operator guides and opt-in real HTTPS Compose/Kind deployment tests. Local candidate evidence is separate from published release, native-host and production capacity certification.
 
 ## [2.0.0] - 2026-10-02
 

@@ -1,6 +1,16 @@
 'use client';
 
-import { useActionState, useState, type ReactNode, type ComponentProps } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useActionState,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+  type ComponentProps,
+} from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter, unstable_rethrow } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -44,14 +54,27 @@ export function StatusBadge({ status, className }: { status: string; className?:
   return <RunbookStatusBadge status={status} className={className} />;
 }
 
+const InvalidFormContext = createContext(false);
+// Action forms require client-side dispatch. Do not offer an enabled submit
+// button while a newly streamed card is still waiting for hydration.
+const subscribeHydration = () => () => undefined;
+const clientHydrated = () => true;
+const serverHydrated = () => false;
+
 export function SubmitButton({
   children,
   pendingLabel = 'Saving…',
   ...props
 }: ComponentProps<typeof Button> & { pendingLabel?: string }) {
   const { pending } = useFormStatus();
+  const invalid = useContext(InvalidFormContext);
   return (
-    <Button {...props} type="submit" disabled={pending || props.disabled} aria-busy={pending}>
+    <Button
+      {...props}
+      type="submit"
+      disabled={pending || invalid || props.disabled}
+      aria-busy={pending}
+    >
       {pending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -64,9 +87,12 @@ export function SubmitButton({
   );
 }
 
-export type RunbookFormAction = (
-  data: FormData
-) => Promise<void | { error?: string; saved?: boolean; draftRevision?: number; [key: string]: unknown }>;
+export type RunbookFormAction = (data: FormData) => Promise<void | {
+  error?: string;
+  saved?: boolean;
+  draftRevision?: number;
+  [key: string]: unknown;
+}>;
 export function ActionForm({
   action,
   children,
@@ -76,49 +102,76 @@ export function ActionForm({
   action: RunbookFormAction;
   children: ReactNode;
   className?: string;
-  onSuccess?: (result?: { saved?: boolean; draftRevision?: number; [key: string]: unknown }) => void;
+  onSuccess?: (result?: {
+    saved?: boolean;
+    draftRevision?: number;
+    [key: string]: unknown;
+  }) => void;
 }) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [invalid, setInvalid] = useState(false);
+  const interactive = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const refresh = () => setInvalid(Boolean(form.querySelector('[data-form-invalid="true"]')));
+    const observer = new MutationObserver(refresh);
+    observer.observe(form, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-form-invalid'],
+      childList: true,
+    });
+    refresh();
+    return () => observer.disconnect();
+  }, []);
   const [state, submit, pending] = useActionState<
     { error?: string; saved?: boolean; draftRevision?: number },
     FormData
-  >(
-    async (_state, data: FormData) => {
-      try {
-        const result = await action(data);
-        if (result?.error) return { error: result.error };
-        const successPayload = { saved: true, ...(result || {}) };
-        onSuccess?.(successPayload);
-        router.refresh();
-        return successPayload;
-      } catch (error) {
-        unstable_rethrow(error);
-        return {
-          error:
-            'Could not complete this action. Check your configuration and permissions, then try again.',
-        };
-      }
-    },
-    {}
-  );
+  >(async (_state, data: FormData) => {
+    try {
+      const result = await action(data);
+      if (result?.error) return { error: result.error };
+      const successPayload = { saved: true, ...(result || {}) };
+      onSuccess?.(successPayload);
+      router.refresh();
+      return successPayload;
+    } catch (error) {
+      unstable_rethrow(error);
+      return {
+        error:
+          'Could not complete this action. Check your configuration and permissions, then try again.',
+      };
+    }
+  }, {});
   return (
-    <form action={submit} className={className}>
-      <fieldset disabled={pending} className="contents">
-        {children}
-      </fieldset>
-      {state.error && (
-        <p
-          role="alert"
-          className="col-span-full rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          {state.error}
-        </p>
-      )}
-      {state.saved && (
-        <p role="status" className="col-span-full text-sm text-muted-foreground">
-          Changes saved.
-        </p>
-      )}
+    <form
+      ref={formRef}
+      action={submit}
+      className={className}
+      onSubmit={event => {
+        if (invalid) event.preventDefault();
+      }}
+    >
+      <InvalidFormContext.Provider value={invalid || !interactive}>
+        <fieldset disabled={pending} className="contents">
+          {children}
+        </fieldset>
+        {state.error && (
+          <p
+            role="alert"
+            className="col-span-full rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {state.error}
+          </p>
+        )}
+        {state.saved && (
+          <p role="status" className="col-span-full text-sm text-muted-foreground">
+            Changes saved.
+          </p>
+        )}
+      </InvalidFormContext.Provider>
     </form>
   );
 }

@@ -216,7 +216,7 @@ export default function RecoveryAccounts() {
             }}
           >
             <Plus className="h-4 w-4" />
-            Create emergency identity
+            Create first emergency identity
           </Button>
         </div>
       ) : (
