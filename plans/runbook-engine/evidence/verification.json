@@ -267,5 +267,53 @@
       "documentation": "PASS"
     },
     "remoteCI": "Pending final claim-fix push; use exact-head PR checks. No merge approval or general production certification is implied."
+  },
+  "fleetLifecycleAndMandatoryRevision": {
+    "baseRevision": "6246302034633c2de8f50a9b00a7e0058f7d6c10",
+    "changes": [
+      "Automatic dispatch rejects missing and stale evaluated rule revisions",
+      "Enrollment-scoped projects, stacks, release/Secret names and Kustomize selectors/PVCs; shared UI/live command generator",
+      "Distinct install, upgrade and identity-replacement guidance; upgrade page accepts the original deployment name for legacy installations",
+      "Durable per-Agent policy certification for 1\u2013100 targets in batches of 25; latest evidence selected per eligible Agent",
+      "Searchable archived service rule history and a Configure/Validate/Activate/Monitor lifecycle with missing-certification counts",
+      "Admin-only audited artifact retention with explicit deletion acknowledgement and legacy environment fallback",
+      "Hydration-aware action buttons prevent offering client-dispatched form submission before hydration"
+    ],
+    "localChecks": {
+      "database": {
+        "status": "PASS",
+        "files": 6,
+        "tests": 130,
+        "scope": "Mandatory revision, target/configuration fences, 1/10/50/100 policy certification, partial completion, changed policy/expiry, archive search and retention authority/purge"
+      },
+      "freshAndUpgradeSchema": {
+        "status": "PASS",
+        "migrations": 219,
+        "evidence": "schema-retention-20261015.json"
+      },
+      "generatedKustomizeIsolation": {
+        "status": "PASS",
+        "agents": 2,
+        "scope": "Disjoint selectors, policy, Secrets, SA and PVC references"
+      },
+      "browser": "PENDING_FINAL_BUILD",
+      "typecheck": "PASS",
+      "targetedUnits": {
+        "status": "PASS",
+        "files": 46,
+        "tests": 389,
+        "skipped": 3
+      },
+      "ciContracts": {
+        "status": "PASS",
+        "tests": 11,
+        "runner": "node --test"
+      },
+      "modifiedSourceLint": "PASS",
+      "documentation": "PASS",
+      "productionBuild": "PASS_CANDIDATE_FINAL_HEAD_CI_PENDING"
+    },
+    "liveFleet": "Local Docker command timed out before fleet certification; no pass claimed. Required CI deployment-candidate job now provisions disposable Swarm and Kind to execute the shared UI commands with two Agents per method.",
+    "releaseGates": "Physical multi-node/partition/write fault matrix, sustained authenticated production capacity and official published distribution remain NOT_TESTED. Existing qualification report applies."
   }
 }

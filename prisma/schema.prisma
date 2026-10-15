@@ -2525,6 +2525,7 @@ model MetricRollup {
 }
 
 model SystemSettings {
+  runbookArtifactRetentionDays Int?
   id                                   String   @id @default("default")
   runbookAutoExecutionsPerIncident     Int      @default(3)
   runbookAutoWritesPerIncident         Int      @default(3)

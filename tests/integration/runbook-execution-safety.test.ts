@@ -81,6 +81,7 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
       runbookVersionId,
       sourceEventId,
       triggerId: trigger.id,
+      expectedRuleRevision: binding.configurationRevision,
       triggerFingerprint: computeTriggerFingerprint({
         sourceEventId,
         bindingId: binding.id,

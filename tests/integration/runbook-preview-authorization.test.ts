@@ -245,6 +245,9 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
   });
 
   it.each([
+    'missingRevision',
+    'staleRevision',
+    'otherRuleRevision',
     'missingIncident',
     'missingBinding',
     'missingTrigger',
@@ -276,6 +279,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       serviceId: target.service.id,
       bindingId: target.binding.id,
       triggerId: trigger.id,
+      expectedRuleRevision: target.binding.configurationRevision,
       sourceEventId: 'automatic-source',
       triggerFingerprint: computeTriggerFingerprint({
         sourceEventId: 'automatic-source',
@@ -283,6 +287,19 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
         runbookVersionId: target.version.id,
       }),
     };
+    if (change === 'missingRevision') delete request.expectedRuleRevision;
+    if (change === 'staleRevision')
+      request.expectedRuleRevision = target.binding.configurationRevision + 1;
+    if (change === 'otherRuleRevision') {
+      const other = await testPrisma.serviceAutomationRule.create({
+        data: {
+          serviceId: target.service.id,
+          runbookId: target.runbook.id,
+          configurationRevision: 7,
+        },
+      });
+      request.expectedRuleRevision = other.configurationRevision;
+    }
     if (change === 'missingIncident') delete request.incidentId;
     if (change === 'missingBinding') delete request.bindingId;
     if (change === 'missingTrigger') delete request.triggerId;
@@ -381,6 +398,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       incidentId: target.incident.id,
       bindingId: target.binding.id,
       triggerId: trigger.id,
+      expectedRuleRevision: target.binding.configurationRevision,
       sourceEventId: 'valid-event',
       triggerFingerprint,
     };

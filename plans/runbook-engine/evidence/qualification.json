@@ -78,7 +78,9 @@
       "topology": "PostgreSQL concurrency, plan authorization and lifecycle fences",
       "status": "PASS",
       "evidence": "118 original distinct database cases plus 5 review regressions covering version/input authority, bounded rule pages, recovery deduplication and three-session advisory locking.",
-      "limits": ["Database and browser simulations do not certify all physical write outcomes"]
+      "limits": [
+        "Database and browser simulations do not certify all physical write outcomes"
+      ]
     },
     {
       "gate": "G9",
@@ -94,7 +96,9 @@
       "topology": "Chromium/Firefox/WebKit browser journeys, mobile/keyboard/theme/zoom checks",
       "status": "PASS",
       "evidence": "27 browser journeys; updated responsive screenshots and three browser rule-render reports",
-      "limits": ["Human screen-reader evaluation NOT_TESTED"]
+      "limits": [
+        "Human screen-reader evaluation NOT_TESTED"
+      ]
     },
     {
       "gate": "G11",
@@ -120,5 +124,13 @@
       "reason": "No release published; external supported-host/upgrade matrix remains incomplete."
     }
   ],
-  "releaseDecision": "NOT_CERTIFIED_FOR_GENERAL_RELEASE: named local candidate checks pass; remaining environment and publication gates must be completed before a release claim."
+  "releaseDecision": "NOT_CERTIFIED_FOR_GENERAL_RELEASE: named local candidate checks pass; remaining environment and publication gates must be completed before a release claim.",
+  "latestSourceFollowup": {
+    "assessedAt": "2026-10-15",
+    "baseRevision": "6246302034633c2de8f50a9b00a7e0058f7d6c10",
+    "policyCertification": "Real PostgreSQL 1/10/50/100 Agent durable certification and fail-closed activation PASS; no actions executed by these policy tests",
+    "multiAgentInstall": "Shared UI generator and disjoint-resource rendering PASS; exact-head same-cluster lifecycle certification PENDING CI. Local Docker unavailable.",
+    "schema": "219 migrations applied on fresh and upgrade databases, including SSO, configuration revision and retention; schema-retention-20261015.json",
+    "releaseBoundary": "No new published-host, physical-failure or sustained-workload pass is asserted."
+  }
 }

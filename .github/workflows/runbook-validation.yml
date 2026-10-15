@@ -133,6 +133,7 @@ jobs:
           tests/integration/runbook-preview-authorization.test.ts
           tests/integration/runbook-lifecycle-database.test.ts
           tests/integration/runbook-binding-readiness-database.test.ts
+          tests/integration/runbook-artifact-retention-database.test.ts
           tests/integration/runbook-policy-checks-database.test.ts
           tests/integration/runbook-worker-evidence-database.test.ts
           tests/integration/runbook-review-regressions-database.test.ts
@@ -172,11 +173,27 @@ jobs:
         run: npm run build
       - name: Build local Agent candidate
         run: docker build -f agent/Dockerfile -t opsknight-agent:rbe-local .
+      - name: Prepare disposable same-cluster Agent fleet certification
+        run: |
+          command -v helm
+          command -v kubectl
+          curl --fail --silent --show-error --location https://github.com/kubernetes-sigs/kind/releases/download/v0.30.0/kind-linux-amd64 -o /tmp/rbe-kind
+          curl --fail --silent --show-error --location https://github.com/kubernetes-sigs/kind/releases/download/v0.30.0/kind-linux-amd64.sha256sum -o /tmp/rbe-kind.sha256sum
+          expected=$(awk '{print $1}' /tmp/rbe-kind.sha256sum)
+          printf '%s  %s\n' "$expected" /tmp/rbe-kind | sha256sum --check -
+          sudo install -m 0755 /tmp/rbe-kind /usr/local/bin/kind
+          docker swarm init --advertise-addr 127.0.0.1
+          kind create cluster --name rbe-engine-cert --wait 120s
       - name: Exercise trusted HTTPS enrollment, execution, artifacts, policy and identity recovery
         env:
           RUNBOOK_LIVE_DEPLOYMENT: 'true'
+          RUNBOOK_FLEET_SMOKE: 'true'
+          RUNBOOK_FLEET_HOST: '172.17.0.1'
           VITEST_USE_REAL_DB: '1'
         run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-live-compose.test.ts
+      - name: Remove disposable fleet cluster
+        if: always()
+        run: kind delete cluster --name rbe-engine-cert
       - name: Measure simulated 10/100/1000 Agent claim load
         env:
           RUNBOOK_SCALE_SIMULATION: 'true'

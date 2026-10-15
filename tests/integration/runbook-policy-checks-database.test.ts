@@ -184,3 +184,119 @@ suite('Agent local policy-check authority', () => {
     }
   );
 });
+
+suite('bounded fleet policy certification', () => {
+  beforeEach(resetDatabase);
+  it.each([1, 10, 50, 100])(
+    'requires fresh complete evidence for all %i eligible Agents',
+    async count => {
+      const actor = await createTestUser({ role: 'ADMIN' });
+      const service = await createTestService('Fleet policy');
+      const runbook = await testPrisma.runbook.create({
+        data: { name: 'Fleet policy', slug: `fleet-policy-${crypto.randomUUID()}` },
+      });
+      const version = await testPrisma.runbookVersion.create({
+        data: {
+          runbookId: runbook.id,
+          version: 1,
+          state: 'PUBLISHED',
+          checksum: 'a'.repeat(64),
+          definition: {
+            steps: [
+              {
+                key: 'diagnose',
+                name: 'Summary',
+                type: 'LINUX_DIAGNOSTICS',
+                riskClass: 'READ_ONLY',
+                config: { diagnostic: 'summary' },
+              },
+            ],
+          },
+        },
+      });
+      await testPrisma.runbook.update({
+        where: { id: runbook.id },
+        data: { publishedVersionId: version.id },
+      });
+      const pool = await testPrisma.runbookAgentPool.create({
+        data: { name: 'Fleet', mode: 'SHARED_TARGET' },
+      });
+      const agents = await Promise.all(
+        Array.from({ length: count }, (_, index) =>
+          testPrisma.runbookAgent.create({
+            data: {
+              name: `Fleet ${index}`,
+              status: 'ONLINE',
+              lastHeartbeatAt: new Date(),
+              capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+              policyHash: 'b'.repeat(64),
+              poolMemberships: { create: { poolId: pool.id } },
+            },
+          })
+        )
+      );
+      const rule = await testPrisma.serviceAutomationRule.create({
+        data: {
+          serviceId: service.id,
+          runbookId: runbook.id,
+          runbookVersionId: version.id,
+          versionStrategy: 'PINNED',
+          mode: 'AUTOMATIC',
+          enabled: false,
+          defaultAgentPoolId: pool.id,
+          triggers: { create: { event: 'INCIDENT_CREATED' } },
+        },
+      });
+      await expect(requestRulePolicyChecks(service.id, rule.id, actor.id)).resolves.toMatchObject({
+        checkedTargets: count,
+      });
+      const requests = await testPrisma.runbookPolicyCheck.findMany({
+        where: { ruleId: rule.id },
+        orderBy: { agentId: 'asc' },
+      });
+      expect(requests).toHaveLength(count);
+      const { activateServiceRule } = await import('@/lib/runbooks/bindings');
+      // Completion of the first batch must never authorize a partial fleet.
+      for (const request of requests.slice(0, -1))
+        await submitPolicyCheck(request.agentId, {
+          id: request.id,
+          policyHash: 'b'.repeat(64),
+          results: [{ key: 'diagnose', allowed: true }],
+        });
+      await expect(activateServiceRule(service.id, rule.id, actor.id, true)).rejects.toThrow(
+        'every selected Agent'
+      );
+      const last = requests.at(-1)!;
+      await submitPolicyCheck(last.agentId, {
+        id: last.id,
+        policyHash: 'b'.repeat(64),
+        results: [{ key: 'diagnose', allowed: true }],
+      });
+      await expect(activateServiceRule(service.id, rule.id, actor.id, true)).resolves.toBeDefined();
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: rule.id },
+        data: { enabled: false },
+      });
+      await testPrisma.runbookAgent.update({
+        where: { id: agents[0].id },
+        data: { policyHash: 'c'.repeat(64) },
+      });
+      await expect(activateServiceRule(service.id, rule.id, actor.id, true)).rejects.toThrow(
+        'every selected Agent'
+      );
+      await testPrisma.runbookAgent.update({
+        where: { id: agents[0].id },
+        data: { policyHash: 'b'.repeat(64) },
+      });
+      await testPrisma.runbookPolicyCheck.updateMany({
+        where: { ruleId: rule.id },
+        data: { checkedAt: new Date(Date.now() - 6 * 60_000) },
+      });
+      await expect(activateServiceRule(service.id, rule.id, actor.id, true)).rejects.toThrow(
+        'every selected Agent'
+      );
+      expect(await testPrisma.runbookExecution.count()).toBe(0);
+    },
+    60_000
+  );
+});

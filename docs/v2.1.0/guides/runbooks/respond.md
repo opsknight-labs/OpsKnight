@@ -54,7 +54,7 @@ In **Service → Runbooks**, create independent rules from published workflows. 
 Use **Rule evidence** for configuration, target, immutable version, execution history, Agent policy evidence and audit links. The checks have separate meanings:
 
 - **Validate configuration · No execution** checks the prospective configuration even while paused, without enabling it.
-- **Check Agent policy · No execution** sends a signed request to 1–10 matching online Agents and evaluates their local allowlists without running commands. Evidence is valid only for the same version, resolved configuration, current target and policy hash, for five minutes. It does not prove platform permissions or reachability.
+- **Check Agent policy · No execution** sends a signed request to 1–100 matching online Agents in durable batches of 25 and evaluates their local allowlists without running commands. Evidence is valid only for the same version, resolved configuration, current target and policy hash, for five minutes. It does not prove platform permissions or reachability.
 - **Preview read-only test** runs the complete workflow only after preview confirmation, and rejects any workflow containing writes. Publish a separate diagnostic workflow when a recovery workflow also writes.
 - **Run now · Preview plan** uses a single-use preview and explicit write confirmation. Permissions, approvals and Agent policy remain enforced at execution.
 
@@ -106,3 +106,5 @@ Use **Runbooks → Executions** for recent execution history and
 [troubleshooting](../../troubleshooting/runbooks/) for waiting or uncertain executions.
 
 Suggestions from detached rules remain visible as historical evidence and show **Rule detached**. Preview and execution are disabled; responders with execution permission can still dismiss them. Paused rules likewise cannot start a suggestion until reactivated.
+
+Administrators can set **Execution artifact retention** in Runbooks → Agents → Security. The 1–3650 day policy requires acknowledgement because reconciliation permanently removes expired artifact contents. Execution records remain, but deleted output cannot be restored. Export evidence before shortening the policy. Until an administrator saves an override, `RUNBOOK_ARTIFACT_RETENTION_DAYS` remains the fallback.

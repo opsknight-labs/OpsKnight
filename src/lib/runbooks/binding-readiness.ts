@@ -1,5 +1,6 @@
 import { policyCheckSteps, samePolicySnapshot } from './policy-checks';
 import 'server-only';
+import { MAX_AUTOMATIC_POLICY_TARGETS, POLICY_CERTIFICATION_BATCH_SIZE } from './agent-deployment';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { flattenSteps, parseRunbookDefinition, resolveInputTemplates } from './definition';
@@ -152,12 +153,11 @@ export async function getBindingReadiness(
           state: 'blocked',
           message: 'Target exceeds the bounded readiness check. Narrow the selector.',
         });
-      if (binding.mode === 'AUTOMATIC' && eligibleAgents > 10)
+      if (binding.mode === 'AUTOMATIC' && eligibleAgents > MAX_AUTOMATIC_POLICY_TARGETS)
         checks.push({
           code: 'AUTOMATIC_POLICY_TARGET_LIMIT',
           state: 'blocked',
-          message:
-            'Automatic activation supports at most 10 online Agents per target. Narrow the fixed pool or use Suggested mode.',
+          message: `Automatic activation supports at most ${MAX_AUTOMATIC_POLICY_TARGETS} online Agents per target. Narrow the fixed pool or use Suggested mode.`,
         });
       const pool = binding.defaultAgentPoolId
         ? await db.runbookAgentPool.findUnique({
@@ -202,16 +202,31 @@ export async function getBindingReadiness(
         state: 'deferred',
         message: 'One or more steps require approval of the frozen execution plan.',
       });
-    const policyChecks = await db.runbookPolicyCheck.findMany({
-      where: {
-        ruleId: binding.id,
-        versionId: version.id,
-        checksum: version.checksum,
-        checkedAt: { gte: new Date(now.getTime() - 5 * 60_000) },
-      },
-      orderBy: { checkedAt: 'desc' },
-      take: 10,
-    });
+    const policyChecks: Prisma.RunbookPolicyCheckGetPayload<object>[] = [];
+    const candidateIds = [...candidatePolicies.keys()];
+    // Read the newest evidence for each actual eligible Agent. A busy Agent's
+    // history must not crowd another Agent out of a global take-N query.
+    for (
+      let offset = 0;
+      offset < Math.min(candidateIds.length, MAX_AUTOMATIC_POLICY_TARGETS);
+      offset += POLICY_CERTIFICATION_BATCH_SIZE
+    ) {
+      const batch = await Promise.all(
+        candidateIds.slice(offset, offset + POLICY_CERTIFICATION_BATCH_SIZE).map(agentId =>
+          db.runbookPolicyCheck.findFirst({
+            where: {
+              ruleId: binding.id,
+              agentId,
+              versionId: version.id,
+              checksum: version.checksum,
+              checkedAt: { gte: new Date(now.getTime() - 5 * 60_000) },
+            },
+            orderBy: [{ checkedAt: 'desc' }, { id: 'desc' }],
+          })
+        )
+      );
+      for (const check of batch) if (check) policyChecks.push(check);
+    }
     const seen = new Set<string>();
     for (const policyCheck of policyChecks) {
       if (

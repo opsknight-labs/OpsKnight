@@ -9,39 +9,9 @@ import {
   validateAgentEndpoint,
   type AgentDistribution,
 } from '@/lib/runbooks/distribution-contract';
+import { agentDeploymentIdentity, isAgentDeploymentName } from '@/lib/runbooks/agent-deployment';
+import { agentSetupCommands } from '@/lib/runbooks/agent-setup-commands';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-function imageParts(image: string) {
-  const digestSeparator = image.indexOf('@');
-  if (digestSeparator > 0)
-    return {
-      repository: image.slice(0, digestSeparator),
-      digest: image.slice(digestSeparator + 1),
-    };
-  const tagSeparator = image.lastIndexOf(':');
-  const hasTag = tagSeparator > image.lastIndexOf('/');
-  return {
-    repository: hasTag ? image.slice(0, tagSeparator) : image,
-    tag: hasTag ? image.slice(tagSeparator + 1) : 'REQUIRES_VERIFIED_RELEASE',
-  };
-}
-
-function helmImageArguments(image: string): string {
-  const digestSeparator = image.indexOf('@');
-  if (digestSeparator > 0) {
-    return `--set-string agent.image.repository=${shellQuote(image.slice(0, digestSeparator))} \\
-  --set-string agent.image.digest=${shellQuote(image.slice(digestSeparator + 1))}`;
-  }
-  const lastSlash = image.lastIndexOf('/');
-  const tagSeparator = image.lastIndexOf(':');
-  const hasTag = tagSeparator > lastSlash;
-  return `--set-string agent.image.repository=${shellQuote(hasTag ? image.slice(0, tagSeparator) : image)} \\
-  --set-string agent.image.tag=${shellQuote(hasTag ? image.slice(tagSeparator + 1) : 'REQUIRES_VERIFIED_RELEASE')}`;
-}
 
 function SetupBlock({ value, disabled = false }: { value: string; disabled?: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -83,16 +53,24 @@ function SetupBlock({ value, disabled = false }: { value: string; disabled?: boo
 
 export default function AgentSetupInstructions({
   executionPublicKey,
+  agentId,
   appUrl,
   distribution,
   expiresAt,
+  initialOperation = 'install',
 }: {
   token: string;
+  agentId: string;
   executionPublicKey: string;
   appUrl?: string;
   distribution?: AgentDistribution | null;
   expiresAt?: string;
+  initialOperation?: 'install' | 'upgrade';
 }) {
+  const deployment = agentDeploymentIdentity(agentId);
+  const [operation, setOperation] = useState<'install' | 'upgrade'>(initialOperation);
+  const [deploymentName, setDeploymentName] = useState(deployment.name);
+  const validDeploymentName = isAgentDeploymentName(deploymentName);
   const [expired, setExpired] = useState(() =>
     expiresAt ? Date.parse(expiresAt) <= Date.now() : false
   );
@@ -108,109 +86,39 @@ export default function AgentSetupInstructions({
   const [endpointConfirmed, setEndpointConfirmed] = useState(false);
   const endpointError = validateAgentEndpoint(url);
   const copyBlocked =
-    expired ||
+    (operation === 'install' && expired) ||
+    (operation === 'upgrade' && !validDeploymentName) ||
     Boolean(endpointError) ||
     !endpointConfirmed ||
     !distribution ||
     image !== distribution.manifest.image.reference;
 
   const [policyPath, setPolicyPath] = useState('../../agent/policy.container.json');
-  const snippets = useMemo(() => {
-    const helmImage = helmImageArguments(image);
-    const parsedImage = imageParts(image);
-    const namespace =
-      'kubectl create namespace opsknight --dry-run=client -o yaml | kubectl apply -f -';
-    const kustomization = JSON.stringify({
-      apiVersion: 'kustomize.config.k8s.io/v1beta1',
-      kind: 'Kustomization',
-      namespace: 'opsknight',
-      resources: ['deployment.yaml', 'policy.yaml', 'service-account.yaml', 'pvc.yaml'],
-      images: [
-        {
-          name: 'ghcr.io/opsknight-labs/opsknight-agent',
-          newName: parsedImage.repository,
-          ...(parsedImage.digest ? { digest: parsedImage.digest } : { newTag: parsedImage.tag }),
-        },
-      ],
-      patches: [
-        {
-          target: { kind: 'Deployment', name: 'opsknight-agent' },
-          patch: JSON.stringify([
-            { op: 'replace', path: '/spec/template/spec/containers/0/env/0/value', value: url },
-          ]),
-        },
-      ],
-    });
-    const captureToken = `# Run in Bash. Paste the one-time token at the hidden prompt.
-set +x
-set -euo pipefail
-umask 077
-agent_credential_dir=$(mktemp -d)
-IFS= read -r -s -p 'Enrollment token: ' agent_enrollment_token
-printf '\\n'
-printf '%s' "$agent_enrollment_token" > "$agent_credential_dir/enrollment-token"
-unset agent_enrollment_token
-# The directory stays private; the container can read the mounted token file.
-chmod 0644 "$agent_credential_dir/enrollment-token"
-# Check connectivity and certificate trust from the Agent host before enrollment.
-curl --fail --silent --show-error --max-time 10 ${shellQuote(`${url.replace(/\/+$/, '')}/api/runbook-agent/v1/time`)}`;
-    const compose = `${captureToken}
-export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
-export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
-export OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH="$agent_credential_dir/enrollment-token"
-export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
-
-docker compose -p opsknight-agent -f deploy/compose/docker-compose.agent.yml -f deploy/compose/docker-compose.agent.enrollment-file.yml up -d opsknight-agent`;
-    const swarm = `${captureToken}
-docker secret create opsknight_agent_enrollment_token < "$agent_credential_dir/enrollment-token"
-export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
-export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
-export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-
-# Use an existing overlay network reachable from this Agent.
-export SWARM_NETWORK_NAME=opsknight
-IFS= read -r -p 'Swarm node ID for this Agent identity: ' OPSKNIGHT_AGENT_NODE_ID
-export OPSKNIGHT_AGENT_NODE_ID
-docker stack deploy --with-registry-auth \\
-  -c deploy/swarm/docker-stack.agent.yml opsknight-agent`;
-    const helm = `${captureToken}
-${namespace}
-kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
-  --from-file=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN="$agent_credential_dir/enrollment-token" \\
-  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-
-helm upgrade --install opsknight-agent deploy/kubernetes/helm/opsknight-agent \\
-  --namespace opsknight --create-namespace \\
-  --set agent.enabled=true \\
-  --set-string agent.url=${shellQuote(url)} \\
-  ${helmImage} \\
-  --set agent.enrollmentToken.existingSecret=opsknight-agent-enrollment`;
-    const kustomize = `${captureToken}
-${namespace}
-kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
-  --from-file=enrollment-token="$agent_credential_dir/enrollment-token" \\
-  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
-
-# Build an Agent-only overlay with the selected URL and image.
-agent_setup_dir=$(mktemp -d)
-cp deploy/kubernetes/kustomize/components/agent/deployment.yaml deploy/kubernetes/kustomize/components/agent/policy.yaml deploy/kubernetes/kustomize/components/agent/service-account.yaml deploy/kubernetes/kustomize/components/agent/pvc.yaml "$agent_setup_dir/"
-printf '%s' ${shellQuote(kustomization)} > "$agent_setup_dir/kustomization.yaml"
-kubectl apply -k "$agent_setup_dir"
-rm -rf "$agent_setup_dir"`;
-    const linux = distribution
-      ? `${captureToken}
-curl --fail --silent --show-error ${shellQuote(distribution.installerUrl)} -o "$agent_credential_dir/install.sh"
-printf '%s  %s\\n' ${shellQuote(distribution.manifest.installer.sha256)} "$agent_credential_dir/install.sh" | sha256sum --check -
-sudo bash "$agent_credential_dir/install.sh" \\
-  --url ${shellQuote(url)} \\
-  --key ${shellQuote(executionPublicKey)} \\
-  --token-file "$agent_credential_dir/enrollment-token"
-sudo /opt/opsknight-agent/preflight.sh`
-      : '';
-
-    return { compose, swarm, helm, kustomize, linux };
-  }, [image, policyPath, url, distribution, executionPublicKey]);
+  const snippets = useMemo(
+    () =>
+      agentSetupCommands({
+        agentId,
+        image,
+        url,
+        policyPath,
+        executionPublicKey,
+        distribution,
+        operation,
+        deploymentName: validDeploymentName ? deploymentName : deployment.name,
+      }),
+    [
+      agentId,
+      image,
+      url,
+      policyPath,
+      executionPublicKey,
+      distribution,
+      operation,
+      deploymentName,
+      validDeploymentName,
+      deployment.name,
+    ]
+  );
 
   return (
     <div className="space-y-4 rounded-lg border bg-background p-4">
@@ -224,6 +132,46 @@ sudo /opt/opsknight-agent/preflight.sh`
           </p>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Enrollment deployment name: <code>{deployment.name}</code>. Keep this name with the
+        persisted Agent identity.
+      </p>
+      <label className="block text-sm">
+        Deployment operation
+        <select
+          aria-label="Deployment operation"
+          value={operation}
+          onChange={event => setOperation(event.target.value as 'install' | 'upgrade')}
+          className="ml-2 rounded border bg-background p-2"
+        >
+          <option value="install">Install new independent Agent</option>
+          <option value="upgrade">Upgrade this installed Agent, preserving identity</option>
+        </select>
+      </label>
+      {operation === 'upgrade' && (
+        <label className="block text-sm">
+          Existing deployment name
+          <Input
+            aria-label="Existing deployment name"
+            value={deploymentName}
+            maxLength={45}
+            onChange={event => setDeploymentName(event.target.value)}
+          />
+          <span className="text-xs text-muted-foreground">
+            Match the saved installation name. Older installations may use opsknight-agent. Changing
+            the Compose project name creates a different volume.
+          </span>
+        </label>
+      )}
+      {!validDeploymentName && operation === 'upgrade' && (
+        <p role="alert">
+          Use a deployment name of at most 45 lowercase letters, numbers or hyphens.
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        To replace a lost or compromised identity, revoke the old Agent and create a new enrollment.
+        Use its new deployment name and a new volume; never reuse or copy the old identity.
+      </p>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="agent-setup-image">Agent image</Label>
@@ -253,7 +201,7 @@ sudo /opt/opsknight-agent/preflight.sh`
           />
         </div>
       </div>
-      {expired && (
+      {expired && operation === 'install' && (
         <p role="alert" className="text-sm text-destructive">
           Enrollment token expired. Create a new enrollment before installing.
         </p>
@@ -295,6 +243,39 @@ sudo /opt/opsknight-agent/preflight.sh`
         permissions require explicit provisioning; binary availability does not prove target
         authorization.
       </p>
+      <details className="rounded border p-3 text-sm">
+        <summary className="cursor-pointer font-medium">
+          Installation preflight and diagnostics
+        </summary>
+        <ol className="mt-2 list-decimal space-y-2 pl-5">
+          <li>
+            Endpoint and certificate trust: the generated curl command must succeed from the Agent
+            host. Install the private CA in that host and container trust store if needed; do not
+            disable TLS verification.
+          </li>
+          <li>
+            Image compatibility: copying is enabled only for the verified server-compatible image
+            digest and checked installer checksum.
+          </li>
+          <li>
+            Enrollment: a new installation consumes one token once. An upgrade uses the existing
+            identity and requires no new token.
+          </li>
+          <li>
+            Persistence: retain this deployment name, its identity volume or PVC and its node pin.
+            Never mount one identity into two running Agents.
+          </li>
+          <li>
+            Policy: inspect runtime capabilities and local policy in the Agent drawer. An online
+            heartbeat alone does not grant execution authority.
+          </li>
+          <li>
+            First heartbeat: return to the Agent fleet and confirm the selected Agent is Online with
+            a recent authenticated heartbeat. If degraded, inspect its error, spool and dead-letter
+            diagnostics.
+          </li>
+        </ol>
+      </details>
       <Tabs defaultValue="compose" className="space-y-3">
         <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="compose">Compose</TabsTrigger>

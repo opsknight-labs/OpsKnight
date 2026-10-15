@@ -347,6 +347,37 @@ export async function rotateExecutionSigningIdentityAction(formData: FormData) {
   revalidatePath('/runbooks/agents');
 }
 
+export async function updateRunbookArtifactRetentionAction(formData: FormData) {
+  const actor = await assertCapability(CAPABILITIES.ADMIN_MANAGE);
+  const input = z
+    .object({ days: z.coerce.number().int().min(1).max(3650), confirm: z.literal('on') })
+    .strict()
+    .parse({ days: formData.get('days'), confirm: formData.get('confirm') });
+  await prisma.$transaction(async tx => {
+    const previous = await tx.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { runbookArtifactRetentionDays: true },
+    });
+    await tx.systemSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', runbookArtifactRetentionDays: input.days },
+      update: { runbookArtifactRetentionDays: input.days },
+    });
+    await logAudit(
+      {
+        action: 'runbook.artifact_retention.updated',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: 'default',
+        actorId: actor.id,
+        oldValue: { days: previous?.runbookArtifactRetentionDays ?? null },
+        newValue: { days: input.days, destructiveCleanupConfirmed: true },
+      },
+      tx
+    );
+  });
+  revalidatePath('/runbooks/agents');
+}
+
 export async function updateIncidentRemediationBudgetAction(formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const number = z.coerce.number().int().min(0).max(100);

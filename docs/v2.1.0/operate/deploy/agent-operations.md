@@ -290,3 +290,17 @@ Liveness remains independent during a control-plane partition. Readiness becomes
 Local policy checking does not receive decrypted secrets. A configuration field masked for secrecy produces **DEFERRED**, rather than a definitive policy pass or denial. Exact command allowlists are evaluated again against the actual resolved execution plan at execution time. The server preserves this uncertainty even when an older Agent reports a decision on a masked placeholder.
 
 The scheduler watchdog shares the transaction/connection holding its PostgreSQL advisory lock with reconciliation. It supports a one-connection scheduler pool without acquiring an additional connection during recovery.
+
+## Install another Agent or upgrade an existing identity
+
+Create one enrollment for each independent Agent. The setup UI uses `opsknight-agent-<Agent ID>` for Compose projects, Swarm stacks and Helm releases, and a corresponding Kustomize suffix. Enrollment Secrets, selectors and persistent volumes are isolated. You can install more than one Agent in the same scope without editing generated names. Swarm identities remain pinned to their selected node.
+
+Choose **Install new independent Agent** for a new enrollment. Keep the generated deployment name with its identity volume. For Kustomize, retain the generated overlay in a protected directory: it includes the consumed enrollment credential and the install configuration.
+
+From **Inspect Agent → Upgrade installed Agent**, choose **Upgrade this installed Agent, preserving identity**. Confirm the existing deployment name before copying. Installations made with earlier instructions may use `opsknight-agent`; enter that original name. Compose retains its project volume, Swarm updates only the existing service, Helm upgrades an existing release with its values and PVC, and Kustomize updates only that Deployment image. No new enrollment token is required. Persist the Kustomize image change in the saved overlay before applying it again.
+
+To replace a lost or compromised identity, revoke the old Agent and create a new enrollment. Install using its new deployment name and a new empty identity volume. Never clone an enrolled identity or mount it into two running Agents. The native Linux installer operates one service per host; use the existing host's upgrade path to preserve identity.
+
+The setup diagnostics distinguish endpoint and CA trust, verified image compatibility, enrollment, persistent identity, local policy and the first authenticated heartbeat. Run the generated connectivity check from the actual Agent host. A green control-plane page cannot prove that host's network or certificate trust.
+
+Same-cluster fleet certification uses the same command generator as the UI. It installs two independent Agents on Swarm and with each Kubernetes method, checks distinct job claims, upgrades and restarts an identity, and removes one deployment before executing through its peer. Its local candidate/CA overlay does not certify published distribution or physical multi-node recovery.

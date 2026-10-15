@@ -67,7 +67,7 @@ suite('isolated HTTPS Compose deployment against the real control plane', () => 
       '-subj',
       '/CN=host.docker.internal',
       '-addext',
-      'subjectAltName=DNS:host.docker.internal',
+      'subjectAltName=DNS:host.docker.internal,IP:172.17.0.1',
     ]);
     const proxy = createServer(
       {
@@ -438,6 +438,15 @@ suite('isolated HTTPS Compose deployment against the real control plane', () => 
           2
         )
       );
+      if (process.env.RUNBOOK_FLEET_SMOKE === 'true') {
+        const { smokeAgentFleet } = await import('../helpers/runbook-agent-fleet-smoke');
+        await smokeAgentFleet(
+          directory,
+          actor.id,
+          `https://${process.env.RUNBOOK_FLEET_HOST ?? 'host.docker.internal'}:${address.port}`,
+          composeEnv.OPSKNIGHT_AGENT_IMAGE!
+        );
+      }
       if (process.env.RUNBOOK_KIND_SMOKE === 'true') {
         const { smokeRunbookKind } = await import('../helpers/runbook-kind-smoke');
         await smokeRunbookKind(directory, actor.id, `https://host.docker.internal:${address.port}`);
@@ -490,5 +499,5 @@ suite('isolated HTTPS Compose deployment against the real control plane', () => 
       await new Promise<void>(resolve => proxy.close(() => resolve()));
       await rm(directory, { recursive: true, force: true });
     }
-  }, 600_000);
+  }, 1_200_000);
 });

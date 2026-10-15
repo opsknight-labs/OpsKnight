@@ -129,10 +129,14 @@ export default function ServiceRunbooks({
   pagination,
   catalogQuery = '',
   targetQuery = '',
+  rulesState = 'active',
+  rulesSearch = '',
 }: {
   pagination?: { after?: string; nextCursor?: string; hasNext: boolean };
   catalogQuery?: string;
   targetQuery?: string;
+  rulesState?: 'active' | 'archived';
+  rulesSearch?: string;
   serviceId: string;
   bindings: ServiceRunbookBinding[];
   availableRunbooks: AvailableRunbook[];
@@ -229,9 +233,37 @@ export default function ServiceRunbooks({
       <form
         method="get"
         className="flex flex-wrap items-end gap-2"
+        aria-label="Search service rule history"
+      >
+        <input type="hidden" name="tab" value="runbooks" />
+        <label>
+          Rule history
+          <select
+            name="rulesState"
+            aria-label="Rule history"
+            defaultValue={rulesState}
+            className="ml-2 rounded border bg-background p-2"
+          >
+            <option value="active">Attached rules</option>
+            <option value="archived">Archived rules</option>
+          </select>
+        </label>
+        <label>
+          Search rules
+          <Input name="rulesSearch" defaultValue={rulesSearch} maxLength={100} />
+        </label>
+        <Button type="submit" variant="outline">
+          Search rule history
+        </Button>
+      </form>
+      <form
+        method="get"
+        className="flex flex-wrap items-end gap-2"
         aria-label="Search rule configuration options"
       >
         <input type="hidden" name="tab" value="runbooks" />
+        <input type="hidden" name="rulesState" value={rulesState} />
+        <input type="hidden" name="rulesSearch" value={rulesSearch} />
         <label>
           Workflow search
           <Input name="ruleCatalog" defaultValue={catalogQuery} maxLength={100} />
@@ -256,14 +288,14 @@ export default function ServiceRunbooks({
           <span>{bindings.length} rules on this page</span>
           {pagination.after && (
             <Link
-              href={`/services/${serviceId}?tab=runbooks&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
+              href={`/services/${serviceId}?tab=runbooks&rulesState=${rulesState}&rulesSearch=${encodeURIComponent(rulesSearch)}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
             >
               First rules
             </Link>
           )}
           {pagination.hasNext && (
             <Link
-              href={`/services/${serviceId}?tab=runbooks&rulesAfter=${encodeURIComponent(pagination.nextCursor ?? '')}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
+              href={`/services/${serviceId}?tab=runbooks&rulesAfter=${encodeURIComponent(pagination.nextCursor ?? '')}&rulesState=${rulesState}&rulesSearch=${encodeURIComponent(rulesSearch)}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
             >
               Next rules
             </Link>
@@ -272,7 +304,7 @@ export default function ServiceRunbooks({
       )}
       <Button asChild variant="outline">
         <Link
-          href={`/services/${serviceId}?tab=runbooks&rulesCheck=1&rulesAfter=${encodeURIComponent(pagination?.after ?? '')}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
+          href={`/services/${serviceId}?tab=runbooks&rulesCheck=1&rulesAfter=${encodeURIComponent(pagination?.after ?? '')}&rulesState=${rulesState}&rulesSearch=${encodeURIComponent(rulesSearch)}&ruleCatalog=${encodeURIComponent(catalogQuery)}&ruleTargets=${encodeURIComponent(targetQuery)}`}
         >
           Check visible rule readiness
         </Link>
@@ -589,6 +621,28 @@ export default function ServiceRunbooks({
       {/* Bindings List */}
       <div className="space-y-4">
         {filteredBindings.map(binding => {
+          if (binding.detachedAt)
+            return (
+              <Card key={binding.id}>
+                <CardHeader>
+                  <CardTitle>{binding.name || binding.runbook.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p>Rule detached · Archived history</p>
+                  <p className="text-muted-foreground">
+                    This rule cannot execute. Its configuration, suggestions and execution evidence
+                    are retained.
+                  </p>
+                  <Link
+                    href={`/services/${serviceId}/automations/${binding.id}`}
+                    className="underline"
+                  >
+                    View archived rule evidence
+                  </Link>
+                </CardContent>
+              </Card>
+            );
+
           const presentation =
             binding.presentation ??
             describeBinding(binding, availableAgents, availableAgentPools, loadErrors);

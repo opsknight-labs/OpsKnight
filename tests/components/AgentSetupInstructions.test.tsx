@@ -10,6 +10,7 @@ afterEach(cleanup);
 function setup() {
   return render(
     <AgentSetupInstructions
+      agentId="cmv90000000000000000000001"
       token="single-use-fixture"
       executionPublicKey="public-key-fixture"
       appUrl="https://ops.example.com"
@@ -26,7 +27,9 @@ it('uses the installation URL and deploys only the Compose Agent', () => {
   setup();
   expect(screen.getByLabelText('OpsKnight URL from Agent')).toHaveValue('https://ops.example.com');
   const commands = screen.getByRole('tabpanel').textContent!;
-  expect(commands).toContain('-p opsknight-agent -f deploy/compose/docker-compose.agent.yml');
+  expect(commands).toContain(
+    '-p opsknight-agent-cmv90000000000000000000001 -f deploy/compose/docker-compose.agent.yml'
+  );
   expect(commands).not.toContain('-f deploy/compose/docker-compose.yml');
 });
 it('Helm uses an Agent-only chart and honors the entered URL and digest', () => {
@@ -39,7 +42,7 @@ it('Helm uses an Agent-only chart and honors the entered URL and digest', () => 
   });
   const commands = selectTab('Helm');
   expect(commands).toContain(
-    'helm upgrade --install opsknight-agent deploy/kubernetes/helm/opsknight-agent'
+    'helm upgrade --install opsknight-agent-cmv90000000000000000000001 deploy/kubernetes/helm/opsknight-agent'
   );
   expect(commands).toContain("--set-string agent.url='https://remote.example.com'");
   expect(commands).toContain("agent.image.digest='sha256:abcd'");
@@ -62,7 +65,9 @@ it('Kustomize honors URL and image without referencing application profiles', ()
 it('Swarm references only the Agent stack', () => {
   setup();
   const commands = selectTab('Swarm');
-  expect(commands).toContain('-c deploy/swarm/docker-stack.agent.yml opsknight-agent');
+  expect(commands).toContain(
+    '-c deploy/swarm/docker-stack.agent.yml opsknight-agent-cmv90000000000000000000001'
+  );
   expect(commands).not.toContain('docker-stack.integrated.yml');
 });
 it('associates generated field labels with their input', () => {
@@ -109,6 +114,7 @@ it('allows only the verified digest after endpoint confirmation and disables cop
   };
   render(
     <AgentSetupInstructions
+      agentId="cmv90000000000000000000001"
       token="one-time-secret-value"
       executionPublicKey="public-pin"
       appUrl="https://ops.company.internal"
@@ -133,4 +139,40 @@ it('allows only the verified digest after endpoint confirmation and disables cop
   act(() => vi.advanceTimersByTime(3000));
   expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled();
   expect(screen.getByText(/Enrollment token expired/)).toBeVisible();
+});
+
+it('keeps independent enrollments disjoint and upgrades without consuming another token', () => {
+  const first = render(
+    <AgentSetupInstructions
+      agentId="cmv90000000000000000000001"
+      token="first"
+      executionPublicKey="pin"
+      appUrl="https://ops.example.com"
+    />
+  );
+  const compose = screen.getByRole('tabpanel').textContent!;
+  expect(compose).toContain('opsknight-agent-cmv90000000000000000000001');
+  fireEvent.change(screen.getByLabelText('Deployment operation'), { target: { value: 'upgrade' } });
+  for (const method of ['Compose', 'Swarm', 'Helm', 'Kustomize']) {
+    const upgrade = selectTab(method);
+    expect(upgrade).not.toContain('Enrollment token:');
+    expect(upgrade).not.toContain('secret create');
+    expect(upgrade).not.toContain('create secret');
+    expect(upgrade).toContain('opsknight-agent-cmv90000000000000000000001');
+  }
+  first.unmount();
+  render(
+    <AgentSetupInstructions
+      agentId="cmv90000000000000000000002"
+      token="second"
+      executionPublicKey="pin"
+      appUrl="https://ops.example.com"
+    />
+  );
+  for (const method of ['Compose', 'Swarm', 'Helm', 'Kustomize']) {
+    const install = selectTab(method);
+    expect(install).not.toContain('cmv90000000000000000000001');
+    expect(install).toContain('cmv90000000000000000000002');
+  }
+  expect(screen.getByText(/revoke the old Agent and create a new enrollment/)).toBeVisible();
 });

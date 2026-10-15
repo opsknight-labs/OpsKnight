@@ -43,7 +43,7 @@ export default function AutomaticTargetGuard() {
       className="text-xs text-muted-foreground lg:col-span-4"
     >
       Automatic supports a specific Agent or a fixed pool without a label selector. Each eligible
-      Agent needs a fresh successful policy check. Automatic certification supports at most 10
+      Agent needs a fresh successful policy check. Automatic certification supports at most 100
       online Agents per target. Use Suggested for dynamic or incident-dependent targets.
       {unsupported && (
         <p role="alert" className="text-destructive">

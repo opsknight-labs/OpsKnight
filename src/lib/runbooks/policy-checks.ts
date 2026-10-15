@@ -1,4 +1,5 @@
 import 'server-only';
+import { MAX_AUTOMATIC_POLICY_TARGETS, POLICY_CERTIFICATION_BATCH_SIZE } from './agent-deployment';
 import { hasUnverifiablePolicyInput } from '../../../agent/src/policy-inputs';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -86,10 +87,13 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
           : {}),
       },
       select: { id: true },
-      take: 11,
+      orderBy: { id: 'asc' },
+      take: MAX_AUTOMATIC_POLICY_TARGETS + 1,
     });
-    if (!agents.length || agents.length > 10)
-      throw new Error('A policy check requires 1–10 online targets. Narrow the selector.');
+    if (!agents.length || agents.length > MAX_AUTOMATIC_POLICY_TARGETS)
+      throw new Error(
+        `A policy check requires 1–${MAX_AUTOMATIC_POLICY_TARGETS} online targets. Narrow the selector.`
+      );
     const pending = await tx.runbookPolicyCheck.count({
       where: { ruleId, status: 'PENDING', expiresAt: { gt: now } },
     });
@@ -97,18 +101,22 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
       throw new Error(
         'A policy check is already pending. Wait for the Agent response or expiration.'
       );
-    await tx.runbookPolicyCheck.createMany({
-      data: agents.map(agent => ({
-        id: crypto.randomUUID(),
-        ruleId,
-        agentId: agent.id,
-        versionId: version.id,
-        checksum: version.checksum,
-        steps: steps as unknown as Prisma.InputJsonValue,
-        expiresAt: new Date(now.getTime() + 5 * 60_000),
-        createdById: actorId,
-      })),
-    });
+    // Each durable row freezes the selected version and redacted configuration.
+    // Insert bounded batches atomically: activation cannot observe a partial request.
+    for (let offset = 0; offset < agents.length; offset += POLICY_CERTIFICATION_BATCH_SIZE) {
+      await tx.runbookPolicyCheck.createMany({
+        data: agents.slice(offset, offset + POLICY_CERTIFICATION_BATCH_SIZE).map(agent => ({
+          id: crypto.randomUUID(),
+          ruleId,
+          agentId: agent.id,
+          versionId: version.id,
+          checksum: version.checksum,
+          steps: steps as unknown as Prisma.InputJsonValue,
+          expiresAt: new Date(now.getTime() + 5 * 60_000),
+          createdById: actorId,
+        })),
+      });
+    }
     await logAudit(
       {
         action: 'runbook.rule.policy_check.requested',

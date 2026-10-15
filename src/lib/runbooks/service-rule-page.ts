@@ -7,7 +7,8 @@ export const SERVICE_RULE_PAGE_SIZE = 20;
 export async function getServiceRulePage(
   serviceId: string,
   after: string | undefined = undefined,
-  db: Pick<PrismaClient, 'serviceAutomationRule'> = prisma
+  db: Pick<PrismaClient, 'serviceAutomationRule'> = prisma,
+  options: { state?: 'active' | 'archived'; search?: string } = {}
 ) {
   let cursor: { createdAt: Date; id: string } | null = null;
   if (after && after.length <= 512) {
@@ -22,7 +23,28 @@ export async function getServiceRulePage(
   const rows = await db.serviceAutomationRule.findMany({
     where: {
       serviceId,
-      detachedAt: null,
+      detachedAt: options.state === 'archived' ? { not: null } : null,
+      ...(options.search?.trim()
+        ? {
+            AND: [
+              {
+                OR: [
+                  {
+                    name: { contains: options.search.slice(0, 100), mode: 'insensitive' as const },
+                  },
+                  {
+                    runbook: {
+                      name: {
+                        contains: options.search.slice(0, 100),
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          }
+        : {}),
       ...(cursor
         ? {
             OR: [

@@ -7,6 +7,7 @@ import {
   useRef,
   useActionState,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type ComponentProps,
 } from 'react';
@@ -54,6 +55,11 @@ export function StatusBadge({ status, className }: { status: string; className?:
 }
 
 const InvalidFormContext = createContext(false);
+// Action forms require client-side dispatch. Do not offer an enabled submit
+// button while a newly streamed card is still waiting for hydration.
+const subscribeHydration = () => () => undefined;
+const clientHydrated = () => true;
+const serverHydrated = () => false;
 
 export function SubmitButton({
   children,
@@ -81,9 +87,7 @@ export function SubmitButton({
   );
 }
 
-export type RunbookFormAction = (
-  data: FormData
-) => Promise<void | {
+export type RunbookFormAction = (data: FormData) => Promise<void | {
   error?: string;
   saved?: boolean;
   draftRevision?: number;
@@ -107,6 +111,7 @@ export function ActionForm({
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [invalid, setInvalid] = useState(false);
+  const interactive = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
@@ -149,7 +154,7 @@ export function ActionForm({
         if (invalid) event.preventDefault();
       }}
     >
-      <InvalidFormContext.Provider value={invalid}>
+      <InvalidFormContext.Provider value={invalid || !interactive}>
         <fieldset disabled={pending} className="contents">
           {children}
         </fieldset>

@@ -61,7 +61,10 @@ export default async function AutomationRulePage({
   if (!rule) notFound();
   const selectedVersion =
     rule.versionStrategy === 'PINNED' ? rule.runbookVersion : rule.runbook.publishedVersion;
-  const readiness = await getBindingReadiness(rule);
+  const readiness = await getBindingReadiness(rule.detachedAt ? rule : { ...rule, enabled: true });
+  const certifiedAgents = readiness.checks.filter(
+    check => check.code.startsWith('AGENT_POLICY_') && check.state === 'passed'
+  ).length;
   const permissions = await getUserPermissions();
   const canManage = await assertCanModifyService(input.id)
     .then(() => true)
@@ -92,6 +95,53 @@ export default async function AutomationRulePage({
         title={rule.name || rule.runbook.name}
         description={`Service automation rule ${rule.id} · Created by ${rule.createdBy?.name ?? 'Unavailable user'}`}
       />
+      <ol
+        aria-label="Rule lifecycle"
+        className="grid gap-3 rounded-lg border p-4 sm:grid-cols-4 text-sm"
+      >
+        <li>
+          <strong>1. Configure</strong>
+          <p>
+            {selectedVersion
+              ? `Version ${selectedVersion.version} selected`
+              : 'Select a published version'}
+          </p>
+          <Link href={`/services/${input.id}?tab=runbooks`} className="underline">
+            Manage service rules
+          </Link>
+        </li>
+        <li>
+          <strong>2. Validate</strong>
+          <p>{readiness.state.replaceAll('_', ' ')}</p>
+          <a href="#checks" className="underline">
+            Review configuration and policy checks
+          </a>
+        </li>
+        <li>
+          <strong>3. Activate</strong>
+          <p>
+            {rule.detachedAt
+              ? 'Detached; activation unavailable'
+              : rule.enabled
+                ? 'Rule enabled'
+                : 'Rule paused'}
+          </p>
+          {rule.mode === 'AUTOMATIC' && readiness.eligibleAgents !== null && (
+            <p>
+              {certifiedAgents} / {readiness.eligibleAgents} Agents have fresh accepted policy
+              evidence. {Math.max(0, readiness.eligibleAgents - certifiedAgents)} still require
+              certification.
+            </p>
+          )}
+        </li>
+        <li>
+          <strong>4. Monitor</strong>
+          <p>{rule.executions.length} recent executions</p>
+          <a href="#history" className="underline">
+            Inspect outcomes and evidence
+          </a>
+        </li>
+      </ol>
       <nav aria-label="Rule evidence sections" className="flex flex-wrap gap-3">
         {['overview', 'checks', 'trigger', 'target', 'version', 'history', 'policy', 'audit'].map(
           section => (
@@ -136,7 +186,7 @@ export default async function AutomationRulePage({
             <h3 className="font-semibold">Activate Automatic rule</h3>
             <p className="text-sm">
               Activation requires current configuration and successful Agent policy evidence for
-              every eligible Agent (maximum 10 online Agents per target). Execution approval gates
+              every eligible Agent (maximum 100 online Agents per target). Execution approval gates
               still apply.
             </p>
             {rule.triggers.some(trigger => trigger.enabled && trigger.conditions.length === 0) && (

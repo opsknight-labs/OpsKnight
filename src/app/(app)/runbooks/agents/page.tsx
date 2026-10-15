@@ -58,6 +58,7 @@ import {
   updateSchedulingLabelsAction,
   rotateExecutionSigningIdentityAction,
   updateIncidentRemediationBudgetAction,
+  updateRunbookArtifactRetentionAction,
 } from '../actions';
 
 export const revalidate = 0;
@@ -354,6 +355,44 @@ export default async function RunbookAgentsPage({
               />
             </Field>
             <SubmitButton>Save remediation budgets</SubmitButton>
+          </ActionForm>
+        </details>
+      )}
+      {permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE) && (
+        <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
+          <summary className="cursor-pointer font-semibold text-sm">
+            Execution artifact retention
+          </summary>
+          <ActionForm action={updateRunbookArtifactRetentionAction} className="mt-3 space-y-3">
+            <Field label="Artifact retention days">
+              <Input
+                name="days"
+                type="number"
+                min={1}
+                max={3650}
+                required
+                defaultValue={
+                  budget?.runbookArtifactRetentionDays ??
+                  Math.min(
+                    3650,
+                    Math.max(
+                      1,
+                      Number.parseInt(process.env.RUNBOOK_ARTIFACT_RETENTION_DAYS ?? '30', 10) || 30
+                    )
+                  )
+                }
+              />
+            </Field>
+            <p className="text-sm text-muted-foreground">
+              The next reconciliation permanently deletes artifact contents older than this policy.
+              Execution records remain, but deleted output cannot be recovered. Export evidence
+              before shortening retention.
+            </p>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="confirm" required />I understand this policy permanently
+              deletes expired evidence.
+            </label>
+            <SubmitButton>Save artifact retention policy</SubmitButton>
           </ActionForm>
         </details>
       )}

@@ -103,6 +103,8 @@ type ServiceDetailPageProps = {
     error?: string;
     saved?: string;
     rulesAfter?: string;
+    rulesState?: string;
+    rulesSearch?: string;
     ruleCatalog?: string;
     ruleTargets?: string;
     rulesCheck?: string;
@@ -185,6 +187,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);
+  const rulesState = resolvedSearchParams?.rulesState === 'archived' ? 'archived' : 'active';
+  const rulesSearch = (resolvedSearchParams?.rulesSearch ?? '').slice(0, 100);
   const rulesAfter = resolvedSearchParams?.rulesAfter?.slice(0, 512);
   const catalogQuery = (resolvedSearchParams?.ruleCatalog ?? '').slice(0, 100);
   const targetQuery = (resolvedSearchParams?.ruleTargets ?? '').slice(0, 100);
@@ -451,7 +455,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     availableRunbookAgentPoolsResult,
   ] = await Promise.allSettled([
     loadRunbookView
-      ? getServiceRulePage(id, rulesAfter)
+      ? getServiceRulePage(id, rulesAfter, prisma, { state: rulesState, search: rulesSearch })
       : Promise.resolve({ rules: [], hasNext: false, nextCursor: undefined }),
     loadRunbookView
       ? prisma.runbook.findMany({
@@ -1338,6 +1342,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           ) : (
             <ServiceRunbooks
               serviceId={service.id}
+              rulesState={rulesState}
+              rulesSearch={rulesSearch}
               pagination={{
                 after: rulesAfter,
                 hasNext:

@@ -40,6 +40,7 @@ services:
 secrets:
   opsknight_agent_enrollment_token:
     external: true
+    name: ${OPSKNIGHT_AGENT_ENROLLMENT_SECRET:-opsknight_agent_enrollment_token}
 
 configs:
   opsknight_agent_policy:

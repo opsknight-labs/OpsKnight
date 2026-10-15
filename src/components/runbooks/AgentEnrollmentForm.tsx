@@ -75,6 +75,7 @@ export default function AgentEnrollmentForm({
             description="This token and Agent identity can no longer enroll or authenticate. Create a new enrollment to install another Agent."
           />
           <AgentSetupInstructions
+            agentId={state.agentId!}
             token={state.token}
             executionPublicKey={state.executionPublicKey!}
             appUrl={appUrl}

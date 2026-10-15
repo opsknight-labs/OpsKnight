@@ -186,6 +186,8 @@ Detaching a service rule archives and disables it. It disappears from the active
 
 Incident-trigger evaluation reads rules in ordered batches of at most 100, instead of loading the full inventory into memory. Every enabled rule is evaluated; duplicate event delivery retains existing fingerprint fences. Total processing time still grows with rule count and matching actions. The 100/1,000/10,000-rule regression measures concurrent duplicate deliveries and real suggestion writes; it does not certify sustained production incident throughput.
 
-Automatic policy certification currently supports at most **10 eligible online Agents per target**. Readiness blocks larger Automatic pools. Narrow the pool or use Suggested mode; do not treat a partial policy check as activation evidence.
+Automatic policy certification supports **1–100 eligible online Agents per target**, using durable per-Agent requests inserted in batches of 25. Activation requires fresh accepted evidence for every currently eligible Agent, with the same version, configuration and current policy hash. Membership, configuration or policy changes and expiry invalidate incomplete evidence; partial completion cannot activate the rule. Larger targets remain blocked.
 
 Rule configuration saves increment a monotonic configuration revision. Incident evaluation verifies that revision, mode, selected publication and trigger revision under the workflow lock before recording a suggestion. A change to mode, version, inputs or target invalidates a match read before the edit committed.
+
+Use **Rule history → Archived rules** on the service Runbooks tab to search detached rules by rule or workflow name. Historical configuration and execution links remain readable; archived rules have no dispatch controls. The rule detail page shows Configure → Validate → Activate → Monitor, including the number of Agents still awaiting valid policy evidence.

@@ -462,12 +462,12 @@ suite('PR 864 review regression contracts', () => {
       budget?.mockRestore();
     }
   });
-  it('explains and blocks Automatic policy certification above ten online Agents', async () => {
+  it('explains and blocks Automatic policy certification above 100 online Agents', async () => {
     const { service, workflow, old } = await fixture();
     const pool = await testPrisma.runbookAgentPool.create({
       data: { name: 'Large fixed pool', mode: 'SHARED_TARGET' },
     });
-    const ids = Array.from({ length: 11 }, () => crypto.randomUUID());
+    const ids = Array.from({ length: 101 }, () => crypto.randomUUID());
     await testPrisma.runbookAgent.createMany({
       data: ids.map(id => ({
         id,
@@ -499,20 +499,20 @@ suite('PR 864 review regression contracts', () => {
       },
     });
     const readiness = await getBindingReadiness({ ...rule, enabled: true });
-    expect(readiness).toMatchObject({ state: 'BLOCKED', eligibleAgents: 11 });
+    expect(readiness).toMatchObject({ state: 'BLOCKED', eligibleAgents: 101 });
     expect(readiness.checks).toContainEqual(
       expect.objectContaining({
         code: 'AUTOMATIC_POLICY_TARGET_LIMIT',
         state: 'blocked',
-        message: expect.stringContaining('10 online Agents'),
+        message: expect.stringContaining('100 online Agents'),
       })
     );
     await expect(activateServiceRule(service.id, rule.id, actor.id, true)).rejects.toThrow(
-      '10 online Agents'
+      '100 online Agents'
     );
     const { requestRulePolicyChecks } = await import('@/lib/runbooks/policy-checks');
     await expect(requestRulePolicyChecks(service.id, rule.id, actor.id)).rejects.toThrow(
-      '1–10 online targets'
+      '1–100 online targets'
     );
     expect(await testPrisma.runbookPolicyCheck.count()).toBe(0);
   });
@@ -898,4 +898,50 @@ suite('second audit activation and minimum-pool contracts', () => {
       await Promise.all(schedulers.map(limited => limited.$disconnect()));
     }
   }, 30000);
+});
+
+suite('discoverable archived rule history', () => {
+  beforeEach(resetDatabase);
+  it('searches archived rules without exposing them as active or losing evidence', async () => {
+    actor.id = (await createTestUser()).id;
+    const service = await createTestService('Archived history');
+    const workflow = await testPrisma.runbook.create({
+      data: { name: 'Retained workflow', slug: `archived-${crypto.randomUUID()}` },
+    });
+    const old = await testPrisma.runbookVersion.create({
+      data: {
+        runbookId: workflow.id,
+        version: 1,
+        state: 'PUBLISHED',
+        definition: diagnostic,
+        checksum: 'a'.repeat(64),
+      },
+    });
+    const rule = await testPrisma.serviceAutomationRule.create({
+      data: {
+        serviceId: service.id,
+        runbookId: workflow.id,
+        runbookVersionId: old.id,
+        versionStrategy: 'PINNED',
+        name: 'Retained diagnostic history',
+        enabled: false,
+      },
+    });
+    await detachServiceBinding(service.id, rule.id, actor.id);
+    expect((await getServiceRulePage(service.id)).rules).toHaveLength(0);
+    const archived = await getServiceRulePage(service.id, undefined, testPrisma, {
+      state: 'archived',
+      search: 'retained diagnostic',
+    });
+    expect(archived.rules.map(value => value.id)).toEqual([rule.id]);
+    expect(archived.rules[0]).toMatchObject({ enabled: false, runbookVersionId: old.id });
+    expect(
+      (
+        await getServiceRulePage(service.id, undefined, testPrisma, {
+          state: 'archived',
+          search: 'not present',
+        })
+      ).rules
+    ).toHaveLength(0);
+  });
 });

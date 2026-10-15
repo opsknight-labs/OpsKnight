@@ -24,7 +24,7 @@ spec:
       containers:
         - name: agent
           image: ghcr.io/opsknight-labs/opsknight-agent:REQUIRES_VERIFIED_RELEASE
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           startupProbe:
             exec:
               command: [node, /usr/local/bin/opsknight-agent-healthcheck.mjs, startup]
