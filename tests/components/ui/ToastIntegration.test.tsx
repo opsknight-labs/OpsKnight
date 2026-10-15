@@ -7,6 +7,10 @@ import { notify } from '@/lib/toast';
 describe('Toast and Toaster Component Contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    notify.dismiss();
+    if (typeof document !== 'undefined') {
+      document.body.innerHTML = '';
+    }
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
@@ -137,4 +141,3 @@ describe('Toast and Toaster Component Contract', () => {
     expect(toaster?.getAttribute('data-sonner-theme')).toBe('dark');
   });
 });
-
