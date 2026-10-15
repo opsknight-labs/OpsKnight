@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateApiKey } from '@/lib/api-auth';
+import { jsonOk } from '@/lib/api-response';
 
 function detectAuthMethod(req: NextRequest): string {
   const authHeader = req.headers.get('authorization') || '';
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
 
   if (!apiKey) {
-    return NextResponse.json(
+    return jsonOk(
       {
         status: 'unauthenticated',
         authenticated: false,
@@ -37,11 +38,12 @@ export async function GET(req: NextRequest) {
         documentation: '/settings/api-keys?tab=explorer',
         timestamp: new Date().toISOString(),
       },
-      { status: 200, headers: CORS_HEADERS }
+      200,
+      CORS_HEADERS
     );
   }
 
-  return NextResponse.json(
+  return jsonOk(
     {
       status: 'success',
       authenticated: true,
@@ -56,7 +58,8 @@ export async function GET(req: NextRequest) {
       timestamp: new Date().toISOString(),
       server: 'OpsKnight Enterprise REST Engine',
     },
-    { status: 200, headers: CORS_HEADERS }
+    200,
+    CORS_HEADERS
   );
 }
 
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!apiKey) {
-    return NextResponse.json(
+    return jsonOk(
       {
         status: 'unauthenticated',
         authenticated: false,
@@ -81,11 +84,12 @@ export async function POST(req: NextRequest) {
         detectedAuthMethod: authMethod,
         timestamp: new Date().toISOString(),
       },
-      { status: 401, headers: CORS_HEADERS }
+      401,
+      CORS_HEADERS
     );
   }
 
-  return NextResponse.json(
+  return jsonOk(
     {
       status: 'success',
       authenticated: true,
@@ -100,6 +104,7 @@ export async function POST(req: NextRequest) {
       echo: body,
       timestamp: new Date().toISOString(),
     },
-    { status: 200, headers: CORS_HEADERS }
+    200,
+    CORS_HEADERS
   );
 }
