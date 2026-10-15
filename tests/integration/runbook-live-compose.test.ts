@@ -105,7 +105,9 @@ suite('isolated HTTPS Compose deployment against the real control plane', () => 
       OPSKNIGHT_PROCESS_ROLE: 'web',
       NEXTAUTH_SECRET: 'rbe-live-independent-session-secret',
       API_KEY_SECRET: 'rbe-live-independent-api-signing-secret',
-      APP_HOST_ALIASES: 'host.docker.internal',
+      APP_HOST_ALIASES: ['host.docker.internal', process.env.RUNBOOK_FLEET_HOST]
+        .filter(Boolean)
+        .join(','),
       NEXTAUTH_URL: `http://127.0.0.1:${appPort}`,
       NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${appPort}`,
       TRUST_PROXY_HEADERS: 'false',

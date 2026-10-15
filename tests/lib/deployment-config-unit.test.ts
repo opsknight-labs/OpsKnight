@@ -994,8 +994,10 @@ describe('deployment configuration invariants', () => {
     for (const method of ['Compose', 'Swarm', 'Helm', 'Kustomize', 'Linux']) {
       expect(setupUi).toContain(`>${method}<`);
     }
-    expect(setupUi).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
-    expect(setupUi).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
+    expect(setupUi).toContain('agentSetupCommands');
+    const setupCommands = read('src/lib/runbooks/agent-setup-commands.ts');
+    expect(setupCommands).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
+    expect(setupCommands).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
     expect(read('agent/Dockerfile')).toContain('USER opsknight-agent');
     expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bbash\b/);
     expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bpodman\b/);

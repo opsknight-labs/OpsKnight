@@ -315,5 +315,33 @@
     },
     "liveFleet": "Local Docker command timed out before fleet certification; no pass claimed. Required CI deployment-candidate job now provisions disposable Swarm and Kind to execute the shared UI commands with two Agents per method.",
     "releaseGates": "Physical multi-node/partition/write fault matrix, sustained authenticated production capacity and official published distribution remain NOT_TESTED. Existing qualification report applies."
+  },
+  "runtimePoolerAndFleetCiFollowup": {
+    "baseRevision": "4356e593dd03d422afff7a6b3becd7ab650540fd",
+    "corrections": [
+      "Deployment invariants follow the extracted shared command generator",
+      "Fleet fixture allows its isolated IP endpoint in app host validation; TLS certificate includes that IP",
+      "Archived history browser journey waits for dismissal refresh to commit before navigation",
+      "Container startup gates runtime SQL connectivity after direct schema readiness, preventing authentication initialization from racing a new PgBouncer endpoint"
+    ],
+    "localChecks": {
+      "targetedUnits": {
+        "status": "PASS",
+        "tests": 352,
+        "skipped": 3,
+        "files": 40
+      },
+      "nodeCiContracts": {
+        "status": "PASS",
+        "tests": 13
+      },
+      "typecheck": "PASS",
+      "modifiedTypeScriptLint": "PASS",
+      "runtimeScriptSyntax": "PASS",
+      "runtimeWebDatasourceSelection": "PASS_REAL_POSTGRES",
+      "productionBuild": "PASS",
+      "browser": "RETRYING_AFTER_LOCAL_STARTUP_TIMEOUT"
+    },
+    "remoteCI": "Requires fresh exact-head checks after push. Base head has failed unit invariants, fleet host validation, browser navigation and pooler startup checks; those failures are not passes."
   }
 }

@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Test change classification
-        run: node --test tests/ci/runbook-change-gates.test.cjs
+        run: node --test tests/ci/runbook-change-gates.test.cjs tests/ci/runtime-database-readiness.test.cjs
       - name: Detect affected checks
         id: gates
         run: node scripts/ci/runbook-change-gates.cjs

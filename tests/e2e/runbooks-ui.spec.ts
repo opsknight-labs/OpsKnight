@@ -1399,6 +1399,8 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
     )
     .toBe('DISMISSED');
   expect(await prisma.runbookExecution.count({ where: { bindingId: rule.id } })).toBe(0);
+  // Dismissal updates the database before its server-action refresh commits.
+  await expect(page.getByRole('button', { name: 'Dismiss', exact: true })).not.toBeVisible();
   await page.goto(`/services/${service.id}?tab=runbooks`);
   await expect(
     page.getByRole('link', { name: 'View archived rule evidence', exact: true })
