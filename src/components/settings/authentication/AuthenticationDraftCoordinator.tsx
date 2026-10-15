@@ -9,8 +9,11 @@ import {
   DialogDescription,
   DialogHeader,
 } from '@/components/ui/shadcn/dialog';
+import { CheckCircle2, ArrowRight, Layers, FileEdit } from 'lucide-react';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
+import { providerDefinitions } from '@/lib/auth-control/provider-definitions';
+import ProviderLogo from './ProviderLogo';
 
 export default function AuthenticationDraftCoordinator() {
   const {
@@ -53,55 +56,133 @@ export default function AuthenticationDraftCoordinator() {
   return (
     <aside
       aria-label="Shared authentication draft"
-      className={`sticky top-0 z-20 min-w-0 space-y-3 rounded-xl border p-4 shadow-sm backdrop-blur-md transition-all duration-200 ${
+      className={`min-w-0 space-y-3 rounded-2xl border p-4 sm:p-5 shadow-sm transition-all duration-200 mt-6 ${
         draftDirty
-          ? 'border-amber-500/40 bg-card/95 ring-1 ring-amber-500/20'
-          : 'border-border/80 bg-card/90'
+          ? 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-card dark:from-amber-950/40 dark:via-amber-950/20 dark:to-card ring-1 ring-amber-500/30'
+          : data.revisions.length > 0
+            ? 'border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-card dark:from-emerald-950/35 dark:via-emerald-950/15 dark:to-card ring-1 ring-emerald-500/20'
+            : 'border-blue-500/40 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-card dark:from-blue-950/35 dark:via-indigo-950/15 dark:to-card ring-1 ring-blue-500/20'
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-bold text-foreground">
-              {draftDirty ? 'Changes not staged' : 'Provider draft'} ·{' '}
-              {configuration.providerType === 'azure'
-                ? 'Microsoft Entra ID'
-                : configuration.providerType}
-            </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div
+            className={`p-2.5 rounded-xl shrink-0 ${
+              draftDirty
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                : data.revisions.length > 0
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+            }`}
+          >
             {draftDirty ? (
-              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-semibold">
-                Unstaged Edits
-              </Badge>
+              <FileEdit className="h-5 w-5" />
+            ) : data.revisions.length > 0 ? (
+              <CheckCircle2 className="h-5 w-5" />
             ) : (
-              <Badge variant="neutral" className="text-[10px]">
-                Ready to Stage
-              </Badge>
+              <Layers className="h-5 w-5" />
             )}
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Provider, access and session changes share this draft. Staging does not change active
-            sign-in.
-          </p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                <div className="w-5 h-5 rounded bg-background/80 flex items-center justify-center shrink-0 border border-border/50 p-0.5">
+                  <ProviderLogo
+                    providerType={configuration.providerType}
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                </div>
+                <span>
+                  {draftDirty ? 'Changes not staged' : 'Provider draft'} ·{' '}
+                  {providerDefinitions[configuration.providerType]?.label ??
+                    (configuration.providerType === 'azure'
+                      ? 'Microsoft Entra ID'
+                      : configuration.providerType)}
+                </span>
+              </div>
+              {draftDirty ? (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-semibold"
+                >
+                  Unstaged Edits
+                </Badge>
+              ) : data.revisions.length > 0 ? (
+                <Badge
+                  variant="outline"
+                  className="border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold"
+                >
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Configuration Staged
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="border-blue-500/40 bg-blue-500/15 text-blue-700 dark:text-blue-300 text-[10px] font-semibold"
+                >
+                  Ready to Stage
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Provider, access and session changes share this draft. Staging does not change active
+              sign-in.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
-            <Button size="sm" onClick={() => void stageDraft()}>Stage configuration</Button>
-          </AuthenticationActionGuard>
+          {draftDirty || data.revisions.length === 0 ? (
+            <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
+              <Button size="sm" onClick={() => void stageDraft()}>
+                Stage configuration
+              </Button>
+            </AuthenticationActionGuard>
+          ) : (
+            <Button size="sm" variant="secondary" disabled className="gap-1.5 opacity-80">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              Staged
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
             disabled={!draftDirty || pending}
             onClick={() => setDraftDiscardRequested(true)}
+            title={
+              !draftDirty
+                ? 'There are no edits to discard. You may stage the current configuration to validate discovery.'
+                : undefined
+            }
           >
             Discard changes
           </Button>
         </div>
       </div>
-      {!draftDirty && (
-        <p className="text-xs text-muted-foreground">
-          There are no edits to discard. You may stage the current configuration to validate
-          discovery.
-        </p>
+      {!draftDirty && data.revisions.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
+          <p>
+            Current configuration is staged. Proceed to test administrator access and activate SSO.
+          </p>
+          {activeTab !== 'policy' && (
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs text-primary gap-1 font-semibold"
+              onClick={() => setActiveTab('policy')}
+            >
+              Test and activate
+              <ArrowRight className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      )}
+      {!draftDirty && data.revisions.length === 0 && (
+        <div className="flex items-center gap-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
+          <span>
+            There are no edits to discard. You may stage the current configuration to validate
+            discovery.
+          </span>
+        </div>
       )}
       {stale && (
         <Button

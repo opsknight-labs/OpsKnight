@@ -1,6 +1,12 @@
 'use client';
 
-import { useForm, FormProvider, type FieldValues, type UseFormReturn } from 'react-hook-form';
+import {
+  useForm,
+  FormProvider,
+  type DefaultValues,
+  type FieldValues,
+  type UseFormReturn,
+} from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { useEffect } from 'react';
@@ -10,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { notify as toast } from '@/lib/toast';
 
 interface AutosaveFormProps<T extends FieldValues> {
-  defaultValues: T;
+  defaultValues: DefaultValues<T>;
   onSave: (data: T) => Promise<{ success: boolean; error?: string }>;
   schema: z.ZodType<T>;
   children: (form: UseFormReturn<T>) => React.ReactNode;
@@ -34,7 +40,6 @@ export function AutosaveForm<T extends FieldValues>({
 }: AutosaveFormProps<T>) {
   const form = useForm<T>({
     resolver: zodResolver(schema),
-    // @ts-expect-error - defaultValues type compatibility
     defaultValues,
     mode: 'onChange',
   });
@@ -78,7 +83,6 @@ export function AutosaveForm<T extends FieldValues>({
           }}
           className="space-y-6"
         >
-          {/* @ts-expect-error - form type compatibility */}
           {children(form)}
         </form>
       </div>

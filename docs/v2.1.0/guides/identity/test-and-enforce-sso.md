@@ -23,10 +23,10 @@ Complete [administrator migration](migrate-admin-to-sso/) and [two independent e
 
 ## Stage, test and preview
 
-1. Sign in within the five-minute freshness window. Open **Settings → System → SSO / Authentication**.
+1. Make sure you signed in within the last two hours. Open **Settings → System → SSO / Authentication**.
 2. Configure **Connection**, **Access & provisioning** and session limits. Stage a revision; this performs discovery/JWKS health checks without changing production.
-3. Select the exact revision. Select the existing administrator, explicitly approve first linking if needed, and run the administrator sign-in test. Authenticate through the real IdP redirect.
-4. Return to the console. Discovery health and actual administrator verification must both succeed. Complete the test within five minutes; activation proof lasts 15 minutes.
+3. Select the exact revision. Select the existing administrator. If that administrator has no identity for this provider or app registration yet, tick **Allow this SSO identity to link to the selected existing OpsKnight administrator**; this consent applies to that one test only, and a retest never reuses it. Run the administrator sign-in test and authenticate through the real IdP redirect.
+4. The result page shows only what the server recorded for this browser's test, then returns you to the revision. Discovery health and actual administrator verification must both succeed. Complete the provider sign-in within five minutes; the resulting proof lasts seven days.
 5. Preview enforcement impact. Review affected password sessions, users requiring issuer bindings, verified emergency identities, administrator role retention and replica mismatches.
 6. Choose **SSO Required**, confirm activation and activate the tested revision. Changed policy/config versions, disabled/demoted admins, expired proof and stale recovery drills reject the entire transaction.
 
@@ -52,7 +52,20 @@ Discovery verifies endpoint shape; the administrator test exercises authorizatio
 code exchange, PKCE, nonce, signed ID token/JWKS, email assurance, role mapping, and
 existing identity ownership. A test does not issue an ordinary production session.
 The proof is bound to revision, current provider version, selected administrator
-security state, canonical origin, and a 15-minute lifetime.
+security state, canonical origin, and a seven-day lifetime. The console shows the
+proof state computed by the same check activation uses: **Verified — expires on …**,
+**Verification expired — retest**, **Configuration changed — retest**,
+**Administrator must verify again**, or **Identity/provider verification invalid**.
+
+## Timers at a glance
+
+| Timer                         | Length     | What it controls                                                                                                                                                                       |
+| ----------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Administrator freshness       | 2 hours    | Whether an existing valid session may perform privileged authentication changes. It never extends a session: revoked, expired or unauthorized sessions are rejected inside the window. |
+| Emergency recovery step-up    | 5 minutes  | Sensitive operations in an emergency recovery session. Recovery sessions also keep their one-hour cap and 15-minute idle limit.                                                        |
+| Administrator SSO proof       | 7 days     | How long a successful administrator test of a staged revision counts for activation, while provider, administrator and origin are unchanged.                                           |
+| Sign-in test flow             | 5 minutes  | The OAuth/OIDC state, nonce, PKCE verifier and browser binding of one test. Single use.                                                                                                |
+| Session idle/absolute timeout | Configured | How long users stay signed in; see [Configure OIDC](configure-oidc/).                                                                                                                  |
 
 Enforcement preview counts registered password sessions in PostgreSQL using an
 indexed expiry column. Legacy records without a typed expiry projection are counted
@@ -62,7 +75,7 @@ a displayed preview does not reserve policy or guarantee a later activation.
 
 ## Expected blockers and responses
 
-- Administrator proof absent/expired: repeat real sign-in for the selected revision.
+- Administrator proof absent/expired (older than seven days) or invalidated: repeat real sign-in for the selected revision.
 - Active provider changed: stage against its new version and repeat the test.
 - Fewer than two recovery drills: independently drill both identities at the
   configured recovery origin. Revocation/enrollment invalidates the old drill.

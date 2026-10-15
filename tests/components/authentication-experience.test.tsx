@@ -184,16 +184,42 @@ describe('enterprise authentication experience', () => {
     });
     let version = 1;
     const calls: Array<Record<string, unknown>> = [];
+    const validProof = {
+      state: 'valid',
+      verifiedAt: '2026-10-15T00:00:00.000Z',
+      expiresAt: '2026-10-22T00:00:00.000Z',
+      adminUserId: 'admin',
+    };
+    // Like the real server, a staged revision is listed (with its verified proof) afterwards.
+    let revisions: unknown[] = [];
     const request = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') {
         const body = JSON.parse(String(init.body)) as Record<string, unknown>;
         calls.push(body);
-        if (body.action === 'stage') return Response.json({ data: { revisionId: 'staged' } });
+        if (body.action === 'stage') {
+          revisions = [
+            {
+              id: 'staged',
+              baseConfigVersion: version,
+              configuration: { ...configuration, hasClientSecret: true },
+              createdAt: '2026-10-15T00:00:00.000Z',
+              discoveryVerifiedAt: '2026-10-15T00:00:00.000Z',
+              activatedAt: null,
+              previousRevisionId: null,
+              testedAt: '2026-10-15T00:00:00.000Z',
+              testedAdminId: 'admin',
+              createdByLabel: 'admin@example.test',
+              verification: validProof,
+            },
+          ];
+          return Response.json({ data: { revisionId: 'staged' } });
+        }
         if (body.action === 'preview')
           return Response.json({
             data: {
               policyVersion: 1,
               adminVerified: true,
+              verification: validProof,
               blockers: [],
               passwordSessionCount: 0,
               usersRequiringLinking: 0,
@@ -215,6 +241,7 @@ describe('enterprise authentication experience', () => {
           ),
           providerConfigVersion: version,
           activeProvider: { ...configuration, hasClientSecret: true },
+          revisions,
         },
       });
     });
@@ -234,7 +261,8 @@ describe('enterprise authentication experience', () => {
       expect(screen.getByRole('button', { name: 'Preview enforcement impact' })).toBeEnabled()
     );
     fireEvent.click(screen.getByRole('button', { name: 'Preview enforcement impact' }));
-    await screen.findByText('Real administrator login: verified');
+    await screen.findByText('Enforcement impact summary');
+    expect(screen.getAllByText(/Verified — expires/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('checkbox', { name: /I reviewed the impact/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Activate verified SSO' }));
     await screen.findByText(/Verified SSO activated/);
@@ -327,6 +355,13 @@ describe('enterprise authentication experience', () => {
           testedAt: '',
           testedAdminId: '',
           previousRevisionId: null,
+          createdByLabel: 'admin@example.test',
+          verification: {
+            state: 'required' as const,
+            verifiedAt: null,
+            expiresAt: null,
+            adminUserId: null,
+          },
         },
       ],
     };

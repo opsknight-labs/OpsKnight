@@ -25,10 +25,28 @@ import { digest, secret } from './emergency';
 import { emergencyReadiness } from './emergency-management';
 import { securityEvent } from './security-events';
 import { findRevisionIdentity } from './identity';
+import { evaluateOidcProof, oidcProofLabel, OIDC_PROOF_MAX_AGE_MS } from './proof-status';
 
 export const OIDC_TEST_COOKIE =
   process.env.NODE_ENV === 'production' ? '__Host-opsknight-oidc-test' : 'opsknight-oidc-test';
-const PROOF_MAX_AGE_MS = 15 * 60000;
+export const OIDC_TEST_RESULT_COOKIE =
+  process.env.NODE_ENV === 'production'
+    ? '__Host-opsknight-oidc-test-result'
+    : 'opsknight-oidc-test-result';
+/** Seven-day administrator proof policy; see proof-status.ts. */
+export const PROOF_MAX_AGE_MS = OIDC_PROOF_MAX_AGE_MS;
+/** The OAuth/OIDC authorization flow itself stays short-lived and single-use. */
+export const OIDC_TEST_FLOW_MAX_AGE_MS = 5 * 60 * 1000;
+
+/** Carries the consumed test flow so the callback can bind a result to the initiating browser. */
+export class OidcRevisionTestError extends Error {
+  constructor(
+    message: string,
+    readonly flowId: string | null
+  ) {
+    super(message);
+  }
+}
 
 export function oidcTestClient(config: ProviderConfiguration, metadata: OidcRuntimeMetadata) {
   const issuer = new Issuer({
@@ -146,12 +164,12 @@ export async function stageOidcRevision(
     throw new Error(
       'The active provider changed in another session. Reload and review the latest configuration before staging.'
     );
-  const source = sourceRevisionId
-    ? providerConfigSchema.parse(
-        (await prisma.oidcRevision.findUniqueOrThrow({ where: { id: sourceRevisionId } }))
-          .configuration
-      )
+  // A source revision only lends its encrypted secret. If another administrator deleted it,
+  // fall back to the active provider rather than failing the whole stage operation.
+  const sourceRevision = sourceRevisionId
+    ? await prisma.oidcRevision.findUnique({ where: { id: sourceRevisionId } })
     : null;
+  const source = sourceRevision ? providerConfigSchema.parse(sourceRevision.configuration) : null;
   let encryptedSecret: string;
   if (config.clientSecret) encryptedSecret = await encrypt(config.clientSecret);
   else if (source && source.issuer === config.issuer && source.clientId === config.clientId)
@@ -199,7 +217,9 @@ export async function beginOidcRevisionTest(
     throw new Error(
       'Test your own administrator identity. Emergency recovery may test a selected existing administrator.'
     );
-  const revision = await prisma.oidcRevision.findUniqueOrThrow({ where: { id: revisionId } });
+  const revision = await prisma.oidcRevision.findUnique({ where: { id: revisionId } });
+  if (!revision)
+    throw new Error('This saved configuration was deleted. Select or stage another configuration.');
   const config = providerConfigSchema.parse(revision.configuration);
   config.clientSecret = await decrypt(config.clientSecret);
   const metadata = await validate(config);
@@ -215,6 +235,11 @@ export async function beginOidcRevisionTest(
       throw new Error('Select an active existing administrator.');
     const active = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
     const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    // Deletion holds the same control lock, so this recheck cannot race a concurrent delete.
+    if (!(await tx.oidcRevision.findUnique({ where: { id: revisionId }, select: { id: true } })))
+      throw new Error(
+        'This saved configuration was deleted. Select or stage another configuration.'
+      );
     const isActive =
       policy.activeRevisionId === revisionId &&
       matchesActive(active, providerConfigSchema.parse(revision.configuration));
@@ -231,7 +256,7 @@ export async function beginOidcRevisionTest(
         authorizedBy: `${actor.kind}:${actor.id}`,
         linkApproved,
         secrets: await encrypt(JSON.stringify({ nonce, verifier, actor, origin })),
-        expiresAt: new Date(Date.now() + 300000),
+        expiresAt: new Date(Date.now() + OIDC_TEST_FLOW_MAX_AGE_MS),
       },
     });
   });
@@ -251,7 +276,11 @@ export async function beginOidcRevisionTest(
 }
 
 /** Real code exchange/JWKS/nonce/PKCE verification. Staged tests never issue production sessions. */
-export async function completeOidcRevisionTest(state: string, code: string, browserToken: string) {
+export async function completeOidcRevisionTest(
+  state: string,
+  code: string,
+  browserToken: string
+): Promise<{ flowId: string; revisionId: string }> {
   const flow = await prisma.oidcTestFlow.findUnique({ where: { stateHash: digest(state) } });
   if (
     !flow ||
@@ -259,13 +288,36 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
     flow.expiresAt.getTime() <= Date.now() ||
     flow.browserHash !== digest(browserToken)
   )
-    throw new Error('SSO test expired, replayed, or from another browser. Begin a new test.');
+    throw new OidcRevisionTestError(
+      'SSO test expired, replayed, or from another browser. Begin a new test.',
+      // Only a flow proven to belong to this browser may be referenced by the result page.
+      flow && flow.browserHash === digest(browserToken) ? flow.id : null
+    );
   // Claim before outbound token exchange: concurrent callbacks cannot reuse a code/flow.
   const claimed = await prisma.oidcTestFlow.updateMany({
     where: { id: flow.id, consumedAt: null, expiresAt: { gt: new Date() } },
     data: { consumedAt: new Date() },
   });
-  if (claimed.count !== 1) throw new Error('SSO test already used.');
+  if (claimed.count !== 1) throw new OidcRevisionTestError('SSO test already used.', flow.id);
+  const revisionExists = await prisma.oidcRevision.findUnique({
+    where: { id: flow.revisionId },
+    select: { id: true },
+  });
+  if (!revisionExists) {
+    await prisma.$transaction(tx =>
+      securityEvent(
+        tx,
+        'auth.oidc.test.failed',
+        flow.adminUserId,
+        { revisionId: flow.revisionId, reason: 'REVISION_DELETED' },
+        'failed'
+      )
+    );
+    throw new OidcRevisionTestError(
+      'The configuration under test was deleted before sign-in completed. Production configuration is unchanged.',
+      flow.id
+    );
+  }
   try {
     const secrets = JSON.parse(await decrypt(flow.secrets)) as {
       nonce: string;
@@ -354,7 +406,7 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
         effectiveRole,
       });
     });
-    return flow.revisionId;
+    return { flowId: flow.id, revisionId: flow.revisionId };
   } catch {
     await prisma.$transaction(tx =>
       securityEvent(
@@ -365,38 +417,81 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
         'failed'
       )
     );
-    throw new Error(
-      'SSO administrator test failed. Check provider diagnostics, claims, linking approval and role mapping. Production configuration is unchanged.'
+    throw new OidcRevisionTestError(
+      'SSO administrator test failed. Check provider diagnostics, claims, linking approval and role mapping. Production configuration is unchanged.',
+      flow.id
     );
   }
+}
+
+export type OidcTestResult =
+  | { outcome: 'verified'; revisionId: string; verifiedAt: string; expiresAt: string }
+  | { outcome: 'failed'; revisionId: string | null; reason: 'deleted' | 'failed' }
+  | { outcome: 'unavailable' };
+
+/**
+ * Resolves the outcome shown after a test callback from recorded evidence only. The browser
+ * presents an opaque reference (flow id + the flow's original browser-binding token); a URL
+ * alone can never produce a "verified" page.
+ */
+export async function readOidcTestResult(reference: string | undefined): Promise<OidcTestResult> {
+  const match = /^([a-z0-9]{20,40})\.([A-Za-z0-9_-]{43})$/.exec(reference ?? '');
+  if (!match) return { outcome: 'unavailable' };
+  const [, flowId, browserToken] = match;
+  const flow = await prisma.oidcTestFlow.findUnique({ where: { id: flowId } });
+  if (
+    !flow ||
+    !flow.consumedAt ||
+    flow.browserHash !== digest(browserToken) ||
+    Date.now() - flow.consumedAt.getTime() > 15 * 60 * 1000
+  )
+    return { outcome: 'unavailable' };
+  const revision = await prisma.oidcRevision.findUnique({
+    where: { id: flow.revisionId },
+    select: { id: true },
+  });
+  if (!revision) return { outcome: 'failed', revisionId: null, reason: 'deleted' };
+  const proof = await prisma.oidcRevisionTest.findFirst({
+    where: {
+      revisionId: flow.revisionId,
+      adminUserId: flow.adminUserId,
+      verifiedAt: { gte: flow.createdAt },
+    },
+    orderBy: { verifiedAt: 'desc' },
+  });
+  if (!proof) return { outcome: 'failed', revisionId: flow.revisionId, reason: 'failed' };
+  return {
+    outcome: 'verified',
+    revisionId: flow.revisionId,
+    verifiedAt: proof.verifiedAt.toISOString(),
+    expiresAt: new Date(proof.verifiedAt.getTime() + PROOF_MAX_AGE_MS).toISOString(),
+  };
 }
 
 async function preview(tx: Prisma.TransactionClient, revisionId: string) {
   const origin = await authenticationOrigin(tx);
   const revision = await tx.oidcRevision.findUniqueOrThrow({ where: { id: revisionId } });
   const config = providerConfigSchema.parse(revision.configuration);
-  const proof = await tx.oidcRevisionTest.findFirst({
-    where: {
-      revisionId,
-      verifiedOrigin: origin,
-      verifiedAt: { gte: new Date(Date.now() - PROOF_MAX_AGE_MS) },
-      effectiveRole: 'ADMIN',
-    },
+  // The newest test is authoritative: a later failed-context test is never masked by an older one.
+  const latestProof = await tx.oidcRevisionTest.findFirst({
+    where: { revisionId },
     orderBy: { verifiedAt: 'desc' },
   });
-  const user = proof ? await tx.user.findUnique({ where: { id: proof.adminUserId } }) : null;
-  let adminVerified = Boolean(
-    proof &&
-    user &&
-    user.status === 'ACTIVE' &&
-    user.role === 'ADMIN' &&
-    user.tokenVersion === proof.adminTokenVersion
-  );
+  const user = latestProof
+    ? await tx.user.findUnique({ where: { id: latestProof.adminUserId } })
+    : null;
   const ready = await emergencyReadiness(tx);
   const active = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
   const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
   const isActive = policy.activeRevisionId === revisionId && matchesActive(active, config);
-  adminVerified = adminVerified && proof?.testedConfigVersion === (active?.configVersion ?? 0);
+  const verification = evaluateOidcProof(latestProof, {
+    now: new Date(),
+    origin,
+    activeConfigVersion: active?.configVersion ?? 0,
+    administrator: user,
+  });
+  const adminVerified = verification.state === 'valid';
+  const proof = adminVerified ? latestProof : null;
   const replicas = await tx.authenticationReplicaObservation.count({
     where: { differs: true, lastSeenAt: { gt: new Date(Date.now() - 600000) } },
   });
@@ -413,7 +508,7 @@ async function preview(tx: Prisma.TransactionClient, revisionId: string) {
     },
   });
   const blockers = [
-    !adminVerified ? 'Complete a real SSO administrator login test within 15 minutes.' : '',
+    !adminVerified ? oidcProofLabel(verification.state).detail : '',
     ready.length < 2 ? 'Enroll and sign in with two independent emergency identities.' : '',
     !isActive && (active?.configVersion ?? 0) !== revision.baseConfigVersion
       ? 'Active provider changed; create and test a new revision.'
@@ -427,6 +522,7 @@ async function preview(tx: Prisma.TransactionClient, revisionId: string) {
     usersRequiringLinking,
     verifiedEmergencyAccounts: ready.length,
     adminVerified,
+    verification,
     blockers,
     proof,
     config,
@@ -447,6 +543,7 @@ export async function enforcementPreview(revisionId: string) {
       usersRequiringLinking: value.usersRequiringLinking,
       verifiedEmergencyAccounts: value.verifiedEmergencyAccounts,
       adminVerified: value.adminVerified,
+      verification: value.verification,
       blockers: value.blockers,
     };
   });
@@ -464,6 +561,10 @@ export async function activateOidcRevision(
   const result = await prisma.$transaction(
     async tx => {
       await lockControlActor(tx, actor);
+      if (!(await tx.oidcRevision.findUnique({ where: { id: revisionId }, select: { id: true } })))
+        throw new Error(
+          'This saved configuration was deleted. Select or stage another configuration.'
+        );
       const data = await preview(tx, revisionId);
       if (data.policy.version !== expectedVersion)
         throw new Error('Authentication policy changed. Reload the impact preview.');
@@ -586,4 +687,87 @@ export async function stageRollback(actor: ControlActor, revisionId: string) {
   config.clientSecret = await decrypt(config.clientSecret);
   config.enabled = true;
   return stageOidcRevision(actor, config); // A rollback gets a new revision and real login test.
+}
+
+/** Cancels in-flight administrator tests so their callbacks fail with a precise reason. */
+async function cancelPendingTestFlows(tx: Prisma.TransactionClient, revisionIds: string[]) {
+  if (!revisionIds.length) return 0;
+  const cancelled = await tx.oidcTestFlow.updateMany({
+    where: { revisionId: { in: revisionIds }, consumedAt: null, expiresAt: { gt: new Date() } },
+    data: { expiresAt: new Date() },
+  });
+  return cancelled.count;
+}
+
+function deletionBlocker(
+  revision: { id: string; activatedAt: Date | null } | null,
+  activeRevisionId: string | null
+) {
+  if (!revision) return 'This saved configuration was already deleted in another session.';
+  if (revision.id === activeRevisionId) return 'The active configuration cannot be deleted.';
+  if (revision.activatedAt)
+    return 'Previously activated configurations are kept as rollback history.';
+  return null;
+}
+
+export async function deleteOidcRevision(actor: ControlActor, revisionId: string) {
+  // lockControlActor takes the same advisory lock and policy row lock as activation, so a
+  // revision cannot be activated and deleted concurrently.
+  return prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor, false);
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    const revision = await tx.oidcRevision.findUnique({
+      where: { id: revisionId },
+      select: { id: true, activatedAt: true },
+    });
+    const blocker = deletionBlocker(revision, policy.activeRevisionId);
+    if (blocker) throw new Error(blocker);
+    const cancelledTests = await cancelPendingTestFlows(tx, [revisionId]);
+    const proofs = await tx.oidcRevisionTest.deleteMany({ where: { revisionId } });
+    await tx.oidcRevision.delete({ where: { id: revisionId } });
+    await securityEvent(tx, 'auth.oidc.revision.deleted', actor.id, {
+      revisionId,
+      deletedProofs: proofs.count,
+      cancelledTests,
+    });
+    return { ok: true, deletedRevisionId: revisionId };
+  });
+}
+
+/**
+ * Deletes unused drafts. The client sends the ids it showed in its confirmation; each is
+ * rechecked inside the locked transaction, so a stale confirmation can never delete a draft
+ * that appeared, was activated or became active after the dialog opened.
+ */
+export async function cleanupStagedRevisions(actor: ControlActor, expectedRevisionIds: string[]) {
+  return prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor, false);
+    if (!expectedRevisionIds.length) return { ok: true, count: 0, skipped: 0, deletedIds: [] };
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    const candidates = await tx.oidcRevision.findMany({
+      where: { id: { in: expectedRevisionIds } },
+      select: { id: true, activatedAt: true },
+    });
+    const eligible = candidates
+      .filter(candidate => !deletionBlocker(candidate, policy.activeRevisionId))
+      .map(candidate => candidate.id);
+    if (!eligible.length)
+      return { ok: true, count: 0, skipped: expectedRevisionIds.length, deletedIds: [] };
+    const cancelledTests = await cancelPendingTestFlows(tx, eligible);
+    await tx.oidcRevisionTest.deleteMany({ where: { revisionId: { in: eligible } } });
+    const deleted = await tx.oidcRevision.deleteMany({
+      where: { id: { in: eligible }, activatedAt: null },
+    });
+    await securityEvent(tx, 'auth.oidc.revisions.cleaned', actor.id, {
+      count: deleted.count,
+      revisionIds: eligible,
+      cancelledTests,
+    });
+    return {
+      ok: true,
+      count: deleted.count,
+      skipped: expectedRevisionIds.length - deleted.count,
+      deletedIds: eligible,
+    };
+  });
 }

@@ -1,9 +1,23 @@
 'use client';
-import { ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, KeyRound, Lock, Info, ChevronRight } from 'lucide-react';
+import {
+  ShieldAlert,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  KeyRound,
+  Lock,
+  Info,
+  ChevronRight,
+  UserCheck,
+} from 'lucide-react';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import { authenticationRequest } from './request';
 import AuthenticationSessionPolicyForm from './AuthenticationSessionPolicyForm';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
+import AuthenticationRevisionSelector from './AuthenticationRevisionSelector';
+import AuthenticationAdminTestPanel from './AuthenticationAdminTestPanel';
+import { AuthenticationVerificationBadge } from './AuthenticationVerificationStatus';
+import { oidcProofLabel } from '@/lib/auth-control/proof-status';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import type { enforcementPreview } from '@/lib/auth-control/oidc-revisions';
@@ -37,6 +51,9 @@ export default function AuthenticationPolicyWorkspace() {
     sectionClass,
   } = useAuthenticationWorkspace();
 
+  const selectedRevision = data.revisions.find(rev => rev.id === revisionId);
+  const verification = selectedRevision?.verification;
+
   return (
     <section id="authentication-3" className={sectionClass} aria-labelledby="auth-policy-title">
       {/* Header */}
@@ -47,7 +64,10 @@ export default function AuthenticationPolicyWorkspace() {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 id="auth-policy-title" className="text-lg font-semibold tracking-tight text-foreground">
+              <h2
+                id="auth-policy-title"
+                className="text-lg font-semibold tracking-tight text-foreground"
+              >
                 Sessions &amp; Policies
               </h2>
               <Badge
@@ -58,8 +78,8 @@ export default function AuthenticationPolicyWorkspace() {
               </Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Current mode: {data.mode.replaceAll('_', ' ')}. Sign in again or verify your emergency
-              credential within five minutes before activation.
+              Current mode: {data.mode.replaceAll('_', ' ')}. Validate administrator sign-in and
+              review enforcement impact before activating SSO.
             </p>
           </div>
         </div>
@@ -68,191 +88,272 @@ export default function AuthenticationPolicyWorkspace() {
       {/* Session Policies Form */}
       <AuthenticationSessionPolicyForm key={revisionId} />
 
-      {/* Activation Policy Card */}
-      <div className="space-y-5 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs">
+      {/* Clubbed: Validate Administrator Access & Sign-in Policy Activation Card */}
+      <div className="space-y-6 rounded-xl border border-border/80 bg-card p-4 sm:p-6 shadow-xs">
         <div>
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Lock className="h-4 w-4 text-primary" />
-            Sign-in Policy &amp; Activation
+          <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <Lock className="h-5 w-5 text-primary" />
+            Validate Administrator Access &amp; Sign-in Policy Activation
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Configure how strictly users are required to sign in with single sign-on versus local passwords.
+            Complete the real administrator sign-in test, preview user impact, and activate your
+            staged single sign-on policy.
           </p>
         </div>
 
-        <label className="block space-y-1.5 text-sm font-medium">
-          <span className="text-foreground">Activation mode</span>
-          <select
-            className={inputClass}
-            value={mode}
-            onChange={event => {
-              setMode(event.target.value as typeof mode);
-              setConfirmation(false);
-            }}
-          >
-            <option value="SSO_OPTIONAL" disabled={data.mode === 'SSO_REQUIRED'}>
-              SSO Optional
-            </option>
-            <option value="SSO_REQUIRED">SSO Required</option>
-          </select>
-          <span className="block text-xs font-normal text-muted-foreground pt-0.5">
-            {mode === 'SSO_REQUIRED'
-              ? 'SSO Required enforces authentication via external IdP for all non-emergency users.'
-              : 'SSO Optional permits local password fallbacks and progressive onboarding.'}
-          </span>
-        </label>
-
-        {/* Enforcement Impact Preview */}
-        <div className="space-y-3 pt-1">
-          <AuthenticationActionGuard
-            availability={actionAvailability('Preview impact', [
-              pending && {
-                code: 'busy',
-                message: 'Wait for the current operation or section to finish loading.',
-              },
-              draftDirty && {
-                code: 'draft',
-                message: 'Stage your draft before previewing its enforcement impact.',
-                resolutionTarget: 'connection',
-                resolutionLabel: 'Stage draft',
-              },
-              !revisionId && {
-                code: 'revision',
-                message: 'Stage or select a saved configuration first.',
-                resolutionTarget: 'connection',
-              },
-            ])}
-            onResolve={setActiveTab}
-          >
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() =>
-                void perform(async () => {
-                  setImpact(await authenticationRequest<Preview>({ action: 'preview', revisionId }));
-                  setConfirmation(false);
-                })
-              }
-            >
-              <Info className="h-4 w-4" />
-              Preview enforcement impact
-            </Button>
-          </AuthenticationActionGuard>
-
-          {impact && (
-            <div
-              className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"
-              aria-live="polite"
-            >
-              <div className="flex items-center gap-2 font-semibold text-foreground">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>Enforcement impact summary</span>
+        {/* Step 1: Configuration & Administrator Verification */}
+        <div className="space-y-4 rounded-xl border border-border/60 bg-muted/15 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                <UserCheck className="h-4 w-4" />
               </div>
-              <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed">
-                {impact.passwordSessionCount} registered password sessions affected;{' '}
-                {impact.usersRequiringLinking} users require linking;{' '}
-                {impact.verifiedEmergencyAccounts} emergency identities verified.
-              </p>
-              <div className="flex items-center gap-2 text-xs">
-                <Badge
-                  variant={impact.adminVerified ? 'success' : 'warning'}
-                  className="font-semibold text-xs"
-                >
-                  Real administrator login: {impact.adminVerified ? 'verified' : 'required'}
-                </Badge>
-              </div>
-              {impact.blockers.length > 0 && (
-                <div className="mt-2 space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
-                  <p className="font-semibold flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    Blockers preventing activation:
-                  </p>
-                  <ul className="list-disc pl-5 space-y-0.5">
-                    {impact.blockers.map(blocker => (
-                      <li key={blocker}>{blocker}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <h4 className="text-sm font-semibold text-foreground">
+                Step 1: Administrator sign-in verification
+              </h4>
             </div>
-          )}
+            {verification && (
+              <AuthenticationVerificationBadge verification={verification} compact />
+            )}
+          </div>
+          <AuthenticationRevisionSelector label="Saved configuration to activate" />
+          <AuthenticationAdminTestPanel />
         </div>
 
-        {/* Activation Review Confirmation */}
-        <div className="border-t border-border/70 pt-4 space-y-3">
-          <label className="flex items-start gap-2.5 text-sm cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-border text-primary focus:ring-ring"
-              checked={confirmation}
-              onChange={event => setConfirmation(event.target.checked)}
-            />
-            <span className="text-xs sm:text-sm font-medium text-foreground leading-snug">
-              I reviewed the impact and confirm activation of this verified revision and sign-in policy.
+        {/* Step 2: Policy Mode & Activation */}
+        <div className="space-y-4 pt-1">
+          <div className="flex items-center gap-2 pb-1">
+            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <Lock className="h-4 w-4" />
+            </div>
+            <h4 className="text-sm font-semibold text-foreground">
+              Step 2: Sign-in Policy &amp; Activation
+            </h4>
+          </div>
+
+          <label className="block space-y-1.5 text-sm font-medium">
+            <span className="text-foreground">Activation mode</span>
+            <select
+              className={inputClass}
+              value={mode}
+              onChange={event => {
+                setMode(event.target.value as typeof mode);
+                setConfirmation(false);
+              }}
+            >
+              <option value="SSO_OPTIONAL" disabled={data.mode === 'SSO_REQUIRED'}>
+                SSO Optional
+              </option>
+              <option value="SSO_REQUIRED">SSO Required</option>
+            </select>
+            <span className="block text-xs font-normal text-muted-foreground pt-0.5">
+              {mode === 'SSO_REQUIRED'
+                ? 'SSO Required enforces authentication via external IdP for all non-emergency users.'
+                : 'SSO Optional permits local password fallbacks and progressive onboarding.'}
             </span>
           </label>
 
-          <AuthenticationActionGuard
-            availability={actionAvailability('Activate SSO', [
-              pending && {
-                code: 'busy',
-                message: 'Wait for the current operation or section to finish loading.',
-              },
-              draftDirty && {
-                code: 'draft',
-                message: 'Stage draft changes and repeat the real administrator sign-in test.',
-                resolutionTarget: 'connection',
-              },
-              !impact && { code: 'preview', message: 'Preview enforcement impact before activation.' },
-              !confirmation && { code: 'confirm', message: 'Confirm that you reviewed the impact.' },
-              Boolean(impact && !impact.adminVerified) && {
-                code: 'test',
-                message: 'Complete a real administrator sign-in test for this revision.',
-                resolutionTarget: 'connection',
-              },
-              data.freshAuthenticationRequired && {
-                code: 'fresh',
-                message: 'Sign in again or verify your recovery credential within five minutes.',
-              },
-              data.originConflict && {
-                code: 'origin',
-                message: 'Repair conflicting deployment URLs before activation.',
-                resolutionTarget: 'diagnostics',
-              },
-              ...(mode === 'SSO_REQUIRED'
-                ? (impact?.blockers ?? []).map((message, index) => ({
-                    code: `server-${index}`,
-                    message,
-                  }))
-                : []),
-            ])}
-            onResolve={setActiveTab}
-          >
-            <Button
-              className="gap-2 shadow-xs"
-              onClick={() =>
-                void perform(async () => {
-                  const activated = await authenticationRequest<{ providerConfigVersion: number }>({
-                    action: 'activate',
-                    revisionId,
-                    expectedVersion: impact!.policyVersion,
-                    mode,
-                    confirmation: 'ACTIVATE VERIFIED SSO',
-                  });
-                  setDraftBaseConfigVersion(activated.providerConfigVersion);
-                  setConfirmation(false);
-                  setImpact(null);
-                  setMessage(
-                    'Verified SSO activated. Disallowed sessions are revoked; complete a new sign-in if this provider changed.'
-                  );
-                  await refresh();
-                })
-              }
+          {/* Enforcement Impact Preview */}
+          <div className="space-y-3 pt-1">
+            <AuthenticationActionGuard
+              availability={actionAvailability('Preview impact', [
+                pending && {
+                  code: 'busy',
+                  message: 'Wait for the current operation or section to finish loading.',
+                },
+                draftDirty && {
+                  code: 'draft',
+                  message:
+                    'Stage your draft in Connection before previewing its enforcement impact.',
+                  resolutionTarget: 'connection',
+                  resolutionLabel: 'Stage draft in Connection',
+                },
+                !revisionId && {
+                  code: 'revision',
+                  message:
+                    'Select a saved configuration from the selector above, or stage a new draft.',
+                  resolutionTarget: 'connection',
+                  resolutionLabel: 'Stage in Connection',
+                },
+              ])}
+              onResolve={setActiveTab}
             >
-              <ShieldCheck className="h-4 w-4" />
-              Activate verified SSO
-            </Button>
-          </AuthenticationActionGuard>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() =>
+                  void perform(async () => {
+                    setImpact(
+                      await authenticationRequest<Preview>({ action: 'preview', revisionId })
+                    );
+                    setConfirmation(false);
+                  })
+                }
+              >
+                <Info className="h-4 w-4" />
+                Preview enforcement impact
+              </Button>
+            </AuthenticationActionGuard>
+
+            {impact && (
+              <div
+                className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"
+                aria-live="polite"
+              >
+                <div className="flex items-center gap-2 font-semibold text-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <span>Enforcement impact summary</span>
+                </div>
+                <dl className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    {
+                      label: 'Password sessions',
+                      value: impact.passwordSessionCount,
+                      note:
+                        mode === 'SSO_REQUIRED' ? 'Revoked on activation' : 'Kept (SSO Optional)',
+                    },
+                    {
+                      label: 'Users to link',
+                      value: impact.usersRequiringLinking,
+                      note: 'Need first-time SSO linking',
+                    },
+                    {
+                      label: 'Recovery identities',
+                      value: impact.verifiedEmergencyAccounts,
+                      note:
+                        impact.verifiedEmergencyAccounts >= 2
+                          ? 'Emergency access ready'
+                          : 'Two required for SSO Required',
+                    },
+                  ].map(item => (
+                    <div key={item.label} className="rounded-lg border bg-background/70 p-2.5">
+                      <dt className="text-muted-foreground">{item.label}</dt>
+                      <dd className="text-lg font-semibold text-foreground">{item.value}</dd>
+                      <dd className="text-[11px] text-muted-foreground">{item.note}</dd>
+                    </div>
+                  ))}
+                  <div className="rounded-lg border bg-background/70 p-2.5">
+                    <dt className="text-muted-foreground">Administrator proof</dt>
+                    <dd className="mt-1">
+                      <AuthenticationVerificationBadge verification={impact.verification} />
+                    </dd>
+                  </div>
+                </dl>
+                {impact.blockers.length > 0 && (
+                  <div className="mt-2 space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Blockers preventing activation:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-0.5">
+                      {impact.blockers.map(blocker => (
+                        <li key={blocker}>{blocker}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Activation Review Confirmation */}
+          <div className="border-t border-border/70 pt-4 space-y-3">
+            <label className="flex items-start gap-2.5 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-border text-primary focus:ring-ring"
+                checked={confirmation}
+                onChange={event => setConfirmation(event.target.checked)}
+              />
+              <span className="text-xs sm:text-sm font-medium text-foreground leading-snug">
+                I reviewed the impact and confirm activation of this verified revision and sign-in
+                policy.
+              </span>
+            </label>
+
+            <AuthenticationActionGuard
+              availability={actionAvailability('Activate SSO', [
+                pending && {
+                  code: 'busy',
+                  message: 'Wait for the current operation or section to finish loading.',
+                },
+                draftDirty && {
+                  code: 'draft',
+                  message: 'Stage draft changes and repeat the administrator sign-in test.',
+                  resolutionTarget: 'connection',
+                  resolutionLabel: 'Stage in Connection',
+                },
+                Boolean(verification && verification.state !== 'valid') && {
+                  code: 'test',
+                  message: oidcProofLabel(verification!.state).detail,
+                },
+                data.freshAuthenticationRequired && {
+                  code: 'fresh',
+                  message: 'Sign in again or verify your recovery credential before activating.',
+                },
+                data.originConflict && {
+                  code: 'origin',
+                  message: 'Repair conflicting deployment URLs before activation.',
+                  resolutionTarget: 'diagnostics',
+                  resolutionLabel: 'View Origin Diagnostics',
+                },
+                !impact && {
+                  code: 'preview',
+                  message: 'Preview enforcement impact before activation.',
+                },
+                ...(mode === 'SSO_REQUIRED'
+                  ? (impact?.blockers ?? [])
+                      .filter(
+                        message =>
+                          message !== oidcProofLabel(verification?.state ?? 'required').detail
+                      )
+                      .map((message, index) => ({
+                        code: `server-${index}`,
+                        message,
+                        ...(message.includes('emergency')
+                          ? {
+                              resolutionTarget: 'emergency' as const,
+                              resolutionLabel: 'Set up recovery',
+                            }
+                          : {}),
+                      }))
+                  : []),
+                Boolean(impact) &&
+                  !confirmation && {
+                    code: 'confirm',
+                    message: 'Confirm that you reviewed the impact.',
+                  },
+              ])}
+              onResolve={setActiveTab}
+            >
+              <Button
+                className="gap-2 shadow-xs"
+                onClick={() =>
+                  void perform(async () => {
+                    const activated = await authenticationRequest<{
+                      providerConfigVersion: number;
+                    }>({
+                      action: 'activate',
+                      revisionId,
+                      expectedVersion: impact!.policyVersion,
+                      mode,
+                      confirmation: 'ACTIVATE VERIFIED SSO',
+                    });
+                    setDraftBaseConfigVersion(activated.providerConfigVersion);
+                    setConfirmation(false);
+                    setImpact(null);
+                    setMessage(
+                      'Verified SSO activated. Disallowed sessions are revoked; complete a new sign-in if this provider changed.'
+                    );
+                    await refresh(revisionId);
+                  })
+                }
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Activate verified SSO
+              </Button>
+            </AuthenticationActionGuard>
+          </div>
         </div>
       </div>
 
@@ -273,7 +374,8 @@ export default function AuthenticationPolicyWorkspace() {
                 Administrative Policy Override
               </p>
               <p className="mt-1 leading-relaxed">
-                Reverting to Password Only or SSO Optional allows local password logins. Use this if your external identity provider experiences an extended outage.
+                Reverting to Password Only or SSO Optional allows local password logins. Use this if
+                your external identity provider experiences an extended outage.
               </p>
             </div>
 
@@ -329,7 +431,7 @@ export default function AuthenticationPolicyWorkspace() {
                   },
                 data.freshAuthenticationRequired && {
                   code: 'fresh',
-                  message: 'Sign in again within five minutes before changing policy.',
+                  message: 'Sign in again before changing authentication policy.',
                 },
               ])}
             >

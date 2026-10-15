@@ -16,6 +16,8 @@ import {
   completeOidcRevisionTest,
   activateOidcRevision,
   enforcementPreview,
+  deleteOidcRevision,
+  cleanupStagedRevisions,
 } from '@/lib/auth-control/oidc-revisions';
 import { authenticationOrigin } from '@/lib/auth-control/origin';
 import { restorePasswordAccess } from '@/lib/auth-control/recovery';
@@ -333,7 +335,7 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
         issueCode(flow.url, variant),
         flow.browserToken
       );
-      if (accepted) await expect(result).resolves.toBe(staged.revisionId);
+      if (accepted) await expect(result).resolves.toMatchObject({ revisionId: staged.revisionId });
       else await expect(result).rejects.toThrow('test failed');
     } finally {
       await prisma.oidcRevision.delete({ where: { id: staged.revisionId } });
@@ -374,7 +376,7 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
           flow.browserToken
         );
         if (variant === 'overage') await expect(result).rejects.toThrow('test failed');
-        else await expect(result).resolves.toBe(staged.revisionId);
+        else await expect(result).resolves.toMatchObject({ revisionId: staged.revisionId });
       } finally {
         await prisma.oidcIdentity.deleteMany({ where: { issuer: runtime.issuer } });
         await prisma.oidcRevision.delete({ where: { id: staged.revisionId } });
@@ -414,7 +416,8 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
           issueCode(flow.url, variant),
           flow.browserToken
         );
-        if (variant === 'missing-verification') await expect(result).resolves.toBe(revisionId);
+        if (variant === 'missing-verification')
+          await expect(result).resolves.toMatchObject({ revisionId: revisionId });
         else await expect(result).rejects.toThrow('test failed');
       } finally {
         await prisma.oidcIdentity.deleteMany({ where: { issuer: runtime.issuer } });
@@ -455,7 +458,7 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
         flow.browserToken
       );
       if (succeeds) {
-        await expect(result).resolves.toBe(staged.revisionId);
+        await expect(result).resolves.toMatchObject({ revisionId: staged.revisionId });
         const proof = await prisma.oidcRevisionTest.findFirstOrThrow({
           where: { revisionId: staged.revisionId },
         });
@@ -745,5 +748,64 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     expect(admin.id).toBe(actor.id);
     expect(admin.passwordHash).toBeTruthy();
     expect(admin.tokenVersion).toBe(1);
+  });
+
+  it('allows deleting an unactivated staged candidate revision and its tests, but rejects deleting active revision', async () => {
+    // Password recovery above rotated the administrator's token version and advanced the
+    // session cutoff, so sign in again: a session issued under the current policy.
+    const [admin, policy] = await Promise.all([
+      prisma.user.findUniqueOrThrow({ where: { id: actor.id } }),
+      prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } }),
+    ]);
+    const current: ControlActor = {
+      kind: 'admin',
+      id: actor.id,
+      tokenVersion: admin.tokenVersion,
+      authenticatedAt: Date.now(),
+      method: 'credentials',
+      issuedUnderPolicyVersion: policy.version,
+    };
+    const staged1 = await stageOidcRevision(current, {
+      issuer: runtime.issuer,
+      clientId: 'test-delete-1',
+      clientSecret: 'test-secret',
+    });
+    const staged2 = await stageOidcRevision(current, {
+      issuer: runtime.issuer,
+      clientId: 'test-delete-2',
+      clientSecret: 'test-secret',
+    });
+
+    // Delete single staged revision
+    const deleteResult = await deleteOidcRevision(current, staged1.revisionId);
+    expect(deleteResult.ok).toBe(true);
+    expect(await prisma.oidcRevision.findUnique({ where: { id: staged1.revisionId } })).toBeNull();
+
+    // Staged 2 still exists
+    expect(
+      await prisma.oidcRevision.findUnique({ where: { id: staged2.revisionId } })
+    ).toBeTruthy();
+
+    // A second delete of the same draft reports the conflict instead of failing obscurely.
+    await expect(deleteOidcRevision(current, staged1.revisionId)).rejects.toThrow(
+      'already deleted in another session'
+    );
+
+    // Bulk cleanup deletes only the confirmed, still-eligible drafts.
+    const staged3 = await stageOidcRevision(current, {
+      issuer: runtime.issuer,
+      clientId: 'test-delete-3',
+      clientSecret: 'test-secret',
+    });
+    const cleanupResult = await cleanupStagedRevisions(current, [
+      staged2.revisionId,
+      staged1.revisionId,
+    ]);
+    expect(cleanupResult).toMatchObject({ ok: true, count: 1, skipped: 1 });
+    expect(await prisma.oidcRevision.findUnique({ where: { id: staged2.revisionId } })).toBeNull();
+    // A draft created after the confirmation was shown is never swept up.
+    expect(
+      await prisma.oidcRevision.findUnique({ where: { id: staged3.revisionId } })
+    ).toBeTruthy();
   });
 });
