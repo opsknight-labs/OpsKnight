@@ -2,6 +2,7 @@
 
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import ErrorState from '@/components/ui/ErrorState';
+import { purgeCachesAndReload } from '@/components/ChunkLoadErrorHandler';
 import { logger } from '@/lib/logger';
 import { captureException, isSentryEnabled } from '@/lib/monitoring/sentry';
 
@@ -16,7 +17,7 @@ export default function AppErrorBoundary({ children }: { children: React.ReactNo
         <ErrorState
           title="Application Error"
           message="Something went wrong. Please refresh the page or contact support if the problem persists."
-          onRetry={() => window.location.reload()}
+          onRetry={() => purgeCachesAndReload()}
         />
       }
       onError={(error, errorInfo) => {

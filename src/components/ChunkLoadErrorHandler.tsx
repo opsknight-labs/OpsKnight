@@ -135,6 +135,48 @@ export function clearRecoveryBudget(): void {
   }
 }
 
+export async function purgeCachesAndReload(
+  options: { clearBudget?: boolean } = {}
+): Promise<void> {
+  if (options.clearBudget !== false) {
+    clearRecoveryBudget();
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      if ('caches' in window) {
+        const keys = await window.caches.keys();
+        await Promise.all(
+          keys
+            .filter(name => /next-static|static-js|pages/i.test(name))
+            .map(name => window.caches.delete(name))
+        );
+      }
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        await new Promise<void>(resolve => {
+          const channel = new MessageChannel();
+          const timer = setTimeout(resolve, 500);
+          channel.port1.onmessage = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          try {
+            navigator.serviceWorker.controller?.postMessage(
+              { type: 'PURGE_STATIC_CACHES' },
+              [channel.port2]
+            );
+          } catch {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+      }
+    } catch {
+      // Ignore cache clearing errors during reload
+    }
+    window.location.reload();
+  }
+}
+
 export default function ChunkLoadErrorHandler() {
   const [recoveryRequired, setRecoveryRequired] = useState<{
     reason: string;
@@ -153,7 +195,7 @@ export default function ChunkLoadErrorHandler() {
 
       const allowed = tryConsumeRecoveryBudget(reason);
       if (allowed) {
-        window.location.reload();
+        purgeCachesAndReload({ clearBudget: false });
       } else if (!navigator.webdriver) {
         setRecoveryRequired({ reason });
       }
@@ -256,8 +298,7 @@ export default function ChunkLoadErrorHandler() {
               variant="default"
               className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-medium cursor-pointer"
               onClick={() => {
-                clearRecoveryBudget();
-                window.location.reload();
+                purgeCachesAndReload();
               }}
             >
               <RefreshCw className="h-3.5 w-3.5" />

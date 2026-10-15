@@ -44,7 +44,9 @@ const withPWA = withPWAInit({
         options: { cacheName: 'no-cache-rsc' },
       },
       {
-        urlPattern: ({ url }: { url: URL }) =>
+        urlPattern: ({ request, url }: { request: Request; url: URL }) =>
+          request.mode === 'navigate' ||
+          request.destination === 'document' ||
           url.pathname === '/' ||
           url.pathname === '/m' ||
           url.pathname.startsWith('/login') ||
@@ -56,7 +58,17 @@ const withPWA = withPWAInit({
           url.pathname.startsWith('/teams') ||
           url.pathname.startsWith('/users') ||
           url.pathname.startsWith('/schedules') ||
-          url.pathname.startsWith('/policies'),
+          url.pathname.startsWith('/policies') ||
+          url.pathname.startsWith('/analytics') ||
+          url.pathname.startsWith('/reports') ||
+          url.pathname.startsWith('/runbooks') ||
+          url.pathname.startsWith('/postmortems') ||
+          url.pathname.startsWith('/action-items') ||
+          url.pathname.startsWith('/events') ||
+          url.pathname.startsWith('/status') ||
+          url.pathname.startsWith('/system-logs') ||
+          url.pathname.startsWith('/help') ||
+          url.pathname.startsWith('/shortcuts'),
         handler: 'NetworkOnly',
         options: { cacheName: 'no-cache-pages' },
       },
@@ -82,6 +94,7 @@ const withPWA = withPWAInit({
         options: {
           cacheName: 'next-static-assets',
           expiration: { maxEntries: 500, maxAgeSeconds: 7 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [0, 200] },
         },
       },
       {

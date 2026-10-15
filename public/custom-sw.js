@@ -678,7 +678,21 @@ self.addEventListener('install', () => {});
 self.addEventListener('activate', event => {
   event.waitUntil(
     (async () => {
-      const dynamicCachePatterns = ['pages', 'pages-rsc', 'pages-rsc-prefetch', 'start-url', 'apis', 'static-data-assets', 'cross-origin'];
+      // Dynamic page and API caches must be purged on activation so that new
+      // documents and API schemas are fetched fresh from the server.
+      // Static chunk assets are content-hashed and immutable, so preserving them
+      // in CacheFirst ensures existing unreloaded tabs continue running without
+      // losing access to lazy chunks. Stale chunk caches are evicted explicitly
+      // via PURGE_STATIC_CACHES during recovery reloads.
+      const dynamicCachePatterns = [
+        'pages',
+        'pages-rsc',
+        'pages-rsc-prefetch',
+        'start-url',
+        'apis',
+        'static-data-assets',
+        'cross-origin',
+      ];
       try {
         const cacheNames = await caches.keys();
         await Promise.all(
@@ -713,6 +727,27 @@ self.addEventListener('message', event => {
   if (!event.data) return;
   if (event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+  if (event.data.type === 'PURGE_STATIC_CACHES') {
+    event.waitUntil(
+      (async () => {
+        try {
+          const names = await caches.keys();
+          await Promise.all(
+            names
+              .filter(name => /next-static|static-js|pages/i.test(name))
+              .map(name => caches.delete(name))
+          );
+        } catch (error) {
+          console.warn('[Service Worker] Failed to purge static asset caches', error);
+        } finally {
+          if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({ status: 'PURGED' });
+          }
+        }
+      })()
+    );
     return;
   }
   if (event.data.type === 'SET_ACTIVE_PRINCIPAL') {
