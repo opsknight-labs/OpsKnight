@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, type ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +44,6 @@ export default function DetailTabs({
   actions,
   children,
 }: DetailTabsProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -93,6 +92,13 @@ export default function DetailTabs({
   }, [syncWithUrl, urlParamName, validTabIds, initialTab]);
 
   const handleTabChange = (nextTabId: string) => {
+    if (syncWithUrl && typeof window !== 'undefined') {
+      const change = new CustomEvent('opsknight:settings-navigation', {
+        cancelable: true,
+        detail: { parameter: urlParamName, value: nextTabId },
+      });
+      if (!window.dispatchEvent(change)) return;
+    }
     // 1. Instant 0ms local state update (immediate visual tab highlight & content switch)
     setSelectedTab(nextTabId);
 

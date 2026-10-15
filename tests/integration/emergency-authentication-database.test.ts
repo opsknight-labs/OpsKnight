@@ -1164,8 +1164,9 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       expect(summary.pendingEmailFanoutJobs).toBe(1);
       expect(summary.pendingEmailAlerts).toBe(2);
       expect(summary.failedEmailAlertCount).toBe(55);
-      expect(summary.deliveredEmailAlertCount).toBe(3);
-      expect(summary.cancelledEmailAlertCount).toBe(2);
+      // Summary avoids unused lifetime totals; retained states are still paginated below.
+      expect(summary.deliveredEmailAlertCount).toBe(0);
+      expect(summary.cancelledEmailAlertCount).toBe(0);
       const first = await authenticationAlertHistory('failed');
       expect(first.alerts).toHaveLength(25);
       const second = await authenticationAlertHistory('failed', first.nextCursor!);

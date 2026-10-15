@@ -267,14 +267,15 @@ Demotion, deactivation, deletion or an address change suppresses queued delivery
 explicit review. Unavailable authorization reads defer delivery without sending.
 Mail already accepted by a provider cannot be recalled.
 
-Diagnostics reports **Fan-out jobs pending** separately from **Materialized emails
-pending**. A job may represent many recipients; neither figure is presented as a
-combined recipient backlog. Provider-accepted, delivery-confirmed, failed and cancelled counts cover retained
-records. Delivery history supports all five states, loads 25 records per page and
-uses **Load more deliveries** for older entries. Retry confirmation stays open when
-the server rejects the operation, with its error shown in the console. A successful
-retry closes confirmation and refreshes history. Retention remains 90 days for
-terminal delivery metadata; audit/in-app evidence follows its separate policy.
+Diagnostics reports **Fan-out work pending**, **Emails awaiting acceptance** and
+**Awaiting delivery confirmation** separately. A fan-out job may represent many
+recipients. Historical delivered and cancelled totals are not queried for the summary.
+**Security notifications** supports all five delivery states, with 25, 50 or 100
+records per page and bounded **Previous / Next** navigation. Retry confirmation stays
+open after a server rejection and explains the failure inside the dialog. A successful
+retry refreshes the affected page while retaining other diagnostic views. Retention
+remains 90 days for terminal delivery metadata; audit/in-app evidence follows its
+separate policy.
 
 ## Identity recognition and administrator readiness
 
@@ -392,7 +393,6 @@ classification. The upgrade regression applies quarantine repair twice and verif
 that delivery and bounce receipts from a 48-hour outage update transport and linked-alert
 state using their original occurrence timestamps.
 
-
 ### Selectable password or hardware emergency identities
 
 The password integration suite exercises generated salted hashes, account separation,
@@ -412,7 +412,6 @@ quarantines remain terminal. A 100,000-row PostgreSQL backlog benchmark captures
 with PostgreSQL statement/lock deadlines (500/100 ms), a 250 ms transaction acquisition
 limit and the existing metrics cache. The JS scrape timeout is not the only work bound.
 Do not generalize local timings to production capacity without deployment-specific load tests.
-
 
 Run the production-browser certification with Docker, OpenSSL, Node 22 and the
 repository dependencies installed:
@@ -438,7 +437,6 @@ report is `plans/certification/enterprise-sso-2.1-password-browser.json`.
 Live IdP tenants, physical keys, real mail providers and production HA acceptance remain
 pending; this local evidence does not certify those external environments.
 
-
 ### Password admission under distributed probes
 
 The password integration suite now enables the real PostgreSQL admission counters
@@ -453,3 +451,72 @@ The NGINX fixture verifies excess ingress requests are rejected before upstream 
 ordinary login is unaffected and admission resumes after refill. These isolated tests
 do not certify resistance to network/database saturation or coordinated targeting of
 all known custodian identifiers. Preserve the independently protected ingress path.
+
+## Authentication workspace certification
+
+The authentication workspace uses six focused sections: Overview, Identity Provider,
+Access & provisioning, Sessions & Policies, Emergency Recovery, and Diagnostics.
+`?section=sso&authTab=connection` opens provider settings without replacing the outer
+settings section. Diagnostics adds `authView=sessions|deliveries|audit|replicas`.
+
+Provider, access and session settings share one in-memory draft. Use **Stage
+configuration** from any editing section; staging validates discovery without changing
+active sign-in. Complete **Test administrator sign-in**, then **Preview enforcement
+impact** and **Activate verified SSO**. A saved configuration selection replaces the
+whole draft after confirmation. A concurrent active-provider update requires reloading
+and reviewing the active configuration. Draft secrets are never saved in browser storage.
+
+Provider switching clears client credentials, issuer, provider-specific organization,
+scopes and claim rules after confirmation. Microsoft Entra accepts a Directory tenant
+ID and derives the public-cloud issuer; advanced editing supports an exact issuer.
+Auth0 organization settings appear only for Auth0. A blank secret retains the saved
+secret only for the matching issuer and client. Session limits offer inherited defaults,
+presets and custom units; the effective active policy remains visible separately from
+pending changes. These limits do not change the IdP's tenant policy.
+
+Diagnostics performs filtering in PostgreSQL before selecting a page. Each view retains
+its own filters, page size and navigation position while switching views. Previous/Next
+uses signed cursors tied to the actor, policy version and filters, with a one-hour
+snapshot lifetime. At most 100 previous boundaries are kept in browser memory. Start
+with **First page** after a cursor expires or to see newly changed sessions; mutable
+records can leave an older snapshot. Search matches prefixes, rather than arbitrary
+substrings. Page sizes are 25, 50 or 100. No exact lifetime count is needed.
+
+Session details never include session tokens or JTI values. Audit details explicitly
+identify `EmergencyAccessEvent` as their source and show only allowlisted context;
+this is not a complete history of ordinary sign-ins. Delivery timelines show only
+persisted stages. Provider acceptance does not mean delivery confirmation. Retrying a
+failed security email requires acknowledgment of possible duplicate delivery and a
+current generation check. Replica observations separate recent reports from retained
+history; operators must reconcile deployment settings and restart affected replicas.
+
+Recovery identities use a compact list and account detail dialog. Enrollment, rotation,
+credential switching, disablement and key revocation each use a focused confirmation.
+Compromise acknowledgment applies only to that action. Routine rotation with exactly
+two verified identities under Required mode needs a third verified replacement first.
+Generated passwords require explicit independent-vault storage acknowledgment before
+closing; they cannot be retrieved again. Changing your own credential revokes the old
+session, so store the new password before signing in again for a drill.
+
+Run component/API regressions, `authentication-diagnostics-database.test.ts` against an
+isolated `enterprise_sso_test` database, published-release upgrade certification, and
+`python3 scripts/certify-enterprise-authentication-browser.py --build` before release.
+The diagnostic fixture exercises 0, 1, 24, 25, 26, 50, 100, 10,000 and 100,000 records,
+tied timestamps, method filtering before limits, cursor context changes and mutable
+session state. Production browser certification uses a disposable HTTPS origin and
+virtual hardware authenticator. Live IdP tenants, physical keys and multi-node failure
+drills remain deployment acceptance checks.
+
+### Verified workspace views
+
+These captures use the disposable local certification administrator. Callback URLs
+are examples from that fixture. No generated recovery password is shown.
+
+![Provider workspace on desktop](../../assets/authentication-provider-workspace-desktop.png)
+
+![Provider workspace on mobile](../../assets/authentication-provider-workspace-mobile.png)
+
+When Docker is unavailable, certification can use a separately installed PostgreSQL
+bin directory with `--postgres-bin /path/to/postgresql/bin`. The harness creates and
+removes its own cluster, database, HTTPS origin and application processes. This adds
+no application dependency or authentication environment switch.

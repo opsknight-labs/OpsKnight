@@ -59,7 +59,7 @@ continuing.
 
 ## What OpsKnight validates
 
-**Stage and validate connection** validates discovery and metadata, not a real user login.
+**Stage configuration** validates discovery and metadata, not a real user login.
 OpsKnight requires an HTTPS issuer, exact issuer agreement with discovery,
 usable authorization/token/JWKS endpoints, approved asymmetric signing
 configuration, and safe public endpoint resolution. It rejects unsafe
@@ -268,7 +268,7 @@ After finishing the provider registration:
    issuer inherit Google or Entra trust.
 3. Enter the issuer, client ID, client secret, and matching token endpoint
    authentication method.
-4. Select **Stage and validate connection**. Continue only when discovery validates.
+4. Select **Stage configuration**. Continue only when discovery validates.
 5. Enter a provider label if the sign-in button needs an organization-specific
    name.
 6. Decide whether **JIT Account Auto-Provisioning** is allowed. When disabled,
@@ -359,7 +359,7 @@ password because the provider can reuse its own SSO session.
 
 ## Configure OIDC session policy
 
-The staged **Authentication policy** form can override maximum session lifetime and idle timeout for OIDC
+The staged **Sessions & Policies** form can override maximum session lifetime and idle timeout for OIDC
 sessions. Leaving a field at its default uses the corresponding environment
 policy.
 

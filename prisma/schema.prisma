@@ -1909,12 +1909,16 @@ model UserDevice {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   sessionExpiresAt DateTime?
+  sessionPolicyVersion Int?
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@index([userId])
   @@index([token])
   @@index([platform, sessionExpiresAt])
+  @@index([lastUsed, id], map: "UserDevice_diagnostic_activity_idx")
+  @@index([createdAt, id], map: "UserDevice_diagnostic_created_idx")
+  @@index([sessionExpiresAt, id], map: "UserDevice_diagnostic_expiry_idx")
 }
 
 model AuditLog {
@@ -3979,6 +3983,9 @@ model EmergencyAccessEvent {
 
   @@index([createdAt])
   @@index([emergencyAccountId, createdAt])
+  @@index([createdAt, id], map: "EmergencyAccessEvent_page_idx")
+  @@index([eventType, createdAt, id], map: "EmergencyAccessEvent_type_page_idx")
+  @@index([outcome, createdAt, id], map: "EmergencyAccessEvent_outcome_page_idx")
 }
 
 model AuthenticationAlert {
@@ -4083,4 +4090,6 @@ model AuthenticationReplicaObservation {
   differs     Boolean
   firstSeenAt DateTime @default(now())
   lastSeenAt  DateTime @updatedAt
+
+  @@index([lastSeenAt, id], map: "AuthenticationReplicaObservation_page_idx")
 }

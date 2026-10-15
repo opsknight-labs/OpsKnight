@@ -16,6 +16,8 @@ import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
 import { resetAuthOptionsCache } from '@/lib/auth';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
 import { resetOidcConfigCache } from '@/lib/oidc-config';
+import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
+import { hasBroadAdministratorRule, providerDefinitions } from './provider-definitions';
 import { providerConfigSchema, type ProviderConfiguration } from './provider-config';
 import { lockControlActor, type ControlActor } from './actor';
 import { authenticationOrigin } from './origin';
@@ -113,26 +115,37 @@ export async function stageOidcRevision(
   actor: ControlActor,
   input: unknown,
   acknowledgeBroadAdminRules = false,
-  sourceRevisionId?: string
+  sourceRevisionId?: string,
+  expectedConfigVersion?: number
 ) {
-  const config = providerConfigSchema.parse(input);
+  const parsed = providerConfigSchema.parse(input);
+  const config = {
+    ...parsed,
+    organizationId: providerDefinitions[parsed.providerType].organization
+      ? parsed.organizationId
+      : null,
+  };
+  if (
+    config.sessionIdleTimeoutSeconds != null &&
+    config.sessionIdleTimeoutSeconds > getEnterpriseSessionPolicy(config).maximumAgeSeconds
+  )
+    throw new Error('Idle timeout cannot exceed the effective maximum session lifetime.');
   if (Buffer.byteLength(config.clientSecret, 'utf8') > 4096)
     throw new Error('Client secret must be at most 4096 UTF-8 bytes.');
-  if (
-    config.roleMapping.some(
-      rule =>
-        rule.role === 'ADMIN' &&
-        (!/^(groups?|roles?)$/i.test(rule.claim) ||
-          /^(all|everyone|employees|users|members|authenticated|\*)$/i.test(rule.value))
-    ) &&
-    !acknowledgeBroadAdminRules
-  )
+  if (hasBroadAdministratorRule(config.roleMapping) && !acknowledgeBroadAdminRules)
     throw new Error(
       'A broadly matching ADMIN rule needs explicit acknowledgment. Prefer a dedicated administrator group.'
     );
   if (!config.enabled)
     throw new Error('Staged providers must be enabled. Use Password Only policy to disable SSO.');
   const current = await prisma.oidcConfig.findUnique({ where: { id: 'default' } });
+  if (
+    expectedConfigVersion !== undefined &&
+    expectedConfigVersion !== (current?.configVersion ?? 0)
+  )
+    throw new Error(
+      'The active provider changed in another session. Reload and review the latest configuration before staging.'
+    );
   const source = sourceRevisionId
     ? providerConfigSchema.parse(
         (await prisma.oidcRevision.findUniqueOrThrow({ where: { id: sourceRevisionId } }))

@@ -59,6 +59,7 @@ const schema = z.discriminatedUnion('action', [
       configuration: z.unknown(),
       acknowledgeBroadAdminRules: z.boolean().default(false),
       sourceRevisionId: id.optional(),
+      expectedConfigVersion: z.number().int().min(0).optional(),
     })
     .strict(),
   z
@@ -224,7 +225,8 @@ export async function POST(request: NextRequest) {
             actor,
             input.configuration,
             input.acknowledgeBroadAdminRules,
-            input.sourceRevisionId
+            input.sourceRevisionId,
+            input.expectedConfigVersion
           )
         );
       case 'test': {

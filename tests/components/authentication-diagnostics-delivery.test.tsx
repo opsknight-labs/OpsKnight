@@ -1,7 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthenticationDiagnostics from '@/components/settings/AuthenticationDiagnostics';
-
 const data = {
   registeredSessions: [],
   pendingEmailAlerts: 2,
@@ -13,128 +12,125 @@ const data = {
   replicas: [],
   events: [],
 };
-const firstPage = {
-  nextCursor: null,
-  alerts: [
-    {
-      id: 'alert-1',
-      title: 'Security alert: provider activation',
-      createdAt: '2026-10-13T00:00:00.000Z',
-      completedAt: '2026-10-13T00:00:00.000Z',
-      eventId: 'event-1',
-      recipientId: 'admin',
-      attempts: 3,
-      lastError: null,
-      state: 'FAILED' as const,
-      deliveryGeneration: 3,
-    },
-  ],
+const item = {
+  id: 'alert-1',
+  title: 'Provider activation',
+  subtitle: 'Event one',
+  state: 'FAILED',
+  createdAt: '2026-10-14T00:00:00Z',
+  activityAt: '2026-10-14T00:00:00Z',
+  source: 'AuthenticationAlert',
+  details: [],
+  canRetry: true,
+  generation: 3,
+  actionExplanation: 'A retry may deliver a duplicate.',
 };
-describe('security delivery diagnostics', () => {
-  it('requires explicit confirmation and sends the displayed retry generation', async () => {
+const page = {
+  items: [item],
+  nextCursor: null,
+  hasMore: false,
+  pageSize: 25,
+  snapshotAt: '2026-10-15T00:00:00Z',
+};
+const props = {
+  data,
+  pending: false,
+  onRefresh: vi.fn(),
+  onRevoke: vi.fn(),
+  onRetry: vi.fn().mockResolvedValue(true),
+};
+const deliveries = async () => {
+  fireEvent.click(screen.getByRole('tab', { name: 'Security notifications' }));
+  await screen.findByRole('button', { name: 'View Provider activation' });
+};
+beforeEach(() => {
+  window.history.replaceState(null, '', '/');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ data: page }))
+  );
+});
+afterEach(() => vi.unstubAllGlobals());
+describe('paginated diagnostic interactions', () => {
+  it('requires explicit acknowledgment and sends the displayed retry generation', async () => {
     const retry = vi.fn().mockResolvedValue(true);
-    render(
-      <AuthenticationDiagnostics
-        data={data}
-        pending={false}
-        onRefresh={vi.fn()}
-        onRevoke={vi.fn()}
-        onRetry={retry}
-        onLoadHistory={vi.fn().mockResolvedValue(firstPage)}
-      />
-    );
-    expect(screen.getByText('Security email delivery history')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'Retry email' }));
+    render(<AuthenticationDiagnostics {...props} onRetry={retry} />);
+    await deliveries();
+    fireEvent.click(screen.getByRole('button', { name: 'View Provider activation' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Confirm email retry' })).toBeDisabled();
     expect(retry).not.toHaveBeenCalled();
-    expect(screen.getByRole('status')).toHaveTextContent('duplicate');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(retry).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry email' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm email retry' }));
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm email retry' }));
     await waitFor(() => expect(retry).toHaveBeenCalledWith('alert-1', 3));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
-  it('disables retry while an administration operation is pending', async () => {
-    render(
-      <AuthenticationDiagnostics
-        data={data}
-        pending
-        onRefresh={vi.fn()}
-        onRevoke={vi.fn()}
-        onRetry={vi.fn()}
-        onLoadHistory={vi.fn().mockResolvedValue(firstPage)}
-      />
-    );
-    expect(await screen.findByRole('button', { name: 'Retry email' })).toBeDisabled();
-  });
-  it('keeps confirmation open after a rejected operation, then closes it only after success', async () => {
+  it('keeps confirmation after rejection and closes only on success', async () => {
     const retry = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    render(
-      <AuthenticationDiagnostics
-        data={data}
-        pending={false}
-        onRefresh={vi.fn()}
-        onRevoke={vi.fn()}
-        onRetry={retry}
-        onLoadHistory={vi.fn().mockResolvedValue(firstPage)}
-      />
-    );
-    fireEvent.click(await screen.findByRole('button', { name: 'Retry email' }));
+    render(<AuthenticationDiagnostics {...props} onRetry={retry} />);
+    await deliveries();
+    fireEvent.click(screen.getByRole('button', { name: 'View Provider activation' }));
+    fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm email retry' }));
-    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('button', { name: 'Confirm email retry' })).toBeInTheDocument();
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: 'Confirm email retry' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm email retry' }));
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Confirm email retry' })).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
-  it('loads the next page and resets pagination when the delivery-status filter changes', async () => {
-    const load = vi
-      .fn()
-      .mockResolvedValueOnce({ ...firstPage, nextCursor: 'next-page' })
-      .mockResolvedValueOnce({
-        alerts: [{ ...firstPage.alerts[0], id: 'alert-2', title: 'Older security alert' }],
-        nextCursor: null,
+  it('retains filters and page after unrelated dashboard refresh and view changes', async () => {
+    const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+      Response.json({
+        data: String(url).includes('after=older')
+          ? { ...page, items: [{ ...item, id: 'older', title: 'Older alert' }] }
+          : { ...page, hasMore: true, nextCursor: 'older' },
       })
-      .mockResolvedValueOnce({ alerts: [], nextCursor: null });
-    render(
-      <AuthenticationDiagnostics
-        data={data}
-        pending={false}
-        onRefresh={vi.fn()}
-        onRevoke={vi.fn()}
-        onRetry={vi.fn()}
-        onLoadHistory={load}
-      />
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Load more deliveries' }));
-    expect(await screen.findByText('Older security alert')).toBeInTheDocument();
-    expect(load).toHaveBeenNthCalledWith(2, 'failed', 'next-page', expect.any(AbortSignal));
-    fireEvent.change(screen.getByLabelText('Delivery status'), { target: { value: 'cancelled' } });
-    expect(await screen.findByText('No deliveries match this status.')).toBeInTheDocument();
-    expect(screen.queryByText('Older security alert')).not.toBeInTheDocument();
+    vi.stubGlobal('fetch', fetcher);
+    const { rerender } = render(<AuthenticationDiagnostics {...props} />);
+    await deliveries();
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Top diagnostic pagination' })).getByRole(
+        'button',
+        { name: 'Next page' }
+      )
+    );
+    await screen.findByText('Older alert');
+    const calls = fetcher.mock.calls.length;
+    rerender(<AuthenticationDiagnostics {...props} data={{ ...data, failedEmailAlertCount: 2 }} />);
+    expect(fetcher.mock.calls.length).toBe(calls);
+    fireEvent.click(screen.getByRole('tab', { name: 'Recovery & audit' }));
+    await screen.findByText('Provider activation');
+    fireEvent.click(screen.getByRole('tab', { name: 'Security notifications' }));
+    await screen.findByText('Older alert');
+    expect(String(fetcher.mock.calls.at(-1)?.[0])).toContain('after=older');
   });
-  it('labels provider acceptance separately from confirmed delivery', async () => {
-    const load = vi
-      .fn()
-      .mockResolvedValue({
-        alerts: [{ ...firstPage.alerts[0], state: 'ACCEPTED' }],
-        nextCursor: null,
-      });
-    render(
-      <AuthenticationDiagnostics
-        data={data}
-        pending={false}
-        onRefresh={vi.fn()}
-        onRevoke={vi.fn()}
-        onRetry={vi.fn()}
-        onLoadHistory={load}
-      />
+  it('ignores late responses from an abandoned view', async () => {
+    let finish!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: RequestInfo | URL) =>
+        String(url).includes('view=sessions')
+          ? new Promise<Response>(resolve => {
+              finish = resolve;
+            })
+          : Promise.resolve(Response.json({ data: page }))
+      )
     );
-    const summary = within(screen.getByLabelText('Security email processing'));
-    expect(summary.getByText('Sent to provider')).toBeInTheDocument();
-    expect(summary.getByText('Delivery confirmed')).toBeInTheDocument();
-    expect(await screen.findByText(/Sent to provider ·/)).toBeInTheDocument();
-    expect(screen.queryByText(/Delivery confirmed ·/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Retry email' })).not.toBeInTheDocument();
+    render(<AuthenticationDiagnostics {...props} />);
+    await deliveries();
+    await act(async () =>
+      finish(Response.json({ data: { ...page, items: [{ ...item, title: 'Stale session' }] } }))
+    );
+    expect(screen.queryByText('Stale session')).not.toBeInTheDocument();
+    expect(screen.getByText('Provider activation')).toBeInTheDocument();
+  });
+  it('preserves filters on API failures and exposes page retry', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json({ error: 'Authority expired' }, { status: 403 }))
+    );
+    render(<AuthenticationDiagnostics {...props} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Authority expired');
+    expect(screen.getByRole('button', { name: 'Retry this page' })).toBeEnabled();
   });
 });

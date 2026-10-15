@@ -33,7 +33,7 @@ Sign in within the five-minute freshness window. Stage the connection, run a rea
 
 ## Verify and observe session effects
 
-Inspect **Overview**, then **Authentication policy → Preview enforcement impact**. Confirm the authoritative mode and version, affected password sessions, users requiring identity links, administrator verification and recovery blockers. Confirm the activation checkbox before applying the exact tested revision. A stale version or changed administrator refuses activation transactionally.
+Inspect **Overview**, then **Sessions & Policies → Preview enforcement impact**. Confirm the authoritative mode and version, affected password sessions, users requiring identity links, administrator verification and recovery blockers. Confirm the activation checkbox before applying the exact tested revision. A stale version or changed administrator refuses activation transactionally.
 
 Disallowed sessions fail on the next protected server request. Password cutoffs persist across a later return to Optional; old revoked sessions do not return. Changing the production provider advances the OIDC cutoff. Long-lived streams recheck policy at their existing server intervals; already delivered data is not recalled. Users must sign in again after their issuing method is revoked. Settings → Security shows the current sign-in method separately from system policy.
 

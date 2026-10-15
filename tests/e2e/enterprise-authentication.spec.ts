@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -28,13 +29,23 @@ test('enterprise console and independent hardware recovery work in a real browse
     await page.goto(`${origin}/settings/system?section=sso`);
     for (const title of [
       'Overview',
-      'Connection',
+      'Identity Provider',
       'Access & provisioning',
-      'Authentication policy',
+      'Sessions & Policies',
       'Diagnostics',
     ]) {
       await page.getByRole('tab', { name: title, exact: true }).click();
-      await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+      await expect(
+        page.getByRole('heading', {
+          name:
+            title === 'Overview'
+              ? /Configure Enterprise SSO|Authentication overview/
+              : title === 'Diagnostics'
+                ? 'Authentication diagnostics'
+                : title,
+          exact: title !== 'Overview',
+        })
+      ).toBeVisible();
     }
     await page.getByRole('tab', { name: 'Overview', exact: true }).click();
     if (process.env.SSO_E2E_CAPTURE === '1') {
@@ -44,7 +55,7 @@ test('enterprise console and independent hardware recovery work in a real browse
       await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page
-        .getByRole('heading', { name: 'Overview', exact: true })
+        .getByRole('heading', { name: /Configure Enterprise SSO|Authentication overview/ })
         .evaluate(element => element.closest('section')?.scrollIntoView({ block: 'start' }));
       await page.screenshot({ path: 'docs/v2.1.0/assets/enterprise-authentication-desktop.png' });
     }
@@ -67,7 +78,7 @@ test('enterprise console and independent hardware recovery work in a real browse
         page.getByRole('status').filter({ hasText: 'Loading this section' })
       ).toBeHidden();
       await page
-        .getByRole('heading', { name: 'Overview', exact: true })
+        .getByRole('heading', { name: /Configure Enterprise SSO|Authentication overview/ })
         .evaluate(element => element.closest('section')?.scrollIntoView({ block: 'start' }));
       await page.screenshot({ path: 'docs/v2.1.0/assets/enterprise-authentication-mobile.png' });
     }
@@ -99,19 +110,28 @@ test('enterprise console and independent hardware recovery work in a real browse
       },
     });
     const name = `Browser recovery drill ${Date.now()}`;
+    await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
     await page.getByRole('textbox', { name: 'Emergency identity name', exact: true }).fill(name);
     await page
-      .getByRole('checkbox', { name: /separately held vault password or hardware key/ })
+      .getByRole('checkbox', { name: /custody independent of the other emergency identity/ })
       .check();
-    await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
+    await page
+      .getByRole('combobox', { name: 'Recovery method', exact: true })
+      .selectOption('WEBAUTHN');
+    await page.getByRole('button', { name: 'Create identity', exact: true }).click();
     const identity = page
       .locator('li:visible')
-      .filter({ has: page.getByText(`${name} —`, { exact: false }) })
+      .filter({ has: page.getByText(name, { exact: true }) })
       .first();
     await expect(identity).toBeVisible({ timeout: 30000 });
-    const accountId = await identity.locator('code').innerText();
-    await identity.getByRole('button', { name: 'Enroll hardware key', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Key enrolled' })).toBeVisible({
+    await identity.getByRole('button', { name: /Manage/ }).click();
+    const accountId = await page.getByRole('dialog').locator('dd.font-mono').innerText();
+    await page.getByRole('button', { name: 'Enroll hardware key', exact: true }).click();
+    await page.getByRole('checkbox', { name: /I understand the session revocation/ }).check();
+    await page.getByRole('button', { name: 'Confirm recovery change' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Recovery credential updated' })
+    ).toBeVisible({
       timeout: 30000,
     });
     if (process.env.SSO_E2E_CAPTURE === '1') {
@@ -198,7 +218,7 @@ test('enterprise console and independent hardware recovery work in a real browse
     await recoveryPage.goto(`${origin}/incidents`, { waitUntil: 'domcontentloaded' });
     await expect(recoveryPage).toHaveURL(/\/login/);
     await recoveryPage.goto(`${origin}/recovery`);
-    await recoveryPage.getByRole('tab', { name: 'Emergency Access', exact: true }).click();
+    await recoveryPage.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
     await recoveryPage.getByRole('button', { name: 'Sign out of recovery', exact: true }).click();
     await recoveryPage.waitForURL(`${origin}/login/emergency`, { waitUntil: 'domcontentloaded' });
     await recoveryPage.goto(`${origin}/recovery`);
@@ -229,17 +249,19 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.waitForURL(url => !url.pathname.startsWith('/login'));
     await page.goto(`${origin}/settings/system?section=sso`);
-    await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Configure Enterprise SSO|Authentication overview/ })
+    ).toBeVisible();
     // Saved revision selection must load its own sanitized configuration, not production.
     const saved = await context.request.get(`${origin}/api/auth/control?section=connection`);
     const dashboard = (await saved.json()).data;
-    await page.getByRole('tab', { name: 'Connection', exact: true }).click();
+    await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
     await expect(
-      page.getByRole('combobox', { name: 'Provider revision', exact: true })
+      page.getByRole('combobox', { name: 'Saved provider configuration', exact: true })
     ).toBeEnabled();
     for (const revision of dashboard.revisions.slice(0, 2)) {
       await page
-        .getByRole('combobox', { name: 'Provider revision', exact: true })
+        .getByRole('combobox', { name: 'Saved provider configuration', exact: true })
         .selectOption(revision.id);
       await expect(page.getByLabel('Client ID', { exact: true })).toHaveValue(
         revision.configuration.clientId
@@ -248,7 +270,7 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
 
     if (process.env.SSO_E2E_READINESS_PREVIEW === '1') {
       await page
-        .getByRole('combobox', { name: 'Provider revision', exact: true })
+        .getByRole('combobox', { name: 'Saved provider configuration', exact: true })
         .selectOption('browser-overage-preview');
       await page.getByRole('tab', { name: 'Access & provisioning', exact: true }).click();
       const sample = page.getByLabel(
@@ -281,87 +303,22 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       ).toBeVisible();
     }
     if (process.env.SSO_E2E_DELIVERY_HISTORY === '1') {
-      let staleReads = 0;
-      // Simulate a stale read without changing the browser's native POST behavior.
-      await page.route('**/api/auth/control?*', async route => {
-        if (!new URL(route.request().url()).searchParams.has('status')) return route.continue();
-        const response = await route.fetch();
-        const body = await response.json();
-        if (body.data?.alerts) {
-          staleReads++;
-          body.data.alerts = body.data.alerts.map((alert: { deliveryGeneration: number }) => ({
-            ...alert,
-            deliveryGeneration: alert.deliveryGeneration + 1000,
-          }));
-        }
-        return route.fulfill({ response, json: body });
-      });
-
       await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
-      await expect(
-        page.getByRole('heading', { name: 'Security email delivery history' })
-      ).toBeVisible();
-      await expect(page.getByText('Fan-out jobs pending', { exact: true })).toBeVisible();
-      await expect(page.getByText('Materialized emails pending', { exact: true })).toBeVisible();
-      const history = page
-        .getByRole('heading', { name: 'Security email delivery history' })
-        .locator('..');
-      await expect(history.getByRole('button', { name: 'Load more deliveries' })).toBeVisible();
-      await history.getByRole('button', { name: 'Load more deliveries' }).click();
-      await expect(history.locator('li')).toHaveCount(30);
-      expect(staleReads).toBeGreaterThanOrEqual(2);
-      await history.getByRole('button', { name: 'Retry email' }).first().click();
-      const retryResponse = page.waitForResponse(
-        response =>
-          response.url().endsWith('/api/auth/control') && response.request().method() === 'POST'
-      );
-      await history.getByRole('button', { name: 'Confirm email retry' }).click();
-      expect(await (await retryResponse).json()).toMatchObject({
-        error: expect.stringContaining('Delivery state changed'),
-      });
-      await expect(
-        page.getByRole('alert').filter({ hasText: 'Delivery state changed' })
-      ).toBeVisible();
-      await expect(history.getByRole('button', { name: 'Confirm email retry' })).toBeEnabled();
-      await history.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await page.unroute('**/api/auth/control?*');
-      await history.getByLabel('Delivery status').selectOption('accepted');
-      await expect(history.getByText('Provider accepted fixture', { exact: true })).toBeVisible();
-      await expect(history.getByText(/Sent to provider ·/)).toBeVisible();
-      await expect(history.getByText(/Delivery confirmed ·/)).toHaveCount(0);
-      await history.getByLabel('Delivery status').selectOption('delivered');
-      await expect(history.getByText('Delivery confirmed fixture', { exact: true })).toBeVisible();
-      await expect(history.getByText(/Delivery confirmed ·/)).toBeVisible();
-      await history.getByLabel('Delivery status').selectOption('failed');
-      await expect(history.getByRole('button', { name: 'Retry email' }).first()).toBeVisible();
-
-      for (const width of [1440, 390]) {
-        await page.setViewportSize({ width, height: 1000 });
-        const closeNavigation = page.getByRole('button', {
-          name: 'Close navigation menu',
-          exact: true,
-        });
-        if (await closeNavigation.isVisible()) await closeNavigation.click();
-        if (width === 390)
-          await page.waitForFunction(
-            () =>
-              (document.querySelector('.sidebar-mobile')?.getBoundingClientRect().right ?? 0) <= 1
-          );
-        await page
-          .getByRole('heading', { name: 'Security email delivery history' })
-          .scrollIntoViewIfNeeded();
-        expect(
-          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
-        ).toBe(true);
-        if (process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR)
-          await page.screenshot({
-            path: `${process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR}/diagnostics-${page.context().browser()?.browserType().name()}-${width}.png`,
-            fullPage: true,
-          });
+      await page.getByRole('tab', { name: 'Security notifications', exact: true }).click();
+      const top = page.getByRole('navigation', { name: 'Top diagnostic pagination' });
+      await expect(top.getByRole('button', { name: 'Next page' })).toBeEnabled();
+      await top.getByRole('button', { name: 'Next page' }).click();
+      await expect(page.locator('tbody tr')).toHaveCount(5);
+      await top.getByRole('button', { name: 'Previous page' }).click();
+      await expect(page.locator('tbody tr')).toHaveCount(25);
+      for (const status of ['ACCEPTED', 'DELIVERED', 'FAILED']) {
+        await page.getByLabel('Record status', { exact: true }).selectOption(status);
+        await page.getByRole('button', { name: 'Apply filters' }).click();
+        await expect(page.getByText('Loading security notifications…')).toBeHidden();
       }
-      await page.getByRole('tab', { name: 'Connection', exact: true }).click();
+      await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
     }
-    for (const width of [1440, 390]) {
+    for (const width of [320, 390, 768, 1366, 1920]) {
       await page.setViewportSize({ width, height: 1000 });
       const closeNavigation = page.getByRole('button', {
         name: 'Close navigation menu',
@@ -371,10 +328,41 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         await closeNavigation.click();
         await expect(closeNavigation).toBeHidden();
       }
-      const connection = page.getByRole('tab', { name: 'Connection', exact: true });
+      const connection = page.getByRole('tab', { name: 'Identity Provider', exact: true });
       await connection.focus();
       await page.keyboard.press('Enter');
-      await expect(page.getByRole('heading', { name: 'Connection', exact: true })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Identity Provider', exact: true })
+      ).toBeVisible();
+      await page.getByLabel('Client ID', { exact: true }).fill('preview-client');
+      await page.getByLabel('Client ID', { exact: true }).fill('');
+      const axePath = resolve('node_modules/axe-core/axe.min.js');
+      await page.addScriptTag({ path: axePath });
+      const violations = await page.evaluate(async () => {
+        const engine = (
+          window as unknown as {
+            axe: {
+              run: (
+                node: Element,
+                options: unknown
+              ) => Promise<{ violations: Array<{ id: string; impact: string; nodes: unknown[] }> }>;
+            };
+          }
+        ).axe;
+        return (
+          await engine.run(document.querySelector('[aria-labelledby="auth-connection-title"]')!, {
+            runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] },
+          })
+        ).violations;
+      });
+      expect(violations).toEqual([]);
+      if (process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR)
+        await page.screenshot({
+          path: `${process.env.SSO_E2E_DIAGNOSTICS_CAPTURE_DIR}/provider-${page.context().browser()?.browserType().name()}-${width}.png`,
+          fullPage: true,
+        });
+      expect(new URL(page.url()).searchParams.get('section')).toBe('sso');
+      expect(new URL(page.url()).searchParams.get('authTab')).toBe('connection');
       const client = page.getByLabel('Client ID', { exact: true });
       await expect(client).toBeEnabled();
       await client.fill('');
@@ -385,11 +373,9 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       ).toBe(true);
-      await page
-        .getByRole('button', { name: 'Stage and validate connection', exact: true })
-        .click();
+      await page.getByRole('button', { name: 'Stage configuration', exact: true }).click();
       await expect(
-        page.getByRole('alert').filter({ hasText: 'Invalid authentication request' })
+        page.getByRole('alert').filter({ hasText: 'Check the highlighted draft fields' })
       ).toBeVisible();
     }
   } finally {
@@ -420,28 +406,30 @@ test('independent password recovery, one-time secret and rotation work across br
     });
     await page.goto(`${origin}/settings/system/emergency`);
     const name = `Password browser ${browserName} ${Date.now()}`;
+    await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
     await page.getByRole('textbox', { name: 'Emergency identity name', exact: true }).fill(name);
     await page
       .getByRole('combobox', { name: 'Recovery method', exact: true })
       .selectOption('PASSWORD');
     await page
-      .getByRole('checkbox', { name: /separately held vault password or hardware key/ })
+      .getByRole('checkbox', { name: /custody independent of the other emergency identity/ })
       .check();
     const createdResponse = page.waitForResponse(
       response =>
         response.url().endsWith('/api/auth/control') && response.request().method() === 'POST'
     );
-    await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
+    await page.getByRole('button', { name: 'Create identity', exact: true }).click();
     const created = (await (await createdResponse).json()).data as { id: string; password: string };
     expect(created.password).toMatch(/^[A-Za-z0-9_-]{43}$/);
     await expect(page.getByText(created.password, { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'I stored it securely' }).click();
+    await page.getByRole('checkbox', { name: /I stored this password/ }).check();
+    await page.getByRole('button', { name: 'Acknowledge and close' }).click();
     await expect(page.getByText(created.password, { exact: true })).toHaveCount(0);
     const identity = page
       .locator('li:visible')
-      .filter({ has: page.getByText(`${name} —`, { exact: false }) })
+      .filter({ has: page.getByText(name, { exact: true }) })
       .first();
-    await expect(identity).toContainText('drill required');
+    await expect(identity).toContainText('Needs a drill');
     const rp = await recovery.newPage();
     await rp.goto(`${origin}/login/emergency`);
     await rp
@@ -471,12 +459,28 @@ test('independent password recovery, one-time secret and rotation work across br
         throw new Error('Only the owned disposable browser database can be restarted');
       await promisify(execFile)('docker', ['restart', fixtureContainer]);
     }
+    const nativeData = process.env.SSO_E2E_PG_DATA;
+    if (nativeData && browserName === 'chromium') {
+      if (
+        !/opsknight-auth-browser-[^/]+\/data$/.test(nativeData) ||
+        !process.env.SSO_E2E_PG_CTL?.endsWith('/pg_ctl')
+      )
+        throw new Error('Only the owned native browser fixture can be restarted');
+      await promisify(execFile)(process.env.SSO_E2E_PG_CTL, [
+        '-D',
+        nativeData,
+        '-l',
+        resolve(nativeData, '../postgres.log'),
+        '-w',
+        'restart',
+      ]);
+    }
     await expect
       .poll(async () => (await recovery.request.get(`${origin}/api/auth/control`)).status(), {
         timeout: 30000,
       })
       .toBe(200);
-    await rp.getByRole('tab', { name: 'Emergency Access', exact: true }).click();
+    await rp.getByRole('tab', { name: 'Emergency Recovery', exact: true }).click();
     await rp.getByLabel('Recovery password for fresh verification').fill(created.password);
     const reauthenticated = rp.waitForResponse(
       response =>
@@ -496,18 +500,21 @@ test('independent password recovery, one-time secret and rotation work across br
     expect((await recovery.request.get(`${origin}/api/auth/control`)).status()).toBe(200);
     expect([401, 403]).toContain((await recovery.request.get(`${origin}/api/incidents`)).status());
     await page.reload();
-    await expect(identity).toContainText('drill verified');
-    await identity.getByRole('checkbox', { name: /changing this credential revokes/ }).check();
+    await expect(identity).toContainText('Verified');
+    await identity.getByRole('button', { name: /Manage/ }).click();
+    await page.getByRole('button', { name: 'Rotate password', exact: true }).click();
+    await page.getByRole('checkbox', { name: /I understand the session revocation/ }).check();
     const rotatedResponse = page.waitForResponse(
       response =>
         response.url().endsWith('/api/auth/control') && response.request().method() === 'POST'
     );
-    await identity.getByRole('button', { name: 'Rotate password', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm recovery change' }).click();
     const rotated = (await (await rotatedResponse).json()).data as { id: string; password: string };
     expect(rotated.password).not.toBe(created.password);
     expect((await recovery.request.get(`${origin}/api/auth/control`)).status()).toBe(403);
-    await page.getByRole('button', { name: 'I stored it securely' }).click();
-    await expect(identity).toContainText('drill required');
+    await page.getByRole('checkbox', { name: /I stored this password/ }).check();
+    await page.getByRole('button', { name: 'Acknowledge and close' }).click();
+    await expect(identity).toContainText('Needs a drill');
     await page.setViewportSize({ width: 390, height: 1000 });
     const closeNavigation = page.getByRole('button', {
       name: 'Close navigation menu',

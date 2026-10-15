@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { coerceBooleanClaim, normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
+import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 import { providerConfigSchema } from './provider-config';
 import { storedProviderConfiguration } from './oidc-revisions';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
@@ -12,7 +13,6 @@ import type { ControlActor } from './actor';
 import { emergencyReadiness } from './emergency-management';
 import { findRevisionIdentity } from './identity';
 import { authenticationOrigin, recoveryOrigin } from './origin';
-import { evaluateAuthenticationPolicy } from '@/lib/authentication-policy-evaluator';
 
 export type AuthenticationSection =
   | 'overview'
@@ -49,21 +49,55 @@ export async function authenticationDashboard(
       take: 30,
       include: { tests: { orderBy: { verifiedAt: 'desc' }, take: 1 } },
     }),
-    prisma.emergencyAccount.findMany({
-      where: { status: { not: 'DISABLED' } },
-      orderBy: { enrolledAt: 'desc' },
-      take: 50,
-      include: {
-        credentials: {
-          orderBy: [{ revokedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
-          take: 50,
-          select: { id: true, displayName: true, createdAt: true, revokedAt: true },
+    Promise.all([
+      prisma.emergencyAccount.findMany({
+        where: { status: { not: 'DISABLED' } },
+        orderBy: { enrolledAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          displayName: true,
+          authenticationMethod: true,
+          credentialVersion: true,
+          status: true,
+          verifiedAt: true,
+          lastUsedAt: true,
+          credentials: {
+            orderBy: [{ revokedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
+            take: section === 'emergency' ? 50 : 0,
+            select: { id: true, displayName: true, createdAt: true, revokedAt: true },
+          },
         },
-      },
-    }),
-    section === 'diagnostics'
-      ? prisma.emergencyAccessEvent.findMany({ orderBy: { createdAt: 'desc' }, take: 50 })
-      : Promise.resolve([]),
+      }),
+      prisma.emergencyAccount.findMany({
+        where: { status: 'DISABLED' },
+        orderBy: { enrolledAt: 'desc' },
+        take: 25,
+        select: {
+          id: true,
+          displayName: true,
+          authenticationMethod: true,
+          credentialVersion: true,
+          status: true,
+          verifiedAt: true,
+          lastUsedAt: true,
+          credentials: {
+            orderBy: [{ revokedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
+            take: section === 'emergency' ? 50 : 0,
+            select: { id: true, displayName: true, createdAt: true, revokedAt: true },
+          },
+        },
+      }),
+    ]).then(([active, disabled]) => [...active, ...disabled]),
+    Promise.resolve(
+      [] as Array<{
+        id: string;
+        eventType: string;
+        outcome: string;
+        createdAt: Date;
+        emergencyAccountId: string | null;
+      }>
+    ),
     prisma.user.findMany({
       where: {
         status: { in: ['ACTIVE', 'INVITED'] },
@@ -85,21 +119,14 @@ export async function authenticationDashboard(
       if (error instanceof Error && error.message.includes('conflicting canonical')) return [];
       throw error;
     }),
-    section === 'diagnostics'
-      ? prisma.authenticationReplicaObservation.findMany({
-          where: { lastSeenAt: { gt: new Date(Date.now() - 600000) } },
-          take: 100,
-        })
-      : Promise.resolve([]),
+    Promise.resolve([] as Array<{ id: string; lastSeenAt: Date; differs: boolean }>),
     section === 'diagnostics'
       ? prisma.authenticationAlert.count({
           where: { acceptedAt: null, deliveredAt: null, cancelledAt: null, failedAt: null },
         })
       : Promise.resolve(0),
     section === 'diagnostics' ? prisma.authenticationAlertFanout.count() : Promise.resolve(0),
-    section === 'diagnostics'
-      ? prisma.authenticationAlert.count({ where: { deliveredAt: { not: null } } })
-      : Promise.resolve(0),
+    Promise.resolve(0), // Historical totals are not needed for operational summaries or pagination.
     section === 'diagnostics'
       ? prisma.authenticationAlert.count({
           where: {
@@ -110,29 +137,23 @@ export async function authenticationDashboard(
           },
         })
       : Promise.resolve(0),
-    section === 'diagnostics'
-      ? prisma.authenticationAlert.count({ where: { cancelledAt: { not: null } } })
-      : Promise.resolve(0),
-    section === 'diagnostics'
+    Promise.resolve(0),
+    section === 'diagnostics' || section === 'overview'
       ? prisma.authenticationAlert.count({
           where: { failedAt: { not: null }, deliveredAt: null, cancelledAt: null },
         })
       : Promise.resolve(0),
-    section === 'diagnostics'
-      ? prisma.userDevice.findMany({
-          where: { deviceId: { startsWith: 'session:' } },
-          orderBy: { lastUsed: 'desc' },
-          take: 100,
-          select: {
-            id: true,
-            userId: true,
-            platform: true,
-            token: true,
-            lastUsed: true,
-            user: { select: { email: true } },
-          },
-        })
-      : Promise.resolve([]),
+    Promise.resolve(
+      [] as Array<{
+        id: string;
+        email: string;
+        method: string;
+        state: string;
+        expiresAt: string | null;
+        issuedUnderPolicyVersion: number | null;
+        lastActive: string;
+      }>
+    ),
   ]);
   const [canonical, pinnedOrigin] = await Promise.all([
     authenticationOrigin()
@@ -150,43 +171,31 @@ export async function authenticationDashboard(
   const activeParsed = active
     ? providerConfigSchema.safeParse(storedProviderConfiguration(active))
     : null;
+  if (
+    policy.activeRevisionId &&
+    !revisions.some(revision => revision.id === policy.activeRevisionId)
+  ) {
+    const activeRevision = await prisma.oidcRevision.findUnique({
+      where: { id: policy.activeRevisionId },
+      include: { tests: { orderBy: { verifiedAt: 'desc' }, take: 1 } },
+    });
+    if (activeRevision) revisions.push(activeRevision);
+  }
   const editableRevisions = revisions.filter(
     revision => providerConfigSchema.safeParse(revision.configuration).success
   );
   const providerCompatibilityWarning = Boolean(
     (activeParsed && !activeParsed.success) || editableRevisions.length !== revisions.length
   );
-  const registeredSessions = sessions.map(session => {
-    let metadata: { expiresAt?: string; issuedUnderPolicyVersion?: number } = {};
-    try {
-      metadata = JSON.parse(session.token);
-    } catch {
-      /* Invalid metadata fails authentication closed. */
-    }
-    const method = session.platform.includes('OIDC') ? 'oidc' : 'credentials';
-    const revoked = session.platform.startsWith('session:REVOKED:');
-    const expired =
-      !metadata.expiresAt ||
-      !Number.isFinite(new Date(metadata.expiresAt).getTime()) ||
-      new Date(metadata.expiresAt).getTime() <= Date.now();
-    const disallowed = !evaluateAuthenticationPolicy(
-      policy,
-      'SESSION',
-      { id: session.userId, email: session.user.email },
-      { method, policyVersion: metadata.issuedUnderPolicyVersion }
-    ).allowed;
-    return {
-      id: session.id,
-      email: session.user.email,
-      method,
-      state: revoked || disallowed ? 'REVOKED' : expired ? 'EXPIRED' : 'ACTIVE',
-      expiresAt: metadata.expiresAt ?? null,
-      issuedUnderPolicyVersion: metadata.issuedUnderPolicyVersion ?? null,
-      lastActive: session.lastUsed.toISOString(),
-    };
-  });
+  const registeredSessions = sessions;
   return {
     section,
+    effectiveSessionPolicy: getEnterpriseSessionPolicy({
+      sessionMaxAgeSeconds: active?.sessionMaxAgeSeconds,
+      sessionIdleTimeoutSeconds: active?.sessionIdleTimeoutSeconds,
+    }),
+    inheritedSessionPolicy: getEnterpriseSessionPolicy(),
+    freshAuthenticationRequired: Date.now() - actor.authenticatedAt >= 300000,
     originConflict: canonical.conflict,
     recoveryOrigin: pinnedOrigin,
     recoveryOriginPinned: Boolean(process.env.AUTH_RECOVERY_ORIGIN),

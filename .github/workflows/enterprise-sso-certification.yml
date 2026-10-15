@@ -2,7 +2,7 @@ name: Enterprise SSO certification
 
 on:
   push:
-    branches: [main, 'feat/enterprise-sso-*']
+    branches: [main, 'feat/enterprise-sso-*', 'feat/enterprise-authentication-*']
   pull_request:
     paths:
       - 'src/lib/notification-provider-feedback.ts'
@@ -14,6 +14,8 @@ on:
       - 'src/lib/oidc*'
       - 'src/app/api/auth/**'
       - 'src/components/settings/Authentication*'
+      - 'src/components/settings/authentication/**'
+      - 'src/components/ui/DetailTabs.tsx'
       - 'prisma/**'
       - 'tests/integration/*authentication*'
       - 'tests/integration/sso-upgrade*'
@@ -60,11 +62,11 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
       - name: Authentication and provider unit regressions
-        run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication-console-race.test.tsx tests/components/authentication-diagnostics-delivery.test.tsx tests/components/emergency-password-login.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/api/recovery-stream-policy.test.ts tests/lib/metrics-domain.test.ts
+        run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication tests/api/authentication-diagnostics.test.ts tests/components/emergency-password-login.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/api/recovery-stream-policy.test.ts tests/lib/metrics-domain.test.ts
       - name: Apply additive migrations
         run: npx prisma migrate deploy
       - name: Signed OIDC, WebAuthn, abuse availability and notification fan-out
-        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts tests/integration/provider-feedback-isolation-database.test.ts tests/integration/emergency-password-database.test.ts
+        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-diagnostics-database.test.ts tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts tests/integration/provider-feedback-isolation-database.test.ts tests/integration/emergency-password-database.test.ts
 
       - name: Emergency edge admission fixture
         run: python3 scripts/certify-sso-edge.py
