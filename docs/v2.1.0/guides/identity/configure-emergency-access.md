@@ -154,7 +154,7 @@ Do not exempt requests merely because an unvalidated cookie/header is present.
 Ordinary login and OIDC callback paths are outside this example's limit.
 
 Security emails that exhaust central retries or are skipped stop automatic polling
-and appear under **Diagnostics → Failed security email deliveries**. Correct the
+and appear under **Diagnostics → Security notifications → FAILED**. Correct the
 provider before using the explicit retry action. This requires fresh authority
 and preserves an audit event. Pending transport retries remain automatic; cancelled
 recipient deliveries remain terminal. In-app security evidence is independent.
@@ -169,14 +169,15 @@ Demotion, deactivation, deletion or an address change suppresses queued delivery
 explicit review. Unavailable authorization reads defer delivery without sending.
 Mail already accepted by a provider cannot be recalled.
 
-Diagnostics reports **Fan-out jobs pending** separately from **Materialized emails
-pending**. A job may represent many recipients; neither figure is presented as a
-combined recipient backlog. Provider-accepted, delivery-confirmed, failed and cancelled counts cover retained
-records. Delivery history supports all five states, loads 25 records per page and
-uses **Load more deliveries** for older entries. Retry confirmation stays open when
-the server rejects the operation, with its error shown in the console. A successful
-retry closes confirmation and refreshes history. Retention remains 90 days for
-terminal delivery metadata; audit/in-app evidence follows its separate policy.
+Diagnostics reports **Fan-out work pending**, **Emails awaiting acceptance** and
+**Awaiting delivery confirmation** separately. A fan-out job may represent many
+recipients. Historical delivered and cancelled totals are not queried for the summary.
+**Security notifications** supports all five delivery states, with 25, 50 or 100
+records per page and bounded **Previous / Next** navigation. Retry confirmation stays
+open after a server rejection and explains the failure inside the dialog. A successful
+retry refreshes the affected page while retaining other diagnostic views. Retention
+remains 90 days for terminal delivery metadata; audit/in-app evidence follows its
+separate policy.
 
 ## Identity recognition and administrator readiness
 
@@ -205,7 +206,6 @@ metadata because the old field did not distinguish acceptance from delivery.
 Review the original provider evidence separately when auditing historical delivery.
 Accepted messages without confirmation and other terminal delivery metadata use
 bounded 90-day retention; security audit and in-app evidence remain independent.
-
 
 ## Password custody, rotation and method changes
 
@@ -258,7 +258,6 @@ absolute expiry and enforces the existing fifteen-minute idle timeout. Sensitive
 still require five-minute freshness. Concurrent rotation or disablement is checked again
 inside the PostgreSQL authorization transaction after password verification; a password
 verified against an older credential version cannot create a surviving session.
-
 
 ### Routine rotation with two ready identities
 

@@ -1,0 +1,122 @@
+# Enterprise Authentication Experience
+
+Base: merged PR #865, main 4be1e13. Worktree: opsknight-authentication-experience.
+Branch: feat/enterprise-authentication-experience. One complete PR after implementation.
+
+## Acceptance tracking
+
+- [x] Phase 0: provider leakage, cross-section staging, inline validation, prerequisites, revision/reset races.
+- [x] Phase 1: feature modules, unified draft lifecycle, deep links, operational overview and guided setup.
+- [x] Phase 2: provider registry, Entra tenant setup, callback copy, session presets/effective defaults, role editor.
+- [x] Phase 3: database-filtered sessions, signed keyset pagination, delivery details, audit and replica navigation.
+- [x] Phase 4: compact recovery directory, account details, scoped action confirmations and secure one-time display.
+- [x] Phase 5: component/API/PostgreSQL regressions, large-data EXPLAIN, production browsers, accessibility and responsive review.
+
+Security boundary: preserve stage/test/activate, linking, Required enforcement, recovery session restrictions, secrets and released-version upgrades. Live tenants and physical-key certification remain external acceptance, as previously agreed.
+
+## Verification evidence
+
+- Broad auth/OIDC/SCIM/notification regression selection: 486 passing tests.
+- Latest focused component/API/cursor/redaction/clipboard selection: 51 passing tests.
+- PostgreSQL integration: 128 passing tests, including 100,000 sessions and delivery/replica pages.
+- Non-UTC PostgreSQL pagination certification: 16 passing cases; query-local UTC prevents repeated boundaries.
+- Published v2.0.0 upgrade plus bounded authentication load: 12 passing tests.
+- Fresh production HTTPS browser run: 7 passed, 2 expected virtual-key skips; Chromium, Firefox, WebKit.
+- Axe WCAG 2 A/AA and 2.1 AA checks and responsive overflow assertions at 320/390/768/1366/1920 px passed.
+- Source and measurement receipts: `plans/certification/authentication-experience-diagnostics.json`, `enterprise-sso-2.1-password-browser.json`, `enterprise-sso-2.1-authentication-load.json`.
+
+Static verification: strict TypeScript, modified-file ESLint with zero warnings, Prisma schema validation, additive migration validation and documentation contracts passed. Browser receipt source hashes match the checked workspace. Branch publication is tracked separately from external acceptance.
+
+
+## PR #867 follow-up review
+
+- Activation returns the committed provider configuration version and advances only
+  the draft version fence. Draft contents and baseline remain intact. Regression:
+  stage, activate, edit immediately and stage again against the returned version.
+- Replica observations persist allowlisted mismatch names, and diagnostics displays
+  names without observed identity/secret values. Older observations compare only
+  against the immutable import. PostgreSQL asserts actual mismatch names.
+- Explicit draft replacement/discard resets duration-control presentation. Tests cover
+  custom-to-inherited, custom-to-preset and loading a saved configuration.
+- Existing non-public Entra authorities automatically expose their exact issuer.
+  Public, US Government, China and custom authority presentation are covered locally;
+  backend authority validation remains authoritative.
+- The unreleased diagnostic migration now only adds the nullable projection. Docker,
+  Helm, safe migration and certification paths invoke concurrent indexes plus bounded
+  historical projection. Preview checksum handling is documented; shared databases
+  must never be reset. Online deployment certification runs alongside real registry
+  authorization and durable security-event writes.
+- Session diagnostics explicitly describes live pagination and disappearing mutable
+  rows; it does not claim immutable ordinary sign-in history.
+- Fixed the broad CI database failure: the dedicated 100k diagnostics suite runs only
+  in its isolated enterprise certification database, rather than failing another
+  database job's fixture guard.
+
+Follow-up validation: 50 focused component/API/cursor tests, 129 PostgreSQL tests,
+12 published-release upgrade/load tests, four documentation contracts, strict TypeScript,
+modified-file ESLint (zero warnings), Prisma validation and migration validation passed.
+The migration validator retains its 40 pre-existing warnings. Fresh production HTTPS certification passed seven browser tests with two expected
+virtual-key skips and zero flakes. Entra authorities, Google switching, all diagnostic
+views, emergency recovery, keyboard flows and responsive axe checks passed across
+Chromium, Firefox and WebKit; receipt source hashes match the workspace. The initial
+walkthrough run exposed test selector/disabled-action assumptions, corrected before
+this clean run. New remote CI must finish on the follow-up commit; live tenants and
+physical keys remain pending as previously scoped.
+
+
+## SSO email consistency and CI follow-up
+
+- Resolved both original bot threads with the activation and replica mismatch fixes
+  and their regression evidence from `005c0b553`.
+- Replaced the test's URL substring classification with parsed hostname equality,
+  addressing the new CodeQL finding without disabling or suppressing the check.
+- Authentication security notifications and SSO invitations now use the shared incident
+  email components, readable event-specific subjects, status semantics, recorded UTC
+  evidence and next steps. Emergency access use remains a security warning even when
+  the sign-in succeeds. Raw event context is never selected for email rendering.
+- The delivery worker loads event metadata once for its bounded 20-alert batch and
+  preserves leased delivery, recipient authority, deduplication and retry generations.
+- Improved shared dark-mode label contrast and footer brand visibility; committed two
+  synthetic example screenshots. Eight local Chromium previews passed mobile/desktop
+  overflow checks in light and dark modes. This is not mail-client certification.
+- Verification: 62 focused email/template/authentication tests and 129 PostgreSQL
+  authentication/delivery regressions passed; TypeScript and modified-file lint passed
+  with zero warnings. The previous remote database failure is green on `005c0b553`;
+  new remote checks must rerun after publication of these email and CodeQL changes.
+
+
+## Latest deep review: revocation and preparation completion
+
+- Self-revocation is identified in the backend by the exact session capability and
+  user, while the API returns only a boolean disposition. The workspace and diagnostic
+  dialog skip both protected refresh paths on self-revocation and show a success notice
+  on login. Other-session revocation retains normal diagnostics refresh.
+- Added `sessionDiagnosticProjectedAt` in a new additive migration. New registrations
+  and expiry synchronizations populate it. Historical projection marks rows even when
+  metadata legitimately lacks a version or expiry; no endless nullable-field scan.
+- Preparation reconciles skipped locks across up to ten passes, with bounded per-batch
+  lock/statement timeouts and a 15-minute deadline. Completion explicitly requires no
+  unprocessed session rows; persistent contention exits nonzero. A real PostgreSQL test
+  holds a row across the initial scan and releases it after reconciliation starts.
+- Migration-skipping replicas require every diagnostic index and an empty pending-work
+  check. The pending-work partial index keeps that check bounded. Session diagnostics
+  fails temporarily while preparation is unfinished and excludes unprocessed rows.
+- CodeQL's URL substring finding is fixed in `3e6d40c50` and its analysis passed. Main's
+  retained August `sast` baseline caused the remaining missing-configuration warning.
+  The current complete CodeQL report is also published under that legacy identity;
+  no findings are filtered, analyses deleted or scans disabled. A regression verifies
+  the complete finding data is preserved while only report identity changes.
+- The remote emergency-browser job exposed a Google font download failure in next/font.
+  Bundled the same licensed Manrope/Playfair Display font assets and retained the existing
+  CSS variables, removing that build-time external dependency.
+
+Local verification: 91 focused component/session/deployment tests, 131 PostgreSQL
+regressions, 12 published-release upgrade/load tests, TypeScript and modified-file lint
+passed. Prisma validation passed; migration validation retains its 40 baseline warnings.
+Fresh production HTTPS browser certification passed 10 tests with two expected
+virtual-key skips and zero flakes, including self and other-user revocation across
+Chromium, Firefox and WebKit. Receipt source hashes match the workspace. Fresh remote
+CI results are tracked after publication. Ordinary
+sign-in audit expansion remains a future enhancement; the UI continues to disclose the
+current retained emergency/security-event history. Live IdP and physical-key checks
+remain external acceptance as previously agreed.

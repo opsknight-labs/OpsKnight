@@ -11,6 +11,6 @@ describe('password-free invitation instructions', () => {
     expect(result.html).toContain('Sign in with SSO');
     expect(result.html).not.toContain('set your password');
     expect(result.html).not.toContain('<script>unsafe</script>');
-    expect(result.text).toContain('first-link approval expires in 7 days');
+    expect(result.text).toContain('First-link approval: Expires in 7 days');
   });
 });

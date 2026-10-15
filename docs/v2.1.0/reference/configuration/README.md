@@ -31,7 +31,7 @@ installations retain their effective policy during import.
 
 After import, changing `AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED`, or
 `AUTH_BREAK_GLASS_EMAIL` and restarting does not change the policy. Use
-**Settings → System → SSO / Authentication → Authentication policy** for supported
+**Settings → System → SSO / Authentication → Sessions & Policies** for supported
 mode changes. SSO Required activation needs a verified staged administrator login
 and two independently held hardware-key emergency identities with current drills. An already-disabled local-login installation
 is preserved as Required, including its explicitly configured legacy exception;

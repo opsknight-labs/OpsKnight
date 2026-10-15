@@ -5,13 +5,18 @@ import { securityEvent } from './security-events';
 
 /** Opaque database handle; never expose or accept the JWT/session capability. */
 export async function revokeAuthenticationSession(actor: ControlActor, id: string) {
-  await prisma.$transaction(async tx => {
+  return prisma.$transaction(async tx => {
     await lockControlActor(tx, actor);
     await tx.$queryRaw`SELECT "id" FROM "UserDevice" WHERE "id" = ${id} FOR UPDATE`;
     const session = await tx.userDevice.findUniqueOrThrow({ where: { id } });
     if (!session.platform.startsWith('session:') || !session.deviceId.startsWith('session:'))
       throw new Error('Select a registered authentication session.');
-    if (session.platform.startsWith('session:REVOKED:')) return;
+    const revokedCurrentSession =
+      actor.kind === 'admin' &&
+      session.userId === actor.id &&
+      Boolean(actor.sessionId) &&
+      session.deviceId === `session:${actor.sessionId}`;
+    if (session.platform.startsWith('session:REVOKED:')) return { revokedCurrentSession };
     const method = session.platform === 'session:OIDC' ? 'oidc' : 'credentials';
     await tx.userDevice.update({
       where: { id },
@@ -22,6 +27,7 @@ export async function revokeAuthenticationSession(actor: ControlActor, id: strin
       method,
       sessionHandle: id,
     });
+    return { revokedCurrentSession };
   });
 }
 

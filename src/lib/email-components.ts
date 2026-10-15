@@ -154,7 +154,7 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
             .dm-text-heading   { color: #f1f5f9 !important; }
             .dm-text-subheading{ color: #e2e8f0 !important; }
             .dm-text-body      { color: #94a3b8 !important; }
-            .dm-text-muted     { color: #64748b !important; }
+            .dm-text-muted     { color: #94a3b8 !important; }
             .dm-text-secondary { color: #cbd5e1 !important; }
             .dm-text-brand     { color: #f1f5f9 !important; }
             .dm-link-color     { color: #60a5fa !important; }
@@ -180,13 +180,13 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
             .dm-info-card           { border-color: #1f2937 !important; }
             .dm-info-row-even       { background-color: #1e293b !important; }
             .dm-info-row-odd        { background-color: #0f172a !important; }
-            .dm-info-label          { color: #64748b !important; border-bottom-color: #1f2937 !important; }
+            .dm-info-label          { color: #94a3b8 !important; border-bottom-color: #1f2937 !important; }
             .dm-info-value          { color: #e2e8f0 !important; border-bottom-color: #1f2937 !important; }
 
             /* Incident email – context & description boxes */
             .dm-context-box { background-color: #0f172a !important; border-color: #334155 !important; color: #94a3b8 !important; }
             .dm-desc-box    { background-color: #0f172a !important; border-color: #334155 !important; }
-            .dm-desc-label  { color: #64748b !important; }
+            .dm-desc-label  { color: #94a3b8 !important; }
             .dm-desc-text   { color: #cbd5e1 !important; }
 
             /* Shift reminder checklist */
@@ -497,7 +497,7 @@ export function EmailFooter(
     <tr>
         <td class="dm-bg-footer dm-border" style="padding: 24px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
             <p style="margin: 0 0 6px 0; color: #64748b; font-size: 13px; line-height: 1.5;" class="dm-text-body">
-                This is an automated notification from <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #0f172a; text-decoration: none; font-weight: 700;"><strong style="color: #0f172a;">OpsKnight</strong></a> Incident Management.
+                This is an automated notification from <a href="${safeBrandUrl}" class="dm-text-brand" target="_blank" rel="noopener noreferrer" style="color: #0f172a; text-decoration: none; font-weight: 700;"><strong class="dm-text-brand" style="color: #0f172a;">OpsKnight</strong></a> Incident Management.
             </p>
             <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; line-height: 1.5;" class="dm-text-muted">
                 <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #94a3b8; text-decoration: none;">OpsKnight</a> &bull; Open-Source Incident Response

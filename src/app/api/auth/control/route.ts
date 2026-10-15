@@ -59,6 +59,7 @@ const schema = z.discriminatedUnion('action', [
       configuration: z.unknown(),
       acknowledgeBroadAdminRules: z.boolean().default(false),
       sourceRevisionId: id.optional(),
+      expectedConfigVersion: z.number().int().min(0).optional(),
     })
     .strict(),
   z
@@ -224,7 +225,8 @@ export async function POST(request: NextRequest) {
             actor,
             input.configuration,
             input.acknowledgeBroadAdminRules,
-            input.sourceRevisionId
+            input.sourceRevisionId,
+            input.expectedConfigVersion
           )
         );
       case 'test': {
@@ -297,8 +299,10 @@ export async function POST(request: NextRequest) {
         await retryAuthenticationAlert(actor, input.alertId, input.expectedGeneration);
         return json({ success: true });
       case 'revokeSession':
-        await revokeAuthenticationSession(actor, input.sessionId);
-        return json({ success: true });
+        return json({
+          success: true,
+          ...(await revokeAuthenticationSession(actor, input.sessionId)),
+        });
       case 'revoke':
         await revokeEmergencyCredential(actor, input.credentialId, input.compromised);
         return json({ success: true });

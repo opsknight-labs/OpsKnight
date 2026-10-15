@@ -124,7 +124,9 @@ describe('Dynamic Colorful Incident Email Templates', () => {
 
     // Header logo & brand name should link to https://opsknight.com/
     expect(html).toContain('href="https://opsknight.com/"');
-    expect(html).toContain('<strong style="color: #0f172a;">OpsKnight</strong></a>');
+    expect(html).toContain(
+      '<strong class="dm-text-brand" style="color: #0f172a;">OpsKnight</strong></a>'
+    );
   });
 
   it('deduplicates eventMessage if it echoes incident title or [Service] title', () => {
