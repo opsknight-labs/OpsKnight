@@ -9,10 +9,12 @@ import { storedProviderConfiguration } from './oidc-revisions';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
-import type { ControlActor } from './actor';
+import { type ControlActor, FRESH_AUTHENTICATION_MAX_AGE_MS } from './actor';
 import { emergencyReadiness } from './emergency-management';
 import { findRevisionIdentity } from './identity';
 import { authenticationOrigin, recoveryOrigin } from './origin';
+import { getOidcLinkingApprovalState, type OidcLinkingState } from '@/lib/oidc-linking-approval';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 
 export type AuthenticationSection =
   | 'overview'
@@ -195,7 +197,7 @@ export async function authenticationDashboard(
       sessionIdleTimeoutSeconds: active?.sessionIdleTimeoutSeconds,
     }),
     inheritedSessionPolicy: getEnterpriseSessionPolicy(),
-    freshAuthenticationRequired: Date.now() - actor.authenticatedAt >= 300000,
+    freshAuthenticationRequired: Date.now() - actor.authenticatedAt >= FRESH_AUTHENTICATION_MAX_AGE_MS,
     originConflict: canonical.conflict,
     recoveryOrigin: pinnedOrigin,
     recoveryOriginPinned: Boolean(process.env.AUTH_RECOVERY_ORIGIN),
@@ -299,14 +301,55 @@ export async function searchAuthenticationUsers(
       roleSource: true,
       status: true,
       oidcIdentities: { select: { issuer: true }, take: 10 },
+      oidcLinkingApproval: {
+        select: {
+          id: true,
+          revokedAt: true,
+          consumedAt: true,
+          expiresAt: true,
+          providerConfigId: true,
+          issuerFingerprint: true,
+          configVersion: true,
+        },
+      },
     },
   });
+
+  const now = new Date();
+  const provider = await prisma.oidcConfig.findFirst({
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, issuer: true, clientId: true, configVersion: true, enabled: true },
+  });
+  const providerContext =
+    provider && provider.enabled && provider.issuer
+      ? {
+          providerConfigId: provider.id,
+          issuerFingerprint: oidcTrustFingerprint(provider.issuer, provider.clientId),
+          configVersion: provider.configVersion,
+        }
+      : null;
+
   return {
-    users: users.slice(0, 25).map(user => ({
-      ...user,
-      issuers: user.oidcIdentities.map(identity => identity.issuer),
-      oidcIdentities: undefined,
-    })),
+    users: users.slice(0, 25).map(user => {
+      let linkingState: OidcLinkingState = 'not-approved';
+      if (user.oidcIdentities.length > 0) {
+        linkingState = 'linked';
+      } else if (user.oidcLinkingApproval) {
+        const approvalState = getOidcLinkingApprovalState(
+          user.oidcLinkingApproval,
+          now,
+          providerContext
+        );
+        linkingState = approvalState === 'consumed' ? 'not-approved' : approvalState;
+      }
+      return {
+        ...user,
+        issuers: user.oidcIdentities.map(identity => identity.issuer),
+        linkingState,
+        oidcIdentities: undefined,
+        oidcLinkingApproval: undefined,
+      };
+    }),
     nextCursor: users.length > 25 ? users[24].id : null,
   };
 }

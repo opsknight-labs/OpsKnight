@@ -11,7 +11,7 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { logAudit } from '@/lib/audit';
 import { securityEvent } from '@/lib/auth-control/security-events';
-import { lockControlActor } from '@/lib/auth-control/actor';
+import { lockControlActor, FRESH_AUTHENTICATION_MAX_AGE_MS } from '@/lib/auth-control/actor';
 import { activateOidcRevision } from '@/lib/auth-control/oidc-revisions';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 
@@ -35,9 +35,9 @@ export async function changeAuthenticationMode(input: unknown) {
     !session.authenticatedAt ||
     !Number.isFinite(session.authenticatedAt) ||
     session.authenticatedAt > Date.now() + 30_000 ||
-    Date.now() - session.authenticatedAt > 300_000
+    Date.now() - session.authenticatedAt > FRESH_AUTHENTICATION_MAX_AGE_MS
   ) {
-    throw new Error('Sign in again before changing authentication policy (five-minute limit).');
+    throw new Error('Sign in again before changing authentication policy.');
   }
   if (!(await consumeAuthRateLimit('policy-change', session.user.id, 5, 300_000)).allowed) {
     throw new Error('Too many authentication policy changes. Try again later.');

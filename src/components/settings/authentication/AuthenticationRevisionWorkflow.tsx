@@ -9,6 +9,7 @@ import {
   DialogHeader,
 } from '@/components/ui/shadcn/dialog';
 import AuthenticationAdminPicker from '../AuthenticationAdminPicker';
+import AuthenticationRevisionSelector from './AuthenticationRevisionSelector';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import { authenticationRequest } from './request';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
@@ -45,7 +46,6 @@ export default function AuthenticationRevisionWorkflow() {
     perform,
     refresh,
     setMessage,
-    inputClass,
     setDraftBaseConfigVersion,
     setActiveTab,
   } = useAuthenticationWorkspace();
@@ -126,34 +126,13 @@ export default function AuthenticationRevisionWorkflow() {
       </p>
 
       <div className="space-y-4">
-        <label className="block space-y-1.5 text-sm">
-          <span className="font-semibold text-foreground text-xs uppercase tracking-wider">
-            Saved provider configuration
-          </span>
-          <select
-            className={inputClass}
-            value={revisionId}
-            disabled={pending}
-            onChange={event => {
-              if (draftDirty) setPendingRevision(event.target.value);
-              else load(event.target.value);
-            }}
-          >
-            <option value="" disabled>
-              Choose a saved configuration
-            </option>
-            {data.revisions.map((revision, index) => (
-              <option key={revision.id} value={revision.id}>
-                {revision.id === data.activeRevisionId
-                  ? 'Active configuration'
-                  : revision.activatedAt
-                    ? 'Previous configuration'
-                    : `Staged configuration ${data.revisions.length - index}`}{' '}
-                · {new Date(revision.createdAt).toLocaleString()}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AuthenticationRevisionSelector
+          label="Saved provider configuration"
+          onSelect={id => {
+            if (draftDirty) setPendingRevision(id);
+            else load(id);
+          }}
+        />
 
         {/* Verification Status Pill Grid */}
         <div className="flex flex-wrap items-center gap-2 text-xs">

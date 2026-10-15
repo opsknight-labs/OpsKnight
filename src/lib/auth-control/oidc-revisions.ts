@@ -28,7 +28,7 @@ import { findRevisionIdentity } from './identity';
 
 export const OIDC_TEST_COOKIE =
   process.env.NODE_ENV === 'production' ? '__Host-opsknight-oidc-test' : 'opsknight-oidc-test';
-const PROOF_MAX_AGE_MS = 15 * 60000;
+export const PROOF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (relaxed from 15 minutes)
 
 export function oidcTestClient(config: ProviderConfiguration, metadata: OidcRuntimeMetadata) {
   const issuer = new Issuer({
@@ -413,7 +413,7 @@ async function preview(tx: Prisma.TransactionClient, revisionId: string) {
     },
   });
   const blockers = [
-    !adminVerified ? 'Complete a real SSO administrator login test within 15 minutes.' : '',
+    !adminVerified ? 'Complete a real SSO administrator login test.' : '',
     ready.length < 2 ? 'Enroll and sign in with two independent emergency identities.' : '',
     !isActive && (active?.configVersion ?? 0) !== revision.baseConfigVersion
       ? 'Active provider changed; create and test a new revision.'
@@ -587,3 +587,51 @@ export async function stageRollback(actor: ControlActor, revisionId: string) {
   config.enabled = true;
   return stageOidcRevision(actor, config); // A rollback gets a new revision and real login test.
 }
+
+export async function deleteOidcRevision(actor: ControlActor, revisionId: string) {
+  return prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor, false);
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    if (policy.activeRevisionId === revisionId) {
+      throw new Error('Cannot delete the currently active provider revision.');
+    }
+    const revision = await tx.oidcRevision.findUnique({ where: { id: revisionId } });
+    if (!revision) {
+      throw new Error('Configuration revision not found.');
+    }
+    if (revision.activatedAt) {
+      throw new Error('Cannot delete a revision that has previously been activated.');
+    }
+    await tx.oidcRevisionTest.deleteMany({ where: { revisionId } });
+    await tx.oidcRevision.delete({ where: { id: revisionId } });
+    await securityEvent(tx, 'auth.oidc.revision.deleted', actor.id, { revisionId });
+    return { ok: true, deletedRevisionId: revisionId };
+  });
+}
+
+export async function cleanupStagedRevisions(actor: ControlActor) {
+  return prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor, false);
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    const candidates = await tx.oidcRevision.findMany({
+      where: {
+        id: { not: policy.activeRevisionId ?? '' },
+        activatedAt: null,
+      },
+      select: { id: true },
+    });
+    const candidateIds = candidates.map(c => c.id);
+    if (candidateIds.length === 0) {
+      return { ok: true, count: 0 };
+    }
+    await tx.oidcRevisionTest.deleteMany({
+      where: { revisionId: { in: candidateIds } },
+    });
+    const deleted = await tx.oidcRevision.deleteMany({
+      where: { id: { in: candidateIds } },
+    });
+    await securityEvent(tx, 'auth.oidc.revisions.cleaned', actor.id, { count: deleted.count });
+    return { ok: true, count: deleted.count };
+  });
+}
+

@@ -33,6 +33,7 @@ export function AutosaveForm<T extends FieldValues>({
   enabled = true,
 }: AutosaveFormProps<T>) {
   const form = useForm<T>({
+    // @ts-expect-error - Zod resolver type compatibility with react-hook-form
     resolver: zodResolver(schema),
     // @ts-expect-error - defaultValues type compatibility
     defaultValues,

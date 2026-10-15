@@ -9,6 +9,7 @@ import {
   DialogDescription,
   DialogHeader,
 } from '@/components/ui/shadcn/dialog';
+import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
 
@@ -72,6 +73,11 @@ export default function AuthenticationDraftCoordinator() {
               <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-semibold">
                 Unstaged Edits
               </Badge>
+            ) : data.revisions.length > 0 ? (
+              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Configuration Staged
+              </Badge>
             ) : (
               <Badge variant="neutral" className="text-[10px]">
                 Ready to Stage
@@ -84,9 +90,16 @@ export default function AuthenticationDraftCoordinator() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
-            <Button size="sm" onClick={() => void stageDraft()}>Stage configuration</Button>
-          </AuthenticationActionGuard>
+          {draftDirty || data.revisions.length === 0 ? (
+            <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
+              <Button size="sm" onClick={() => void stageDraft()}>Stage configuration</Button>
+            </AuthenticationActionGuard>
+          ) : (
+            <Button size="sm" variant="secondary" disabled className="gap-1.5 opacity-80">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              Staged
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -97,10 +110,27 @@ export default function AuthenticationDraftCoordinator() {
           </Button>
         </div>
       </div>
-      {!draftDirty && (
+      {!draftDirty && data.revisions.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
+          <p>
+            Current configuration is staged. Proceed to test administrator access and activate SSO.
+          </p>
+          {activeTab !== 'policy' && (
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs text-primary gap-1 font-semibold"
+              onClick={() => setActiveTab('policy')}
+            >
+              Go to Policy &amp; Activation
+              <ArrowRight className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      )}
+      {!draftDirty && data.revisions.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          There are no edits to discard. You may stage the current configuration to validate
-          discovery.
+          Stage this initial configuration to validate discovery with the provider.
         </p>
       )}
       {stale && (

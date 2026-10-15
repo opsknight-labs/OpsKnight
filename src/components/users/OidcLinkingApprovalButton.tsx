@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock3, Link2, Loader2, RotateCcw, Unlink2 } from 'lucide-react';
 import { notify as toast } from '@/lib/toast';
 import { DropdownMenuItem } from '@/components/ui/shadcn/dropdown-menu';
+import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,22 +20,32 @@ import {
   allowOidcLinking,
   getOidcLinkingState,
   revokeOidcLinking,
-  type OidcLinkingState,
 } from '@/app/(app)/users/oidc-actions';
+import type { OidcLinkingState } from '@/lib/oidc-linking-approval';
 
 export default function OidcLinkingApprovalButton({
   userId,
   userName,
+  initialState,
+  variant = 'dropdown',
+  onStateChange,
 }: {
   userId: string;
   userName: string;
+  initialState?: OidcLinkingState;
+  variant?: 'dropdown' | 'button';
+  onStateChange?: (state: OidcLinkingState) => void;
 }) {
-  const [state, setState] = useState<OidcLinkingState | 'loading'>('loading');
+  const [state, setState] = useState<OidcLinkingState | 'loading'>(initialState ?? 'loading');
   const [pending, setPending] = useState(false);
   const [dialog, setDialog] = useState<'allow' | 'revoke' | null>(null);
 
   useEffect(() => {
     let active = true;
+    if (initialState) {
+      setState(initialState);
+      return;
+    }
     getOidcLinkingState(userId)
       .then(result => {
         if (!active) return;
@@ -49,7 +61,7 @@ export default function OidcLinkingApprovalButton({
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [userId, initialState]);
 
   const confirmAllow = async () => {
     const wasExpired = state === 'expired';
@@ -63,10 +75,12 @@ export default function OidcLinkingApprovalButton({
       }
       if (result.alreadyLinked) {
         setState('linked');
+        onStateChange?.('linked');
         toast.info(`${userName} already has an OIDC identity linked.`);
         return;
       }
       setState('approved');
+      onStateChange?.('approved');
       toast.success(
         wasExpired || wasRevoked || result.renewed
           ? `OIDC linking approval renewed for ${userName}.`
@@ -85,11 +99,16 @@ export default function OidcLinkingApprovalButton({
     try {
       const result = await revokeOidcLinking(userId);
       if (result.error) {
-        if (result.alreadyLinked) setState('linked');
+        if (result.alreadyLinked) {
+          setState('linked');
+          onStateChange?.('linked');
+        }
         toast.error(result.error);
         return;
       }
-      setState(result.state ?? 'revoked');
+      const nextState = result.state ?? 'revoked';
+      setState(nextState);
+      onStateChange?.(nextState);
       toast.success(`OIDC linking approval revoked for ${userName}.`);
     } catch {
       toast.error('Failed to revoke OIDC linking approval.');
@@ -101,19 +120,127 @@ export default function OidcLinkingApprovalButton({
 
   const isRenewal = state === 'expired' || state === 'revoked' || state === 'stale';
 
-  return (
-    <>
-      {state === 'loading' ? (
+  const renderTrigger = () => {
+    if (variant === 'button') {
+      if (state === 'loading') {
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>Checking…</span>
+          </span>
+        );
+      }
+      if (state === 'linked') {
+        return (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            <span>Identity linked</span>
+          </span>
+        );
+      }
+      if (state === 'approved') {
+        return (
+          <div className="flex items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className="bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400 text-xs py-0"
+            >
+              Approved
+            </Badge>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDialog('revoke')}
+              disabled={pending}
+              className="h-6 px-1.5 text-xs text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400"
+              title="Revoke linking approval"
+            >
+              <Unlink2 className="h-3 w-3 mr-1" />
+              Revoke
+            </Button>
+          </div>
+        );
+      }
+      if (state === 'expired' || state === 'stale') {
+        return (
+          <div className="flex items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className="bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-400 text-xs py-0"
+            >
+              {state === 'expired' ? 'Expired' : 'Outdated'}
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDialog('allow')}
+              disabled={pending}
+              className="h-6 px-2 text-xs text-amber-700 border-amber-500/30 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/40"
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Renew
+            </Button>
+          </div>
+        );
+      }
+      if (state === 'revoked') {
+        return (
+          <div className="flex items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className="bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:text-zinc-400 text-xs py-0"
+            >
+              Revoked
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDialog('allow')}
+              disabled={pending}
+              className="h-6 px-2 text-xs text-blue-600 border-blue-400/30 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Reapprove
+            </Button>
+          </div>
+        );
+      }
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setDialog('allow')}
+          disabled={pending}
+          className="h-7 px-2.5 text-xs font-medium text-blue-600 border-blue-500/30 hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/40"
+        >
+          <Link2 className="h-3.5 w-3.5 mr-1" />
+          Allow linking
+        </Button>
+      );
+    }
+
+    if (state === 'loading') {
+      return (
         <DropdownMenuItem disabled>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           <span>Checking OIDC linking…</span>
         </DropdownMenuItem>
-      ) : state === 'linked' ? (
+      );
+    }
+    if (state === 'linked') {
+      return (
         <DropdownMenuItem disabled className="text-emerald-700">
           <CheckCircle2 className="mr-2 h-4 w-4" />
           <span>OIDC linked</span>
         </DropdownMenuItem>
-      ) : state === 'approved' ? (
+      );
+    }
+    if (state === 'approved') {
+      return (
         <DropdownMenuItem
           onSelect={event => {
             event.preventDefault();
@@ -124,7 +251,10 @@ export default function OidcLinkingApprovalButton({
           <Unlink2 className="mr-2 h-4 w-4" />
           <span>Approved — Revoke OIDC linking</span>
         </DropdownMenuItem>
-      ) : state === 'expired' ? (
+      );
+    }
+    if (state === 'expired') {
+      return (
         <DropdownMenuItem
           onSelect={event => {
             event.preventDefault();
@@ -135,7 +265,10 @@ export default function OidcLinkingApprovalButton({
           <Clock3 className="mr-2 h-4 w-4" />
           <span>Expired — Renew approval</span>
         </DropdownMenuItem>
-      ) : state === 'stale' ? (
+      );
+    }
+    if (state === 'stale') {
+      return (
         <DropdownMenuItem
           onSelect={event => {
             event.preventDefault();
@@ -146,7 +279,10 @@ export default function OidcLinkingApprovalButton({
           <RotateCcw className="mr-2 h-4 w-4" />
           <span>Config changed — Renew approval</span>
         </DropdownMenuItem>
-      ) : state === 'revoked' ? (
+      );
+    }
+    if (state === 'revoked') {
+      return (
         <DropdownMenuItem
           onSelect={event => {
             event.preventDefault();
@@ -157,18 +293,25 @@ export default function OidcLinkingApprovalButton({
           <RotateCcw className="mr-2 h-4 w-4" />
           <span>Revoked — Reapprove OIDC linking</span>
         </DropdownMenuItem>
-      ) : (
-        <DropdownMenuItem
-          onSelect={event => {
-            event.preventDefault();
-            setDialog('allow');
-          }}
-          className="text-blue-600 focus:text-blue-700"
-        >
-          <Link2 className="mr-2 h-4 w-4" />
-          <span>Not approved — Allow OIDC linking</span>
-        </DropdownMenuItem>
-      )}
+      );
+    }
+    return (
+      <DropdownMenuItem
+        onSelect={event => {
+          event.preventDefault();
+          setDialog('allow');
+        }}
+        className="text-blue-600 focus:text-blue-700"
+      >
+        <Link2 className="mr-2 h-4 w-4" />
+        <span>Not approved — Allow OIDC linking</span>
+      </DropdownMenuItem>
+    );
+  };
+
+  return (
+    <>
+      {renderTrigger()}
 
       <AlertDialog open={dialog === 'allow'} onOpenChange={open => !open && setDialog(null)}>
         <AlertDialogContent>

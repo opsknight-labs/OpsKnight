@@ -12,12 +12,15 @@ export async function GET(request: NextRequest) {
         code: request.nextUrl.searchParams.get('code'),
         state: request.nextUrl.searchParams.get('state'),
       });
-    await completeOidcRevisionTest(
+    const revisionId = await completeOidcRevisionTest(
       query.state,
       query.code,
       request.cookies.get(OIDC_TEST_COOKIE)?.value ?? ''
     );
     destination.searchParams.set('outcome', 'verified');
+    if (revisionId) {
+      destination.searchParams.set('revisionId', revisionId);
+    }
   } catch {
     destination.searchParams.set('outcome', 'failed');
   }

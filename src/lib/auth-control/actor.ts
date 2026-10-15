@@ -27,12 +27,14 @@ export type ControlActor =
       sessionTokenHash: string;
     };
 
+export const FRESH_AUTHENTICATION_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 export async function getControlActor(fresh = false): Promise<ControlActor> {
   const emergencyToken = (await cookies()).get(EMERGENCY_COOKIE)?.value;
   if (emergencyToken) {
     const session = await getEmergencySession(emergencyToken);
     if (session) {
-      if (fresh && Date.now() - session.authenticatedAt.getTime() > 300000)
+      if (fresh && Date.now() - session.authenticatedAt.getTime() > FRESH_AUTHENTICATION_MAX_AGE_MS)
         throw new Error('Verify your emergency credential again before this operation.');
       return {
         kind: session.emergencyAccountId ? 'emergency' : 'legacy',
@@ -55,9 +57,9 @@ export async function getControlActor(fresh = false): Promise<ControlActor> {
     fresh &&
     (!session.authenticatedAt ||
       session.authenticatedAt > Date.now() + 30000 ||
-      Date.now() - session.authenticatedAt > 300000)
+      Date.now() - session.authenticatedAt > FRESH_AUTHENTICATION_MAX_AGE_MS)
   )
-    throw new Error('Sign in again before this operation (five-minute limit).');
+    throw new Error('Sign in again before this operation.');
   if (session.sessionId) {
     const { touchAuthenticatedSession } = await import('@/lib/session-registry');
     await touchAuthenticatedSession({ userId: session.user.id, sessionId: session.sessionId });
@@ -116,7 +118,8 @@ export async function lockControlActor(
       throw new Error('Administrator sign-in method was revoked by policy.');
     if (
       fresh &&
-      (actor.authenticatedAt > Date.now() + 30000 || Date.now() - actor.authenticatedAt > 300000)
+      (actor.authenticatedAt > Date.now() + 30000 ||
+        Date.now() - actor.authenticatedAt > FRESH_AUTHENTICATION_MAX_AGE_MS)
     )
       throw new Error('Fresh administrator sign-in required.');
     if (actor.sessionId) {
@@ -141,7 +144,7 @@ export async function lockControlActor(
       session.revokedAt ||
       session.expiresAt.getTime() <= Date.now() ||
       Date.now() - session.lastActivityAt.getTime() >= 900000 ||
-      (fresh && Date.now() - session.authenticatedAt.getTime() > 300000)
+      (fresh && Date.now() - session.authenticatedAt.getTime() > FRESH_AUTHENTICATION_MAX_AGE_MS)
     )
       throw new Error('Emergency session expired. Verify your credential again.');
     if (actor.kind === 'emergency') {

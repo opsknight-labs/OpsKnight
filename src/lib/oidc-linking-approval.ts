@@ -23,6 +23,8 @@ export type OidcLinkingApprovalState =
   | 'consumed'
   | 'stale';
 
+export type OidcLinkingState = OidcLinkingApprovalState | 'linked';
+
 /**
  * Single source of truth for whether a first-time OIDC linking approval is
  * usable. Authentication and administration must use the same state machine.

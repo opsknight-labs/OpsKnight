@@ -16,6 +16,8 @@ import {
   completeOidcRevisionTest,
   activateOidcRevision,
   enforcementPreview,
+  deleteOidcRevision,
+  cleanupStagedRevisions,
 } from '@/lib/auth-control/oidc-revisions';
 import { authenticationOrigin } from '@/lib/auth-control/origin';
 import { restorePasswordAccess } from '@/lib/auth-control/recovery';
@@ -745,5 +747,32 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     expect(admin.id).toBe(actor.id);
     expect(admin.passwordHash).toBeTruthy();
     expect(admin.tokenVersion).toBe(1);
+  });
+
+  it('allows deleting an unactivated staged candidate revision and its tests, but rejects deleting active revision', async () => {
+    const staged1 = await stageOidcRevision(actor, {
+      issuer: runtime.issuer,
+      clientId: 'test-delete-1',
+      clientSecret: 'test-secret',
+    });
+    const staged2 = await stageOidcRevision(actor, {
+      issuer: runtime.issuer,
+      clientId: 'test-delete-2',
+      clientSecret: 'test-secret',
+    });
+
+    // Delete single staged revision
+    const deleteResult = await deleteOidcRevision(actor, staged1.revisionId);
+    expect(deleteResult.ok).toBe(true);
+    expect(await prisma.oidcRevision.findUnique({ where: { id: staged1.revisionId } })).toBeNull();
+
+    // Staged 2 still exists
+    expect(await prisma.oidcRevision.findUnique({ where: { id: staged2.revisionId } })).toBeTruthy();
+
+    // Bulk cleanup deletes remaining unactivated staged revisions
+    const cleanupResult = await cleanupStagedRevisions(actor);
+    expect(cleanupResult.ok).toBe(true);
+    expect(cleanupResult.count).toBeGreaterThanOrEqual(1);
+    expect(await prisma.oidcRevision.findUnique({ where: { id: staged2.revisionId } })).toBeNull();
   });
 });

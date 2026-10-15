@@ -37,9 +37,19 @@ export function useAuthenticationController({
   emergencyOnly = false,
 }: AuthenticationConsoleProps) {
   const router = useRouter();
-  const [activeTab, setActiveTabState] = useState<AuthenticationSection>(
-    emergencyOnly ? 'emergency' : initialData.section
-  );
+  const [activeTab, setActiveTabState] = useState<AuthenticationSection>(() => {
+    if (emergencyOnly) return 'emergency';
+    if (typeof window !== 'undefined') {
+      const param = new URLSearchParams(window.location.search).get('authTab');
+      if (
+        param &&
+        ['overview', 'connection', 'access', 'policy', 'recovery', 'diagnostics'].includes(param)
+      ) {
+        return param as AuthenticationSection;
+      }
+    }
+    return initialData.section;
+  });
   const setActiveTab = useCallback((tab: AuthenticationSection) => {
     setActiveTabState(tab);
     if (typeof window !== 'undefined') {
@@ -97,7 +107,32 @@ export function useAuthenticationController({
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [draftDiscardRequested, setDraftDiscardRequested] = useState(false);
-  const [revisionId, setRevisionId] = useState('');
+  const [revisionId, setRevisionIdState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const param = new URLSearchParams(window.location.search).get('revisionId');
+      if (param && initialData.revisions.some(r => r.id === param)) {
+        return param;
+      }
+    }
+    const tested = initialData.revisions.find(r => r.testedAt);
+    return tested?.id ?? initialData.revisions[0]?.id ?? '';
+  });
+  const setRevisionId = useCallback((id: string) => {
+    setRevisionIdState(id);
+    if (typeof window !== 'undefined') {
+      const search = new URLSearchParams(window.location.search);
+      if (id) {
+        search.set('revisionId', id);
+      } else {
+        search.delete('revisionId');
+      }
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}?${search}${window.location.hash}`
+      );
+    }
+  }, []);
   const [adminId, setAdminId] = useState(
     data.actor.kind === 'admin'
       ? data.actor.id
