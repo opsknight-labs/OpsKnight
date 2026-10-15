@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashTokenV2 } from '@/lib/api-keys';
 import { legacyHashCandidatesWithAdmission } from '@/lib/legacy-token-admission';
+import { isWellFormedApiToken } from '@/lib/api-v2/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 
@@ -60,7 +61,8 @@ export async function authorizeStatusApiRequest(
   let tokenHash: string | null = null;
   let tokenRecord: { id: string } | null = null;
 
-  if (token) {
+  // A token that cannot be well formed is never looked up (same pre-filter as API keys).
+  if (token && isWellFormedApiToken(token)) {
     // Try V2 hash first (HMAC-SHA256 - Secure)
     tokenHash = hashTokenV2(token);
     tokenRecord = await prisma.statusPageApiToken.findFirst({

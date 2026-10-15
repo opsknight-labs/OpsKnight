@@ -66,6 +66,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       legacySnapshots: legacySnapshots
         .slice(0, limit)
         .map(snapshot => ({ ...snapshot, legacy: true })),
+      // When true, page through every version with GET /api/v1/service-objectives/{id}/versions.
       versionsTruncated,
       pagination: {
         nextSnapshotCursor: snapshots.length > limit ? snapshots[limit - 1]?.id : null,

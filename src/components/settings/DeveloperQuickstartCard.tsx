@@ -36,6 +36,8 @@ interface ScenarioDef {
   scope: string;
   description: string;
   payload?: Record<string, unknown>;
+  /** Real identifiers the caller must supply; `{name}` in path or payload is replaced. */
+  params?: Array<{ name: string; label: string; placeholder: string }>;
   expectedStatus: number;
   expectedResponse: Record<string, unknown>;
 }
@@ -49,10 +51,11 @@ const SCENARIOS: ScenarioDef[] = [
     path: '/api/events',
     scope: 'events:write',
     description: 'Ingest monitoring signals, telemetry spikes, or heartbeats into OpsKnight.',
+    params: [{ name: 'serviceId', label: 'Service ID', placeholder: 'ID of a service in this workspace' }],
     payload: {
       event_action: 'trigger',
       dedup_key: 'api-gateway-5xx-spike',
-      service_id: 'srv_prod_api_gateway',
+      service_id: '{serviceId}',
       payload: {
         summary: '5xx Error Rate > 5% on Production API Gateway',
         source: 'datadog-agent',
@@ -125,9 +128,10 @@ const SCENARIOS: ScenarioDef[] = [
     badgeNumber: 4,
     title: '4. Acknowledge Incident (POST /api/v2/incidents/{id}/acknowledge)',
     method: 'POST',
-    path: '/api/v2/incidents/inc_9f8d1e2a/acknowledge',
+    path: '/api/v2/incidents/{incidentId}/acknowledge',
     scope: 'incidents:write',
     description: 'Acknowledge an operational alert programmatically to halt escalation timeouts.',
+    params: [{ name: 'incidentId', label: 'Incident ID', placeholder: 'ID of an open incident' }],
     payload: {
       note: 'On-call engineer actively mitigating gateway error spike.',
     },
@@ -190,6 +194,26 @@ export default function DeveloperQuickstartCard({
   const [testKeyInput, setTestKeyInput] = useState('');
   const liveKey = testKeyInput.trim() || revealedSecret || '';
 
+  // Identifiers for scenarios that act on a specific resource. Samples show a clear placeholder
+  // (never an invented id) until the user enters a real one.
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+  const fill = (scenario: ScenarioDef, text: string) =>
+    (scenario.params ?? []).reduce(
+      (out, param) =>
+        out.split(`{${param.name}}`).join(
+          paramValues[param.name]?.trim() || `YOUR_${param.name.replace(/([A-Z])/g, '_$1').toUpperCase()}`
+        ),
+      text
+    );
+  const resolve = (scenario: ScenarioDef) => ({
+    path: fill(scenario, scenario.path),
+    payload: scenario.payload
+      ? (JSON.parse(fill(scenario, JSON.stringify(scenario.payload))) as Record<string, unknown>)
+      : undefined,
+  });
+  const missingParams = (scenario: ScenarioDef) =>
+    (scenario.params ?? []).filter(param => !paramValues[param.name]?.trim());
+
   const activeScenario = SCENARIOS.find(s => s.id === activeScenarioId) ?? SCENARIOS[0];
 
   const handleCopy = async (text: string) => {
@@ -203,14 +227,14 @@ export default function DeveloperQuickstartCard({
   };
 
   const generateCurl = (scenario: ScenarioDef) => {
-    const fullUrl = `${baseUrl}${scenario.path}`;
+    const fullUrl = `${baseUrl}${resolve(scenario).path}`;
     const headerLine =
       authFormat === 'BEARER'
         ? `  -H "Authorization: Bearer ${effectiveToken}" \\`
         : `  -H "X-API-Key: ${effectiveToken}" \\`;
 
     if (scenario.method === 'POST') {
-      const payloadString = JSON.stringify(scenario.payload, null, 2);
+      const payloadString = JSON.stringify(resolve(scenario).payload, null, 2);
       return `curl -X POST ${fullUrl} \\
 ${headerLine}
   -H "Content-Type: application/json" \\
@@ -222,14 +246,14 @@ ${headerLine.replace(/ \\$/, '')}`;
   };
 
   const generateNode = (scenario: ScenarioDef) => {
-    const fullUrl = `${baseUrl}${scenario.path}`;
+    const fullUrl = `${baseUrl}${resolve(scenario).path}`;
     const headersObj =
       authFormat === 'BEARER'
         ? `    'Authorization': 'Bearer ${effectiveToken}',`
         : `    'X-API-Key': '${effectiveToken}',`;
 
     if (scenario.method === 'POST') {
-      const bodyFormatted = JSON.stringify(scenario.payload, null, 4).replace(/^/gm, '    ').trim();
+      const bodyFormatted = JSON.stringify(resolve(scenario).payload, null, 4).replace(/^/gm, '    ').trim();
       return `const response = await fetch('${fullUrl}', {
   method: 'POST',
   headers: {
@@ -254,14 +278,14 @@ console.log(data);`;
   };
 
   const generatePython = (scenario: ScenarioDef) => {
-    const fullUrl = `${baseUrl}${scenario.path}`;
+    const fullUrl = `${baseUrl}${resolve(scenario).path}`;
     const headersPy =
       authFormat === 'BEARER'
         ? `        "Authorization": "Bearer ${effectiveToken}",`
         : `        "X-API-Key": "${effectiveToken}",`;
 
     if (scenario.method === 'POST') {
-      const bodyFormatted = JSON.stringify(scenario.payload, null, 4)
+      const bodyFormatted = JSON.stringify(resolve(scenario).payload, null, 4)
         .replace(/: true/g, ': True')
         .replace(/: false/g, ': False')
         .replace(/: null/g, ': None')
@@ -311,13 +335,30 @@ print(response.json())`;
 
   const activeSnippet = getCodeSnippet(activeScenario, activeTab);
 
+  // Success means a 2xx that actually authenticated: /api/sample answers 200 with
+  // `authenticated: false` for a bad key, and status 0 marks a request that never completed.
+  const resultSucceeded =
+    !!testResult &&
+    testResult.status >= 200 &&
+    testResult.status < 300 &&
+    !(
+      testResult.data &&
+      typeof testResult.data === 'object' &&
+      (testResult.data as { data?: { authenticated?: unknown } }).data?.authenticated === false
+    ) &&
+    !(
+      testResult.data &&
+      typeof testResult.data === 'object' &&
+      (testResult.data as { authenticated?: unknown }).authenticated === false
+    );
+
   // Live test runner execution
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const isMutation = activeScenario.method !== 'GET';
 
   // Requests that change data need an explicit second click on the inline confirmation.
   const requestLiveTest = () => {
-    if (!liveKey) return;
+    if (!liveKey || missingParams(activeScenario).length > 0) return;
     if (isMutation) {
       setAwaitingConfirmation(true);
       return;
@@ -326,7 +367,7 @@ print(response.json())`;
   };
 
   const executeLiveTest = async () => {
-    if (!liveKey) return;
+    if (!liveKey || missingParams(activeScenario).length > 0) return;
     setAwaitingConfirmation(false);
     setIsRunningTest(true);
     setTestResult(null);
@@ -343,10 +384,11 @@ print(response.json())`;
       }
 
       // Execute request against current origin
-      const res = await fetch(activeScenario.path, {
+      const target = resolve(activeScenario);
+      const res = await fetch(target.path, {
         method: activeScenario.method,
         headers,
-        body: activeScenario.payload ? JSON.stringify(activeScenario.payload) : undefined,
+        body: target.payload ? JSON.stringify(target.payload) : undefined,
       });
 
       let json: unknown = null;
@@ -593,8 +635,16 @@ print(response.json())`;
                 variant="outline"
                 size="sm"
                 onClick={requestLiveTest}
-                disabled={isRunningTest || !liveKey}
-                title={liveKey ? undefined : 'Enter an API key above to run live tests'}
+                disabled={isRunningTest || !liveKey || missingParams(activeScenario).length > 0}
+                title={
+                  !liveKey
+                    ? 'Enter an API key above to run live tests'
+                    : missingParams(activeScenario).length > 0
+                      ? `Enter ${missingParams(activeScenario)
+                          .map(param => param.label)
+                          .join(' and ')} to run this test`
+                      : undefined
+                }
                 className="h-7 text-xs gap-1.5 border-primary/30 hover:bg-primary/5 text-primary"
               >
                 {isRunningTest ? (
@@ -677,7 +727,7 @@ print(response.json())`;
           >
             <p id="quickstart-confirm-title" className="text-xs text-foreground">
               <span className="font-mono font-semibold">
-                {activeScenario.method} {activeScenario.path}
+                {activeScenario.method} {resolve(activeScenario).path}
               </span>{' '}
               sends a real request that changes data in this workspace.
             </p>
@@ -703,24 +753,50 @@ print(response.json())`;
           </div>
         )}
 
+        {activeScenario.params && activeScenario.params.length > 0 && (
+          <div className="grid gap-2 sm:grid-cols-2 rounded-xl border border-border/70 bg-muted/20 p-2.5">
+            {activeScenario.params.map(param => (
+              <label key={param.name} className="flex flex-col gap-1 text-[11px] font-medium">
+                {param.label} (required for live test)
+                <input
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={paramValues[param.name] ?? ''}
+                  onChange={event =>
+                    setParamValues(prev => ({ ...prev, [param.name]: event.target.value }))
+                  }
+                  placeholder={param.placeholder}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+            ))}
+          </div>
+        )}
+
         {testResult && (
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 space-y-2 animate-in fade-in-50 duration-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Badge
                   className={
-                    testResult.status < 300
+                    resultSucceeded
                       ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 text-[10px]'
                       : 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 text-[10px]'
                   }
                 >
-                  HTTP {testResult.status} {testResult.statusText}
+                  {testResult.status === 0
+                    ? 'Request failed'
+                    : `HTTP ${testResult.status} ${testResult.statusText}`}
+                  {testResult.status !== 0 && !resultSucceeded && testResult.status < 300
+                    ? ' · not authenticated'
+                    : ''}
                 </Badge>
                 <span className="text-[11px] text-muted-foreground">
                   Latency: <span className="font-semibold text-foreground">{testResult.durationMs}ms</span>
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  Route: <code className="font-mono text-foreground">{activeScenario.path}</code>
+                  Route: <code className="font-mono text-foreground">{resolve(activeScenario).path}</code>
                 </span>
               </div>
 

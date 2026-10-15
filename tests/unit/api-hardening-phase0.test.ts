@@ -55,6 +55,9 @@ import { authenticateApiKey, authenticateApiKeyDetailed } from '@/lib/api-auth';
 import { legacyHashCandidatesWithAdmission } from '@/lib/legacy-token-admission';
 import { LEGACY_AUTH_ADMISSION_LIMIT } from '@/lib/api-v2/rate-limit';
 import { rateLimitMemoryCache } from '@/lib/api-v2/cache';
+import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
+import { GET as getResponsePolicyWorkspace } from '@/app/api/v1/response-policy/workspace/route';
+import { GET as listOverrides } from '@/app/api/v2/schedules/[id]/overrides/route';
 
 const get = (url: string, headers: Record<string, string> = {}) =>
   new NextRequest(`http://localhost:3000${url}`, { headers });
@@ -196,9 +199,9 @@ describe('legacy credential paths share the scrypt admission budget', () => {
       'throttled'
     );
     // A modern-format token never needs scrypt and is never throttled here.
-    expect(
-      (await legacyHashCandidatesWithAdmission(req, `ok_live_${'m'.repeat(40)}`)).status
-    ).toBe('ok');
+    expect((await legacyHashCandidatesWithAdmission(req, `ok_live_${'m'.repeat(40)}`)).status).toBe(
+      'ok'
+    );
   });
 
   it('rejects malformed API keys on the legacy path without a database lookup', async () => {
@@ -242,14 +245,100 @@ describe('/api/v1 error boundary', () => {
     expect(res.status).toBe(401);
   });
 
-  it('bounds the version list', async () => {
+  it('paginates the version list with a keyset instead of hiding older versions', async () => {
     v1Actor.get.mockResolvedValue({ ...admin, apiKey: undefined });
-    (prisma as any).serviceObjective = {
-      findMany: vi.fn().mockResolvedValue([{ id: 'v1', lineageId: 'lin_1', version: 1 }]),
-    };
+    const versions = Array.from({ length: 4 }, (_, i) => ({
+      id: `v${4 - i}`,
+      lineageId: 'lin_1',
+      version: 4 - i,
+    }));
+    (prisma as any).serviceObjective = { findMany: vi.fn().mockResolvedValue(versions) };
+    const res = await listObjectiveVersions(
+      get('/api/v1/service-objectives/lin_1/versions?limit=3'),
+      { params: Promise.resolve({ id: 'lin_1' }) }
+    );
+    expect((prisma as any).serviceObjective.findMany.mock.calls[0][0]).toMatchObject({ take: 4 });
+    expect(res.headers.get('X-Next-Before-Version')).toBe('2');
+
+    await listObjectiveVersions(
+      get('/api/v1/service-objectives/lin_1/versions?limit=3&beforeVersion=2'),
+      { params: Promise.resolve({ id: 'lin_1' }) }
+    );
+    expect((prisma as any).serviceObjective.findMany.mock.calls[1][0].where).toMatchObject({
+      version: { lt: 2 },
+    });
+
     await listObjectiveVersions(get('/api/v1/service-objectives/lin_1/versions?limit=10000'), {
       params: Promise.resolve({ id: 'lin_1' }),
     });
-    expect((prisma as any).serviceObjective.findMany.mock.calls[0][0]).toMatchObject({ take: 500 });
+    expect((prisma as any).serviceObjective.findMany.mock.calls[2][0]).toMatchObject({ take: 501 });
+  });
+});
+
+describe('review follow-ups', () => {
+  it('never looks up a malformed status-page token', async () => {
+    (prisma as any).statusPageApiToken = {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    };
+    const result = await authorizeStatusApiRequest(
+      get('/api/status', { authorization: 'Bearer not-a-token' }),
+      'sp_1',
+      { requireToken: true, rateLimitEnabled: false }
+    );
+    expect(result.allowed).toBe(false);
+    expect((prisma as any).statusPageApiToken.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('sends Retry-After when the response-policy API throttles authentication', async () => {
+    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+    const headers = { 'x-forwarded-for': '198.51.100.40' };
+    const token = (seed: string) => `ok_${seed.padEnd(43, 'a')}`;
+    let res: Response | undefined;
+    for (let i = 0; i <= LEGACY_AUTH_ADMISSION_LIMIT; i++) {
+      res = await getResponsePolicyWorkspace(
+        get('/api/v1/response-policy/workspace', {
+          ...headers,
+          authorization: `Bearer ${token(`rp${i}`)}`,
+        })
+      );
+    }
+    expect(res!.status).toBe(429);
+    expect(Number(res!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+  });
+
+  it('keeps schedule overrides in start order and pages on (start, id)', async () => {
+    vi.mocked(prisma.onCallSchedule.findUnique).mockResolvedValue({ id: 'sch_1' } as any);
+    vi.mocked(prisma.onCallSchedule.findFirst).mockResolvedValue({ id: 'sch_1' } as any);
+    const rows = Array.from({ length: 3 }, (_, i) => ({
+      id: `ovr_${i}`,
+      scheduleId: 'sch_1',
+      userId: 'u',
+      replacesUserId: null,
+      start: new Date(Date.UTC(2026, 9, 20 - i)),
+      end: new Date(Date.UTC(2026, 9, 21 - i)),
+      createdAt: new Date(),
+      user: null,
+    }));
+    vi.mocked(prisma.onCallOverride.findMany).mockResolvedValue(rows as any);
+    const res = await listOverrides(get('/api/v2/schedules/sch_1/overrides?limit=2'), {
+      params: Promise.resolve({ id: 'sch_1' }),
+    });
+    const body = await res.json();
+    const query = vi.mocked(prisma.onCallOverride.findMany).mock.calls[0][0] as any;
+    expect(query.orderBy).toEqual([{ start: 'desc' }, { id: 'desc' }]);
+    expect(body.data).toHaveLength(2);
+    expect(body.pagination.nextCursor).toBeTruthy();
+
+    vi.mocked(prisma.onCallOverride.findMany).mockResolvedValue([] as any);
+    await listOverrides(
+      get(
+        `/api/v2/schedules/sch_1/overrides?cursor=${encodeURIComponent(body.pagination.nextCursor)}`
+      ),
+      { params: Promise.resolve({ id: 'sch_1' }) }
+    );
+    const next = vi.mocked(prisma.onCallOverride.findMany).mock.calls[1][0] as any;
+    expect(JSON.stringify(next.where)).toContain(rows[1].start.toISOString());
   });
 });

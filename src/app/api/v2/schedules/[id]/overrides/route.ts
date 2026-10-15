@@ -1,15 +1,12 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
 import {
   apiV2Created,
   apiV2Error,
   apiV2Success,
   authenticateV2Request,
-  buildCursorWhere,
   enforceV2Authorization,
   enforceV2RateLimit,
-  formatCursorPagination,
   logV2Audit,
   parsePaginationParams,
   ScheduleOverrideV2Schema,
@@ -19,6 +16,7 @@ import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { createScheduleOverrideMutation } from '@/lib/schedules/mutations';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { decodeCursor, encodeCursor } from '@/lib/api-v2/pagination';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -55,13 +53,21 @@ export const GET = withV2Observability(async function GET(
       });
     }
 
-    // Bounded and cursor-paginated (newest first by creation; the cursor needs a stable key).
+    // Bounded and cursor-paginated, keeping the established order (latest start first). The signed
+    // cursor carries the last row's start time and id, so paging is stable on (start, id).
     const { limit, cursor } = parsePaginationParams(new URL(req.url).searchParams);
+    const after = cursor ? decodeCursor(cursor) : null;
+    const afterStart = after ? new Date(after.createdAt) : null;
     const overrides = await prisma.onCallOverride.findMany({
       where: {
-        AND: [{ scheduleId: id }, buildCursorWhere(cursor) as Prisma.OnCallOverrideWhereInput],
+        AND: [
+          { scheduleId: id },
+          ...(after && afterStart
+            ? [{ OR: [{ start: { lt: afterStart } }, { start: afterStart, id: { lt: after.id } }] }]
+            : []),
+        ],
       },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ start: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       select: {
         id: true,
@@ -75,14 +81,22 @@ export const GET = withV2Observability(async function GET(
       },
     });
 
-    const page = formatCursorPagination(overrides, limit);
-    const dto = page.data.map(o => ({
+    const hasMore = overrides.length > limit;
+    const rows = hasMore ? overrides.slice(0, limit) : overrides;
+    const last = rows[rows.length - 1];
+    const pagination = {
+      limit,
+      hasMore,
+      nextCursor:
+        hasMore && last ? encodeCursor({ id: last.id, createdAt: last.start.toISOString() }) : null,
+    };
+    const dto = rows.map(o => ({
       ...o,
       startDate: o.start,
       endDate: o.end,
     }));
 
-    return apiV2Success(dto, { pagination: page.pagination, headers: rlHeaders });
+    return apiV2Success(dto, { pagination, headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

@@ -18,7 +18,10 @@ describe('DeveloperQuickstartCard Component', () => {
 
   it('switches authentication header format between Bearer and X-API-Key', () => {
     const { container } = render(
-      <DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" revealedSecret="ok_live_secret123" />
+      <DeveloperQuickstartCard
+        appUrl="https://api.test.opsknight.com"
+        revealedSecret="ok_live_secret123"
+      />
     );
 
     // Initial state is Bearer
@@ -71,6 +74,7 @@ describe('DeveloperQuickstartCard Component', () => {
 
   it('disables live tests until a real API key is provided', () => {
     render(<DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" />);
+    selectScenario(/sample ping/i);
     const runBtn = screen.getByRole('button', { name: /run live test/i }) as HTMLButtonElement;
     expect(runBtn.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(/api key for live tests/i), {
@@ -80,9 +84,11 @@ describe('DeveloperQuickstartCard Component', () => {
   });
 
   it('sends the pasted key, not the placeholder, and shows the real response', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ status: 'success', authenticated: true }), { status: 200 })
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ status: 'success', authenticated: true }), { status: 200 })
+      );
     vi.stubGlobal('fetch', fetchMock);
     render(<DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" />);
     selectScenario(/sample ping/i);
@@ -118,6 +124,7 @@ describe('DeveloperQuickstartCard Component', () => {
     fireEvent.change(screen.getByLabelText(/api key for live tests/i), {
       target: { value: 'ok_live_realkey123' },
     });
+    fireEvent.change(screen.getByLabelText(/service id/i), { target: { value: 'svc_real_1' } });
     fireEvent.click(screen.getByRole('button', { name: /run live test/i }));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toBeDefined();
@@ -129,5 +136,57 @@ describe('DeveloperQuickstartCard Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /run live test/i }));
     fireEvent.click(screen.getByRole('button', { name: /send request/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).service_id).toBe('svc_real_1');
+  });
+  it('marks an unauthenticated 200 from /api/sample as a failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true, data: { authenticated: false } }), {
+          status: 200,
+        })
+      )
+    );
+    render(<DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" />);
+    selectScenario(/sample ping/i);
+    fireEvent.change(screen.getByLabelText(/api key for live tests/i), {
+      target: { value: 'ok_live_wrongkey123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /run live test/i }));
+    const badge = await screen.findByText(/not authenticated/i);
+    expect(badge.className).toContain('rose');
+  });
+
+  it('shows a network failure as failed, not green', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    render(<DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" />);
+    selectScenario(/sample ping/i);
+    fireEvent.change(screen.getByLabelText(/api key for live tests/i), {
+      target: { value: 'ok_live_realkey123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /run live test/i }));
+    const badge = await screen.findByText(/request failed/i);
+    expect(badge.className).toContain('rose');
+  });
+
+  it('requires a real resource id instead of using an invented one', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" />);
+    selectScenario(/acknowledge/i);
+    fireEvent.change(screen.getByLabelText(/api key for live tests/i), {
+      target: { value: 'ok_live_realkey123' },
+    });
+    const run = screen.getByRole('button', { name: /run live test/i }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(document.body.textContent).toContain('YOUR_INCIDENT_ID');
+    expect(document.body.textContent).not.toContain('inc_9f8d1e2a/acknowledge');
+
+    fireEvent.change(screen.getByLabelText(/incident id/i), { target: { value: 'inc_real_1' } });
+    expect(run.disabled).toBe(false);
+    fireEvent.click(run);
+    fireEvent.click(screen.getByRole('button', { name: /send request/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/incidents/inc_real_1/acknowledge');
   });
 });
