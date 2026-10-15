@@ -231,6 +231,58 @@ export async function smokeAgentFleet(
           upgradePreservesIdentity: 'PASS',
           removalIsolation: 'PASS',
         });
+      } catch (error) {
+        // Capture only owned resources before cleanup; never inspect Secrets or service env.
+        const diagnostics: unknown[] = [];
+        for (const identity of names) {
+          if (platform === 'swarm') {
+            for (const args of [
+              ['service', 'ps', '--no-trunc', `${identity.name}_opsknight-agent`],
+              ['service', 'logs', '--tail', '80', `${identity.name}_opsknight-agent`],
+            ]) {
+              const result = await run('docker', args, { timeout: 10_000 }).catch(failure => ({
+                stdout: '',
+                stderr: failure instanceof Error ? failure.message : 'Diagnostic unavailable',
+              }));
+              diagnostics.push({ name: identity.name, command: args.slice(0, 2), ...result });
+            }
+          } else {
+            const selector = `app.kubernetes.io/instance=${identity.name}`;
+            for (const args of [
+              ['get', 'pods', '-l', selector, '-o', 'wide'],
+              ['logs', '-l', selector, '--all-containers', '--tail=80'],
+              ['get', 'events', '--field-selector=type=Warning'],
+            ]) {
+              const result = await kubectl(args).catch(failure => ({
+                stdout: '',
+                stderr: failure instanceof Error ? failure.message : 'Diagnostic unavailable',
+              }));
+              diagnostics.push({ name: identity.name, command: args.slice(0, 2), ...result });
+            }
+          }
+        }
+        diagnostics.push({
+          agents: await testPrisma.runbookAgent.findMany({
+            where: { id: { in: enrollments.map(value => value.agent.id) } },
+            select: {
+              id: true,
+              status: true,
+              capabilities: true,
+              policyHash: true,
+              lastHeartbeatAt: true,
+              lastError: true,
+            },
+          }),
+        });
+        // Redact the one-time credentials even if a future subprocess prints one.
+        let report = JSON.stringify({ platform, diagnostics }, null, 2);
+        for (const enrollment of enrollments)
+          report = report.replaceAll(enrollment.token, '[REDACTED]');
+        await writeFile(
+          `test-results/runbook-engine/live-agent-fleet-${platform}-failure.json`,
+          report
+        );
+        throw error;
       } finally {
         for (const identity of names) {
           if (platform === 'swarm') {
