@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
+import { Clock, AlertTriangle, Info, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 
 export function readableDuration(seconds: number | undefined) {
@@ -9,6 +11,7 @@ export function readableDuration(seconds: number | undefined) {
   if (seconds % 3600 === 0) return `${seconds / 3600} ${seconds === 3600 ? 'hour' : 'hours'}`;
   return `${Math.round((seconds / 60) * 100) / 100} minutes`;
 }
+
 function DurationField({
   label,
   value,
@@ -34,15 +37,29 @@ function DurationField({
 }) {
   const [custom, setCustom] = useState(value !== null && !presets.includes(value));
   const [unit, setUnit] = useState(3600);
+
+  const isCustomActive = custom || (value !== null && !presets.includes(value));
+  const isDefaultActive = !isCustomActive && value === null;
+
   return (
-    <fieldset disabled={disabled} className="min-w-0 space-y-2">
-      <legend className="text-sm font-medium">{label}</legend>
+    <fieldset disabled={disabled} className="min-w-0 space-y-3 rounded-xl border border-border/80 bg-muted/20 p-4 transition-all hover:border-border">
+      <div className="flex items-center justify-between gap-2">
+        <legend className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          <Timer className="h-4 w-4 text-primary" />
+          <span>{label}</span>
+        </legend>
+        <Badge variant={isDefaultActive ? 'neutral' : 'outline'} className="text-[10px] font-medium py-0">
+          {isDefaultActive ? 'Inherited Default' : isCustomActive ? 'Custom Value' : 'Preset'}
+        </Badge>
+      </div>
+
       <label className="sr-only" htmlFor={id}>
         {label}
       </label>
+
       <select
         id={id}
-        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         value={
           custom
             ? 'custom'
@@ -72,13 +89,14 @@ function DurationField({
         ))}
         <option value="custom">Custom duration</option>
       </select>
-      {(custom || (value !== null && !presets.includes(value))) && (
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs text-muted-foreground">
-            Custom value
+
+      {isCustomActive && (
+        <div className="grid grid-cols-2 gap-2.5 pt-1">
+          <label className="text-xs font-medium text-muted-foreground space-y-1 block">
+            <span>Custom value</span>
             <input
               aria-label={`${label} custom value`}
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               type="number"
               step="any"
               min={min / unit}
@@ -89,12 +107,12 @@ function DurationField({
               }
             />
           </label>
-          <label className="text-xs text-muted-foreground">
-            Unit
+          <label className="text-xs font-medium text-muted-foreground space-y-1 block">
+            <span>Unit</span>
             <select
               aria-label={`${label} unit`}
               value={unit}
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onChange={event => setUnit(Number(event.target.value))}
             >
               <option value={60}>Minutes</option>
@@ -104,9 +122,10 @@ function DurationField({
           </label>
         </div>
       )}
+
       <p
         id={`${id}-help`}
-        className={`text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}
+        className={`text-xs leading-relaxed ${error ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
       >
         {error ??
           `Allowed range: ${readableDuration(min)} to ${readableDuration(max)}. Inherited uses the deployment default reported by the server.`}
@@ -114,6 +133,7 @@ function DurationField({
     </fieldset>
   );
 }
+
 export default function AuthenticationSessionPolicyForm() {
   const { configuration, update, data, fieldErrors, pending, draftGeneration } =
     useAuthenticationWorkspace();
@@ -123,21 +143,28 @@ export default function AuthenticationSessionPolicyForm() {
     configuration.sessionIdleTimeoutSeconds !== null &&
     maximum !== undefined &&
     configuration.sessionIdleTimeoutSeconds > maximum;
+
   return (
     <section
-      className="space-y-4 border-y border-border py-5"
+      className="space-y-4 rounded-xl border border-border/70 bg-card/60 p-4 sm:p-5 shadow-xs"
       aria-labelledby="auth-session-duration-title"
     >
-      <div>
-        <h3 id="auth-session-duration-title" className="font-semibold">
-          OpsKnight session limits
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          These govern OpsKnight sessions. They do not configure Microsoft Entra Conditional Access
-          or another provider’s sign-in frequency.
-        </p>
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-primary/10 p-2 text-primary shrink-0">
+          <Clock className="h-4 w-4" />
+        </div>
+        <div>
+          <h3 id="auth-session-duration-title" className="text-base font-semibold text-foreground">
+            OpsKnight session limits
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+            These govern OpsKnight sessions. They do not configure Microsoft Entra Conditional Access
+            or another provider’s sign-in frequency.
+          </p>
+        </div>
       </div>
-      <div className="grid gap-5 sm:grid-cols-2">
+
+      <div className="grid gap-4 sm:grid-cols-2 pt-2">
         <DurationField
           key={`maximum-${draftGeneration}`}
           disabled={pending}
@@ -169,24 +196,43 @@ export default function AuthenticationSessionPolicyForm() {
           }
         />
       </div>
+
       {conflict && (
-        <div role="alert" className="space-y-2 text-sm text-destructive">
-          <p>Shorten the idle timeout or increase maximum lifetime before staging.</p>
+        <div
+          role="alert"
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3.5 text-destructive"
+        >
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+            <p className="text-xs font-semibold">
+              Shorten the idle timeout or increase maximum lifetime before staging.
+            </p>
+          </div>
           <Button
             variant="outline"
             size="sm"
+            className="border-destructive/30 hover:bg-destructive/15 text-destructive shrink-0"
             onClick={() => update('sessionIdleTimeoutSeconds', maximum!)}
           >
             Match idle timeout to maximum lifetime
           </Button>
         </div>
       )}
-      <p className="text-xs text-muted-foreground">
-        Currently effective on the active provider: maximum{' '}
-        {readableDuration(data.effectiveSessionPolicy?.maximumAgeSeconds)}, idle{' '}
-        {readableDuration(data.effectiveSessionPolicy?.idleTimeoutSeconds)}. Draft changes take
-        effect only after staging, real-login testing and activation.
-      </p>
+
+      <div className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground">
+        <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+        <p className="leading-relaxed">
+          Currently effective on the active provider: maximum{' '}
+          <span className="font-semibold text-foreground">
+            {readableDuration(data.effectiveSessionPolicy?.maximumAgeSeconds)}
+          </span>
+          , idle{' '}
+          <span className="font-semibold text-foreground">
+            {readableDuration(data.effectiveSessionPolicy?.idleTimeoutSeconds)}
+          </span>
+          . Draft changes take effect only after staging, real-login testing and activation.
+        </p>
+      </div>
     </section>
   );
 }

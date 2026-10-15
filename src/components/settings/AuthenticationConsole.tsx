@@ -59,21 +59,50 @@ function AuthenticationWorkspace() {
   } = useAuthenticationWorkspace();
   return (
     <div className="min-w-0 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border bg-muted/40 p-2.5">
-            <Shield className="h-5 w-5 text-primary" />
+      {/* Main SSO & Authentication Card Header */}
+      <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
+              <Shield className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-foreground">
+                  Authentication Control Center
+                </h3>
+                <Badge
+                  variant={data.mode === 'SSO_REQUIRED' ? 'success' : 'neutral'}
+                  className="text-xs font-semibold"
+                >
+                  {data.mode.replaceAll('_', ' ')}
+                </Badge>
+                {data.activeProvider && (
+                  <Badge variant="outline" className="text-xs border-primary/20 bg-primary/5 text-primary">
+                    <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-500" />
+                    {providerDefinitions[data.activeProvider.providerType]?.label ?? 'OIDC Active'}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Secure sign-in, tested changes, independent recovery
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold">Authentication control center</p>
-            <p className="text-xs text-muted-foreground">
-              Secure sign-in, tested changes, independent recovery
-            </p>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+            <Badge
+              variant="outline"
+              className={
+                data.verifiedEmergencyAccounts >= 2
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs'
+              }
+            >
+              <KeyRound className="h-3 w-3 mr-1" />
+              {data.verifiedEmergencyAccounts} Recovery {data.verifiedEmergencyAccounts === 1 ? 'Drill' : 'Drills'}
+            </Badge>
           </div>
         </div>
-        <Badge variant={data.mode === 'SSO_REQUIRED' ? 'success' : 'neutral'}>
-          {data.mode.replaceAll('_', ' ')}
-        </Badge>
       </div>
       {data.originConflict && (
         <Alert variant="destructive">
@@ -153,6 +182,11 @@ function AuthenticationWorkspace() {
                   id: 'connection',
                   label: 'Identity Provider',
                   icon: <Globe className="h-4 w-4" />,
+                  badge: data.activeProvider ? (
+                    <span aria-hidden="true" className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      Active
+                    </span>
+                  ) : undefined,
                 },
                 {
                   id: 'access',
@@ -166,8 +200,26 @@ function AuthenticationWorkspace() {
                 },
               ]
             : []),
-          { id: 'emergency', label: 'Emergency Recovery', icon: <KeyRound className="h-4 w-4" /> },
-          { id: 'diagnostics', label: 'Diagnostics', icon: <Activity className="h-4 w-4" /> },
+          {
+            id: 'emergency',
+            label: 'Emergency Recovery',
+            icon: <KeyRound className="h-4 w-4" />,
+            badge: data.verifiedEmergencyAccounts < 2 ? (
+              <span aria-hidden="true" className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                Needs Drill
+              </span>
+            ) : undefined,
+          },
+          {
+            id: 'diagnostics',
+            label: 'Diagnostics',
+            icon: <Activity className="h-4 w-4" />,
+            badge: data.failedEmailAlertCount > 0 ? (
+              <span aria-hidden="true" className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-600 dark:text-rose-400">
+                {data.failedEmailAlertCount} alert{data.failedEmailAlertCount > 1 ? 's' : ''}
+              </span>
+            ) : undefined,
+          },
         ]}
       >
         {sectionLoading && (

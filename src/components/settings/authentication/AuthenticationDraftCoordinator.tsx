@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Dialog,
   DialogContent,
@@ -52,27 +53,43 @@ export default function AuthenticationDraftCoordinator() {
   return (
     <aside
       aria-label="Shared authentication draft"
-      className="sticky top-0 z-10 min-w-0 space-y-3 rounded-lg border border-border bg-background/95 p-4 shadow-sm backdrop-blur-sm"
+      className={`sticky top-0 z-20 min-w-0 space-y-3 rounded-xl border p-4 shadow-sm backdrop-blur-md transition-all duration-200 ${
+        draftDirty
+          ? 'border-amber-500/40 bg-card/95 ring-1 ring-amber-500/20'
+          : 'border-border/80 bg-card/90'
+      }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold">
-            {draftDirty ? 'Changes not staged' : 'Provider draft'} ·{' '}
-            {configuration.providerType === 'azure'
-              ? 'Microsoft Entra ID'
-              : configuration.providerType}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-foreground">
+              {draftDirty ? 'Changes not staged' : 'Provider draft'} ·{' '}
+              {configuration.providerType === 'azure'
+                ? 'Microsoft Entra ID'
+                : configuration.providerType}
+            </p>
+            {draftDirty ? (
+              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-semibold">
+                Unstaged Edits
+              </Badge>
+            ) : (
+              <Badge variant="neutral" className="text-[10px]">
+                Ready to Stage
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
             Provider, access and session changes share this draft. Staging does not change active
             sign-in.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <AuthenticationActionGuard availability={availability} onResolve={setActiveTab}>
-            <Button onClick={() => void stageDraft()}>Stage configuration</Button>
+            <Button size="sm" onClick={() => void stageDraft()}>Stage configuration</Button>
           </AuthenticationActionGuard>
           <Button
             variant="outline"
+            size="sm"
             disabled={!draftDirty || pending}
             onClick={() => setDraftDiscardRequested(true)}
           >
@@ -89,6 +106,7 @@ export default function AuthenticationDraftCoordinator() {
       {stale && (
         <Button
           variant="outline"
+          size="sm"
           disabled={pending || !data.activeProvider}
           onClick={() => setReloadRequested(true)}
         >

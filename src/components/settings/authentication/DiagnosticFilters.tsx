@@ -11,7 +11,7 @@ const localDate = (value: string) => {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
 const inputClass =
-  'mt-1 block w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm';
+  'mt-1 block w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 export default function DiagnosticFilters({
   query,
   onApply,
