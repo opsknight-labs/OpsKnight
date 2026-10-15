@@ -23,6 +23,7 @@ on:
       - 'tests/integration/provider-feedback-isolation-database.test.ts'
       - '.github/workflows/tests.yml'
       - 'scripts/certify-sso-upgrade.cjs'
+      - 'scripts/prepare-authentication-diagnostics.cjs'
       - '.github/workflows/enterprise-sso-certification.yml'
   workflow_dispatch:
 
@@ -64,7 +65,9 @@ jobs:
       - name: Authentication and provider unit regressions
         run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication tests/api/authentication-diagnostics.test.ts tests/components/emergency-password-login.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/api/recovery-stream-policy.test.ts tests/lib/metrics-domain.test.ts
       - name: Apply additive migrations
-        run: npx prisma migrate deploy
+        run: |
+          npx prisma migrate deploy
+          node scripts/prepare-authentication-diagnostics.cjs
       - name: Signed OIDC, WebAuthn, abuse availability and notification fan-out
         run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-diagnostics-database.test.ts tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts tests/integration/provider-feedback-isolation-database.test.ts tests/integration/emergency-password-database.test.ts
 
@@ -80,6 +83,7 @@ jobs:
             plans/certification/enterprise-sso-2.1-password-admission.json
             plans/certification/enterprise-sso-2.1-password-hashing.json
             plans/certification/enterprise-sso-2.1-receipt-metrics.json
+            plans/certification/authentication-experience-online-deployment.json
           if-no-files-found: ignore
 
   published-release-upgrade:

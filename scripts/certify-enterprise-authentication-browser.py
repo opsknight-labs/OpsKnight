@@ -52,6 +52,7 @@ try:
   subprocess.run(['node','-e',"const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.$executeRawUnsafe('CREATE DATABASE enterprise_sso_test').catch(e=>{console.error(e.code||e.name);process.exitCode=1}).finally(()=>p.$disconnect());"],cwd=root,env=bootstrap_env,check=True)
 
  subprocess.run(['npx','prisma','migrate','deploy'],cwd=root,env=env,check=True,stdout=subprocess.DEVNULL)
+ subprocess.run(['node','scripts/prepare-authentication-diagnostics.cjs'],cwd=root,env=env,check=True,stdout=subprocess.DEVNULL)
  seed=r'''const {PrismaClient}=require('@prisma/client');const bcrypt=require('bcryptjs');const p=new PrismaClient();(async()=>{
 await p.systemSettings.create({data:{id:'default',appUrl:'https://localhost:32615'}});
 await p.authenticationPolicy.create({data:{id:'default',mode:'PASSWORD_ONLY',legacySnapshot:{}}});

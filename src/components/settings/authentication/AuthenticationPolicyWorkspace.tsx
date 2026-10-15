@@ -9,6 +9,7 @@ type Preview = Awaited<ReturnType<typeof enforcementPreview>>;
 export default function AuthenticationPolicyWorkspace() {
   const {
     draftDirty,
+    setDraftBaseConfigVersion,
     setActiveTab,
     modeConfirmed,
     setModeConfirmed,
@@ -151,13 +152,14 @@ export default function AuthenticationPolicyWorkspace() {
         <Button
           onClick={() =>
             void perform(async () => {
-              await authenticationRequest({
+              const activated = await authenticationRequest<{ providerConfigVersion: number }>({
                 action: 'activate',
                 revisionId,
                 expectedVersion: impact!.policyVersion,
                 mode,
                 confirmation: 'ACTIVATE VERIFIED SSO',
               });
+              setDraftBaseConfigVersion(activated.providerConfigVersion);
               setConfirmation(false);
               setImpact(null);
               setMessage(

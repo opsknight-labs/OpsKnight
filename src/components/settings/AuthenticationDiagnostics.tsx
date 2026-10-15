@@ -291,8 +291,9 @@ export default function AuthenticationDiagnostics({
         {pagination('Bottom diagnostic pagination')}
         {page && (
           <p className="text-xs text-muted-foreground">
-            Snapshot started {new Date(page.snapshotAt).toLocaleString()}. Records changed after
-            that snapshot can leave this page; start again to see current activity.
+            Live pagination started {new Date(page.snapshotAt).toLocaleString()}. Active sessions
+            can leave later pages when used, renewed or revoked. This is not an immutable sign-in
+            history. Start again to see current activity.
           </p>
         )}
       </div>

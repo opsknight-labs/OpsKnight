@@ -175,6 +175,199 @@ describe('enterprise authentication experience', () => {
     });
     expect(screen.getByLabelText('Client ID')).toHaveValue('remote-client');
   });
+  it('activates then immediately edits and stages against the committed provider version', async () => {
+    const configuration = providerConfigSchema.parse({
+      providerType: 'google',
+      issuer: 'https://accounts.google.com',
+      clientId: 'google-client',
+      clientSecret: '',
+    });
+    let version = 1;
+    const calls: Array<Record<string, unknown>> = [];
+    const request = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        calls.push(body);
+        if (body.action === 'stage') return Response.json({ data: { revisionId: 'staged' } });
+        if (body.action === 'preview')
+          return Response.json({
+            data: {
+              policyVersion: 1,
+              adminVerified: true,
+              blockers: [],
+              passwordSessionCount: 0,
+              usersRequiringLinking: 0,
+              verifiedEmergencyAccounts: 2,
+            },
+          });
+        if (body.action === 'activate') {
+          version = 2;
+          return Response.json({
+            data: { mode: 'SSO_OPTIONAL', version: 2, providerConfigVersion: 2 },
+          });
+        }
+      }
+      return Response.json({
+        data: {
+          ...fixtureDashboard,
+          section: new URL(String(url), 'https://instance.example.test').searchParams.get(
+            'section'
+          ),
+          providerConfigVersion: version,
+          activeProvider: { ...configuration, hasClientSecret: true },
+        },
+      });
+    });
+    vi.stubGlobal('fetch', request);
+    renderConsole('connection', {
+      ...fixtureDashboard,
+      providerConfigVersion: 1,
+      activeProvider: { ...configuration, hasClientSecret: true },
+    });
+    fireEvent.change(screen.getByLabelText('Provider display name'), {
+      target: { value: 'First draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Stage configuration' }));
+    await screen.findByText(/Changes staged and discovery verified/);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sessions & Policies' }), { button: 0 });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Preview enforcement impact' })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Preview enforcement impact' }));
+    await screen.findByText('Real administrator login: verified');
+    fireEvent.click(screen.getByRole('checkbox', { name: /I reviewed the impact/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Activate verified SSO' }));
+    await screen.findByText(/Verified SSO activated/);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), { button: 0 });
+    await waitFor(() => expect(screen.getByLabelText('Provider display name')).toBeEnabled());
+    expect(screen.getByLabelText('Provider display name')).toHaveValue('First draft');
+    fireEvent.change(screen.getByLabelText('Provider display name'), {
+      target: { value: 'Second draft' },
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Reload active configuration' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stage configuration' }));
+    await waitFor(() => expect(calls.filter(call => call.action === 'stage')).toHaveLength(2));
+    expect(
+      calls.filter(call => call.action === 'stage').map(call => call.expectedConfigVersion)
+    ).toEqual([1, 2]);
+  });
+  it.each([
+    'https://login.microsoftonline.com/tenant-one/v2.0',
+    'https://login.microsoftonline.us/tenant-one/v2.0',
+    'https://login.partner.microsoftonline.cn/tenant-one/v2.0',
+    'https://authority.example.test/tenant-one/v2.0',
+  ])('presents an existing Entra authority without a blank tenant: %s', issuer => {
+    const configuration = providerConfigSchema.parse({
+      providerType: 'azure',
+      issuer,
+      clientId: 'entra-client',
+      clientSecret: '',
+    });
+    renderConsole('connection', {
+      ...fixtureDashboard,
+      activeProvider: { ...configuration, hasClientSecret: true },
+    });
+    if (issuer.includes('login.microsoftonline.com/')) {
+      expect(screen.getByLabelText(/Directory \(tenant\) ID/)).toHaveValue('tenant-one');
+    } else {
+      expect(screen.getByLabelText('Exact issuer', { exact: true })).toHaveValue(issuer);
+      expect(screen.queryByLabelText(/Directory \(tenant\) ID/)).not.toBeInTheDocument();
+    }
+  });
+  it.each([null, 3600])(
+    'restores duration selection after discarding custom edits (saved %s)',
+    saved => {
+      const configuration = providerConfigSchema.parse({
+        providerType: 'google',
+        issuer: 'https://accounts.google.com',
+        clientId: 'google-client',
+        clientSecret: '',
+        sessionMaxAgeSeconds: saved,
+      });
+      renderConsole('policy', {
+        ...fixtureDashboard,
+        activeProvider: { ...configuration, hasClientSecret: true },
+      });
+      fireEvent.change(screen.getByLabelText('Maximum session lifetime', { exact: true }), {
+        target: { value: 'custom' },
+      });
+      fireEvent.change(screen.getByLabelText('Maximum session lifetime custom value'), {
+        target: { value: '5' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Discard draft changes' }));
+      expect(screen.getByLabelText('Maximum session lifetime', { exact: true })).toHaveValue(
+        saved === null ? 'default' : String(saved)
+      );
+      expect(
+        screen.queryByLabelText('Maximum session lifetime custom value')
+      ).not.toBeInTheDocument();
+    }
+  );
+  it('loads saved session defaults after editing a custom duration', async () => {
+    const configuration = providerConfigSchema.parse({
+      providerType: 'google',
+      issuer: 'https://accounts.google.com',
+      clientId: 'google-client',
+      clientSecret: '',
+    });
+    const data = {
+      ...fixtureDashboard,
+      activeProvider: { ...configuration, hasClientSecret: true },
+      revisions: [
+        {
+          id: 'saved-defaults',
+          baseConfigVersion: 0,
+          configuration: { ...configuration, hasClientSecret: true },
+          createdAt: '2026-10-15T00:00:00Z',
+          activatedAt: null,
+          discoveryVerifiedAt: null,
+          testedAt: '',
+          testedAdminId: '',
+          previousRevisionId: null,
+        },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: RequestInfo | URL) =>
+        Response.json({
+          data: {
+            ...data,
+            section: new URL(String(url), 'https://instance.example.test').searchParams.get(
+              'section'
+            ),
+          },
+        })
+      )
+    );
+    renderConsole('policy', data);
+    fireEvent.change(screen.getByLabelText('Maximum session lifetime', { exact: true }), {
+      target: { value: 'custom' },
+    });
+    fireEvent.change(screen.getByLabelText('Maximum session lifetime custom value'), {
+      target: { value: '5' },
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Identity Provider' }), { button: 0 });
+    await waitFor(() =>
+      expect(screen.getByLabelText('Saved provider configuration')).toBeEnabled()
+    );
+    fireEvent.change(screen.getByLabelText('Saved provider configuration'), {
+      target: { value: 'saved-defaults' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Load saved configuration' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sessions & Policies' }), { button: 0 });
+    await waitFor(() =>
+      expect(screen.getByLabelText('Maximum session lifetime', { exact: true })).toHaveValue(
+        'default'
+      )
+    );
+    expect(
+      screen.queryByLabelText('Maximum session lifetime custom value')
+    ).not.toBeInTheDocument();
+  });
   it('protects unstaged changes when leaving through an outer settings tab', () => {
     renderConsole();
     fireEvent.change(screen.getByLabelText('Client ID'), { target: { value: 'unsaved' } });

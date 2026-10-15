@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { ensureRegisteredSession, isSessionActive } from '@/lib/session-registry';
 import { writeFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
@@ -8,7 +11,12 @@ import type { ControlActor } from '@/lib/auth-control/actor';
 vi.mock('@/lib/secret-manager', () => ({
   getNextAuthSecret: async () => 'local-diagnostic-postgres-certification',
 }));
-const suite = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
+// The dedicated certification job owns this database and its 100k-row load fixture.
+const suite =
+  process.env.VITEST_USE_REAL_DB === '1' &&
+  new URL(process.env.DATABASE_URL!).pathname.endsWith('/enterprise_sso_test')
+    ? describe
+    : describe.skip;
 const actor: ControlActor = {
   kind: 'admin',
   id: 'diagnostic-certifier',
@@ -260,6 +268,12 @@ suite('authentication diagnostics with real PostgreSQL', () => {
     expect(first.items).toHaveLength(25);
     expect(first.hasMore).toBe(true);
     expect(JSON.stringify(first)).not.toContain('must-never-leak');
+    expect(first.items.find(item => item.state === 'CONFLICTING')?.details).toContainEqual(
+      expect.objectContaining({
+        label: 'Mismatching settings',
+        value: expect.stringContaining('breakGlassEmail'),
+      })
+    );
     const second = await authenticationDiagnosticPage(
       actor,
       query({
@@ -293,4 +307,80 @@ suite('authentication diagnostics with real PostgreSQL', () => {
     expect(plan).toContain('UserDevice_diagnostic_activity_idx');
     console.info('DIAGNOSTIC_EXPLAIN', plan);
   });
+  it('builds indexes and backfills under concurrent session authorization without changing authentication metadata', async () => {
+    await prisma.$executeRaw`UPDATE "UserDevice" SET "sessionPolicyVersion"=NULL,"sessionExpiresAt"=NULL WHERE "userId"=${actor.id} AND id <= 'diagnostic-010000'`;
+    const original = await prisma.userDevice.findUniqueOrThrow({
+      where: { id: 'diagnostic-000002' },
+    });
+    expect(
+      await ensureRegisteredSession({
+        userId: actor.id,
+        sessionId: 'diagnostic-live-certification',
+        policy: 'OIDC',
+        issuedUnderPolicyVersion: 1,
+        expiresAtSeconds: Math.floor(Date.now() / 1000) + 3600,
+      })
+    ).toBe('allowed');
+    // Owned fixture only: prove index construction itself overlaps live authorization.
+    await prisma.$executeRawUnsafe('DROP INDEX "UserDevice_diagnostic_activity_idx"');
+    const [walBefore] = await prisma.$queryRaw<
+      Array<{ lsn: string }>
+    >`SELECT pg_current_wal_lsn()::text AS lsn`;
+    let running = true;
+    const latencies: number[] = [];
+    let exclusiveLocks = 0;
+    const load = (async () => {
+      while (running) {
+        const start = performance.now();
+        expect(await isSessionActive(actor.id, 'diagnostic-live-certification')).toBe(true);
+        await prisma.emergencyAccessEvent.create({
+          data: { eventType: 'diagnostic-cert:online-deployment', outcome: 'SUCCESS', context: {} },
+        });
+        latencies.push(performance.now() - start);
+        const [locks] = await prisma.$queryRaw<
+          Array<{ count: number }>
+        >`SELECT count(*)::int AS count FROM pg_locks WHERE relation = '"UserDevice"'::regclass AND mode='AccessExclusiveLock' AND granted`;
+        exclusiveLocks += locks.count;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+    })();
+    const started = performance.now();
+    try {
+      await promisify(execFile)(
+        process.execPath,
+        ['scripts/prepare-authentication-diagnostics.cjs'],
+        { env: { ...process.env, DIRECT_DATABASE_URL: process.env.DATABASE_URL }, timeout: 60000 }
+      );
+    } finally {
+      running = false;
+      await load;
+    }
+    const [wal] = await prisma.$queryRaw<
+      Array<{ bytes: string }>
+    >`SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), ${walBefore.lsn}::pg_lsn)::text AS bytes`;
+    const restored = await prisma.userDevice.findUniqueOrThrow({ where: { id: original.id } });
+    expect(restored.sessionPolicyVersion).toBe(1);
+    expect(restored.sessionExpiresAt?.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+    expect(restored.token).toBe(original.token);
+    expect(restored.updatedAt).toEqual(original.updatedAt);
+    expect(exclusiveLocks).toBe(0);
+    expect(latencies.length).toBeGreaterThan(5);
+    writeFileSync(
+      'plans/certification/authentication-experience-online-deployment.json',
+      JSON.stringify(
+        {
+          measuredAt: new Date().toISOString(),
+          scope:
+            'Isolated PostgreSQL, 100k existing sessions, 10k historical projections, concurrent registry authorization and durable security events; not production capacity or full IdP certification',
+          durationMs: Math.round(performance.now() - started),
+          walBytes: Number(wal.bytes),
+          authorizationAndEventSamples: latencies.length,
+          worstAuthorizationAndEventMs: Math.round(Math.max(...latencies)),
+          observedAccessExclusiveLocks: exclusiveLocks,
+        },
+        null,
+        2
+      ) + '\n'
+    );
+  }, 90000);
 });

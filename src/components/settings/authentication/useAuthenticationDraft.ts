@@ -8,6 +8,7 @@ const signature = (value: Draft) =>
 
 /** One in-memory draft shared by all sections. Secrets are never persisted in browser storage. */
 export function useAuthenticationDraft(initial: ProviderConfiguration) {
+  const [draftGeneration, setDraftGeneration] = useState(0);
   const [configuration, setConfigurationState] = useState(initial);
   const [profileJson, setProfileState] = useState(JSON.stringify(initial.profileMapping, null, 2));
   const [domainText, setDomainState] = useState(initial.allowedDomains.join(', '));
@@ -41,11 +42,13 @@ export function useAuthenticationDraft(initial: ProviderConfiguration) {
   const draftDirty = signature({ configuration, profileJson, domainText }) !== baseline;
   const setDraftDirty = (dirty: boolean) => {
     if (!dirty) {
+      setDraftGeneration(value => value + 1);
       setBaseline(signature(current.current));
       setBaselineDraft(current.current);
     }
   };
   const discard = () => {
+    setDraftGeneration(value => value + 1);
     setConfiguration(baselineDraft.configuration);
     setProfileJson(baselineDraft.profileJson);
     setDomainText(baselineDraft.domainText);
@@ -60,6 +63,7 @@ export function useAuthenticationDraft(initial: ProviderConfiguration) {
     return () => window.removeEventListener('beforeunload', protect);
   }, [draftDirty]);
   return {
+    draftGeneration,
     domainText,
     setDomainText,
     configuration,

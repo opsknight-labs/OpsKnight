@@ -520,3 +520,39 @@ When Docker is unavailable, certification can use a separately installed Postgre
 bin directory with `--postgres-bin /path/to/postgresql/bin`. The harness creates and
 removes its own cluster, database, HTTPS origin and application processes. This adds
 no application dependency or authentication environment switch.
+
+
+### Online diagnostic deployment
+
+Use `npm run prisma:migrate:safe`, the Docker entrypoint, or the Helm migration Job.
+All three run `scripts/prepare-authentication-diagnostics.cjs` after schema migration.
+For custom deployments, run that script explicitly with a direct PostgreSQL connection
+(`DIRECT_DATABASE_URL` takes precedence over `DATABASE_URL`; transaction pooling is
+not supported by this session-scoped installer).
+
+The schema change adds a nullable projection without rewriting historical rows.
+The installer builds indexes concurrently, repairs invalid interrupted index builds,
+and verifies index validity. It then projects historical session metadata in transactions
+of at most 250 rows, with a 250 ms lock timeout, two-second statement timeout,
+`SKIP LOCKED`, and a pause between batches. Already projected rows are not rewritten.
+Original session metadata and activity timestamps remain unchanged. Locked rows can
+remain unprojected until a later run; rerun the idempotent installer after contention
+subsides. Missing historical expiry is shown conservatively as expired until projected;
+authorization still verifies original metadata independently.
+
+This migration is being revised before its first published release. Recreate only owned
+disposable preview/test databases that applied the earlier PR migration. Never reset a
+shared database or edit migration bookkeeping to hide a checksum difference. Existing
+preview installations already containing the projection can run the online installer
+without reapplying the column addition.
+
+The database certification now records online build/backfill duration, WAL generated,
+concurrent session authorization plus durable security-event latency, and sampled
+exclusive locks in `plans/certification/authentication-experience-online-deployment.json`.
+These are local fixture measurements, not production capacity guarantees.
+
+Session diagnostics intentionally uses live pagination: ordinary session use, renewal
+or revocation can remove a row from later pages. Signed cursors bound ordering and
+filters; they do not freeze mutable records. Use First page for current activity.
+The audit view is immutable recorded emergency security-event evidence, not a complete
+ordinary-provider sign-in history.

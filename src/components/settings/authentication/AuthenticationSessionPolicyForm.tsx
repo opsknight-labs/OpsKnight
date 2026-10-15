@@ -115,7 +115,8 @@ function DurationField({
   );
 }
 export default function AuthenticationSessionPolicyForm() {
-  const { configuration, update, data, fieldErrors, pending } = useAuthenticationWorkspace();
+  const { configuration, update, data, fieldErrors, pending, draftGeneration } =
+    useAuthenticationWorkspace();
   const inherited = data.inheritedSessionPolicy;
   const maximum = configuration.sessionMaxAgeSeconds ?? inherited?.maximumAgeSeconds;
   const conflict =
@@ -138,6 +139,7 @@ export default function AuthenticationSessionPolicyForm() {
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <DurationField
+          key={`maximum-${draftGeneration}`}
           disabled={pending}
           id="auth-field-sessionMaxAgeSeconds"
           label="Maximum session lifetime"
@@ -150,6 +152,7 @@ export default function AuthenticationSessionPolicyForm() {
           error={fieldErrors.sessionMaxAgeSeconds}
         />
         <DurationField
+          key={`idle-${draftGeneration}`}
           disabled={pending}
           id="auth-field-sessionIdleTimeoutSeconds"
           label="Idle timeout"

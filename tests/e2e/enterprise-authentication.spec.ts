@@ -318,6 +318,55 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       }
       await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
     }
+    // Local presentation walkthrough: no live tenant or discovery request is required.
+    await page
+      .getByRole('combobox', { name: 'Identity provider', exact: true })
+      .selectOption('azure');
+    await page.getByRole('button', { name: /Change provider/ }).click();
+    await page
+      .getByRole('textbox', { name: /^Directory \(tenant\) ID/ })
+      .fill('11111111-2222-3333-4444-555555555555');
+    await expect(page.getByRole('textbox', { name: /^Directory \(tenant\) ID/ })).toHaveValue(
+      '11111111-2222-3333-4444-555555555555'
+    );
+    await page.getByText('Advanced provider settings', { exact: true }).click();
+    await page.getByRole('checkbox', { name: /Edit the exact issuer/ }).check();
+    for (const host of [
+      'login.microsoftonline.us',
+      'login.partner.microsoftonline.cn',
+      'authority.example.test',
+    ]) {
+      const issuer = `https://${host}/11111111-2222-3333-4444-555555555555/v2.0`;
+      await page.getByRole('textbox', { name: /^Exact issuer/ }).fill(issuer);
+      await expect(page.getByRole('textbox', { name: /^Exact issuer/ })).toHaveValue(issuer);
+      await expect(page.getByRole('textbox', { name: /^Directory \(tenant\) ID/ })).toHaveCount(0);
+    }
+    await page
+      .getByRole('combobox', { name: 'Identity provider', exact: true })
+      .selectOption('google');
+    await page.getByRole('button', { name: /Change provider/ }).click();
+    await expect(
+      page.getByRole('combobox', { name: 'Identity provider', exact: true })
+    ).toHaveValue('google');
+    // Reset all walkthrough edits before checking the untouched provider layout.
+    if (await page.getByRole('button', { name: 'Discard changes', exact: true }).isEnabled()) {
+      await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+      await page.getByRole('button', { name: 'Discard draft changes', exact: true }).click();
+    }
+    await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+    for (const name of [
+      'Sign-in & sessions',
+      'Security notifications',
+      'Recovery & audit',
+      'Deployment health',
+    ]) {
+      await page.getByRole('tab', { name, exact: true }).click();
+      await expect(
+        page.getByRole('navigation', { name: 'Top diagnostic pagination' })
+      ).toBeVisible();
+      await expect(page.getByText(/Unable to load|Request timed out/)).toHaveCount(0);
+    }
+    await page.getByRole('tab', { name: 'Identity Provider', exact: true }).click();
     for (const width of [320, 390, 768, 1366, 1920]) {
       await page.setViewportSize({ width, height: 1000 });
       const closeNavigation = page.getByRole('button', {

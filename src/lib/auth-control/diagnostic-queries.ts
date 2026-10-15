@@ -24,6 +24,36 @@ const detail = (label: string, value: unknown) => ({
   label,
   value: redactDiagnosticText(text(value) || String(value ?? 'Not recorded')),
 });
+// Only fixed setting names cross the API boundary; observed values can contain private identities.
+function replicaMismatchNames(snapshot: unknown, imported: unknown, differs: boolean) {
+  if (!differs) return 'None reported';
+  if (!snapshot || typeof snapshot !== 'object') return 'Names not recorded';
+  const allowed = [
+    'localLoginEnabled',
+    'breakGlassEnabled',
+    'breakGlassEmail',
+    'authenticationOrigin',
+  ];
+  const recorded = Object.entries(snapshot).find(([key]) => key === 'mismatchNames')?.[1];
+  if (Array.isArray(recorded)) {
+    return (
+      recorded
+        .filter((name): name is string => typeof name === 'string' && allowed.includes(name))
+        .join(', ') || 'Names not recorded'
+    );
+  }
+  // Older observations predate recording mismatch names. Compare only the immutable import.
+  const original = imported && typeof imported === 'object' ? Object.entries(imported) : [];
+  const names = Object.entries(snapshot)
+    .filter(
+      ([key, value]) =>
+        allowed.includes(key) &&
+        key !== 'authenticationOrigin' &&
+        original.find(([name]) => name === key)?.[1] !== value
+    )
+    .map(([key]) => key);
+  return names.join(', ') || 'Names not recorded; compare canonical public URLs';
+}
 function dateWindow(query: DiagnosticQuery, snapshot: Date) {
   const from =
     query.range === 'custom'
@@ -205,6 +235,10 @@ export async function authenticationDiagnosticPage(
           details: [
             detail('Last report', iso(row.at)),
             detail('First observed', iso(row.createdAt)),
+            detail(
+              'Mismatching settings',
+              replicaMismatchNames(row.snapshot, policy.legacySnapshot, Boolean(row.differs))
+            ),
             detail(
               'Observation',
               row.at.getTime() > snapshot.getTime() - 600000

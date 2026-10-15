@@ -40,6 +40,11 @@ export default function AuthenticationProviderForm() {
   } = useAuthenticationWorkspace();
   const [nextProvider, setNextProvider] = useState<ProviderType | null>(null);
   const [advancedIssuer, setAdvancedIssuer] = useState(false);
+  const requiresExactIssuer =
+    configuration.providerType === 'azure' &&
+    Boolean(configuration.issuer) &&
+    !entraTenant(configuration.issuer);
+  const showExactIssuer = advancedIssuer || requiresExactIssuer;
   const [copyMessage, setCopyMessage] = useState('');
   const definition = providerDefinitions[configuration.providerType];
   const field = (
@@ -101,7 +106,7 @@ export default function AuthenticationProviderForm() {
           </select>
         </label>
         <p className="text-sm text-muted-foreground">{definition.help}</p>
-        {definition.tenant && !advancedIssuer && (
+        {definition.tenant && !showExactIssuer && (
           <label className="block space-y-1 text-sm">
             <span className="font-medium">Directory (tenant) ID</span>
             <input
@@ -209,7 +214,11 @@ export default function AuthenticationProviderForm() {
           </p>
         )}
       </section>
-      <details className="max-w-2xl space-y-4">
+      <details
+        key={String(requiresExactIssuer)}
+        open={requiresExactIssuer || undefined}
+        className="max-w-2xl space-y-4"
+      >
         <summary className="cursor-pointer text-sm font-semibold">
           Advanced provider settings
         </summary>
@@ -221,13 +230,14 @@ export default function AuthenticationProviderForm() {
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
-              checked={advancedIssuer}
+              checked={showExactIssuer}
+              disabled={requiresExactIssuer}
               onChange={event => setAdvancedIssuer(event.target.checked)}
             />
             Edit the exact issuer, including supported sovereign-cloud authorities.
           </label>
         )}
-        {(advancedIssuer || configuration.providerType === 'google') &&
+        {(showExactIssuer || configuration.providerType === 'google') &&
           field(
             'Exact issuer',
             'issuer',

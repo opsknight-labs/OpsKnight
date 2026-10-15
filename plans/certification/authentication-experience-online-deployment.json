@@ -1,0 +1,9 @@
+{
+  "measuredAt": "2026-10-15T11:09:57.551Z",
+  "scope": "Isolated PostgreSQL, 100k existing sessions, 10k historical projections, concurrent registry authorization and durable security events; not production capacity or full IdP certification",
+  "durationMs": 4102,
+  "walBytes": 16567856,
+  "authorizationAndEventSamples": 86,
+  "worstAuthorizationAndEventMs": 44,
+  "observedAccessExclusiveLocks": 0
+}

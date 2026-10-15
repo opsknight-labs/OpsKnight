@@ -566,7 +566,11 @@ export async function activateOidcRevision(
         recoveryOnly: actor.kind !== 'admin',
         administratorUserIdPreserved: admin.id,
       });
-      return { mode: policy.mode, version: policy.version };
+      return {
+        mode: policy.mode,
+        version: policy.version,
+        providerConfigVersion: policy.oidcConfigVersion,
+      };
     },
     { timeout: 15000 }
   );
