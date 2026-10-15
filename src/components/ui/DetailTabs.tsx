@@ -130,10 +130,10 @@ export default function DetailTabs({
     <Tabs value={currentTab} onValueChange={handleTabChange} className={cn('space-y-6', className)}>
       {/* Centralized Elevated Navigation Header */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="overflow-x-auto pb-1 scrollbar-none">
+        <div className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto">
           <TabsList
             className={cn(
-              'h-auto rounded-xl border border-border/80 bg-muted/40 p-1 backdrop-blur-xs shadow-2xs',
+              'h-auto rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
               layout === 'grid' && [
                 'grid min-w-[540px]',
                 tabs.length === 2 && 'grid-cols-2',
@@ -142,7 +142,7 @@ export default function DetailTabs({
                 tabs.length === 5 && 'grid-cols-5',
                 tabs.length >= 6 && 'grid-cols-6',
               ],
-              layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 gap-1',
+              layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 flex-wrap sm:flex-nowrap',
               listClassName
             )}
           >
@@ -152,13 +152,14 @@ export default function DetailTabs({
                 value={tab.id}
                 disabled={tab.disabled}
                 className={cn(
-                  'group relative flex items-center justify-center gap-2 rounded-lg py-2.5 px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer',
-                  'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                  'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:shadow-xs data-[state=active]:ring-1 data-[state=active]:ring-border/60'
+                  'group relative flex items-center justify-center gap-2 rounded-lg py-2.5 px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
+                  'border border-border/40 bg-background/50 text-muted-foreground/90 shadow-2xs',
+                  'hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]',
+                  'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20'
                 )}
               >
                 {tab.icon && (
-                  <span className="shrink-0 transition-colors group-data-[state=active]:text-primary">
+                  <span className="shrink-0 transition-transform duration-150 group-hover:scale-110 group-data-[state=active]:text-primary group-hover:text-primary">
                     {tab.icon}
                   </span>
                 )}
@@ -168,8 +169,8 @@ export default function DetailTabs({
                 {tab.count !== undefined && tab.count !== null && (
                   <span
                     className={cn(
-                      'ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-semibold transition-colors',
-                      'bg-muted-foreground/10 text-muted-foreground',
+                      'ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition-colors',
+                      'bg-muted-foreground/15 text-muted-foreground',
                       'group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary group-data-[state=active]:font-bold'
                     )}
                   >
@@ -178,7 +179,11 @@ export default function DetailTabs({
                 )}
 
                 {/* Custom Badge Tag */}
-                {tab.badge && <span className="ml-1 shrink-0">{tab.badge}</span>}
+                {tab.badge && (
+                  <span className="ml-0.5 shrink-0 transition-transform duration-150 group-hover:scale-105">
+                    {tab.badge}
+                  </span>
+                )}
               </TabsTrigger>
             ))}
           </TabsList>

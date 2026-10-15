@@ -183,7 +183,7 @@ function AuthenticationWorkspace() {
                   label: 'Identity Provider',
                   icon: <Globe className="h-4 w-4" />,
                   badge: data.activeProvider ? (
-                    <span aria-hidden="true" className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    <span aria-hidden="true" className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">
                       Active
                     </span>
                   ) : undefined,
@@ -205,7 +205,7 @@ function AuthenticationWorkspace() {
             label: 'Emergency Recovery',
             icon: <KeyRound className="h-4 w-4" />,
             badge: data.verifiedEmergencyAccounts < 2 ? (
-              <span aria-hidden="true" className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+              <span aria-hidden="true" className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400">
                 Needs Drill
               </span>
             ) : undefined,
@@ -215,7 +215,7 @@ function AuthenticationWorkspace() {
             label: 'Diagnostics',
             icon: <Activity className="h-4 w-4" />,
             badge: data.failedEmailAlertCount > 0 ? (
-              <span aria-hidden="true" className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-600 dark:text-rose-400">
+              <span aria-hidden="true" className="rounded-full border border-rose-500/30 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700 dark:text-rose-400">
                 {data.failedEmailAlertCount} alert{data.failedEmailAlertCount > 1 ? 's' : ''}
               </span>
             ) : undefined,
