@@ -9,9 +9,10 @@ import ServiceAccountsPanel, {
 } from '@/components/settings/ServiceAccountsPanel';
 import ApiExplorerPanel, { type ApiEndpointDoc } from '@/components/settings/ApiExplorerPanel';
 import ApiActivityPanel, { type ApiAuditLogItem } from '@/components/settings/ApiActivityPanel';
+import ApiKeysWorkspaceTabs from '@/components/settings/ApiKeysWorkspaceTabs';
+import { normalizeWorkspaceTab } from '@/lib/api-keys-workspace';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import {
   Card,
   CardHeader,
@@ -21,7 +22,7 @@ import {
 } from '@/components/ui/shadcn/card';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
-import { Key, ShieldCheck, Bot, Activity, Terminal, Code2, Clock, ShieldAlert } from 'lucide-react';
+import { Key, ShieldCheck, Bot, Terminal, Clock, ShieldAlert } from 'lucide-react';
 import { getAppUrl } from '@/lib/app-url';
 import { listServiceAccounts } from '@/lib/api-v2/service-accounts';
 import { getOpenApiV2Spec } from '@/lib/api-v2/openapi';
@@ -39,7 +40,6 @@ import {
   SERVICE_ACCOUNT_PAGE_SIZE,
 } from '@/lib/service-account-inventory';
 import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
-import Link from 'next/link';
 import {
   API_ACTIVITY_PAGE_SIZE,
   buildApiActivityWhere,
@@ -174,8 +174,6 @@ const sanitizeAuditDetails = (rawDetails: unknown): Record<string, unknown> | nu
   return Object.keys(safe).length > 0 ? safe : null;
 };
 
-const WORKSPACE_TABS = ['api-keys', 'service-accounts', 'explorer', 'activity'] as const;
-
 export default async function ApiKeysSettingsPage({
   searchParams,
 }: {
@@ -183,10 +181,7 @@ export default async function ApiKeysSettingsPage({
 }) {
   const query = (await searchParams) ?? {};
   const rawTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
-  const requestedTab = rawTab === 'api-explorer' ? 'explorer' : rawTab;
-  const activeTab = (WORKSPACE_TABS as readonly string[]).includes(requestedTab ?? '')
-    ? (requestedTab as (typeof WORKSPACE_TABS)[number])
-    : 'api-keys';
+  const activeTab = normalizeWorkspaceTab(rawTab) ?? 'api-keys';
   const activityFilters = parseApiActivityFilters(query);
   const [session, appUrl] = await Promise.all([
     getServerSession(await getAuthOptions()),
@@ -234,7 +229,7 @@ export default async function ApiKeysSettingsPage({
   > = [];
   let nextKeyCursor: string | null = null;
   let matchingKeys: number | undefined;
-  if (keyScope && activeTab === 'api-keys') {
+  if (keyScope) {
     const [rows, matches] = await Promise.all([
       prisma.apiKey.findMany({
         where: buildKeyInventoryWhere(keyScope, keyFilters, now),
@@ -292,71 +287,72 @@ export default async function ApiKeysSettingsPage({
   let matchingActivity: number | undefined;
 
   if (isAdmin) {
-    // Header counts are cheap aggregates; unexpired, unrevoked tokens only.
-    [totalServiceAccounts, totalMachineTokens] = await Promise.all([
-      prisma.user.count({
-        where: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+    const [
+      saCounts,
+      accounts,
+      teamsRes,
+      matches,
+      auditRes,
+      auditMatches,
+    ] = await Promise.all([
+      Promise.all([
+        prisma.user.count({
+          where: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+        }),
+        prisma.apiKey.count({
+          where: {
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            user: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+          },
+        }),
+      ]),
+      listServiceAccounts({
+        where: buildServiceAccountWhere(serviceAccountFilters),
+        take: SERVICE_ACCOUNT_PAGE_SIZE + 1,
       }),
-      prisma.apiKey.count({
-        where: {
-          revokedAt: null,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-          user: { email: { endsWith: `@${SERVICE_ACCOUNT_DOMAIN}`, mode: 'insensitive' } },
+      prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+      prisma.user.count({
+        where: buildServiceAccountWhere({ ...serviceAccountFilters, cursor: undefined }),
+      }),
+      prisma.auditLog.findMany({
+        where: buildApiActivityWhere(activityFilters),
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: API_ACTIVITY_PAGE_SIZE + 1,
+        select: {
+          id: true,
+          action: true,
+          entityType: true,
+          entityId: true,
+          actorEmail: true,
+          actorName: true,
+          createdAt: true,
+          details: true,
+          ip: true,
         },
+      }),
+      prisma.auditLog.count({
+        where: buildApiActivityWhere({ ...activityFilters, cursor: undefined }),
       }),
     ]);
 
-    if (activeTab === 'service-accounts') {
-      const [accounts, teamsRes, matches] = await Promise.all([
-        listServiceAccounts({
-          where: buildServiceAccountWhere(serviceAccountFilters),
-          take: SERVICE_ACCOUNT_PAGE_SIZE + 1,
-        }),
-        prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-        prisma.user.count({
-          where: buildServiceAccountWhere({ ...serviceAccountFilters, cursor: undefined }),
-        }),
-      ]);
-      matchingServiceAccounts = matches;
-      teams = teamsRes;
-      rawServiceAccounts = accounts.slice(0, SERVICE_ACCOUNT_PAGE_SIZE);
-      nextServiceAccountCursor =
-        accounts.length > SERVICE_ACCOUNT_PAGE_SIZE
-          ? encodeInventoryCursor(rawServiceAccounts[rawServiceAccounts.length - 1])
-          : null;
-    }
+    totalServiceAccounts = saCounts[0];
+    totalMachineTokens = saCounts[1];
+    matchingServiceAccounts = matches;
+    teams = teamsRes;
+    rawServiceAccounts = accounts.slice(0, SERVICE_ACCOUNT_PAGE_SIZE);
+    nextServiceAccountCursor =
+      accounts.length > SERVICE_ACCOUNT_PAGE_SIZE
+        ? encodeInventoryCursor(rawServiceAccounts[rawServiceAccounts.length - 1])
+        : null;
 
-    if (activeTab === 'activity') {
-      // Filtered, ordered and paginated in the database; one extra row signals another page.
-      const [auditRes, matches] = await Promise.all([
-        prisma.auditLog.findMany({
-          where: buildApiActivityWhere(activityFilters),
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: API_ACTIVITY_PAGE_SIZE + 1,
-          select: {
-            id: true,
-            action: true,
-            entityType: true,
-            entityId: true,
-            actorEmail: true,
-            actorName: true,
-            createdAt: true,
-            details: true,
-            ip: true,
-          },
-        }),
-        prisma.auditLog.count({
-          where: buildApiActivityWhere({ ...activityFilters, cursor: undefined }),
-        }),
-      ]);
-      matchingActivity = matches;
-      const hasMoreActivity = auditRes.length > API_ACTIVITY_PAGE_SIZE;
-      rawAuditLogs = auditRes.slice(0, API_ACTIVITY_PAGE_SIZE);
-      nextActivityCursor =
-        hasMoreActivity && rawAuditLogs.length > 0
-          ? encodeActivityCursor(rawAuditLogs[rawAuditLogs.length - 1])
-          : null;
-    }
+    matchingActivity = auditMatches;
+    const hasMoreActivity = auditRes.length > API_ACTIVITY_PAGE_SIZE;
+    rawAuditLogs = auditRes.slice(0, API_ACTIVITY_PAGE_SIZE);
+    nextActivityCursor =
+      hasMoreActivity && rawAuditLogs.length > 0
+        ? encodeActivityCursor(rawAuditLogs[rawAuditLogs.length - 1])
+        : null;
   }
 
   // Format Service Accounts
@@ -523,40 +519,13 @@ export default async function ApiKeysSettingsPage({
       />
 
       {/* Unified 4-Tab Developer Workspace */}
-      <Tabs value={activeTab} className="space-y-6">
-        <TabsList className="h-auto max-w-full flex-wrap justify-start bg-muted/70 p-1 border border-border/80 rounded-xl">
-          <TabsTrigger value="api-keys" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
-            <Link href="/settings/api-keys?tab=api-keys" scroll={false} prefetch={false}>
-              <Key className="h-3.5 w-3.5" />
-              API Keys ({totalKeys})
-            </Link>
-          </TabsTrigger>
-          <TabsTrigger
-            value="service-accounts"
-            className="text-xs font-semibold gap-1.5 px-3.5"
-            asChild
-          >
-            <Link href="/settings/api-keys?tab=service-accounts" scroll={false} prefetch={false}>
-              <Bot className="h-3.5 w-3.5" />
-              Service Accounts {isAdmin ? `(${totalServiceAccounts})` : ''}
-            </Link>
-          </TabsTrigger>
-          <TabsTrigger value="explorer" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
-            <Link href="/settings/api-keys?tab=explorer" scroll={false} prefetch={false}>
-              <Code2 className="h-3.5 w-3.5" />
-              API Explorer ({endpointCount})
-            </Link>
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
-            <Link href="/settings/api-keys?tab=activity" scroll={false} prefetch={false}>
-              <Activity className="h-3.5 w-3.5" />
-              API Activity
-            </Link>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Tab 1: API Keys */}
-        <TabsContent value="api-keys" className="space-y-4">
+      <ApiKeysWorkspaceTabs
+        initialTab={activeTab}
+        totalKeys={totalKeys}
+        totalServiceAccounts={totalServiceAccounts}
+        endpointCount={endpointCount}
+        isAdmin={isAdmin}
+        apiKeysContent={
           <ApiKeysPanel
             keys={formattedKeys}
             inventory={{
@@ -573,11 +542,9 @@ export default async function ApiKeysSettingsPage({
             role={user?.role}
             appUrl={appUrl}
           />
-        </TabsContent>
-
-        {/* Tab 2: Service Accounts */}
-        <TabsContent value="service-accounts" className="space-y-4">
-          {isAdmin ? (
+        }
+        serviceAccountsContent={
+          isAdmin ? (
             <ServiceAccountsPanel
               serviceAccounts={formattedServiceAccounts}
               availableTeams={teams}
@@ -615,17 +582,11 @@ export default async function ApiKeysSettingsPage({
                 </p>
               </CardContent>
             </Card>
-          )}
-        </TabsContent>
-
-        {/* Tab 3: API Explorer */}
-        <TabsContent value="explorer" className="space-y-4">
-          <ApiExplorerPanel endpoints={endpoints} appUrl={appUrl} />
-        </TabsContent>
-
-        {/* Tab 4: API Activity */}
-        <TabsContent value="activity" className="space-y-4">
-          {isAdmin ? (
+          )
+        }
+        explorerContent={<ApiExplorerPanel endpoints={endpoints} appUrl={appUrl} />}
+        activityContent={
+          isAdmin ? (
             <ApiActivityPanel
               activities={formattedActivities}
               nextCursor={nextActivityCursor}
@@ -666,9 +627,9 @@ export default async function ApiKeysSettingsPage({
                 </p>
               </CardContent>
             </Card>
-          )}
-        </TabsContent>
-      </Tabs>
+          )
+        }
+      />
     </div>
   );
 }

@@ -789,3 +789,12 @@ self.addEventListener('message', event => {
     );
   }
 });
+
+// Suppress benign Workbox no-response promise rejections on network navigation redirects
+self.addEventListener('unhandledrejection', event => {
+  const reasonStr = String(event.reason || '');
+  const messageStr = String(event.reason?.message || '');
+  if (reasonStr.includes('no-response') || messageStr.includes('no-response')) {
+    event.preventDefault();
+  }
+});
