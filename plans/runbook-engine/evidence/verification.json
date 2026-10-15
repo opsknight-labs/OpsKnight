@@ -386,5 +386,11 @@
       "webkit": "Archived suggestion dismissal/search/lifecycle journey: 3 consecutive local WebKit repetitions PASS; uses existing production build for unchanged UI behavior",
       "node": "14 CI runner contracts and 7 deployment/capacity documentation contracts PASS"
     }
+  },
+  "authenticationExperienceIntegration": {
+    "base": "7d6e4f006",
+    "result": "Rebased onto authentication workspace #867, PWA fixes #868 and authentication UI #870. Retained main WOFF2 assets and authentication projection preparation; restored router hook for Runbook server tabs.",
+    "validation": "372 targeted units (3 skipped), 62 execution/backlog/retention database cases and 16 navigation/authentication component cases PASS; overlapping suites. All 222 migrations applied on the isolated upgraded database.",
+    "ci": "New rebased head requires full CI; earlier candidate results are historical evidence only."
   }
 }

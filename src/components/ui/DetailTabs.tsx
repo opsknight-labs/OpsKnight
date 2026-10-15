@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, type ReactNode } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +46,7 @@ export default function DetailTabs({
   actions,
   children,
 }: DetailTabsProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
