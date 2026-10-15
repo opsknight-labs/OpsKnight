@@ -8,6 +8,8 @@ on:
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
+      - 'scripts/wait-for-runtime-database.cjs'
+      - 'scripts/wait-for-database-ready.cjs'
       - 'deploy/images/pgbouncer/**'
       - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
@@ -21,6 +23,8 @@ on:
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
+      - 'scripts/wait-for-runtime-database.cjs'
+      - 'scripts/wait-for-database-ready.cjs'
       - 'deploy/images/pgbouncer/**'
       - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
