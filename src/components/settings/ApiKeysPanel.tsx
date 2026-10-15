@@ -9,7 +9,6 @@ import { createApiKey, revokeApiKey } from '@/app/(app)/settings/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
-import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -33,8 +32,8 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/shadcn/table';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
+import DeveloperQuickstartCard from './DeveloperQuickstartCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +47,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
 import OneTimeSecretBanner from './OneTimeSecretBanner';
+import ScopeSelectorGrouped from './ScopeSelectorGrouped';
 import {
   Key,
   XCircle,
@@ -204,33 +204,6 @@ export default function ApiKeysPanel({
       ? new Set(['events:write', 'incidents:read'])
       : new Set(['incidents:read'])
   );
-
-  const applyKeyPreset = (type: 'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'CLEAR') => {
-    if (type === 'CLEAR') {
-      setSelectedKeyScopes(new Set());
-    } else if (type === 'ADMIN') {
-      setSelectedKeyScopes(new Set(visibleScopes.map(s => s.value)));
-    } else if (type === 'RESPONDER') {
-      setSelectedKeyScopes(
-        new Set(
-          [
-            'events:write',
-            'incidents:read',
-            'incidents:write',
-            'services:read',
-            'schedules:read',
-            'runbooks:read',
-            'runbooks:execute',
-            'notifications:read',
-            'teams:read',
-            'users:read',
-          ].filter(s => visibleScopes.some(v => v.value === s))
-        )
-      );
-    } else if (type === 'READ_ONLY') {
-      setSelectedKeyScopes(new Set(visibleScopes.filter(s => !s.write).map(s => s.value)));
-    }
-  };
 
   const handleRevoke = async (keyId: string) => {
     setIsRevoking(true);
@@ -490,213 +463,8 @@ export default function ApiKeysPanel({
         </Card>
       )}
 
-      {/* 4. Developer Quickstart Guide & Code Snippets */}
-      <Card className="border-border/80 shadow-xs bg-card overflow-hidden">
-        <CardHeader className="pb-3 border-b border-border/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                <Terminal className="h-4 w-4" />
-              </div>
-              <div>
-                <CardTitle className="text-sm font-bold">Developer API Quickstart</CardTitle>
-                <CardDescription className="text-xs">
-                  Pass your API key in the standard{' '}
-                  <code className="text-foreground font-mono font-semibold bg-muted px-1.5 py-0.5 rounded border border-border/50">
-                    Authorization: Bearer &lt;TOKEN&gt;
-                  </code>{' '}
-                  HTTP header.
-                </CardDescription>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-5">
-          <Tabs defaultValue="curl" className="w-full">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-              <TabsList className="h-9 bg-muted/60">
-                <TabsTrigger value="curl" className="text-xs gap-1.5">
-                  <Terminal className="h-3.5 w-3.5" />
-                  cURL
-                </TabsTrigger>
-                <TabsTrigger value="node" className="text-xs gap-1.5">
-                  <Code2 className="h-3.5 w-3.5" />
-                  Node.js / Fetch
-                </TabsTrigger>
-                <TabsTrigger value="python" className="text-xs gap-1.5">
-                  <Code2 className="h-3.5 w-3.5" />
-                  Python (requests)
-                </TabsTrigger>
-              </TabsList>
-
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/30 px-2.5 py-1 rounded-md border border-border/40">
-                <span>Header formats supported:</span>
-                <code className="text-foreground font-mono font-semibold">
-                  Bearer &lt;token&gt;
-                </code>
-                <span>or</span>
-                <code className="text-foreground font-mono font-semibold">X-API-Key</code>
-              </div>
-            </div>
-
-            {/* cURL Snippet */}
-            <TabsContent value="curl" className="space-y-3">
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  1. Trigger / Ingest Alert (POST /api/events)
-                </span>
-                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                  <pre className="leading-relaxed">
-                    {`curl -X POST ${baseUrl}/api/events \\
-  -H "Authorization: Bearer ${revealedSecret || 'ok_live_your_api_key'}" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "event_action": "trigger",
-    "dedup_key": "api-gateway-5xx-spike",
-    "payload": {
-      "summary": "5xx Error Rate > 5% on Production API Gateway",
-      "source": "datadog-agent",
-      "severity": "critical",
-      "custom_details": {
-        "cluster": "prod-us-east-1",
-        "error_rate": "7.4%"
-      }
-    }
-  }'`}
-                  </pre>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  2. Query Active Incidents (GET /api/incidents)
-                </span>
-                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                  <pre className="leading-relaxed">
-                    {`curl -X GET "${baseUrl}/api/incidents?status=OPEN&limit=25" \\
-  -H "Authorization: Bearer ${revealedSecret || 'ok_live_your_api_key'}"`}
-                  </pre>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* Node.js Snippet */}
-            <TabsContent value="node" className="space-y-3">
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  1. Trigger / Ingest Alert (POST /api/events)
-                </span>
-                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                  <pre className="leading-relaxed">
-                    {`const response = await fetch('${baseUrl}/api/events', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer ${revealedSecret || 'ok_live_your_api_key'}',
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    event_action: 'trigger',
-    dedup_key: 'api-gateway-5xx-spike',
-    payload: {
-      summary: '5xx Error Rate > 5% on Production API Gateway',
-      source: 'datadog-agent',
-      severity: 'critical',
-      custom_details: {
-        cluster: 'prod-us-east-1',
-        error_rate: '7.4%',
-      },
-    },
-  }),
-});
-
-const result = await response.json();
-console.log(result);`}
-                  </pre>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  2. Query Active Incidents (GET /api/incidents)
-                </span>
-                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                  <pre className="leading-relaxed">
-                    {`const response = await fetch('${baseUrl}/api/incidents?status=OPEN&limit=25', {
-  headers: {
-    'Authorization': 'Bearer ${revealedSecret || 'ok_live_your_api_key'}',
-  },
-});
-
-const data = await response.json();
-console.log(data.incidents);`}
-                  </pre>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* Python Snippet */}
-            <TabsContent value="python" className="space-y-3">
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  1. Trigger / Ingest Alert (POST /api/events)
-                </span>
-                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                  <pre className="leading-relaxed">
-                    {`import requests
-
-response = requests.post(
-    "${baseUrl}/api/events",
-    headers={
-        "Authorization": "Bearer ${revealedSecret || 'ok_live_your_api_key'}",
-        "Content-Type": "application/json",
-    },
-    json={
-        "event_action": "trigger",
-        "dedup_key": "api-gateway-5xx-spike",
-        "payload": {
-            "summary": "5xx Error Rate > 5% on Production API Gateway",
-            "source": "datadog-agent",
-            "severity": "critical",
-            "custom_details": {
-                "cluster": "prod-us-east-1",
-                "error_rate": "7.4%",
-            },
-        },
-    },
-)
-
-print(response.json())`}
-                  </pre>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  2. Query Active Incidents (GET /api/incidents)
-                </span>
-                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                  <pre className="leading-relaxed">
-                    {`import requests
-
-response = requests.get(
-    "${baseUrl}/api/incidents",
-    headers={
-        "Authorization": "Bearer ${revealedSecret || 'ok_live_your_api_key'}",
-    },
-    params={
-        "status": "OPEN",
-        "limit": 25,
-    },
-)
-
-print(response.json()["incidents"])`}
-                  </pre>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+      {/* 4. Developer Quickstart Guide & Interactive Code Examples */}
+      <DeveloperQuickstartCard appUrl={baseUrl} revealedSecret={revealedSecret} />
 
       {/* 5. Create API Key Modal Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -767,115 +535,14 @@ print(response.json()["incidents"])`}
               </div>
             </div>
 
-            {/* Granular Permission Scopes */}
-            <div className="space-y-2.5 rounded-xl border border-border/80 bg-muted/20 p-3.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
-                  <p className="text-[11px] text-muted-foreground">
-                    Selected: {selectedKeyScopes.size} of {visibleScopes.length} scopes (least privilege principle).
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {isAdmin && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => applyKeyPreset('ADMIN')}
-                      className="h-7 text-[10px] px-2"
-                    >
-                      Admin Full
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyKeyPreset('RESPONDER')}
-                    className="h-7 text-[10px] px-2"
-                  >
-                    Responder
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyKeyPreset('READ_ONLY')}
-                    className="h-7 text-[10px] px-2"
-                  >
-                    Read-Only
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyKeyPreset('CLEAR')}
-                    className="h-7 text-[10px] px-2"
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
-
-              {/* Hidden inputs to guarantee all selected scopes are sent with formData */}
-              {Array.from(selectedKeyScopes).map(sc => (
-                <input key={sc} type="hidden" name="scopes" value={sc} />
-              ))}
-
-              <div className="grid min-w-0 gap-2 sm:grid-cols-2 max-h-72 overflow-y-auto pr-1">
-                {visibleScopes.map(scope => {
-                  const Icon = scope.icon;
-                  const isChecked = selectedKeyScopes.has(scope.value);
-                  return (
-                    <div
-                      key={scope.value}
-                      onClick={e => {
-                        if ((e.target as HTMLElement).closest('button, input')) return;
-                        setSelectedKeyScopes(prev => {
-                          const next = new Set(prev);
-                          if (next.has(scope.value)) next.delete(scope.value);
-                          else next.add(scope.value);
-                          return next;
-                        });
-                      }}
-                      className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border p-3 text-xs cursor-pointer transition-all ${
-                        isChecked
-                          ? 'border-primary/50 bg-primary/5'
-                          : 'border-border/80 bg-background hover:border-primary/40'
-                      }`}
-                    >
-                      <Checkbox
-                        checked={isChecked}
-                        id={`scope-${scope.value}`}
-                        className="mt-0.5 shrink-0"
-                        onCheckedChange={checked => {
-                          setSelectedKeyScopes(prev => {
-                            const next = new Set(prev);
-                            if (checked) next.add(scope.value);
-                            else next.delete(scope.value);
-                            return next;
-                          });
-                        }}
-                      />
-                      <div className="grid min-w-0 cursor-pointer gap-1 sm:grid-cols-[minmax(8rem,0.8fr)_minmax(0,1.4fr)_auto] sm:items-center">
-                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
-                        </span>
-                        <span className="min-w-0 text-[11px] leading-relaxed text-muted-foreground">
-                          {scope.detail}
-                        </span>
-                        <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
-                          {scope.value}
-                        </code>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {/* Granular Permission Scopes - Grouped by Domain Category with Search and Posture Badges */}
+            <ScopeSelectorGrouped
+              availableScopes={visibleScopes}
+              selectedScopes={selectedKeyScopes}
+              onChange={setSelectedKeyScopes}
+              isAdmin={isAdmin}
+              name="scopes"
+            />
 
             <DialogFooter className="pt-2">
               <Button

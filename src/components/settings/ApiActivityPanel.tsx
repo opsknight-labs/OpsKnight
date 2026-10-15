@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/shadcn/table';
 import { EmptyState } from './feedback/EmptyState';
 import { API_ACTIVITY_ENTITY_TYPES } from '@/lib/api-v2/activity-query';
-import { Activity, Search, Terminal } from 'lucide-react';
+import { Activity, Search, Terminal, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export type ApiAuditLogItem = {
   id: string;
@@ -60,10 +60,12 @@ export default function ApiActivityPanel({
   activities,
   nextCursor,
   filters,
+  total,
 }: {
   activities: ApiAuditLogItem[];
   nextCursor: string | null;
   filters: ApiActivityFilterValues;
+  total?: number;
 }) {
   const filtered = Boolean(
     filters.q || filters.entity || filters.actor || filters.key || filters.from || filters.to
@@ -230,19 +232,42 @@ export default function ApiActivityPanel({
               </Table>
             </div>
           </CardContent>
-          <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
-            <span>Showing {activities.length} events</span>
-            <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span>
+                Showing <strong className="text-foreground font-semibold">{activities.length}</strong>
+                {typeof total === 'number' ? (
+                  <> of <strong className="text-foreground font-semibold">{total}</strong></>
+                ) : null}{' '}
+                events
+              </span>
               {filters.hasCursor && (
-                <Button asChild variant="outline" size="sm">
-                  <Link href={activityHref(filters)}>Newest</Link>
+                <Badge variant="outline" className="text-[10px] bg-muted/60 text-muted-foreground font-medium">
+                  Older results
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {filters.hasCursor && (
+                <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+                  <Link href={activityHref(filters)}>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Newest
+                  </Link>
                 </Button>
               )}
-              {nextCursor && (
-                <Button asChild variant="outline" size="sm">
-                  <Link href={activityHref(filters, nextCursor)}>Older events</Link>
+              {nextCursor ? (
+                <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+                  <Link href={activityHref(filters, nextCursor)}>
+                    Older events
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Link>
                 </Button>
-              )}
+              ) : activities.length > 0 && filters.hasCursor ? (
+                <span className="text-[11px] text-muted-foreground italic px-2">
+                  End of recorded activity
+                </span>
+              ) : null}
             </div>
           </div>
         </Card>

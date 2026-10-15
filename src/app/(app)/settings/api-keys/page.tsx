@@ -60,6 +60,7 @@ function generateSampleFromSchema(schema: any): any {
   if (schema.type === 'object' && schema.properties) {
     const result: Record<string, any> = {};
     for (const [key, prop] of Object.entries<any>(schema.properties)) {
+      if (!prop || typeof prop !== 'object') continue;
       if (prop.default !== undefined) {
         result[key] = prop.default;
       } else if (prop.enum && prop.enum.length > 0) {
@@ -181,7 +182,8 @@ export default async function ApiKeysSettingsPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = (await searchParams) ?? {};
-  const requestedTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
+  const rawTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
+  const requestedTab = rawTab === 'api-explorer' ? 'explorer' : rawTab;
   const activeTab = (WORKSPACE_TABS as readonly string[]).includes(requestedTab ?? '')
     ? (requestedTab as (typeof WORKSPACE_TABS)[number])
     : 'api-keys';
@@ -287,6 +289,7 @@ export default async function ApiKeysSettingsPage({
     ip: string | null;
   }> = [];
   let nextActivityCursor: string | null = null;
+  let matchingActivity: number | undefined;
 
   if (isAdmin) {
     // Header counts are cheap aggregates; unexpired, unrevoked tokens only.
@@ -325,22 +328,28 @@ export default async function ApiKeysSettingsPage({
 
     if (activeTab === 'activity') {
       // Filtered, ordered and paginated in the database; one extra row signals another page.
-      const auditRes = await prisma.auditLog.findMany({
-        where: buildApiActivityWhere(activityFilters),
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: API_ACTIVITY_PAGE_SIZE + 1,
-        select: {
-          id: true,
-          action: true,
-          entityType: true,
-          entityId: true,
-          actorEmail: true,
-          actorName: true,
-          createdAt: true,
-          details: true,
-          ip: true,
-        },
-      });
+      const [auditRes, matches] = await Promise.all([
+        prisma.auditLog.findMany({
+          where: buildApiActivityWhere(activityFilters),
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: API_ACTIVITY_PAGE_SIZE + 1,
+          select: {
+            id: true,
+            action: true,
+            entityType: true,
+            entityId: true,
+            actorEmail: true,
+            actorName: true,
+            createdAt: true,
+            details: true,
+            ip: true,
+          },
+        }),
+        prisma.auditLog.count({
+          where: buildApiActivityWhere({ ...activityFilters, cursor: undefined }),
+        }),
+      ]);
+      matchingActivity = matches;
       const hasMoreActivity = auditRes.length > API_ACTIVITY_PAGE_SIZE;
       rawAuditLogs = auditRes.slice(0, API_ACTIVITY_PAGE_SIZE);
       nextActivityCursor =
@@ -379,32 +388,43 @@ export default async function ApiKeysSettingsPage({
   const endpointCount = V2_OPERATIONS.length;
   const spec = getOpenApiV2Spec() as { paths?: Record<string, Record<string, any>> };
   const endpoints: ApiEndpointDoc[] = [];
-  // The spec and its sample bodies are only built for the Explorer tab.
-  if (activeTab === 'explorer' && spec?.paths) {
+  if (spec?.paths) {
     for (const [pathKey, pathItem] of Object.entries(spec.paths)) {
       for (const method of ['get', 'post', 'patch', 'put', 'delete'] as const) {
         const op = pathItem[method];
         if (op) {
-          const verifiedSample = getVerifiedSampleBody(method, pathKey);
-          const reqSchema = op.requestBody?.content?.['application/json']?.schema;
-          const sampleBody =
-            verifiedSample ?? (reqSchema ? generateSampleFromSchema(reqSchema) : undefined);
+          try {
+            const verifiedSample = getVerifiedSampleBody(method, pathKey);
+            const reqSchema = op.requestBody?.content?.['application/json']?.schema;
+            const sampleBody =
+              verifiedSample ?? (reqSchema ? generateSampleFromSchema(reqSchema) : undefined);
 
-          endpoints.push({
-            method: method.toUpperCase() as any,
-            path: pathKey,
-            tag: op.tags?.[0] || 'General',
-            summary: op.summary || '',
-            description: op.description || '',
-            scope: getEndpointScope(method, pathKey),
-            parameters: op.parameters,
-            requestBody: op.requestBody
-              ? {
-                  description: op.requestBody.description,
-                  sample: sampleBody,
-                }
-              : undefined,
-          });
+            endpoints.push({
+              method: method.toUpperCase() as any,
+              path: pathKey,
+              tag: op.tags?.[0] || 'General',
+              summary: op.summary || '',
+              description: op.description || '',
+              scope: getEndpointScope(method, pathKey),
+              parameters: op.parameters,
+              requestBody: op.requestBody
+                ? {
+                    description: op.requestBody.description,
+                    sample: sampleBody,
+                  }
+                : undefined,
+            });
+          } catch {
+            endpoints.push({
+              method: method.toUpperCase() as any,
+              path: pathKey,
+              tag: op.tags?.[0] || 'General',
+              summary: op.summary || '',
+              description: op.description || '',
+              scope: getEndpointScope(method, pathKey),
+              parameters: op.parameters,
+            });
+          }
         }
       }
     }
@@ -506,7 +526,7 @@ export default async function ApiKeysSettingsPage({
       <Tabs value={activeTab} className="space-y-6">
         <TabsList className="h-auto max-w-full flex-wrap justify-start bg-muted/70 p-1 border border-border/80 rounded-xl">
           <TabsTrigger value="api-keys" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
-            <Link href="?tab=api-keys" scroll={false} prefetch={false}>
+            <Link href="/settings/api-keys?tab=api-keys" scroll={false} prefetch={false}>
               <Key className="h-3.5 w-3.5" />
               API Keys ({totalKeys})
             </Link>
@@ -516,19 +536,19 @@ export default async function ApiKeysSettingsPage({
             className="text-xs font-semibold gap-1.5 px-3.5"
             asChild
           >
-            <Link href="?tab=service-accounts" scroll={false} prefetch={false}>
+            <Link href="/settings/api-keys?tab=service-accounts" scroll={false} prefetch={false}>
               <Bot className="h-3.5 w-3.5" />
               Service Accounts {isAdmin ? `(${totalServiceAccounts})` : ''}
             </Link>
           </TabsTrigger>
           <TabsTrigger value="explorer" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
-            <Link href="?tab=explorer" scroll={false} prefetch={false}>
+            <Link href="/settings/api-keys?tab=explorer" scroll={false} prefetch={false}>
               <Code2 className="h-3.5 w-3.5" />
               API Explorer ({endpointCount})
             </Link>
           </TabsTrigger>
           <TabsTrigger value="activity" className="text-xs font-semibold gap-1.5 px-3.5" asChild>
-            <Link href="?tab=activity" scroll={false} prefetch={false}>
+            <Link href="/settings/api-keys?tab=activity" scroll={false} prefetch={false}>
               <Activity className="h-3.5 w-3.5" />
               API Activity
             </Link>
@@ -609,6 +629,7 @@ export default async function ApiKeysSettingsPage({
             <ApiActivityPanel
               activities={formattedActivities}
               nextCursor={nextActivityCursor}
+              total={matchingActivity}
               filters={{
                 q: activityFilters.action ?? '',
                 entity: activityFilters.entityType ?? '',
