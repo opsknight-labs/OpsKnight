@@ -741,6 +741,10 @@ self.addEventListener('message', event => {
           );
         } catch (error) {
           console.warn('[Service Worker] Failed to purge static asset caches', error);
+        } finally {
+          if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({ status: 'PURGED' });
+          }
         }
       })()
     );

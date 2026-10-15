@@ -135,26 +135,40 @@ export function clearRecoveryBudget(): void {
   }
 }
 
-export function purgeCachesAndReload(options: { clearBudget?: boolean } = {}): void {
+export async function purgeCachesAndReload(
+  options: { clearBudget?: boolean } = {}
+): Promise<void> {
   if (options.clearBudget !== false) {
     clearRecoveryBudget();
   }
   if (typeof window !== 'undefined') {
     try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'PURGE_STATIC_CACHES' });
-      }
       if ('caches' in window) {
-        void window.caches
-          .keys()
-          .then(keys => {
-            return Promise.all(
-              keys
-                .filter(name => /next-static|static-js|pages/i.test(name))
-                .map(name => window.caches.delete(name))
+        const keys = await window.caches.keys();
+        await Promise.all(
+          keys
+            .filter(name => /next-static|static-js|pages/i.test(name))
+            .map(name => window.caches.delete(name))
+        );
+      }
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        await new Promise<void>(resolve => {
+          const channel = new MessageChannel();
+          const timer = setTimeout(resolve, 500);
+          channel.port1.onmessage = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          try {
+            navigator.serviceWorker.controller?.postMessage(
+              { type: 'PURGE_STATIC_CACHES' },
+              [channel.port2]
             );
-          })
-          .catch(() => {});
+          } catch {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
       }
     } catch {
       // Ignore cache clearing errors during reload
