@@ -678,6 +678,12 @@ self.addEventListener('install', () => {});
 self.addEventListener('activate', event => {
   event.waitUntil(
     (async () => {
+      // Dynamic page and API caches must be purged on activation so that new
+      // documents and API schemas are fetched fresh from the server.
+      // Static chunk assets are content-hashed and immutable, so preserving them
+      // in CacheFirst ensures existing unreloaded tabs continue running without
+      // losing access to lazy chunks. Stale chunk caches are evicted explicitly
+      // via PURGE_STATIC_CACHES during recovery reloads.
       const dynamicCachePatterns = [
         'pages',
         'pages-rsc',
@@ -686,8 +692,6 @@ self.addEventListener('activate', event => {
         'apis',
         'static-data-assets',
         'cross-origin',
-        'next-static-assets',
-        'static-js-assets',
       ];
       try {
         const cacheNames = await caches.keys();

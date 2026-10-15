@@ -79,29 +79,38 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const isChunkError = isChunkLoadError(this.state.error);
+
+      if (isChunkError) {
+        return (
+          <ErrorState
+            title="Application Update Available"
+            message="A new version of OpsKnight has been deployed. Please reload the page to get the latest updates."
+            retryText="Reload Application"
+            onRetry={() => {
+              if (typeof window !== 'undefined') {
+                purgeCachesAndReload();
+              }
+            }}
+          />
+        );
+      }
+
       if (this.props.fallback) {
         return this.props.fallback;
       }
 
-      const isChunkError = isChunkLoadError(this.state.error);
-
       return (
         <ErrorState
-          title={isChunkError ? 'Application Update Available' : 'Something went wrong'}
+          title="Something went wrong"
           message={
-            isChunkError
-              ? 'A new version of OpsKnight has been deployed. Please reload the page to get the latest updates.'
-              : this.state.error
-                ? getUserFacingErrorMessage(this.state.error)
-                : 'An unexpected error occurred'
+            this.state.error
+              ? getUserFacingErrorMessage(this.state.error)
+              : 'An unexpected error occurred'
           }
-          retryText={isChunkError ? 'Reload Application' : 'Try Again'}
+          retryText="Try Again"
           onRetry={() => {
-            if (isChunkError && typeof window !== 'undefined') {
-              purgeCachesAndReload();
-            } else {
-              this.setState({ hasError: false, error: null });
-            }
+            this.setState({ hasError: false, error: null });
           }}
         />
       );

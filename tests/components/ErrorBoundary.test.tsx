@@ -76,4 +76,43 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
+
+  it('bypasses custom fallback and renders update prompt on ChunkLoadError', () => {
+    const chunkError = new Error('ChunkLoadError: Loading chunk 92296 failed');
+    chunkError.name = 'ChunkLoadError';
+
+    render(
+      <ErrorBoundary fallback={<div>Production App Fallback</div>}>
+        <ThrowError error={chunkError} />
+      </ErrorBoundary>
+    );
+
+    // Custom fallback must be bypassed for chunk errors
+    expect(screen.queryByText('Production App Fallback')).not.toBeInTheDocument();
+    expect(screen.getByText('Application Update Available')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'A new version of OpsKnight has been deployed. Please reload the page to get the latest updates.'
+      )
+    ).toBeInTheDocument();
+
+    const reloadBtn = screen.getByRole('button', { name: /reload application/i });
+    expect(reloadBtn).toBeInTheDocument();
+    fireEvent.click(reloadBtn);
+
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders custom fallback for non-chunk errors when provided', () => {
+    const regularError = new Error('Database connection failed');
+
+    render(
+      <ErrorBoundary fallback={<div>Production App Fallback</div>}>
+        <ThrowError error={regularError} />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByText('Production App Fallback')).toBeInTheDocument();
+    expect(screen.queryByText('Application Update Available')).not.toBeInTheDocument();
+  });
 });
