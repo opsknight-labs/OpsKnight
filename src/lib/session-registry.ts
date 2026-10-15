@@ -303,6 +303,8 @@ export async function ensureRegisteredSession(input: {
                   metadata.issuedUnderPolicyVersion
                 ),
                 sessionExpiresAt: new Date(input.expiresAtSeconds * 1000),
+                sessionPolicyVersion: metadata.issuedUnderPolicyVersion ?? null,
+                sessionDiagnosticProjectedAt: new Date(),
               },
             });
           } catch (err) {
@@ -332,6 +334,8 @@ export async function ensureRegisteredSession(input: {
             input.issuedUnderPolicyVersion
           ),
           platform: activePlatform(input.policy),
+          sessionPolicyVersion: input.issuedUnderPolicyVersion ?? null,
+          sessionDiagnosticProjectedAt: new Date(),
           sessionExpiresAt:
             typeof input.expiresAtSeconds === 'number' && Number.isFinite(input.expiresAtSeconds)
               ? new Date(input.expiresAtSeconds * 1000)

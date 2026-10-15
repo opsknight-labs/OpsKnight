@@ -160,6 +160,10 @@ async function main() {
     console.log(`Existing 2.0 fixture seeded at ${baseline}; applying additive branch migrations.`);
     await db.$disconnect();
     run(['prisma', 'migrate', 'deploy']);
+    execFileSync(process.execPath, ['scripts/prepare-authentication-diagnostics.cjs'], {
+      stdio: 'inherit',
+      env: process.env,
+    });
     run([
       'vitest',
       'run',

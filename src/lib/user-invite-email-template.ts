@@ -14,6 +14,7 @@ import {
   escapeHtml,
 } from '@/lib/email-components';
 import { getBaseUrl } from '@/lib/env-validation';
+import { getSsoInvitationEmailTemplate } from '@/lib/authentication-email-template';
 
 export interface UserInviteEmailData {
   userName: string;
@@ -28,6 +29,7 @@ export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
   html: string;
   text: string;
 } {
+  if (data.ssoOnly) return getSsoInvitationEmailTemplate(data);
   const subject = "[OpsKnight] You're invited to join";
   const expiresText = data.expiresInDays ? `${data.expiresInDays} days` : '7 days';
   const greetingName = data.userName || 'there';

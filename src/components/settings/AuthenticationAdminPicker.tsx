@@ -11,12 +11,14 @@ export default function AuthenticationAdminPicker({
   onChange,
   initialAdmins,
   disabled = false,
+  disabledReason = 'The sign-in test is bound to the currently authenticated administrator.',
 }: {
   label: string;
   value: string;
   onChange: (id: string) => void;
   initialAdmins: Admin[];
   disabled?: boolean;
+  disabledReason?: string;
 }) {
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState(initialAdmins);
@@ -54,6 +56,18 @@ export default function AuthenticationAdminPicker({
   }, [query, after, disabled]);
   const selected =
     users.find(user => user.id === value) ?? initialAdmins.find(user => user.id === value);
+  if (disabled)
+    return (
+      <div className="space-y-2 text-sm">
+        <p className="font-medium">{label}</p>
+        <p className="break-words rounded-md bg-muted/40 p-3">
+          {selected
+            ? `${selected.name ? selected.name + ' · ' : ''}${selected.email}`
+            : 'No eligible administrator selected'}
+        </p>
+        <p className="text-xs text-muted-foreground">{disabledReason}</p>
+      </div>
+    );
   return (
     <div className="space-y-2">
       {!disabled && (

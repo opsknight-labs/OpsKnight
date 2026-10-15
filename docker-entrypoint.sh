@@ -169,6 +169,8 @@ install_voice_attempt_indexes() {
     return 0
 }
 
+node scripts/prepare-authentication-diagnostics.cjs || exit 1
+
 echo "🔄 Enforcing status platform indexes..."
 if ! install_status_platform_indexes; then
     echo "❌ Status platform index enforcement failed. Refusing to start without required indexes."
