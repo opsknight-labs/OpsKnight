@@ -104,3 +104,5 @@ target and record findings before considering another run.
 Use **Runbooks → Executions** for recent execution history and
 **Runbooks → Health** for queue and safety signals. See
 [troubleshooting](../../troubleshooting/runbooks/) for waiting or uncertain executions.
+
+Suggestions from detached rules remain visible as historical evidence and show **Rule detached**. Preview and execution are disabled; responders with execution permission can still dismiss them. Paused rules likewise cannot start a suggestion until reactivated.

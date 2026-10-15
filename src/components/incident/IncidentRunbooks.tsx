@@ -54,7 +54,7 @@ export default async function IncidentRunbooks({
   await assertCanViewIncident(incidentId);
   const [bindings, executions, suggestions] = await Promise.all([
     prisma.serviceAutomationRule.findMany({
-      where: { serviceId, enabled: true },
+      where: { serviceId, enabled: true, detachedAt: null },
       include: { runbook: true, runbookVersion: true },
       orderBy: { createdAt: 'asc' },
     }),
@@ -143,12 +143,20 @@ export default async function IncidentRunbooks({
                   <div className="font-medium">{suggestion.binding.runbook.name}</div>
                   <div className="text-xs text-muted-foreground">
                     Version {suggestion.runbookVersion.version}
+                    {suggestion.binding.detachedAt ? (
+                      <Badge variant="outline">Rule detached</Badge>
+                    ) : !suggestion.binding.enabled ? (
+                      <Badge variant="outline">Rule paused</Badge>
+                    ) : null}
                   </div>
                 </div>
                 {canExecute && (
                   <div className="flex gap-2">
                     {suggestion.planSnapshot && (
                       <RunbookExecutionPreview
+                        disabled={
+                          Boolean(suggestion.binding.detachedAt) || !suggestion.binding.enabled
+                        }
                         previewAction={previewIncidentRunbookAction.bind(
                           null,
                           incidentId,

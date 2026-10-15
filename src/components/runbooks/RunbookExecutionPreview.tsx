@@ -8,9 +8,11 @@ import type { ExecutionPreview } from '@/lib/runbooks/execution-preview';
 export default function RunbookExecutionPreview({
   previewAction,
   executeAction,
+  disabled = false,
   previewLabel = 'Preview execution',
   executeLabel = 'Execute this plan',
 }: {
+  disabled?: boolean;
   previewAction: () => Promise<{ preview?: ExecutionPreview; error?: string }>;
   executeAction: RunbookFormAction;
   previewLabel?: string;
@@ -34,7 +36,7 @@ export default function RunbookExecutionPreview({
       <Button
         type="button"
         variant="outline"
-        disabled={pending}
+        disabled={disabled || pending}
         aria-busy={pending}
         onClick={async () => {
           setPending(true);
@@ -145,6 +147,7 @@ export default function RunbookExecutionPreview({
             <SubmitButton
               pendingLabel="Starting…"
               disabled={
+                disabled ||
                 expired ||
                 preview.readiness?.some(check => check.state === 'blocked') ||
                 (preview.steps.some(step => step.risk !== 'READ_ONLY') && !confirmed)

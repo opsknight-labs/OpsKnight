@@ -277,6 +277,90 @@ suite('PR 864 review regression contracts', () => {
       )
     ).rejects.toThrow('not found');
   });
+  it('rejects stale Suggested matches when a condition edit commits after the batch read', async () => {
+    const { service, workflow, old } = await fixture();
+    const incident = await createTestIncident('Concurrent condition edit', service.id);
+    const rule = await testPrisma.serviceAutomationRule.create({
+      data: {
+        serviceId: service.id,
+        runbookId: workflow.id,
+        runbookVersionId: old.id,
+        mode: 'SUGGESTED',
+        versionStrategy: 'PINNED',
+        inputValues: { legacy: 'test' },
+      },
+    });
+    const trigger = await replaceBindingTrigger(
+      service.id,
+      rule.id,
+      {
+        event: 'INCIDENT_CREATED',
+        enabled: true,
+        conditionLogic: 'AND',
+        conditions: [{ field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH', sequence: 0 }],
+      },
+      actor.id
+    );
+    const { evaluateIncidentTriggers } = await import('@/lib/runbooks/triggers');
+    const { default: applicationPrisma } = await import('@/lib/prisma');
+    let loaded!: () => void;
+    let locked!: () => void;
+    const read = new Promise<void>(resolve => {
+      loaded = resolve;
+    });
+    const lock = new Promise<void>(resolve => {
+      locked = resolve;
+    });
+    const original = applicationPrisma.serviceAutomationRule.findMany.bind(
+      applicationPrisma.serviceAutomationRule
+    );
+    const spy = vi
+      .spyOn(applicationPrisma.serviceAutomationRule, 'findMany')
+      .mockImplementationOnce(args => {
+        const query = original(args);
+        void query.then(
+          () => loaded(),
+          () => loaded()
+        );
+        return query;
+      });
+    try {
+      const editor = testPrisma.$transaction(
+        async tx => {
+          await tx.$queryRaw`SELECT id FROM "Runbook" WHERE id = ${workflow.id} FOR UPDATE`;
+          locked();
+          await read;
+          await tx.runbookTrigger.update({
+            where: { id: trigger.id },
+            data: {
+              revision: { increment: 1 },
+              conditions: {
+                deleteMany: {},
+                create: {
+                  field: 'incident.urgency',
+                  operator: 'EQUALS',
+                  value: 'LOW',
+                  sequence: 0,
+                },
+              },
+            },
+          });
+        },
+        { timeout: 10000 }
+      );
+      await lock;
+      const evaluation = evaluateIncidentTriggers(incident.id, 'concurrent-edit');
+      const [, result] = await Promise.all([editor, evaluation]);
+      expect(result).toMatchObject({ matched: 1, suggested: 0 });
+      expect(await testPrisma.runbookSuggestion.count()).toBe(0);
+      expect(await evaluateIncidentTriggers(incident.id, 'fresh-read')).toMatchObject({
+        matched: 0,
+        suggested: 0,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
   it('evaluates 100/1000/10000 incident rules in bounded batches and deduplicates concurrent events', async () => {
     const { service, workflow, old } = await fixture();
     const incident = await createTestIncident('Trigger scale', service.id);

@@ -106,6 +106,19 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
                 }))
               )
                 return false;
+              if (
+                !(await tx.runbookTrigger.findFirst({
+                  where: {
+                    id: trigger.id,
+                    bindingId: binding.id,
+                    revision: trigger.revision,
+                    enabled: true,
+                    event: 'INCIDENT_CREATED',
+                  },
+                  select: { id: true },
+                }))
+              )
+                return false;
 
               const version = await tx.runbookVersion.findUniqueOrThrow({
                 where: { id: versionId },
@@ -204,6 +217,19 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
                 )
                   return false;
 
+                if (
+                  !(await tx.runbookTrigger.findFirst({
+                    where: {
+                      id: trigger.id,
+                      bindingId: binding.id,
+                      revision: trigger.revision,
+                      enabled: true,
+                      event: 'INCIDENT_CREATED',
+                    },
+                    select: { id: true },
+                  }))
+                )
+                  return false;
                 await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-incident-budget:${incidentId}`}))`;
                 await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
                 if (

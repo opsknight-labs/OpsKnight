@@ -37,7 +37,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: integration-certification
+  group: integration-certification-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   multi-replica-failover-load:

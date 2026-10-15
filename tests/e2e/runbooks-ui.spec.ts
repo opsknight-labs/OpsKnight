@@ -1320,3 +1320,83 @@ test('editing an active Automatic rule warns, pauses it and leads to reactivatio
   );
   await expect(page.getByRole('heading', { name: 'Activate Automatic rule' })).toBeVisible();
 });
+
+test('detached-rule suggestions stay visible with disabled execution and can be dismissed', async ({
+  page,
+}) => {
+  const service = await prisma.service.create({
+    data: { name: `Detached suggestion ${crypto.randomUUID()}` },
+  });
+  const workflow = await prisma.runbook.create({
+    data: { name: 'Detached response evidence', slug: crypto.randomUUID() },
+  });
+  const version = await prisma.runbookVersion.create({
+    data: {
+      runbookId: workflow.id,
+      version: 1,
+      state: 'PUBLISHED',
+      checksum: 'e'.repeat(64),
+      definition: {
+        steps: [
+          {
+            key: 'wait',
+            name: 'Wait',
+            type: 'WAIT',
+            riskClass: 'READ_ONLY',
+            config: { durationSeconds: 1 },
+          },
+        ],
+      },
+    },
+  });
+  const rule = await prisma.serviceAutomationRule.create({
+    data: {
+      serviceId: service.id,
+      runbookId: workflow.id,
+      runbookVersionId: version.id,
+      mode: 'SUGGESTED',
+      versionStrategy: 'PINNED',
+      enabled: false,
+      detachedAt: new Date(),
+      triggers: { create: { event: 'INCIDENT_CREATED', revision: 2 } },
+    },
+    include: { triggers: true },
+  });
+  const incident = await prisma.incident.create({
+    data: { title: 'Detached suggestion evidence', serviceId: service.id },
+  });
+  const suggestion = await prisma.runbookSuggestion.create({
+    data: {
+      incidentId: incident.id,
+      bindingId: rule.id,
+      runbookVersionId: version.id,
+      triggerId: rule.triggers[0].id,
+      triggerRevision: 2,
+      fingerprint: crypto.randomUUID(),
+      sourceEventId: crypto.randomUUID(),
+      planSnapshot: {
+        inputValues: {},
+        agentId: null,
+        agentPoolId: null,
+        definitionChecksum: version.checksum,
+      },
+    },
+  });
+  await login(page);
+  await page.goto(`/incidents/${incident.id}`);
+  await page.getByRole('tab', { name: /^Runbooks/ }).click();
+  await expect(page.getByText('Detached response evidence', { exact: true })).toBeVisible();
+  await expect(page.getByText('Rule detached', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preview execution', exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Execute this plan', exact: true })
+  ).not.toBeVisible();
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await prisma.runbookSuggestion.findUniqueOrThrow({ where: { id: suggestion.id } })).state
+    )
+    .toBe('DISMISSED');
+  expect(await prisma.runbookExecution.count({ where: { bindingId: rule.id } })).toBe(0);
+});

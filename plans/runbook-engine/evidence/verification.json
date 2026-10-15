@@ -154,5 +154,41 @@
     "runtimeScale": "incident-trigger-scale.json",
     "limitation": "Batching bounds loaded rule/condition data, not total processing time. The fixture measures three concurrent duplicate deliveries with five matching suggestions and no physical execution; sustained production throughput remains unqualified.",
     "remoteCI": "Use exact-head PR checks after the follow-up push."
+  },
+  "suggestionRaceAndControlsFollowup": {
+    "baseRevision": "eb52efd1240b7676ea5a53b43a6f001bbc50fc12",
+    "changes": [
+      "Incident suggestions disclose detached/paused rule state and disable preview/execution while preserving dismissal",
+      "Suggested and budget-fallback suggestion transactions recheck evaluated trigger revision under the workflow lock",
+      "Integration certification concurrency groups are scoped by Git ref to avoid pending-run replacement across unrelated branches"
+    ],
+    "localChecks": {
+      "reviewDatabase": {
+        "status": "PASS",
+        "tests": 10,
+        "scope": "Includes deterministic condition edit between batch read and locked suggestion creation"
+      },
+      "runbookAndPreviewUnits": {
+        "status": "PASS",
+        "files": 37,
+        "tests": 311
+      },
+      "deploymentWorkflowUnits": {
+        "status": "PASS",
+        "tests": 34
+      },
+      "browser": {
+        "status": "PASS",
+        "tests": 36,
+        "skipped": 0,
+        "browsers": ["Chromium", "Firefox", "WebKit"],
+        "scope": "Full production-server matrix including detached suggestion visibility, disabled execution and successful dismissal"
+      },
+      "productionBuild": "PASS",
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "documentation": "PASS"
+    },
+    "remoteCI": "Pending after follow-up push; check exact-head PR results. Previous head eb52efd12 completed without failed checks."
   }
 }
