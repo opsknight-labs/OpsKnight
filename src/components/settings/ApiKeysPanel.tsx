@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSecretSafeAction } from './useSecretSafeAction';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
@@ -175,23 +175,21 @@ export default function ApiKeysPanel({
   // The secret is held only in `revealedSecret`; dismissing the banner clears it, and the
   // action state itself never retains it (see useSecretSafeAction).
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [state, formAction] = useSecretSafeAction<State>(
     createApiKey,
     { error: null, success: false, token: null },
-    setRevealedSecret
+    setRevealedSecret,
+    // Close the dialog from the action result instead of syncing state in an effect.
+    result => {
+      if (result.success) setCreateDialogOpen(false);
+    }
   );
 
   const router = useRouter();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [revokeKeyId, setRevokeKeyId] = useState<string | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (state?.success) {
-      setCreateDialogOpen(false);
-    }
-  }, [state?.success]);
 
   const effectiveRole = role ?? (isAdmin ? 'ADMIN' : canCreateWriteKeys ? 'RESPONDER' : 'USER');
   const issuable = new Set<string>(issuableScopesForRole(effectiveRole).map(d => d.scope));

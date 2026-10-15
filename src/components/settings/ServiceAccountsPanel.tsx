@@ -1,7 +1,7 @@
 'use client';
 
 import { ALL_API_SCOPE_DEFINITIONS, issuableScopesForRole } from '@/lib/api-scope-registry';
-import { useState, useMemo, useActionState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useSecretSafeAction } from './useSecretSafeAction';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
@@ -148,11 +148,20 @@ export default function ServiceAccountsPanel({
 
   // Create Service Account Dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createState, createAction] = useActionState(createServiceAccountAction, {
-    error: null,
-    success: false,
-    token: null,
-  });
+  const [createState, createAction] = useSecretSafeAction<
+    Awaited<ReturnType<typeof createServiceAccountAction>>
+  >(
+    createServiceAccountAction,
+    { error: null, success: false, token: null },
+    () => {},
+    // Close the dialog and refresh from the action result instead of syncing state in an effect.
+    result => {
+      if (result.success) {
+        setCreateDialogOpen(false);
+        router.refresh();
+      }
+    }
+  );
 
   // Issue Token Dialog
   const [issueTokenTargetId, setIssueTokenTargetId] = useState<string | null>(null);
@@ -178,13 +187,6 @@ export default function ServiceAccountsPanel({
       router.refresh();
     }
   );
-
-  useEffect(() => {
-    if (createState?.success) {
-      setCreateDialogOpen(false);
-      router.refresh();
-    }
-  }, [createState?.success, router]);
 
   // Delete SA Confirmation
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);

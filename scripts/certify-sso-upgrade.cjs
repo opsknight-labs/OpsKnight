@@ -53,15 +53,16 @@ async function main() {
     const encrypted = `${iv.toString('hex')}:${Buffer.concat([cipher.update('legacy-upgrade-client-secret'), cipher.final()]).toString('hex')}`;
     process.env.ENCRYPTION_KEY = encryptionKey.toString('hex');
     process.env.NEXTAUTH_SECRET = crypto.randomBytes(48).toString('base64url');
-    const seed = (model, input) =>
-      // Only return the id: this client is newer than the published v2.0.0 schema being seeded, so
-      // columns added since then (for example a resource `revision`) do not exist yet.
-      model.upsert({
-        where: { id: input.data.id },
-        create: input.data,
-        update: input.data,
-        select: { id: true },
-      });
+    // This client is newer than the published v2.0.0 schema being seeded, so columns added since
+    // then (for example a resource `revision`) do not exist in the database yet. Prisma's native
+    // upsert returns every column, so seed with find + create/update and select only the id.
+    const seed = async (model, input) => {
+      const where = { id: input.data.id };
+      const existing = await model.findUnique({ where, select: { id: true } });
+      return existing
+        ? model.update({ where, data: input.data, select: { id: true } })
+        : model.create({ data: input.data, select: { id: true } });
+    };
     const passwordHash = await bcrypt.hash(
       'Existing optional administrator passphrase October 2026',
       12
