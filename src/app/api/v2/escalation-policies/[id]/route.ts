@@ -49,7 +49,7 @@ export const GET = withV2Observability(async function GET(
     }
 
     return apiV2Success(policy, {
-      headers: { ...rlHeaders, ...etagHeaders(policy.updatedAt) },
+      headers: { ...rlHeaders, ...etagHeaders(policy.revision) },
     });
   } catch (error) {
     return apiV2Error(error, req);
@@ -182,7 +182,7 @@ export const PATCH = withV2Observability(async function PATCH(
     );
 
     return apiV2Success(updated, {
-      headers: { ...rlHeaders, ...etagHeaders(updated!.updatedAt) },
+      headers: { ...rlHeaders, ...etagHeaders(updated!.revision) },
     });
   } catch (error) {
     return apiV2Error(error, req);

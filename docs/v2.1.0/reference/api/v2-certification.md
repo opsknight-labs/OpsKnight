@@ -107,6 +107,19 @@ Behaviour change to announce: deployments that relied on `CF-Connecting-IP` bein
 | `PATCH` publication field against PostgreSQL | Done (local) | Runtime test asserts `publication` is returned and the audit row committed |
 | Recovery after a crash right after the default-page commit, a failed publish of the new default, a failed republish of the demoted page | **Not yet run** | Needs PostgreSQL and the projector; the existing integration tests were not run locally |
 
+## Round four (review of `d5482126`)
+
+| Item | State | Evidence |
+| --- | --- | --- |
+| ETags backed by a dedicated monotonic revision | Done in code; **real-PostgreSQL rerun pending** | `revision` column on Team, Service, EscalationPolicy, Integration, OnCallSchedule; a `BEFORE UPDATE` trigger increments it on every write from any code path (metadata-only `ADD COLUMN`, no rewrite). `ETag: "<revision>"`; `If-Match` compares the revision in the UPDATE's WHERE clause. Unit tests and tsc pass; the migration applied cleanly to PostgreSQL 16 with all five triggers. The earlier timestamp-based version passed the two-writer, 20-rapid-write, stale and weak-validator tests on PostgreSQL; the same tests must be rerun against the revision implementation |
+| Secret not retained in React action state | Done | `useSecretSafeAction` hands the secret to the dismissable banner and returns the action state with `token` removed. Hook and panel tests |
+| Nested service-account token lists bounded | Done in code; **real-PostgreSQL rerun pending** | Newest 25 tokens per account (detail: 100), per-token `ACTIVE`/`EXPIRED` status, counts (`activeTokensCount`, `tokensTotal`, `tokensTruncated`) from `groupBy`/`count` aggregates; OpenAPI schema extended. Unit tests; the 120-token PostgreSQL test was written but not run |
+| Independent OpenAPI validation | Done | Redocly CLI lint: valid, 2 warnings (missing `license`, now added; one ambiguous-path warning between `/runbooks/{id}/execute` and `/runbooks/executions/{id}`). `openapi-typescript` generated a 4,308-line client and a typed list/create/patch/execute workflow compiled with `tsc --strict`. `openapi-python-client` generated 256 modules, all import cleanly. A live workflow with the generated clients was **not** run (the local proxy was returning 504s under load; note the generated Python client raises on a non-JSON gateway error body) |
+| k6 availability versus throughput | Done | `read_succeeded` (rate of 200s, threshold above 0.99) is separate from safe 429s; reads run at 40 rps so 24 keys stay inside the per-credential limit |
+| Cold-start scenario | Written, **not run** | `cold_start`: valid credentials first appearing during a flood (no verified hint on any replica), measured in the first 15 s and in steady state; steady-state admission 429 threshold below 5% |
+| Authentication admission is per replica | Documented | The priority, unidentified and legacy lanes are per-process by design (no Redis). Aggregate concurrency grows with replicas, so size `API_V2_*_CONCURRENCY` and the connection pool together; the 1, 2 and 4 replica connection measurements are **not yet run** |
+| Branch behind `main` | Open | Needs a merge or rebase of `main`; not done here |
+
 ## Findings from running against a real database
 
 Both were invisible to unit tests with mocked Prisma and are fixed:

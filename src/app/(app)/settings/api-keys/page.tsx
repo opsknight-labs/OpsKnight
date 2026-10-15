@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
+/* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
 import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
@@ -359,7 +361,10 @@ export default async function ApiKeysSettingsPage({
     updatedAt: formatDateTime(sa.updatedAt, timeZone, { format: 'date' }),
     teams: sa.teams,
     activeTokensCount: sa.activeTokensCount,
+    tokensTotal: sa.tokensTotal,
+    tokensTruncated: sa.tokensTruncated,
     tokens: sa.tokens.map(t => ({
+      status: t.status,
       id: t.id,
       name: t.name,
       prefix: t.prefix,

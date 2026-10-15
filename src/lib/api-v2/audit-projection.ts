@@ -57,15 +57,20 @@ export function projectAuditDetails(details: unknown): unknown {
   const preserved: Record<string, unknown> = {};
   const rest: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(source)) {
+    // Never assign through the prototype accessor with an attacker-chosen key.
+    if (key === '__proto__') continue;
     if (SAFE_KEYS.has(key) && typeof value === 'string') {
+      // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
       preserved[key] = sanitizeString(value);
     } else if (
       SAFE_KEYS.has(key) &&
       Array.isArray(value) &&
       value.every(v => typeof v === 'string')
     ) {
+      // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
       preserved[key] = value.map(v => sanitizeString(v as string));
     } else {
+      // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
       rest[key] = value;
     }
   }

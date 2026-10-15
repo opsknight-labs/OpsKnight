@@ -18,7 +18,6 @@ import {
   resetDatabase,
   testPrisma,
 } from '../helpers/test-db';
-import { POST as createTeam } from '@/app/api/v2/teams/route';
 import { GET as getTeam, PATCH as patchTeam } from '@/app/api/v2/teams/[id]/route';
 import {
   GET as getPolicy,
@@ -26,7 +25,7 @@ import {
 } from '@/app/api/v2/escalation-policies/[id]/route';
 import { PATCH as patchIncident } from '@/app/api/v2/incidents/[id]/route';
 import { POST as assignIncident } from '@/app/api/v2/incidents/[id]/assign/route';
-import { GET as listTeams } from '@/app/api/v2/teams/route';
+import { GET as listTeams, POST as createTeam } from '@/app/api/v2/teams/route';
 import { POST as createServiceAccount } from '@/app/api/v2/service-accounts/route';
 import { POST as issueToken } from '@/app/api/v2/service-accounts/[id]/tokens/route';
 import { DELETE as deleteServiceAccount } from '@/app/api/v2/service-accounts/[id]/route';
@@ -648,6 +647,39 @@ describe('API v2 runtime certification (PostgreSQL)', () => {
         where: buildKeyInventoryWhere({ userId: owner.id }, { status: 'ALL', q: 'inv-59' }, now),
       });
       expect(found.map(k => k.name)).toEqual(['inv-59']);
+    });
+  });
+
+  describe('service account token lists', () => {
+    it('bounds the nested list while counts cover every token, with per-token status', async () => {
+      const { token } = await makeKey('ADMIN');
+      const created = await call(createServiceAccount, token, 'POST', '/api/v2/service-accounts', {
+        body: { name: 'many tokens', role: 'RESPONDER' },
+      });
+      const id = (await created.json()).data.id;
+      const now = Date.now();
+      const rows = Array.from({ length: 120 }, (_, i) => ({
+        name: `t-${i}`,
+        prefix: `ok_sa_${String(i).padStart(5, '0')}`,
+        tokenHash: `hash-${randomUUID()}`,
+        scopes: ['incidents:read'],
+        userId: id,
+        createdAt: new Date(now - i * 1000),
+        revokedAt: i % 10 === 0 ? new Date() : null,
+        expiresAt: i % 4 === 0 ? new Date(now - 86_400_000) : new Date(now + 86_400_000),
+      }));
+      await testPrisma.apiKey.createMany({ data: rows });
+
+      const { listServiceAccounts, SERVICE_ACCOUNT_TOKEN_PREVIEW } =
+        await import('@/lib/api-v2/service-accounts');
+      const [account] = await listServiceAccounts({ where: { id } });
+      const unrevoked = rows.filter(r => !r.revokedAt);
+      const active = unrevoked.filter(r => r.expiresAt > new Date());
+      expect(account.tokens).toHaveLength(SERVICE_ACCOUNT_TOKEN_PREVIEW);
+      expect(account.tokensTotal).toBe(unrevoked.length);
+      expect(account.tokensTruncated).toBe(true);
+      expect(account.activeTokensCount).toBe(active.length);
+      expect(new Set(account.tokens.map(t => t.status))).toEqual(new Set(['ACTIVE', 'EXPIRED']));
     });
   });
 });

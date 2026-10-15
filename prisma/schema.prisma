@@ -587,6 +587,8 @@ model OidcIdentity {
 }
 
 model Team {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision Int @default(1)
   id                String             @id @default(cuid())
   name              String             @unique
   description       String?
@@ -617,6 +619,8 @@ model TeamMember {
 }
 
 model Service {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision Int @default(1)
   id                              String                          @id @default(cuid())
   name                            String                          @unique
   description                     String?
@@ -668,6 +672,8 @@ model Service {
 }
 
 model EscalationPolicy {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision Int @default(1)
   id          String           @id @default(cuid())
   name        String           @unique
   description String?
@@ -713,6 +719,8 @@ model EscalationRuleCondition {
 }
 
 model Integration {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision Int @default(1)
   id              String   @id @default(cuid())
   name            String
   type            String   @default("EVENTS_API_V2")
@@ -1631,6 +1639,8 @@ model ExternalIssueLink {
 }
 
 model OnCallSchedule {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  revision Int @default(1)
   id              String           @id @default(cuid())
   name            String           @unique
   timeZone        String           @default("UTC")

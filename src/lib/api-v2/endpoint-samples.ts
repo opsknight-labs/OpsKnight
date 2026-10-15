@@ -137,5 +137,6 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
  */
 export function getVerifiedSampleBody(method: string, path: string): Record<string, unknown> | undefined {
   const key = `${method.toUpperCase()} ${path}`;
+  // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
   return ENDPOINT_SAMPLES[key];
 }

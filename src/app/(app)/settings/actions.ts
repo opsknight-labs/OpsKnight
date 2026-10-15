@@ -759,6 +759,7 @@ export async function createServiceAccountAction(
 
     await createServiceAccount({
       name,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing
       role: role as any,
       description,
       teamIds: teamIds.length > 0 ? teamIds : undefined,

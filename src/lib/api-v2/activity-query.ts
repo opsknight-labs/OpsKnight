@@ -21,6 +21,7 @@ export type ApiActivityFilters = {
 type RawParams = Record<string, string | string[] | undefined>;
 
 function first(params: RawParams, key: string): string | undefined {
+  // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
   const value = params[key];
   const single = Array.isArray(value) ? value[0] : value;
   const trimmed = single?.trim();

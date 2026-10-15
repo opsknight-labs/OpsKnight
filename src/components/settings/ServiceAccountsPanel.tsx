@@ -2,6 +2,7 @@
 
 import { ALL_API_SCOPE_DEFINITIONS, issuableScopesForRole } from '@/lib/api-scope-registry';
 import { useState, useMemo, useActionState, useEffect } from 'react';
+import { useSecretSafeAction } from './useSecretSafeAction';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -67,6 +68,8 @@ export type ServiceAccountToken = {
   createdAt: string;
   lastUsedAt?: string | null;
   expiresAt?: string | null;
+  /** Derived in the database layer from revocation and expiry. */
+  status?: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
 };
 
 export type ServiceAccountItem = {
@@ -79,6 +82,9 @@ export type ServiceAccountItem = {
   updatedAt: string;
   teams: { id: string; name: string }[];
   activeTokensCount: number;
+  /** Non-revoked tokens (active or expired); `tokens` holds only the newest of them. */
+  tokensTotal?: number;
+  tokensTruncated?: boolean;
   tokens: ServiceAccountToken[];
 };
 
@@ -161,14 +167,17 @@ export default function ServiceAccountsPanel({
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(
     new Set(['events:write', 'incidents:read'])
   );
-  const [issueTokenState, issueTokenAction] = useActionState(issueServiceAccountTokenAction, {
-    error: null,
-    success: false,
-    token: null,
-  });
-
-  // Reveal Token Banner
+  // Reveal Token Banner: the only place the secret lives. The action state never keeps it.
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [issueTokenState, issueTokenAction] = useSecretSafeAction<Awaited<ReturnType<typeof issueServiceAccountTokenAction>>>(
+    issueServiceAccountTokenAction,
+    { error: null, success: false, token: null },
+    secret => {
+      setIssueTokenTargetId(null);
+      setRevealedToken(secret);
+      router.refresh();
+    }
+  );
 
   useEffect(() => {
     if (createState?.success) {
@@ -176,14 +185,6 @@ export default function ServiceAccountsPanel({
       router.refresh();
     }
   }, [createState?.success, router]);
-
-  useEffect(() => {
-    if (issueTokenState?.success && issueTokenState?.token) {
-      setIssueTokenTargetId(null);
-      setRevealedToken(issueTokenState.token);
-      router.refresh();
-    }
-  }, [issueTokenState?.success, issueTokenState?.token, router]);
 
   // Delete SA Confirmation
   const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
@@ -477,7 +478,7 @@ export default function ServiceAccountsPanel({
                   <div className="border-t border-border/60 bg-muted/20 p-4">
                     <div className="mb-2.5 flex items-center justify-between">
                       <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                        Active Machine Tokens ({sa.tokens.length})
+                        Machine Tokens ({sa.tokensTruncated ? `newest ${sa.tokens.length} of ${sa.tokensTotal}` : sa.tokens.length})
                       </span>
                       {isAdmin && (
                         <Button
@@ -507,6 +508,7 @@ export default function ServiceAccountsPanel({
                               <TableHead className="text-xs py-2.5">Token Name</TableHead>
                               <TableHead className="text-xs py-2.5">Prefix</TableHead>
                               <TableHead className="text-xs py-2.5">Scopes</TableHead>
+                              <TableHead className="text-xs py-2.5">Status</TableHead>
                               <TableHead className="text-xs py-2.5">Created</TableHead>
                               <TableHead className="text-xs py-2.5">Expires</TableHead>
                               <TableHead className="text-xs py-2.5 text-right">Action</TableHead>
@@ -535,6 +537,18 @@ export default function ServiceAccountsPanel({
                                       </Badge>
                                     ))}
                                   </div>
+                                </TableCell>
+                                <TableCell className="py-2.5">
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      token.status === 'EXPIRED'
+                                        ? 'text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                                        : 'text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
+                                    }
+                                  >
+                                    {token.status === 'EXPIRED' ? 'Expired' : 'Active'}
+                                  </Badge>
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground py-2.5">
                                   {token.createdAt}

@@ -28,6 +28,7 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
     ...actual,
     authenticateV2Request: vi.fn().mockImplementation(async (req: NextRequest) => {
       const auth = req.headers.get('authorization');
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- test double comparing a fixed fixture string
       if (auth === 'Bearer viewer-token') {
         return {
           apiKey: { id: 'key_view', scopes: ['incidents:read'] },
@@ -56,7 +57,6 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
 
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import { API_SCOPES } from '@/lib/authorization';
 
 describe('defineV2Route Endpoint Factory', () => {
 

@@ -59,6 +59,10 @@ saturated by other workloads. Re-run `invalid_flood` (proxy) and `unknown_ip` (d
 two rows above. A client whose credential has not yet verified on a given replica still shares the
 throttled lane, so first-contact requests during an attack can see 429s.
 
+### Added, not yet run
+
+`cold_start` (valid credentials arriving during an active flood) and a `read_succeeded` throughput threshold. Run `cold_start` first after recreating the replicas so no replica holds verified-credential hints; seed a separate set of never-used keys and pass them as `API_COLD_TOKENS`.
+
 ### Not run
 
 1 and 4 replica sweeps, replica kill during `idempotent_writes`, rolling upgrade, `pg_stat_activity`

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
 import { describe, expect, it } from 'vitest';
 import {
   ENDPOINT_SAMPLES,

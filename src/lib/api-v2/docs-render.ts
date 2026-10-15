@@ -10,6 +10,7 @@ import { getOpenApiV2Spec } from './openapi';
  * endpoint, scope or retry guarantee cannot drift from the implementation.
  */
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing
 type Json = Record<string, any>;
 
 const IDEMPOTENCY_LABEL = {
@@ -26,6 +27,7 @@ export function renderEndpointReference(): string {
     const operation = spec.paths[definition.path][definition.method] as Json;
     const tag: string = operation.tags?.[0] ?? 'Other';
     const contractKey = `${definition.method.toUpperCase()} ${`/api/v2${definition.path}`.replace(/\{(\w+)\}/g, '[$1]')}`;
+    // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
     const contract = V2_MUTATION_CONTRACT[contractKey];
     const retry = contract ? ` Retries: ${IDEMPOTENCY_LABEL[contract.idempotency]}.` : '';
     const line =

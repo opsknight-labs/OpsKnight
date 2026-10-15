@@ -17,6 +17,7 @@ import type { ApiScope } from '@/lib/authorization';
  *   Retry-After, 412 and 409 where applicable, Idempotency-Key, If-Match, ETag).
  */
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing
 type Json = Record<string, any>;
 
 const ENVELOPE_META = {
@@ -31,6 +32,7 @@ function convertNullable(node: unknown): unknown {
   const out: Json = {};
   for (const [key, value] of Object.entries(input)) {
     if (key === 'nullable') continue;
+    // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
     out[key] = convertNullable(value);
   }
   if (input.nullable === true) {
@@ -295,6 +297,7 @@ export function finalizeOpenApiSpec(base: Json): Json {
       .join('\n\n');
 
     const contractKey = `${definition.method.toUpperCase()} ${`/api/v2${definition.path}`.replace(/\{(\w+)\}/g, '[$1]')}`;
+    // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
     const contract = V2_MUTATION_CONTRACT[contractKey];
     if (contract) {
       operation['x-idempotency'] = contract.idempotency;
@@ -333,6 +336,7 @@ export function finalizeOpenApiSpec(base: Json): Json {
     const responses = (operation.responses ??= {}) as Json;
     const okCode = successStatus(operation);
     if (okCode && definition.kind !== 'none') {
+      // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
       const ok = responses[okCode] as Json;
       if (!ok.content) {
         const paginated = definition.kind === 'list' && hasParam(operation, 'limit', 'query');

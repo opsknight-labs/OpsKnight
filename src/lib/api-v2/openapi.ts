@@ -12,6 +12,7 @@ function buildBaseSpec(): Record<string, unknown> {
       version: '2.0.0',
       description:
         'Secure, high-performance, enterprise-grade REST API platform for OpsKnight incident management, on-call schedules, escalations, automation, runbooks, and administration.',
+      license: { name: 'AGPL-3.0-only', url: 'https://www.gnu.org/licenses/agpl-3.0.html' },
       contact: {
         name: 'OpsKnight Engineering',
         url: 'https://opsknight.com',
@@ -161,6 +162,12 @@ function buildBaseSpec(): Record<string, unknown> {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            revision: {
+              type: 'integer',
+              readOnly: true,
+              description:
+                'Monotonic version of this resource; it is the value of the ETag header on detail reads.',
+            },
             name: { type: 'string' },
             description: { type: 'string', nullable: true },
             status: { type: 'string', enum: ['OPERATIONAL', 'DEGRADED', 'PARTIAL_OUTAGE', 'MAJOR_OUTAGE', 'MAINTENANCE'] },
@@ -184,6 +191,12 @@ function buildBaseSpec(): Record<string, unknown> {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            revision: {
+              type: 'integer',
+              readOnly: true,
+              description:
+                'Monotonic version of this resource; it is the value of the ETag header on detail reads.',
+            },
             name: { type: 'string' },
             description: { type: 'string', nullable: true },
             memberCount: { type: 'integer' },
@@ -212,6 +225,12 @@ function buildBaseSpec(): Record<string, unknown> {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            revision: {
+              type: 'integer',
+              readOnly: true,
+              description:
+                'Monotonic version of this resource; it is the value of the ETag header on detail reads.',
+            },
             name: { type: 'string' },
             timeZone: { type: 'string' },
             description: { type: 'string', nullable: true },
@@ -224,6 +243,12 @@ function buildBaseSpec(): Record<string, unknown> {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            revision: {
+              type: 'integer',
+              readOnly: true,
+              description:
+                'Monotonic version of this resource; it is the value of the ETag header on detail reads.',
+            },
             name: { type: 'string' },
             description: { type: 'string', nullable: true },
             stepCount: { type: 'integer' },
@@ -238,6 +263,12 @@ function buildBaseSpec(): Record<string, unknown> {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            revision: {
+              type: 'integer',
+              readOnly: true,
+              description:
+                'Monotonic version of this resource; it is the value of the ETag header on detail reads.',
+            },
             name: { type: 'string' },
             type: { type: 'string' },
             enabled: { type: 'boolean' },
@@ -346,7 +377,36 @@ function buildBaseSpec(): Record<string, unknown> {
             description: { type: 'string', nullable: true },
             status: { type: 'string' },
             teamIds: { type: 'array', items: { type: 'string' } },
-            tokens: { type: 'array', items: { type: 'object' } },
+            activeTokensCount: {
+              type: 'integer',
+              description: 'Unrevoked, unexpired tokens (database aggregate).',
+            },
+            tokensTotal: {
+              type: 'integer',
+              description: 'List: non-revoked tokens. Detail: every token ever issued.',
+            },
+            tokensTruncated: {
+              type: 'boolean',
+              description:
+                'True when `tokens` holds only the newest tokens; counts above cover all of them.',
+            },
+            tokens: {
+              type: 'array',
+              description: 'The newest tokens only (bounded).',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  prefix: { type: 'string' },
+                  scopes: { type: 'array', items: { type: 'string' } },
+                  status: { type: 'string', enum: ['ACTIVE', 'EXPIRED', 'REVOKED'] },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  lastUsedAt: { type: 'string', format: 'date-time', nullable: true },
+                  expiresAt: { type: 'string', format: 'date-time', nullable: true },
+                },
+              },
+            },
             createdAt: { type: 'string', format: 'date-time' },
           },
           required: ['id', 'name', 'role', 'status', 'createdAt'],

@@ -25,6 +25,7 @@ export interface ClientIpOptions {
 function readHeader(headers: HeaderSource | undefined, name: string): string | undefined {
   if (!headers) return undefined;
   if (headers instanceof Headers) return headers.get(name)?.trim() || undefined;
+  // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
   const value = headers[name] ?? headers[name.toLowerCase()];
   return (Array.isArray(value) ? value[0] : value)?.trim() || undefined;
 }
@@ -182,6 +183,7 @@ export function getClientIp(
     const chain = forwarded.split(',').map(value => value.trim());
     const trustedHops = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS) || 1);
     const index = Math.max(0, chain.length - trustedHops);
+    // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
     const candidate = validIp(chain[index]);
     if (candidate) return candidate;
     return detectedSocketIp || '0.0.0.0';

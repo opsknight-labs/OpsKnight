@@ -74,6 +74,20 @@ export function resolveTokenExpiry(
   return new Date(now + input.expiresInDays * 86_400_000);
 }
 
+/** Most recent tokens returned per service account; counts always cover all of them. */
+export const SERVICE_ACCOUNT_TOKEN_PREVIEW = 25;
+
+export type ServiceAccountTokenStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+
+export function tokenStatus(
+  key: { revokedAt?: Date | null; expiresAt: Date | null },
+  now = Date.now()
+): ServiceAccountTokenStatus {
+  if (key.revokedAt) return 'REVOKED';
+  if (key.expiresAt && key.expiresAt.getTime() <= now) return 'EXPIRED';
+  return 'ACTIVE';
+}
+
 export async function listServiceAccounts(
   options: { where?: Prisma.UserWhereInput; take?: number } = {}
 ) {
@@ -98,8 +112,12 @@ export async function listServiceAccounts(
           },
         },
       },
+      // Bounded: the newest tokens only. Counts come from aggregates below, so an account with
+      // thousands of old tokens cannot inflate the response.
       apiKeys: {
         where: { revokedAt: null },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: SERVICE_ACCOUNT_TOKEN_PREVIEW,
         select: {
           id: true,
           name: true,
@@ -113,6 +131,29 @@ export async function listServiceAccounts(
     },
   });
 
+  const ids = users.map(user => user.id);
+  const now = new Date();
+  const [unrevoked, active] = ids.length
+    ? await Promise.all([
+        prisma.apiKey.groupBy({
+          by: ['userId'],
+          where: { userId: { in: ids }, revokedAt: null },
+          _count: { _all: true },
+        }),
+        prisma.apiKey.groupBy({
+          by: ['userId'],
+          where: {
+            userId: { in: ids },
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          },
+          _count: { _all: true },
+        }),
+      ])
+    : [[], []];
+  const unrevokedByUser = new Map(unrevoked.map(row => [row.userId, row._count._all]));
+  const activeByUser = new Map(active.map(row => [row.userId, row._count._all]));
+
   return users.map(user => ({
     id: user.id,
     name: user.name,
@@ -123,10 +164,11 @@ export async function listServiceAccounts(
     updatedAt: user.updatedAt,
     teams: user.teamMemberships.map(tm => tm.team),
     // Tokens are listed until revoked, but only unexpired ones are active.
-    activeTokensCount: user.apiKeys.filter(
-      key => !key.expiresAt || key.expiresAt.getTime() > Date.now()
-    ).length,
-    tokens: user.apiKeys,
+    activeTokensCount: activeByUser.get(user.id) ?? 0,
+    /** Non-revoked tokens, active or expired. */
+    tokensTotal: unrevokedByUser.get(user.id) ?? 0,
+    tokensTruncated: (unrevokedByUser.get(user.id) ?? 0) > user.apiKeys.length,
+    tokens: user.apiKeys.map(key => ({ ...key, status: tokenStatus(key, now.getTime()) })),
   }));
 }
 
@@ -161,7 +203,8 @@ export async function getServiceAccount(id: string) {
           expiresAt: true,
           revokedAt: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: SERVICE_ACCOUNT_TOKEN_PREVIEW * 4,
       },
     },
   });
@@ -173,6 +216,18 @@ export async function getServiceAccount(id: string) {
     });
   }
 
+  const now = new Date();
+  const [tokensTotal, activeTokensCount] = await Promise.all([
+    prisma.apiKey.count({ where: { userId: user.id } }),
+    prisma.apiKey.count({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    }),
+  ]);
+
   return {
     id: user.id,
     name: user.name,
@@ -182,7 +237,11 @@ export async function getServiceAccount(id: string) {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     teams: user.teamMemberships.map(tm => tm.team),
-    tokens: user.apiKeys,
+    activeTokensCount,
+    /** Every token ever issued, including revoked and expired. */
+    tokensTotal,
+    tokensTruncated: tokensTotal > user.apiKeys.length,
+    tokens: user.apiKeys.map(key => ({ ...key, status: tokenStatus(key, now.getTime()) })),
   };
 }
 

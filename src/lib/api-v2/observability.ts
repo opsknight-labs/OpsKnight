@@ -22,6 +22,7 @@ const matchers = [...V2_OPERATIONS]
     method: definition.method.toUpperCase(),
     operationId: definition.operationId,
     params: (definition.path.match(/\{/g) ?? []).length,
+    // eslint-disable-next-line security/detect-non-literal-regexp -- pattern is built from fixed internal strings, never user input
     pattern: new RegExp(
       '^/api/v2' +
         // Escape every regex metacharacter (including backslash and `.`) in the literal

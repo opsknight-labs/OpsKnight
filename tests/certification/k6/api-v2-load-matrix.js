@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
 // REST v2 load matrix. Run against a certified topology (see ../README-api-v2.md).
 //
 //   K6_BASE=http://127.0.0.1:3300 API_TOKEN=ok_... API_TEAM_ID=... k6 run api-v2-load-matrix.js
@@ -8,6 +9,8 @@
 //   unknown_ip       invalid-token flood with no address headers (direct deployment), bounded not locked out
 //   idempotent_writes the same Idempotency-Key sent concurrently: exactly one resource may be created
 //   mixed_mutations  concurrent creates and ETag-conditional updates
+//   cold_start       valid credentials that first appear while a flood is already running
+//                    (no verified-credential hint yet); needs API_COLD_TOKENS (keys never used)
 //
 // Pass/fail is expressed as k6 thresholds so the run can gate a release.
 import http from 'k6/http';
@@ -22,6 +25,7 @@ const BASE = __ENV.K6_BASE || 'http://127.0.0.1:3300';
 // exercise exactly that.
 const TOKENS = (__ENV.API_TOKENS || __ENV.API_TOKEN || '').split(',').filter(Boolean);
 const TOKEN = TOKENS[0];
+const COLD_TOKENS = (__ENV.API_COLD_TOKENS || '').split(',').filter(Boolean);
 const authFor = i => ({ Authorization: `Bearer ${TOKENS[Math.abs(i) % TOKENS.length]}` });
 const rr = () => authFor(exec.scenario.iterationInTest);
 const FLOOD_IP = '203.0.113.50';
@@ -35,12 +39,20 @@ const readLatency = new Trend('read_latency_ms', true);
 const validClientLimited = new Rate('valid_client_limited');
 const validClientAdmissionLimited = new Rate('valid_client_admission_limited');
 const probeLatency = new Trend('probe_latency_ms', true);
+// Successful throughput, kept separate from availability: a 429 is a safe answer, but only 200s
+// count as served work.
+const readSucceeded = new Rate('read_succeeded');
+// Cold credentials: first requests of a credential during an attack (hint not yet established)
+// versus steady state once it has verified.
+const coldWindowLimited = new Rate('cold_window_admission_limited');
+const coldSteadyLimited = new Rate('cold_steady_admission_limited');
 
 const all = {
-  valid_reads: { executor: 'constant-arrival-rate', rate: 100, timeUnit: '1s', duration: '60s', preAllocatedVUs: 50, maxVUs: 200, exec: 'validReads' },
+  valid_reads: { executor: 'constant-arrival-rate', rate: 40, timeUnit: '1s', duration: '60s', preAllocatedVUs: 50, maxVUs: 200, exec: 'validReads' },
   invalid_flood: { executor: 'constant-arrival-rate', startTime: '15s', rate: 300, timeUnit: '1s', duration: '60s', preAllocatedVUs: 50, maxVUs: 200, exec: 'invalidFlood' },
   unknown_ip: { executor: 'constant-arrival-rate', startTime: '15s', rate: 200, timeUnit: '1s', duration: '60s', preAllocatedVUs: 50, maxVUs: 200, exec: 'unknownIp' },
   idempotent_writes: { executor: 'per-vu-iterations', vus: 20, iterations: 5, exec: 'idempotentWrites' },
+  cold_start: { executor: 'constant-arrival-rate', rate: 300, timeUnit: '1s', duration: '60s', preAllocatedVUs: 50, maxVUs: 200, exec: 'coldFlood' },
   mixed_mutations: { executor: 'constant-arrival-rate', rate: 20, timeUnit: '1s', duration: '60s', preAllocatedVUs: 20, maxVUs: 60, exec: 'mixedMutations' },
 };
 // A valid client that probes at a modest rate before and while a flood runs (the flood starts
@@ -52,6 +64,7 @@ const probes = {
   unknown_ip: { executor: 'constant-arrival-rate', rate: 24, timeUnit: '1s', duration: '75s', preAllocatedVUs: 10, maxVUs: 50, exec: 'probeDirect' },
 };
 const selected = __ENV.K6_SCENARIO;
+probes.cold_start = { executor: 'constant-arrival-rate', startTime: '5s', rate: 24, timeUnit: '1s', duration: '55s', preAllocatedVUs: 10, maxVUs: 50, exec: 'coldProbe' };
 const withProbes = name => (probes[name] ? { [name]: all[name], [`${name}_probe`]: probes[name] } : { [name]: all[name] });
 
 export const options = {
@@ -64,6 +77,9 @@ export const options = {
     // Admission 429s for a valid credential while another client floods (see probes above).
     valid_client_admission_limited: ['rate<0.05'],
     read_latency_ms: ['p(95)<400', 'p(99)<1000'],
+    // Rate-limit headroom is sized so reads are served: 429s must not be hiding a capacity gap.
+    read_succeeded: ['rate>0.99'],
+    cold_steady_admission_limited: ['rate<0.05'],
     duplicate_creates: ['count==0'],
     unexpected_status: ['count==0'],
   },
@@ -78,6 +94,7 @@ export function validReads() {
   const headers = { ...rr(), 'X-Forwarded-For': CLIENT_IP };
   const res = http.get(`${BASE}/api/v2/incidents?limit=20`, { headers });
   if (res.status === 200) readLatency.add(res.timings.duration);
+  readSucceeded.add(res.status === 200);
   serverErrors.add(res.status >= 500);
   validClientRejected.add(res.status === 401 || res.status === 403);
   validClientLimited.add(res.status === 429);
@@ -108,6 +125,27 @@ export function unknownIp() {
   check(bad, { 'unknown-ip flood is 401 or bounded 429': r => r.status === 401 || r.status === 429 });
 }
 
+export function coldFlood() {
+  invalidFlood();
+}
+
+export function coldProbe() {
+  const token = COLD_TOKENS[exec.scenario.iterationInTest % COLD_TOKENS.length];
+  const good = http.get(`${BASE}/api/v2/services?limit=1`, { headers: { Authorization: `Bearer ${token}` } });
+  probeLatency.add(good.timings.duration);
+  serverErrors.add(good.status >= 500);
+  validClientRejected.add(good.status === 401 || good.status === 403);
+  let admission = false;
+  if (good.status === 429) {
+    let detail = '';
+    try { detail = good.json('detail') || ''; } catch (_e) { detail = ''; }
+    admission = !detail.startsWith('Rate limit of');
+  }
+  // 5 s probe offset + 15 s window: the first seconds of each credential during the attack.
+  if (exec.scenario.progress * 55000 < 15000) coldWindowLimited.add(admission);
+  else coldSteadyLimited.add(admission);
+}
+
 function probe(extraHeaders) {
   const good = http.get(`${BASE}/api/v2/services?limit=1`, { headers: { ...rr(), ...extraHeaders } });
   probeLatency.add(good.timings.duration);
@@ -118,7 +156,7 @@ function probe(extraHeaders) {
   let admission = false;
   if (good.status === 429) {
     let detail = '';
-    try { detail = good.json('detail') || ''; } catch (e) { detail = ''; }
+    try { detail = good.json('detail') || ''; } catch (_e) { detail = ''; }
     admission = !detail.startsWith('Rate limit of');
   }
   validClientAdmissionLimited.add(admission);

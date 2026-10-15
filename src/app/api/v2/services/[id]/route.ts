@@ -67,7 +67,7 @@ export const GET = withV2Observability(async function GET(
     };
 
     return apiV2Success(dto, {
-      headers: { ...rlHeaders, ...etagHeaders(service.updatedAt) },
+      headers: { ...rlHeaders, ...etagHeaders(service.revision) },
     });
   } catch (error) {
     return apiV2Error(error, req);
@@ -156,6 +156,7 @@ export const PATCH = withV2Observability(async function PATCH(
               escalationPolicyId: true,
               createdAt: true,
               updatedAt: true,
+              revision: true,
               team: { select: { id: true, name: true } },
               policy: { select: { id: true, name: true } },
             },
@@ -185,7 +186,7 @@ export const PATCH = withV2Observability(async function PATCH(
     };
 
     return apiV2Success(dto, {
-      headers: { ...rlHeaders, ...etagHeaders(updated.updatedAt) },
+      headers: { ...rlHeaders, ...etagHeaders(updated.revision) },
     });
   } catch (error) {
     return apiV2Error(error, req);

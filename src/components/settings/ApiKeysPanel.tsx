@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useSecretSafeAction } from './useSecretSafeAction';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -171,11 +172,14 @@ export default function ApiKeysPanel({
   };
   appUrl?: string;
 }) {
-  const [state, formAction] = useActionState<State, FormData>(createApiKey, {
-    error: null,
-    success: false,
-    token: null,
-  });
+  // The secret is held only in `revealedSecret`; dismissing the banner clears it, and the
+  // action state itself never retains it (see useSecretSafeAction).
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [state, formAction] = useSecretSafeAction<State>(
+    createApiKey,
+    { error: null, success: false, token: null },
+    setRevealedSecret
+  );
 
   const router = useRouter();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -183,18 +187,11 @@ export default function ApiKeysPanel({
   const [isRevoking, setIsRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
-  // The secret is held in local state so dismissing the banner removes it from the page,
-  // including from the code samples below.
-  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
-
   useEffect(() => {
     if (state?.success) {
       setCreateDialogOpen(false);
     }
-    if (state?.token) {
-      setRevealedSecret(state.token);
-    }
-  }, [state?.success, state?.token]);
+  }, [state?.success]);
 
   const effectiveRole = role ?? (isAdmin ? 'ADMIN' : canCreateWriteKeys ? 'RESPONDER' : 'USER');
   const issuable = new Set<string>(issuableScopesForRole(effectiveRole).map(d => d.scope));

@@ -31,10 +31,8 @@ import {
   generateServiceAccountTokenRaw,
   RATE_LIMIT_CONFIGS,
   IncidentCreateV2Schema,
-  IncidentUpdateV2Schema,
   ServiceCreateV2Schema,
   PostmortemCreateV2Schema,
-  PostmortemUpdateV2Schema,
   ServiceAccountCreateV2Schema,
   ServiceAccountTokenIssueV2Schema,
 } from '@/lib/api-v2';

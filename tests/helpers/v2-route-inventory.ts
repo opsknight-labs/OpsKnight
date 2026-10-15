@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-non-literal-fs-filename -- reads repository files at constant paths */
+/* eslint-disable security/detect-non-literal-regexp -- pattern is built from fixed internal strings, never user input */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 

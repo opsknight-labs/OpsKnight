@@ -5,7 +5,11 @@ import prisma from '@/lib/prisma';
 const auditMocks = vi.hoisted(() => ({ logAudit: vi.fn() }));
 vi.mock('@/lib/audit', () => ({ logAudit: auditMocks.logAudit }));
 
-import { issueServiceAccountToken, listServiceAccounts } from '@/lib/api-v2/service-accounts';
+import {
+  issueServiceAccountToken,
+  listServiceAccounts,
+  SERVICE_ACCOUNT_TOKEN_PREVIEW,
+} from '@/lib/api-v2/service-accounts';
 import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
 
 const account = (status: string) => ({
@@ -76,7 +80,7 @@ describe('service account token lifecycle', () => {
     expect(JSON.stringify(result)).toContain('ok_');
   });
 
-  it('counts only unexpired tokens as active', async () => {
+  it('takes token counts from database aggregates and bounds the nested list', async () => {
     const day = 86_400_000;
     vi.mocked(prisma.user.findMany as any).mockResolvedValue([
       {
@@ -88,9 +92,24 @@ describe('service account token lifecycle', () => {
         ],
       },
     ]);
+    (prisma.apiKey as any).groupBy = vi
+      .fn()
+      .mockResolvedValueOnce([{ userId: 'sa_1', _count: { _all: 4000 } }]) // non-revoked
+      .mockResolvedValueOnce([{ userId: 'sa_1', _count: { _all: 2 } }]); // active
 
     const [listed] = await listServiceAccounts();
     expect(listed.activeTokensCount).toBe(2);
-    expect(listed.tokens).toHaveLength(3);
+    expect(listed.tokensTotal).toBe(4000);
+    expect(listed.tokensTruncated).toBe(true);
+    expect(listed.tokens.map((t: { status: string }) => t.status)).toEqual([
+      'ACTIVE',
+      'ACTIVE',
+      'EXPIRED',
+    ]);
+    // The query itself is bounded and ordered, not unbounded.
+    expect(vi.mocked(prisma.user.findMany as any).mock.calls[0][0].select.apiKeys).toMatchObject({
+      take: SERVICE_ACCOUNT_TOKEN_PREVIEW,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
   });
 });

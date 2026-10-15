@@ -23,6 +23,7 @@ export async function checkV2RateLimit(
   apiKeyId: string,
   operationClass: V2OperationClass = 'READ'
 ): Promise<RateLimitResult> {
+  // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
   const config = RATE_LIMIT_CONFIGS[operationClass];
   const now = Date.now();
   const windowStart = Math.floor(now / config.windowMs);
@@ -144,6 +145,7 @@ export const GENERAL_PRE_AUTH_ADMISSION_LIMIT = FAILED_AUTH_ADMISSION_LIMIT;
 export const GENERAL_PRE_AUTH_ADMISSION_WINDOW_MS = FAILED_AUTH_ADMISSION_WINDOW_MS;
 
 function envInt(name: string, fallback: number): number {
+  // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
   const parsed = Number.parseInt(process.env[name] ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

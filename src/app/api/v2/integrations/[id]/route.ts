@@ -34,6 +34,7 @@ export const GET = withV2Observability(async function GET(
         enabled: true,
         createdAt: true,
         updatedAt: true,
+        revision: true,
         service: {
           select: { id: true, name: true, teamId: true },
         },
@@ -53,7 +54,7 @@ export const GET = withV2Observability(async function GET(
     });
 
     return apiV2Success(integration, {
-      headers: { ...rlHeaders, ...etagHeaders(integration.updatedAt) },
+      headers: { ...rlHeaders, ...etagHeaders(integration.revision) },
     });
   } catch (error) {
     return apiV2Error(error, req);
@@ -116,6 +117,7 @@ export const PATCH = withV2Observability(async function PATCH(
               enabled: true,
               createdAt: true,
               updatedAt: true,
+              revision: true,
               service: { select: { id: true, name: true } },
             },
           }),
@@ -131,7 +133,7 @@ export const PATCH = withV2Observability(async function PATCH(
     );
 
     return apiV2Success(updated, {
-      headers: { ...rlHeaders, ...etagHeaders(updated.updatedAt) },
+      headers: { ...rlHeaders, ...etagHeaders(updated.revision) },
     });
   } catch (error) {
     return apiV2Error(error, req);

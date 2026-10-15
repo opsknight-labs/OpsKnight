@@ -12,13 +12,12 @@ import {
 } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
-import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
 import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
-import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';

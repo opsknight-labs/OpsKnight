@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { authenticateV2Request, type V2ApiKeyIdentity } from './auth';

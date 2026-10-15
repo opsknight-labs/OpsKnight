@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
+/* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
 /**
  * Backward-compatibility check between two OpenAPI documents. It reports changes
  * that can break an existing client: removed operations, removed or narrowed

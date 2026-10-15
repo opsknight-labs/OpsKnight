@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
@@ -65,7 +66,6 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
 import { GET as getIntegrationsRoute } from '@/app/api/v2/integrations/route';
 import { GET as getScheduleOnCallRoute } from '@/app/api/v2/schedules/[id]/on-call/route';
 import { GET as getMetricsRoute } from '@/app/api/v2/reports/metrics/route';
-import { POST as postAssignRoute } from '@/app/api/v2/incidents/[id]/assign/route';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { decodeCursor, encodeCursor } from '@/lib/api-v2/pagination';
 import { AppError } from '@/lib/errors';
@@ -299,7 +299,7 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
       expect(decoded.id).toBe('inc_123');
 
       // Tampering with payload part:
-      const [payloadB64, sig] = valid.split('.');
+      const [, sig] = valid.split('.');
       const tamperedPayload = Buffer.from(JSON.stringify({ id: 'inc_hacked', createdAt: '2026-10-13T12:00:00.000Z' })).toString('base64url');
       const tamperedCursor = `${tamperedPayload}.${sig}`;
 

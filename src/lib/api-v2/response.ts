@@ -197,6 +197,7 @@ export function apiV2Error(
   }
 
   const category =
+    // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
     (ERROR_REGISTRY as Record<string, { category: string }>)[code]?.category ??
     (error instanceof ZodError ? 'validation' : 'internal');
   recordApiError(category, status);

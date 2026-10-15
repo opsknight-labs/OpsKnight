@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
 import { describe, expect, it } from 'vitest';
 import { implementedOperations } from '../helpers/v2-route-inventory';
 import {

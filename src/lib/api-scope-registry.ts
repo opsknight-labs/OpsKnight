@@ -250,6 +250,7 @@ export const ALL_API_SCOPE_DEFINITIONS: readonly ApiScopeDefinition[] =
   Object.values(API_SCOPE_REGISTRY);
 
 export function isScopeIssuable(scope: ApiScope): boolean {
+  // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
   return API_SCOPE_REGISTRY[scope].status === 'active';
 }
 

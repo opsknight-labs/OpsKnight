@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-non-literal-regexp -- pattern is built from fixed internal strings, never user input */
 import { issuableScopesForRole } from '@/lib/api-scope-registry';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

@@ -43,6 +43,7 @@ const SELECT_CLASS =
 function activityHref(filters: ApiActivityFilterValues, cursor?: string | null): string {
   const params = new URLSearchParams({ tab: 'activity' });
   (['q', 'entity', 'actor', 'key', 'from', 'to'] as const).forEach(name => {
+    // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
     if (filters[name]) params.set(name, filters[name]);
   });
   if (cursor) params.set('cursor', cursor);
