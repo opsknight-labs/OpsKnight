@@ -101,6 +101,49 @@ export async function restorePasswordAccess(
   return result;
 }
 
+/**
+ * Lets an independent emergency recovery identity step SSO Required back to SSO Optional,
+ * for example when administrators need password fallback while SSO keeps working. It never
+ * creates or changes a password and never goes further than SSO Optional; Password Only
+ * stays with restorePasswordAccess so an administrator password always exists afterwards.
+ */
+export async function relaxRequiredToOptional(actor: ControlActor, expectedVersion: number) {
+  if (actor.kind !== 'emergency')
+    throw new Error('Use an independent emergency recovery identity or a normal administrator.');
+  const result = await prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor);
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    if (policy.version !== expectedVersion)
+      throw new Error('Policy changed. Reload the recovery console.');
+    if (policy.mode !== 'SSO_REQUIRED')
+      throw new Error('SSO Optional can be selected here only while SSO Required is active.');
+    const oidc = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
+    if (!oidc?.enabled) throw new Error('Enable an OIDC provider before selecting SSO Optional.');
+    const updated = await tx.authenticationPolicy.update({
+      where: { id: 'default' },
+      data: {
+        mode: 'SSO_OPTIONAL',
+        version: { increment: 1 },
+        enforcedAt: null,
+        passwordRecoveryUserId: null,
+        passwordRecoveryExpiresAt: null,
+        oidcConfigVersion: oidc.configVersion,
+        updatedBy: null,
+      },
+    });
+    await securityEvent(tx, 'auth.policy.changed', actor.id, {
+      oldMode: policy.mode,
+      mode: updated.mode,
+      version: updated.version,
+      recoveryOnly: true,
+      initiatedBy: 'emergency-recovery',
+    });
+    return { mode: updated.mode, version: updated.version };
+  });
+  resetAuthOptionsCache();
+  return result;
+}
+
 /** A deployment pin grants recovery-origin trust, never arbitrary Host-header trust. */
 export async function repairCanonicalOrigin(actor: ControlActor, expectedVersion: number) {
   if (actor.kind !== 'emergency' || !process.env.AUTH_RECOVERY_ORIGIN)

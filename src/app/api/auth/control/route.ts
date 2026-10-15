@@ -33,7 +33,11 @@ import {
   verifyRegistration,
 } from '@/lib/auth-control/emergency-management';
 import { CEREMONY_COOKIE, emergencyCookieOptions } from '@/lib/auth-control/emergency';
-import { restorePasswordAccess, repairCanonicalOrigin } from '@/lib/auth-control/recovery';
+import {
+  relaxRequiredToOptional,
+  restorePasswordAccess,
+  repairCanonicalOrigin,
+} from '@/lib/auth-control/recovery';
 import { changeAuthenticationMode } from '@/app/(app)/settings/system/authentication-actions';
 import { readJsonBodyWithLimit } from '@/lib/request-body';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
@@ -323,6 +327,8 @@ export async function POST(request: NextRequest) {
       case 'claims':
         return json(await identityClaimsPreview(input.revisionId, input.claims));
       case 'mode':
+        if (actor.kind === 'emergency' && input.mode === 'SSO_OPTIONAL')
+          return json(await relaxRequiredToOptional(actor, input.expectedVersion));
         if (actor.kind !== 'admin')
           throw new Error('Use the explicit recovery workflow to restore password access.');
         {

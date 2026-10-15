@@ -13,7 +13,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 import prisma from '@/lib/prisma';
-import { restorePasswordAccess } from '@/lib/auth-control/recovery';
+import { relaxRequiredToOptional, restorePasswordAccess } from '@/lib/auth-control/recovery';
 import type { ControlActor } from '@/lib/auth-control/actor';
 import { securityEvent } from '@/lib/auth-control/security-events';
 import { lockControlActor } from '@/lib/auth-control/actor';
@@ -107,5 +107,71 @@ describe('administrator self-service password access recovery', () => {
       'admin-self',
       expect.objectContaining({ initiatedBy: 'administrator-self-service' })
     );
+  });
+});
+
+describe('emergency recovery stepping SSO Required back to SSO Optional', () => {
+  const emergency: ControlActor = {
+    kind: 'emergency',
+    id: 'recovery-1',
+    sessionId: 'session-1',
+    credentialVersion: 1,
+    authenticatedAt: Date.now(),
+    sessionTokenHash: 'hash',
+  };
+  const transaction = (mode: string, enabled = true) => {
+    const tx = {
+      authenticationPolicy: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'default', mode, version: 12 }),
+        update: vi.fn().mockResolvedValue({ mode: 'SSO_OPTIONAL', version: 13 }),
+      },
+      oidcConfig: { findUnique: vi.fn().mockResolvedValue({ enabled, configVersion: 4 }) },
+    };
+    vi.mocked(prisma.$transaction).mockImplementation(async callback =>
+      (callback as unknown as (value: typeof tx) => unknown)(tx)
+    );
+    return tx;
+  };
+  beforeEach(() => vi.clearAllMocks());
+
+  it('relaxes Required to Optional under a fresh recovery lock, without touching passwords', async () => {
+    const tx = transaction('SSO_REQUIRED');
+    expect(await relaxRequiredToOptional(emergency, 12)).toEqual({
+      mode: 'SSO_OPTIONAL',
+      version: 13,
+    });
+    expect(lockControlActor).toHaveBeenCalledWith(tx, emergency);
+    expect(tx.authenticationPolicy.update).toHaveBeenCalledWith({
+      where: { id: 'default' },
+      data: expect.objectContaining({ mode: 'SSO_OPTIONAL', enforcedAt: null }),
+    });
+    expect(securityEvent).toHaveBeenCalledWith(
+      tx,
+      'auth.policy.changed',
+      'recovery-1',
+      expect.objectContaining({ oldMode: 'SSO_REQUIRED', recoveryOnly: true })
+    );
+  });
+
+  it.each([
+    ['a normal administrator', admin],
+    ['legacy recovery', { ...emergency, kind: 'legacy' } as ControlActor],
+  ])('is not available to %s', async (_label, actor) => {
+    await expect(relaxRequiredToOptional(actor, 12)).rejects.toThrow();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('only steps down from SSO Required and needs an enabled provider', async () => {
+    transaction('PASSWORD_ONLY');
+    await expect(relaxRequiredToOptional(emergency, 12)).rejects.toThrow(
+      'only while SSO Required is active'
+    );
+    transaction('SSO_REQUIRED', false);
+    await expect(relaxRequiredToOptional(emergency, 12)).rejects.toThrow('Enable an OIDC provider');
+  });
+
+  it('rejects a stale policy version', async () => {
+    transaction('SSO_REQUIRED');
+    await expect(relaxRequiredToOptional(emergency, 11)).rejects.toThrow('Policy changed');
   });
 });
