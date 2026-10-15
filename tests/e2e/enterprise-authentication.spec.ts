@@ -110,7 +110,11 @@ test('enterprise console and independent hardware recovery work in a real browse
       },
     });
     const name = `Browser recovery drill ${Date.now()}`;
-    await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
+    // The empty state shows the action twice (header and call-to-action); either opens the dialog.
+    await page
+      .getByRole('button', { name: 'Create emergency identity', exact: true })
+      .first()
+      .click();
     await page.getByRole('textbox', { name: 'Emergency identity name', exact: true }).fill(name);
     await page
       .getByRole('checkbox', { name: /custody independent of the other emergency identity/ })
@@ -455,7 +459,11 @@ test('independent password recovery, one-time secret and rotation work across br
     });
     await page.goto(`${origin}/settings/system/emergency`);
     const name = `Password browser ${browserName} ${Date.now()}`;
-    await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
+    // The empty state shows the action twice (header and call-to-action); either opens the dialog.
+    await page
+      .getByRole('button', { name: 'Create emergency identity', exact: true })
+      .first()
+      .click();
     await page.getByRole('textbox', { name: 'Emergency identity name', exact: true }).fill(name);
     await page
       .getByRole('combobox', { name: 'Recovery method', exact: true })

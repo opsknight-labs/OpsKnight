@@ -54,7 +54,14 @@ async function main() {
     process.env.ENCRYPTION_KEY = encryptionKey.toString('hex');
     process.env.NEXTAUTH_SECRET = crypto.randomBytes(48).toString('base64url');
     const seed = (model, input) =>
-      model.upsert({ where: { id: input.data.id }, create: input.data, update: input.data });
+      // Only return the id: this client is newer than the published v2.0.0 schema being seeded, so
+      // columns added since then (for example a resource `revision`) do not exist yet.
+      model.upsert({
+        where: { id: input.data.id },
+        create: input.data,
+        update: input.data,
+        select: { id: true },
+      });
     const passwordHash = await bcrypt.hash(
       'Existing optional administrator passphrase October 2026',
       12
