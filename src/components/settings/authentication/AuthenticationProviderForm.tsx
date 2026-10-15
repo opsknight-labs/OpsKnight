@@ -342,18 +342,20 @@ export default function AuthenticationProviderForm() {
           ].map(([label, value, key]) => {
             const isCopied = copiedKey === key;
             return (
-              <div key={label} className="space-y-1.5">
+              <label key={label} className="block space-y-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {label}
                 </span>
                 <div className="flex min-w-0 items-center gap-2">
                   <input
+                    aria-label={label}
                     readOnly
                     value={value}
                     className={`${inputClass} font-mono text-xs bg-muted/40 select-all`}
                     onFocus={event => event.target.select()}
                   />
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="h-9 px-3 text-xs gap-1.5 shrink-0"
@@ -380,9 +382,28 @@ export default function AuthenticationProviderForm() {
                     <span>{isCopied ? 'Copied' : 'Copy'}</span>
                   </Button>
                 </div>
-              </div>
+              </label>
             );
           })}
+        </div>
+
+        {/* Provider-Specific Setup Tip */}
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-foreground/90 space-y-1">
+          <p className="font-semibold text-primary flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" />
+            Where to paste these in {definition.label}:
+          </p>
+          <p className="text-muted-foreground leading-relaxed">
+            {configuration.providerType === 'google'
+              ? 'Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID → Under "Authorized redirect URIs", paste both URLs above.'
+              : configuration.providerType === 'azure'
+                ? 'Microsoft Entra Admin Center → App registrations → Authentication → Add a platform (Web) → Paste both URLs under "Redirect URIs".'
+                : configuration.providerType === 'okta'
+                  ? 'Okta Admin Console → Applications → Your App → General Settings → Paste both URLs under "Sign-in redirect URIs".'
+                  : configuration.providerType === 'auth0'
+                    ? 'Auth0 Dashboard → Applications → Your App → Settings → Paste both URLs under "Allowed Callback URLs" (separated by comma).'
+                    : 'Paste both URLs under the allowed redirect URIs or callback URLs configuration in your OpenID Connect provider console.'}
+          </p>
         </div>
 
         {copyMessage && (

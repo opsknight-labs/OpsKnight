@@ -322,6 +322,54 @@ export default function AuthenticationOverview({
         </div>
       )}
 
+      {/* Interactive Workflow & Navigation Guide */}
+      <div className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs space-y-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">
+            How OpsKnight SSO Works · Quick Guide
+          </h3>
+        </div>
+        <div className="grid gap-2.5 sm:grid-cols-2 text-xs leading-relaxed">
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
+            <p className="font-semibold text-foreground flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-primary" />
+              1. Identity Provider (Connection)
+            </p>
+            <p className="text-muted-foreground">
+              Choose your IdP, register the two Callback URLs in your IdP console, and enter your Client ID and Secret. Stage the draft and run a real test sign-in.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
+            <p className="font-semibold text-foreground flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5 text-amber-500" />
+              2. Emergency Recovery
+            </p>
+            <p className="text-muted-foreground">
+              Create and drill at least 2 independent recovery credentials. These ensure you can always sign in at <code className="font-mono text-[10px] bg-background px-1 py-0.5 rounded border border-border/50">/login/emergency</code> even if your IdP is completely down.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
+            <p className="font-semibold text-foreground flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              3. Access & Provisioning
+            </p>
+            <p className="text-muted-foreground">
+              Enable JIT provisioning to automatically create accounts for corporate users on their first login, restrict logins to company domains, and map IdP groups to OpsKnight roles.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1">
+            <p className="font-semibold text-foreground flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-primary" />
+              4. Sessions & Policies
+            </p>
+            <p className="text-muted-foreground">
+              Configure session limits and idle timeouts. Once your test login and recovery drills are complete, preview the impact and activate verified SSO enforcement.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <p className="text-xs text-muted-foreground pt-2">
         Your original administrator and incident ownership are preserved. Emergency identities are
         separate from normal users. Recorded checks are evidence of their timestamp, not a live IdP
