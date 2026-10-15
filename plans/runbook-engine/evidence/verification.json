@@ -461,7 +461,7 @@
       "proof": "10000 expired nonces; at most 1000 removed. Fresh/future-dated replay rejected concurrently; stale signed requests remain invalid after their record is deleted. Deliberately stalled delete rolls back while new authentication and recovery under a separate deadline succeed."
     },
     "swarmRuntime": {
-      "change": "Isolated lifecycle CI job pins Docker Engine 29.9.1 through the commit-pinned official setup action; asserts actual engine version and preserves strict health/rollback/convergence gates",
+      "change": "Isolated lifecycle CI job pins Docker Engine 29.9.1 through the commit-pinned official setup action in release-image mode, avoiding archive index lag; asserts actual engine version and preserves strict health/rollback/convergence gates",
       "reason": "Repeated older-daemon secret remount EBUSY failures; upstream moby/moby#52235",
       "scope": "Ephemeral GitHub lifecycle job; no local/shared Docker daemon changes; runtime success still requires hosted CI"
     },

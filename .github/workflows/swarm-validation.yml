@@ -185,7 +185,8 @@ jobs:
       - name: Set up pinned Docker Engine for Swarm lifecycle certification
         uses: docker/setup-docker-action@2bf61fb9464cc67f0cbdeabed6aa0380accd1c70 # v5
         with:
-          version: v29.9.1
+          # Published release images avoid the toolkit archive index lagging new patches.
+          version: type=image,tag=29.9.1
           set-host: true
 
       - name: Set up Docker Buildx

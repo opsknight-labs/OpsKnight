@@ -71,7 +71,8 @@ Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict
 ### Engine version used for lifecycle certification
 
 The Swarm lifecycle CI job pins Docker Engine **29.9.1** in its own ephemeral
-daemon before creating the Swarm or any test services. This current patch release includes security updates and contains
+daemon before creating the Swarm or any test services. The setup action extracts
+the official CLI/Engine release images, avoiding delays in its archive release index. This current patch release includes security updates and contains
 [the upstream secret/config remount fix](https://github.com/moby/moby/pull/52235).
 Older affected engines can intermittently fail service updates with
 `unable to remount dir as readonly` / `device or resource busy`, even when the
