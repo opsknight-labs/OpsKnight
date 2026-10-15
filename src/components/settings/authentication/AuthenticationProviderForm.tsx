@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+import ProviderLogo from './ProviderLogo';
 
 export default function AuthenticationProviderForm() {
   const {
@@ -182,22 +183,35 @@ export default function AuthenticationProviderForm() {
                 type="button"
                 onClick={() => handleProviderSelect(id as ProviderType)}
                 disabled={pending}
-                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
+                className={`group relative flex flex-col items-start p-3.5 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
                   isSelected
                     ? 'border-primary bg-primary/10 shadow-xs ring-1 ring-primary'
-                    : 'border-border/80 bg-muted/20 hover:bg-muted/40 hover:border-border'
+                    : 'border-border/80 bg-card hover:bg-muted/40 hover:border-border'
                 }`}
               >
-                <div className="flex items-center justify-between w-full mb-1.5">
-                  <span className="font-bold text-xs truncate text-foreground">
-                    {provider.label}
-                  </span>
-                  {isSelected && (
-                    <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                <div className="flex items-center justify-between w-full mb-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center shrink-0 border border-border/60 shadow-2xs p-1.5 transition-transform group-hover:scale-105">
+                    <ProviderLogo providerType={id} />
+                  </div>
+                  {isSelected ? (
+                    <span className="h-2 w-2 rounded-full bg-primary shrink-0 ring-4 ring-primary/20" />
+                  ) : (
+                    <span className="h-2 w-2 rounded-full bg-border shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
                   )}
                 </div>
-                <span className="text-[10px] text-muted-foreground line-clamp-1">
-                  {id === 'azure' ? 'Microsoft 365' : id === 'google' ? 'Google Workspace' : id === 'okta' ? 'Okta Org' : id === 'auth0' ? 'Auth0 Tenant' : 'Custom OIDC'}
+                <span className="font-bold text-xs truncate text-foreground block w-full mb-0.5">
+                  {provider.label}
+                </span>
+                <span className="text-[10px] text-muted-foreground line-clamp-1 font-medium">
+                  {id === 'azure'
+                    ? 'Microsoft 365'
+                    : id === 'google'
+                      ? 'Google Workspace'
+                      : id === 'okta'
+                        ? 'Okta Org'
+                        : id === 'auth0'
+                          ? 'Auth0 Tenant'
+                          : 'Custom OIDC'}
                 </span>
               </button>
             );

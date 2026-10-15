@@ -36,27 +36,30 @@ export default function OidcLinkingApprovalButton({
   variant?: 'dropdown' | 'button';
   onStateChange?: (state: OidcLinkingState) => void;
 }) {
-  const [state, setState] = useState<OidcLinkingState | 'loading'>(initialState ?? 'loading');
+  const [overrideState, setOverrideState] = useState<OidcLinkingState | null>(null);
+  const [fetchedState, setFetchedState] = useState<OidcLinkingState | 'loading'>(
+    initialState ?? 'loading'
+  );
+  const state = overrideState ?? (initialState !== undefined ? initialState : fetchedState);
   const [pending, setPending] = useState(false);
   const [dialog, setDialog] = useState<'allow' | 'revoke' | null>(null);
 
   useEffect(() => {
-    let active = true;
-    if (initialState) {
-      setState(initialState);
+    if (initialState !== undefined) {
       return;
     }
+    let active = true;
     getOidcLinkingState(userId)
       .then(result => {
         if (!active) return;
         if (result.error || !result.state) {
-          setState('not-approved');
+          setFetchedState('not-approved');
           return;
         }
-        setState(result.state);
+        setFetchedState(result.state);
       })
       .catch(() => {
-        if (active) setState('not-approved');
+        if (active) setFetchedState('not-approved');
       });
     return () => {
       active = false;
@@ -74,12 +77,12 @@ export default function OidcLinkingApprovalButton({
         return;
       }
       if (result.alreadyLinked) {
-        setState('linked');
+        setOverrideState('linked');
         onStateChange?.('linked');
         toast.info(`${userName} already has an OIDC identity linked.`);
         return;
       }
-      setState('approved');
+      setOverrideState('approved');
       onStateChange?.('approved');
       toast.success(
         wasExpired || wasRevoked || result.renewed
@@ -100,14 +103,14 @@ export default function OidcLinkingApprovalButton({
       const result = await revokeOidcLinking(userId);
       if (result.error) {
         if (result.alreadyLinked) {
-          setState('linked');
+          setOverrideState('linked');
           onStateChange?.('linked');
         }
         toast.error(result.error);
         return;
       }
       const nextState = result.state ?? 'revoked';
-      setState(nextState);
+      setOverrideState(nextState);
       onStateChange?.(nextState);
       toast.success(`OIDC linking approval revoked for ${userName}.`);
     } catch {

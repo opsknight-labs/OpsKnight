@@ -59,7 +59,6 @@ export default function AuthenticationActionGuard({
 
       {availability.blockers.length > 0 && (
         <div
-          id={id}
           className="rounded-lg border border-amber-500/25 bg-amber-50/70 p-3 text-xs dark:border-amber-500/20 dark:bg-amber-950/20 space-y-2 shadow-2xs"
           aria-label={`${availability.action} requirements`}
         >
@@ -68,7 +67,7 @@ export default function AuthenticationActionGuard({
             <span>Requirements to {availability.action.toLowerCase()}:</span>
           </div>
 
-          <ul className="space-y-1.5 pl-5 list-disc marker:text-amber-500">
+          <ul id={id} className="space-y-1.5 pl-5 list-disc marker:text-amber-500">
             {availability.blockers.map(blocker => (
               <li key={blocker.code} className="text-muted-foreground leading-relaxed">
                 <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">

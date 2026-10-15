@@ -43,6 +43,7 @@ function detectEnvStatus() {
     nextAuthUrl,
     databaseUrl: Boolean(process.env.DATABASE_URL),
     nextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+    apiKeySecret: Boolean(process.env.API_KEY_SECRET),
   };
 }
 
@@ -138,6 +139,7 @@ export default async function SystemSettingsPage() {
       appUrl: isAppUrlConfigured,
       databaseUrl: env.databaseUrl,
       nextAuthSecret: env.nextAuthSecret,
+      apiKeySecret: env.apiKeySecret,
     };
     const allEnvOk = Object.values(effectiveEnv).every(Boolean);
     const missingCount = Object.values(effectiveEnv).filter(v => !v).length;
@@ -268,6 +270,17 @@ export default async function SystemSettingsPage() {
         statusBadgeText: env.nextAuthSecret ? 'Configured' : 'Missing',
         note: 'Cryptographic key used to sign and verify user authentication session cookies',
         impact: 'Authentication',
+        required: true,
+      },
+      {
+        key: 'API_KEY_SECRET',
+        ok: env.apiKeySecret,
+        icon: <Key className="h-4 w-4" />,
+        scope: 'Server Secret',
+        source: env.apiKeySecret ? 'Environment (.env)' : 'Not Set',
+        statusBadgeText: env.apiKeySecret ? 'Configured' : 'Missing',
+        note: 'Independent signing secret used to generate and verify Public REST API keys',
+        impact: 'Public REST API',
         required: true,
       },
     ];
@@ -489,7 +502,7 @@ export default async function SystemSettingsPage() {
               value: allEnvOk ? 'All Set' : `${missingCount} Missing`,
               icon: <Key className="h-4 w-4" />,
               valueClassName: allEnvOk ? 'text-emerald-300' : 'text-rose-300',
-              subtext: `${4 - missingCount}/4 configurations active`,
+              subtext: `${5 - missingCount}/5 configurations active`,
             },
           ]}
         />

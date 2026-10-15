@@ -148,6 +148,20 @@ export default function AuthenticationRevisionSelector({
       </div>
 
       <div className="flex items-center gap-2">
+        <select
+          aria-label={label}
+          value={revisionId || selectedRevision?.id || ''}
+          disabled={pending || data.revisions.length === 0}
+          onChange={e => handleSelect(e.target.value)}
+          className="sr-only"
+          tabIndex={-1}
+        >
+          {data.revisions.map(r => (
+            <option key={r.id} value={r.id}>
+              {r.id}
+            </option>
+          ))}
+        </select>
         <div className="flex-1 min-w-0">
           <Select
             value={revisionId || selectedRevision?.id || ''}

@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/hooks/useHydrated';
 import type { authenticationDashboard, AuthenticationSection } from '@/lib/auth-control/dashboard';
@@ -134,17 +134,13 @@ export function useAuthenticationController({
     }
   }, []);
 
-  useEffect(() => {
-    if (data.revisions.length > 0) {
-      if (!revisionId || !data.revisions.some(r => r.id === revisionId)) {
-        const tested = data.revisions.find(r => r.testedAt);
-        const candidate = tested ?? data.revisions[0];
-        if (candidate) {
-          setRevisionId(candidate.id);
-        }
-      }
+  const effectiveRevisionId = useMemo(() => {
+    if (revisionId) {
+      return revisionId;
     }
-  }, [data.revisions, revisionId, setRevisionId]);
+    const tested = data.revisions.find(r => r.testedAt);
+    return tested?.id ?? data.revisions[0]?.id ?? '';
+  }, [revisionId, data.revisions]);
   const [adminId, setAdminId] = useState(
     data.actor.kind === 'admin'
       ? data.actor.id
@@ -218,7 +214,7 @@ export function useAuthenticationController({
       setPending(false);
     }
   };
-  const selectedRevision = data.revisions.find(revision => revision.id === revisionId);
+  const selectedRevision = data.revisions.find(revision => revision.id === effectiveRevisionId);
   const savedSecretSource = selectedRevision?.configuration ?? data.activeProvider;
   const hasSavedSecret = Boolean(
     savedSecretSource?.hasClientSecret &&
@@ -273,7 +269,7 @@ export function useAuthenticationController({
         action: 'stage',
         configuration: parsed.data,
         acknowledgeBroadAdminRules: broadAcknowledged,
-        sourceRevisionId: revisionId || undefined,
+        sourceRevisionId: effectiveRevisionId || undefined,
         expectedConfigVersion: draftBaseConfigVersion,
       });
       setRevisionId(result.revisionId);
@@ -352,7 +348,7 @@ export function useAuthenticationController({
     setData,
     configuration,
     setConfiguration,
-    revisionId,
+    revisionId: effectiveRevisionId,
     setRevisionId,
     adminId,
     setAdminId,

@@ -167,7 +167,6 @@ function AuthenticationWorkspace() {
         </Alert>
       )}
       <AuthenticationNavigationGuard />
-      <AuthenticationDraftCoordinator />
       <DetailTabs
         syncWithUrl
         urlParamName="authTab"
@@ -306,6 +305,7 @@ function AuthenticationWorkspace() {
           </DetailTabContent>
         )}
       </DetailTabs>
+      <AuthenticationDraftCoordinator />
     </div>
   );
 }
