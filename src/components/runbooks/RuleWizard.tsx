@@ -56,10 +56,17 @@ export default function RuleWizard({
             .filter(([name]) => labels.has(name) || name.startsWith('input:'))
             .map(([name, value]) => {
               const label = labels.get(name) ?? `Input: ${name.slice(6)}`;
-              const masked = name.startsWith('input:');
+              const field = form.elements.namedItem(name);
+              const masked =
+                name.startsWith('input:') &&
+                (!(field instanceof HTMLElement) ||
+                  field.dataset.reviewSensitive !== 'false' ||
+                  (field instanceof HTMLInputElement && field.type === 'password'));
+              const inputLabel =
+                field instanceof HTMLElement ? field.getAttribute('aria-label') : null;
               const selectedText = document.getElementById(name)?.textContent;
               return [
-                label,
+                inputLabel || label,
                 masked ? 'Configured · Values masked in review' : selectedText || String(value),
               ];
             })

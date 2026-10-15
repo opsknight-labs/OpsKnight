@@ -154,6 +154,19 @@ suite('bounded operational backlog handling', () => {
         })),
       });
     }
+    const captured: Array<{ query: string; params: string }> = [];
+    let capturing = true;
+    prisma.$on('query', event => {
+      if (
+        capturing &&
+        event.query.includes('RunbookStepAttempt') &&
+        event.query.includes('ORDER BY')
+      )
+        captured.push(event);
+    });
+    // Record emitted SQL against the ineligible backlog, before adding eligible work.
+    expect(await claimAgentAttempt(agent.id, true)).toBeNull();
+    capturing = false;
     const eligible = await testPrisma.runbookExecutionStep.create({
       data: {
         executionId: execution.id,
@@ -168,6 +181,7 @@ suite('bounded operational backlog handling', () => {
           create: {
             attemptNumber: 1,
             targetAgentId: agent.id,
+            availableAt: old,
             claimDeadlineAt: execution.deadlineAt,
             planDigest: 'b'.repeat(64),
           },
@@ -175,29 +189,29 @@ suite('bounded operational backlog handling', () => {
       },
       include: { attempts: true },
     });
-    const started = performance.now();
-    const captured: Array<{ query: string; params: string }> = [];
-    let capturing = true;
-    prisma.$on('query', event => {
-      if (
-        capturing &&
-        event.query.includes('RunbookStepAttempt') &&
-        event.query.includes('ORDER BY')
-      )
-        captured.push(event);
-    });
-    const claimed = await claimAgentAttempt(agent.id, true);
-    const elapsedMs = performance.now() - started;
-    capturing = false;
     const query = captured[0];
     expect(query).toBeDefined();
-    // Emitted Prisma SQL only, with original bound parameters. The eligible row is now claimed.
-    const queryPlan = await testPrisma.$queryRawUnsafe(
-      `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query.query}`,
-      ...JSON.parse(query.params).map((value: unknown) =>
-        typeof value === 'string' && /^\d{4}-\d{2}-\d{2}[T ]/.test(value) ? new Date(value) : value
-      )
-    );
+    // Inspect a populated pending queue before any mutation consumes the eligible row.
+    // Prisma's ORM binds DateTime as timestamp without time zone, while raw Date
+    // parameters bind as timestamptz. Preserve the ORM parameter types when replaying.
+    let replaySql = query.query;
+    const replayParams = (JSON.parse(query.params) as unknown[]).map((value, index) => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}[T ]/.test(value)) return value;
+      replaySql = replaySql.replace(/\$(\d+)\b/g, (placeholder, ordinal: string) =>
+        Number(ordinal) === index + 1 ? `${placeholder}::timestamp` : placeholder
+      );
+      return new Date(value).toISOString();
+    });
+    const queryPlan = await testPrisma.$transaction(async tx => {
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`;
+      return tx.$queryRawUnsafe<
+        Array<{ 'QUERY PLAN': Array<{ Plan: { 'Actual Rows': number } }> }>
+      >(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${replaySql}`, ...replayParams);
+    });
+    expect(queryPlan[0]['QUERY PLAN'][0].Plan['Actual Rows']).toBe(1);
+    const started = performance.now();
+    const claimed = await claimAgentAttempt(agent.id, true);
+    const elapsedMs = performance.now() - started;
     expect(claimed?.attemptId).toBe(eligible.attempts[0].id);
     expect(
       await testPrisma.runbookStepAttempt.count({

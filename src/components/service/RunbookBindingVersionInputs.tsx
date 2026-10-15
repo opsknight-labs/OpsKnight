@@ -208,6 +208,9 @@ function GeneratedFields({
         <label key={input.key} className="flex items-start gap-2 rounded-md border p-3 text-sm">
           <input
             name={`input:${input.key}`}
+            data-review-sensitive={/password|secret|token|credential|api.?key|private.?key/i.test(
+              input.key
+            )}
             type="checkbox"
             value="true"
             defaultChecked={current === true || current === 'true'}
@@ -237,6 +240,10 @@ function GeneratedFields({
         <Input
           id={`${idPrefix}-${input.key}`}
           name={`input:${input.key}`}
+          data-review-sensitive={
+            input.type === 'SECRET_REF' ||
+            /password|secret|token|credential|api.?key|private.?key/i.test(input.key)
+          }
           type={input.type === 'NUMBER' ? 'number' : input.type === 'URL' ? 'url' : 'text'}
           step={input.type === 'NUMBER' ? 'any' : undefined}
           required={input.required}

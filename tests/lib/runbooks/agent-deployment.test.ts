@@ -36,6 +36,12 @@ it('renders disjoint Kubernetes selectors, identities, policy, Secrets and PVC r
       const identity = agentDeploymentIdentity(agentId);
       const deployment = documents.find(value => value.kind === 'Deployment');
       expect(deployment.metadata.name).toBe(identity.name);
+      for (const name of ['OPSKNIGHT_EXECUTION_PUBLIC_KEY', 'OPSKNIGHT_EXECUTION_PUBLIC_KEYS']) {
+        const variable = deployment.spec.template.spec.containers[0].env.find(
+          (item: { name: string }) => item.name === name
+        );
+        expect(variable.valueFrom.secretKeyRef.name).toBe(identity.enrollmentSecret);
+      }
       expect(deployment.spec.selector.matchLabels['app.kubernetes.io/instance']).toBe(
         identity.name
       );
@@ -86,7 +92,7 @@ docker() {
   else return 1; fi
 }
 ${commands.swarm}
-rm -rf "$agent_credential_dir"
+[ ! -e "$agent_credential_dir/enrollment-token" ] || { printf 'Credential file retained' >&2; exit 1; }
 `,
     ],
     { encoding: 'utf8', input: 'fixture-token\nfixture-node\n' }
@@ -165,7 +171,7 @@ kubectl() {
   esac
 }
 ${commands.kustomize}
-[ ! -e "$agent_credential_dir/enrollment-token" ] || rm -rf "$agent_credential_dir"
+[ ! -e "$agent_credential_dir/enrollment-token" ] || { printf 'Credential file retained' >&2; exit 1; }
 `,
       ],
       {

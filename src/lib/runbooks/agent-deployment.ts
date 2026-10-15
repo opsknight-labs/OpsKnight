@@ -33,6 +33,16 @@ export function agentKustomization(agentId: string, url: string, image: string) 
           { op: 'replace', path: '/spec/template/spec/containers/0/env/0/value', value: url },
           {
             op: 'replace',
+            path: '/spec/template/spec/containers/0/env/1/valueFrom/secretKeyRef/name',
+            value: identity.enrollmentSecret,
+          },
+          {
+            op: 'replace',
+            path: '/spec/template/spec/containers/0/env/2/valueFrom/secretKeyRef/name',
+            value: identity.enrollmentSecret,
+          },
+          {
+            op: 'replace',
             path: '/spec/template/spec/volumes/2/secret/secretName',
             value: identity.enrollmentSecret,
           },

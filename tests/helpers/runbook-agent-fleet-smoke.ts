@@ -75,10 +75,12 @@ export async function smokeAgentFleet(
   if (!nodeId) throw new Error('Fleet smoke requires a preconfigured disposable Swarm manager.');
   const network = `rbe-fleet-${crypto.randomUUID().slice(0, 8)}`;
   await run('docker', ['network', 'create', '--driver', 'overlay', '--attachable', network]);
+  const runtime = await run('docker', ['version', '--format', '{{json .}}']);
+  await writeFile('test-results/runbook-engine/fleet-docker-version.json', runtime.stdout);
   const evidence: unknown[] = [];
   const failures: Error[] = [];
   try {
-    for (const platform of ['swarm', 'helm', 'kustomize'] as const) {
+    for (const platform of ['compose', 'swarm', 'helm', 'kustomize'] as const) {
       const enrollments = await Promise.all(
         [0, 1].map(index =>
           createAgentEnrollment({ name: `${platform} independent ${index}`, actorId })
@@ -90,6 +92,12 @@ export async function smokeAgentFleet(
         CURL_CA_BUNDLE: join(directory, 'tls.crt'),
         SWARM_NETWORK_NAME: network,
         XDG_STATE_HOME: join(directory, 'agent-state'),
+        TMPDIR: directory,
+        OPSKNIGHT_PULL_POLICY: 'never',
+        OPSKNIGHT_AGENT_IMAGE: image,
+        OPSKNIGHT_AGENT_URL: endpoint,
+        OPSKNIGHT_EXECUTION_PUBLIC_KEY: enrollments[0].executionPublicKey,
+        OPSKNIGHT_AGENT_POLICY_PATH: '../../agent/policy.container.json',
       };
       const names = enrollments.map(enrollment => agentDeploymentIdentity(enrollment.agent.id));
       try {
@@ -99,7 +107,7 @@ export async function smokeAgentFleet(
             image,
             url: endpoint,
             executionPublicKey: enrollment.executionPublicKey,
-            policyPath: 'agent/policy.container.json',
+            policyPath: '../../agent/policy.container.json',
           });
           await script(commands[platform], `${enrollment.token}\n${nodeId}\n`, env);
         }
@@ -191,12 +199,26 @@ export async function smokeAgentFleet(
             image,
             url: endpoint,
             executionPublicKey: enrollment.executionPublicKey,
-            policyPath: 'agent/policy.container.json',
+            policyPath: '../../agent/policy.container.json',
             operation: 'upgrade',
           });
           await script(commands[platform], '', env);
         }
-        if (platform === 'swarm')
+        if (platform === 'compose')
+          await run(
+            'docker',
+            [
+              'compose',
+              '-p',
+              names[0].name,
+              '-f',
+              'deploy/compose/docker-compose.agent.yml',
+              'restart',
+              'opsknight-agent',
+            ],
+            { env, timeout: 120_000 }
+          );
+        else if (platform === 'swarm')
           await run(
             'docker',
             ['service', 'update', '--force', `${names[0].name}_opsknight-agent`],
@@ -217,7 +239,21 @@ export async function smokeAgentFleet(
           `${platform} restarted identity`
         );
         await runFor(0);
-        if (platform === 'swarm') await run('docker', ['stack', 'rm', names[0].name]);
+        if (platform === 'compose')
+          await run(
+            'docker',
+            [
+              'compose',
+              '-p',
+              names[0].name,
+              '-f',
+              'deploy/compose/docker-compose.agent.yml',
+              'down',
+              '-v',
+            ],
+            { env, timeout: 120_000 }
+          );
+        else if (platform === 'swarm') await run('docker', ['stack', 'rm', names[0].name]);
         else if (platform === 'helm')
           await run('helm', ['uninstall', names[0].name, '-n', 'opsknight'], {
             env,
@@ -249,7 +285,36 @@ export async function smokeAgentFleet(
         // Capture only owned resources before cleanup; never inspect Secrets or service env.
         const diagnostics: unknown[] = [];
         for (const identity of names) {
-          if (platform === 'swarm') {
+          if (platform === 'compose') {
+            const logs = await run(
+              'docker',
+              [
+                'compose',
+                '-p',
+                identity.name,
+                '-f',
+                'deploy/compose/docker-compose.agent.yml',
+                'logs',
+                '--tail',
+                '80',
+              ],
+              { env, timeout: 10_000 }
+            ).catch(() => ({ stdout: 'Logs unavailable', stderr: '' }));
+            diagnostics.push({ name: identity.name, ...logs });
+          } else if (platform === 'swarm') {
+            const containers = await run(
+              'docker',
+              ['ps', '-aq', '--filter', `label=com.docker.stack.namespace=${identity.name}`],
+              { timeout: 10_000 }
+            );
+            for (const container of containers.stdout.trim().split(/\s+/).filter(Boolean)) {
+              const state = await run(
+                'docker',
+                ['inspect', '--format', '{{json .State}}', container],
+                { timeout: 10_000 }
+              ).catch(() => ({ stdout: 'Container unavailable', stderr: '' }));
+              diagnostics.push({ name: identity.name, container, ...state });
+            }
             for (const args of [
               ['service', 'ps', '--no-trunc', `${identity.name}_opsknight-agent`],
               ['service', 'logs', '--tail', '80', `${identity.name}_opsknight-agent`],
@@ -304,7 +369,21 @@ export async function smokeAgentFleet(
         evidence.push({ platform, status: 'FAIL', reason });
       } finally {
         for (const identity of names) {
-          if (platform === 'swarm') {
+          if (platform === 'compose') {
+            await run(
+              'docker',
+              [
+                'compose',
+                '-p',
+                identity.name,
+                '-f',
+                'deploy/compose/docker-compose.agent.yml',
+                'down',
+                '-v',
+              ],
+              { env, timeout: 120_000 }
+            ).catch(() => undefined);
+          } else if (platform === 'swarm') {
             await run('docker', ['stack', 'rm', identity.name]).catch(() => undefined);
             await until(
               async () =>

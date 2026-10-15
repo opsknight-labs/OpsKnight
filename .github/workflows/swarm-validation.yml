@@ -183,6 +183,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Record Docker runtime versions
+        run: |
+          docker version
+          docker info --format 'Kernel={{.KernelVersion}} OS={{.OperatingSystem}} Driver={{.Driver}}'
       - name: Initialize Docker Swarm Node
         run: |
           docker swarm init --advertise-addr 127.0.0.1

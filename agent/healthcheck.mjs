@@ -23,6 +23,9 @@ try {
     throw new Error('Agent has not initialized or local progress is stale.');
   }
   process.kill(state.pid, 0);
-} catch {
+} catch (error) {
+  process.stderr.write(
+    `Agent ${process.argv[2] ?? 'readiness'} probe failed: ${error instanceof Error ? error.message : 'Invalid health state'}\n`
+  );
   process.exitCode = 1;
 }

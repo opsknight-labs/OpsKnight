@@ -579,8 +579,16 @@ export async function run(options: RunAgentOptions = {}) {
     }
     options.signal.addEventListener('abort', shutdown, { once: true });
   }
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
+  const interrupt = () => {
+    process.stderr.write('Agent received SIGINT; draining and stopping.\n');
+    shutdown();
+  };
+  const terminate = () => {
+    process.stderr.write('Agent received SIGTERM; draining and stopping.\n');
+    shutdown();
+  };
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', terminate);
 
   let iterationsRun = 0;
   try {
@@ -833,8 +841,8 @@ export async function run(options: RunAgentOptions = {}) {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     if (healthTimer) clearInterval(healthTimer);
     abortUnfinishedExecution();
-    process.removeListener('SIGINT', shutdown);
-    process.removeListener('SIGTERM', shutdown);
+    process.removeListener('SIGINT', interrupt);
+    process.removeListener('SIGTERM', terminate);
   }
 }
 

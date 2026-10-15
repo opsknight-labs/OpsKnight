@@ -75,6 +75,7 @@ export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
 
 docker compose -p ${deployment.name} -f deploy/compose/docker-compose.agent.yml -f deploy/compose/docker-compose.agent.enrollment-file.yml up -d opsknight-agent`;
   const swarm = `${captureToken}
+trap 'rm -rf "$agent_credential_dir"' EXIT
 docker secret create ${deployment.enrollmentSecret} - < "$agent_credential_dir/enrollment-token"
 export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
 export OPSKNIGHT_AGENT_ENROLLMENT_SECRET=${shellQuote(deployment.enrollmentSecret)}
@@ -86,8 +87,11 @@ export SWARM_NETWORK_NAME="\${SWARM_NETWORK_NAME:-opsknight}"
 IFS= read -r -p 'Swarm node ID for this Agent identity: ' OPSKNIGHT_AGENT_NODE_ID
 export OPSKNIGHT_AGENT_NODE_ID
 docker stack deploy --with-registry-auth \\
-  -c deploy/swarm/docker-stack.agent.yml ${deployment.name}`;
+  -c deploy/swarm/docker-stack.agent.yml ${deployment.name}
+rm -rf "$agent_credential_dir"
+trap - EXIT`;
   const helm = `${captureToken}
+trap 'rm -rf "$agent_credential_dir"' EXIT
 ${namespace}
 kubectl -n opsknight create secret generic ${deployment.enrollmentSecret} \\
   --from-file=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN="$agent_credential_dir/enrollment-token" \\
@@ -98,7 +102,9 @@ helm upgrade --install ${deployment.name} deploy/kubernetes/helm/opsknight-agent
   --set agent.enabled=true \\
   --set-string agent.url=${shellQuote(url)} \\
   ${helmImage} \\
-  --set-string agent.enrollmentToken.existingSecret=${shellQuote(deployment.enrollmentSecret)}`;
+  --set-string agent.enrollmentToken.existingSecret=${shellQuote(deployment.enrollmentSecret)}
+rm -rf "$agent_credential_dir"
+trap - EXIT`;
   const kustomize = `${captureToken}
 trap 'rm -rf "$agent_credential_dir"' EXIT
 ${namespace}
@@ -112,9 +118,12 @@ kubectl -n opsknight create secret generic ${deployment.enrollmentSecret} \\
   --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 cp deploy/kubernetes/kustomize/components/agent/deployment.yaml deploy/kubernetes/kustomize/components/agent/policy.yaml deploy/kubernetes/kustomize/components/agent/service-account.yaml deploy/kubernetes/kustomize/components/agent/pvc.yaml "$agent_setup_dir/"
 printf '%s' ${shellQuote(kustomization)} > "$agent_setup_dir/kustomization.yaml"
-kubectl apply -k "$agent_setup_dir"`;
+kubectl apply -k "$agent_setup_dir"
+rm -rf "$agent_credential_dir"
+trap - EXIT`;
   const linux = distribution
     ? `${captureToken}
+trap 'rm -rf "$agent_credential_dir"' EXIT
 curl --fail --silent --show-error ${shellQuote(distribution.installerUrl)} -o "$agent_credential_dir/install.sh"
 printf '%s  %s\\n' ${shellQuote(distribution.manifest.installer.sha256)} "$agent_credential_dir/install.sh" | sha256sum --check -
 sudo bash "$agent_credential_dir/install.sh" \\
@@ -122,7 +131,9 @@ sudo bash "$agent_credential_dir/install.sh" \\
   --url ${shellQuote(url)} \\
   --key ${shellQuote(executionPublicKey)} \\
   --token-file "$agent_credential_dir/enrollment-token"
-sudo /opt/opsknight-agent/preflight.sh`
+sudo /opt/opsknight-agent/preflight.sh
+rm -rf "$agent_credential_dir"
+trap - EXIT`
     : '';
 
   if (operation === 'upgrade')
@@ -149,10 +160,13 @@ set +x
 set -euo pipefail
 umask 077
 agent_credential_dir=$(mktemp -d)
+trap 'rm -rf "$agent_credential_dir"' EXIT
 curl --fail --silent --show-error ${shellQuote(distribution.installerUrl)} -o "$agent_credential_dir/install.sh"
 printf '%s  %s\\n' ${shellQuote(distribution.manifest.installer.sha256)} "$agent_credential_dir/install.sh" | sha256sum --check -
 sudo bash "$agent_credential_dir/install.sh" --version ${shellQuote(distribution.manifest.version)} --url ${shellQuote(url)} --key ${shellQuote(executionPublicKey)}
-sudo /opt/opsknight-agent/preflight.sh`
+sudo /opt/opsknight-agent/preflight.sh
+rm -rf "$agent_credential_dir"
+trap - EXIT`
         : '',
     };
   return { compose, swarm, helm, kustomize, linux };

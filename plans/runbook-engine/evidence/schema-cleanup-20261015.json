@@ -1,23 +1,32 @@
 {
-  "measuredAt": "2026-10-15T14:55:33.082Z",
+  "measuredAt": "2026-10-15T15:41:28.764Z",
+  "migration": "20261015130000_runbook_artifact_cleanup_indexes",
   "results": [
     {
-      "database": "rbe_engine_test",
-      "migrations": 220,
+      "database": "rbe_audit_fresh_20261015",
+      "status": "PASS",
+      "idempotentDDL": "PASS",
       "indexes": [
+        "RunbookArtifact_attemptId_createdAt_idx",
         "RunbookArtifact_createdAt_id_idx",
+        "RunbookArtifact_pkey",
         "RunbookStepAttempt_outputArtifactId_idx"
       ]
     },
     {
-      "database": "rbe_schema_fresh_20261015",
-      "migrations": 220,
+      "database": "rbe_audit_upgrade_20261015",
+      "status": "PASS",
+      "idempotentDDL": "PASS",
       "indexes": [
+        "RunbookArtifact_attemptId_createdAt_idx",
         "RunbookArtifact_createdAt_id_idx",
+        "RunbookArtifact_pkey",
         "RunbookStepAttempt_outputArtifactId_idx"
       ]
     }
   ],
-  "schemaComparison": "No difference detected between migrated databases",
-  "limitation": "Existing migrated local fresh/upgrade fixtures; not physical deployment upgrade certification"
+  "predecessor": "20261004200000_runbook_execution_deadline creates RunbookArtifact_createdAt_idx as a nonunique, nonconstraint index; no CASCADE used",
+  "validator": "0 errors, historical warnings retained",
+  "schemaComparison": "No difference detected between fresh and predecessor-upgrade databases",
+  "scope": "Disposable PostgreSQL; no production migration history changed"
 }

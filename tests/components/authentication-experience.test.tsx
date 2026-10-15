@@ -434,3 +434,11 @@ describe('enterprise authentication experience', () => {
     expect(screen.getByRole('button', { name: 'Confirm recovery change' })).toBeDisabled();
   });
 });
+
+it('distinguishes the first-identity empty-state action from the persistent creation action', () => {
+  renderConsole('emergency', { ...fixtureDashboard, emergencyAccounts: [] });
+  expect(screen.getByRole('button', { name: 'Create emergency identity' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Create first emergency identity' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Create first emergency identity' }));
+  expect(screen.getByRole('dialog', { name: 'Create emergency identity' })).toBeVisible();
+});

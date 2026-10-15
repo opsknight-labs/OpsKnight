@@ -392,5 +392,16 @@
     "result": "Rebased onto authentication workspace #867, PWA fixes #868 and authentication UI #870. Retained main WOFF2 assets and authentication projection preparation; restored router hook for Runbook server tabs.",
     "validation": "372 targeted units (3 skipped), 62 execution/backlog/retention database cases and 16 navigation/authentication component cases PASS; overlapping suites. All 222 migrations applied on the isolated upgraded database.",
     "ci": "New rebased head requires full CI; earlier candidate results are historical evidence only."
+  },
+  "confirmedBlockerFollowup": {
+    "base": "c0482d4c6",
+    "migration": "Unpublished PR cleanup migration uses idempotent CREATE INDEX IF NOT EXISTS / DROP INDEX IF EXISTS; fresh+predecessor-upgrade+DDL reapplication PASS. Historical production migration files unchanged. Validator 0 errors.",
+    "kustomize": "Enrollment volume and both signing-key secretKeyRef names explicitly bind the same Agent-specific external Secret; two-enrollment render asserts all three. Clean-namespace live result pending CI.",
+    "authentication": "Empty-state action named Create first emergency identity; persistent action retains Create emergency identity; tests assert unambiguous actions and dialog.",
+    "claimPlan": "Read-only EXPLAIN before claim, preserves ORM timestamp parameter types, requires Actual Rows = 1; separate end-to-end claim timing.",
+    "review": "Nonsecret inputs explicitly marked for review are shown; secret references, sensitive names, password fields and unclassified inputs remain masked.",
+    "credentials": "Swarm, Helm, Kustomize and native token tempfiles removed immediately on success, EXIT trap for failure; Compose token mount retained.",
+    "swarm": "Previous any-exit restart-policy change did not resolve upgrade stall. No new convergence claim. Capture task/container health, signal logs and Docker runtime versions; rollback detection remains strict.",
+    "validation": "391 targeted units (3 skipped), 13 later setup/cleanup checks (overlap), 4 backlog cases and pre-claim plan regression PASS; TypeScript/lint clean. Exact-head CI pending."
   }
 }
