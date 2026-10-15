@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [responder, administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-14
+  verified_at: 2026-10-15
   evidence:
     [
       src/lib/runbooks/agent-claims.ts,
@@ -92,3 +92,36 @@ write; inspect the observed target state before repeating remediation.
 If installation commands cannot be copied, review the verified release manifest, confirmed Agent-reachable HTTPS URL and token expiry. Missing release assets cannot be repaired with a guessed installer URL. Revoke the enrollment and create a fresh token if it expired or was abandoned. A consumed token is not a substitute for a lost private identity.
 
 For UNKNOWN worker health, inspect durable worker heartbeats, deploy/run the runbook lane and scheduler, and confirm successful dispatch and reconciliation within 90 seconds. An empty queue is insufficient evidence. For Agent readiness failures, inspect clock, authentication, durable storage and drain reasons; liveness should remain healthy while the process makes progress. Restore the dependency before retrying. Never replay an uncertain started write automatically.
+
+## A rule save conflicts or a suggestion cannot execute
+
+A configuration revision conflict means someone changed the rule after you
+loaded it. Reload, review the saved version and reapply the intended changes.
+A successful trigger save affects future incident events; it does not rewrite
+historical suggestions.
+
+**Rule detached** retains the suggestion for history and disables preview and
+execution. Dismiss it if no longer useful. Paused rules also cannot start their
+suggestions until reactivated. Detach archives the rule instead of deleting its
+historical trigger, suggestion and execution identity.
+
+For v2 API execution, a non-empty `parameters` object with a resolved rule returns
+HTTP 400 `RUNBOOK_DEFINITION_INVALID`. Omit those parameters and use the rule's
+saved inputs, or deliberately execute an unbound workflow with validated inputs.
+See [service rules and incident response](../../guides/runbooks/respond).
+
+## Replay nonce maintenance is falling behind
+
+Inspect the [nonce purge metrics and limits](../../reference/runbooks#bounded-nonce-maintenance)
+alongside database latency, lock contention and worker logs. Purging runs in a
+separate one-connection maintenance pool; each batch selects at most 1,000
+expired IDs, and slow batches do not overlap. Artifact retention shares this
+pool but keeps its own one-minute cadence.
+
+A rising oldest-expired-age gauge or failed-batch counter calls for database and
+maintenance-throughput investigation. Skipped or failed batches preserve the
+last successful age observation, so pair the gauge with counters and logs.
+Do not truncate the nonce table to clear a backlog: recent rows protect against
+replay inside the signature window. Agent clock or authentication failures
+require correcting time synchronization or identity, rather than weakening the
+signature window or disabling replay checks.

@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [administrator, responder]
 verification:
   level: test
-  verified_at: 2026-10-14
+  verified_at: 2026-10-15
   evidence:
     [
       src/components/service/ServiceRunbooks.tsx,
@@ -40,10 +40,16 @@ write targets are disabled in the UI and rejected by the backend. Use
 Open **Configure** on the attached workflow. Set the binding to Suggested or
 Automatic if it should react to incident creation. In the trigger section,
 select **Incident created**, choose **Match all** or **Match any**, and enter
-conditions such as **Incident urgency Equals HIGH**. Save the trigger.
+conditions such as **Incident urgency Equals HIGH**. Save the trigger and check the success message and saved summary. Binding and
+trigger saves use configuration revisions: if another administrator changes
+the rule while your form is open, reload the current configuration, reconcile
+your edits and save again. Do not repeatedly submit an outdated form.
 
 Changes affect future matching events; they do not retroactively regenerate
-old suggestions. In Suggested mode, check a newly created matching incident
+old suggestions. Trigger evaluation rechecks the rule and trigger revisions
+under its transaction locks before persisting a suggestion, so an event already
+being evaluated cannot create a suggestion from superseded conditions.
+In Suggested mode, check a newly created matching incident
 for a suggestion. An existing suggestion keeps its frozen version, resolved
 inputs, and target even if its service binding is later edited.
 
@@ -93,6 +99,20 @@ specific action and target are appropriate.
 Approval does not override Agent policy or platform permissions. A changed
 plan is not authorized by a prior approval. Watch subsequent step progress and
 verification output; use artifact download links when available.
+
+## Execute through the v2 API
+
+`POST /api/v2/runbooks/{id}/execute` uses saved rule inputs when an explicit
+binding is selected or a service/incident resolves to a binding. Omit
+`parameters` or send `{}` for these executions. A non-empty `parameters` object
+returns HTTP 400 with `RUNBOOK_DEFINITION_INVALID`; values are never silently
+ignored or substituted for the reviewed rule configuration. To change a bound
+execution, edit the rule, validate it and preview the updated plan.
+
+An unbound execution accepts `parameters` validated against the published
+version's input definitions. Supply JSON numbers and booleans with their actual
+types. Review preview/approval requirements and the idempotency contract in the
+[v2 API reference](../../reference/api/v2) before integrating an external caller.
 
 ## Cancellation and uncertain outcomes
 

@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [administrator, operator]
 verification:
   level: test
-  verified_at: 2026-10-14
+  verified_at: 2026-10-15
   evidence:
     [
       src/app/(app)/runbooks/agents/page.tsx,
@@ -73,8 +73,11 @@ in commands or diagnostic output, even though output redaction is provided.
 
 **Runbooks → Health** reports queue age, artifact storage, unknown outcomes,
 expired leases, circuit-breaker indicators, and Agents requiring attention.
-Worker status is local to the current process; a split web process cannot
-certify the whole worker fleet. Monitor worker readiness endpoints separately.
+Worker health uses durable PostgreSQL evidence from worker instances and lanes.
+HEALTHY requires fresh successful dispatch and reconciliation; missing or
+incomplete evidence is UNKNOWN even when the queue is empty. Inspect worker
+readiness endpoints and logs separately when diagnosing a split deployment.
+The web process's local scheduler state alone cannot establish fleet health.
 For recovery procedures, see [Runbook troubleshooting](../../troubleshooting/runbooks/).
 
 ## Enrollment and policy evidence

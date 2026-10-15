@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [administrator, operator, developer]
 verification:
   level: source
-  verified_at: 2026-10-14
+  verified_at: 2026-10-15
   evidence:
     [
       src/lib/runbooks/types.ts,
@@ -216,3 +216,13 @@ mean that valid nonce replay protection has been disabled.
 ## Current boundaries
 
 Nested-check builder controls, signing rotation, structured selectors, independent rules and static version comparison are implemented. Version comparisons mask credential fields and list effects on latest-publication rules while pinned rules retain their versions. These features do not certify all deployment topologies or fleet capacity. The measured 10/100/1000 Agent simulation is direct-library idle claim load; it is not authenticated production network capacity or physical recovery proof. Promote only released server/Agent pairs with completed topology evidence.
+
+
+Runbooks remains **Beta** in v2.1. Configuration checks, policy evidence, browser
+journeys and candidate deployment tests each establish a limited property.
+Release qualification still requires the published server/Agent pair, physical
+write and recovery evidence on the intended Systemd/container/Kubernetes targets,
+HA and fault scenarios, sustained authenticated workload measurements, and human
+accessibility review. Candidate builds, simulations and a successful preview
+cannot substitute for those environment-specific results. Follow
+[Agent operations](../operate/deploy/agent-operations) for deployment prerequisites.
