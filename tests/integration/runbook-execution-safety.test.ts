@@ -1,6 +1,9 @@
+/* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma, RunbookInputType } from '@prisma/client';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import {
   computeDefinitionChecksum,
   computePlanDigest,
@@ -47,6 +50,9 @@ import {
   resetDatabase,
   testPrisma,
 } from '../helpers/test-db';
+import { NextRequest } from 'next/server';
+import { POST as executeRunbookV2Route } from '@/app/api/v2/runbooks/[id]/execute/route';
+import { hashTokenV2 } from '@/lib/api-keys';
 
 /** Explicitly provision legitimate automatic fixtures; actor-less production calls stay rejected. */
 async function startRunbookExecution(input: RunbookExecutionRequest) {
@@ -2663,4 +2669,368 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(manualExecution.id).toBeDefined();
     expect(manualExecution.triggeredByUserId).toBe(target.actor.id);
   });
+
+  it('executes incident-linked runbook through preview and orchestrator with service boundary and agent target', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: {
+            unit: 'nginx.service',
+            action: 'status',
+          },
+        },
+      ],
+    });
+
+    const incident = await createTestIncident('Incident linked execution', target.service.id);
+
+    // Resolve service boundary and binding like the v2 API endpoint
+    const binding = await testPrisma.serviceRunbookBinding.findFirst({
+      where: {
+        runbookId: target.runbook.id,
+        serviceId: incident.serviceId,
+        enabled: true,
+      },
+    });
+    expect(binding).toBeDefined();
+
+    const preview = await previewRunbookExecution({
+      runbookId: target.runbook.id,
+      runbookVersionId: target.version.id,
+      serviceId: incident.serviceId,
+      bindingId: binding!.id,
+      incidentId: incident.id,
+      triggeredByUserId: target.actor.id,
+    });
+
+    expect(preview.digest).toBeDefined();
+    expect(preview.authorizationToken).toBeDefined();
+
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      runbookVersionId: target.version.id,
+      serviceId: incident.serviceId,
+      bindingId: binding!.id,
+      incidentId: incident.id,
+      triggeredByUserId: target.actor.id,
+      expectedPlanDigest: preview.digest,
+      previewAuthorizationToken: preview.authorizationToken,
+    });
+
+    expect(execution.id).toBeDefined();
+    expect(execution.serviceId).toBe(incident.serviceId);
+    expect(execution.bindingId).toBe(binding!.id);
+    expect(execution.incidentId).toBe(incident.id);
+    expect(execution.resolvedTargetAgentPoolId).toBe(target.pool.id);
+
+    // Advancing step claims agent attempt
+    await advanceExecution(execution.id);
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim).not.toBeNull();
+    expect(claim?.executionId).toBe(execution.id);
+  });
+
+  it('executes incident-linked runbook via v2 REST API route with bearer token authentication and idempotency against real PostgreSQL', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: {
+            unit: 'nginx.service',
+            action: 'status',
+          },
+        },
+      ],
+    });
+
+    const incident = await createTestIncident('REST API incident runbook', target.service.id);
+
+    // Create an API key with runbooks:execute and runbooks:read scopes for a responder user
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    const rawToken = `ok_test_${randomUUID().replace(/-/g, '')}`;
+    await testPrisma.apiKey.create({
+      data: {
+        name: 'Runbook API Key',
+        prefix: rawToken.slice(0, 12),
+        tokenHash: hashTokenV2(rawToken),
+        // Incident-linked execution also reads the incident, so incidents:read is required.
+        scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'],
+        userId: responder.id,
+      },
+    });
+
+    const idempotencyKey = `idem-${randomUUID()}`;
+
+    // 1. Initial execution request
+    const request = new NextRequest(
+      `http://localhost:3000/api/v2/runbooks/${target.runbook.id}/execute`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          incidentId: incident.id,
+          serviceId: target.service.id,
+        }),
+      }
+    );
+
+    const response = await executeRunbookV2Route(request, {
+      params: Promise.resolve({ id: target.runbook.id }),
+    });
+
+    expect(response.status).toBe(202);
+    const body = await response.json();
+    expect(body.data).toBeDefined();
+    expect(body.data.executionId).toBeDefined();
+    expect(body.data.status).toBe('QUEUED');
+    expect(body.data.runbookId).toBe(target.runbook.id);
+    expect(body.data.incidentId).toBe(incident.id);
+    expect(body.data.serviceId).toBe(target.service.id);
+
+    // Verify execution record in database
+    const dbExecution = await testPrisma.runbookExecution.findUnique({
+      where: { id: body.data.executionId },
+    });
+    expect(dbExecution).not.toBeNull();
+    expect(dbExecution?.serviceId).toBe(target.service.id);
+    expect(dbExecution?.incidentId).toBe(incident.id);
+    expect(dbExecution?.bindingId).toBe(target.binding.id);
+
+    // 2. Idempotent replay with same idempotency key
+    const replayRequest = new NextRequest(
+      `http://localhost:3000/api/v2/runbooks/${target.runbook.id}/execute`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          incidentId: incident.id,
+          serviceId: target.service.id,
+        }),
+      }
+    );
+
+    const replayResponse = await executeRunbookV2Route(replayRequest, {
+      params: Promise.resolve({ id: target.runbook.id }),
+    });
+
+    expect(replayResponse.status).toBe(202);
+    expect(replayResponse.headers.get('idempotency-replayed')).toBe('true');
+    const replayBody = await replayResponse.json();
+    expect(replayBody.data.executionId).toBe(body.data.executionId);
+
+    // 3. Complete agent lifecycle: advance execution, claim attempt, submit agent command result
+    await advanceExecution(body.data.executionId);
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim).not.toBeNull();
+    expect(claim?.executionId).toBe(body.data.executionId);
+
+    await fenceAgentAttempt({
+      attemptId: claim!.attemptId,
+      agentId: target.agent.id,
+      leaseToken: claim!.leaseToken,
+    });
+
+    await submitAgentResult(target.agent.id, {
+      attemptId: claim!.attemptId,
+      leaseToken: claim!.leaseToken,
+      producedAt: new Date().toISOString(),
+      status: 'SUCCEEDED',
+      exitCode: 0,
+    });
+
+    await advanceExecution(body.data.executionId);
+
+    const completedExecution = await testPrisma.runbookExecution.findUnique({
+      where: { id: body.data.executionId },
+    });
+    expect(completedExecution?.status).toBe('SUCCEEDED');
+    expect(completedExecution?.completedAt).not.toBeNull();
+  });
+
+  it('rejects incident-linked runbook execution with 403 when the token lacks incidents:read, creating no execution', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { unit: 'nginx.service', action: 'status' },
+        },
+      ],
+    });
+    const incident = await createTestIncident('Scope-limited runbook execution', target.service.id);
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    const rawToken = `ok_test_${randomUUID().replace(/-/g, '')}`;
+    await testPrisma.apiKey.create({
+      data: {
+        name: 'Runbook Only Key',
+        prefix: rawToken.slice(0, 12),
+        tokenHash: hashTokenV2(rawToken),
+        scopes: ['runbooks:read', 'runbooks:execute'],
+        userId: responder.id,
+      },
+    });
+
+    const response = await executeRunbookV2Route(
+      new NextRequest(`http://localhost:3000/api/v2/runbooks/${target.runbook.id}/execute`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': `idem-${randomUUID()}`,
+        },
+        body: JSON.stringify({ incidentId: incident.id, serviceId: target.service.id }),
+      }),
+      { params: Promise.resolve({ id: target.runbook.id }) }
+    );
+
+    expect(response.status).toBe(403);
+    const executions = await testPrisma.runbookExecution.count({
+      where: { incidentId: incident.id },
+    });
+    expect(executions).toBe(0);
+  });
+
+  it('serves runbook execution over real HTTP server with Bearer auth, agent claim, and terminal verification', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Check service status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: {
+            unit: 'nginx.service',
+            action: 'status',
+          },
+        },
+      ],
+    });
+
+    const incident = await createTestIncident('HTTP server runbook execution', target.service.id);
+    const responder = await createTestUser({ role: 'RESPONDER' });
+    const rawToken = `ok_test_${randomUUID().replace(/-/g, '')}`;
+    await testPrisma.apiKey.create({
+      data: {
+        name: 'HTTP Server API Key',
+        prefix: rawToken.slice(0, 12),
+        tokenHash: hashTokenV2(rawToken),
+        // Incident-linked execution also reads the incident, so incidents:read is required.
+        scopes: ['runbooks:read', 'runbooks:execute', 'incidents:read'],
+        userId: responder.id,
+      },
+    });
+
+    // Set up real Node.js HTTP server on ephemeral port
+    const server = createServer(async (nodeReq, nodeRes) => {
+      try {
+        let bodyBuffer = '';
+        for await (const chunk of nodeReq) {
+          bodyBuffer += chunk;
+        }
+
+        const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}${nodeReq.url}`;
+        const headers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(nodeReq.headers)) {
+          if (v) headers[k] = Array.isArray(v) ? v.join(', ') : v;
+        }
+
+        const nextReq = new NextRequest(url, {
+          method: nodeReq.method,
+          headers,
+          body: bodyBuffer || undefined,
+        });
+
+        const routeRes = await executeRunbookV2Route(nextReq, {
+          params: Promise.resolve({ id: target.runbook.id }),
+        });
+
+        nodeRes.writeHead(routeRes.status, Object.fromEntries(routeRes.headers.entries()));
+        nodeRes.end(await routeRes.text());
+      } catch {
+        nodeRes.writeHead(500, { 'content-type': 'application/json' });
+        nodeRes.end(JSON.stringify({ error: 'Internal test server error' }));
+      }
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const serverUrl = `http://127.0.0.1:${port}/api/v2/runbooks/${target.runbook.id}/execute`;
+
+    try {
+      const idempotencyKey = `idem-http-${randomUUID()}`;
+
+      // Invoke route over actual TCP / HTTP socket
+      const res = await fetch(serverUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${rawToken}`,
+          'idempotency-key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          incidentId: incident.id,
+          serviceId: target.service.id,
+        }),
+      });
+
+      expect(res.status).toBe(202);
+      const resJson = (await res.json()) as { data: { executionId: string; status: string } };
+      expect(resJson.data.executionId).toBeDefined();
+      expect(resJson.data.status).toBe('QUEUED');
+
+      const executionId = resJson.data.executionId;
+
+      // Exercise full agent dispatch and completion lifecycle
+      await advanceExecution(executionId);
+      const claim = await claimAgentAttempt(target.agent.id);
+      expect(claim).not.toBeNull();
+      expect(claim?.executionId).toBe(executionId);
+
+      await fenceAgentAttempt({
+        attemptId: claim!.attemptId,
+        agentId: target.agent.id,
+        leaseToken: claim!.leaseToken,
+      });
+
+      await submitAgentResult(target.agent.id, {
+        attemptId: claim!.attemptId,
+        leaseToken: claim!.leaseToken,
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+        exitCode: 0,
+      });
+
+      await advanceExecution(executionId);
+
+      // Verify database reflects SUCCEEDED state
+      const dbRecord = await testPrisma.runbookExecution.findUnique({
+        where: { id: executionId },
+      });
+      expect(dbRecord?.status).toBe('SUCCEEDED');
+      expect(dbRecord?.completedAt).not.toBeNull();
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve()))
+      );
+    }
+  });
 });
+
+

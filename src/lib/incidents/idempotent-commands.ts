@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { IncidentStatus } from '@prisma/client';
+import type { IncidentStatus, Prisma } from '@prisma/client';
 
 import { runSerializableTransaction } from '@/lib/db-utils';
 import {
@@ -69,16 +69,28 @@ function creationPayload(input: IncidentCreationInput): Record<string, unknown> 
   };
 }
 
+/**
+ * Runs inside the idempotent transaction after the command applies, and never on
+ * a replay. Use it for records that must commit atomically with the change, such
+ * as the API audit event.
+ */
+export type IdempotentCommandInTx<T> = (tx: Prisma.TransactionClient, value: T) => Promise<void>;
+
 export async function executeIdempotentIncidentLifecycleCommand(
   input: IncidentLifecycleInput,
-  context?: IdempotencyContext
+  context?: IdempotencyContext,
+  inTx?: IdempotentCommandInTx<IncidentLifecycleResult>
 ): Promise<IdempotentExecution<IncidentLifecycleResult>> {
   return runSerializableTransaction(tx =>
     executeIdempotentOperation(tx, {
       scope: 'INCIDENT_LIFECYCLE',
       context,
       payload: lifecyclePayload(input),
-      execute: () => applyIncidentLifecycleCommand(tx, input),
+      execute: async () => {
+        const result = await applyIncidentLifecycleCommand(tx, input);
+        if (inTx) await inTx(tx, result);
+        return result;
+      },
     })
   );
 }
@@ -99,14 +111,19 @@ export async function transitionIncidentToStatusIdempotent(
 
 export async function executeIdempotentIncidentCreation(
   input: IncidentCreationInput,
-  context?: IdempotencyContext
+  context?: IdempotencyContext,
+  inTx?: IdempotentCommandInTx<IncidentCreationResult>
 ): Promise<IdempotentExecution<IncidentCreationResult>> {
   return runSerializableTransaction(tx =>
     executeIdempotentOperation(tx, {
       scope: 'INCIDENT_CREATION',
       context,
       payload: creationPayload(input),
-      execute: () => applyIncidentCreation(tx, input),
+      execute: async () => {
+        const result = await applyIncidentCreation(tx, input);
+        if (inTx) await inTx(tx, result);
+        return result;
+      },
     })
   );
 }

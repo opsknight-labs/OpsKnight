@@ -665,8 +665,10 @@ describe('deployment configuration invariants', () => {
     expect(workflow).toContain('incident-meeting-concurrency.test.ts');
     expect(compose).toContain('migration:');
     expect(compose).toContain("OPSKNIGHT_MIGRATION_ONLY: 'true'");
-    expect(compose.match(/OPSKNIGHT_SKIP_MIGRATIONS: 'true'/g)).toHaveLength(2);
-    expect(compose.match(/condition: service_completed_successfully/g)).toHaveLength(2);
+    // web, web-direct (REST v2 unproxied topology) and worker: every app service waits for the
+    // single migration owner and skips migrations itself.
+    expect(compose.match(/OPSKNIGHT_SKIP_MIGRATIONS: 'true'/g)).toHaveLength(3);
+    expect(compose.match(/condition: service_completed_successfully/g)).toHaveLength(3);
   });
 
   it('accepts matching release tags while keeping only stable tags latest-eligible', () => {

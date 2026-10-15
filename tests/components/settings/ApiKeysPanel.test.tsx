@@ -1,5 +1,7 @@
+/* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { API_SCOPE_REGISTRY } from '@/lib/api-scope-registry';
 import ApiKeysPanel, { type ApiKey } from '@/components/settings/ApiKeysPanel';
 import { revokeApiKey } from '@/app/(app)/settings/actions';
 
@@ -54,6 +56,8 @@ const mockKeys: ApiKey[] = [
   },
 ];
 
+const title = (scope: keyof typeof API_SCOPE_REGISTRY) => API_SCOPE_REGISTRY[scope].title;
+
 describe('ApiKeysPanel Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,30 +68,54 @@ describe('ApiKeysPanel Component', () => {
 
     expect(screen.getByText('Datadog Ingestion')).toBeDefined();
     expect(screen.getByText('ops_live_d7a...')).toBeDefined();
-    expect(screen.getByText('Active')).toBeDefined();
+    expect(within(screen.getByRole('table')).getByText('Active')).toBeDefined();
 
     expect(screen.getByText('GitHub CI Pipeline')).toBeDefined();
     expect(screen.getByText('ops_live_83b...')).toBeDefined();
-    expect(screen.getByText('Revoked')).toBeDefined();
+    expect(within(screen.getByRole('table')).getByText('Revoked')).toBeDefined();
 
     expect(screen.getByText('Old Testing Key')).toBeDefined();
     expect(screen.getByText('ops_live_12c...')).toBeDefined();
-    expect(screen.getByText('Expired')).toBeDefined();
+    expect(within(screen.getByRole('table')).getByText('Expired')).toBeDefined();
   });
 
-  it('filters keys by search query', () => {
-    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} />);
-
-    const searchInput = screen.getByPlaceholderText('Search by name, prefix, or owner...');
-    fireEvent.change(searchInput, { target: { value: 'datadog' } });
-
+  it('sends search and status to the server as URL params instead of filtering in the browser', () => {
+    const { container } = render(
+      <ApiKeysPanel
+        keys={mockKeys}
+        canCreateWriteKeys={true}
+        inventory={{ q: 'datadog', status: 'ACTIVE', hasCursor: false, nextCursor: null }}
+      />
+    );
+    const form = container.querySelector('form[aria-label="Filter API keys"]') as HTMLFormElement;
+    expect(form.method).toBe('get');
+    expect((form.querySelector('input[name="tab"]') as HTMLInputElement).value).toBe('api-keys');
+    expect((form.querySelector('input[name="kq"]') as HTMLInputElement).value).toBe('datadog');
+    expect((form.querySelector('select[name="kstatus"]') as HTMLSelectElement).value).toBe('ACTIVE');
+    // Every row the server returned is shown; nothing is hidden client-side.
     expect(screen.getByText('Datadog Ingestion')).toBeDefined();
-    expect(screen.queryByText('GitHub CI Pipeline')).toBeNull();
-    expect(screen.queryByText('Old Testing Key')).toBeNull();
+    expect(screen.getByText('GitHub CI Pipeline')).toBeDefined();
+  });
+
+  it('pages through keys with a cursor and keeps the active filters', () => {
+    render(
+      <ApiKeysPanel
+        keys={mockKeys}
+        canCreateWriteKeys={true}
+        inventory={{ q: 'ci', status: 'REVOKED', hasCursor: true, nextCursor: 'cur-1', total: 90 }}
+      />
+    );
+    const older = screen.getByRole('link', { name: /older keys/i }).getAttribute('href') ?? '';
+    expect(older).toContain('tab=api-keys');
+    expect(older).toContain('kcursor=cur-1');
+    expect(older).toContain('kq=ci');
+    expect(older).toContain('kstatus=REVOKED');
+    expect(screen.getByRole('link', { name: /newest/i })).toBeDefined();
+    expect(screen.getByText(/90 keys match/)).toBeDefined();
   });
 
   it('opens create API key modal dialog on button click', () => {
-    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} />);
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={true} />);
 
     const generateButtons = screen.getAllByRole('button', { name: /generate api key/i });
     fireEvent.click(generateButtons[0]);
@@ -95,19 +123,36 @@ describe('ApiKeysPanel Component', () => {
     expect(screen.getByText('Generate New API Key')).toBeDefined();
     expect(screen.getByLabelText(/key name \/ client identifier \*/i)).toBeDefined();
     expect(screen.getByLabelText(/expiration duration/i)).toBeDefined();
-    expect(screen.getByText('Response Policy Read')).toBeDefined();
-    expect(screen.getByText('Response Policy Write')).toBeDefined();
+    expect(screen.getByText(title('response-policy:read'))).toBeDefined();
+    expect(screen.getByText(title('response-policy:write'))).toBeDefined();
 
     const dialog = screen.getByRole('dialog');
     expect(dialog.getAttribute('style')).toContain('max-width: 72rem');
     expect(dialog.className).toContain('sm:w-[94vw]');
   });
 
-  it('keeps response-policy read available while hiding write scope without write access', () => {
-    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={false} />);
+  it('keeps response-policy read available for admins while hiding write scope without write access', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={false} isAdmin={true} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
-    expect(screen.getByText('Response Policy Read')).toBeDefined();
-    expect(screen.queryByText('Response Policy Write')).toBeNull();
+    expect(screen.getByText(title('response-policy:read'))).toBeDefined();
+    expect(screen.queryByText(title('response-policy:write'))).toBeNull();
+  });
+
+  it('does not offer reserved scopes, which currently grant nothing', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={true} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
+    expect(screen.queryByText(title('runbooks:write'))).toBeNull();
+    expect(screen.queryByText(title('users:write'))).toBeNull();
+  });
+
+  it('hides administrative scopes for non-admins, following the registry', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={false} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
+    // The registry lets responders mint read-only response-policy keys; writes stay admin-only.
+    expect(screen.getByText(title('response-policy:read'))).toBeDefined();
+    expect(screen.queryByText(title('response-policy:write'))).toBeNull();
+    expect(screen.queryByText(title('admin:manage'))).toBeNull();
+    expect(screen.queryByText(title('service-accounts:read'))).toBeNull();
   });
 
 
@@ -147,5 +192,36 @@ describe('ApiKeysPanel Component', () => {
     render(<ApiKeysPanel keys={[]} canCreateWriteKeys={true} />);
 
     expect(screen.getByText('No API keys configured')).toBeDefined();
+  });
+});
+
+describe('one-time secret banner', () => {
+  it('stays until the user confirms storage, then removes the secret from the page', async () => {
+    const { default: OneTimeSecretBanner } = await import(
+      '@/components/settings/OneTimeSecretBanner'
+    );
+    const onDismiss = vi.fn();
+    const { rerender } = render(
+      <OneTimeSecretBanner
+        title="Key generated"
+        badge="Secret"
+        secret="ok_test_super_secret_value_123"
+        description="Copy it now."
+        onDismiss={onDismiss}
+      />
+    );
+
+    expect(screen.getByTestId('one-time-secret').textContent).toBe('ok_test_super_secret_value_123');
+    const dismiss = screen.getByRole('button', { name: /dismiss and clear/i }) as HTMLButtonElement;
+    expect(dismiss.disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /i have stored this secret/i }));
+    expect(dismiss.disabled).toBe(false);
+    fireEvent.click(dismiss);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    // The parent drops the secret on dismiss; nothing remains in the document.
+    rerender(<div />);
+    expect(document.body.textContent).not.toContain('ok_test_super_secret_value_123');
   });
 });

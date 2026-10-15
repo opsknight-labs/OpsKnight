@@ -3133,14 +3133,18 @@ export async function getNextCentralNotificationAt(
   return deliveryAt <= reconciliationAt ? deliveryAt : reconciliationAt;
 }
 
-export async function requeueCentralNotification(notificationId: string): Promise<boolean> {
+export async function requeueCentralNotification(
+  notificationId: string,
+  /** Runs in the same transaction as the requeue, only when the requeue succeeded. */
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>
+): Promise<boolean> {
   const probe = await prisma.notification.findUnique({
     where: { id: notificationId },
     select: { channel: true },
   });
   if (probe?.channel === 'MICROSOFT_TEAMS') {
     const { requeueMicrosoftTeamsNotification } = await import('./microsoft-teams/delivery');
-    return requeueMicrosoftTeamsNotification(notificationId);
+    return requeueMicrosoftTeamsNotification(notificationId, inTx);
   }
 
   const notification = await prisma.notification.findFirst({
@@ -3154,24 +3158,28 @@ export async function requeueCentralNotification(notificationId: string): Promis
   });
   if (!notification || notification.attempts >= 20) return false;
   const maxAttempts = Math.min(20, Math.max(notification.maxAttempts, notification.attempts + 1));
-  const updated = await prisma.notification.updateMany({
-    where: {
-      id: notificationId,
-      payloadEncrypted: { not: null },
-      status: 'FAILED',
-      attempts: notification.attempts,
-      maxAttempts: notification.maxAttempts,
-    },
-    data: {
-      status: 'PENDING',
-      maxAttempts,
-      failedAt: null,
-      errorMsg: null,
-      lastAttemptAt: null,
-      nextAttemptAt: new Date(),
-    },
+  return prisma.$transaction(async tx => {
+    const updated = await tx.notification.updateMany({
+      where: {
+        id: notificationId,
+        payloadEncrypted: { not: null },
+        status: 'FAILED',
+        attempts: notification.attempts,
+        maxAttempts: notification.maxAttempts,
+      },
+      data: {
+        status: 'PENDING',
+        maxAttempts,
+        failedAt: null,
+        errorMsg: null,
+        lastAttemptAt: null,
+        nextAttemptAt: new Date(),
+      },
+    });
+    if (updated.count === 0) return false;
+    if (inTx) await inTx(tx);
+    return true;
   });
-  return updated.count > 0;
 }
 
 export async function cancelCentralNotification(

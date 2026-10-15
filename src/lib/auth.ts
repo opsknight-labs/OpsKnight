@@ -8,6 +8,7 @@ import type { NextAuthOptions, User } from 'next-auth';
 import OIDCProvider from '@/lib/oidc';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
+import { isServiceAccountIdentity } from '@/lib/service-account-identity';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getOidcConfig } from '@/lib/oidc-config';
@@ -406,6 +407,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   }
 
                   const user = await prisma.user.findUnique({ where: { email } });
+                  // Machine identities authenticate with API tokens only, never a browser session.
+                  if (user && isServiceAccountIdentity(user)) {
+                    await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
+                    return null;
+                  }
                   if (!user || !user.passwordHash) {
                     recordFailedAttempt(email, ip);
                     await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
@@ -554,7 +560,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   ? await prisma.user.findUnique({ where: { id: identity.userId } })
                   : null;
 
-                if (!dbUser || dbUser.status === 'DISABLED') {
+                if (!dbUser || dbUser.status === 'DISABLED' || isServiceAccountIdentity(dbUser)) {
                   logger.error('[Auth] JWT callback - stable OIDC identity not resolvable', {
                     component: 'auth:jwt',
                     issuer,

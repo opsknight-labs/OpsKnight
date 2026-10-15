@@ -113,13 +113,16 @@ export interface RunbookExecutionRequest {
 }
 
 /** Responder entry point. Absence of an actor never authorizes an automatic execution. */
-export async function startRunbookExecution(input: RunbookExecutionRequest) {
+export async function startRunbookExecution(
+  input: RunbookExecutionRequest,
+  externalTx?: Prisma.TransactionClient
+) {
   if (!input.triggeredByUserId || !input.expectedPlanDigest || !input.previewAuthorizationToken) {
     throw new RunbookDefinitionError(
       'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder and preview are required.'
     );
   }
-  const result = await prepareRunbookExecution(input, false, 'MANUAL');
+  const result = await prepareRunbookExecution(input, false, 'MANUAL', externalTx);
   if (!('id' in result)) throw new Error('Execution was not created.');
   return result;
 }
@@ -158,12 +161,15 @@ export async function startTriggeredRunbookExecution(
 }
 
 /** Resolves the execution preflight and issues a responder-bound preview capability. */
-export async function previewRunbookExecution(input: RunbookExecutionRequest) {
+export async function previewRunbookExecution(
+  input: RunbookExecutionRequest,
+  externalTx?: Prisma.TransactionClient
+) {
   if (!input.triggeredByUserId)
     throw new RunbookDefinitionError(
       'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder is required.'
     );
-  const result = await prepareRunbookExecution(input, true, 'MANUAL');
+  const result = await prepareRunbookExecution(input, true, 'MANUAL', externalTx);
   if (!('digest' in result)) throw new Error('Preview was not generated.');
   return result;
 }
@@ -171,9 +177,10 @@ export async function previewRunbookExecution(input: RunbookExecutionRequest) {
 async function prepareRunbookExecution(
   input: RunbookExecutionRequest,
   previewOnly: boolean,
-  mode: 'MANUAL' | 'AUTOMATIC'
+  mode: 'MANUAL' | 'AUTOMATIC',
+  externalTx?: Prisma.TransactionClient
 ) {
-  return prisma.$transaction(async tx => {
+  const runner = async (tx: Prisma.TransactionClient) => {
     await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
     const runbook = await tx.runbook.findFirst({
       where: { id: input.runbookId, archivedAt: null },
@@ -834,7 +841,12 @@ async function prepareRunbookExecution(
       tx
     );
     return execution;
-  });
+  };
+
+  if (externalTx) {
+    return runner(externalTx);
+  }
+  return prisma.$transaction(runner);
 }
 
 function resolvedPlanDigest(

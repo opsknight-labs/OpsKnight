@@ -1,0 +1,184 @@
+import { NextRequest } from 'next/server';
+import prisma from '@/lib/prisma';
+import {
+  apiV2Error,
+  apiV2Success,
+  authenticateV2Request,
+  enforceV2Authorization,
+  enforceV2RateLimit,
+  logV2Audit,
+  StatusPageUpdateV2Schema,
+} from '@/lib/api-v2';
+import { makeDefaultStatusPage, StatusPageAdminError } from '@/lib/status-pages/admin';
+import {
+  applyStatusPageConfigurationChange,
+  type StatusPagePublicationState,
+} from '@/lib/status-pages/publish-configuration';
+import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { AppError } from '@/lib/errors';
+import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
+
+export const GET = withV2Observability(async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { apiKey, actor } = await authenticateV2Request(req);
+    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
+    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.STATUS_PAGE_READ);
+
+    const { id } = await params;
+    const page = await prisma.statusPage.findUnique({
+      where: { id },
+      include: {
+        services: {
+          include: {
+            service: { select: { id: true, name: true, status: true } },
+          },
+        },
+      },
+    });
+
+    if (!page) {
+      throw new AppError({
+        code: 'STATUS_PAGE_NOT_FOUND',
+        userMessage: `Status page with id '${id}' was not found.`,
+      });
+    }
+
+    const dto = {
+      id: page.id,
+      name: page.name,
+      slug: page.slug,
+      isDefault: page.isDefault,
+      enabled: page.enabled,
+      services: page.services.map(s => s.service),
+      createdAt: page.createdAt,
+      updatedAt: page.updatedAt,
+    };
+
+    return apiV2Success(dto, { headers: rlHeaders });
+  } catch (error) {
+    return apiV2Error(error, req);
+  }
+});
+
+export const PATCH = withV2Observability(async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { apiKey, actor } = await authenticateV2Request(req);
+    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
+    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.STATUS_PAGE_MANAGE);
+
+    const { id } = await params;
+    const existing = await prisma.statusPage.findUnique({ where: { id } });
+    if (!existing) {
+      throw new AppError({
+        code: 'STATUS_PAGE_NOT_FOUND',
+        userMessage: `Status page with id '${id}' was not found.`,
+      });
+    }
+
+    const body = await req.json().catch(() => {
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
+    });
+
+    const validated = StatusPageUpdateV2Schema.parse(body);
+
+    const isDefaultSpecified = validated.isDefault !== undefined;
+    const hasConfigChanges =
+      validated.name !== undefined ||
+      validated.slug !== undefined ||
+      validated.enabled !== undefined;
+
+    if (isDefaultSpecified && hasConfigChanges) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage:
+          'Updating default status page designation and general configuration in a single request is not supported. Please update default status page designation and general configuration attributes separately.',
+      });
+    }
+
+    if (existing.isDefault && validated.isDefault === false) {
+      throw new AppError({
+        code: 'STATUS_PAGE_DEFAULT_REPLACEMENT_REQUIRED',
+        userMessage:
+          'Cannot unset default status page directly. Designate another status page as default instead.',
+      });
+    }
+
+    const auditInTx = (tx: Prisma.TransactionClient) =>
+      logV2Audit({
+        action: 'status_page.updated',
+        entityType: 'STATUS_PAGE',
+        entityId: id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: validated,
+        tx,
+      });
+
+    // The change is committed before the public page is republished. Report the publication
+    // outcome so a client can tell "saved and live" from "saved, republish pending or failed".
+    let publication: StatusPagePublicationState | undefined;
+
+    try {
+      if (validated.isDefault === true && !existing.isDefault) {
+        ({ publication } = await makeDefaultStatusPage(id, auditInTx));
+      }
+
+      const hasConfigChanges =
+        validated.name !== undefined ||
+        validated.slug !== undefined ||
+        validated.enabled !== undefined;
+
+      if (hasConfigChanges) {
+        const configured = await applyStatusPageConfigurationChange({
+          pageId: id,
+          actor: { id: actor.id, name: apiKey.name },
+          patch: {
+            ...(validated.name !== undefined ? { name: validated.name } : {}),
+            ...(validated.slug !== undefined ? { slug: validated.slug } : {}),
+            ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
+          },
+          // Runs inside the configuration transaction, so the audit record commits with the change.
+          transform: async (tx, data) => {
+            await auditInTx(tx);
+            return data;
+          },
+        });
+        publication = configured.publication;
+      }
+    } catch (err) {
+      if (err instanceof StatusPageAdminError) {
+        throw new AppError({
+          code: err.code,
+          userMessage: err.message,
+        });
+      }
+      throw err;
+    }
+
+    const updated = await prisma.statusPage.findUniqueOrThrow({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isDefault: true,
+        enabled: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return apiV2Success(publication ? { ...updated, publication } : updated, {
+      headers: rlHeaders,
+    });
+  } catch (error) {
+    return apiV2Error(error, req);
+  }
+});

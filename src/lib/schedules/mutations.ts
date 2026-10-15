@@ -263,7 +263,14 @@ export type CreateScheduleOverrideInput = {
   end: Date;
 };
 
-export async function createScheduleOverrideMutation(input: CreateScheduleOverrideInput) {
+export async function createScheduleOverrideMutation(
+  input: CreateScheduleOverrideInput,
+  /** Runs inside the same serializable transaction, e.g. to write a mandatory audit record. */
+  afterCreate?: (
+    tx: Prisma.TransactionClient,
+    created: Awaited<ReturnType<Prisma.TransactionClient['onCallOverride']['create']>>
+  ) => Promise<void>
+) {
   if (input.end <= input.start) {
     throw new AppError({
       code: 'VALIDATION_FAILED',
@@ -367,7 +374,7 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
         }
       }
 
-      return tx.onCallOverride.create({
+      const created = await tx.onCallOverride.create({
         data: {
           scheduleId: input.scheduleId,
           userId: input.userId,
@@ -376,6 +383,8 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
           end: input.end,
         },
       });
+      if (afterCreate) await afterCreate(tx, created);
+      return created;
     });
   } catch (error) {
     if (isScheduleConflictError(error)) {

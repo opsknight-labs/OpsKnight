@@ -33,7 +33,7 @@ export async function checkRateLimit(
     });
 
     const resetAt = (windowStart + 1) * windowMs;
-    const count = result.count;
+    const count = typeof result?.count === 'number' ? result.count : 1;
     const remaining = Math.max(0, limit - count);
 
     return {
@@ -55,6 +55,27 @@ export async function checkRateLimit(
       count: limit + 1,
     };
   }
+}
+
+/**
+ * Atomically increment a shared fixed-window counter in PostgreSQL and return
+ * the post-increment count. Unlike checkRateLimit this throws on database
+ * failure, so callers can choose their own fail-open/fail-closed policy
+ * instead of inheriting the fail-closed behaviour of request admission.
+ */
+export async function incrementSharedCounter(
+  key: string,
+  windowMs: number
+): Promise<{ count: number; resetAt: number }> {
+  const now = Date.now();
+  const windowStart = Math.floor(now / windowMs);
+  const resetAt = (windowStart + 1) * windowMs;
+  const result = await prisma.rateLimit.upsert({
+    where: { key: `${key}:${windowStart}` },
+    create: { key: `${key}:${windowStart}`, count: 1, expiresAt: new Date(resetAt) },
+    update: { count: { increment: 1 } },
+  });
+  return { count: typeof result?.count === 'number' ? result.count : 1, resetAt };
 }
 
 /**

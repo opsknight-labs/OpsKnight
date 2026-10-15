@@ -39,11 +39,18 @@ export async function requireStatusPageForAdmin(
   return page;
 }
 
-export async function createStatusPage(input: {
-  name: string;
-  slug: string;
-  makeDefault?: boolean;
-}) {
+export async function createStatusPage(
+  input: {
+    name: string;
+    slug: string;
+    makeDefault?: boolean;
+  },
+  /** Runs inside the creation transaction, e.g. to write a mandatory audit record. */
+  afterCreate?: (
+    tx: Prisma.TransactionClient,
+    page: Awaited<ReturnType<Prisma.TransactionClient['statusPage']['create']>>
+  ) => Promise<void>
+) {
   return prisma.$transaction(async tx => {
     await lockLifecycle(tx);
     const count = await tx.statusPage.count();
@@ -59,13 +66,19 @@ export async function createStatusPage(input: {
     if (isDefault) {
       await tx.statusPage.updateMany({ where: { isDefault: true }, data: { isDefault: false } });
     }
-    return tx.statusPage.create({
+    const page = await tx.statusPage.create({
       data: { name: input.name, slug: input.slug, enabled: false, isDefault },
     });
+    if (afterCreate) await afterCreate(tx, page);
+    return page;
   });
 }
 
-export async function makeDefaultStatusPage(statusPageId: string) {
+export async function makeDefaultStatusPage(
+  statusPageId: string,
+  /** Runs inside the lifecycle transaction, e.g. to write a mandatory audit record. */
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>
+) {
   const { page, previousDefaultId } = await prisma.$transaction(async tx => {
     await lockLifecycle(tx);
     await requireStatusPageForAdmin(statusPageId, tx);
@@ -77,13 +90,12 @@ export async function makeDefaultStatusPage(statusPageId: string) {
       where: { isDefault: true, id: { not: statusPageId } },
       data: { isDefault: false },
     });
-    return {
-      page: await tx.statusPage.update({
-        where: { id: statusPageId },
-        data: { isDefault: true },
-      }),
-      previousDefaultId: previousDefault?.id ?? null,
-    };
+    const promoted = await tx.statusPage.update({
+      where: { id: statusPageId },
+      data: { isDefault: true },
+    });
+    if (inTx) await inTx(tx);
+    return { page: promoted, previousDefaultId: previousDefault?.id ?? null };
   });
 
   // Imported lazily: publish-configuration imports StatusPageAdminError from this module, and a

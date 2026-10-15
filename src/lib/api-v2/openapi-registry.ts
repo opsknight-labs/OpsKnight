@@ -1,0 +1,267 @@
+/**
+ * Canonical REST v2 operation registry.
+ *
+ * One row per operation: its stable operationId (SDK method name), the API scope
+ * that authorises it, and the shape of the `data` it returns. The OpenAPI document
+ * is finalised from this table (see openapi-finalize.ts), and
+ * tests/unit/api-v2-openapi-conformance.test.ts verifies the table against the route
+ * handlers (scope, existence) so the contract cannot drift from the implementation.
+ */
+export type OperationResultKind = 'item' | 'list' | 'none';
+
+export interface V2OperationDefinition {
+  method: 'get' | 'post' | 'patch' | 'put' | 'delete';
+  path: string;
+  operationId: string;
+  scope: string;
+  kind: OperationResultKind;
+  /** Name of the component schema describing one `data` item. Empty when kind is 'none'. */
+  schema: string;
+}
+
+const op = (
+  method: V2OperationDefinition['method'],
+  path: string,
+  operationId: string,
+  scope: string,
+  kind: OperationResultKind,
+  schema: string
+): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
+
+export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
+  op('get', '/audit-logs', 'listAuditLogs', 'audit:read', 'list', 'AuditLog'),
+  op(
+    'get',
+    '/escalation-policies/{id}',
+    'getEscalationPolicy',
+    'escalation-policies:read',
+    'item',
+    'EscalationPolicy'
+  ),
+  op(
+    'patch',
+    '/escalation-policies/{id}',
+    'updateEscalationPolicy',
+    'escalation-policies:write',
+    'item',
+    'EscalationPolicy'
+  ),
+  op(
+    'delete',
+    '/escalation-policies/{id}',
+    'deleteEscalationPolicy',
+    'escalation-policies:write',
+    'item',
+    'ActionResult'
+  ),
+  op(
+    'get',
+    '/escalation-policies',
+    'listEscalationPolicies',
+    'escalation-policies:read',
+    'list',
+    'EscalationPolicy'
+  ),
+  op(
+    'post',
+    '/escalation-policies',
+    'createEscalationPolicy',
+    'escalation-policies:write',
+    'item',
+    'EscalationPolicy'
+  ),
+  op(
+    'post',
+    '/incidents/{id}/acknowledge',
+    'acknowledgeIncident',
+    'incidents:write',
+    'item',
+    'IncidentTransition'
+  ),
+  op(
+    'post',
+    '/incidents/{id}/assign',
+    'assignIncident',
+    'incidents:write',
+    'item',
+    'IncidentAssignment'
+  ),
+  op('get', '/incidents/{id}/notes', 'listIncidentNotes', 'incidents:read', 'list', 'IncidentNote'),
+  op('post', '/incidents/{id}/notes', 'addIncidentNote', 'incidents:write', 'item', 'IncidentNote'),
+  op(
+    'post',
+    '/incidents/{id}/resolve',
+    'resolveIncident',
+    'incidents:write',
+    'item',
+    'IncidentTransition'
+  ),
+  op('get', '/incidents/{id}', 'getIncident', 'incidents:read', 'item', 'Incident'),
+  op('patch', '/incidents/{id}', 'updateIncident', 'incidents:write', 'item', 'Incident'),
+  op(
+    'get',
+    '/incidents/{id}/timeline',
+    'getIncidentTimeline',
+    'incidents:read',
+    'list',
+    'IncidentTimelineEvent'
+  ),
+  op('get', '/incidents', 'listIncidents', 'incidents:read', 'list', 'Incident'),
+  op('post', '/incidents', 'createIncident', 'incidents:write', 'item', 'Incident'),
+  op('get', '/integrations/{id}', 'getIntegration', 'integrations:read', 'item', 'Integration'),
+  op(
+    'patch',
+    '/integrations/{id}',
+    'updateIntegration',
+    'integrations:write',
+    'item',
+    'Integration'
+  ),
+  op('get', '/integrations', 'listIntegrations', 'integrations:read', 'list', 'Integration'),
+  op(
+    'post',
+    '/notifications/{id}/retry',
+    'retryNotification',
+    'notifications:write',
+    'item',
+    'ActionResult'
+  ),
+  op('get', '/notifications', 'listNotifications', 'notifications:read', 'list', 'Notification'),
+  op('get', '/postmortems/{id}', 'getPostmortem', 'postmortems:read', 'item', 'Postmortem'),
+  op('patch', '/postmortems/{id}', 'updatePostmortem', 'postmortems:write', 'item', 'Postmortem'),
+  op('delete', '/postmortems/{id}', 'deletePostmortem', 'postmortems:write', 'none', ''),
+  op('get', '/postmortems', 'listPostmortems', 'postmortems:read', 'list', 'Postmortem'),
+  op('post', '/postmortems', 'createPostmortem', 'postmortems:write', 'item', 'Postmortem'),
+  op('get', '/reports/metrics', 'getMetricsReport', 'reports:read', 'item', 'MetricsReport'),
+  op(
+    'post',
+    '/runbooks/{id}/execute',
+    'executeRunbook',
+    'runbooks:execute',
+    'item',
+    'RunbookExecutionStarted'
+  ),
+  op('get', '/runbooks/{id}', 'getRunbook', 'runbooks:read', 'item', 'Runbook'),
+  op(
+    'get',
+    '/runbooks/executions/{id}',
+    'getRunbookExecution',
+    'runbooks:read',
+    'item',
+    'RunbookExecution'
+  ),
+  op('get', '/runbooks', 'listRunbooks', 'runbooks:read', 'list', 'Runbook'),
+  op(
+    'get',
+    '/schedules/{id}/on-call',
+    'getScheduleOnCall',
+    'schedules:read',
+    'item',
+    'ScheduleOnCall'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/overrides',
+    'listScheduleOverrides',
+    'schedules:read',
+    'list',
+    'ScheduleOverride'
+  ),
+  op(
+    'post',
+    '/schedules/{id}/overrides',
+    'createScheduleOverride',
+    'schedules:write',
+    'item',
+    'ScheduleOverride'
+  ),
+  op('get', '/schedules/{id}', 'getSchedule', 'schedules:read', 'item', 'Schedule'),
+  op('patch', '/schedules/{id}', 'updateSchedule', 'schedules:write', 'item', 'Schedule'),
+  op('delete', '/schedules/{id}', 'deleteSchedule', 'schedules:write', 'item', 'ActionResult'),
+  op('get', '/schedules', 'listSchedules', 'schedules:read', 'list', 'Schedule'),
+  op('post', '/schedules', 'createSchedule', 'schedules:write', 'item', 'Schedule'),
+  op(
+    'get',
+    '/service-accounts/{id}',
+    'getServiceAccount',
+    'service-accounts:read',
+    'item',
+    'ServiceAccount'
+  ),
+  op(
+    'delete',
+    '/service-accounts/{id}',
+    'deleteServiceAccount',
+    'service-accounts:write',
+    'item',
+    'ActionResult'
+  ),
+  op(
+    'delete',
+    '/service-accounts/{id}/tokens/{tokenId}',
+    'revokeServiceAccountToken',
+    'service-accounts:write',
+    'item',
+    'ActionResult'
+  ),
+  op(
+    'post',
+    '/service-accounts/{id}/tokens',
+    'issueServiceAccountToken',
+    'service-accounts:write',
+    'item',
+    'ServiceAccountTokenIssued'
+  ),
+  op(
+    'get',
+    '/service-accounts',
+    'listServiceAccounts',
+    'service-accounts:read',
+    'list',
+    'ServiceAccount'
+  ),
+  op(
+    'post',
+    '/service-accounts',
+    'createServiceAccount',
+    'service-accounts:write',
+    'item',
+    'ServiceAccount'
+  ),
+  op('get', '/services/{id}', 'getService', 'services:read', 'item', 'Service'),
+  op('patch', '/services/{id}', 'updateService', 'services:write', 'item', 'Service'),
+  op('delete', '/services/{id}', 'deleteService', 'services:write', 'item', 'ActionResult'),
+  op('get', '/services', 'listServices', 'services:read', 'list', 'Service'),
+  op('post', '/services', 'createService', 'services:write', 'item', 'Service'),
+  op(
+    'get',
+    '/status-pages/{id}/announcements',
+    'listStatusPageAnnouncements',
+    'status-pages:read',
+    'list',
+    'StatusPageAnnouncement'
+  ),
+  op(
+    'post',
+    '/status-pages/{id}/announcements',
+    'createStatusPageAnnouncement',
+    'status-pages:write',
+    'item',
+    'StatusPageAnnouncement'
+  ),
+  op('get', '/status-pages/{id}', 'getStatusPage', 'status-pages:read', 'item', 'StatusPage'),
+  op('patch', '/status-pages/{id}', 'updateStatusPage', 'status-pages:write', 'item', 'StatusPage'),
+  op('get', '/status-pages', 'listStatusPages', 'status-pages:read', 'list', 'StatusPage'),
+  op('post', '/status-pages', 'createStatusPage', 'status-pages:write', 'item', 'StatusPage'),
+  op('get', '/teams/{id}', 'getTeam', 'teams:read', 'item', 'Team'),
+  op('patch', '/teams/{id}', 'updateTeam', 'teams:write', 'item', 'Team'),
+  op('delete', '/teams/{id}', 'deleteTeam', 'teams:write', 'item', 'ActionResult'),
+  op('get', '/teams', 'listTeams', 'teams:read', 'list', 'Team'),
+  op('post', '/teams', 'createTeam', 'teams:write', 'item', 'Team'),
+  op('get', '/users/{id}', 'getUser', 'users:read', 'item', 'User'),
+  op('get', '/users', 'listUsers', 'users:read', 'list', 'User'),
+];
+
+export function findOperation(method: string, path: string): V2OperationDefinition | undefined {
+  return V2_OPERATIONS.find(o => o.method === method.toLowerCase() && o.path === path);
+}

@@ -46,6 +46,17 @@ export function serviceReadWhere(actor: AuthorizationActor): Prisma.ServiceWhere
   return decision.scope === 'global' ? {} : { teamId: { in: [...actor.teamIds] } };
 }
 
+export function integrationReadWhere(actor: AuthorizationActor): Prisma.IntegrationWhereInput {
+  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INTEGRATION_READ });
+  if (!decision.allowed) {
+    throw new AuthorizationError(
+      'Forbidden. Integration access denied.',
+      CAPABILITIES.SERVICE_READ_SCOPED
+    );
+  }
+  return decision.scope === 'global' ? {} : { service: { teamId: { in: [...actor.teamIds] } } };
+}
+
 export function teamReadWhere(actor: AuthorizationActor): Prisma.TeamWhereInput {
   const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ });
   if (!decision.allowed) {

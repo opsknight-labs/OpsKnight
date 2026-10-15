@@ -15,6 +15,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: opsknight
+      # checkov:skip=CKV_SECRET_4: Ephemeral local certification test database credentials
       POSTGRES_PASSWORD: certification-only
       POSTGRES_DB: opsknight
     healthcheck:
@@ -36,6 +37,19 @@ services:
       <<: *app-env
       OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       OPSKNIGHT_PROCESS_ROLE: web
+      # Behind the proxy, which overwrites X-Forwarded-For with the address it saw.
+      TRUST_PROXY_HEADERS: 'true'
+      TRUSTED_PROXY_HOPS: '1'
+    depends_on:
+      migration: { condition: service_completed_successfully }
+  # Direct deployment: no proxy, no trusted forwarded headers, so every client is "unidentified".
+  web-direct:
+    image: opsknight-certification:local
+    environment:
+      <<: *app-env
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
+      OPSKNIGHT_PROCESS_ROLE: web
+    ports: ['127.0.0.1:3401:3000']
     depends_on:
       migration: { condition: service_completed_successfully }
   worker:

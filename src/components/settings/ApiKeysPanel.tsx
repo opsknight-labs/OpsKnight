@@ -1,7 +1,9 @@
 'use client';
 
-import { useActionState, useState, useMemo } from 'react';
+import { useState } from 'react';
+import { useSecretSafeAction } from './useSecretSafeAction';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createApiKey, revokeApiKey } from '@/app/(app)/settings/actions';
 import { Button } from '@/components/ui/shadcn/button';
@@ -31,13 +33,6 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/shadcn/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import {
@@ -52,15 +47,13 @@ import {
 } from '@/components/ui/shadcn/alert-dialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
-import CopyButton from './CopyButton';
+import OneTimeSecretBanner from './OneTimeSecretBanner';
 import {
   Key,
-  CheckCircle2,
   XCircle,
   Loader2,
   Terminal,
   Plus,
-  X,
   Code2,
   Clock,
   ShieldAlert,
@@ -69,7 +62,12 @@ import {
   FileText,
   Layers,
   Calendar,
+  Bot,
+  Shield,
+  Users,
+  type LucideIcon,
 } from 'lucide-react';
+import { ALL_API_SCOPE_DEFINITIONS, issuableScopesForRole } from '@/lib/api-scope-registry';
 
 export type ApiKey = {
   id: string;
@@ -109,91 +107,130 @@ function SubmitButton() {
   );
 }
 
-const SCOPES_CONFIG = [
-  {
-    value: 'events:write',
-    title: 'Events Ingestion',
-    detail: 'Send incoming alert payloads, webhooks, and telemetry',
-    icon: Send,
-    color: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-    defaultChecked: true,
-  },
-  {
-    value: 'incidents:read',
-    title: 'Incidents Read',
-    detail: 'Query active and historical incident states and timelines',
-    icon: FileText,
-    color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-    defaultChecked: true,
-  },
-  {
-    value: 'incidents:write',
-    title: 'Incidents Write',
-    detail: 'Acknowledge, resolve, update severity, and add timeline notes',
-    icon: Radio,
-    color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-    defaultChecked: false,
-  },
-  {
-    value: 'services:read',
-    title: 'Services Read',
-    detail: 'Query service catalog definitions and dependencies',
-    icon: Layers,
-    color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-    defaultChecked: false,
-  },
-  {
-    value: 'schedules:read',
-    title: 'Schedules Read',
-    detail: 'Query on-call rotations, active shifts, and responder escalation',
-    icon: Calendar,
-    color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
-    defaultChecked: false,
-  },
-  {
-    value: 'response-policy:read',
-    title: 'Response Policy Read',
-    detail: 'Preview and inspect classification, SLA, support-hours, and policy history',
-    icon: ShieldAlert,
-    color: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
-    defaultChecked: false,
-  },
-  {
-    value: 'response-policy:write',
-    title: 'Response Policy Write',
-    detail: 'Publish and restore response-policy versions',
-    icon: ShieldAlert,
-    color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
-    defaultChecked: false,
-  },
-];
+const SCOPE_CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Events: Send,
+  Incidents: Radio,
+  Services: Layers,
+  Schedules: Calendar,
+  Teams: Users,
+  Users: Users,
+  Escalations: ShieldAlert,
+  Integrations: Code2,
+  Notifications: Send,
+  'Status pages': FileText,
+  Runbooks: Terminal,
+  Governance: Shield,
+  Administration: Bot,
+};
+
+/**
+ * Scopes offered for new keys. Derived from the shared registry (never a local list) and
+ * limited to scopes the REST surface currently enforces.
+ */
+const SCOPES_CONFIG = ALL_API_SCOPE_DEFINITIONS.filter(
+  definition => definition.status === 'active'
+).map(definition => ({
+  value: definition.scope as string,
+  title: definition.title,
+  detail: definition.description,
+  icon: SCOPE_CATEGORY_ICONS[definition.category] ?? Key,
+  category: definition.category,
+  write: definition.write,
+}));
+
+function keysHref(
+  inventory: { q: string; status: string },
+  cursor?: string | null
+): string {
+  const params = new URLSearchParams({ tab: 'api-keys' });
+  if (inventory.q) params.set('kq', inventory.q);
+  if (inventory.status !== 'ALL') params.set('kstatus', inventory.status);
+  if (cursor) params.set('kcursor', cursor);
+  return `?${params.toString()}`;
+}
 
 export default function ApiKeysPanel({
   keys,
   canCreateWriteKeys,
+  isAdmin = false,
+  role,
   appUrl,
+  inventory = { q: '', status: 'ALL', hasCursor: false, nextCursor: null, total: undefined },
 }: {
   keys: ApiKey[];
   canCreateWriteKeys: boolean;
+  isAdmin?: boolean;
+  /** The viewer's role; decides which scopes may be issued. Derived from the flags when omitted. */
+  role?: string;
+  /** Server-side inventory state: filters live in the URL and paging runs in the database. */
+  inventory?: {
+    q: string;
+    status: string;
+    hasCursor: boolean;
+    nextCursor: string | null;
+    total?: number;
+  };
   appUrl?: string;
 }) {
-  const [state, formAction] = useActionState<State, FormData>(createApiKey, {
-    error: null,
-    success: false,
-    token: null,
-  });
+  // The secret is held only in `revealedSecret`; dismissing the banner clears it, and the
+  // action state itself never retains it (see useSecretSafeAction).
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [state, formAction] = useSecretSafeAction<State>(
+    createApiKey,
+    { error: null, success: false, token: null },
+    setRevealedSecret,
+    // Close the dialog from the action result instead of syncing state in an effect.
+    result => {
+      if (result.success) setCreateDialogOpen(false);
+    }
+  );
 
   const router = useRouter();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [revokeKeyId, setRevokeKeyId] = useState<string | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED' | 'EXPIRED'>('ALL');
 
-  const visibleScopes = canCreateWriteKeys
-    ? SCOPES_CONFIG
-    : SCOPES_CONFIG.filter(scope => !scope.value.endsWith(':write'));
+  const effectiveRole = role ?? (isAdmin ? 'ADMIN' : canCreateWriteKeys ? 'RESPONDER' : 'USER');
+  const issuable = new Set<string>(issuableScopesForRole(effectiveRole).map(d => d.scope));
+  const visibleScopes = SCOPES_CONFIG.filter(scope => {
+    if (!issuable.has(scope.value)) return false;
+    if (scope.write && !canCreateWriteKeys) return false;
+    return true;
+  });
+
+  const [selectedKeyScopes, setSelectedKeyScopes] = useState<Set<string>>(
+    canCreateWriteKeys
+      ? new Set(['events:write', 'incidents:read'])
+      : new Set(['incidents:read'])
+  );
+
+  const applyKeyPreset = (type: 'ADMIN' | 'RESPONDER' | 'READ_ONLY' | 'CLEAR') => {
+    if (type === 'CLEAR') {
+      setSelectedKeyScopes(new Set());
+    } else if (type === 'ADMIN') {
+      setSelectedKeyScopes(new Set(visibleScopes.map(s => s.value)));
+    } else if (type === 'RESPONDER') {
+      setSelectedKeyScopes(
+        new Set(
+          [
+            'events:write',
+            'incidents:read',
+            'incidents:write',
+            'services:read',
+            'schedules:read',
+            'runbooks:read',
+            'runbooks:execute',
+            'notifications:read',
+            'teams:read',
+            'users:read',
+          ].filter(s => visibleScopes.some(v => v.value === s))
+        )
+      );
+    } else if (type === 'READ_ONLY') {
+      setSelectedKeyScopes(new Set(visibleScopes.filter(s => !s.write).map(s => s.value)));
+    }
+  };
 
   const handleRevoke = async (keyId: string) => {
     setIsRevoking(true);
@@ -212,103 +249,69 @@ export default function ApiKeysPanel({
     }
   };
 
-  // Filtered keys
-  const filteredKeys = useMemo(() => {
-    return keys.filter(key => {
-      const isRevoked = Boolean(key.revokedAt);
-      const isExpired = Boolean(key.expired);
-      const isActive = !isRevoked && !isExpired;
-
-      const matchesSearch =
-        searchQuery === '' ||
-        key.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        key.prefix.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (key.ownerEmail && key.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' && isActive) ||
-        (statusFilter === 'REVOKED' && isRevoked) ||
-        (statusFilter === 'EXPIRED' && isExpired);
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [keys, searchQuery, statusFilter]);
+  // Rows arrive already filtered and paged by the server (see lib/api-key-inventory).
+  const filteredKeys = keys;
+  const isFiltered = Boolean(inventory.q) || inventory.status !== 'ALL';
 
   const baseUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://api.opsknight.com';
 
   return (
     <div className="space-y-6">
       {/* 1. Reveal Token Banner / Modal if just created */}
-      {state?.token && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 space-y-4 shadow-sm animate-in fade-in-0 duration-200">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <span>API Key Generated Successfully</span>
-            </div>
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Secret Token
-            </Badge>
-          </div>
-
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Please copy this key now and store it in a secure password manager or CI/CD secret
-            vault. For security reasons,{' '}
-            <strong className="text-foreground">
-              you will not be able to view this token again
-            </strong>
-            .
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-emerald-500/25 bg-background p-2.5 shadow-2xs">
-            <code className="flex-1 text-xs font-mono font-bold text-foreground break-all px-2 select-all">
-              {state.token}
-            </code>
-            <CopyButton text={state.token} />
-          </div>
-        </div>
+      {revealedSecret && (
+        <OneTimeSecretBanner
+          title="API Key Generated Successfully"
+          badge="Secret Token"
+          secret={revealedSecret}
+          onDismiss={() => setRevealedSecret(null)}
+          description={
+            <>
+              Copy this key now and store it in a password manager or CI/CD secret vault. For
+              security reasons,{' '}
+              <strong className="text-foreground">you will not be able to view this token again</strong>.
+            </>
+          }
+        />
       )}
 
       {/* 2. Action and Filter Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
-          {/* Search Bar */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by name, prefix, or owner..."
-              className="h-9 text-xs bg-background"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={v => setStatusFilter(v as typeof statusFilter)}
+          <form
+            method="get"
+            aria-label="Filter API keys"
+            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1"
           >
-            <SelectTrigger className="h-9 text-xs w-[140px] bg-background">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Statuses</SelectItem>
-              <SelectItem value="ACTIVE">Active Only</SelectItem>
-              <SelectItem value="REVOKED">Revoked</SelectItem>
-              <SelectItem value="EXPIRED">Expired</SelectItem>
-            </SelectContent>
-          </Select>
+            <input type="hidden" name="tab" value="api-keys" />
+            <div className="relative flex-1 min-w-[200px]">
+              <Input
+                name="kq"
+                defaultValue={inventory.q}
+                aria-label="Search keys"
+                placeholder="Search by name, prefix, or owner..."
+                className="h-9 text-xs bg-background"
+              />
+            </div>
+            <select
+              name="kstatus"
+              defaultValue={inventory.status}
+              aria-label="Key status"
+              className="h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[140px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="ALL">All statuses</option>
+              <option value="ACTIVE">Active only</option>
+              <option value="REVOKED">Revoked</option>
+              <option value="EXPIRED">Expired</option>
+            </select>
+            <Button type="submit" variant="outline" size="sm" className="h-9">
+              Apply
+            </Button>
+            {(isFiltered || inventory.hasCursor) && (
+              <Button asChild variant="ghost" size="sm" className="h-9">
+                <Link href="?tab=api-keys">Reset</Link>
+              </Button>
+            )}
+          </form>
         </div>
 
         <Button
@@ -325,27 +328,16 @@ export default function ApiKeysPanel({
       {filteredKeys.length === 0 ? (
         <EmptyState
           icon={Key}
-          title={
-            searchQuery || statusFilter !== 'ALL'
-              ? 'No matching API keys'
-              : 'No API keys configured'
-          }
+          title={isFiltered ? 'No matching API keys' : 'No API keys configured'}
           description={
-            searchQuery || statusFilter !== 'ALL'
+            isFiltered
               ? 'Try adjusting your search terms or status filters.'
               : 'Generate your first API key above to enable webhook alert ingestion, CI/CD automation, and incident management.'
           }
           action={
-            searchQuery || statusFilter !== 'ALL' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('ALL');
-                }}
-              >
-                Reset Filters
+            isFiltered ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="?tab=api-keys">Reset filters</Link>
               </Button>
             ) : (
               <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5">
@@ -362,7 +354,10 @@ export default function ApiKeysPanel({
               <div>
                 <CardTitle className="text-sm font-bold">Configured API Keys</CardTitle>
                 <CardDescription className="text-xs">
-                  {filteredKeys.length} {filteredKeys.length === 1 ? 'key' : 'keys'} in view
+                  {inventory.total !== undefined
+                    ? `${inventory.total} ${inventory.total === 1 ? 'key' : 'keys'} match`
+                    : `${filteredKeys.length} ${filteredKeys.length === 1 ? 'key' : 'keys'}`}
+                  {' · '}showing {filteredKeys.length}
                 </CardDescription>
               </div>
             </div>
@@ -478,6 +473,20 @@ export default function ApiKeysPanel({
               </Table>
             </div>
           </CardContent>
+          {(inventory.hasCursor || inventory.nextCursor) && (
+            <div className="flex items-center justify-end gap-2 border-t border-border/60 px-4 py-3">
+              {inventory.hasCursor && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={keysHref(inventory)}>Newest</Link>
+                </Button>
+              )}
+              {inventory.nextCursor && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={keysHref(inventory, inventory.nextCursor)}>Older keys</Link>
+                </Button>
+              )}
+            </div>
+          )}
         </Card>
       )}
 
@@ -539,7 +548,7 @@ export default function ApiKeysPanel({
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
                     {`curl -X POST ${baseUrl}/api/events \\
-  -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}" \\
+  -H "Authorization: Bearer ${revealedSecret || 'ok_live_your_api_key'}" \\
   -H "Content-Type: application/json" \\
   -d '{
     "event_action": "trigger",
@@ -565,7 +574,7 @@ export default function ApiKeysPanel({
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
                     {`curl -X GET "${baseUrl}/api/incidents?status=OPEN&limit=25" \\
-  -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}"`}
+  -H "Authorization: Bearer ${revealedSecret || 'ok_live_your_api_key'}"`}
                   </pre>
                 </div>
               </div>
@@ -582,7 +591,7 @@ export default function ApiKeysPanel({
                     {`const response = await fetch('${baseUrl}/api/events', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
+    'Authorization': 'Bearer ${revealedSecret || 'ok_live_your_api_key'}',
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
@@ -614,7 +623,7 @@ console.log(result);`}
                   <pre className="leading-relaxed">
                     {`const response = await fetch('${baseUrl}/api/incidents?status=OPEN&limit=25', {
   headers: {
-    'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
+    'Authorization': 'Bearer ${revealedSecret || 'ok_live_your_api_key'}',
   },
 });
 
@@ -638,7 +647,7 @@ console.log(data.incidents);`}
 response = requests.post(
     "${baseUrl}/api/events",
     headers={
-        "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
+        "Authorization": "Bearer ${revealedSecret || 'ok_live_your_api_key'}",
         "Content-Type": "application/json",
     },
     json={
@@ -672,7 +681,7 @@ print(response.json())`}
 response = requests.get(
     "${baseUrl}/api/incidents",
     headers={
-        "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
+        "Authorization": "Bearer ${revealedSecret || 'ok_live_your_api_key'}",
     },
     params={
         "status": "OPEN",
@@ -709,13 +718,7 @@ print(response.json()["incidents"])`}
             </div>
           </DialogHeader>
 
-          <form
-            action={formData => {
-              formAction(formData);
-              setCreateDialogOpen(false);
-            }}
-            className="space-y-5 pt-2"
-          >
+          <form action={formAction} className="space-y-5 pt-2">
             {state?.error && (
               <Alert variant="destructive">
                 <XCircle className="h-4 w-4" />
@@ -766,32 +769,97 @@ print(response.json()["incidents"])`}
 
             {/* Granular Permission Scopes */}
             <div className="space-y-2.5 rounded-xl border border-border/80 bg-muted/20 p-3.5">
-              <div>
-                <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
-                <p className="text-[11px] text-muted-foreground">
-                  Select only the scopes required for this automation (least privilege principle).
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Selected: {selectedKeyScopes.size} of {visibleScopes.length} scopes (least privilege principle).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {isAdmin && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyKeyPreset('ADMIN')}
+                      className="h-7 text-[10px] px-2"
+                    >
+                      Admin Full
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyKeyPreset('RESPONDER')}
+                    className="h-7 text-[10px] px-2"
+                  >
+                    Responder
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyKeyPreset('READ_ONLY')}
+                    className="h-7 text-[10px] px-2"
+                  >
+                    Read-Only
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => applyKeyPreset('CLEAR')}
+                    className="h-7 text-[10px] px-2"
+                  >
+                    Clear
+                  </Button>
+                </div>
               </div>
 
-              <div className="grid min-w-0 gap-2.5 xl:grid-cols-2">
+              {/* Hidden inputs to guarantee all selected scopes are sent with formData */}
+              {Array.from(selectedKeyScopes).map(sc => (
+                <input key={sc} type="hidden" name="scopes" value={sc} />
+              ))}
+
+              <div className="grid min-w-0 gap-2 sm:grid-cols-2 max-h-72 overflow-y-auto pr-1">
                 {visibleScopes.map(scope => {
                   const Icon = scope.icon;
+                  const isChecked = selectedKeyScopes.has(scope.value);
                   return (
                     <div
                       key={scope.value}
-                      className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-border/80 bg-background p-3.5 text-xs transition-all hover:border-primary/40 hover:bg-accent/30"
+                      onClick={e => {
+                        if ((e.target as HTMLElement).closest('button, input')) return;
+                        setSelectedKeyScopes(prev => {
+                          const next = new Set(prev);
+                          if (next.has(scope.value)) next.delete(scope.value);
+                          else next.add(scope.value);
+                          return next;
+                        });
+                      }}
+                      className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border p-3 text-xs cursor-pointer transition-all ${
+                        isChecked
+                          ? 'border-primary/50 bg-primary/5'
+                          : 'border-border/80 bg-background hover:border-primary/40'
+                      }`}
                     >
                       <Checkbox
-                        name="scopes"
-                        value={scope.value}
-                        defaultChecked={scope.defaultChecked}
+                        checked={isChecked}
                         id={`scope-${scope.value}`}
                         className="mt-0.5 shrink-0"
+                        onCheckedChange={checked => {
+                          setSelectedKeyScopes(prev => {
+                            const next = new Set(prev);
+                            if (checked) next.add(scope.value);
+                            else next.delete(scope.value);
+                            return next;
+                          });
+                        }}
                       />
-                      <label
-                        htmlFor={`scope-${scope.value}`}
-                        className="grid min-w-0 cursor-pointer gap-2 sm:grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.35fr)_auto] sm:items-center"
-                      >
+                      <div className="grid min-w-0 cursor-pointer gap-1 sm:grid-cols-[minmax(8rem,0.8fr)_minmax(0,1.4fr)_auto] sm:items-center">
                         <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
                           <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
@@ -802,7 +870,7 @@ print(response.json()["incidents"])`}
                         <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
                           {scope.value}
                         </code>
-                      </label>
+                      </div>
                     </div>
                   );
                 })}

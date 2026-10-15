@@ -12,14 +12,15 @@ import {
 } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
-import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
 import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
-import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
+import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 
 const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
@@ -205,179 +206,27 @@ export async function addNote(incidentId: string, content: string) {
   await assertCanAddIncidentNote(incidentId);
   const user = await getCurrentUser();
 
-  await prisma.$transaction(async tx => {
-    const note = await tx.incidentNote.create({
-      data: {
-        incidentId,
-        userId: user.id,
-        content,
-      },
-    });
-
-    await tx.incidentEvent.create({
-      data: {
-        incidentId,
-        type: 'COMMENT',
-        message: `Note added by ${user.name}`,
-      },
-    });
-
-    const links = await tx.externalIssueLink.findMany({
-      where: { incidentId, provider: 'JIRA' },
-      select: { externalKey: true },
-    });
-    if (links.length > 0) {
-      const { enqueueJiraCommentOperationsInTransaction } =
-        await import('@/lib/external-operations');
-      await enqueueJiraCommentOperationsInTransaction(
-        tx,
-        links.map(link => ({
-          incidentId,
-          externalKey: link.externalKey,
-          eventId: `note:${note.id}`,
-          comment: `[OpsKnight Note by ${user.name}]:\n${content}`,
-        }))
-      );
-    }
-    await enqueueWarRoomSideEffects(tx, incidentId, [
-      { effect: 'WAR_ROOM_MESSAGE', message: `📝 *Note by ${user.name}:*\n> ${content}` },
-    ]);
+  await addIncidentNoteDomainCommand({
+    incidentId,
+    content,
+    actor: { id: user.id, name: user.name },
   });
 
   revalidatePath(`/incidents/${incidentId}`);
 }
 
 export async function reassignIncident(incidentId: string, assigneeId: string, teamId?: string) {
-  await assertResponderOrAbove();
+  const actor = await assertResponderOrAbove();
 
-  // Handle unassigning (empty assigneeId and teamId)
-  if ((!assigneeId || assigneeId.trim() === '') && (!teamId || teamId.trim() === '')) {
-    await prisma.$transaction(
-      async tx => {
-        await tx.incident.update({
-          where: { id: incidentId },
-          data: {
-            assigneeId: null,
-            teamId: null,
-          },
-        });
+  await assignIncidentDomainCommand({
+    incidentId,
+    assigneeId,
+    teamId,
+    actor: { id: actor.id, name: actor.name },
+  });
 
-        await tx.incidentEvent.create({
-          data: {
-            incidentId,
-            type: 'ASSIGNMENT',
-            message: 'Incident unassigned',
-          },
-        });
-        await enqueueWarRoomSideEffects(tx, incidentId, [
-          { effect: 'WAR_ROOM_MESSAGE', message: '👤 *Incident unassigned*' },
-          { effect: 'WAR_ROOM_TOPIC' },
-        ]);
-      },
-      { isolationLevel: 'Serializable' }
-    );
-
-    revalidatePath(`/incidents/${incidentId}`);
-    revalidatePath('/incidents');
-    return;
-  }
-
-  // Handle assigning to team
-  if (teamId && teamId.trim() !== '') {
-    await prisma.$transaction(async tx => {
-      const teamRecord = await tx.team.findUnique({
-        where: { id: teamId },
-        select: { name: true },
-      });
-      if (!teamRecord) {
-        throw new AppError({
-          code: 'RESOURCE_NOT_FOUND',
-          userMessage: LEGACY_NOT_FOUND_MESSAGE,
-          details: { resource: 'team', teamId },
-        });
-      }
-
-      await tx.incident.update({
-        where: { id: incidentId },
-        data: {
-          teamId,
-          assigneeId: null, // Clear user assignment when assigning to team
-        },
-      });
-
-      await tx.incidentEvent.create({
-        data: {
-          incidentId,
-          type: 'ASSIGNMENT',
-          message: `Incident assigned to team: ${teamRecord.name}`,
-        },
-      });
-      await enqueueIncidentUpdateSideEffects(tx, incidentId, [
-        'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION',
-      ]);
-      await enqueueWarRoomSideEffects(tx, incidentId, [
-        {
-          effect: 'WAR_ROOM_MESSAGE',
-          message: `👥 *Incident assigned to team: ${teamRecord.name}*`,
-        },
-        { effect: 'WAR_ROOM_INVITE_TEAM', teamId },
-        { effect: 'WAR_ROOM_TOPIC' },
-      ]);
-    });
-
-    revalidatePath(`/incidents/${incidentId}`);
-    revalidatePath('/incidents');
-    return;
-  }
-
-  // Handle assigning to a user
-  if (assigneeId && assigneeId.trim() !== '') {
-    await prisma.$transaction(
-      async tx => {
-        let assigneeRecord;
-        try {
-          assigneeRecord = await requireOperationalUser(tx, assigneeId);
-        } catch {
-          throw new AppError({
-            code: 'RESOURCE_NOT_FOUND',
-            userMessage: LEGACY_NOT_FOUND_MESSAGE,
-            details: { resource: 'user', userId: assigneeId },
-          });
-        }
-
-        await tx.incident.update({
-          where: { id: incidentId },
-          data: {
-            assigneeId,
-            teamId: null, // Clear team assignment when assigning to user
-          },
-        });
-
-        await tx.incidentEvent.create({
-          data: {
-            incidentId,
-            type: 'ASSIGNMENT',
-            message: `Incident manually reassigned to ${assigneeRecord.name}`,
-          },
-        });
-        await enqueueIncidentUpdateSideEffects(tx, incidentId, [
-          'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
-        ]);
-        await enqueueWarRoomSideEffects(tx, incidentId, [
-          {
-            effect: 'WAR_ROOM_MESSAGE',
-            message: `👤 *Incident reassigned to ${assigneeRecord.name}*`,
-          },
-          { effect: 'WAR_ROOM_INVITE_USER', userId: assigneeId },
-          { effect: 'WAR_ROOM_TOPIC' },
-        ]);
-      },
-      { isolationLevel: 'Serializable' }
-    );
-
-    revalidatePath(`/incidents/${incidentId}`);
-    revalidatePath('/incidents');
-  }
+  revalidatePath(`/incidents/${incidentId}`);
+  revalidatePath('/incidents');
 }
 
 export async function addWatcher(incidentId: string, userId: string, role: string) {
