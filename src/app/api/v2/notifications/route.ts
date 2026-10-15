@@ -11,7 +11,8 @@ import {
   parsePaginationParams,
 } from '@/lib/api-v2';
 import { authorize, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import type { NotificationChannel, NotificationStatus, Prisma } from '@prisma/client';
+import { NotificationChannel, NotificationStatus, type Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
 export const GET = withV2Observability(async function GET(req: NextRequest) {
@@ -28,8 +29,16 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { limit, cursor } = parsePaginationParams(searchParams);
 
-    const channel = searchParams.get('channel')?.trim();
-    const status = searchParams.get('status')?.trim();
+    // Validate against the real enums: an unknown value is a 400, never a Prisma error (500).
+    const { channel, status } = z
+      .object({
+        channel: z.nativeEnum(NotificationChannel).optional(),
+        status: z.nativeEnum(NotificationStatus).optional(),
+      })
+      .parse({
+        channel: searchParams.get('channel')?.trim() || undefined,
+        status: searchParams.get('status')?.trim() || undefined,
+      });
     const incidentId = searchParams.get('incidentId')?.trim();
     const userId = searchParams.get('userId')?.trim();
 
@@ -37,8 +46,8 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
 
     if (userId) filters.push({ userId });
 
-    if (channel) filters.push({ channel: channel as NotificationChannel });
-    if (status) filters.push({ status: status as NotificationStatus });
+    if (channel) filters.push({ channel });
+    if (status) filters.push({ status });
     if (incidentId) filters.push({ incidentId });
 
     const cursorWhere = buildCursorWhere(cursor);

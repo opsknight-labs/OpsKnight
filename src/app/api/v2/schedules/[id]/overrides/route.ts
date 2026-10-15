@@ -1,13 +1,17 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import {
   apiV2Created,
   apiV2Error,
   apiV2Success,
   authenticateV2Request,
+  buildCursorWhere,
   enforceV2Authorization,
   enforceV2RateLimit,
+  formatCursorPagination,
   logV2Audit,
+  parsePaginationParams,
   ScheduleOverrideV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -51,9 +55,14 @@ export const GET = withV2Observability(async function GET(
       });
     }
 
+    // Bounded and cursor-paginated (newest first by creation; the cursor needs a stable key).
+    const { limit, cursor } = parsePaginationParams(new URL(req.url).searchParams);
     const overrides = await prisma.onCallOverride.findMany({
-      where: { scheduleId: id },
-      orderBy: { start: 'desc' },
+      where: {
+        AND: [{ scheduleId: id }, buildCursorWhere(cursor) as Prisma.OnCallOverrideWhereInput],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       select: {
         id: true,
         scheduleId: true,
@@ -66,13 +75,14 @@ export const GET = withV2Observability(async function GET(
       },
     });
 
-    const dto = overrides.map(o => ({
+    const page = formatCursorPagination(overrides, limit);
+    const dto = page.data.map(o => ({
       ...o,
       startDate: o.start,
       endDate: o.end,
     }));
 
-    return apiV2Success(dto, { headers: rlHeaders });
+    return apiV2Success(dto, { pagination: page.pagination, headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

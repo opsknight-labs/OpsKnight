@@ -14,6 +14,8 @@ type IssuerRole = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
 const ALL_ROLES: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'];
 const OPERATORS: readonly IssuerRole[] = ['ADMIN', 'RESPONDER'];
 const ADMINS: readonly IssuerRole[] = ['ADMIN'];
+// Directory-wide reads need a capability the USER role does not have.
+const NON_USER: readonly IssuerRole[] = ['ADMIN', 'RESPONDER', 'AUDITOR'];
 
 export interface ApiScopeDefinition {
   scope: ApiScope;
@@ -98,11 +100,16 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Create and update schedules and create overrides. Layer and rotation editing is not available over REST.',
     { write: true }
   ),
-  [S.TEAMS_READ]: def(S.TEAMS_READ, 'Teams read', 'Teams', 'List and read teams.'),
+  [S.TEAMS_READ]: def(S.TEAMS_READ, 'Teams read', 'Teams', 'List and read teams.', {
+    issuableBy: NON_USER,
+  }),
   [S.TEAMS_WRITE]: def(S.TEAMS_WRITE, 'Teams manage', 'Teams', 'Create, update and delete teams.', {
     write: true,
+    issuableBy: ADMINS,
   }),
-  [S.USERS_READ]: def(S.USERS_READ, 'Users read', 'Users', 'List and read users.'),
+  [S.USERS_READ]: def(S.USERS_READ, 'Users read', 'Users', 'List and read users.', {
+    issuableBy: NON_USER,
+  }),
   [S.USERS_WRITE]: def(
     S.USERS_WRITE,
     'Users manage',
@@ -114,14 +121,15 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.ESCALATION_POLICIES_READ,
     'Escalation policies read',
     'Escalations',
-    'List and read escalation policies.'
+    'List and read escalation policies.',
+    { issuableBy: NON_USER }
   ),
   [S.ESCALATION_POLICIES_WRITE]: def(
     S.ESCALATION_POLICIES_WRITE,
     'Escalation policies manage',
     'Escalations',
     'Create, update and delete escalation policies.',
-    { write: true }
+    { write: true, issuableBy: ADMINS }
   ),
   [S.INTEGRATIONS_READ]: def(
     S.INTEGRATIONS_READ,
@@ -134,14 +142,14 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Integrations update',
     'Integrations',
     'Rename and enable or disable existing integrations. Creating integrations and editing connector configuration is not available over REST.',
-    { write: true }
+    { write: true, issuableBy: ADMINS }
   ),
   [S.NOTIFICATIONS_READ]: def(
     S.NOTIFICATIONS_READ,
     'Notifications read',
     'Notifications',
     'Read notification delivery history.',
-    { issuableBy: ['ADMIN', 'RESPONDER', 'AUDITOR'] }
+    { issuableBy: NON_USER }
   ),
   [S.NOTIFICATIONS_WRITE]: def(
     S.NOTIFICATIONS_WRITE,
@@ -154,20 +162,22 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.STATUS_PAGES_READ,
     'Status pages read',
     'Status pages',
-    'List and read status pages.'
+    'List and read status pages.',
+    { issuableBy: NON_USER }
   ),
   [S.STATUS_PAGES_WRITE]: def(
     S.STATUS_PAGES_WRITE,
     'Status pages manage',
     'Status pages',
     'Create status pages, update name, slug, enabled and default state, and post announcements. Components, subscribers and branding are not available over REST.',
-    { write: true }
+    { write: true, issuableBy: ADMINS }
   ),
   [S.RUNBOOKS_READ]: def(
     S.RUNBOOKS_READ,
     'Runbooks read',
     'Runbooks',
-    'List runbooks, read step summaries (never step configuration) and read execution state.'
+    'List runbooks, read step summaries (never step configuration) and read execution state.',
+    { issuableBy: NON_USER }
   ),
   [S.RUNBOOKS_EXECUTE]: def(
     S.RUNBOOKS_EXECUTE,
@@ -228,7 +238,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Response policy read',
     'Administration',
     'Read response policy through the response-policy API.',
-    { issuableBy: ['ADMIN', 'RESPONDER', 'AUDITOR'] }
+    { issuableBy: ADMINS }
   ),
   [S.RESPONSE_POLICY_WRITE]: def(
     S.RESPONSE_POLICY_WRITE,

@@ -148,8 +148,8 @@ describe('ApiKeysPanel Component', () => {
   it('hides administrative scopes for non-admins, following the registry', () => {
     render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={false} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
-    // The registry lets responders mint read-only response-policy keys; writes stay admin-only.
-    expect(screen.getByText(title('response-policy:read'))).toBeDefined();
+    // The /api/v1 response-policy API requires ADMIN for reads too, so neither scope is offered.
+    expect(screen.queryByText(title('response-policy:read'))).toBeNull();
     expect(screen.queryByText(title('response-policy:write'))).toBeNull();
     expect(screen.queryByText(title('admin:manage'))).toBeNull();
     expect(screen.queryByText(title('service-accounts:read'))).toBeNull();

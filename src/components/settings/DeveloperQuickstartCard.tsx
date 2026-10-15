@@ -183,7 +183,12 @@ export default function DeveloperQuickstartCard({
   } | null>(null);
 
   const baseUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://api.opsknight.com';
+  // Snippets show a placeholder unless a key was just generated on this page.
   const effectiveToken = revealedSecret || 'ok_live_your_api_key';
+  // Live tests need a real key. It lives only in this component's memory: never persisted,
+  // never put in a URL, and cleared when the page unloads.
+  const [testKeyInput, setTestKeyInput] = useState('');
+  const liveKey = testKeyInput.trim() || revealedSecret || '';
 
   const activeScenario = SCENARIOS.find(s => s.id === activeScenarioId) ?? SCENARIOS[0];
 
@@ -307,7 +312,22 @@ print(response.json())`;
   const activeSnippet = getCodeSnippet(activeScenario, activeTab);
 
   // Live test runner execution
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const isMutation = activeScenario.method !== 'GET';
+
+  // Requests that change data need an explicit second click on the inline confirmation.
+  const requestLiveTest = () => {
+    if (!liveKey) return;
+    if (isMutation) {
+      setAwaitingConfirmation(true);
+      return;
+    }
+    void executeLiveTest();
+  };
+
   const executeLiveTest = async () => {
+    if (!liveKey) return;
+    setAwaitingConfirmation(false);
     setIsRunningTest(true);
     setTestResult(null);
     const start = performance.now();
@@ -317,9 +337,9 @@ print(response.json())`;
         'Content-Type': 'application/json',
       };
       if (authFormat === 'BEARER') {
-        headers['Authorization'] = `Bearer ${effectiveToken}`;
+        headers['Authorization'] = `Bearer ${liveKey}`;
       } else {
-        headers['X-API-Key'] = effectiveToken;
+        headers['X-API-Key'] = liveKey;
       }
 
       // Execute request against current origin
@@ -343,14 +363,13 @@ print(response.json())`;
         durationMs,
         data: json,
       });
-    } catch {
-      const durationMs = Math.round(performance.now() - start);
-      // Fallback with mock verification if offline or mock environment
+    } catch (error) {
+      // Report the failure as it is; never substitute the sample response for a real result.
       setTestResult({
-        status: activeScenario.expectedStatus,
-        statusText: activeScenario.expectedStatus === 200 ? 'OK' : 'Accepted',
-        durationMs,
-        data: activeScenario.expectedResponse,
+        status: 0,
+        statusText: 'Network error',
+        durationMs: Math.round(performance.now() - start),
+        data: { error: error instanceof Error ? error.message : 'The request could not be sent.' },
       });
     } finally {
       setIsRunningTest(false);
@@ -401,6 +420,28 @@ print(response.json())`;
       </CardHeader>
 
       <CardContent className="p-4 sm:p-5 space-y-4">
+        {/* Live-test credential: kept in memory only */}
+        <div className="flex flex-col gap-1.5 rounded-xl border border-border/70 bg-muted/20 p-2.5">
+          <label htmlFor="quickstart-live-key" className="text-[11px] font-medium text-foreground">
+            API key for live tests
+          </label>
+          <input
+            id="quickstart-live-key"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={testKeyInput}
+            onChange={event => setTestKeyInput(event.target.value)}
+            placeholder={revealedSecret ? 'Using the key you just generated' : 'ok_live_…'}
+            className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-describedby="quickstart-live-key-help"
+          />
+          <p id="quickstart-live-key-help" className="text-[11px] text-muted-foreground">
+            Used only for &quot;Run Live Test&quot; requests from this page. It is not saved or shown
+            in the code samples. Requests that change data ask for confirmation first.
+          </p>
+        </div>
+
         {/* 2. Interactive Header Format Switcher & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-xl border border-border/70 bg-muted/20">
           <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -478,6 +519,7 @@ print(response.json())`;
                   onClick={() => {
                     setActiveScenarioId(sc.id);
                     setTestResult(null);
+                    setAwaitingConfirmation(false);
                   }}
                   className={`flex flex-col items-start gap-1 p-2 rounded-lg border text-left transition-all ${
                     isSelected
@@ -550,8 +592,9 @@ print(response.json())`;
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={executeLiveTest}
-                disabled={isRunningTest}
+                onClick={requestLiveTest}
+                disabled={isRunningTest || !liveKey}
+                title={liveKey ? undefined : 'Enter an API key above to run live tests'}
                 className="h-7 text-xs gap-1.5 border-primary/30 hover:bg-primary/5 text-primary"
               >
                 {isRunningTest ? (
@@ -626,6 +669,40 @@ print(response.json())`;
         </Tabs>
 
         {/* 5. Live Test Result Drawer (Shows actual runtime test output) */}
+        {awaitingConfirmation && (
+          <div
+            role="alertdialog"
+            aria-labelledby="quickstart-confirm-title"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3"
+          >
+            <p id="quickstart-confirm-title" className="text-xs text-foreground">
+              <span className="font-mono font-semibold">
+                {activeScenario.method} {activeScenario.path}
+              </span>{' '}
+              sends a real request that changes data in this workspace.
+            </p>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setAwaitingConfirmation(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => void executeLiveTest()}
+              >
+                Send request
+              </Button>
+            </div>
+          </div>
+        )}
+
         {testResult && (
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 space-y-2 animate-in fade-in-50 duration-200">
             <div className="flex items-center justify-between">

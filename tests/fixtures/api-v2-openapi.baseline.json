@@ -4,6 +4,10 @@
     "title": "OpsKnight Enterprise Public REST API",
     "version": "2.0.0",
     "description": "Secure, high-performance, enterprise-grade REST API platform for OpsKnight incident management, on-call schedules, escalations, automation, runbooks, and administration.",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "url": "https://www.gnu.org/licenses/agpl-3.0.html"
+    },
     "contact": {
       "name": "OpsKnight Engineering",
       "url": "https://opsknight.com"
@@ -425,6 +429,11 @@
           "id": {
             "type": "string"
           },
+          "revision": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Monotonic version of this resource; it is the value of the ETag header on detail reads."
+          },
           "name": {
             "type": "string"
           },
@@ -499,6 +508,11 @@
         "properties": {
           "id": {
             "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Monotonic version of this resource; it is the value of the ETag header on detail reads."
           },
           "name": {
             "type": "string"
@@ -583,6 +597,11 @@
           "id": {
             "type": "string"
           },
+          "revision": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Monotonic version of this resource; it is the value of the ETag header on detail reads."
+          },
           "name": {
             "type": "string"
           },
@@ -617,6 +636,11 @@
         "properties": {
           "id": {
             "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Monotonic version of this resource; it is the value of the ETag header on detail reads."
           },
           "name": {
             "type": "string"
@@ -660,6 +684,11 @@
         "properties": {
           "id": {
             "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Monotonic version of this resource; it is the value of the ETag header on detail reads."
           },
           "name": {
             "type": "string"
@@ -781,6 +810,37 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "publication": {
+            "type": "object",
+            "description": "Present on PATCH. The change is committed before the public page is republished; this reports whether the page is live, still publishing, or failed and awaiting background reconciliation.",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "LIVE",
+                  "PUBLISHING",
+                  "FAILED",
+                  "DISABLED"
+                ]
+              },
+              "revision": {
+                "type": "string"
+              },
+              "lastError": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "stale": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "status",
+              "revision"
+            ]
           }
         },
         "required": [
@@ -974,10 +1034,66 @@
               "type": "string"
             }
           },
+          "activeTokensCount": {
+            "type": "integer",
+            "description": "Unrevoked, unexpired tokens (database aggregate)."
+          },
+          "tokensTotal": {
+            "type": "integer",
+            "description": "List: non-revoked tokens. Detail: every token ever issued."
+          },
+          "tokensTruncated": {
+            "type": "boolean",
+            "description": "True when `tokens` holds only the newest tokens; counts above cover all of them."
+          },
           "tokens": {
             "type": "array",
+            "description": "The newest tokens only (bounded).",
             "items": {
-              "type": "object"
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "prefix": {
+                  "type": "string"
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ACTIVE",
+                    "EXPIRED",
+                    "REVOKED"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "lastUsedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "expiresAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              }
             }
           },
           "createdAt": {
@@ -6310,19 +6426,12 @@
                   "isDefault": {
                     "type": "boolean",
                     "default": false
-                  },
-                  "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
                   }
                 }
               },
               "example": {
                 "name": "OpsKnight Public Status",
                 "slug": "opsknight-status",
-                "description": "Real-time service availability, system metrics, and incident announcements",
                 "isDefault": false
               }
             }
@@ -6516,12 +6625,6 @@
                   },
                   "isDefault": {
                     "type": "boolean"
-                  },
-                  "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
                   },
                   "enabled": {
                     "type": "boolean"
@@ -8250,9 +8353,6 @@
                   "mitigation": {
                     "type": "string"
                   },
-                  "impact": {
-                    "type": "string"
-                  },
                   "lessons": {
                     "type": "string"
                   },
@@ -8488,9 +8588,6 @@
                     "type": "string"
                   },
                   "mitigation": {
-                    "type": "string"
-                  },
-                  "impact": {
                     "type": "string"
                   },
                   "lessons": {

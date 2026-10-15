@@ -85,7 +85,6 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'POST /status-pages': {
     name: 'OpsKnight Public Status',
     slug: 'opsknight-status',
-    description: 'Real-time service availability, system metrics, and incident announcements',
     isDefault: false,
   },
   'PATCH /status-pages/{id}': {

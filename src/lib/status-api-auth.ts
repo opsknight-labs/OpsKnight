@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashLegacyTokenCandidates, hashTokenV2 } from '@/lib/api-keys';
+import { hashTokenV2 } from '@/lib/api-keys';
+import { legacyHashCandidatesWithAdmission } from '@/lib/legacy-token-admission';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 
@@ -74,7 +75,9 @@ export async function authorizeStatusApiRequest(
     // Lazy migration: preserve 1.x scrypt tokens and 2.0 HMACs signed with
     // NEXTAUTH_SECRET before an independent API_KEY_SECRET was configured.
     if (!tokenRecord) {
-      const legacyHashes = await hashLegacyTokenCandidates(token);
+      // Same legacy-hash admission budget as API keys: a throttled 1.x lookup finds nothing.
+      const legacy = await legacyHashCandidatesWithAdmission(req, token);
+      const legacyHashes = legacy.status === 'ok' ? legacy.candidates : [];
       if (legacyHashes.length > 0) {
         tokenRecord = await prisma.statusPageApiToken.findFirst({
           where: {

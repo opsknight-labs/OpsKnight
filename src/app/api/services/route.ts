@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   try {
     const apiKey = await authenticateApiKey(req);
     if (!apiKey) {
-      return jsonError(new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
+      return jsonError(new AppError({ code: 'API_KEY_INVALID' }));
     }
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
