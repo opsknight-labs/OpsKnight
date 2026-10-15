@@ -9,7 +9,11 @@
     "browser": {
       "status": "PASS",
       "tests": 33,
-      "browsers": ["Chromium", "Firefox", "WebKit"],
+      "browsers": [
+        "Chromium",
+        "Firefox",
+        "WebKit"
+      ],
       "productionServer": true,
       "scope": "Complete publish/attach/trigger/approval/cancellation, old pinned versions, pagination/scale, capability isolation, Automatic edit/pause/reactivation guidance and dynamic-target UI guard"
     },
@@ -147,7 +151,11 @@
       "browser": {
         "status": "PASS",
         "tests": 33,
-        "browsers": ["Chromium", "Firefox", "WebKit"],
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ],
         "skipped": 0
       }
     },
@@ -181,7 +189,11 @@
         "status": "PASS",
         "tests": 36,
         "skipped": 0,
-        "browsers": ["Chromium", "Firefox", "WebKit"],
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ],
         "scope": "Full production-server matrix including detached suggestion visibility, disabled execution and successful dismissal"
       },
       "productionBuild": "PASS",
@@ -190,5 +202,43 @@
       "documentation": "PASS"
     },
     "remoteCI": "Pending after follow-up push; check exact-head PR results. Previous head eb52efd12 completed without failed checks."
+  },
+  "configurationRevisionAndSsoCompatibility": {
+    "baseRevision": "60521b03fba72c2134cc3c7d02bcdfe70bb05f2a",
+    "integratedMain": "4be1e13bd51e361b52ad97b77dcbcb4343ba4ae8",
+    "changes": [
+      "Rule configuration revision fences mode, version, inputs and target changes in Suggested and budget-fallback suggestion creation",
+      "Automatic evaluator supplies configuration revision to execution preflight",
+      "Automatic activation and readiness explicitly reject pools over 10 online Agents",
+      "Added secret-free live HTTPS execution/job/worker state diagnostics"
+    ],
+    "localChecks": {
+      "fullUnitSuiteAfterSsoRebase": {
+        "status": "PASS",
+        "tests": 5846,
+        "skipped": 4
+      },
+      "targetedUnitSuite": {
+        "status": "PASS",
+        "tests": 356,
+        "skipped": 3
+      },
+      "database": {
+        "status": "PASS",
+        "tests": 104,
+        "files": 5,
+        "postgres": "15.18 isolated local instance",
+        "scope": "Eight deterministic concurrent rule-edit races, trigger-edit regression, 11-Agent policy limit, lifecycle and execution safety"
+      },
+      "schemaFreshAndUpgrade": {
+        "status": "PASS",
+        "evidence": "schema-upgrade-20261015.json"
+      },
+      "productionBuild": "PASS",
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "browser": "RUNNING"
+    },
+    "remoteCI": "Pending next push. Rebased base has failing live HTTPS execution smoke; state diagnostics added to identify terminal status without exposing credentials. No claim of deployment certification."
   }
 }

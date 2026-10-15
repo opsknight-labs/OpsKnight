@@ -152,6 +152,13 @@ export async function getBindingReadiness(
           state: 'blocked',
           message: 'Target exceeds the bounded readiness check. Narrow the selector.',
         });
+      if (binding.mode === 'AUTOMATIC' && eligibleAgents > 10)
+        checks.push({
+          code: 'AUTOMATIC_POLICY_TARGET_LIMIT',
+          state: 'blocked',
+          message:
+            'Automatic activation supports at most 10 online Agents per target. Narrow the fixed pool or use Suggested mode.',
+        });
       const pool = binding.defaultAgentPoolId
         ? await db.runbookAgentPool.findUnique({
             where: { id: binding.defaultAgentPoolId },

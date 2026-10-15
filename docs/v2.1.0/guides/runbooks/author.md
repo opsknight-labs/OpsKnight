@@ -185,3 +185,7 @@ Suggestions and triggered executions store the evaluated trigger revision separa
 Detaching a service rule archives and disables it. It disappears from the active service rule list; its evidence URL, original configuration, suggestions and execution associations remain available. Pending suggestions cannot start after detachment. Archived rules cannot be edited or reactivated.
 
 Incident-trigger evaluation reads rules in ordered batches of at most 100, instead of loading the full inventory into memory. Every enabled rule is evaluated; duplicate event delivery retains existing fingerprint fences. Total processing time still grows with rule count and matching actions. The 100/1,000/10,000-rule regression measures concurrent duplicate deliveries and real suggestion writes; it does not certify sustained production incident throughput.
+
+Automatic policy certification currently supports at most **10 eligible online Agents per target**. Readiness blocks larger Automatic pools. Narrow the pool or use Suggested mode; do not treat a partial policy check as activation evidence.
+
+Rule configuration saves increment a monotonic configuration revision. Incident evaluation verifies that revision, mode, selected publication and trigger revision under the workflow lock before recording a suggestion. A change to mode, version, inputs or target invalidates a match read before the edit committed.

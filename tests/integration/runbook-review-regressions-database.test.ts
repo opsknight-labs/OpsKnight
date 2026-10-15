@@ -224,6 +224,21 @@ suite('PR 864 review regression contracts', () => {
       actor.id
     );
     expect(second).toMatchObject({ id: first.id, revision: 2, conditionLogic: 'OR' });
+    const configured = await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+      where: { id: rule.id },
+    });
+    expect(configured.configurationRevision).toBe(3);
+    await updateServiceBinding(
+      service.id,
+      rule.id,
+      { name: 'Updated name', enabled: false },
+      actor.id
+    );
+    expect(
+      (await testPrisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } }))
+        .configurationRevision
+    ).toBe(4);
+
     expect(await testPrisma.runbookTrigger.count({ where: { bindingId: rule.id } })).toBe(1);
     expect(await testPrisma.runbookSuggestion.findMany()).toEqual(
       expect.arrayContaining(suggestions)
@@ -360,6 +375,146 @@ suite('PR 864 review regression contracts', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+  it.each(
+    (['SUGGESTED', 'AUTOMATIC'] as const).flatMap(mode =>
+      (['mode', 'version', 'inputs', 'target'] as const).map(change => ({ mode, change }))
+    )
+  )('rejects stale $mode suggestions after a concurrent $change edit', async ({ mode, change }) => {
+    const { service, workflow, old, current } = await fixture();
+    const incident = await createTestIncident('Concurrent rule configuration', service.id);
+    const agent = await testPrisma.runbookAgent.create({ data: { name: 'Original target' } });
+    const newAgent = await testPrisma.runbookAgent.create({ data: { name: 'New target' } });
+    const rule = await testPrisma.serviceAutomationRule.create({
+      data: {
+        serviceId: service.id,
+        runbookId: workflow.id,
+        runbookVersionId: old.id,
+        mode,
+        versionStrategy: 'PINNED',
+        inputValues: { legacy: 'original' },
+        defaultAgentId: agent.id,
+        triggers: { create: { event: 'INCIDENT_CREATED' } },
+      },
+    });
+    const { evaluateIncidentTriggers } = await import('@/lib/runbooks/triggers');
+    const orchestrator = await import('@/lib/runbooks/orchestrator');
+    const { RunbookDefinitionError } = await import('@/lib/runbooks/errors');
+    // Isolate the real budget-fallback transaction from execution planning; physical execution is never started.
+    const budget =
+      mode === 'AUTOMATIC'
+        ? vi
+            .spyOn(orchestrator, 'startTriggeredRunbookExecution')
+            .mockRejectedValue(
+              new RunbookDefinitionError('AUTO_REMEDIATION_BUDGET_EXHAUSTED: fixture budget')
+            )
+        : null;
+    const { default: applicationPrisma } = await import('@/lib/prisma');
+    let loaded!: () => void;
+    let locked!: () => void;
+    const read = new Promise<void>(resolve => {
+      loaded = resolve;
+    });
+    const lock = new Promise<void>(resolve => {
+      locked = resolve;
+    });
+    const original = applicationPrisma.serviceAutomationRule.findMany.bind(
+      applicationPrisma.serviceAutomationRule
+    );
+    const spy = vi
+      .spyOn(applicationPrisma.serviceAutomationRule, 'findMany')
+      .mockImplementationOnce(args => {
+        const query = original(args);
+        void query.then(
+          () => loaded(),
+          () => loaded()
+        );
+        return query;
+      });
+    try {
+      const editor = testPrisma.$transaction(
+        async tx => {
+          await tx.$queryRaw`SELECT id FROM "Runbook" WHERE id = ${workflow.id} FOR UPDATE`;
+          locked();
+          await read;
+          await tx.serviceAutomationRule.update({
+            where: { id: rule.id },
+            data: {
+              configurationRevision: { increment: 1 },
+              ...(change === 'mode' ? { mode: 'MANUAL' } : {}),
+              ...(change === 'version' ? { runbookVersionId: current.id } : {}),
+              ...(change === 'inputs' ? { inputValues: { legacy: 'edited' } } : {}),
+              ...(change === 'target' ? { defaultAgentId: newAgent.id } : {}),
+            },
+          });
+        },
+        { timeout: 15000 }
+      );
+      await lock;
+      const evaluation = evaluateIncidentTriggers(incident.id, `configuration-${mode}-${change}`);
+      const [, result] = await Promise.all([editor, evaluation]);
+      expect(result).toMatchObject({ matched: 1, suggested: 0 });
+      expect(await testPrisma.runbookSuggestion.count()).toBe(0);
+      expect(await testPrisma.runbookExecution.count()).toBe(0);
+      if (budget) expect(budget).toHaveBeenCalledOnce();
+    } finally {
+      spy.mockRestore();
+      budget?.mockRestore();
+    }
+  });
+  it('explains and blocks Automatic policy certification above ten online Agents', async () => {
+    const { service, workflow, old } = await fixture();
+    const pool = await testPrisma.runbookAgentPool.create({
+      data: { name: 'Large fixed pool', mode: 'SHARED_TARGET' },
+    });
+    const ids = Array.from({ length: 11 }, () => crypto.randomUUID());
+    await testPrisma.runbookAgent.createMany({
+      data: ids.map(id => ({
+        id,
+        name: id,
+        status: 'ONLINE',
+        lastHeartbeatAt: new Date(),
+        capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+      })),
+    });
+    await testPrisma.runbookAgentPoolMember.createMany({
+      data: ids.map(agentId => ({ poolId: pool.id, agentId })),
+    });
+    const rule = await testPrisma.serviceAutomationRule.create({
+      data: {
+        serviceId: service.id,
+        runbookId: workflow.id,
+        runbookVersionId: old.id,
+        mode: 'AUTOMATIC',
+        versionStrategy: 'PINNED',
+        enabled: false,
+        defaultAgentPoolId: pool.id,
+        inputValues: { legacy: 'test' },
+        triggers: { create: { event: 'INCIDENT_CREATED' } },
+      },
+      include: {
+        runbook: { include: { publishedVersion: { include: { inputs: true } } } },
+        runbookVersion: { include: { inputs: true } },
+        triggers: { include: { conditions: true } },
+      },
+    });
+    const readiness = await getBindingReadiness({ ...rule, enabled: true });
+    expect(readiness).toMatchObject({ state: 'BLOCKED', eligibleAgents: 11 });
+    expect(readiness.checks).toContainEqual(
+      expect.objectContaining({
+        code: 'AUTOMATIC_POLICY_TARGET_LIMIT',
+        state: 'blocked',
+        message: expect.stringContaining('10 online Agents'),
+      })
+    );
+    await expect(activateServiceRule(service.id, rule.id, actor.id, true)).rejects.toThrow(
+      '10 online Agents'
+    );
+    const { requestRulePolicyChecks } = await import('@/lib/runbooks/policy-checks');
+    await expect(requestRulePolicyChecks(service.id, rule.id, actor.id)).rejects.toThrow(
+      '1–10 online targets'
+    );
+    expect(await testPrisma.runbookPolicyCheck.count()).toBe(0);
   });
   it('evaluates 100/1000/10000 incident rules in bounded batches and deduplicates concurrent events', async () => {
     const { service, workflow, old } = await fixture();

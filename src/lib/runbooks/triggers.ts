@@ -101,7 +101,16 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
               // A detached/paused rule may have been read before its archival transaction committed.
               if (
                 !(await tx.serviceAutomationRule.findFirst({
-                  where: { id: binding.id, enabled: true, detachedAt: null },
+                  where: {
+                    id: binding.id,
+                    enabled: true,
+                    detachedAt: null,
+                    configurationRevision: binding.configurationRevision,
+                    mode: binding.mode,
+                    ...(binding.versionStrategy === 'LATEST_PUBLISHED'
+                      ? { runbook: { publishedVersionId: binding.runbook.publishedVersionId } }
+                      : {}),
+                  },
                   select: { id: true },
                 }))
               )
@@ -171,6 +180,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
             incidentId,
             bindingId: binding.id,
             triggerId: trigger.id,
+            expectedRuleRevision: binding.configurationRevision,
             inputValues: binding.inputValues as Record<string, unknown>,
             triggerFingerprint: fingerprint,
             sourceEventId,
@@ -211,7 +221,16 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
                 // A detached/paused rule may have been read before its archival transaction committed.
                 if (
                   !(await tx.serviceAutomationRule.findFirst({
-                    where: { id: binding.id, enabled: true, detachedAt: null },
+                    where: {
+                      id: binding.id,
+                      enabled: true,
+                      detachedAt: null,
+                      configurationRevision: binding.configurationRevision,
+                      mode: binding.mode,
+                      ...(binding.versionStrategy === 'LATEST_PUBLISHED'
+                        ? { runbook: { publishedVersionId: binding.runbook.publishedVersionId } }
+                        : {}),
+                    },
                     select: { id: true },
                   }))
                 )

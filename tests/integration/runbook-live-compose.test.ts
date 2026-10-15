@@ -35,7 +35,11 @@ async function stopProcess(child?: ChildProcess) {
   const stopped = once(child, 'exit');
   child.kill('SIGTERM');
   const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
-  try { await stopped; } finally { clearTimeout(timer); }
+  try {
+    await stopped;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 suite('isolated HTTPS Compose deployment against the real control plane', () => {
   it('enrolls through a token file, executes a signed diagnostic with an artifact, checks policy and preserves identity after restart', async () => {
@@ -280,10 +284,15 @@ suite('isolated HTTPS Compose deployment against the real control plane', () => 
         previewAuthorizationToken: preview.authorizationToken,
       });
       await until(async () => {
-        return (
-          (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } }))
-            .status === 'SUCCEEDED'
-        );
+        const current = await testPrisma.runbookExecution.findUniqueOrThrow({
+          where: { id: execution.id },
+          select: { status: true, failureCode: true },
+        });
+        if (['FAILED', 'TIMED_OUT', 'CANCELLED'].includes(current.status))
+          throw new Error(
+            `Live diagnostic ${current.status}: ${current.failureCode ?? 'unspecified'}`
+          );
+        return current.status === 'SUCCEEDED';
       });
       const artifacts = await testPrisma.runbookArtifact.count({
         where: { attempt: { executionStep: { executionId: execution.id } } },
@@ -436,6 +445,34 @@ suite('isolated HTTPS Compose deployment against the real control plane', () => 
     } catch (error) {
       await mkdir('test-results/runbook-engine', { recursive: true });
       await writeFile('test-results/runbook-engine/live-compose-app.log', appOutput);
+      // Capture states and stable error codes, excluding tokens, payloads and output.
+      const state = await Promise.all([
+        testPrisma.runbookExecution.findMany({
+          select: {
+            id: true,
+            status: true,
+            failureCode: true,
+            steps: {
+              select: {
+                status: true,
+                errorCode: true,
+                attempts: {
+                  select: { status: true, errorCode: true, claimedAt: true, completedAt: true },
+                },
+              },
+            },
+          },
+        }),
+        testPrisma.backgroundJob.findMany({
+          where: { type: 'RUNBOOK' },
+          select: { id: true, status: true, attempts: true, scheduledAt: true },
+        }),
+        getRunbookWorkerEvidence(new Date()),
+      ]).catch(() => null);
+      await writeFile(
+        'test-results/runbook-engine/live-compose-state.json',
+        JSON.stringify(state, null, 2)
+      );
       if (composeEnv.OPSKNIGHT_AGENT_IMAGE) {
         const logs = await compose(['logs', '--no-color', '--tail', '50']).catch(() => null);
         if (logs)

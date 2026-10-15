@@ -291,6 +291,7 @@ export async function updateServiceBinding(
       where: { id: bindingId, serviceId, detachedAt: null },
       data: {
         ...input,
+        configurationRevision: { increment: 1 },
         runbookVersionId: strategy === 'PINNED' ? version.id : null,
         inputValues: values as Prisma.InputJsonValue,
       },
@@ -327,7 +328,7 @@ export async function detachServiceBinding(serviceId: string, bindingId: string,
     await lockRunbookForUpdate(tx, binding.runbookId, { action: 'detach a rule for' });
     const deleted = await tx.serviceAutomationRule.updateMany({
       where: { id: bindingId, serviceId, detachedAt: null },
-      data: { enabled: false, detachedAt: new Date() },
+      data: { enabled: false, detachedAt: new Date(), configurationRevision: { increment: 1 } },
     });
     if (deleted.count !== 1) throw new RunbookDefinitionError('Service runbook binding not found.');
     await logAudit(
@@ -358,11 +359,13 @@ export async function replaceBindingTrigger(
     });
     if (!binding) throw new RunbookDefinitionError('Service runbook binding not found.');
     await lockRunbookForUpdate(tx, binding.runbookId, { action: 'configure triggers for' });
-    if (binding.mode === 'AUTOMATIC')
-      await tx.serviceAutomationRule.update({
-        where: { id: binding.id },
-        data: { enabled: false },
-      });
+    await tx.serviceAutomationRule.update({
+      where: { id: binding.id },
+      data: {
+        ...(binding.mode === 'AUTOMATIC' ? { enabled: false } : {}),
+        configurationRevision: { increment: 1 },
+      },
+    });
     const previous = await tx.runbookTrigger.findFirst({
       where: { bindingId, event: input.event },
       orderBy: { createdAt: 'asc' },
@@ -448,7 +451,10 @@ export async function pauseServiceRule(serviceId: string, ruleId: string, actorI
       where: { id: ruleId, serviceId, detachedAt: null },
     });
     if (!rule) throw new RunbookDefinitionError('Service automation rule not found.');
-    await tx.serviceAutomationRule.update({ where: { id: ruleId }, data: { enabled: false } });
+    await tx.serviceAutomationRule.update({
+      where: { id: ruleId },
+      data: { enabled: false, configurationRevision: { increment: 1 } },
+    });
     await logAudit(
       {
         action: 'runbook.rule.paused',
@@ -559,6 +565,10 @@ export async function activateServiceRule(
       );
     const { getBindingReadiness } = await import('./binding-readiness');
     const readiness = await getBindingReadiness({ ...rule, enabled: true }, new Date(), tx);
+    const targetLimit = readiness.checks.find(
+      check => check.code === 'AUTOMATIC_POLICY_TARGET_LIMIT'
+    );
+    if (targetLimit) throw new RunbookDefinitionError(targetLimit.message);
     if (
       readiness.state === 'BLOCKED' ||
       readiness.state === 'UNKNOWN' ||
@@ -583,7 +593,10 @@ export async function activateServiceRule(
       throw new RunbookDefinitionError(
         'Request fresh successful local policy checks for every selected Agent before activation.'
       );
-    await tx.serviceAutomationRule.update({ where: { id: rule.id }, data: { enabled: true } });
+    await tx.serviceAutomationRule.update({
+      where: { id: rule.id },
+      data: { enabled: true, configurationRevision: { increment: 1 } },
+    });
     await logAudit(
       {
         action: 'runbook.rule.activated',

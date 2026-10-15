@@ -3523,6 +3523,7 @@ model RunbookInput {
 }
 
 model ServiceAutomationRule {
+  configurationRevision Int @default(1)
   detachedAt DateTime?
   policyChecks RunbookPolicyCheck[]
   name               String                 @default("")

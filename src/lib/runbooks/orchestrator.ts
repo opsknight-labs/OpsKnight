@@ -106,6 +106,7 @@ export interface RunbookExecutionRequest {
   inputValues?: Record<string, unknown>;
   triggeredByUserId?: string;
   triggerFingerprint?: string;
+  expectedRuleRevision?: number;
   triggerId?: string;
   sourceEventId?: string;
   expectedPlanDigest?: string;
@@ -135,6 +136,7 @@ const automaticExecutionSchema = z
     serviceId: z.string().cuid(),
     bindingId: z.string().cuid(),
     triggerId: z.string().cuid(),
+    expectedRuleRevision: z.number().int().positive().optional(),
     triggerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     sourceEventId: z.string().min(1).max(200),
     inputValues: z.record(z.string(), z.unknown()).optional(),
@@ -215,7 +217,9 @@ async function prepareRunbookExecution(
         !binding ||
         binding.mode !== 'AUTOMATIC' ||
         binding.versionStrategy !== 'PINNED' ||
-        binding.runbookVersionId !== input.runbookVersionId
+        binding.runbookVersionId !== input.runbookVersionId ||
+        (input.expectedRuleRevision !== undefined &&
+          binding.configurationRevision !== input.expectedRuleRevision)
       ) {
         throw new RunbookDefinitionError(
           'AUTOMATION_NOT_AUTHORIZED: An enabled AUTOMATIC binding pinned to this version is required.'

@@ -135,8 +135,9 @@ export default async function AutomationRulePage({
           <ActionForm action={activateRuleAction.bind(null, input.id, rule.id)}>
             <h3 className="font-semibold">Activate Automatic rule</h3>
             <p className="text-sm">
-              Activation requires current configuration and successful Agent policy evidence.
-              Execution approval gates still apply.
+              Activation requires current configuration and successful Agent policy evidence for
+              every eligible Agent (maximum 10 online Agents per target). Execution approval gates
+              still apply.
             </p>
             {rule.triggers.some(trigger => trigger.enabled && trigger.conditions.length === 0) && (
               <label className="flex items-start gap-2 text-sm">
