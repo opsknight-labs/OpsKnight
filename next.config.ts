@@ -37,14 +37,6 @@ const withPWA = withPWAInit({
       },
       {
         urlPattern: ({ request, url }: { request: Request; url: URL }) =>
-          request.headers.get('RSC') === '1' ||
-          url.searchParams.has('_rsc') ||
-          request.headers.get('Next-Router-Prefetch') === '1',
-        handler: 'NetworkOnly',
-        options: { cacheName: 'no-cache-rsc' },
-      },
-      {
-        urlPattern: ({ request, url }: { request: Request; url: URL }) =>
           request.mode === 'navigate' ||
           request.destination === 'document' ||
           url.pathname === '/' ||
