@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
-import { escapeHtml, sanitizeUrl } from '@/lib/email-components';
+import { getAuthenticationSecurityEmailTemplate } from '@/lib/authentication-email-template';
 import { lockControlActor, type ControlActor } from './actor';
 import { authenticationOrigin } from './origin';
 
@@ -153,6 +153,16 @@ export async function processAuthenticationAlerts() {
     orderBy: { createdAt: 'asc' },
     take: 20,
   });
+  if (!pending.length) return;
+  // One bounded metadata read per batch; event context never enters email payloads.
+  const events = new Map(
+    (
+      await prisma.emergencyAccessEvent.findMany({
+        where: { id: { in: pending.map(alert => alert.eventId) } },
+        select: { id: true, eventType: true, outcome: true, createdAt: true },
+      })
+    ).map(event => [event.id, event])
+  );
   for (const alert of pending) {
     const leaseToken = randomUUID();
     const claim = await prisma.authenticationAlert.updateMany({
@@ -192,8 +202,14 @@ export async function processAuthenticationAlerts() {
         continue;
       }
       const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
-      const reviewUrl = sanitizeUrl(`${await authenticationOrigin()}/settings/system?section=sso`);
-      if (!reviewUrl) throw new Error('Canonical security review URL unavailable.');
+      const template = getAuthenticationSecurityEmailTemplate({
+        title: alert.title,
+        message: alert.message,
+        eventId: alert.eventId,
+        createdAt: alert.createdAt,
+        origin: await authenticationOrigin(),
+        event: events.get(alert.eventId),
+      });
       const result = await enqueueCentralNotification(
         {
           category: 'SECURITY',
@@ -215,9 +231,7 @@ export async function processAuthenticationAlerts() {
           payload: {
             kind: 'EMAIL',
             to: recipient.email,
-            subject: alert.title,
-            text: `${alert.message}\nReview authentication: ${reviewUrl}`,
-            html: `<p>${escapeHtml(alert.message)}</p><p><a href="${escapeHtml(reviewUrl)}">Review authentication on your instance</a></p><p><a href="https://opsknight.com/">OpsKnight</a></p>`,
+            ...template,
           },
         },
         { dispatchImmediately: false }

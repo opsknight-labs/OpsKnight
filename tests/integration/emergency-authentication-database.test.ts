@@ -830,6 +830,17 @@ suite('independent emergency authentication with signed WebAuthn responses and P
     vi.mocked(enqueueCentralNotification).mockClear();
     await Promise.all([processAuthenticationAlerts(), processAuthenticationAlerts()]);
     expect(enqueueCentralNotification).toHaveBeenCalledTimes(recipients);
+    expect(enqueueCentralNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateKey: 'authentication-security-alert',
+        sourceId: event.id,
+        payload: expect.objectContaining({
+          html: expect.stringContaining('dm-info-card'),
+          text: expect.stringContaining(`Event reference: ${event.id}`),
+        }),
+      }),
+      { dispatchImmediately: false }
+    );
     const alerts = await prisma.authenticationAlert.findMany({ where: { eventId: event.id } });
     expect(
       alerts.every(

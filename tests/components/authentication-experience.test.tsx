@@ -269,7 +269,7 @@ describe('enterprise authentication experience', () => {
       ...fixtureDashboard,
       activeProvider: { ...configuration, hasClientSecret: true },
     });
-    if (issuer.includes('login.microsoftonline.com/')) {
+    if (new URL(issuer).hostname === 'login.microsoftonline.com') {
       expect(screen.getByLabelText(/Directory \(tenant\) ID/)).toHaveValue('tenant-one');
     } else {
       expect(screen.getByLabelText('Exact issuer', { exact: true })).toHaveValue(issuer);

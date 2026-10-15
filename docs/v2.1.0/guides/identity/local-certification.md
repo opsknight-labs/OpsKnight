@@ -556,3 +556,32 @@ or revocation can remove a row from later pages. Signed cursors bound ordering a
 filters; they do not freeze mutable records. Use First page for current activity.
 The audit view is immutable recorded emergency security-event evidence, not a complete
 ordinary-provider sign-in history.
+
+
+### Authentication security email presentation
+
+SSO, emergency-access and authentication-policy alerts use the incident email design
+system: responsive branded headers, semantic status badges, a recorded-event details
+card, a framed summary and a direct action to the authentication audit view. Emergency
+access use and degraded recovery coverage remain prominent security warnings even when
+the underlying operation succeeded. Other events distinguish verification, configuration
+changes, rejected attempts and credential changes. Plain-text messages carry the same
+recorded evidence and next steps. SSO invitations use the same components and explain
+verified first sign-in, approval expiry and renewal without offering password setup.
+
+Only event type, outcome and recorded timestamp are selected for presentation, in one
+bounded metadata query per delivery batch. Raw event context, claims, keys and passwords
+are never included. Links use the configured authoritative authentication origin;
+retained alerts without event metadata show a generic security notification rather
+than inventing an outcome. Existing delivery leases, retry generations and recipient
+authority checks remain in place. Subject lines now use readable event-specific titles
+prefixed with `[OpsKnight]`.
+
+Local synthetic mobile/light and desktop/dark previews:
+
+![Emergency access security email](../../assets/authentication-security-email-mobile.png)
+
+![SSO invitation email](../../assets/authentication-invitation-email-desktop-dark.png)
+
+Local Chromium rendering checks layout and dark-mode styling. Actual Outlook, Gmail
+and other mail-client rendering still depends on each client's HTML/CSS support.

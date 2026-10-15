@@ -62,3 +62,24 @@ Chromium, Firefox and WebKit; receipt source hashes match the workspace. The ini
 walkthrough run exposed test selector/disabled-action assumptions, corrected before
 this clean run. New remote CI must finish on the follow-up commit; live tenants and
 physical keys remain pending as previously scoped.
+
+
+## SSO email consistency and CI follow-up
+
+- Resolved both original bot threads with the activation and replica mismatch fixes
+  and their regression evidence from `005c0b553`.
+- Replaced the test's URL substring classification with parsed hostname equality,
+  addressing the new CodeQL finding without disabling or suppressing the check.
+- Authentication security notifications and SSO invitations now use the shared incident
+  email components, readable event-specific subjects, status semantics, recorded UTC
+  evidence and next steps. Emergency access use remains a security warning even when
+  the sign-in succeeds. Raw event context is never selected for email rendering.
+- The delivery worker loads event metadata once for its bounded 20-alert batch and
+  preserves leased delivery, recipient authority, deduplication and retry generations.
+- Improved shared dark-mode label contrast and footer brand visibility; committed two
+  synthetic example screenshots. Eight local Chromium previews passed mobile/desktop
+  overflow checks in light and dark modes. This is not mail-client certification.
+- Verification: 62 focused email/template/authentication tests and 129 PostgreSQL
+  authentication/delivery regressions passed; TypeScript and modified-file lint passed
+  with zero warnings. The previous remote database failure is green on `005c0b553`;
+  new remote checks must rerun after publication of these email and CodeQL changes.
