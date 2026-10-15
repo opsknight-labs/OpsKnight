@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DetailTabs from '@/components/ui/DetailTabs';
 const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -45,4 +45,28 @@ it('honors a cancelled settings navigation guard before navigating', () => {
   } finally {
     window.removeEventListener('opsknight:settings-navigation', guard);
   }
+});
+
+it('navigates once for a real pointer sequence and repeated selection while navigation is pending', async () => {
+  render(<DetailTabs tabs={tabs} navigationMode="server" />);
+  const tab = screen.getByRole('tab', { name: 'Runbooks' });
+  fireEvent.pointerDown(tab, { button: 0, pointerType: 'mouse' });
+  fireEvent.mouseDown(tab, { button: 0 });
+  fireEvent.pointerUp(tab, { button: 0, pointerType: 'mouse' });
+  fireEvent.click(tab);
+  fireEvent.click(tab);
+  expect(navigation.replace).toHaveBeenCalledTimes(1);
+});
+it('supports keyboard tab activation without duplicate server navigation', async () => {
+  render(<DetailTabs tabs={tabs} navigationMode="server" />);
+  const first = screen.getByRole('tab', { name: 'Overview' });
+  act(() => first.focus());
+  fireEvent.keyDown(first, { key: 'ArrowRight' });
+  const next = screen.getByRole('tab', { name: 'Runbooks' });
+  act(() => next.focus());
+  fireEvent.keyDown(next, { key: 'Enter' });
+  await waitFor(() =>
+    expect(screen.getByRole('tab', { name: 'Runbooks' })).toHaveAttribute('aria-selected', 'true')
+  );
+  expect(navigation.replace).toHaveBeenCalledTimes(1);
 });

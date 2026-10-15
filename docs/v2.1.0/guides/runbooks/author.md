@@ -191,3 +191,17 @@ Automatic policy certification supports **1–100 eligible online Agents per tar
 Rule configuration saves increment a monotonic configuration revision. Incident evaluation verifies that revision, mode, selected publication and trigger revision under the workflow lock before recording a suggestion. A change to mode, version, inputs or target invalidates a match read before the edit committed.
 
 Use **Rule history → Archived rules** on the service Runbooks tab to search detached rules by rule or workflow name. Historical configuration and execution links remain readable; archived rules have no dispatch controls. The rule detail page shows Configure → Validate → Activate → Monitor, including the number of Agents still awaiting valid policy evidence.
+
+## Concurrent rule changes and pausing
+
+Configuration and trigger forms carry the rule revision displayed when the form opened.
+If another administrator saves, pauses, detaches or activates the rule first, a stale
+save is rejected. Reload the page, review the current configuration, and apply your
+changes again. A stale save does not overwrite the other administrator's work.
+
+Pause and execution preparation serialize at the database transaction boundary.
+If Pause obtains the lock first, a waiting start rechecks the disabled rule and
+creates no execution. If execution preparation obtains the lock first, that
+execution may commit before Pause completes. Pause prevents subsequent starts;
+it does not cancel an execution already created. Cancel that execution separately
+when appropriate. Trigger suggestions use the same rule boundary and revision checks.

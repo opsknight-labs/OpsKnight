@@ -502,6 +502,7 @@ export async function run(options: RunAgentOptions = {}) {
   };
 
   let publishingHealth = false;
+  let reportedHealthError: string | null = null;
   const publishHealth = async () => {
     if (publishingHealth) return;
     publishingHealth = true;
@@ -542,8 +543,13 @@ export async function run(options: RunAgentOptions = {}) {
         { mode: 0o600 }
       );
       await rename(temporary, healthPath);
+      reportedHealthError = null;
     } catch (healthErr) {
-      storageError = `Agent data directory inaccessible: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}`;
+      storageError = `Agent health state inaccessible: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}`;
+      if (reportedHealthError !== storageError) {
+        process.stderr.write(`[Agent Health Error] ${storageError}\n`);
+        reportedHealthError = storageError;
+      }
     } finally {
       publishingHealth = false;
     }

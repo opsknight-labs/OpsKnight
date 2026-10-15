@@ -124,6 +124,12 @@ it('preserves the configured endpoint when Docker renders the Agent Swarm stack'
   const stack = YAML.parse(render.stdout);
   expect(stack.services['opsknight-agent'].environment.OPSKNIGHT_URL).toBe(endpoint);
   expect(stack.services['opsknight-agent'].deploy.restart_policy.condition).toBe('any');
+  expect(stack.services['opsknight-agent'].volumes).toContainEqual({
+    type: 'tmpfs',
+    target: '/tmp',
+    tmpfs: { size: 16777216 },
+  });
+  expect(stack.services['opsknight-agent'].tmpfs).toBeUndefined();
   // The endpoint must still be required, including when explicitly empty.
   const missing = spawnSync(
     'docker',

@@ -8,7 +8,11 @@ import {
   createTestUser,
   createTestIncident,
 } from '../helpers/test-db';
-import { attachRunbookAction } from '@/app/(app)/services/[id]/runbook-actions';
+import {
+  attachRunbookAction,
+  updateRunbookBindingAction,
+  configureRunbookTriggerAction,
+} from '@/app/(app)/services/[id]/runbook-actions';
 import {
   activateServiceRule,
   createServiceBinding,
@@ -461,6 +465,77 @@ suite('PR 864 review regression contracts', () => {
       spy.mockRestore();
       budget?.mockRestore();
     }
+  });
+  it('rejects simultaneous administrator saves from the same displayed rule revision', async () => {
+    const { service, workflow, old } = await fixture();
+    const rule = await testPrisma.serviceAutomationRule.create({
+      data: {
+        serviceId: service.id,
+        runbookId: workflow.id,
+        runbookVersionId: old.id,
+        versionStrategy: 'PINNED',
+        mode: 'SUGGESTED',
+        inputValues: { legacy: 'kept' },
+        enabled: false,
+      },
+    });
+    const saves = await Promise.allSettled(
+      ['First editor', 'Second editor'].map(name =>
+        updateServiceBinding(
+          service.id,
+          rule.id,
+          { name },
+          actor.id,
+          old.id,
+          rule.configurationRevision
+        )
+      )
+    );
+    expect(saves.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    const stale = saves.find(result => result.status === 'rejected');
+    expect(stale).toMatchObject({
+      status: 'rejected',
+      reason: expect.objectContaining({ userMessage: expect.stringContaining('Reload the page') }),
+    });
+    const saved = await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+      where: { id: rule.id },
+    });
+    expect(saved.configurationRevision).toBe(rule.configurationRevision + 1);
+    const form = new FormData();
+    for (const [key, value] of Object.entries({
+      ruleName: 'Stale UI editor',
+      enabled: 'false',
+      mode: 'SUGGESTED',
+      versionStrategy: 'PINNED',
+      runbookVersionId: old.id,
+      expectedVersionId: old.id,
+      expectedConfigurationRevision: String(rule.configurationRevision),
+      agentSelector: '{}',
+      executionTarget: 'none',
+      'input:legacy': 'stale',
+    }))
+      form.set(key, value);
+    expect(await updateRunbookBindingAction(service.id, rule.id, form)).toMatchObject({
+      error: expect.stringContaining('Reload the page'),
+    });
+    expect(await configureRunbookTriggerAction(service.id, rule.id, form)).toMatchObject({
+      error: expect.stringContaining('Reload the page'),
+    });
+    expect(
+      (await testPrisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } }))
+        .inputValues
+    ).toEqual({ legacy: 'kept' });
+
+    await expect(
+      replaceBindingTrigger(
+        service.id,
+        rule.id,
+        { event: 'INCIDENT_CREATED', conditionLogic: 'AND', enabled: true, conditions: [] },
+        actor.id,
+        rule.configurationRevision
+      )
+    ).rejects.toThrow('Reload the page');
+    expect(await testPrisma.runbookTrigger.count({ where: { bindingId: rule.id } })).toBe(0);
   });
   it('explains and blocks Automatic policy certification above 100 online Agents', async () => {
     const { service, workflow, old } = await fixture();

@@ -189,6 +189,9 @@ async function prepareRunbookExecution(
       include: { publishedVersion: true },
     });
     if (!runbook) throw new RunbookDefinitionError('Runbook not found or archived.');
+    // Retain the rule lock through execution creation, fencing pause/edit/detach.
+    if (input.bindingId)
+      await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${input.bindingId} AND "runbookId" = ${input.runbookId} FOR SHARE`;
     const binding = input.bindingId
       ? await tx.serviceAutomationRule.findFirst({
           where: {

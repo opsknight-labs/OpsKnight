@@ -871,9 +871,15 @@ export default function ServiceRunbooks({
                             </div>
                           )}
                           <ActionForm
+                            key={`configuration-${binding.id}-${binding.configurationRevision}`}
                             action={updateRunbookBindingAction.bind(null, serviceId, binding.id)}
                             className="grid gap-3 lg:grid-cols-4"
                           >
+                            <input
+                              type="hidden"
+                              name="expectedConfigurationRevision"
+                              value={binding.configurationRevision}
+                            />
                             <RunbookBindingVersionInputs
                               initialMode={binding.mode}
                               runbookId={binding.runbookId}
@@ -946,9 +952,15 @@ export default function ServiceRunbooks({
                             label="Detach Runbook"
                           />
                           <ActionForm
+                            key={`trigger-${binding.id}-${binding.configurationRevision}`}
                             action={configureRunbookTriggerAction.bind(null, serviceId, binding.id)}
                             className="mt-4 grid gap-3 border-t pt-4 lg:grid-cols-3"
                           >
+                            <input
+                              type="hidden"
+                              name="expectedConfigurationRevision"
+                              value={binding.configurationRevision}
+                            />
                             <Field label="Trigger event">
                               <FormSelect
                                 name="event"

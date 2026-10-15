@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-non-literal-fs-filename, security/detect-object-injection -- Fixture-owned temporary paths and enumerated deployment methods; no external path or method input. */
 import type { Prisma } from '@prisma/client';
-import { spawn, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,6 +11,7 @@ import { computeDefinitionChecksum, parseRunbookDefinition } from '@/lib/runbook
 import { previewRunbookExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
 import { testPrisma, createTestService } from './test-db';
 
+import { runFleetCommand as script } from './runbook-fleet-command';
 const run = promisify(execFile);
 async function until(check: () => Promise<boolean>, description: string) {
   const deadline = Date.now() + 120_000;
@@ -19,29 +20,6 @@ async function until(check: () => Promise<boolean>, description: string) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   throw new Error(`Fleet certification timed out: ${description}`);
-}
-async function script(text: string, input: string, env: NodeJS.ProcessEnv) {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn('bash', ['-c', text], {
-      env,
-      timeout: 180_000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    let output = '';
-    child.stdout.on('data', data => {
-      output = (output + data).slice(-8000);
-    });
-    child.stderr.on('data', data => {
-      output = (output + data).slice(-8000);
-    });
-    child.stdin.end(input);
-    child.on('error', reject);
-    child.on('exit', code =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`Generated fleet command failed (${code}): ${output}`))
-    );
-  });
 }
 /** Opt-in, disposable cluster only. The production UI and this fixture use the same generator. */
 export async function smokeAgentFleet(
@@ -124,6 +102,60 @@ export async function smokeAgentFleet(
             })) === 2,
           `${platform} both online`
         );
+        const assertSwarmHealth = async () => {
+          if (platform !== 'swarm') return;
+          for (const identity of names) {
+            const containers = await run('docker', [
+              'ps',
+              '-q',
+              '--filter',
+              `label=com.docker.swarm.service.name=${identity.name}_opsknight-agent`,
+            ]);
+            const container = containers.stdout.trim();
+            if (!container || container.includes('\n'))
+              throw new Error('Expected one running Swarm Agent task.');
+            const mounts = await run('docker', [
+              'inspect',
+              '--format',
+              '{{json .HostConfig.Mounts}}',
+              container,
+            ]);
+            const parsed = JSON.parse(mounts.stdout) as Array<{ Type: string; Target: string }>;
+            if (!parsed.some(mount => mount.Type === 'tmpfs' && mount.Target === '/tmp'))
+              throw new Error('Swarm Agent /tmp must be an explicit writable tmpfs mount.');
+            await until(async () => {
+              try {
+                await run(
+                  'docker',
+                  [
+                    'exec',
+                    container,
+                    'node',
+                    '/usr/local/bin/opsknight-agent-healthcheck.mjs',
+                    'readiness',
+                  ],
+                  { timeout: 5000 }
+                );
+                return true;
+              } catch {
+                return false;
+              }
+            }, 'Swarm health file exists, is fresh and is ready before convergence');
+            // Liveness remains a local progress check; readiness above also verifies the heartbeat.
+            await run(
+              'docker',
+              [
+                'exec',
+                container,
+                'node',
+                '/usr/local/bin/opsknight-agent-healthcheck.mjs',
+                'liveness',
+              ],
+              { timeout: 5000 }
+            );
+          }
+        };
+        await assertSwarmHealth();
         const service = await createTestService(`Fleet ${platform}`);
         const definition = parseRunbookDefinition({
           steps: [
@@ -204,6 +236,7 @@ export async function smokeAgentFleet(
           });
           await script(commands[platform], '', env);
         }
+        await assertSwarmHealth();
         if (platform === 'compose')
           await run(
             'docker',
@@ -238,6 +271,7 @@ export async function smokeAgentFleet(
             ).status === 'ONLINE',
           `${platform} restarted identity`
         );
+        await assertSwarmHealth();
         await runFor(0);
         if (platform === 'compose')
           await run(

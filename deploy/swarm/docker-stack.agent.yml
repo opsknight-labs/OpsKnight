@@ -16,9 +16,13 @@ services:
         target: /etc/opsknight-agent/policy.json
     volumes:
       - opsknight_agent_data:/var/lib/opsknight-agent
+      # Swarm converts volumes into Mounts; the separate tmpfs field is ignored.
+      # Engine tmpfs mounts default to mode 1777 and noexec/nosuid/nodev.
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 16777216
     read_only: true
-    tmpfs:
-      - /tmp:size=16m,mode=1777,noexec,nosuid
     networks:
       - opsknight
     deploy:

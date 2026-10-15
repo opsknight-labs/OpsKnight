@@ -1,5 +1,5 @@
 /* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma, RunbookInputType } from '@prisma/client';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -10,7 +10,12 @@ import {
   computeTriggerFingerprint,
   parseRunbookDefinition,
 } from '@/lib/runbooks/definition';
-import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
+import * as ruleLocks from '@/lib/runbooks/locking';
+import {
+  pauseServiceRule,
+  createServiceBinding,
+  updateServiceBinding,
+} from '@/lib/runbooks/bindings';
 import {
   advanceExecution,
   startRunbookExecution as startAuthorizedExecution,
@@ -202,6 +207,106 @@ async function createAgentTarget(
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase(), 30000);
   afterAll(async () => testPrisma.$disconnect());
+
+  it.each(['pause', 'start'] as const)(
+    'serializes pause against Automatic start when %s locks first',
+    async winner => {
+      const target = await createAgentTarget({
+        steps: [
+          {
+            key: 'wait',
+            name: 'Wait',
+            type: 'WAIT',
+            riskClass: 'READ_ONLY',
+            config: { durationSeconds: 0 },
+          },
+        ],
+      });
+      const incident = await createTestIncident('Pause race', target.service.id);
+      const trigger = await testPrisma.runbookTrigger.create({
+        data: { bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
+      });
+      const sourceEventId = crypto.randomUUID();
+      const request = {
+        runbookId: target.runbook.id,
+        runbookVersionId: target.version.id,
+        serviceId: target.service.id,
+        bindingId: target.binding.id,
+        incidentId: incident.id,
+        triggerId: trigger.id,
+        expectedRuleRevision: target.binding.configurationRevision,
+        sourceEventId,
+        triggerFingerprint: computeTriggerFingerprint({
+          sourceEventId,
+          bindingId: target.binding.id,
+          runbookVersionId: target.version.id,
+        }),
+      };
+      let release!: () => void;
+      let acquired!: () => void;
+      const gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const locked = new Promise<void>(resolve => {
+        acquired = resolve;
+      });
+      const originalShare = ruleLocks.lockRunbookForShare;
+      const originalUpdate = ruleLocks.lockServiceRuleForUpdate;
+      const spy =
+        winner === 'pause'
+          ? vi
+              .spyOn(ruleLocks, 'lockServiceRuleForUpdate')
+              .mockImplementationOnce(async (...args) => {
+                await originalUpdate(...args);
+                acquired();
+                await gate;
+              })
+          : vi.spyOn(ruleLocks, 'lockRunbookForShare').mockImplementationOnce(async (...args) => {
+              const result = await originalShare(...args);
+              acquired();
+              await gate;
+              return result;
+            });
+      const start = () => startTriggeredRunbookExecution(request);
+      const pause = () => pauseServiceRule(target.service.id, target.binding.id, target.actor.id);
+      try {
+        const first = winner === 'pause' ? pause() : start();
+        await locked;
+        const second = winner === 'pause' ? start() : pause();
+        // Attach rejection handling before releasing the deliberately held lock.
+        const settled = Promise.allSettled([first, second]);
+        let blocked = false;
+        const deadline = Date.now() + 3000;
+        while (Date.now() < deadline) {
+          const [row] = await testPrisma.$queryRaw<
+            { count: bigint }[]
+          >`SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%Runbook%'`;
+          if (Number(row.count) > 0) {
+            blocked = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        release();
+        const results = await settled;
+        expect(blocked).toBe(true);
+        expect(results[0].status).toBe('fulfilled');
+        expect(results[1].status).toBe(winner === 'pause' ? 'rejected' : 'fulfilled');
+        expect(await testPrisma.runbookExecution.count()).toBe(winner === 'pause' ? 0 : 1);
+        expect(
+          (
+            await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+              where: { id: target.binding.id },
+            })
+          ).enabled
+        ).toBe(false);
+        await expect(start()).rejects.toThrow(/boundary|AUTOMATION_NOT_AUTHORIZED/);
+      } finally {
+        release();
+        spy.mockRestore();
+      }
+    }
+  );
 
   it('previews without creating work and executes only an unchanged plan', async () => {
     const { runbook, version } = await createPublishedRunbook({

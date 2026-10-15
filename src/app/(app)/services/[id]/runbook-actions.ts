@@ -181,7 +181,8 @@ async function updateRunbookBinding(serviceId: string, bindingId: string, formDa
       idSchema.parse(bindingId),
       parsed,
       actor.id,
-      expectedVersionId
+      expectedVersionId,
+      z.coerce.number().int().positive().parse(formData.get('expectedConfigurationRevision'))
     );
   } catch (error) {
     if (error instanceof RunbookError) return { error: error.userMessage };
@@ -220,17 +221,23 @@ export async function configureRunbookTriggerAction(
           : rawValue;
     return [{ field, operator, value, sequence }];
   });
-  await replaceBindingTrigger(
-    serviceId,
-    idSchema.parse(bindingId),
-    {
-      event: String(formData.get('event') ?? 'INCIDENT_CREATED') as 'INCIDENT_CREATED',
-      conditionLogic: z.enum(['AND', 'OR']).parse(formData.get('conditionLogic') ?? 'AND'),
-      enabled: true,
-      conditions,
-    },
-    actor.id
-  );
+  try {
+    await replaceBindingTrigger(
+      serviceId,
+      idSchema.parse(bindingId),
+      {
+        event: String(formData.get('event') ?? 'INCIDENT_CREATED') as 'INCIDENT_CREATED',
+        conditionLogic: z.enum(['AND', 'OR']).parse(formData.get('conditionLogic') ?? 'AND'),
+        enabled: true,
+        conditions,
+      },
+      actor.id,
+      z.coerce.number().int().positive().parse(formData.get('expectedConfigurationRevision'))
+    );
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
   revalidatePath(`/services/${serviceId}`);
 }
 

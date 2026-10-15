@@ -98,6 +98,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
           try {
             const created = await prisma.$transaction(async tx => {
               await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
+              await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${binding.id} AND "runbookId" = ${binding.runbookId} FOR SHARE`;
               // A detached/paused rule may have been read before its archival transaction committed.
               if (
                 !(await tx.serviceAutomationRule.findFirst({
@@ -218,6 +219,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
             try {
               const createdSuggestion = await prisma.$transaction(async tx => {
                 await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
+                await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${binding.id} AND "runbookId" = ${binding.runbookId} FOR SHARE`;
                 // A detached/paused rule may have been read before its archival transaction committed.
                 if (
                   !(await tx.serviceAutomationRule.findFirst({

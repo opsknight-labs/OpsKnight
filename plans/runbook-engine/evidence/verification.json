@@ -403,5 +403,41 @@
     "credentials": "Swarm, Helm, Kustomize and native token tempfiles removed immediately on success, EXIT trap for failure; Compose token mount retained.",
     "swarm": "Previous any-exit restart-policy change did not resolve upgrade stall. No new convergence claim. Capture task/container health, signal logs and Docker runtime versions; rollback detection remains strict.",
     "validation": "391 targeted units (3 skipped), 13 later setup/cleanup checks (overlap), 4 backlog cases and pre-claim plan regression PASS; TypeScript/lint clean. Exact-head CI pending."
+  },
+  "currentAuditFollowup": {
+    "verifiedAt": "2026-10-15",
+    "auditedHead": "33ec9c64e7df4dd8ef35b5d8d4d22a168e59f2d0",
+    "fixes": {
+      "swarmHealth": "Use an explicit type: tmpfs volume at /tmp (16 MiB); the Swarm converter ignores the standalone tmpfs field. Keep liveness enabled and its existing deadlines. Log health-state publication failures.",
+      "liveFleetAssertions": "Inspect the running task mount and require fresh readiness/liveness before and after upgrades/restarts. Bound generated-command process groups, including stuck Bash cleanup children.",
+      "ruleConcurrency": "All configuration mutations acquire Runbook then rule locks; execution preparation and suggestions hold shared locks through creation. Pause cannot commit before an already-locked start finishes; a pause-first start revalidates and rejects.",
+      "optimisticEdits": "UI configuration and trigger actions require the displayed configuration revision. Stale saves return a reload/review conflict. Form instances refresh with the revision.",
+      "navigation": "Synchronously guard the selected/pending destination. Pointer, repeated selection and keyboard interaction regressions pass; shallow navigation and cancellation remain covered."
+    },
+    "localValidation": {
+      "targetedUnit": {
+        "passed": 317,
+        "skipped": 3,
+        "files": 39
+      },
+      "postgresql": {
+        "passed": 104,
+        "files": 4,
+        "includes": [
+          "Both deterministic pause/start orderings with observed PostgreSQL lock waits",
+          "Concurrent administrator saves and stale configuration/trigger UI actions",
+          "Existing execution safety, lifecycle and trigger revision regressions"
+        ]
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS: zero errors and warnings",
+      "fullApplicationUnit": {
+        "passed": 5935,
+        "skipped": 7,
+        "files": 788
+      }
+    },
+    "deploymentQualification": "PENDING final-head CI. Local Docker daemon unavailable; static rendering and probe unit coverage do not establish a live Swarm pass. Prior-head evidence passed Compose, Helm and Kustomize and failed Swarm.",
+    "releaseQualification": "Beta. Physical approved writes, physical HA/failover/partition/disk faults, official public installer distribution, sustained authenticated fleet capacity and human accessibility qualification remain NOT_TESTED."
   }
 }
