@@ -148,4 +148,42 @@ describe('ApiExplorerPanel Component', () => {
 
     expect(screen.queryByText('Retrieve paginated incidents with team boundary checks.')).toBeNull();
   });
+
+  it('toggles authentication header format between Bearer and X-API-Key', () => {
+    const { container } = render(
+      <ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />
+    );
+
+    // Expand GET /incidents (first matching endpoint)
+    const getIncidents = screen.getAllByText('/api/v2/incidents')[0];
+    fireEvent.click(getIncidents);
+
+    expect(container.textContent).toContain('Authorization: Bearer ok_live_your_api_key');
+
+    // Click on X-API-Key header button
+    const xApiKeyButton = screen.getByRole('button', { name: 'X-API-Key' });
+    fireEvent.click(xApiKeyButton);
+
+    expect(container.textContent).toContain('X-API-Key: ok_live_your_api_key');
+  });
+
+  it('resolves parameterized path templates to realistic sample IDs in code snippets', () => {
+    const { container } = render(
+      <ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />
+    );
+
+    // Expand DELETE /services/{id}
+    const deleteCard = screen.getByText('/api/v2/services/{id}');
+    fireEvent.click(deleteCard);
+
+    // Should resolve {id} to srv_123456 instead of raw {id}
+    expect(container.textContent).toContain('https://api.test.opsknight.local/api/v2/services/srv_123456');
+  });
+
+  it('renders gracefully without crashing when endpoints array is empty', () => {
+    render(<ApiExplorerPanel endpoints={[]} appUrl="https://api.test.opsknight.local" />);
+
+    expect(screen.getByText(/Showing/i)).toBeDefined();
+    expect(screen.getByText(/No matching REST endpoints found/i)).toBeDefined();
+  });
 });

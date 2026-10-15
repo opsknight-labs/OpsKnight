@@ -137,4 +137,20 @@ describe('ApiActivityPanel Component', () => {
     render(<ApiActivityPanel activities={mockActivities} nextCursor={null} filters={noFilters} />);
     expect(screen.getByText(/reads and rejected requests are not\s+recorded/i)).toBeDefined();
   });
+
+  it('displays total count when provided and indicates older results page', () => {
+    render(
+      <ApiActivityPanel
+        activities={mockActivities}
+        nextCursor="cursor-abc"
+        filters={{ ...noFilters, hasCursor: true }}
+        total={42}
+      />
+    );
+    expect(screen.getByText('Older results')).toBeDefined();
+    expect(screen.getByText('42')).toBeDefined();
+    expect(screen.getByText((_, el) => el?.tagName.toLowerCase() === 'span' && /Showing.*3.*of.*42.*events/i.test(el.textContent || ''))).toBeDefined();
+    expect(screen.getByRole('link', { name: /newest/i })).toBeDefined();
+    expect(screen.getByRole('link', { name: /older events/i })).toBeDefined();
+  });
 });
