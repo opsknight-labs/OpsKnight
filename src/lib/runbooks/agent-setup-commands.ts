@@ -75,7 +75,7 @@ export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
 
 docker compose -p ${deployment.name} -f deploy/compose/docker-compose.agent.yml -f deploy/compose/docker-compose.agent.enrollment-file.yml up -d opsknight-agent`;
   const swarm = `${captureToken}
-docker secret create ${deployment.enrollmentSecret} < "$agent_credential_dir/enrollment-token"
+docker secret create ${deployment.enrollmentSecret} - < "$agent_credential_dir/enrollment-token"
 export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
 export OPSKNIGHT_AGENT_ENROLLMENT_SECRET=${shellQuote(deployment.enrollmentSecret)}
 export OPSKNIGHT_AGENT_URL=${shellQuote(url)}

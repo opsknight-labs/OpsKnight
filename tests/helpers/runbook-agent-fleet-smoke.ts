@@ -107,6 +107,8 @@ export async function smokeAgentFleet(
               where: {
                 id: { in: enrollments.map(value => value.agent.id) },
                 status: 'ONLINE',
+                capabilities: { array_contains: ['RUNBOOK_LINUX_DIAGNOSTICS'] },
+                policyHash: { not: null },
                 lastHeartbeatAt: { gt: new Date(Date.now() - 90_000) },
               },
             })) === 2,

@@ -343,5 +343,27 @@
       "browser": "RETRYING_AFTER_LOCAL_STARTUP_TIMEOUT"
     },
     "remoteCI": "Requires fresh exact-head checks after push. Base head has failed unit invariants, fleet host validation, browser navigation and pooler startup checks; those failures are not passes."
+  },
+  "swarmSecretStdinAndArchiveSelectors": {
+    "baseRevision": "7d2eae36e49e403df6f36241af9ad3f94047ff3f",
+    "changes": [
+      "Docker secret creation explicitly selects stdin with a dash; shell regression checks token consumption and preservation of the next node prompt",
+      "Archived history browser assertions target visible controls/text while React retains hidden route copies",
+      "Live fleet waits for capability and policy-hash heartbeat evidence before creating jobs"
+    ],
+    "localChecks": {
+      "focusedUnitSuite": {
+        "status": "PASS",
+        "tests": 45,
+        "files": 3
+      },
+      "webkitArchivedHistory": {
+        "status": "PASS",
+        "repetitions": 3
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS"
+    },
+    "remoteCI": "Pending follow-up push; fleet smoke and exact-head browser/Swarm certification still required."
   }
 }

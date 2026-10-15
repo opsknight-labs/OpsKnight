@@ -64,3 +64,40 @@ it('renders disjoint Kubernetes selectors, identities, policy, Secrets and PVC r
   }
   expect([...inventories[0]].filter(name => inventories[1].has(name))).toEqual([]);
 });
+
+it('passes the token file through Docker secret stdin without consuming the node prompt', async () => {
+  const { agentSetupCommands } = await import('@/lib/runbooks/agent-setup-commands');
+  const commands = agentSetupCommands({
+    agentId: 'cmv90000000000000000000001',
+    image: 'fixture:verified',
+    url: 'https://ops.example.com',
+    policyPath: 'agent/policy.container.json',
+    executionPublicKey: 'public-pin',
+  });
+  const result = spawnSync(
+    'bash',
+    [
+      '-c',
+      `
+curl() { return 0; }
+docker() {
+  if [ "$1 $2" = 'secret create' ]; then
+    [ "$#" = 4 ] && [ "$4" = '-' ] || { printf 'secret file is required' >&2; return 1; }
+    [ "$(cat)" = 'fixture-token' ] || return 1
+    printf 'Token delivered through stdin\\n'
+  elif [ "$1 $2" = 'stack deploy' ]; then
+    [ "$OPSKNIGHT_AGENT_NODE_ID" = 'fixture-node' ] || return 1
+    printf 'Node prompt preserved\\n'
+  else return 1; fi
+}
+${commands.swarm}
+rm -rf "$agent_credential_dir"
+`,
+    ],
+    { encoding: 'utf8', input: 'fixture-token\nfixture-node\n' }
+  );
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain('Token delivered through stdin');
+  expect(result.stdout).toContain('Node prompt preserved');
+  expect(result.stdout).not.toContain('fixture-token');
+});
