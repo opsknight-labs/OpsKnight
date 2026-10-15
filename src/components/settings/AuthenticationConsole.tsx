@@ -52,6 +52,8 @@ function AuthenticationWorkspace() {
     refresh,
     pending,
     perform,
+    setMessage,
+    router,
     sectionClass,
     emergencyOnly,
   } = useAuthenticationWorkspace();
@@ -233,10 +235,22 @@ function AuthenticationWorkspace() {
                 })
               }
               onRevoke={async sessionId => {
-                return perform(async () => {
-                  await authenticationRequest({ action: 'revokeSession', sessionId });
+                let redirecting = false;
+                const success = await perform(async () => {
+                  const result = await authenticationRequest<{ revokedCurrentSession: boolean }>({
+                    action: 'revokeSession',
+                    sessionId,
+                  });
+                  if (result.revokedCurrentSession) {
+                    redirecting = true;
+                    setMessage('Your session was revoked successfully. Sign in again to continue.');
+                    router.replace('/login?sessionRevoked=1');
+                    return;
+                  }
+                  setMessage('Session revoked successfully.');
                   await refresh();
                 });
+                return success && redirecting ? 'redirecting' : success;
               }}
             />
           </DetailTabContent>

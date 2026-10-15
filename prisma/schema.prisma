@@ -1910,6 +1910,7 @@ model UserDevice {
   updatedAt        DateTime  @updatedAt
   sessionExpiresAt DateTime?
   sessionPolicyVersion Int?
+  sessionDiagnosticProjectedAt DateTime?
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])

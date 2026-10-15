@@ -535,10 +535,18 @@ The installer builds indexes concurrently, repairs invalid interrupted index bui
 and verifies index validity. It then projects historical session metadata in transactions
 of at most 250 rows, with a 250 ms lock timeout, two-second statement timeout,
 `SKIP LOCKED`, and a pause between batches. Already projected rows are not rewritten.
-Original session metadata and activity timestamps remain unchanged. Locked rows can
-remain unprojected until a later run; rerun the idempotent installer after contention
-subsides. Missing historical expiry is shown conservatively as expired until projected;
-authorization still verifies original metadata independently.
+Original session metadata and activity timestamps remain unchanged. An explicit
+`sessionDiagnosticProjectedAt` marker records completion even when historical metadata
+legitimately contains no policy version or expiry. New session registrations populate
+this marker immediately. Up to ten reconciliation passes revisit skipped locks, with
+500 ms pauses and a 15-minute backfill deadline. Persistent contention makes preparation
+fail; it never reports success while historical work remains.
+
+Migration-skipping replicas wait for all diagnostic indexes to be valid and for the
+indexed pending-projection check to be empty. Session Diagnostics also rejects reads
+while projection is incomplete, rather than classifying unfinished historical rows.
+Authentication continues to validate original session metadata independently. Retry a
+failed preparation after contention subsides; completed rows are not rewritten.
 
 This migration is being revised before its first published release. Recreate only owned
 disposable preview/test databases that applied the earlier PR migration. Never reset a
@@ -585,3 +593,13 @@ Local synthetic mobile/light and desktop/dark previews:
 
 Local Chromium rendering checks layout and dark-mode styling. Actual Outlook, Gmail
 and other mail-client rendering still depends on each client's HTML/CSS support.
+
+
+Self-session revocation returns an explicit backend disposition. The authentication
+workspace skips protected summary and diagnostics refreshes, redirects to login, and
+displays a successful revocation notice. Revoking another session retains the ordinary
+refresh path. Browser certification covers both across Chromium, Firefox and WebKit.
+
+Production builds bundle the same Manrope and Playfair Display Latin variable fonts
+under `src/app/fonts`, including their SIL Open Font License notices. Certification
+no longer depends on a Google font download succeeding during the build.

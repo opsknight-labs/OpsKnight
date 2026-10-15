@@ -66,41 +66,54 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN RETURN NULL;
 END;
 $$;`);
-  let after = '';
   let total = 0;
-  while (true) {
-    const rows = await prisma.$transaction(
-      async tx => {
-        await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '250ms'");
-        await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '2s'");
-        return tx.$queryRawUnsafe(
-          `WITH batch AS (
-        SELECT id FROM "UserDevice" WHERE id > $1 AND "deviceId" LIKE 'session:%'
-          AND ("sessionPolicyVersion" IS NULL OR "sessionExpiresAt" IS NULL)
-        ORDER BY id LIMIT 250 FOR UPDATE SKIP LOCKED
-      ), changed AS (UPDATE "UserDevice" d SET
-        "sessionPolicyVersion" = COALESCE(d."sessionPolicyVersion", pg_temp.auth_diagnostic_version(d.token)),
-        "sessionExpiresAt" = COALESCE(d."sessionExpiresAt", pg_temp.auth_diagnostic_expiry(d.token))
-      FROM batch WHERE d.id = batch.id
-        AND (d."sessionPolicyVersion" IS DISTINCT FROM COALESCE(d."sessionPolicyVersion", pg_temp.auth_diagnostic_version(d.token))
-          OR d."sessionExpiresAt" IS DISTINCT FROM COALESCE(d."sessionExpiresAt", pg_temp.auth_diagnostic_expiry(d.token)))
-        RETURNING d.id)
-      SELECT id FROM batch`,
-          after
-        );
-      },
-      { timeout: 5000 }
-    );
-    if (!rows.length) break;
-    after = rows
-      .map(row => row.id)
-      .sort()
-      .at(-1);
-    total += rows.length;
-    await new Promise(resolve => setTimeout(resolve, 25));
+  const deadline = Date.now() + 15 * 60 * 1000;
+  for (let pass = 0; pass < 10; pass++) {
+    let after = '';
+    while (true) {
+      if (Date.now() >= deadline)
+        throw new Error('Diagnostic backfill deadline exceeded; readiness remains blocked.');
+      const rows = await prisma.$transaction(
+        async tx => {
+          await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '250ms'");
+          await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '2s'");
+          return tx.$queryRawUnsafe(
+            `WITH batch AS (
+          SELECT id FROM "UserDevice" WHERE id > $1 AND "deviceId" LIKE 'session:%'
+            AND "sessionDiagnosticProjectedAt" IS NULL
+          ORDER BY id LIMIT 250 FOR UPDATE SKIP LOCKED
+        ) UPDATE "UserDevice" d SET
+          "sessionPolicyVersion" = COALESCE(d."sessionPolicyVersion", pg_temp.auth_diagnostic_version(d.token)),
+          "sessionExpiresAt" = COALESCE(d."sessionExpiresAt", pg_temp.auth_diagnostic_expiry(d.token)),
+          "sessionDiagnosticProjectedAt" = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
+        FROM batch WHERE d.id = batch.id RETURNING d.id`,
+            after
+          );
+        },
+        { timeout: 5000 }
+      );
+      if (!rows.length) break;
+      after = rows
+        .map(row => row.id)
+        .sort()
+        .at(-1);
+      total += rows.length;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    const [remaining] = await prisma.$queryRawUnsafe(`SELECT EXISTS (
+      SELECT 1 FROM "UserDevice" WHERE "deviceId" LIKE 'session:%' AND "sessionDiagnosticProjectedAt" IS NULL
+    ) AS pending`);
+    if (!remaining.pending) {
+      console.log(
+        `Authentication diagnostic projection complete: ${total} rows processed across ${pass + 1} pass(es).`
+      );
+      return;
+    }
+    console.log('Historical sessions remain locked or were added during preparation; reconciling.');
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
-  console.log(
-    `Authentication diagnostic projection: ${total} rows examined in bounded batches. Locked rows are retried on the next run.`
+  throw new Error(
+    'Historical session projection is incomplete after bounded reconciliation; readiness remains blocked. Retry after contention subsides.'
   );
 }
 
@@ -136,6 +149,11 @@ async function main() {
     await ensureIndex(
       'AuthenticationReplicaObservation_page_idx',
       'CREATE INDEX CONCURRENTLY IF NOT EXISTS "AuthenticationReplicaObservation_page_idx" ON "AuthenticationReplicaObservation" ("lastSeenAt",id)'
+    );
+    await ensureIndex(
+      'UserDevice_diagnostic_projection_pending_idx',
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "UserDevice_diagnostic_projection_pending_idx"
+       ON "UserDevice" (id) WHERE "deviceId" LIKE 'session:%' AND "sessionDiagnosticProjectedAt" IS NULL`
     );
     await backfill();
   } finally {

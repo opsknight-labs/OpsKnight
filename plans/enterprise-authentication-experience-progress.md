@@ -83,3 +83,40 @@ physical keys remain pending as previously scoped.
   authentication/delivery regressions passed; TypeScript and modified-file lint passed
   with zero warnings. The previous remote database failure is green on `005c0b553`;
   new remote checks must rerun after publication of these email and CodeQL changes.
+
+
+## Latest deep review: revocation and preparation completion
+
+- Self-revocation is identified in the backend by the exact session capability and
+  user, while the API returns only a boolean disposition. The workspace and diagnostic
+  dialog skip both protected refresh paths on self-revocation and show a success notice
+  on login. Other-session revocation retains normal diagnostics refresh.
+- Added `sessionDiagnosticProjectedAt` in a new additive migration. New registrations
+  and expiry synchronizations populate it. Historical projection marks rows even when
+  metadata legitimately lacks a version or expiry; no endless nullable-field scan.
+- Preparation reconciles skipped locks across up to ten passes, with bounded per-batch
+  lock/statement timeouts and a 15-minute deadline. Completion explicitly requires no
+  unprocessed session rows; persistent contention exits nonzero. A real PostgreSQL test
+  holds a row across the initial scan and releases it after reconciliation starts.
+- Migration-skipping replicas require every diagnostic index and an empty pending-work
+  check. The pending-work partial index keeps that check bounded. Session diagnostics
+  fails temporarily while preparation is unfinished and excludes unprocessed rows.
+- CodeQL's URL substring finding is fixed in `3e6d40c50` and its analysis passed. Main's
+  retained August `sast` baseline caused the remaining missing-configuration warning.
+  The current complete CodeQL report is also published under that legacy identity;
+  no findings are filtered, analyses deleted or scans disabled. A regression verifies
+  the complete finding data is preserved while only report identity changes.
+- The remote emergency-browser job exposed a Google font download failure in next/font.
+  Bundled the same licensed Manrope/Playfair Display font assets and retained the existing
+  CSS variables, removing that build-time external dependency.
+
+Local verification: 91 focused component/session/deployment tests, 131 PostgreSQL
+regressions, 12 published-release upgrade/load tests, TypeScript and modified-file lint
+passed. Prisma validation passed; migration validation retains its 40 baseline warnings.
+Fresh production HTTPS browser certification passed 10 tests with two expected
+virtual-key skips and zero flakes, including self and other-user revocation across
+Chromium, Firefox and WebKit. Receipt source hashes match the workspace. Fresh remote
+CI results are tracked after publication. Ordinary
+sign-in audit expansion remains a future enhancement; the UI continues to disclose the
+current retained emergency/security-event history. Live IdP and physical-key checks
+remain external acceptance as previously agreed.

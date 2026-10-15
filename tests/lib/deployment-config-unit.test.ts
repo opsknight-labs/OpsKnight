@@ -203,12 +203,96 @@ describe('deployment configuration invariants', () => {
           rolled_back_at: null,
         },
       ])
-      .mockResolvedValueOnce(readiness.REQUIRED_INDEXES.map(name => ({ name, valid: true })));
+      .mockResolvedValueOnce(readiness.REQUIRED_INDEXES.map(name => ({ name, valid: true })))
+      .mockResolvedValueOnce([{ pending: false }]);
 
     expect(readiness.REQUIRED_INDEXES).not.toContain('idx_incident_next_sla_transition');
     await expect(
       readiness.readinessProblem({ $queryRawUnsafe: query }, expectedMigrations)
     ).resolves.toBeNull();
+  });
+
+  it('blocks migration-skipping replicas until diagnostic indexes and historical projections are complete', async () => {
+    const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
+      REQUIRED_INDEXES: string[];
+      readinessProblem: (
+        prisma: { $queryRawUnsafe: ReturnType<typeof vi.fn> },
+        expected: string[]
+      ) => Promise<string | null>;
+    };
+    expect(readiness.REQUIRED_INDEXES).toContain('UserDevice_diagnostic_projection_pending_idx');
+    const indexes = readiness.REQUIRED_INDEXES.map(name => ({ name, valid: true }));
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(indexes)
+      .mockResolvedValueOnce([{ pending: true }]);
+    await expect(readiness.readinessProblem({ $queryRawUnsafe: query }, [])).resolves.toContain(
+      'projection is not complete'
+    );
+    const missing = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(
+        indexes.filter(index => index.name !== 'UserDevice_diagnostic_activity_idx')
+      );
+    await expect(readiness.readinessProblem({ $queryRawUnsafe: missing }, [])).resolves.toContain(
+      'UserDevice_diagnostic_activity_idx'
+    );
+  });
+
+  it('preserves every CodeQL finding while reconciling the legacy scan identity', () => {
+    const workflow = YAML.parse(read('.github/workflows/security.yml')) as {
+      jobs: { sast: { steps: Array<{ name: string; run?: string }> } };
+    };
+    const step = workflow.jobs.sast.steps.find(
+      item => item.name === 'Map complete results to the legacy analysis identity'
+    );
+    expect(step?.run).toBeTruthy();
+    const script = step!.run!.split("node - <<'NODE'\n")[1].split('\nNODE')[0];
+    const directory = fs.mkdtempSync(
+      path.join(require('node:os').tmpdir(), 'opsknight-codeql-identity-')
+    );
+    const report = {
+      version: '2.1.0',
+      runs: [
+        {
+          tool: { driver: { name: 'CodeQL' } },
+          automationDetails: { id: '.github/workflows/security.yml:codeql/' },
+          results: [
+            {
+              ruleId: 'security/high-fixture',
+              level: 'error',
+              message: { text: 'Retain the full finding' },
+              locations: [
+                {
+                  physicalLocation: {
+                    artifactLocation: { uri: 'src/example.ts' },
+                    region: { startLine: 1 },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    try {
+      fs.mkdirSync(path.join(directory, 'codeql-results'));
+      const file = path.join(directory, 'codeql-results/javascript.sarif');
+      fs.writeFileSync(file, JSON.stringify(report));
+      const result = spawnSync(process.execPath, ['-e', script], {
+        cwd: directory,
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(0);
+      const legacy = JSON.parse(fs.readFileSync(file, 'utf8')) as typeof report;
+      expect(legacy.runs[0].results).toEqual(report.runs[0].results);
+      expect(legacy.runs[0].tool).toEqual(report.runs[0].tool);
+      expect(legacy.runs[0].automationDetails.id).toBe('.github/workflows/security.yml:sast/');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('does not allocate an unused standalone postgres PVC', () => {

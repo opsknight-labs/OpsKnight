@@ -21,6 +21,7 @@ type SearchParams = {
   callbackUrl?: string;
   error?: string;
   password?: string;
+  sessionRevoked?: string;
 };
 
 export default async function LoginPage({
@@ -101,6 +102,7 @@ export default async function LoginPage({
       defaultCallbackUrl={fallback}
       errorCode={errorCode}
       passwordSet={passwordSet}
+      sessionRevoked={awaitedSearchParams?.sessionRevoked === '1'}
       ssoError={ssoError}
       ssoEnabled={ssoEnabled}
       ssoProviderType={ssoCapability.providerType}

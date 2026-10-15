@@ -1,23 +1,25 @@
 import type { Metadata, Viewport } from 'next';
-import { Manrope, Playfair_Display } from 'next/font/google';
+import localFont from 'next/font/local';
 import '@/styles/index.css';
 import './layers.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import ServiceWorkerBootstrap from '@/components/pwa/ServiceWorkerBootstrap';
 
-const manrope = Manrope({
+// Bundle the same typefaces so builds do not depend on Google font downloads.
+const manrope = localFont({
+  src: './fonts/Manrope-latin.woff2',
   variable: '--font-manrope',
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+  weight: '200 800',
+  style: 'normal',
   display: 'swap',
 });
-
-const playfair = Playfair_Display({
+const playfair = localFont({
+  src: [
+    { path: './fonts/PlayfairDisplay-latin-normal.woff2', weight: '400 900', style: 'normal' },
+    { path: './fonts/PlayfairDisplay-latin-italic.woff2', weight: '400 900', style: 'italic' },
+  ],
   variable: '--font-serif',
-  subsets: ['latin'],
-  style: ['normal', 'italic'],
-  weight: ['400', '600', '700'],
   display: 'swap',
 });
 

@@ -304,6 +304,7 @@ export async function ensureRegisteredSession(input: {
                 ),
                 sessionExpiresAt: new Date(input.expiresAtSeconds * 1000),
                 sessionPolicyVersion: metadata.issuedUnderPolicyVersion ?? null,
+                sessionDiagnosticProjectedAt: new Date(),
               },
             });
           } catch (err) {
@@ -334,6 +335,7 @@ export async function ensureRegisteredSession(input: {
           ),
           platform: activePlatform(input.policy),
           sessionPolicyVersion: input.issuedUnderPolicyVersion ?? null,
+          sessionDiagnosticProjectedAt: new Date(),
           sessionExpiresAt:
             typeof input.expiresAtSeconds === 'number' && Number.isFinite(input.expiresAtSeconds)
               ? new Date(input.expiresAtSeconds * 1000)

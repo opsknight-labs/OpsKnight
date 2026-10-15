@@ -592,3 +592,70 @@ test('independent password recovery, one-time secret and rotation work across br
     await normal.close();
   }
 });
+
+test('revokes another user session and then signs out cleanly after self revocation', async ({
+  browser,
+}) => {
+  test.skip(!process.env.SSO_E2E_BASE_URL, 'Requires disposable authentication fixture.');
+  test.setTimeout(120000);
+  const origin = process.env.SSO_E2E_BASE_URL!;
+  const admin = await browser.newContext();
+  const other = await browser.newContext();
+  try {
+    const page = await admin.newPage();
+    const otherPage = await other.newPage();
+    for (const [target, email] of [
+      [otherPage, 'browser-secondary@example.test'],
+      [page, process.env.SSO_E2E_ADMIN_EMAIL!],
+    ] as const) {
+      await target.goto(`${origin}/login`);
+      await target.getByLabel('Email', { exact: true }).fill(email);
+      await target
+        .getByLabel('Password', { exact: true })
+        .fill(process.env.SSO_E2E_ADMIN_PASSWORD!);
+      await target.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await target.waitForURL(url => !url.pathname.startsWith('/login'));
+    }
+    await page.goto(`${origin}/settings/system?section=sso&authTab=diagnostics&authView=sessions`);
+    const search = page.getByRole('searchbox', {
+      name: /Search name, email or session record prefix/,
+    });
+    await search.fill('browser-secondary@example.test');
+    await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+    await page.getByRole('button', { name: 'View Browser Secondary', exact: true }).first().click();
+    await page
+      .getByRole('checkbox', { name: /registered session will lose access immediately/ })
+      .check();
+    await page.getByRole('button', { name: 'Confirm session revocation', exact: true }).click();
+    await expect(page.getByText('Session revoked successfully.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    const invalidated = await other.request.get(`${origin}/api/auth/session`);
+    expect((await invalidated.json())?.user?.id).toBeFalsy();
+    await search.fill(process.env.SSO_E2E_ADMIN_EMAIL!);
+    await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+    await page.getByRole('button', { name: 'View Browser Certifier', exact: true }).first().click();
+    await page
+      .getByRole('checkbox', { name: /registered session will lose access immediately/ })
+      .check();
+    const protectedReads: string[] = [];
+    page.on('request', request => {
+      if (
+        request.method() === 'GET' &&
+        new URL(request.url()).pathname.startsWith('/api/auth/control')
+      )
+        protectedReads.push(request.url());
+    });
+    await page.getByRole('button', { name: 'Confirm session revocation', exact: true }).click();
+    await page.waitForURL(
+      url => url.pathname === '/login' && url.searchParams.get('sessionRevoked') === '1'
+    );
+    await expect(
+      page.getByText('Your session was revoked successfully. Sign in again to continue.', {
+        exact: true,
+      })
+    ).toBeVisible();
+    expect(protectedReads).toHaveLength(0);
+  } finally {
+    await Promise.allSettled([admin.close(), other.close()]);
+  }
+});

@@ -73,7 +73,7 @@ export default function AuthenticationDiagnostics({
   >;
   pending: boolean;
   onRefresh: () => Promise<void>;
-  onRevoke: (sessionId: string) => Promise<void | boolean>;
+  onRevoke: (sessionId: string) => Promise<void | boolean | 'redirecting'>;
   onRetry: (alertId: string, expectedGeneration: number) => Promise<boolean>;
   onLoadHistory?: (
     status: NonNullable<Parameters<typeof authenticationAlertHistory>[0]>,
@@ -304,9 +304,12 @@ export default function AuthenticationDiagnostics({
           pending={pending}
           onClose={() => setSelected(null)}
           onAction={async item => {
-            const success = item.canRetry
+            const outcome = item.canRetry
               ? await onRetry(item.id, item.generation!)
-              : (await onRevoke(item.id)) !== false;
+              : await onRevoke(item.id);
+            // A self-revoked session must not make another protected diagnostics read.
+            if (outcome === 'redirecting') return true;
+            const success = outcome !== false;
             if (success) refresh();
             return success;
           }}

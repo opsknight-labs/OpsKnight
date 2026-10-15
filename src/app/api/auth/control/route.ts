@@ -299,8 +299,10 @@ export async function POST(request: NextRequest) {
         await retryAuthenticationAlert(actor, input.alertId, input.expectedGeneration);
         return json({ success: true });
       case 'revokeSession':
-        await revokeAuthenticationSession(actor, input.sessionId);
-        return json({ success: true });
+        return json({
+          success: true,
+          ...(await revokeAuthenticationSession(actor, input.sessionId)),
+        });
       case 'revoke':
         await revokeEmergencyCredential(actor, input.credentialId, input.compromised);
         return json({ success: true });

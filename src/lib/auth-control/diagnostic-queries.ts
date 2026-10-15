@@ -103,6 +103,10 @@ export async function authenticationDiagnosticPage(
       let rows: Row[];
       let items: DiagnosticItem[];
       if (query.view === 'sessions') {
+        const [projection] = await tx.$queryRaw<Array<{ pending: boolean }>>`SELECT EXISTS (
+          SELECT 1 FROM "UserDevice" WHERE "deviceId" LIKE 'session:%' AND "sessionDiagnosticProjectedAt" IS NULL
+        ) AS pending`;
+        if (projection.pending) throw new Error('Historical session preparation is incomplete.');
         const localAllowed = policy.passwordRecoveryUserId
           ? Prisma.sql`d."userId" = ${policy.passwordRecoveryUserId} AND ${Boolean(policy.passwordRecoveryExpiresAt && policy.passwordRecoveryExpiresAt > snapshot)}`
           : Prisma.sql`${policy.mode !== 'SSO_REQUIRED'}`;
@@ -126,7 +130,7 @@ export async function authenticationDiagnosticPage(
           u.email, u.name, ${sort} AS at, ${state} AS state,
           CASE WHEN d.platform IN ('session:OIDC','session:REVOKED:OIDC') THEN 'oidc' ELSE 'credentials' END AS method
         FROM "UserDevice" d JOIN "User" u ON u.id = d."userId"
-        WHERE d."deviceId" LIKE 'session:%' AND d."createdAt" <= ${to} AND d."updatedAt" <= ${snapshot}
+        WHERE d."deviceId" LIKE 'session:%' AND d."sessionDiagnosticProjectedAt" IS NOT NULL AND d."createdAt" <= ${to} AND d."updatedAt" <= ${snapshot}
           ${from ? Prisma.sql`AND d."createdAt" >= ${from}` : Prisma.empty}
           ${query.q ? Prisma.sql`AND (LOWER(u.email) LIKE ${prefix(query.q)} OR LOWER(u.name) LIKE ${prefix(query.q)} OR LOWER(d.id) LIKE ${prefix(query.q)})` : Prisma.empty}
           ${query.method !== 'all' ? (query.method === 'oidc' ? Prisma.sql`AND d.platform IN ('session:OIDC','session:REVOKED:OIDC')` : Prisma.sql`AND d.platform NOT IN ('session:OIDC','session:REVOKED:OIDC')`) : Prisma.empty}
