@@ -1,0 +1,3 @@
+# Upstream transitive vulnerability in braces <=3.0.3 with no upstream fix published yet
+CVE-2026-93687
+GHSA-vfj7-8cjw-p6xm
