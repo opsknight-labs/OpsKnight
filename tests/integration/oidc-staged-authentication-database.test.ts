@@ -767,12 +767,30 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
     expect(await prisma.oidcRevision.findUnique({ where: { id: staged1.revisionId } })).toBeNull();
 
     // Staged 2 still exists
-    expect(await prisma.oidcRevision.findUnique({ where: { id: staged2.revisionId } })).toBeTruthy();
+    expect(
+      await prisma.oidcRevision.findUnique({ where: { id: staged2.revisionId } })
+    ).toBeTruthy();
 
-    // Bulk cleanup deletes remaining unactivated staged revisions
-    const cleanupResult = await cleanupStagedRevisions(actor);
-    expect(cleanupResult.ok).toBe(true);
-    expect(cleanupResult.count).toBeGreaterThanOrEqual(1);
+    // A second delete of the same draft reports the conflict instead of failing obscurely.
+    await expect(deleteOidcRevision(actor, staged1.revisionId)).rejects.toThrow(
+      'already deleted in another session'
+    );
+
+    // Bulk cleanup deletes only the confirmed, still-eligible drafts.
+    const staged3 = await stageOidcRevision(actor, {
+      issuer: runtime.issuer,
+      clientId: 'test-delete-3',
+      clientSecret: 'test-secret',
+    });
+    const cleanupResult = await cleanupStagedRevisions(actor, [
+      staged2.revisionId,
+      staged1.revisionId,
+    ]);
+    expect(cleanupResult).toMatchObject({ ok: true, count: 1, skipped: 1 });
     expect(await prisma.oidcRevision.findUnique({ where: { id: staged2.revisionId } })).toBeNull();
+    // A draft created after the confirmation was shown is never swept up.
+    expect(
+      await prisma.oidcRevision.findUnique({ where: { id: staged3.revisionId } })
+    ).toBeTruthy();
   });
 });

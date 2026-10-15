@@ -2,7 +2,7 @@
 
 import { cloneElement, useId, type ReactElement } from 'react';
 import { Button, type ButtonProps } from '@/components/ui/shadcn/button';
-import { AlertCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight, ChevronDown } from 'lucide-react';
 import type { AuthenticationSection } from '@/lib/auth-control/dashboard';
 
 export type ActionBlocker = {
@@ -39,6 +39,11 @@ function getDefaultResolutionLabel(target: AuthenticationSection): string {
   }
 }
 
+/**
+ * Wraps a privileged action. When the action is unavailable the primary blocker and its
+ * resolution are shown inline (not in a hover tooltip), further blockers are one click away,
+ * and the disabled control is described by the same text for assistive technology.
+ */
 export default function AuthenticationActionGuard({
   availability,
   children,
@@ -49,48 +54,63 @@ export default function AuthenticationActionGuard({
   onResolve?: (target: AuthenticationSection) => void;
 }) {
   const id = useId();
+  const [primary, ...others] = availability.blockers;
+  // "Busy" is transient and self-explanatory; never present it as a requirement.
+  const actionable = primary && primary.code !== 'busy';
+
+  const resolution = (blocker: ActionBlocker) =>
+    blocker.resolutionTarget && onResolve ? (
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="h-auto p-0 text-xs font-semibold text-primary gap-1"
+        onClick={() => onResolve(blocker.resolutionTarget!)}
+      >
+        {blocker.resolutionLabel ?? getDefaultResolutionLabel(blocker.resolutionTarget)}
+        <ArrowRight className="h-3 w-3" aria-hidden />
+      </Button>
+    ) : null;
 
   return (
-    <div className="min-w-0 space-y-2.5">
+    <div className="min-w-0 space-y-2">
       {cloneElement(children, {
         disabled: !availability.allowed || children.props.disabled,
-        'aria-describedby': availability.blockers.length ? id : undefined,
+        'aria-describedby': actionable ? id : undefined,
       })}
 
-      {availability.blockers.length > 0 && (
-        <div
-          className="rounded-lg border border-amber-500/25 bg-amber-50/70 p-3 text-xs dark:border-amber-500/20 dark:bg-amber-950/20 space-y-2 shadow-2xs"
-          aria-label={`${availability.action} requirements`}
-        >
-          <div className="flex items-center gap-1.5 font-semibold text-amber-950 dark:text-amber-200">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span>Requirements to {availability.action.toLowerCase()}:</span>
+      {actionable && (
+        <div className="min-w-0 rounded-lg border border-amber-500/25 bg-amber-50/60 px-3 py-2 text-xs dark:border-amber-500/20 dark:bg-amber-950/20">
+          <div className="flex items-start gap-2">
+            <AlertCircle
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+              aria-hidden
+            />
+            <div className="min-w-0 space-y-1">
+              <p id={id} className="text-foreground/90 leading-relaxed">
+                {primary.message}
+              </p>
+              {resolution(primary)}
+            </div>
           </div>
-
-          <ul id={id} className="space-y-1.5 pl-5 list-disc marker:text-amber-500">
-            {availability.blockers.map(blocker => (
-              <li key={blocker.code} className="text-muted-foreground leading-relaxed">
-                <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span>{blocker.message}</span>
-                  {blocker.resolutionTarget && onResolve && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-6 px-2 text-[11px] font-medium text-primary hover:text-primary hover:bg-primary/10 border-primary/25 gap-1 shadow-none"
-                      onClick={() => onResolve(blocker.resolutionTarget!)}
-                    >
-                      <span>
-                        {blocker.resolutionLabel ??
-                          getDefaultResolutionLabel(blocker.resolutionTarget)}
-                      </span>
-                      <ArrowRight className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+          {others.length > 0 && (
+            <details className="group mt-1.5 pl-5">
+              <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground list-none inline-flex items-center gap-1">
+                <ChevronDown
+                  className="h-3 w-3 transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
+                {others.length} more {others.length === 1 ? 'requirement' : 'requirements'}
+              </summary>
+              <ul className="mt-1.5 space-y-1.5">
+                {others.map(blocker => (
+                  <li key={blocker.code} className="text-muted-foreground leading-relaxed">
+                    <span>{blocker.message}</span> {resolution(blocker)}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       )}
     </div>

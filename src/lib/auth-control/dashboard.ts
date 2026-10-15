@@ -9,20 +9,15 @@ import { storedProviderConfiguration } from './oidc-revisions';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
-import { type ControlActor, FRESH_AUTHENTICATION_MAX_AGE_MS } from './actor';
+import { type ControlActor, isAuthenticationFresh } from './actor';
 import { emergencyReadiness } from './emergency-management';
 import { findRevisionIdentity } from './identity';
 import { authenticationOrigin, recoveryOrigin } from './origin';
-import { getOidcLinkingApprovalState, type OidcLinkingState } from '@/lib/oidc-linking-approval';
-import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
+import { getActiveLinkingProvider, resolveOidcLinkingStatuses } from '@/lib/oidc-linking-status';
+import { evaluateOidcProof } from './proof-status';
 
 export type AuthenticationSection =
-  | 'overview'
-  | 'connection'
-  | 'access'
-  | 'policy'
-  | 'emergency'
-  | 'diagnostics';
+  'overview' | 'connection' | 'access' | 'policy' | 'emergency' | 'diagnostics';
 export async function authenticationDashboard(
   actor: ControlActor,
   section: AuthenticationSection = 'overview'
@@ -190,6 +185,37 @@ export async function authenticationDashboard(
     (activeParsed && !activeParsed.success) || editableRevisions.length !== revisions.length
   );
   const registeredSessions = sessions;
+  // Verification and authorship are resolved server-side so every badge reflects the same
+  // evaluation activation uses, and no client has to infer validity from a timestamp.
+  const principalIds = new Set<string>();
+  for (const revision of editableRevisions) {
+    if (revision.tests[0]) principalIds.add(revision.tests[0].adminUserId);
+    const [kind, id] = revision.createdBy.split(':');
+    if (kind === 'admin' && id) principalIds.add(id);
+  }
+  const [principals, linkingProvider] = await Promise.all([
+    principalIds.size
+      ? prisma.user.findMany({
+          where: { id: { in: [...principalIds] } },
+          select: { id: true, email: true, role: true, status: true, tokenVersion: true },
+        })
+      : Promise.resolve([]),
+    getActiveLinkingProvider(prisma),
+  ]);
+  const principalById = new Map(principals.map(principal => [principal.id, principal]));
+  const adminLinking = await resolveOidcLinkingStatuses(
+    prisma,
+    users.map(user => user.id),
+    linkingProvider
+  );
+  const now = new Date();
+  const authorLabel = (createdBy: string) => {
+    const [kind, id] = createdBy.split(':');
+    if (createdBy === 'MIGRATION') return 'Imported at upgrade';
+    if (kind === 'admin') return principalById.get(id)?.email ?? 'Former administrator';
+    if (kind === 'emergency' || kind === 'legacy') return 'Emergency recovery';
+    return 'System';
+  };
   return {
     section,
     effectiveSessionPolicy: getEnterpriseSessionPolicy({
@@ -197,7 +223,7 @@ export async function authenticationDashboard(
       sessionIdleTimeoutSeconds: active?.sessionIdleTimeoutSeconds,
     }),
     inheritedSessionPolicy: getEnterpriseSessionPolicy(),
-    freshAuthenticationRequired: Date.now() - actor.authenticatedAt >= FRESH_AUTHENTICATION_MAX_AGE_MS,
+    freshAuthenticationRequired: !isAuthenticationFresh(actor.authenticatedAt, actor.kind),
     originConflict: canonical.conflict,
     recoveryOrigin: pinnedOrigin,
     recoveryOriginPinned: Boolean(process.env.AUTH_RECOVERY_ORIGIN),
@@ -223,6 +249,15 @@ export async function authenticationDashboard(
       previousRevisionId: revision.previousRevisionId,
       testedAt: revision.tests[0]?.verifiedAt.toISOString() ?? null,
       testedAdminId: revision.tests[0]?.adminUserId ?? null,
+      createdByLabel: authorLabel(revision.createdBy),
+      verification: evaluateOidcProof(revision.tests[0], {
+        now,
+        origin: canonical.origin,
+        activeConfigVersion: active?.configVersion ?? 0,
+        administrator: revision.tests[0]
+          ? (principalById.get(revision.tests[0].adminUserId) ?? null)
+          : null,
+      }),
     })),
     emergencyAccounts: accounts.map(account => ({
       id: account.id,
@@ -252,6 +287,7 @@ export async function authenticationDashboard(
     users: users.map(user => ({
       ...user,
       issuers: user.oidcIdentities.map(identity => identity.issuer),
+      linkingState: adminLinking.get(user.id)?.state ?? 'not-approved',
       oidcIdentities: undefined,
     })),
     replicas: replicas.map(replica => ({
@@ -301,53 +337,24 @@ export async function searchAuthenticationUsers(
       roleSource: true,
       status: true,
       oidcIdentities: { select: { issuer: true }, take: 10 },
-      oidcLinkingApproval: {
-        select: {
-          id: true,
-          revokedAt: true,
-          consumedAt: true,
-          expiresAt: true,
-          providerConfigId: true,
-          issuerFingerprint: true,
-          configVersion: true,
-        },
-      },
     },
   });
-
-  const now = new Date();
-  const provider = await prisma.oidcConfig.findFirst({
-    orderBy: { updatedAt: 'desc' },
-    select: { id: true, issuer: true, clientId: true, configVersion: true, enabled: true },
-  });
-  const providerContext =
-    provider && provider.enabled && provider.issuer
-      ? {
-          providerConfigId: provider.id,
-          issuerFingerprint: oidcTrustFingerprint(provider.issuer, provider.clientId),
-          configVersion: provider.configVersion,
-        }
-      : null;
-
+  const page = users.slice(0, 25);
+  // One batched resolution per page; linking is scoped to the active provider trust boundary.
+  const statuses = await resolveOidcLinkingStatuses(
+    prisma,
+    page.map(user => user.id),
+    await getActiveLinkingProvider(prisma)
+  );
   return {
-    users: users.slice(0, 25).map(user => {
-      let linkingState: OidcLinkingState = 'not-approved';
-      if (user.oidcIdentities.length > 0) {
-        linkingState = 'linked';
-      } else if (user.oidcLinkingApproval) {
-        const approvalState = getOidcLinkingApprovalState(
-          user.oidcLinkingApproval,
-          now,
-          providerContext
-        );
-        linkingState = approvalState === 'consumed' ? 'not-approved' : approvalState;
-      }
+    users: page.map(user => {
+      const status = statuses.get(user.id);
       return {
         ...user,
         issuers: user.oidcIdentities.map(identity => identity.issuer),
-        linkingState,
+        linkingState: status?.state ?? 'not-approved',
+        approvalExpiresAt: status?.approvalExpiresAt ?? null,
         oidcIdentities: undefined,
-        oidcLinkingApproval: undefined,
       };
     }),
     nextCursor: users.length > 25 ? users[24].id : null,

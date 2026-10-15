@@ -27,17 +27,50 @@ export type ControlActor =
       sessionTokenHash: string;
     };
 
-export const FRESH_AUTHENTICATION_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+/**
+ * Product policy: an administrator who signed in within the last two hours may perform
+ * privileged authentication changes. This is a step-up window, not a session lifetime:
+ * revoked, expired or unauthorized sessions are still rejected inside it.
+ */
+export const FRESH_AUTHENTICATION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+/**
+ * Emergency recovery keeps its stricter step-up. Its sessions already have a one-hour
+ * absolute cap and a fifteen-minute idle limit, so the administrator window must not apply.
+ */
+export const EMERGENCY_FRESH_AUTHENTICATION_MAX_AGE_MS = 5 * 60 * 1000;
+const CLOCK_SKEW_MS = 30_000;
+
+export function freshAuthenticationMaxAge(kind: ControlActor['kind']) {
+  return kind === 'admin'
+    ? FRESH_AUTHENTICATION_MAX_AGE_MS
+    : EMERGENCY_FRESH_AUTHENTICATION_MAX_AGE_MS;
+}
+
+/** The single freshness rule shared by every privileged route, action and dashboard hint. */
+export function isAuthenticationFresh(
+  authenticatedAt: number | null | undefined,
+  kind: ControlActor['kind'] = 'admin',
+  now = Date.now()
+): authenticatedAt is number {
+  return (
+    typeof authenticatedAt === 'number' &&
+    Number.isFinite(authenticatedAt) &&
+    authenticatedAt > 0 &&
+    authenticatedAt <= now + CLOCK_SKEW_MS &&
+    now - authenticatedAt <= freshAuthenticationMaxAge(kind)
+  );
+}
 
 export async function getControlActor(fresh = false): Promise<ControlActor> {
   const emergencyToken = (await cookies()).get(EMERGENCY_COOKIE)?.value;
   if (emergencyToken) {
     const session = await getEmergencySession(emergencyToken);
     if (session) {
-      if (fresh && Date.now() - session.authenticatedAt.getTime() > FRESH_AUTHENTICATION_MAX_AGE_MS)
+      const kind = session.emergencyAccountId ? 'emergency' : 'legacy';
+      if (fresh && !isAuthenticationFresh(session.authenticatedAt.getTime(), kind))
         throw new Error('Verify your emergency credential again before this operation.');
       return {
-        kind: session.emergencyAccountId ? 'emergency' : 'legacy',
+        kind,
         id: session.emergencyAccountId ?? session.legacyUserId!,
         sessionId: session.id,
         credentialVersion: session.credentialVersion,
@@ -53,12 +86,7 @@ export async function getControlActor(fresh = false): Promise<ControlActor> {
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.id || session.authenticationMethod === 'legacy-emergency')
     throw new Error('Administrator sign-in required.');
-  if (
-    fresh &&
-    (!session.authenticatedAt ||
-      session.authenticatedAt > Date.now() + 30000 ||
-      Date.now() - session.authenticatedAt > FRESH_AUTHENTICATION_MAX_AGE_MS)
-  )
+  if (fresh && !isAuthenticationFresh(session.authenticatedAt, 'admin'))
     throw new Error('Sign in again before this operation.');
   if (session.sessionId) {
     const { touchAuthenticatedSession } = await import('@/lib/session-registry');
@@ -116,11 +144,7 @@ export async function lockControlActor(
       ).allowed
     )
       throw new Error('Administrator sign-in method was revoked by policy.');
-    if (
-      fresh &&
-      (actor.authenticatedAt > Date.now() + 30000 ||
-        Date.now() - actor.authenticatedAt > FRESH_AUTHENTICATION_MAX_AGE_MS)
-    )
+    if (fresh && !isAuthenticationFresh(actor.authenticatedAt, 'admin'))
       throw new Error('Fresh administrator sign-in required.');
     if (actor.sessionId) {
       const deviceId = `session:${actor.sessionId}`;
@@ -144,7 +168,7 @@ export async function lockControlActor(
       session.revokedAt ||
       session.expiresAt.getTime() <= Date.now() ||
       Date.now() - session.lastActivityAt.getTime() >= 900000 ||
-      (fresh && Date.now() - session.authenticatedAt.getTime() > FRESH_AUTHENTICATION_MAX_AGE_MS)
+      (fresh && !isAuthenticationFresh(session.authenticatedAt.getTime(), actor.kind))
     )
       throw new Error('Emergency session expired. Verify your credential again.');
     if (actor.kind === 'emergency') {

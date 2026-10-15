@@ -11,7 +11,7 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { logAudit } from '@/lib/audit';
 import { securityEvent } from '@/lib/auth-control/security-events';
-import { lockControlActor, FRESH_AUTHENTICATION_MAX_AGE_MS } from '@/lib/auth-control/actor';
+import { lockControlActor, isAuthenticationFresh } from '@/lib/auth-control/actor';
 import { activateOidcRevision } from '@/lib/auth-control/oidc-revisions';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 
@@ -30,13 +30,8 @@ export async function changeAuthenticationMode(input: unknown) {
   if (!permissions.isAdmin || !permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE))
     throw new Error('Administrator access required.');
   const session = await getServerSession(await getAuthOptions());
-  if (
-    !session?.user?.id ||
-    !session.authenticatedAt ||
-    !Number.isFinite(session.authenticatedAt) ||
-    session.authenticatedAt > Date.now() + 30_000 ||
-    Date.now() - session.authenticatedAt > FRESH_AUTHENTICATION_MAX_AGE_MS
-  ) {
+  const authenticatedAt = session?.authenticatedAt;
+  if (!session?.user?.id || !isAuthenticationFresh(authenticatedAt, 'admin')) {
     throw new Error('Sign in again before changing authentication policy.');
   }
   if (!(await consumeAuthRateLimit('policy-change', session.user.id, 5, 300_000)).allowed) {
@@ -53,7 +48,7 @@ export async function changeAuthenticationMode(input: unknown) {
         kind: 'admin',
         id: session.user.id,
         tokenVersion: session.user.tokenVersion ?? 0,
-        authenticatedAt: session.authenticatedAt,
+        authenticatedAt,
         sessionId: session.sessionId,
         method: session.authenticationMethod === 'oidc' ? 'oidc' : 'credentials',
         issuedUnderPolicyVersion: session.issuedUnderPolicyVersion,

@@ -74,12 +74,7 @@ export default function AuthenticationProviderForm() {
   const field = (
     label: string,
     key:
-      | 'issuer'
-      | 'clientId'
-      | 'clientSecret'
-      | 'providerLabel'
-      | 'organizationId'
-      | 'customScopes',
+      'issuer' | 'clientId' | 'clientSecret' | 'providerLabel' | 'organizationId' | 'customScopes',
     help?: string,
     required = false
   ) => {
@@ -120,9 +115,7 @@ export default function AuthenticationProviderForm() {
             aria-invalid={Boolean(error)}
             aria-describedby={`auth-help-${key}`}
             placeholder={
-              isSecret && hasSavedSecret
-                ? '•••••••••••••••• (Leave blank to retain)'
-                : undefined
+              isSecret && hasSavedSecret ? '•••••••••••••••• (Leave blank to retain)' : undefined
             }
             onChange={event => update(key, event.target.value)}
           />
@@ -169,7 +162,8 @@ export default function AuthenticationProviderForm() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Select an enterprise directory or federated OIDC provider. Switching providers resets candidate draft values.
+            Select an enterprise directory or federated OIDC provider. Switching providers resets
+            candidate draft values.
           </p>
         </div>
 
@@ -220,9 +214,7 @@ export default function AuthenticationProviderForm() {
 
         {/* Semantic Select element for accessible keyboard navigation and testing */}
         <label className="block space-y-1 text-sm pt-1">
-          <span className="font-medium text-xs text-muted-foreground">
-            Identity provider
-          </span>
+          <span className="font-medium text-xs text-muted-foreground">Identity provider</span>
           <select
             id="auth-field-providerType"
             className={inputClass}
@@ -456,7 +448,8 @@ export default function AuthenticationProviderForm() {
                 onChange={event => setAdvancedIssuer(event.target.checked)}
               />
               <span className="text-xs leading-relaxed text-foreground">
-                Edit the exact issuer, including supported sovereign-cloud authorities (US Government, China, or custom private clouds).
+                Edit the exact issuer, including supported sovereign-cloud authorities (US
+                Government, China, or custom private clouds).
               </span>
             </label>
           )}

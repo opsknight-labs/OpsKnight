@@ -25,7 +25,8 @@ type User = {
   role: string;
   roleSource: string;
   issuers: string[];
-  linkingState?: OidcLinkingState;
+  linkingState: OidcLinkingState;
+  approvalExpiresAt?: string | null;
 };
 
 export default function AuthenticationUserDirectory() {
@@ -103,15 +104,19 @@ export default function AuthenticationUserDirectory() {
               First-Link Approval for Existing Accounts
             </p>
             <p className="leading-relaxed text-amber-800 dark:text-amber-300">
-              Existing accounts require administrator approval before signing in with SSO for the first time.
-              You can authorize first-link access directly using the <strong>Allow linking</strong> button (or <strong>•••</strong> menu) on any account below, or manage approvals in bulk from the{' '}
+              Existing accounts require administrator approval before signing in with SSO for the
+              first time. Linking status below is checked against the{' '}
+              <strong>currently active provider</strong>; an identity from a previous issuer or app
+              registration does not count. Approve first-time linking with the button on each
+              account, or manage approvals from the{' '}
               <Link
                 href="/users"
                 className="font-semibold underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-100 inline-flex items-center gap-0.5"
               >
                 Users directory
                 <ExternalLink className="h-3 w-3 inline ml-0.5" />
-              </Link>.
+              </Link>
+              .
             </p>
           </div>
         </div>
@@ -153,11 +158,26 @@ export default function AuthenticationUserDirectory() {
                   initialState={user.linkingState}
                   variant="button"
                   onStateChange={nextState => {
+                    // Update just this row with the server-confirmed result; no directory reload.
                     setUsers(prev =>
-                      prev.map(u => (u.id === user.id ? { ...u, linkingState: nextState } : u))
+                      prev.map(u =>
+                        u.id === user.id
+                          ? {
+                              ...u,
+                              linkingState: nextState,
+                              approvalExpiresAt:
+                                nextState === 'approved' ? u.approvalExpiresAt : null,
+                            }
+                          : u
+                      )
                     );
                   }}
                 />
+                {user.linkingState === 'approved' && user.approvalExpiresAt && (
+                  <span className="text-[11px] text-muted-foreground">
+                    until {new Date(user.approvalExpiresAt).toLocaleDateString()}
+                  </span>
+                )}
 
                 {/* Actions dropdown menu matching the user page UI */}
                 <DropdownMenu>
@@ -171,22 +191,14 @@ export default function AuthenticationUserDirectory() {
                       <span className="sr-only">Actions for {user.name || user.email}</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64 p-1.5 rounded-xl border shadow-xl">
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-64 p-1.5 rounded-xl border shadow-xl"
+                  >
                     <DropdownMenuLabel className="px-2 py-1.5 text-xs text-muted-foreground font-semibold">
                       Account & Identity
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator className="my-1" />
-                    <OidcLinkingApprovalButton
-                      userId={user.id}
-                      userName={user.name || user.email}
-                      initialState={user.linkingState}
-                      variant="dropdown"
-                      onStateChange={nextState => {
-                        setUsers(prev =>
-                          prev.map(u => (u.id === user.id ? { ...u, linkingState: nextState } : u))
-                        );
-                      }}
-                    />
                     <DropdownMenuItem
                       onClick={() => router.push(`/users?q=${encodeURIComponent(user.email)}`)}
                       className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium"

@@ -8,20 +8,14 @@ import {
   DialogDescription,
   DialogHeader,
 } from '@/components/ui/shadcn/dialog';
-import AuthenticationAdminPicker from '../AuthenticationAdminPicker';
 import AuthenticationRevisionSelector from './AuthenticationRevisionSelector';
+import AuthenticationAdminTestPanel from './AuthenticationAdminTestPanel';
+import { AuthenticationVerificationBadge } from './AuthenticationVerificationStatus';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import { authenticationRequest } from './request';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
 
-import {
-  UserCheck,
-  CheckCircle2,
-  RotateCcw,
-  ExternalLink,
-  ChevronDown,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { UserCheck, RotateCcw, ChevronDown } from 'lucide-react';
 
 export default function AuthenticationRevisionWorkflow() {
   const {
@@ -39,9 +33,6 @@ export default function AuthenticationRevisionWorkflow() {
     setBroadAcknowledged,
     setImpact,
     setConfirmation,
-    adminId,
-    setAdminId,
-    linkApproved,
     pending,
     perform,
     refresh,
@@ -91,7 +82,7 @@ export default function AuthenticationRevisionWorkflow() {
     ) && {
       code: 'stale',
       message:
-        'This saved configuration predates the active provider. Reload and stage a current draft.',
+        'This saved configuration predates the active provider. Stage a current draft instead.',
       resolutionTarget: 'connection' as const,
       resolutionLabel: 'Review in Connection',
     },
@@ -101,7 +92,10 @@ export default function AuthenticationRevisionWorkflow() {
     },
   ];
   return (
-    <div className="rounded-xl border bg-card p-5 space-y-5 shadow-xs" aria-labelledby="auth-test-title">
+    <div
+      className="rounded-xl border bg-card p-5 space-y-5 shadow-xs"
+      aria-labelledby="auth-test-title"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
@@ -116,11 +110,8 @@ export default function AuthenticationRevisionWorkflow() {
             </p>
           </div>
         </div>
-        {selected?.testedAt && (
-          <Badge variant="success" className="text-xs shrink-0">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
-            Tested Verified
-          </Badge>
+        {selected && (
+          <AuthenticationVerificationBadge verification={selected.verification} compact />
         )}
       </div>
 
@@ -138,83 +129,7 @@ export default function AuthenticationRevisionWorkflow() {
           }}
         />
 
-        {/* Verification Status Pill Grid */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-muted/30">
-            <span className="font-semibold text-muted-foreground">Discovery:</span>
-            {selected?.discoveryVerifiedAt ? (
-              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]">
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-                {new Date(selected.discoveryVerifiedAt).toLocaleString()}
-              </Badge>
-            ) : (
-              <Badge variant="neutral" className="text-[10px]">Not validated</Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-muted/30">
-            <span className="font-semibold text-muted-foreground">Admin Sign-in:</span>
-            {selected?.testedAt ? (
-              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]">
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-                {new Date(selected.testedAt).toLocaleString()}
-              </Badge>
-            ) : (
-              <Badge variant="neutral" className="text-[10px]">Not verified</Badge>
-            )}
-          </div>
-        </div>
-
-        <AuthenticationAdminPicker
-          label="Administrator to verify"
-          value={adminId}
-          onChange={setAdminId}
-          initialAdmins={data.users.filter(user => user.role === 'ADMIN' && user.status === 'ACTIVE')}
-          disabled={data.actor.kind === 'admin'}
-        />
-
-        <label className="flex items-start gap-2.5 text-sm p-3.5 rounded-xl border bg-muted/20">
-          <input
-            type="checkbox"
-            className="mt-0.5 rounded border-input"
-            checked={linkApproved}
-            onChange={event => setLinkApproved(event.target.checked)}
-          />
-          <span className="text-xs text-foreground leading-relaxed">
-            Authorize linking the verified identity to this existing administrator if needed. Email
-            alone never links an account.
-          </span>
-        </label>
-      </div>
-
-      <div className="pt-2">
-        <AuthenticationActionGuard
-          availability={actionAvailability('Test administrator sign-in', [
-            ...common,
-            !adminId && {
-              code: 'admin',
-              message: 'Select an active existing administrator to verify.',
-            },
-          ])}
-          onResolve={setActiveTab}
-        >
-          <Button
-            className="gap-2"
-            onClick={() =>
-              void perform(async () => {
-                const result = await authenticationRequest<{ url: string }>({
-                  action: 'test',
-                  revisionId,
-                  adminUserId: adminId,
-                  linkApproved,
-                });
-                window.location.assign(result.url);
-              })
-            }
-          >
-            <ExternalLink className="h-4 w-4" />
-            Test administrator sign-in
-          </Button>
-        </AuthenticationActionGuard>
+        <AuthenticationAdminTestPanel />
       </div>
 
       {/* Rollback Details Section */}
@@ -244,9 +159,8 @@ export default function AuthenticationRevisionWorkflow() {
                   action: 'rollback',
                   revisionId,
                 });
-                setRevisionId(result.revisionId);
                 setDraftBaseConfigVersion(data.providerConfigVersion);
-                await refresh();
+                await refresh(result.revisionId);
                 setMessage('Previous configuration staged. Test it before activation.');
               })
             }

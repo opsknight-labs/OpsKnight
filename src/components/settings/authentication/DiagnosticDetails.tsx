@@ -38,7 +38,9 @@ export default function DiagnosticDetails({
       <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto [overflow-wrap:anywhere]">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold">{item.title}</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">{item.source}</DialogDescription>
+          <DialogDescription className="text-xs text-muted-foreground">
+            {item.source}
+          </DialogDescription>
         </DialogHeader>
 
         <dl className="grid gap-3 rounded-xl border border-border/80 bg-muted/20 p-4 text-xs sm:text-sm sm:grid-cols-2">
@@ -53,7 +55,10 @@ export default function DiagnosticDetails({
         </dl>
 
         {item.timeline && (
-          <section aria-label="Recorded delivery timeline" className="rounded-xl border border-border/80 p-4 bg-card">
+          <section
+            aria-label="Recorded delivery timeline"
+            className="rounded-xl border border-border/80 p-4 bg-card"
+          >
             <h3 className="mb-3 font-semibold text-xs uppercase tracking-wider text-foreground flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5 text-primary" />
               Recorded delivery timeline
@@ -99,7 +104,10 @@ export default function DiagnosticDetails({
               </span>
             </label>
             {error && (
-              <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2"
+              >
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -121,7 +129,9 @@ export default function DiagnosticDetails({
                         );
                     })
                     .catch(failure =>
-                      setError(failure instanceof Error ? failure.message : 'Operation unavailable.')
+                      setError(
+                        failure instanceof Error ? failure.message : 'Operation unavailable.'
+                      )
                     )
                     .finally(() => setWorking(false));
                 }}

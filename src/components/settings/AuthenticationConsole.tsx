@@ -31,6 +31,7 @@ import AuthenticationProviderWorkspace from './authentication/AuthenticationProv
 import AuthenticationAccessWorkspace from './authentication/AuthenticationAccessWorkspace';
 import AuthenticationPolicyWorkspace from './authentication/AuthenticationPolicyWorkspace';
 import AuthenticationRecoveryWorkspace from './authentication/AuthenticationRecoveryWorkspace';
+import AuthenticationWorkflowSteps from './authentication/AuthenticationWorkflowSteps';
 
 export default function AuthenticationConsole(props: AuthenticationConsoleProps) {
   const controller = useAuthenticationController(props);
@@ -78,7 +79,10 @@ function AuthenticationWorkspace() {
                   {data.mode.replaceAll('_', ' ')}
                 </Badge>
                 {data.activeProvider && (
-                  <Badge variant="outline" className="text-xs border-primary/20 bg-primary/5 text-primary">
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-primary/20 bg-primary/5 text-primary"
+                  >
                     <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-500" />
                     {providerDefinitions[data.activeProvider.providerType]?.label ?? 'OIDC Active'}
                   </Badge>
@@ -99,7 +103,8 @@ function AuthenticationWorkspace() {
               }
             >
               <KeyRound className="h-3 w-3 mr-1" />
-              {data.verifiedEmergencyAccounts} Recovery {data.verifiedEmergencyAccounts === 1 ? 'Drill' : 'Drills'}
+              {data.verifiedEmergencyAccounts} Recovery{' '}
+              {data.verifiedEmergencyAccounts === 1 ? 'Drill' : 'Drills'}
             </Badge>
           </div>
         </div>
@@ -182,7 +187,10 @@ function AuthenticationWorkspace() {
                   label: 'Identity Provider',
                   icon: <Globe className="h-4 w-4" />,
                   badge: data.activeProvider ? (
-                    <span aria-hidden="true" className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    <span
+                      aria-hidden="true"
+                      className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-400"
+                    >
                       Active
                     </span>
                   ) : undefined,
@@ -203,24 +211,33 @@ function AuthenticationWorkspace() {
             id: 'emergency',
             label: 'Emergency Recovery',
             icon: <KeyRound className="h-4 w-4" />,
-            badge: data.verifiedEmergencyAccounts < 2 ? (
-              <span aria-hidden="true" className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400">
-                Needs Drill
-              </span>
-            ) : undefined,
+            badge:
+              data.verifiedEmergencyAccounts < 2 ? (
+                <span
+                  aria-hidden="true"
+                  className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
+                >
+                  Needs Drill
+                </span>
+              ) : undefined,
           },
           {
             id: 'diagnostics',
             label: 'Diagnostics',
             icon: <Activity className="h-4 w-4" />,
-            badge: data.failedEmailAlertCount > 0 ? (
-              <span aria-hidden="true" className="rounded-full border border-rose-500/30 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700 dark:text-rose-400">
-                {data.failedEmailAlertCount} alert{data.failedEmailAlertCount > 1 ? 's' : ''}
-              </span>
-            ) : undefined,
+            badge:
+              data.failedEmailAlertCount > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="rounded-full border border-rose-500/30 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700 dark:text-rose-400"
+                >
+                  {data.failedEmailAlertCount} alert{data.failedEmailAlertCount > 1 ? 's' : ''}
+                </span>
+              ) : undefined,
           },
         ]}
       >
+        <AuthenticationWorkflowSteps />
         {sectionLoading && (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -271,7 +288,9 @@ function AuthenticationWorkspace() {
               data={data}
               pending={pending}
               onLoadHistory={loadAuthenticationAlertHistory}
-              onRefresh={refresh}
+              onRefresh={async () => {
+                await refresh();
+              }}
               onRetry={(alertId, expectedGeneration) =>
                 perform(async () => {
                   await authenticationRequest({

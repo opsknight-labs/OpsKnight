@@ -16,7 +16,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/oidc/trust-fingerprint', async (importOriginal) => {
+vi.mock('@/lib/oidc/trust-fingerprint', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/oidc/trust-fingerprint')>();
   return {
     ...actual,
@@ -24,14 +24,32 @@ vi.mock('@/lib/oidc/trust-fingerprint', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/prisma', () => ({
-  default: {
+vi.mock('@/lib/prisma', () => {
+  // Scenario mocks are written per single record (findFirst/findUnique). The batched
+  // resolver reads with findMany; these shims answer it from the same scenario mocks.
+  const db = {
     user: { findUnique: vi.fn() },
-    oidcIdentity: { findFirst: vi.fn() },
-    oidcLinkingApproval: { findUnique: vi.fn(), upsert: vi.fn(), updateMany: vi.fn() },
-    oidcConfig: { findFirst: vi.fn() },
-  },
-}));
+    oidcIdentity: { findFirst: vi.fn(), findMany: vi.fn() },
+    oidcLinkingApproval: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    oidcConfig: { findFirst: vi.fn(), findUnique: vi.fn() },
+  };
+  type ManyArgs = { where: { userId: { in: string[] } } };
+  db.oidcIdentity.findMany.mockImplementation(async (args: ManyArgs) => {
+    const identity = await db.oidcIdentity.findFirst(args);
+    return identity ? [{ userId: args.where.userId.in[0] }] : [];
+  });
+  db.oidcLinkingApproval.findMany.mockImplementation(async (args: ManyArgs) => {
+    const approval = await db.oidcLinkingApproval.findUnique(args);
+    return approval ? [{ ...approval, userId: args.where.userId.in[0] }] : [];
+  });
+  db.oidcConfig.findUnique.mockImplementation(async () => db.oidcConfig.findFirst());
+  return { default: db };
+});
 
 import prisma from '@/lib/prisma';
 import {
@@ -208,7 +226,6 @@ describe('OIDC linking approval management', () => {
     const result = await allowOidcLinking('user-1');
 
     expect(result).toEqual({ success: true, alreadyLinked: true, state: 'linked' });
-    expect(prisma.oidcLinkingApproval.findUnique).not.toHaveBeenCalled();
     expect(prisma.oidcLinkingApproval.upsert).not.toHaveBeenCalled();
   });
 
@@ -307,7 +324,7 @@ describe('OIDC linking approval management', () => {
     }) => {
       const targetIssuer = 'https://new-idp.example.com';
       const issuerFilter = args?.where?.issuer?.in ?? [];
-      if (issuerFilter.some((iss) => iss === targetIssuer)) {
+      if (issuerFilter.some(iss => iss === targetIssuer)) {
         return null;
       }
       // If querying without issuer or for old issuer, returns old identity
@@ -323,9 +340,9 @@ describe('OIDC linking approval management', () => {
       enabled: true,
     } as never);
 
-    // User is NOT linked to current provider
+    // User is NOT linked to current provider: the old-issuer identity is reported as such.
     const stateResult = await getOidcLinkingState('user-1');
-    expect(stateResult.state).toBe('not-approved');
+    expect(stateResult.state).toBe('provider-changed');
     expect(stateResult.alreadyLinked).toBe(false);
 
     // Admin can successfully allow linking for the new provider
@@ -372,7 +389,7 @@ describe('OIDC linking approval management', () => {
 
     // Alice is not considered linked to client-B yet
     const stateResult = await getOidcLinkingState('user-1');
-    expect(stateResult.state).toBe('not-approved');
+    expect(stateResult.state).toBe('provider-changed');
     expect(stateResult.alreadyLinked).toBe(false);
 
     // Admin can authorize linking for the new client ID registration
@@ -425,7 +442,7 @@ describe('OIDC linking approval management', () => {
 
     // Legacy identity with NULL fingerprint is NOT considered linked to client-B
     const stateResult = await getOidcLinkingState('user-1');
-    expect(stateResult.state).toBe('not-approved');
+    expect(stateResult.state).toBe('provider-changed');
     expect(stateResult.alreadyLinked).toBe(false);
 
     // Admin can authorize linking for client-B without being blocked by "already linked"
@@ -442,4 +459,3 @@ describe('OIDC linking approval management', () => {
     );
   });
 });
-

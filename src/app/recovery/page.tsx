@@ -27,10 +27,7 @@ export default async function RecoveryPage() {
         <RecoveryActivity />
 
         {/* Top Header Bar */}
-        <RecoveryHeader
-          accountName={accountName}
-          expiresAtIso={session.expiresAt.toISOString()}
-        />
+        <RecoveryHeader accountName={accountName} expiresAtIso={session.expiresAt.toISOString()} />
 
         {/* Hero Context Card */}
         <div className="rounded-2xl border bg-card p-5 sm:p-6 shadow-xs space-y-5">
@@ -49,7 +46,9 @@ export default async function RecoveryPage() {
                   </Badge>
                 </div>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-3xl">
-                  Use this isolated console to repair Identity Provider configurations through staged revisions, rotate recovery credentials, or restore emergency administrator password access. Active sign-in policies remain enforced during your session.
+                  Use this isolated console to repair Identity Provider configurations through
+                  staged revisions, rotate recovery credentials, or restore emergency administrator
+                  password access. Active sign-in policies remain enforced during your session.
                 </p>
               </div>
             </div>
@@ -62,7 +61,8 @@ export default async function RecoveryPage() {
               <div>
                 <p className="text-xs font-semibold text-foreground">Strict Isolation</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                  Operational incidents, alerts, responders, and production API keys remain securely inaccessible.
+                  Operational incidents, alerts, responders, and production API keys remain securely
+                  inaccessible.
                 </p>
               </div>
             </div>

@@ -9,14 +9,15 @@ import {
   Info,
   ChevronRight,
   UserCheck,
-  ExternalLink,
 } from 'lucide-react';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import { authenticationRequest } from './request';
 import AuthenticationSessionPolicyForm from './AuthenticationSessionPolicyForm';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
-import AuthenticationAdminPicker from '../AuthenticationAdminPicker';
 import AuthenticationRevisionSelector from './AuthenticationRevisionSelector';
+import AuthenticationAdminTestPanel from './AuthenticationAdminTestPanel';
+import { AuthenticationVerificationBadge } from './AuthenticationVerificationStatus';
+import { oidcProofLabel } from '@/lib/auth-control/proof-status';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import type { enforcementPreview } from '@/lib/auth-control/oidc-revisions';
@@ -48,35 +49,10 @@ export default function AuthenticationPolicyWorkspace() {
     perform,
     inputClass,
     sectionClass,
-    adminId,
-    setAdminId,
-    linkApproved,
-    setLinkApproved,
   } = useAuthenticationWorkspace();
 
-  const selectedRevision =
-    data.revisions.find(rev => rev.id === revisionId) ?? data.revisions[0];
-
-  const adminTestAvailability = actionAvailability('Test administrator sign-in', [
-    pending && { code: 'busy', message: 'Wait for current operation to finish.' },
-    draftDirty && {
-      code: 'draft',
-      message: 'Stage your draft changes in Connection before testing sign-in.',
-      resolutionTarget: 'connection',
-      resolutionLabel: 'Go to draft to stage',
-    },
-    !revisionId && {
-      code: 'revision',
-      message: 'Select a saved configuration from the selector above, or stage a new draft.',
-      resolutionTarget: 'connection',
-      resolutionLabel: 'Stage new configuration',
-    },
-    !adminId && { code: 'admin', message: 'Choose an administrator to verify from the selector.' },
-    data.freshAuthenticationRequired && {
-      code: 'fresh',
-      message: 'Re-authenticate your administrator session before continuing.',
-    },
-  ]);
+  const selectedRevision = data.revisions.find(rev => rev.id === revisionId);
+  const verification = selectedRevision?.verification;
 
   return (
     <section id="authentication-3" className={sectionClass} aria-labelledby="auth-policy-title">
@@ -88,7 +64,10 @@ export default function AuthenticationPolicyWorkspace() {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 id="auth-policy-title" className="text-lg font-semibold tracking-tight text-foreground">
+              <h2
+                id="auth-policy-title"
+                className="text-lg font-semibold tracking-tight text-foreground"
+              >
                 Sessions &amp; Policies
               </h2>
               <Badge
@@ -99,7 +78,8 @@ export default function AuthenticationPolicyWorkspace() {
               </Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Current mode: {data.mode.replaceAll('_', ' ')}. Validate administrator sign-in and review enforcement impact before activating SSO.
+              Current mode: {data.mode.replaceAll('_', ' ')}. Validate administrator sign-in and
+              review enforcement impact before activating SSO.
             </p>
           </div>
         </div>
@@ -116,145 +96,28 @@ export default function AuthenticationPolicyWorkspace() {
             Validate Administrator Access &amp; Sign-in Policy Activation
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Complete the real administrator sign-in test, preview user impact, and activate your staged single sign-on policy.
+            Complete the real administrator sign-in test, preview user impact, and activate your
+            staged single sign-on policy.
           </p>
         </div>
 
         {/* Step 1: Configuration & Administrator Verification */}
         <div className="space-y-4 rounded-xl border border-border/60 bg-muted/15 p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/50">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/50">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
                 <UserCheck className="h-4 w-4" />
               </div>
               <h4 className="text-sm font-semibold text-foreground">
-                Step 1: Administrator Sign-in Verification
+                Step 1: Administrator sign-in verification
               </h4>
             </div>
-            {selectedRevision?.testedAt ? (
-              <Badge variant="success" className="text-xs shrink-0 font-medium">
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-                Sign-in Verified
-              </Badge>
-            ) : (
-              <Badge variant="warning" className="text-xs shrink-0 font-medium">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                Sign-in Test Required
-              </Badge>
+            {verification && (
+              <AuthenticationVerificationBadge verification={verification} compact />
             )}
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <AuthenticationRevisionSelector label="Saved configuration to activate" />
-            </div>
-
-            <div className="flex flex-col justify-end space-y-1.5">
-              <span className="text-xs font-semibold text-muted-foreground">Configuration status</span>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-muted/40">
-                  <span className="font-semibold text-muted-foreground">Discovery:</span>
-                  {selectedRevision?.discoveryVerifiedAt ? (
-                    <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Validated
-                    </Badge>
-                  ) : (
-                    <Badge variant="neutral" className="text-[10px]">Not validated</Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-muted/40">
-                  <span className="font-semibold text-muted-foreground">Admin Sign-in:</span>
-                  {selectedRevision?.testedAt ? (
-                    <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Verified ({new Date(selectedRevision.testedAt).toLocaleTimeString()})
-                    </Badge>
-                  ) : (
-                    <Badge variant="warning" className="text-[10px]">Needs Test</Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Test Controls or Verified Notice */}
-          {!selectedRevision?.testedAt ? (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3.5">
-              <p className="text-xs text-foreground/90 leading-relaxed">
-                Before activating this configuration, complete a real sign-in drill with your identity provider to confirm you will not be locked out.
-              </p>
-              <AuthenticationAdminPicker
-                label="Administrator to verify"
-                value={adminId}
-                onChange={setAdminId}
-                initialAdmins={data.users.filter(user => user.role === 'ADMIN' && user.status === 'ACTIVE')}
-                disabled={data.actor.kind === 'admin'}
-              />
-              <label className="flex items-start gap-2.5 text-xs text-foreground select-none cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 rounded border-border"
-                  checked={linkApproved}
-                  onChange={event => setLinkApproved(event.target.checked)}
-                />
-                <span className="leading-relaxed">
-                  Authorize linking the verified identity to this existing administrator if needed. Email alone never links an account.
-                </span>
-              </label>
-              <div>
-                <AuthenticationActionGuard
-                  availability={adminTestAvailability}
-                  onResolve={setActiveTab}
-                >
-                  <Button
-                    className="gap-2 shadow-xs"
-                    onClick={() =>
-                      void perform(async () => {
-                        const result = await authenticationRequest<{ url: string }>({
-                          action: 'test',
-                          revisionId: selectedRevision?.id ?? revisionId,
-                          adminUserId: adminId,
-                          linkApproved,
-                        });
-                        window.location.assign(result.url);
-                      })
-                    }
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Test administrator sign-in
-                  </Button>
-                </AuthenticationActionGuard>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3.5 text-xs">
-              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                <span className="leading-relaxed">
-                  Administrator sign-in verified on {new Date(selectedRevision.testedAt).toLocaleString()}. You can now preview impact and activate this configuration below.
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs shrink-0 self-start sm:self-center"
-                onClick={() =>
-                  void perform(async () => {
-                    const result = await authenticationRequest<{ url: string }>({
-                      action: 'test',
-                      revisionId: selectedRevision.id,
-                      adminUserId: adminId,
-                      linkApproved: true,
-                    });
-                    window.location.assign(result.url);
-                  })
-                }
-              >
-                Retest sign-in
-              </Button>
-            </div>
-          )}
+          <AuthenticationRevisionSelector label="Saved configuration to activate" />
+          <AuthenticationAdminTestPanel />
         </div>
 
         {/* Step 2: Policy Mode & Activation */}
@@ -300,13 +163,15 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 draftDirty && {
                   code: 'draft',
-                  message: 'Stage your draft in Connection before previewing its enforcement impact.',
+                  message:
+                    'Stage your draft in Connection before previewing its enforcement impact.',
                   resolutionTarget: 'connection',
                   resolutionLabel: 'Stage draft in Connection',
                 },
                 !revisionId && {
                   code: 'revision',
-                  message: 'Select a saved configuration from the selector above, or stage a new draft.',
+                  message:
+                    'Select a saved configuration from the selector above, or stage a new draft.',
                   resolutionTarget: 'connection',
                   resolutionLabel: 'Stage in Connection',
                 },
@@ -318,7 +183,9 @@ export default function AuthenticationPolicyWorkspace() {
                 className="gap-2"
                 onClick={() =>
                   void perform(async () => {
-                    setImpact(await authenticationRequest<Preview>({ action: 'preview', revisionId }));
+                    setImpact(
+                      await authenticationRequest<Preview>({ action: 'preview', revisionId })
+                    );
                     setConfirmation(false);
                   })
                 }
@@ -337,19 +204,41 @@ export default function AuthenticationPolicyWorkspace() {
                   <CheckCircle2 className="h-4 w-4 text-primary" />
                   <span>Enforcement impact summary</span>
                 </div>
-                <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed">
-                  {impact.passwordSessionCount} registered password sessions affected;{' '}
-                  {impact.usersRequiringLinking} users require linking;{' '}
-                  {impact.verifiedEmergencyAccounts} emergency identities verified.
-                </p>
-                <div className="flex items-center gap-2 text-xs">
-                  <Badge
-                    variant={impact.adminVerified ? 'success' : 'warning'}
-                    className="font-semibold text-xs"
-                  >
-                    Real administrator login: {impact.adminVerified ? 'verified' : 'required'}
-                  </Badge>
-                </div>
+                <dl className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    {
+                      label: 'Password sessions',
+                      value: impact.passwordSessionCount,
+                      note:
+                        mode === 'SSO_REQUIRED' ? 'Revoked on activation' : 'Kept (SSO Optional)',
+                    },
+                    {
+                      label: 'Users to link',
+                      value: impact.usersRequiringLinking,
+                      note: 'Need first-time SSO linking',
+                    },
+                    {
+                      label: 'Recovery identities',
+                      value: impact.verifiedEmergencyAccounts,
+                      note:
+                        impact.verifiedEmergencyAccounts >= 2
+                          ? 'Emergency access ready'
+                          : 'Two required for SSO Required',
+                    },
+                  ].map(item => (
+                    <div key={item.label} className="rounded-lg border bg-background/70 p-2.5">
+                      <dt className="text-muted-foreground">{item.label}</dt>
+                      <dd className="text-lg font-semibold text-foreground">{item.value}</dd>
+                      <dd className="text-[11px] text-muted-foreground">{item.note}</dd>
+                    </div>
+                  ))}
+                  <div className="rounded-lg border bg-background/70 p-2.5">
+                    <dt className="text-muted-foreground">Administrator proof</dt>
+                    <dd className="mt-1">
+                      <AuthenticationVerificationBadge verification={impact.verification} />
+                    </dd>
+                  </div>
+                </dl>
                 {impact.blockers.length > 0 && (
                   <div className="mt-2 space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
                     <p className="font-semibold flex items-center gap-1.5">
@@ -377,7 +266,8 @@ export default function AuthenticationPolicyWorkspace() {
                 onChange={event => setConfirmation(event.target.checked)}
               />
               <span className="text-xs sm:text-sm font-medium text-foreground leading-snug">
-                I reviewed the impact and confirm activation of this verified revision and sign-in policy.
+                I reviewed the impact and confirm activation of this verified revision and sign-in
+                policy.
               </span>
             </label>
 
@@ -393,11 +283,9 @@ export default function AuthenticationPolicyWorkspace() {
                   resolutionTarget: 'connection',
                   resolutionLabel: 'Stage in Connection',
                 },
-                !impact && { code: 'preview', message: 'Preview enforcement impact before activation.' },
-                !confirmation && { code: 'confirm', message: 'Confirm that you reviewed the impact.' },
-                Boolean(impact && !impact.adminVerified) && {
+                Boolean(verification && verification.state !== 'valid') && {
                   code: 'test',
-                  message: 'Complete the administrator sign-in test above for this revision.',
+                  message: oidcProofLabel(verification!.state).detail,
                 },
                 data.freshAuthenticationRequired && {
                   code: 'fresh',
@@ -409,12 +297,32 @@ export default function AuthenticationPolicyWorkspace() {
                   resolutionTarget: 'diagnostics',
                   resolutionLabel: 'View Origin Diagnostics',
                 },
+                !impact && {
+                  code: 'preview',
+                  message: 'Preview enforcement impact before activation.',
+                },
                 ...(mode === 'SSO_REQUIRED'
-                  ? (impact?.blockers ?? []).map((message, index) => ({
-                      code: `server-${index}`,
-                      message,
-                    }))
+                  ? (impact?.blockers ?? [])
+                      .filter(
+                        message =>
+                          message !== oidcProofLabel(verification?.state ?? 'required').detail
+                      )
+                      .map((message, index) => ({
+                        code: `server-${index}`,
+                        message,
+                        ...(message.includes('emergency')
+                          ? {
+                              resolutionTarget: 'emergency' as const,
+                              resolutionLabel: 'Set up recovery',
+                            }
+                          : {}),
+                      }))
                   : []),
+                Boolean(impact) &&
+                  !confirmation && {
+                    code: 'confirm',
+                    message: 'Confirm that you reviewed the impact.',
+                  },
               ])}
               onResolve={setActiveTab}
             >
@@ -422,7 +330,9 @@ export default function AuthenticationPolicyWorkspace() {
                 className="gap-2 shadow-xs"
                 onClick={() =>
                   void perform(async () => {
-                    const activated = await authenticationRequest<{ providerConfigVersion: number }>({
+                    const activated = await authenticationRequest<{
+                      providerConfigVersion: number;
+                    }>({
                       action: 'activate',
                       revisionId,
                       expectedVersion: impact!.policyVersion,
@@ -435,7 +345,7 @@ export default function AuthenticationPolicyWorkspace() {
                     setMessage(
                       'Verified SSO activated. Disallowed sessions are revoked; complete a new sign-in if this provider changed.'
                     );
-                    await refresh();
+                    await refresh(revisionId);
                   })
                 }
               >
@@ -464,7 +374,8 @@ export default function AuthenticationPolicyWorkspace() {
                 Administrative Policy Override
               </p>
               <p className="mt-1 leading-relaxed">
-                Reverting to Password Only or SSO Optional allows local password logins. Use this if your external identity provider experiences an extended outage.
+                Reverting to Password Only or SSO Optional allows local password logins. Use this if
+                your external identity provider experiences an extended outage.
               </p>
             </div>
 

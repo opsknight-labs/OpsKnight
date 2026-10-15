@@ -3,7 +3,7 @@ import { redactDiagnosticText } from './diagnostic-safety';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
-import { type ControlActor, FRESH_AUTHENTICATION_MAX_AGE_MS } from './actor';
+import { type ControlActor, isAuthenticationFresh } from './actor';
 import {
   diagnosticQuerySchema,
   type DiagnosticQuery,
@@ -93,7 +93,7 @@ export async function authenticationDiagnosticPage(
   const snapshotAt = cursor?.snapshotAt ?? new Date().toISOString();
   const snapshot = new Date(snapshotAt);
   const { from, to } = dateWindow(query, snapshot);
-  const fresh = Date.now() - actor.authenticatedAt < FRESH_AUTHENTICATION_MAX_AGE_MS;
+  const fresh = isAuthenticationFresh(actor.authenticatedAt, actor.kind);
   const result = await prisma.$transaction(
     async tx => {
       // Prisma DateTime columns store UTC without a zone; raw cursor comparisons must not inherit the server timezone.
