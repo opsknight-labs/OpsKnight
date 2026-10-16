@@ -1,0 +1,602 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "e6361eab15ec98766cff28145b9e24c68d2a632e",
+  "releaseStatus": "not_certified",
+  "scope": "Capability-family source inventory; individual operation grants and domain extraction require review in the owning delivery.",
+  "plan": "plans/rest-api-enterprise/complete-feature-coverage-plan.md",
+  "workflows": [
+    {
+      "capabilityId": "runbook-authoring",
+      "delivery": "API-15",
+      "workflow": "Draft creation, editing, validation and immutable publication",
+      "sources": [
+        {
+          "path": "src/lib/runbooks/versioning.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "runbook-control",
+      "delivery": "API-15",
+      "workflow": "Preview, start, cancel, approval and rerun",
+      "sources": [
+        {
+          "path": "src/lib/runbooks/orchestrator.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "incident-lifecycle",
+      "delivery": "API-13",
+      "workflow": "Lifecycle transitions and watcher changes",
+      "sources": [
+        {
+          "path": "src/lib/incidents",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "schedule-participants",
+      "delivery": "API-18",
+      "workflow": "Participant addition, movement and removal",
+      "sources": [
+        {
+          "path": "src/lib/schedules/mutations.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "service-automation",
+      "delivery": "API-14",
+      "workflow": "Effective configuration, drafts, simulation, publish, modes, restore, decisions and observations",
+      "sources": [
+        {
+          "path": "src/lib/automation/versioning.ts",
+          "branch": "feat/service-automation"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": ["Integrate and certify feat/service-automation before exposing REST commands"]
+    },
+    {
+      "capabilityId": "service-settings",
+      "delivery": "API-20",
+      "workflow": "Notification, support-hours and response policies",
+      "sources": [
+        {
+          "path": "src/app/(app)/services",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "incident-metadata",
+      "delivery": "API-13",
+      "workflow": "Custom fields, tags and routing history",
+      "sources": [
+        {
+          "path": "src/lib/custom-fields.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "incident-collaboration",
+      "delivery": "API-17",
+      "workflow": "Provision, synchronize, close and reconcile provider collaboration",
+      "sources": [
+        {
+          "path": "src/app/api/incidents/[id]/war-rooms",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "incident-templates",
+      "delivery": "API-13",
+      "workflow": "Template authoring and ownership",
+      "sources": [
+        {
+          "path": "src/app/(app)/incidents/template-actions.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "schedule-layers",
+      "delivery": "API-18",
+      "workflow": "Layer timing, restrictions, precedence, override cancellation and coverage preview",
+      "sources": [
+        {
+          "path": "src/app/(app)/schedules/actions.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "escalation-validation",
+      "delivery": "API-14",
+      "workflow": "Policy reference validation and dependency deletion protection",
+      "sources": [
+        {
+          "path": "src/lib/escalation",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "team-membership",
+      "delivery": "API-19",
+      "workflow": "Membership roles, team lead and service assignment",
+      "sources": [
+        {
+          "path": "src/lib/teams/membership-commands.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "identity-lifecycle",
+      "delivery": "API-19",
+      "workflow": "Invitation, role, activation, identity ownership and session revocation",
+      "sources": [
+        {
+          "path": "src/lib/users/admin-invariants.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "scim",
+      "delivery": "API-19",
+      "workflow": "Dedicated provisioning protocol",
+      "sources": [
+        {
+          "path": "src/lib/scim.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "integration-lifecycle",
+      "delivery": "API-17",
+      "workflow": "Provider configuration, validation, diagnostics, rotation and deletion",
+      "sources": [
+        {
+          "path": "src/lib/integrations",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "provider-oauth",
+      "delivery": "API-17",
+      "workflow": "Provider consent and protected callback flow",
+      "sources": [
+        {
+          "path": "src/app/(app)/settings/slack-oauth/actions.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "notification-configuration",
+      "delivery": "API-20",
+      "workflow": "Preferences, provider health, tests, feedback, capacity and recovery",
+      "sources": [
+        {
+          "path": "src/lib/notification-control-plane.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "runbook-service-rules",
+      "delivery": "API-15",
+      "workflow": "Bindings, triggers, pinned versions, policy checks, activation and pause",
+      "sources": [
+        {
+          "path": "src/lib/runbooks/bindings.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "runbook-agents",
+      "delivery": "API-16",
+      "workflow": "Enrollment, revocation, pools, membership and safe operational settings",
+      "sources": [
+        {
+          "path": "src/app/(app)/runbooks/actions.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "runbook-secrets",
+      "delivery": "API-16",
+      "workflow": "Secret creation, rotation, grants and usage metadata",
+      "sources": [
+        {
+          "path": "src/lib/runbooks/secrets.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "agent-protocol",
+      "delivery": "API-16",
+      "workflow": "Private authenticated claims, heartbeats and results",
+      "sources": [
+        {
+          "path": "src/app/api/runbook-agent/v1",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "status-management",
+      "delivery": "API-21",
+      "workflow": "Services, appearance, privacy, content, subscribers, domains and publication",
+      "sources": [
+        {
+          "path": "src/lib/status-pages/admin.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "postmortem-workflows",
+      "delivery": "API-22",
+      "workflow": "Impact, factors, five whys, action items, contributors and publication",
+      "sources": [
+        {
+          "path": "src/app/(app)/postmortems/actions.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "report-exports",
+      "delivery": "API-22",
+      "workflow": "Report catalog, bounded queries, saved reports and durable export jobs",
+      "sources": [
+        {
+          "path": "src/lib/reports",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "slo-management",
+      "delivery": "API-23",
+      "workflow": "Approved objectives, evaluations, history, versions, snapshots and archival",
+      "sources": [
+        {
+          "path": "src/lib/slo",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": ["Approve and certify supported SLO product contract"]
+    },
+    {
+      "capabilityId": "dashboards",
+      "delivery": "API-22",
+      "workflow": "Dashboard configuration, widgets, visibility, data and exports",
+      "sources": [
+        {
+          "path": "src/lib/reports/widget-registry.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "audit-export",
+      "delivery": "API-22",
+      "workflow": "Bounded immutable exports, authorized download and integrity verification",
+      "sources": [
+        {
+          "path": "src/lib/compliance/export/engine.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "operational-settings",
+      "delivery": "API-24",
+      "workflow": "SLA, custom fields, ChatOps and approved preferences",
+      "sources": [
+        {
+          "path": "src/app/(app)/settings",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    },
+    {
+      "capabilityId": "sensitive-maintenance",
+      "delivery": "API-24",
+      "workflow": "Dedicated recovery, authentication and encryption control planes",
+      "sources": [
+        {
+          "path": "src/lib/auth-control",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
+    }
+  ],
+  "releaseGates": [
+    {
+      "id": "approved-capability-matrix",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "security-authorization",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "ui-api-parity",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "idempotency-concurrency",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "end-to-end-operations",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "load-recovery",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "developer-experience",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "upgrade-safety",
+      "status": "pending",
+      "evidence": []
+    }
+  ]
+}
