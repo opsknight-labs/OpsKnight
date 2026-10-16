@@ -35,6 +35,8 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNowStrict } from 'date-fns';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { formatDateTime } from '@/lib/timezone';
 import {
   describeBinding,
   type RunbookResource,
@@ -110,6 +112,7 @@ export function RuleCard({
   canManage,
   configurationAvailable,
   loadErrors,
+  userTimeZone,
 }: {
   serviceId: string;
   binding: ServiceRunbookBinding;
@@ -119,7 +122,10 @@ export function RuleCard({
   canManage: boolean;
   configurationAvailable: boolean;
   loadErrors: RunbookResource[];
+  userTimeZone?: string;
 }) {
+  const { userTimeZone: contextTz } = useTimezone();
+  const activeTz = userTimeZone || contextTz;
   const presentation =
     binding.presentation ??
     describeBinding(binding, availableAgents, availableAgentPools, loadErrors);
@@ -247,7 +253,20 @@ export function RuleCard({
                     ? 'Target requires incident context'
                     : 'Target check unavailable'
                 : `${binding.readiness.eligibleAgents} matching online Agents`}{' '}
-              · checked {new Date(binding.readiness.checkedAt).toLocaleTimeString()}
+              · checked{' '}
+              <time
+                dateTime={binding.readiness.checkedAt}
+                title={formatDateTime(binding.readiness.checkedAt, activeTz, {
+                  format: 'datetime',
+                  includeTimeZone: true,
+                })}
+                suppressHydrationWarning
+              >
+                {formatDateTime(binding.readiness.checkedAt, activeTz, {
+                  format: 'time',
+                  includeTimeZone: true,
+                })}
+              </time>
             </p>
             {blocked.slice(0, 3).map(check => (
               <p key={check.code} className="flex items-start gap-1.5">

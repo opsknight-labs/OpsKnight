@@ -139,7 +139,10 @@ export function AgentDetailDrawer({
               <span className="text-muted-foreground block text-[11px]">Heartbeat</span>
               <span className="font-semibold text-foreground">
                 {agent.lastHeartbeatAt
-                  ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' })
+                  ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, {
+                      format: 'datetime',
+                      includeTimeZone: true,
+                    })
                   : 'Never received'}
               </span>
             </div>

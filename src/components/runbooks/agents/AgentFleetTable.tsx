@@ -74,7 +74,7 @@ function Heartbeat({ value, userTimeZone }: { value: string | null; userTimeZone
   return (
     <time
       dateTime={value}
-      title={formatDateTime(value, userTimeZone, { format: 'datetime' })}
+      title={formatDateTime(value, userTimeZone, { format: 'datetime', includeTimeZone: true })}
       suppressHydrationWarning
     >
       {formatDateTime(value, userTimeZone, { format: 'relative' })}

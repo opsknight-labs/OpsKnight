@@ -77,7 +77,8 @@ export function ExecutionDetailDrawer({
     )
   );
   const terminal = isTerminalExecutionStatus(execution.status as RunbookExecutionStatus);
-  const fmt = (value: string) => formatDateTime(value, userTimeZone, { format: 'datetime' });
+  const fmt = (value: string) =>
+    formatDateTime(value, userTimeZone, { format: 'datetime', includeTimeZone: true });
   const target = execution.resolvedTargetAgent
     ? `Agent · ${execution.resolvedTargetAgent.name}`
     : execution.resolvedTargetAgentPool

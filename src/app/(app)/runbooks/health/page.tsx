@@ -230,7 +230,7 @@ export default async function RunbookHealthPage() {
       <RunbookPageHeader
         title="Automation Health"
         icon={HeartPulse}
-        description={`Continuous health surveillance across execution workers, queues and agents. Last evaluated at ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}
+        description={`Continuous health surveillance across execution workers, queues and agents. Last evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone}).`}
         badge={<RunbookStatusBadge status={health.health} context="health" />}
       />
 

@@ -227,7 +227,7 @@ export default async function RunbookDetailPage({
       ? `${exportHref}?version=${runbook.draftVersion.id}`
       : null;
   const formatTimestamp = (value: Date) =>
-    formatDateTime(value, userTimeZone, { format: 'datetime' });
+    formatDateTime(value, userTimeZone, { format: 'datetime', includeTimeZone: true });
 
   const sourceDefinition = source ? parseRunbookDefinition(source.definition) : null;
   const builder =

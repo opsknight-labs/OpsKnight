@@ -3,6 +3,7 @@ import {
   Archive,
   BookOpen,
   CheckCircle2,
+  Clock,
   PencilLine,
   Server,
   Workflow,
@@ -161,11 +162,16 @@ export default async function RunbooksPage({
           </p>
         }
         actions={
-          canManage ? (
-            <div className="flex items-center gap-2">
-              <CreateRunbookDialog teams={teams} />
-            </div>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            <span
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-2.5 py-1 text-xs text-primary-foreground/90 font-medium tabular-nums shadow-2xs"
+              title={`All runbook library and execution timestamps reflect your profile timezone: ${userTimeZone}`}
+            >
+              <Clock className="h-3 w-3" aria-hidden="true" />
+              {userTimeZone}
+            </span>
+            {canManage && <CreateRunbookDialog teams={teams} />}
+          </div>
         }
         stats={[
           {

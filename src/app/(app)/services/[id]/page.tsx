@@ -17,7 +17,9 @@ import {
   assertCanModifyService,
   assertCanViewService,
   getCurrentAuthorizationActor,
+  getCurrentUser,
 } from '@/lib/rbac';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { deleteService, updateService, deleteIntegration } from '../actions';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
@@ -202,7 +204,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   } catch {
     notFound();
   }
-  const actor = await getCurrentAuthorizationActor();
+  const [actor, user] = await Promise.all([getCurrentAuthorizationActor(), getCurrentUser()]);
+  const userTimeZone = getUserTimeZone(user);
   const canReadRunbooks = hasCapability(actor.role, CAPABILITIES.RUNBOOK_READ_ALL);
   const loadRunbookView = canReadRunbooks && activeTab === 'runbooks';
   const incidentAccess = incidentReadWhere(actor);
@@ -771,11 +774,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           <span className="font-mono font-medium">{typeInfo.label}</span>
                           <span>•</span>
                           <span>
-                            {new Date(integration.createdAt).toLocaleDateString('en-US', {
-                              timeZone: 'UTC',
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
+                            {formatDateTime(integration.createdAt, userTimeZone, {
+                              format: 'date',
                             })}
                           </span>
                         </div>
@@ -942,32 +942,17 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                                       version: policy.version,
                                       derivePriorityFromUrgency: policy.derivePriorityFromUrgency,
                                       priorityFallbackMode: policy.priorityFallbackMode as
-                                        | 'INHERIT'
-                                        | 'ENABLED'
-                                        | 'DISABLED',
+                                        'INHERIT' | 'ENABLED' | 'DISABLED',
                                       rules: policy.rules.map(
                                         (rule: ClassificationPolicyWithRules['rules'][number]) => ({
                                           matchValue: rule.matchValue as
-                                            | 'critical'
-                                            | 'error'
-                                            | 'warning'
-                                            | 'info',
+                                            'critical' | 'error' | 'warning' | 'info',
                                           priorityMode: rule.priorityMode as
-                                            | 'INHERIT'
-                                            | 'FALLBACK'
-                                            | 'SET'
-                                            | 'CLEAR',
+                                            'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR',
                                           priority: rule.priority as
-                                            | 'P1'
-                                            | 'P2'
-                                            | 'P3'
-                                            | 'P4'
-                                            | 'P5'
-                                            | null,
+                                            'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
                                           urgencyMode: rule.urgencyMode as
-                                            | 'INHERIT'
-                                            | 'SET'
-                                            | 'DEFAULT',
+                                            'INHERIT' | 'SET' | 'DEFAULT',
                                           urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
                                         })
                                       ),
@@ -1381,6 +1366,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               availableAgentPools={availableRunbookAgentPools}
               canManage={canManageService && hasCapability(actor.role, CAPABILITIES.RUNBOOK_MANAGE)}
               loadErrors={runbooksLoadErrors}
+              userTimeZone={userTimeZone}
             />
           )
         }

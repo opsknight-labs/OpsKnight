@@ -157,7 +157,7 @@ export default async function RunbookAgentsPage({
     <FleetPageShell
       title="Execution Infrastructure"
       icon={Server}
-      description={`Outbound-only native Agents, explicit worker pools, and cryptographically isolated credentials. Fleet evaluated at ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}
+      description={`Outbound-only native Agents, explicit worker pools, and cryptographically isolated credentials. Fleet evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone}).`}
       navigation={navigation}
       canManageSecrets={canManageSecrets}
       actions={

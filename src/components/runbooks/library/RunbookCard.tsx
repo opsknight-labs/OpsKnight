@@ -84,7 +84,10 @@ export function RunbookCard({
           <RunbookStatusBadge status={lastExec.status} size="sm" context="execution" />
           <time
             dateTime={lastExec.createdAt}
-            title={formatDateTime(lastExec.createdAt, userTimeZone, { format: 'datetime' })}
+            title={formatDateTime(lastExec.createdAt, userTimeZone, {
+              format: 'datetime',
+              includeTimeZone: true,
+            })}
             suppressHydrationWarning
           >
             {formatRelativeShort(lastExec.createdAt, userTimeZone)}

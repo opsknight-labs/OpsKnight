@@ -1,5 +1,6 @@
 import { redactRunbookConfiguration } from '@/lib/runbooks/display-name';
 import type { BindingReadiness } from '@/lib/runbooks/binding-readiness';
+import { formatDateTime } from '@/lib/timezone';
 
 export type RuleStatusKind = 'AUTOMATIC' | 'SUGGESTED' | 'MANUAL' | 'PAUSED' | 'ARCHIVED';
 
@@ -167,8 +168,8 @@ export function shortChecksum(checksum: string | null | undefined, length = 12):
   return checksum ? checksum.slice(0, length) : '—';
 }
 
-export function formatAbsolute(date: Date): string {
-  return `${date.toISOString().replace('T', ' ').slice(0, 19)} UTC`;
+export function formatAbsolute(date: Date, timeZone: string = 'UTC'): string {
+  return formatDateTime(date, timeZone, { format: 'datetime', includeTimeZone: true });
 }
 
 export function formatDuration(
