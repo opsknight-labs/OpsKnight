@@ -485,18 +485,55 @@
   }
 }
 
-/* Ensure toast close button icon is always visible with crisp stroke and contrast */
+/* Ensure toast close button icon is always visible with crisp stroke and contrast across light and dark modes */
 [data-sonner-toast] [data-close-button] {
-  border: none !important;
-  background: transparent !important;
-  color: var(--toast-muted) !important;
-  opacity: 0.85 !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #334155 !important;
+  opacity: 0.9 !important;
 }
 
 [data-sonner-toast] [data-close-button]:hover {
-  background: rgba(128, 128, 128, 0.15) !important;
-  color: var(--toast-fg) !important;
+  background: rgba(0, 0, 0, 0.12) !important;
+  color: #0f172a !important;
   opacity: 1 !important;
+}
+
+/* Dark mode toast close button contrast (explicit theme, class, and system preference) */
+[data-sonner-toaster][data-sonner-theme='dark'] [data-sonner-toast] [data-close-button],
+.dark [data-sonner-toast] [data-close-button],
+[data-theme='dark'] [data-sonner-toast] [data-close-button] {
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  opacity: 0.95 !important;
+}
+
+[data-sonner-toaster][data-sonner-theme='dark'] [data-sonner-toast] [data-close-button]:hover,
+.dark [data-sonner-toast] [data-close-button]:hover,
+[data-theme='dark'] [data-sonner-toast] [data-close-button]:hover {
+  background: rgba(255, 255, 255, 0.24) !important;
+  color: #ffffff !important;
+  opacity: 1 !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) [data-sonner-toast] [data-close-button],
+  [data-sonner-toaster]:not([data-sonner-theme='light']) [data-sonner-toast] [data-close-button] {
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+    opacity: 0.95 !important;
+  }
+
+  :root:not([data-theme='light']) [data-sonner-toast] [data-close-button]:hover,
+  [data-sonner-toaster]:not([data-sonner-theme='light']) [data-sonner-toast] [data-close-button]:hover {
+    background: rgba(255, 255, 255, 0.24) !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+  }
 }
 
 [data-sonner-toast] [data-close-button] svg {
@@ -507,6 +544,25 @@
   stroke-width: 2.25px !important;
   stroke-linecap: round !important;
   stroke-linejoin: round !important;
+}
+
+/* High contrast for alert and banner dismiss X buttons in dark mode and system dark preference */
+.dark [role="alert"] button[aria-label*="Dismiss"],
+.dark [role="status"] button[aria-label*="Dismiss"],
+[data-theme="dark"] [role="alert"] button[aria-label*="Dismiss"],
+[data-theme="dark"] [role="status"] button[aria-label*="Dismiss"] {
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+  opacity: 0.95 !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [role="alert"] button[aria-label*="Dismiss"],
+  :root:not([data-theme="light"]) [role="status"] button[aria-label*="Dismiss"] {
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    color: #ffffff !important;
+    opacity: 0.95 !important;
+  }
 }
 
 
