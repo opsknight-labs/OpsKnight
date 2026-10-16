@@ -163,8 +163,7 @@ export function RuleCard({
         <p className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
           <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <span className="min-w-0 break-words">
-            Target: <span className="font-medium text-foreground/90">{presentation.target}</span> ·
-            Trigger: <span className="font-medium text-foreground/90">{presentation.trigger}</span>
+            Target: {presentation.target} · Trigger: {presentation.trigger}
           </span>
         </p>
 
