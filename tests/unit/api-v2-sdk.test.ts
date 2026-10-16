@@ -134,6 +134,11 @@ describe('generated TypeScript client', () => {
     await expect(iterate()).rejects.toThrow('repeated pagination cursor');
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it('does not expose malformed success payloads in parser errors', async () => {
+    fetcher.mockResolvedValue(new Response('PRIVATE_RESPONSE_MARKER', { status: 200 }));
+    await expect(client().call('listIncidents', {})).rejects.toThrow('API returned invalid JSON.');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
   it('does not retry transport uncertainty for executable writes', async () => {
     fetcher.mockRejectedValue(new TypeError('network disconnected'));
     await expect(

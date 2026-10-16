@@ -27,6 +27,7 @@ export const POST = defineV2Route({
         defaultValue: input.defaultValue ?? undefined,
         description: input.description ?? '',
         sequence: input.sequence,
+        options: input.options,
       }))
     );
     assertAuthoringDefinition(draft.definition, inputs);

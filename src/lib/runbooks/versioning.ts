@@ -2,6 +2,7 @@ import 'server-only';
 import { assertAuthoringDefinition } from './authoring-validation';
 
 import type { Prisma, RunbookInput, RunbookVersion } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import {
@@ -271,7 +272,7 @@ export async function publishDraftVersion(
     if (draft.state !== 'DRAFT') throw new RunbookVersionImmutableError(versionId, draft.state);
 
     const draftInputs = draft.inputs.map(
-      ({ key, label, type, required, defaultValue, description, sequence }) => ({
+      ({ key, label, type, required, defaultValue, description, sequence, options }) => ({
         key,
         label,
         type,
@@ -279,6 +280,7 @@ export async function publishDraftVersion(
         defaultValue: defaultValue ?? undefined,
         description: description ?? '',
         sequence,
+        options,
       })
     );
     assertAuthoringDefinition(draft.definition, draftInputs);

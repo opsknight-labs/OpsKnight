@@ -1,6 +1,6 @@
 import { OPERATIONS, type OperationRequests, type OperationResponses } from './schema.js';
 
-export type { OperationRequests, OperationResponses } from './schema.js';
+export type * from './schema.js';
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -50,7 +50,11 @@ async function readJson(response: Response): Promise<unknown> {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  try {
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch {
+    throw new Error('API returned invalid JSON.');
+  }
 }
 export interface ClientOptions {
   baseUrl: string;

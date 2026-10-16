@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-16",
+  "releaseStatus": "not_certified",
+  "scope": "Incremental REST v2 operational commands, runbook authoring/control and generated clients",
+  "baseCommit": "d8e67ae96",
+  "runtime": {
+    "node": "20.20.2",
+    "postgres": "16.15 aarch64 Alpine",
+    "python": "3.12-alpine",
+    "next": "16.4.1"
+  },
+  "results": [
+    {
+      "check": "API, authorization, watcher UI, Explorer and runbook contract regression",
+      "status": "passed",
+      "files": 32,
+      "tests": 371,
+      "command": "node node_modules/vitest/vitest.mjs run --no-file-parallelism --maxWorkers=1 tests/unit/api-v2-*.test.ts tests/actions/incident-subscription-access.test.ts tests/components/settings/ApiExplorerPanel.test.tsx tests/lib/runbooks/authoring-contract.test.ts tests/lib/runbooks/state-machine-safety.test.ts tests/lib/authorization-policy.test.ts"
+    },
+    {
+      "check": "Broader runbook regression",
+      "status": "passed",
+      "files": 39,
+      "tests": 317,
+      "command": "node node_modules/vitest/vitest.mjs run --no-file-parallelism --maxWorkers=1 tests/lib/runbooks",
+      "note": "Overlaps with two suites above; counts are not additive."
+    },
+    {
+      "check": "PostgreSQL baseline plus expanded command runtime",
+      "status": "passed",
+      "files": 2,
+      "tests": 29,
+      "command": "VITEST_USE_REAL_DB=1 node node_modules/vitest/vitest.mjs run --no-file-parallelism --maxWorkers=1 tests/integration/api-v2-runtime.test.ts tests/integration/api-v2-enterprise-runtime.test.ts",
+      "storage": "Dedicated PostgreSQL 16 container with tmpfs data; fsync was not disabled."
+    },
+    {
+      "check": "Disk-backed PostgreSQL baseline",
+      "status": "passed",
+      "files": 1,
+      "tests": 21,
+      "note": "Executed separately before rebasing onto current main. Not a performance or durability certification."
+    },
+    {
+      "check": "Python client HTTP fixture workflows",
+      "status": "passed",
+      "tests": 9,
+      "command": "python -m unittest discover -s tests/sdk -p 'test_*.py'"
+    },
+    {
+      "check": "Both clients against built application",
+      "status": "passed",
+      "command": "npm run certify:api:clients:live",
+      "requirements": [
+        "Build application and TypeScript SDK first",
+        "Dedicated DATABASE_URL ending in _test",
+        "Docker with Python 3.12 image",
+        "Free local port 3159 or API_SDK_TEST_PORT"
+      ],
+      "typescript": [
+        "Authenticated runbook creation and replay",
+        "Validation and publication with If-Match",
+        "Preview and reviewed-plan execution",
+        "Cancellation request semantics"
+      ],
+      "python": [
+        "Authenticated creation, validation and publication",
+        "Bounded cursor traversal across real API pages"
+      ]
+    },
+    {
+      "check": "TypeScript",
+      "status": "passed",
+      "command": "node node_modules/typescript/bin/tsc --noEmit"
+    },
+    {
+      "check": "Changed-file ESLint",
+      "status": "passed",
+      "warnings": 0,
+      "note": "Generator and generated TypeScript schema are linted explicitly with --no-ignore."
+    },
+    {
+      "check": "Generated clients/OpenAPI drift",
+      "status": "passed",
+      "command": "npm run api:clients:check"
+    },
+    {
+      "check": "TypeScript SDK package build",
+      "status": "passed",
+      "command": "npm run build --prefix sdk/typescript"
+    },
+    {
+      "check": "Application production build",
+      "status": "passed",
+      "command": "npm run build",
+      "warnings": [
+        "Middleware convention deprecation",
+        "Ambiguous Tailwind ease utility",
+        "Next.js dependency process.cwd Edge Runtime warning"
+      ]
+    }
+  ],
+  "verifiedInvariants": [
+    "Concurrent identical create requests produce one runbook and audit",
+    "Conflicting draft writers produce one success and one 412",
+    "Duplicate publication requests replay without a second publication audit",
+    "An injected database audit failure rolls back runbook, draft and replay state",
+    "UI and REST publication commands produce matching checksums and revisions",
+    "Published versions retire without violating database immutability",
+    "SELECT options survive validation, publication and cloning",
+    "Participant moves are safe to retry",
+    "Broad admin scope alone cannot authorize runbook authoring",
+    "Preview responses omit executable configuration, input values and internal capability tokens",
+    "Cancellation acceptance is distinct from confirmed termination"
+  ],
+  "notCertified": [
+    "Remaining capability catalog workflows",
+    "Docker/Kind target execution and isolation",
+    "1/2/4 replica HA and failover",
+    "Invalid-token flood isolation under defined attack load",
+    "Measured latency, pool saturation and query plans",
+    "Independent security review and release approval"
+  ]
+}

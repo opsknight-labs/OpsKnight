@@ -1,3 +1,4 @@
+import { MAX_SELECT_OPTIONS } from '@/lib/runbooks/input-options';
 import {
   RUNBOOK_INPUT_TYPES,
   RUNBOOK_STEP_TYPES,
@@ -157,6 +158,11 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       defaultValue: string(2000),
       description: string(1000),
       sequence: integer,
+      options: {
+        type: 'array',
+        maxItems: MAX_SELECT_OPTIONS,
+        items: { type: 'string', minLength: 1, maxLength: 200 },
+      },
     },
     ['key', 'label']
   ),

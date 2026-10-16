@@ -328,6 +328,69 @@ describe('enterprise REST commands against PostgreSQL', () => {
     expect(await testPrisma.auditLog.count({ where: { action: 'runbook.created' } })).toBe(0);
   });
 
+  it('preserves SELECT input options through validation, publication and draft cloning', async () => {
+    const { token } = await credential();
+    const created = await call(
+      createRunbookRoute,
+      token,
+      'POST',
+      '/runbooks',
+      {},
+      {
+        name: 'Select inputs',
+        slug: 'select-inputs',
+        definition,
+        inputs: [
+          {
+            key: 'environment',
+            label: 'Environment',
+            type: 'SELECT',
+            defaultValue: 'staging',
+            options: ['staging', 'production'],
+          },
+        ],
+      }
+    );
+    expect(created.status).toBe(201);
+    const runbook = (await created.json()).data;
+    const params = { id: runbook.id, versionId: runbook.draftVersionId };
+    const path = `/runbooks/${params.id}/drafts/${params.versionId}`;
+    expect((await call(validateDraft, token, 'POST', `${path}/validate`, params, {})).status).toBe(
+      200
+    );
+    expect(
+      (
+        await call(
+          publishDraft,
+          token,
+          'POST',
+          `${path}/publish`,
+          params,
+          {},
+          'publish-select',
+          '"0"'
+        )
+      ).status
+    ).toBe(200);
+    const cloned = await call(
+      cloneDraft,
+      token,
+      'POST',
+      `/runbooks/${params.id}/drafts`,
+      { id: params.id },
+      { sourceVersionId: params.versionId }
+    );
+    expect(cloned.status).toBe(201);
+    const next = (await cloned.json()).data;
+    const inputs = await testPrisma.runbookInput.findMany({ where: { runbookVersionId: next.id } });
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]).toMatchObject({
+      type: 'SELECT',
+      defaultValue: 'staging',
+      options: ['staging', 'production'],
+    });
+  });
+
   it('rolls back the runbook, draft and replay record when the mandatory audit insert fails', async () => {
     const { token } = await credential();
     await testPrisma.$executeRawUnsafe(`

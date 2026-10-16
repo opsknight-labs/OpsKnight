@@ -99,11 +99,11 @@
         "Generated TypeScript and Python request/response types for shipped operations",
         "SDK retry, redirect, pagination, precondition and secret-handling checks",
         "OpenAPI/client drift verification in CI",
-        "Explorer snippets include required If-Match and idempotency headers"
+        "Explorer snippets include required If-Match and idempotency headers",
+        "Both SDKs passed real HTTP workflows against the locally deployed production build and PostgreSQL"
       ],
       "remaining": [
         "Credential-aware execution and permission diagnostics in Explorer",
-        "Live SDK workflows against a deployed application",
         "Distribution/release of SDK packages"
       ]
     },
@@ -127,7 +127,7 @@
   "certificationLimits": [
     "Unit and database tests do not establish load, HA or production certification.",
     "The temporary memory-backed database proves transaction behavior, not crash durability.",
-    "Python HTTP fixture tests are not deployed OpsKnight SDK end-to-end tests.",
-    "The admin:manage runbook scope change requires the documented credential migration."
+    "The admin:manage runbook scope change requires the documented credential migration.",
+    "Live SDK tests used a local production build and isolated PostgreSQL, not a customer production deployment."
   ]
 }

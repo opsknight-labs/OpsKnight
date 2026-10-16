@@ -1729,7 +1729,8 @@
               "BOOLEAN",
               "URL",
               "DURATION",
-              "SECRET_REF"
+              "SECRET_REF",
+              "SELECT"
             ]
           },
           "required": {
@@ -1746,6 +1747,15 @@
           "sequence": {
             "type": "integer",
             "minimum": 0
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         },
         "required": [
