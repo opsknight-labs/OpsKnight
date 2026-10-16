@@ -1,13 +1,20 @@
-import { Activity, Archive, CheckCircle2, PencilLine, Server } from 'lucide-react';
+import {
+  Activity,
+  Archive,
+  BookOpen,
+  CheckCircle2,
+  PencilLine,
+  Server,
+  Workflow,
+} from 'lucide-react';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
-import { StatTile } from '@/components/runbooks/ui/primitives';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
-import { ImportRunbookDialog } from '@/components/runbooks/detail/ImportRunbookDialog';
 import { LibraryFilterBar } from '@/components/runbooks/library/LibraryFilterBar';
 import {
   RunbookPagination,
@@ -18,7 +25,6 @@ import { runbookLibraryFilterSchema } from '@/lib/runbooks/schemas';
 import { buildRunbookLibraryWhere } from '@/lib/runbooks/lifecycle';
 import { isValidRunbookTag } from '@/lib/runbooks/metadata-form';
 import { getUserTimeZone } from '@/lib/timezone';
-import { cn } from '@/lib/utils';
 import { z } from 'zod';
 
 export const revalidate = 0;
@@ -80,19 +86,25 @@ export default async function RunbooksPage({
   const where = buildRunbookLibraryWhere(filter);
   const total = await prisma.runbook.count({ where });
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
-  const [publishedCount, draftCount, archivedCount, teams, popularTags] = await Promise.all([
-    prisma.runbook.count({
-      where: { archivedAt: null, publishedVersionId: { not: null } },
-    }),
-    prisma.runbook.count({
-      where: { archivedAt: null, draftVersionId: { not: null } },
-    }),
-    prisma.runbook.count({
-      where: { archivedAt: { not: null } },
-    }),
-    prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }),
-    getPopularRunbookTags(),
-  ]);
+  const [totalLibraryCount, publishedCount, draftCount, archivedCount, teams, popularTags] =
+    await Promise.all([
+      prisma.runbook.count({ where: { archivedAt: null } }),
+      prisma.runbook.count({
+        where: { archivedAt: null, publishedVersionId: { not: null } },
+      }),
+      prisma.runbook.count({
+        where: { archivedAt: null, draftVersionId: { not: null } },
+      }),
+      prisma.runbook.count({
+        where: { archivedAt: { not: null } },
+      }),
+      prisma.team.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+        take: 200,
+      }),
+      getPopularRunbookTags(),
+    ]);
   const [permissions, runbooks, navigation] = await Promise.all([
     getUserPermissions(),
     prisma.runbook.findMany({
@@ -132,115 +144,148 @@ export default async function RunbooksPage({
   const executionCount = navigation.activeExecutions ?? 'Unknown';
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      <RunbookPageHeader
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Glassmorphic Hero Banner matching Services */}
+      <DetailHeroBanner
+        tag="Automation & Remediation Catalog"
         title="Runbooks"
-        description="Versioned, safety-checked recovery workflows your responders can run with confidence."
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Workflow className="h-6 w-6" aria-hidden="true" />
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Version-controlled, safety-verified automated recovery workflows and diagnostics for
+            incident responders.
+          </p>
+        }
         actions={
           canManage ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <ImportRunbookDialog />
+            <div className="flex items-center gap-2">
               <CreateRunbookDialog teams={teams} />
             </div>
           ) : undefined
         }
+        stats={[
+          {
+            label: 'Total Runbooks',
+            value: totalLibraryCount,
+            icon: <BookOpen className="h-3.5 w-3.5" />,
+            href: '/runbooks',
+          },
+          {
+            label: 'Published',
+            value: publishedCount,
+            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: 'text-emerald-200',
+            href: '/runbooks?status=published',
+          },
+          {
+            label: 'Active Drafts',
+            value: draftCount,
+            icon: <PencilLine className="h-3.5 w-3.5 text-amber-200" />,
+            valueClassName: draftCount > 0 ? 'text-amber-200' : undefined,
+            href: '/runbooks?status=draft',
+          },
+          {
+            label: 'Archived',
+            value: archivedCount,
+            icon: <Archive className="h-3.5 w-3.5 text-slate-300" />,
+            valueClassName: archivedCount > 0 ? 'text-slate-300' : undefined,
+            href: '/runbooks?status=archived',
+            active: filter.status === 'archived' || filter.tab === 'archived',
+          },
+          {
+            label: 'Running Now',
+            value: executionCount,
+            icon: <Activity className="h-3.5 w-3.5 text-sky-200" />,
+            valueClassName:
+              typeof executionCount === 'number' && executionCount > 0 ? 'text-sky-200' : undefined,
+            href: '/runbooks/executions',
+          },
+          {
+            label: 'Fleet Agents',
+            value: onlineAgents,
+            icon: <Server className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName:
+              typeof onlineAgents === 'number' && onlineAgents > 0 ? 'text-emerald-200' : undefined,
+            href: '/runbooks/agents',
+          },
+        ]}
       />
 
       <RunbookModuleNav summary={navigation} />
 
-      <section
-        aria-label="Library summary"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5"
-      >
-        <StatTile
-          label="Published"
-          value={publishedCount}
-          hint="Live for services"
-          icon={CheckCircle2}
-          tone="success"
-          href="/runbooks?status=published"
+      <div className="space-y-4 md:space-y-5">
+        {/* Search text is excluded from the key so typing keeps focus */}
+        <LibraryFilterBar
+          key={JSON.stringify({ ...query, q: undefined })}
+          query={query}
+          teams={teams}
+          popularTags={popularTags}
         />
-        <StatTile
-          label="Drafts"
-          value={draftCount}
-          hint={draftCount > 0 ? 'Waiting to publish' : 'Nothing in progress'}
-          icon={PencilLine}
-          tone={draftCount > 0 ? 'warning' : 'neutral'}
-          href="/runbooks?status=draft"
-        />
-        <StatTile
-          label="Running now"
-          value={executionCount}
-          hint="Active executions"
-          icon={Activity}
-          tone={typeof executionCount === 'number' && executionCount > 0 ? 'info' : 'neutral'}
-          href="/runbooks/executions"
-        />
-        <StatTile
-          label="Online agents"
-          value={onlineAgents}
-          hint="Ready to execute"
-          icon={Server}
-          tone={typeof onlineAgents === 'number' && onlineAgents > 0 ? 'success' : 'neutral'}
-          href="/runbooks/agents"
-        />
-        <StatTile
-          label="Archived"
-          value={archivedCount}
-          hint="Bindings disabled"
-          icon={Archive}
-          href="/runbooks?status=archived"
-          className={cn(
-            'col-span-2 sm:col-span-1',
-            (filter.status === 'archived' || filter.tab === 'archived') && 'border-primary/40'
-          )}
-        />
-      </section>
 
-      {/* Search text is excluded from the key so typing keeps focus */}
-      <LibraryFilterBar
-        key={JSON.stringify({ ...query, q: undefined })}
-        query={query}
-        teams={teams}
-        popularTags={popularTags}
-      />
+        {/* Library Operational Cards */}
+        <RunbookLibrary
+          total={total}
+          canManage={canManage}
+          userTimeZone={userTimeZone}
+          teams={teams}
+          hasActiveFilters={hasActiveFilters}
+          runbooks={runbooks.map(item => ({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            publishedVersion: item.publishedVersion?.version ?? null,
+            draftVersion: item.draftVersion?.version ?? null,
+            bindings: item._count.bindings,
+            executions: item._count.executions,
+            sampleServices: item.bindings
+              .map(b => b.service?.name)
+              .filter((n): n is string => Boolean(n)),
+            ownerTeam: item.ownerTeam,
+            tags: item.tags,
+            lastExecution: item.executions[0]
+              ? {
+                  id: item.executions[0].id,
+                  status: item.executions[0].status,
+                  createdAt: item.executions[0].createdAt.toISOString(),
+                  startedAt: item.executions[0].startedAt?.toISOString() ?? null,
+                  completedAt: item.executions[0].completedAt?.toISOString() ?? null,
+                }
+              : null,
+            archivedAt: item.archivedAt?.toISOString() ?? null,
+            updatedAt: item.updatedAt.toISOString(),
+          }))}
+        />
 
-      {/* Library Operational Cards */}
-      <RunbookLibrary
-        total={total}
-        canManage={canManage}
-        userTimeZone={userTimeZone}
-        teams={teams}
-        hasActiveFilters={hasActiveFilters}
-        runbooks={runbooks.map(item => ({
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          publishedVersion: item.publishedVersion?.version ?? null,
-          draftVersion: item.draftVersion?.version ?? null,
-          bindings: item._count.bindings,
-          executions: item._count.executions,
-          sampleServices: item.bindings
-            .map(b => b.service?.name)
-            .filter((n): n is string => Boolean(n)),
-          ownerTeam: item.ownerTeam,
-          tags: item.tags,
-          lastExecution: item.executions[0]
-            ? {
-                id: item.executions[0].id,
-                status: item.executions[0].status,
-                createdAt: item.executions[0].createdAt.toISOString(),
-                startedAt: item.executions[0].startedAt?.toISOString() ?? null,
-                completedAt: item.executions[0].completedAt?.toISOString() ?? null,
-              }
-            : null,
-          archivedAt: item.archivedAt?.toISOString() ?? null,
-          updatedAt: item.updatedAt.toISOString(),
-        }))}
-      />
+        {/* Bounded Server Pagination */}
+        <RunbookPagination page={page} total={total} query={query} />
 
-      {/* Bounded Server Pagination */}
-      <RunbookPagination page={page} total={total} query={query} />
+        {/* Enterprise Contextual Operational Card matching Services */}
+        <Card className="bg-muted/40 border-dashed">
+          <CardContent className="p-5 text-sm text-muted-foreground flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <strong className="text-foreground font-semibold">
+                Enterprise Execution Guarantee:
+              </strong>{' '}
+              Published runbook versions are immutable and cryptographically checksummed before
+              execution. Production changes with non-idempotent risk classes require peer approval
+              gates.
+            </div>
+            <div className="flex items-center gap-2 text-xs shrink-0">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="font-medium text-foreground">
+                {onlineAgents} Fleet Runners Online
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

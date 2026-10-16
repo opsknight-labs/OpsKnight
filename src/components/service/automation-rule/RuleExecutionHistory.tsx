@@ -25,7 +25,7 @@ export type RuleExecutionRow = {
 export function RuleExecutionHistory({ executions }: { executions: RuleExecutionRow[] }) {
   if (executions.length === 0)
     return (
-      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-4 py-10 text-center">
+      <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border/80 px-4 py-10 text-center">
         <History className="h-6 w-6 text-muted-foreground" aria-hidden />
         <p className="text-sm font-medium">This rule has not run yet.</p>
         <p className="text-xs text-muted-foreground">
@@ -35,7 +35,7 @@ export function RuleExecutionHistory({ executions }: { executions: RuleExecution
     );
   return (
     <>
-      <div className="hidden overflow-hidden rounded-lg border md:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs md:block">
         <Table aria-label="Execution history">
           <TableHeader className="bg-muted/40">
             <TableRow>
@@ -88,7 +88,10 @@ export function RuleExecutionHistory({ executions }: { executions: RuleExecution
           </TableBody>
         </Table>
       </div>
-      <ul aria-label="Execution history" className="divide-y rounded-lg border md:hidden">
+      <ul
+        aria-label="Execution history"
+        className="divide-y divide-border/60 rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs md:hidden"
+      >
         {executions.map(execution => (
           <li key={execution.id} className="space-y-1.5 px-3 py-3 text-sm">
             <div className="flex items-center justify-between gap-2">

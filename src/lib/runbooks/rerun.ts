@@ -8,6 +8,11 @@ export type RerunSource = {
   runbookId: string;
   incidentId: string | null;
   serviceId: string | null;
+  bindingId?: string | null;
+  triggerId?: string | null;
+  triggerFingerprint?: string | null;
+  resolvedTargetAgentId?: string | null;
+  resolvedTargetAgentPoolId?: string | null;
   inputValues: unknown;
   runbook: { archivedAt: Date | null; publishedVersionId: string | null };
   binding: {
@@ -26,6 +31,11 @@ export const rerunSourceSelect = {
   runbookId: true,
   incidentId: true,
   serviceId: true,
+  bindingId: true,
+  triggerId: true,
+  triggerFingerprint: true,
+  resolvedTargetAgentId: true,
+  resolvedTargetAgentPoolId: true,
   inputValues: true,
   runbook: { select: { archivedAt: true, publishedVersionId: true } },
   binding: {
@@ -55,7 +65,8 @@ export function getRerunBlockedReason(
     return 'The service rule that started this run was detached. Attach the runbook to the service again to re-run it.';
   if (source.binding && !source.binding.enabled)
     return 'The service rule that started this run is paused. Enable the rule to re-run it.';
-  if (source.incidentId && !source.binding)
+  const hadRule = Boolean(source.bindingId || source.triggerId || source.triggerFingerprint);
+  if (hadRule && !source.binding)
     return 'The service rule that started this incident run no longer exists. Attach the runbook to the service again to re-run it.';
   const pinned = source.binding?.versionStrategy === 'PINNED';
   if (pinned ? !source.binding?.runbookVersionId : !source.runbook.publishedVersionId)
@@ -83,6 +94,8 @@ export function buildRerunRequest(source: RerunSource, actorId: string): Runbook
     bindingId: binding?.id,
     // Service rules always execute with their saved inputs.
     inputValues: binding ? undefined : inputValues,
+    targetAgentId: binding ? undefined : (source.resolvedTargetAgentId ?? undefined),
+    targetAgentPoolId: binding ? undefined : (source.resolvedTargetAgentPoolId ?? undefined),
     triggeredByUserId: actorId,
   };
 }

@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- StepChange is a closed enum */
 import { Minus, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
@@ -50,14 +51,14 @@ function DiffPane({
   return (
     <div
       className={cn(
-        'min-w-0 rounded-lg border p-3',
+        'min-w-0 rounded-xl border p-3.5',
         !side && 'border-dashed bg-muted/20',
         side && tone === 'before' && 'border-rose-500/20 bg-rose-500/[0.03]',
         side && tone === 'after' && 'border-emerald-500/20 bg-emerald-500/[0.03]',
         side && !tone && 'bg-muted/20'
       )}
     >
-      <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <h3 className="flex items-center gap-1.5 !text-xs !leading-normal font-medium text-muted-foreground">
         {tone === 'before' && side && (
           <Minus className="h-3 w-3 text-rose-600 dark:text-rose-400" aria-hidden="true" />
         )}
@@ -70,7 +71,7 @@ function DiffPane({
         {side ? side.summary : emptyLabel}
       </p>
       {side && (
-        <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-md bg-background/80 p-2.5 font-mono text-xs leading-relaxed ring-1 ring-inset ring-border/60">
+        <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background/80 p-3 font-mono text-xs leading-relaxed ring-1 ring-inset ring-border/60">
           {side.configuration}
         </pre>
       )}
@@ -91,14 +92,17 @@ function StepDiffCard({
   const changed = step.change === 'CHANGED';
   return (
     <article
-      className={cn('space-y-3 rounded-xl border bg-card p-4 shadow-xs', style.card)}
+      className={cn(
+        'space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs transition-all hover:shadow-md',
+        style.card
+      )}
       data-change={step.change}
     >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={cn('font-mono text-[10px]', style.badge)}>
           {step.change}
         </Badge>
-        <h2 className="break-all font-mono text-sm font-semibold">{step.key}</h2>
+        <h2 className="break-all font-mono !text-sm !leading-snug font-semibold">{step.key}</h2>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <DiffPane

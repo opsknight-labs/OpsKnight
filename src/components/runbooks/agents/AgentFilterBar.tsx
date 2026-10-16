@@ -18,7 +18,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/shadcn/collapsible';
-import { Filter, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Activity, Filter, Monitor, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Label } from '@/components/ui/shadcn/label';
 
@@ -86,7 +86,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
   };
 
   return (
-    <div className="space-y-3 rounded-xl border bg-card p-3 shadow-xs">
+    <div className="space-y-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 shadow-xs">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <form
           onSubmit={e => {
@@ -100,7 +100,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search agents by name or hostname…"
             aria-label="Search agents"
-            className="w-full"
+            className="w-full rounded-xl"
           />
         </form>
 
@@ -114,28 +114,52 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             }}
           >
             <SelectTrigger
-              className="h-9 w-[130px] text-xs bg-background"
+              className="h-9 w-[135px] rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors"
               aria-label="Filter by status"
             >
-              <SelectValue placeholder="Status" />
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Activity
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <SelectValue placeholder="Status" />
+              </div>
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
+            <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+              <SelectItem
+                value="all"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 All active
               </SelectItem>
-              <SelectItem value="ONLINE" className="text-xs">
+              <SelectItem
+                value="ONLINE"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 Online
               </SelectItem>
-              <SelectItem value="DEGRADED" className="text-xs">
+              <SelectItem
+                value="DEGRADED"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 Degraded
               </SelectItem>
-              <SelectItem value="OFFLINE" className="text-xs">
+              <SelectItem
+                value="OFFLINE"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 Offline
               </SelectItem>
-              <SelectItem value="ENROLLING" className="text-xs">
+              <SelectItem
+                value="ENROLLING"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 Enrolling
               </SelectItem>
-              <SelectItem value="REVOKED" className="text-xs">
+              <SelectItem
+                value="REVOKED"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 Revoked
               </SelectItem>
             </SelectContent>
@@ -165,22 +189,40 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             }}
           >
             <SelectTrigger
-              className="h-9 w-[130px] text-xs bg-background"
+              className="h-9 w-[140px] rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors"
               aria-label="Filter by platform"
             >
-              <SelectValue placeholder="Platform" />
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Monitor
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <SelectValue placeholder="Platform" />
+              </div>
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
+            <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+              <SelectItem
+                value="all"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 All platforms
               </SelectItem>
-              <SelectItem value="linux" className="text-xs">
+              <SelectItem
+                value="linux"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 Linux
               </SelectItem>
-              <SelectItem value="darwin" className="text-xs">
+              <SelectItem
+                value="darwin"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 macOS (Darwin)
               </SelectItem>
-              <SelectItem value="win32" className="text-xs">
+              <SelectItem
+                value="win32"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 Windows
               </SelectItem>
             </SelectContent>
@@ -192,7 +234,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               <Button
                 variant={advancedOpen ? 'secondary' : 'outline'}
                 size="sm"
-                className="h-9 text-xs gap-1.5"
+                className="h-9 text-xs gap-1.5 rounded-xl border-input/80 shadow-2xs"
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Advanced</span>
@@ -210,7 +252,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               variant="ghost"
               size="sm"
               onClick={resetFilters}
-              className="h-9 text-xs gap-1 text-muted-foreground hover:text-foreground"
+              className="h-9 text-xs gap-1 rounded-xl text-muted-foreground hover:text-foreground"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Reset</span>

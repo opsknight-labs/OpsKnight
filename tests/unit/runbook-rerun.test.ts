@@ -48,6 +48,7 @@ function source(overrides: Partial<RerunSource> = {}): RerunSource {
     runbookId: 'runbook_1',
     incidentId: 'incident_1',
     serviceId: 'service_1',
+    bindingId: 'binding_1',
     inputValues: { host: 'web-1' },
     runbook: { archivedAt: null, publishedVersionId: 'version_latest' },
     binding: {
@@ -97,12 +98,27 @@ describe('getRerunBlockedReason', () => {
     expect(getRerunBlockedReason(source({ binding: null }))).toMatch(/no longer exists/);
   });
 
+  it('allows incident runs that were intentionally unbound to be re-run', () => {
+    expect(
+      getRerunBlockedReason(
+        source({
+          incidentId: 'incident_1',
+          binding: null,
+          bindingId: null,
+          triggerId: null,
+          triggerFingerprint: null,
+        })
+      )
+    ).toBeNull();
+  });
+
   it('blocks when no runnable version exists', () => {
     expect(
       getRerunBlockedReason(
         source({
           incidentId: null,
           binding: null,
+          bindingId: null,
           runbook: { archivedAt: null, publishedVersionId: null },
         })
       )
@@ -136,10 +152,31 @@ describe('buildRerunRequest', () => {
   });
 
   it('replays original input values for unbound runs', () => {
-    expect(buildRerunRequest(source({ incidentId: null, binding: null }), 'user_1')).toMatchObject({
+    expect(
+      buildRerunRequest(source({ incidentId: null, binding: null, bindingId: null }), 'user_1')
+    ).toMatchObject({
       bindingId: undefined,
       inputValues: { host: 'web-1' },
       runbookVersionId: 'version_latest',
+    });
+  });
+
+  it('preserves target agent and pool for unbound runs', () => {
+    expect(
+      buildRerunRequest(
+        source({
+          incidentId: 'incident_1',
+          binding: null,
+          bindingId: null,
+          resolvedTargetAgentId: 'agent_target',
+          resolvedTargetAgentPoolId: 'pool_target',
+        }),
+        'user_1'
+      )
+    ).toMatchObject({
+      bindingId: undefined,
+      targetAgentId: 'agent_target',
+      targetAgentPoolId: 'pool_target',
     });
   });
 });

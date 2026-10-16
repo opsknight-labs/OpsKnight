@@ -49,7 +49,7 @@ export default function ReadinessBar({
     <aside
       aria-label="Runbook publish readiness summary"
       className={cn(
-        'rounded-xl border bg-card px-4 py-3 shadow-xs',
+        'rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs px-5 py-3.5 shadow-xs',
         errorCount > 0 && 'border-destructive/30'
       )}
     >

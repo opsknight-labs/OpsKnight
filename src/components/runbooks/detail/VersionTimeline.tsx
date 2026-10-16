@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { GitBranch, GitCompare } from 'lucide-react';
+import { Archive, Check, GitBranch, GitCompare, PencilLine } from 'lucide-react';
 import { ConfirmAction, type RunbookFormAction } from '@/components/runbooks/RunbookControls';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
-import { EmptyHint, Pill } from '@/components/runbooks/ui/primitives';
+import { EmptyHint } from '@/components/runbooks/ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 
@@ -24,10 +24,29 @@ export type VersionTimelineItem = {
   retireAction?: RunbookFormAction;
 };
 
-const DOT_STYLES: Record<string, string> = {
-  PUBLISHED: 'bg-emerald-500 ring-emerald-500/20',
-  DRAFT: 'bg-amber-500 ring-amber-500/20',
-  RETIRED: 'bg-muted-foreground/50 ring-muted-foreground/10',
+const NODE_CONFIG: Record<
+  string,
+  {
+    ring: string;
+    icon: typeof Check;
+    iconClass: string;
+  }
+> = {
+  PUBLISHED: {
+    ring: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-400',
+    icon: Check,
+    iconClass: 'h-3.5 w-3.5',
+  },
+  DRAFT: {
+    ring: 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:border-amber-400/50 dark:bg-amber-400/10 dark:text-amber-400',
+    icon: PencilLine,
+    iconClass: 'h-3.5 w-3.5',
+  },
+  RETIRED: {
+    ring: 'border-border/80 bg-muted/80 text-muted-foreground',
+    icon: Archive,
+    iconClass: 'h-3 w-3',
+  },
 };
 
 function plural(count: number, word: string) {
@@ -45,34 +64,41 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
     );
   }
   return (
-    <ol aria-label="Version history" className="relative">
+    <ol aria-label="Version history" className="relative space-y-0">
       {versions.map((version, index) => {
         const isLast = index === versions.length - 1;
+        const config = NODE_CONFIG[version.state] ?? NODE_CONFIG.RETIRED;
+        const NodeIcon = config.icon;
+
         return (
-          <li key={version.id} className="relative pb-5 pl-9 last:pb-0">
+          <li key={version.id} className="relative pb-6 last:pb-0">
             {!isLast && (
               <span
                 aria-hidden="true"
-                className="absolute bottom-0 left-[11px] top-7 w-px bg-border"
+                className="absolute left-[15px] top-8 -bottom-6 w-0.5 bg-border/60 dark:bg-border/40"
               />
             )}
             <span
               aria-hidden="true"
               className={cn(
-                'absolute left-[5px] top-[18px] h-3.5 w-3.5 rounded-full border-2 border-background ring-4',
-                DOT_STYLES[version.state] ?? DOT_STYLES.RETIRED
+                'absolute left-0 top-3.5 flex h-8 w-8 items-center justify-center rounded-full border ring-4 ring-background shadow-2xs z-10 transition-colors',
+                config.ring
               )}
-            />
+            >
+              <NodeIcon className={config.iconClass} strokeWidth={2.5} aria-hidden="true" />
+            </span>
             <article
               className={cn(
-                'flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs sm:flex-row sm:items-start sm:justify-between',
-                version.isCurrentPublished && 'border-emerald-500/30',
-                version.isCurrentDraft && 'border-amber-500/30'
+                'ml-12 flex flex-col gap-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-5 shadow-xs hover:border-border hover:shadow-md transition-all duration-200 sm:flex-row sm:items-start sm:justify-between',
+                version.isCurrentPublished &&
+                  'border-emerald-500/40 bg-emerald-500/[0.02] dark:border-emerald-500/30 dark:bg-emerald-500/[0.03]',
+                version.isCurrentDraft &&
+                  'border-amber-500/40 bg-amber-500/[0.02] dark:border-amber-500/30 dark:bg-amber-500/[0.03]'
               )}
             >
               <div className="min-w-0 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold">
+                  <h3 className="!text-sm !leading-snug font-semibold">
                     <Link
                       className="rounded-sm text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       href={version.viewHref}
@@ -81,8 +107,24 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
                     </Link>
                   </h3>
                   <RunbookStatusBadge status={version.state} context="lifecycle" size="sm" />
-                  {version.isCurrentPublished && <Pill tone="success">Live</Pill>}
-                  {version.isCurrentDraft && <Pill tone="warning">Editable</Pill>}
+                  {version.isCurrentPublished && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>Live</span>
+                    </span>
+                  )}
+                  {version.isCurrentDraft && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300 shadow-2xs">
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>Editable Draft</span>
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {version.publishedAtLabel
@@ -113,7 +155,12 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
               {(version.compareHref || version.restoreAction || version.retireAction) && (
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {version.compareHref && (
-                    <Button asChild variant="outline" size="sm">
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-xl text-xs gap-1.5 shadow-2xs"
+                    >
                       <Link href={version.compareHref}>
                         <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
                         Compare with published

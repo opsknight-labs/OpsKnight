@@ -191,7 +191,7 @@ export default async function RunbookExecutionsPage({
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <RunbookPageHeader
         title="Executions"
         description={`Every runbook run across services and incidents, with live status, approvals and outcomes. As of ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}

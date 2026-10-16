@@ -1209,11 +1209,11 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
     font-size: clamp(1.5rem, 2vw, 2rem) !important;
   }
 
-  h2:not(.login-title):not(.login-card h2) {
+  h2:not(.login-title):not(.login-card h2):not([class*="text-xs"]):not([class*="text-sm"]):not([class*="text-base"]):not([class*="text-lg"]):not([class*="text-xl"]) {
     font-size: clamp(1.25rem, 1.75vw, 1.75rem) !important;
   }
 
-  h3:not(.login-card h3) {
+  h3:not(.login-card h3):not([class*="text-xs"]):not([class*="text-sm"]):not([class*="text-base"]):not([class*="text-lg"]):not([class*="text-xl"]) {
     font-size: clamp(1rem, 1.5vw, 1.5rem) !important;
   }
 

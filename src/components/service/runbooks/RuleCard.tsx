@@ -73,14 +73,14 @@ export function ArchivedRuleCard({
   binding: ServiceRunbookBinding;
 }) {
   return (
-    <article className="rounded-xl border border-dashed bg-card/60 p-5 shadow-xs">
+    <article className="bg-card rounded-2xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs p-5 sm:p-6 shadow-xs">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted border border-border/60 text-muted-foreground shadow-2xs">
             <Archive className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h3 className="break-words text-sm font-semibold text-foreground">
+            <h3 className="break-words text-sm font-bold text-foreground">
               {binding.name || binding.runbook.name}
             </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">Rule detached · Archived history</p>
@@ -91,7 +91,7 @@ export function ArchivedRuleCard({
       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
         This rule cannot run. Its configuration, suggestions and execution evidence are kept.
       </p>
-      <Button asChild variant="outline" size="sm" className="mt-4 h-8 gap-1.5">
+      <Button asChild variant="outline" size="sm" className="mt-4 h-8 gap-1.5 shadow-2xs">
         <Link href={`/services/${serviceId}/automations/${binding.id}`}>
           <FileSearch className="h-3.5 w-3.5" aria-hidden />
           View archived rule evidence
@@ -132,27 +132,27 @@ export function RuleCard({
   const readinessView = binding.readiness ? readinessPresentation(binding.readiness.state) : null;
 
   return (
-    <article className="group relative overflow-hidden rounded-xl border bg-card shadow-xs transition-shadow hover:shadow-sm">
-      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1', accent)} />
-      <div className="space-y-4 p-5 pl-6">
+    <article className="bg-card group relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200">
+      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1.5', accent)} />
+      <div className="space-y-4 p-5 sm:p-6 pl-6 sm:pl-7">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold leading-6">
+            <h3 className="text-base font-bold leading-snug">
               <Link
                 href={rulePath}
-                className="break-words rounded-sm text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="break-words rounded-sm text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
               >
                 {binding.name || binding.runbook.name}
               </Link>
             </h3>
-            <p className="line-clamp-1 text-xs text-muted-foreground">
-              Runs <span className="font-medium text-foreground/80">{binding.runbook.name}</span>
+            <p className="line-clamp-1 mt-0.5 text-xs text-muted-foreground">
+              Runs <span className="font-semibold text-foreground/90">{binding.runbook.name}</span>
               {binding.runbook.description ? ` · ${binding.runbook.description}` : ''}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
             <RuleStatusPill kind={kind} />
-            <Pill>
+            <Pill tone="neutral" className="font-medium">
               {binding.versionStrategy === 'PINNED'
                 ? `v${binding.runbookVersion?.version ?? '?'} pinned`
                 : 'Latest published'}
@@ -161,15 +161,17 @@ export function RuleCard({
         </div>
 
         <p className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
-          <Target className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <span className="min-w-0 break-words">
             Target: {presentation.target} · Trigger: {presentation.trigger}
           </span>
         </p>
 
-        <dl className="grid grid-cols-3 divide-x rounded-lg border bg-muted/30">
-          <div className="min-w-0 px-3 py-2.5">
-            <dt className="text-[11px] font-medium text-muted-foreground">Last run</dt>
+        <dl className="grid grid-cols-3 divide-x divide-border/60 rounded-xl border border-border/60 bg-muted/20">
+          <div className="min-w-0 px-3.5 py-2.5">
+            <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Last run
+            </dt>
             <dd className="mt-1 min-w-0">
               {lastExecution ? (
                 <Link
@@ -177,26 +179,32 @@ export function RuleCard({
                   className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <RunbookStatusBadge status={lastExecution.status} size="sm" />
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] font-medium text-muted-foreground">
                     {relative(lastExecution.createdAt)}
                   </span>
                 </Link>
               ) : (
-                <span className="text-sm text-muted-foreground">Never run</span>
+                <span className="text-xs font-medium text-muted-foreground">Never run</span>
               )}
             </dd>
           </div>
-          <div className="min-w-0 px-3 py-2.5">
-            <dt className="text-[11px] font-medium text-muted-foreground">Executions</dt>
-            <dd className="mt-1 text-sm font-semibold tabular-nums">{executionCount}</dd>
+          <div className="min-w-0 px-3.5 py-2.5">
+            <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Executions
+            </dt>
+            <dd className="mt-1 text-sm font-bold tracking-tight text-foreground tabular-nums">
+              {executionCount}
+            </dd>
           </div>
-          <div className="min-w-0 px-3 py-2.5">
-            <dt className="text-[11px] font-medium text-muted-foreground">Readiness</dt>
-            <dd className="mt-1 text-sm">
+          <div className="min-w-0 px-3.5 py-2.5">
+            <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Readiness
+            </dt>
+            <dd className="mt-1 text-xs">
               {readinessView ? (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1.5 font-medium',
+                    'inline-flex items-center gap-1.5 font-semibold',
                     TONE_TEXT[readinessView.tone]
                   )}
                 >
@@ -207,7 +215,7 @@ export function RuleCard({
                   {readinessView.label}
                 </span>
               ) : (
-                <span className="text-muted-foreground">Not checked</span>
+                <span className="font-medium text-muted-foreground">Not checked</span>
               )}
             </dd>
           </div>
@@ -256,22 +264,32 @@ export function RuleCard({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-5 py-3 pl-6">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/20 px-5 sm:px-6 py-3.5 pl-6 sm:pl-7">
         {binding.enabled && (
-          <Button asChild size="sm" className="h-8 gap-1.5">
+          <Button asChild size="sm" className="h-8 gap-1.5 shadow-2xs font-semibold">
             <Link href={`${rulePath}#run-now`}>
               <Play className="h-3.5 w-3.5" aria-hidden />
               Run now
             </Link>
           </Button>
         )}
-        <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 shadow-2xs font-semibold"
+        >
           <Link href={rulePath}>
             <FileSearch className="h-3.5 w-3.5" aria-hidden />
             Rule evidence
           </Link>
         </Button>
-        <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5">
+        <Button
+          asChild
+          size="sm"
+          variant="ghost"
+          className="h-8 gap-1.5 font-semibold text-muted-foreground hover:text-foreground"
+        >
           <Link href={`/runbooks/${binding.runbookId}`}>
             <BookOpen className="h-3.5 w-3.5" aria-hidden />
             <span>View Runbook</span>
@@ -290,15 +308,15 @@ export function RuleCard({
         )}
       </div>
 
-      <details className="group/manage border-t [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-5 pl-6 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+      <details className="group/manage border-t border-border/60 [&_summary::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-5 sm:px-6 pl-6 sm:pl-7 text-xs font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
           Manage rule
           <ChevronDown
             className="h-4 w-4 transition-transform group-open/manage:rotate-180"
             aria-hidden
           />
         </summary>
-        <div className="space-y-4 border-t px-5 py-4 pl-6">
+        <div className="space-y-4 border-t border-border/60 px-5 sm:px-6 py-4 pl-6 sm:pl-7">
           <div>
             <h4 className="mb-2 text-xs font-semibold text-foreground">Inputs</h4>
             <InputSummary

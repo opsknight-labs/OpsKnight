@@ -5,7 +5,9 @@ import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/Runbo
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
+  Activity,
   Archive,
+  CheckCircle2,
   FileX,
   Hash,
   History,
@@ -14,11 +16,13 @@ import {
   Lock,
   PencilLine,
   PlayCircle,
+  Server,
   ShieldAlert,
-  Tag,
   Users,
   Workflow,
 } from 'lucide-react';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Badge } from '@/components/ui/shadcn/badge';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -36,7 +40,6 @@ import {
   updateRunbookMetadataAction,
 } from '../actions';
 import { retireVersionAction } from './version-actions';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import DetailTabs from '@/components/ui/DetailTabs';
 import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import {
@@ -401,129 +404,201 @@ export default async function RunbookDetailPage({
       </ActionForm>
     ) : null;
 
+  const successMetric = computeSuccessRate(runbook.executions.map(execution => execution.status));
+  const successRateDisplay =
+    successMetric.completed > 0
+      ? `${Math.round((successMetric.succeeded / successMetric.completed) * 100)}%`
+      : '100%';
+
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-3 sm:p-4 md:p-6">
-      <header className="space-y-3">
-        <RunbookPageHeader
-          breadcrumbs={[{ label: 'Runbooks', href: '/runbooks' }, { label: runbook.name }]}
-          title={runbook.name}
-          description={runbook.description || undefined}
-          badge={
-            <div className="flex flex-wrap items-center gap-1.5">
-              {runbook.publishedVersion && (
-                <Pill tone="success" className="font-mono">
-                  Published v{runbook.publishedVersion.version}
-                </Pill>
-              )}
-              {runbook.draftVersion && (
-                <Pill tone="warning" className="font-mono">
-                  Draft v{runbook.draftVersion.version}
-                </Pill>
-              )}
-              {!runbook.publishedVersion && !runbook.draftVersion && <Pill>No active version</Pill>}
-              {runbook.archivedAt && <Pill icon={Archive}>Archived</Pill>}
-            </div>
-          }
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              {primaryAction}
-              {canManage && (
-                <RunbookDetailsSheet
-                  runbook={{
-                    name: runbook.name,
-                    slug: runbook.slug,
-                    description: runbook.description,
-                    ownerTeamId: runbook.ownerTeamId,
-                    tags: runbook.tags,
-                  }}
-                  teams={teams}
-                  action={updateRunbookMetadataAction.bind(null, runbook.id)}
-                  archiveAction={archiveRunbookAction.bind(null, runbook.id)}
-                />
-              )}
-              <RunbookActionsMenu
-                runbookId={id}
-                runbookName={runbook.name}
-                canRun={Boolean(runbook.publishedVersion) && !isArchived}
-                exportHref={runbook.publishedVersion || runbook.draftVersion ? exportHref : null}
-                draftExportHref={draftExportHref}
-                duplicateAction={
-                  hasManageCapability ? duplicateRunbookAction.bind(null, runbook.id) : undefined
-                }
-                duplicateDescription={
-                  runbook.draftVersion
-                    ? `Creates a new draft copy based on the current draft (v${runbook.draftVersion.version}).`
-                    : runbook.publishedVersion
-                      ? `Creates a new draft copy based on the published version (v${runbook.publishedVersion.version}).`
-                      : 'Creates a new draft copy with identical metadata.'
-                }
-              />
-            </div>
-          }
-        />
-        <dl className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <dt className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" aria-hidden="true" />
-              Owner
-            </dt>
-            <dd className="font-medium text-foreground">
-              {runbook.ownerTeam ? (
-                <Link
-                  href={`/teams/${runbook.ownerTeam.id}`}
-                  className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {runbook.ownerTeam.name}
-                </Link>
-              ) : (
-                <span className="font-normal text-muted-foreground">No owner team</span>
-              )}
-            </dd>
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Canonical DetailHeroBanner */}
+      <DetailHeroBanner
+        breadcrumb={{
+          label: 'Runbooks',
+          href: '/runbooks',
+          current: runbook.name,
+        }}
+        tag="Automation & Remediation Catalog"
+        title={runbook.name}
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20 backdrop-blur-xs shadow-xs">
+            <Workflow className="h-6 w-6" aria-hidden="true" />
           </div>
-          <div className="flex min-w-0 items-center gap-2">
-            <dt className="flex items-center gap-1.5">
-              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
-              Tags
-            </dt>
-            <dd className="flex min-w-0 flex-wrap gap-1">
-              {runbook.tags.length ? (
-                runbook.tags.map(tag => (
+        }
+        badges={
+          <>
+            {runbook.publishedVersion && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/40 text-[10px] font-mono gap-1"
+              >
+                <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                Published v{runbook.publishedVersion.version}
+              </Badge>
+            )}
+            {runbook.draftVersion && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-amber-500/20 text-amber-100 border-amber-400/40 text-[10px] font-mono gap-1"
+              >
+                <PencilLine className="h-3 w-3 text-amber-300" />
+                Draft v{runbook.draftVersion.version}
+              </Badge>
+            )}
+            {isArchived && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-rose-500/20 text-rose-100 border-rose-400/40 text-[10px] gap-1"
+              >
+                <Archive className="h-3 w-3 text-rose-300" />
+                Archived
+              </Badge>
+            )}
+            {runbook.ownerTeam ? (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] gap-1"
+              >
+                <Users className="h-3 w-3" />
+                {runbook.ownerTeam.name}
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-primary-foreground/10 text-primary-foreground/80 border-primary-foreground/20 text-[10px] gap-1"
+              >
+                <Users className="h-3 w-3" />
+                No owner team
+              </Badge>
+            )}
+            <Badge
+              variant="outline"
+              size="xs"
+              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-mono gap-1"
+            >
+              <Hash className="h-3 w-3" />
+              {runbook.slug}
+            </Badge>
+          </>
+        }
+        subtitle={
+          <div className="space-y-1.5">
+            <p className="text-xs text-primary-foreground/85 leading-relaxed max-w-3xl">
+              {runbook.description ||
+                'Enterprise automated remediation runbook with guardrails, parameter bindings, and auditable history.'}
+            </p>
+            {runbook.tags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {runbook.tags.map(tag => (
                   <Link
                     key={tag}
                     href={`/runbooks?tag=${encodeURIComponent(tag)}`}
-                    className="rounded-full px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset ring-border transition-colors hover:text-foreground hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-full bg-primary-foreground/10 px-2.5 py-0.5 font-mono text-[10px] text-primary-foreground/90 ring-1 ring-inset ring-primary-foreground/20 hover:bg-primary-foreground/25 transition-colors"
                   >
-                    {tag}
+                    #{tag}
                   </Link>
-                ))
-              ) : (
-                <span>None</span>
-              )}
-            </dd>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <dt className="flex items-center gap-1.5">
-              <Hash className="h-3.5 w-3.5" aria-hidden="true" />
-              Slug
-            </dt>
-            <dd className="font-mono text-foreground/80">{runbook.slug}</dd>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {primaryAction}
+            {canManage && (
+              <RunbookDetailsSheet
+                runbook={{
+                  name: runbook.name,
+                  slug: runbook.slug,
+                  description: runbook.description,
+                  ownerTeamId: runbook.ownerTeamId,
+                  tags: runbook.tags,
+                }}
+                teams={teams}
+                action={updateRunbookMetadataAction.bind(null, runbook.id)}
+                archiveAction={archiveRunbookAction.bind(null, runbook.id)}
+              />
+            )}
+            <RunbookActionsMenu
+              runbookId={id}
+              runbookName={runbook.name}
+              canRun={Boolean(runbook.publishedVersion) && !isArchived}
+              exportHref={runbook.publishedVersion || runbook.draftVersion ? exportHref : null}
+              draftExportHref={draftExportHref}
+              duplicateAction={
+                hasManageCapability ? duplicateRunbookAction.bind(null, runbook.id) : undefined
+              }
+              duplicateDescription={
+                runbook.draftVersion
+                  ? `Creates a new draft copy based on the current draft (v${runbook.draftVersion.version}).`
+                  : runbook.publishedVersion
+                    ? `Creates a new draft copy based on the published version (v${runbook.publishedVersion.version}).`
+                    : 'Creates a new draft copy with identical metadata.'
+              }
+            />
           </div>
-        </dl>
-      </header>
-      {isArchived && (
-        <div
-          role="note"
-          className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200"
-        >
-          <Archive className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="text-sm font-semibold">This runbook is archived</p>
-            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
-              It can’t be edited, published or run. Execution history is preserved.
-            </p>
-          </div>
-        </div>
-      )}
+        }
+        stats={[
+          {
+            label: 'Live Version',
+            value: runbook.publishedVersion ? `v${runbook.publishedVersion.version}` : 'None',
+            subtext: runbook.publishedVersion?.publishedAt
+              ? `Published ${formatTimestamp(runbook.publishedVersion.publishedAt)}`
+              : 'No published build',
+            icon: <CheckCircle2 className="h-4 w-4" />,
+          },
+          {
+            label: 'Active Draft',
+            value: runbook.draftVersion ? `v${runbook.draftVersion.version}` : 'None',
+            subtext: runbook.draftVersion
+              ? `Revision r${runbook.draftVersion.draftRevision}`
+              : 'Working copy synced',
+            icon: <PencilLine className="h-4 w-4" />,
+          },
+          {
+            label: 'Bound Services',
+            value: serviceCount,
+            subtext: `${topServiceGroups.length} active service triggers`,
+            icon: <Server className="h-4 w-4" />,
+          },
+          {
+            label: 'Total Runs',
+            value: runbook._count.executions,
+            subtext: overviewExecutions[0]
+              ? `Last ${overviewExecutions[0].createdAtLabel}`
+              : 'No execution runs yet',
+            icon: <History className="h-4 w-4" />,
+          },
+          {
+            label: 'Success Rate',
+            value: successRateDisplay,
+            subtext: 'Across recorded runs',
+            icon: <Activity className="h-4 w-4" />,
+          },
+        ]}
+        alert={
+          isArchived ? (
+            <div
+              role="note"
+              className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200"
+            >
+              <Archive className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-semibold">This runbook is archived</p>
+                <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
+                  It can’t be edited, published or run. Execution history is preserved.
+                </p>
+              </div>
+            </div>
+          ) : undefined
+        }
+      />
       <RunbookModuleNav summary={navigation} />
       <DetailTabs
         defaultTab={runbook.draftVersion ? 'builder' : 'overview'}
@@ -769,7 +844,7 @@ export default async function RunbookDetailPage({
                 title={`Delete ${runbook.name}`}
                 description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
                 trigger={
-                  <Button variant="destructive" size="sm">
+                  <Button variant="destructive" size="sm" className="rounded-xl shadow-2xs">
                     Delete runbook
                   </Button>
                 }
@@ -789,7 +864,7 @@ export default async function RunbookDetailPage({
                       placeholder={runbook.slug}
                       required
                       autoComplete="off"
-                      className="font-mono text-xs"
+                      className="font-mono text-xs rounded-xl"
                     />
                   </div>
                   <SubmitButton variant="destructive" pendingLabel="Deleting…">
@@ -801,6 +876,6 @@ export default async function RunbookDetailPage({
           </div>
         </SectionCard>
       )}
-    </div>
+    </main>
   );
 }

@@ -91,15 +91,15 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
   const visibleTags = popularTags.filter(item => item.tag !== activeTag).slice(0, MAX_TAG_CHIPS);
 
   return (
-    <div className="space-y-3 rounded-xl border bg-card p-3 shadow-xs sm:p-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-colors">
+      <div className="flex flex-wrap items-center gap-2.5">
         <form
           role="search"
           onSubmit={e => {
             e.preventDefault();
             navigate({});
           }}
-          className="flex h-9 min-w-0 basis-full items-center rounded-md border border-input bg-background shadow-xs focus-within:ring-2 focus-within:ring-ring xl:min-w-[260px] xl:flex-1 xl:basis-auto"
+          className="flex h-9 min-w-0 basis-full items-center rounded-xl border border-input/80 dark:border-border/70 bg-background/80 shadow-2xs focus-within:ring-2 focus-within:ring-primary/40 xl:min-w-[260px] xl:flex-1 xl:basis-auto transition-colors"
         >
           <SearchField
             type="text"
@@ -145,18 +145,27 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
 
         <Select value={teamId} onValueChange={val => navigate({ team: val })}>
           <SelectTrigger
-            className="h-9 w-full bg-background text-xs sm:w-[180px]"
+            className="h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium sm:w-[180px] focus:ring-2 focus:ring-primary/40 transition-colors"
             aria-label="Filter by team"
           >
-            <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <SelectValue placeholder="All teams" />
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <SelectValue placeholder="All teams" />
+            </div>
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all" className="text-xs">
+          <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+            <SelectItem
+              value="all"
+              className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+            >
               All teams
             </SelectItem>
             {teams.map(team => (
-              <SelectItem key={team.id} value={team.id} className="text-xs">
+              <SelectItem
+                key={team.id}
+                value={team.id}
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 {team.name}
               </SelectItem>
             ))}
@@ -168,7 +177,7 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
           variant="secondary"
           aria-label="Apply filters"
           onClick={() => navigate({})}
-          className="h-9 gap-1.5 text-xs max-sm:flex-1"
+          className="h-9 gap-1.5 rounded-xl text-xs font-medium shadow-2xs max-sm:flex-1"
         >
           <Filter className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Apply filters</span>

@@ -21,6 +21,7 @@ import {
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
 } from '@/components/runbooks/RunbookPagination';
+
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -171,7 +172,7 @@ export default async function RunbookSecretsPage({
               className="bg-card"
             />
           ) : (
-            <div className="overflow-x-auto rounded-xl border bg-card shadow-xs">
+            <div className="overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs">
               <Table>
                 <TableCaption className="sr-only">Scoped secrets</TableCaption>
                 <TableHeader>
@@ -267,48 +268,50 @@ export default async function RunbookSecretsPage({
           >
             <div aria-labelledby="secret-detail-title" className="space-y-6">
               <section aria-labelledby="secret-grants-title" className="space-y-3">
-                <h3 id="secret-grants-title" className="text-sm font-semibold">
+                <h3 id="secret-grants-title" className="!text-sm !leading-snug font-semibold">
                   Grants
                 </h3>
                 {grants.length > 0 ? (
-                  <Table>
-                    <TableCaption className="sr-only">Grants for {selected.name}</TableCaption>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Target</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {grants.map(grant => (
-                        <TableRow key={grant.id}>
-                          <TableCell className="text-sm">
-                            {grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target'}
-                            <span className="block text-[11px] text-muted-foreground">
-                              Granted{' '}
-                              {formatDateTime(grant.createdAt, userTimeZone, { format: 'date' })}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Pill tone={grant.agentPool ? 'info' : 'neutral'}>
-                              {grant.agentPool ? 'Pool' : 'Agent'}
-                            </Pill>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <ConfirmAction
-                              action={revokeRunbookSecretGrantAction.bind(null, grant.id)}
-                              title="Revoke this secret grant?"
-                              description="The target can no longer resolve this credential for new steps. Previously resolved values cannot be recalled."
-                              label="Revoke grant"
-                              variant="outline"
-                              successMessage="Grant revoked"
-                            />
-                          </TableCell>
+                  <div className="overflow-x-auto rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs">
+                    <Table>
+                      <TableCaption className="sr-only">Grants for {selected.name}</TableCaption>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Target</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {grants.map(grant => (
+                          <TableRow key={grant.id}>
+                            <TableCell className="text-sm">
+                              {grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target'}
+                              <span className="block text-[11px] text-muted-foreground">
+                                Granted{' '}
+                                {formatDateTime(grant.createdAt, userTimeZone, { format: 'date' })}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Pill tone={grant.agentPool ? 'info' : 'neutral'}>
+                                {grant.agentPool ? 'Pool' : 'Agent'}
+                              </Pill>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <ConfirmAction
+                                action={revokeRunbookSecretGrantAction.bind(null, grant.id)}
+                                title="Revoke this secret grant?"
+                                description="The target can no longer resolve this credential for new steps. Previously resolved values cannot be recalled."
+                                label="Revoke grant"
+                                variant="outline"
+                                successMessage="Grant revoked"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 ) : (
                   <EmptyHint
                     icon={ShieldOff}
@@ -353,9 +356,9 @@ export default async function RunbookSecretsPage({
 
               <section
                 aria-labelledby="secret-rotate-title"
-                className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4"
+                className="space-y-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:p-5"
               >
-                <h3 id="secret-rotate-title" className="text-sm font-semibold">
+                <h3 id="secret-rotate-title" className="!text-sm !leading-snug font-semibold">
                   Rotate value
                 </h3>
                 <ActionForm

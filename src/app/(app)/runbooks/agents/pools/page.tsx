@@ -197,7 +197,7 @@ export default async function RunbookAgentPoolsPage({
         >
           <div aria-labelledby="pool-members-title" className="space-y-4">
             {members.length > 0 ? (
-              <div className="overflow-x-auto rounded-lg border">
+              <div className="overflow-x-auto rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs">
                 <Table>
                   <TableCaption className="sr-only">Members of {selected.name}</TableCaption>
                   <TableHeader>
@@ -312,17 +312,19 @@ export default async function RunbookAgentPoolsPage({
                 key={pool.id}
                 aria-label={pool.name}
                 className={cn(
-                  'flex flex-col rounded-xl border bg-card shadow-xs transition-colors',
-                  isSelected && 'border-primary/50 ring-1 ring-primary/30'
+                  'flex flex-col rounded-2xl border border-border/80 dark:border-border/60 bg-card backdrop-blur-xs shadow-xs transition-all duration-200 hover:border-primary/40 hover:shadow-md',
+                  isSelected && 'border-primary/50 ring-2 ring-primary/20 shadow-md'
                 )}
               >
-                <div className="space-y-2 border-b px-5 py-4">
+                <div className="space-y-2 border-b border-border/60 px-5 py-4">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
                         <Network className="h-4 w-4" aria-hidden="true" />
                       </span>
-                      <h2 className="break-words text-sm font-semibold">{pool.name}</h2>
+                      <h2 className="break-words !text-sm !leading-snug font-semibold">
+                        {pool.name}
+                      </h2>
                     </div>
                     <Pill tone={pool.mode === 'SHARED_TARGET' ? 'info' : 'neutral'}>
                       {pool.mode === 'SHARED_TARGET' ? 'Shared target' : 'Local hosts'}
@@ -336,13 +338,21 @@ export default async function RunbookAgentPoolsPage({
                 </div>
                 <div className="flex-1 space-y-4 px-5 py-4 text-sm">
                   <dl className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-muted/40 px-3 py-2">
-                      <dt className="text-[11px] text-muted-foreground">Agents</dt>
-                      <dd className="text-lg font-semibold tabular-nums">{pool._count.members}</dd>
+                    <div className="rounded-xl border border-border/50 bg-muted/30 px-3.5 py-2.5">
+                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Agents
+                      </dt>
+                      <dd className="mt-1 text-xl font-extrabold tabular-nums">
+                        {pool._count.members}
+                      </dd>
                     </div>
-                    <div className="rounded-lg bg-muted/40 px-3 py-2">
-                      <dt className="text-[11px] text-muted-foreground">Rules</dt>
-                      <dd className="text-lg font-semibold tabular-nums">{pool._count.bindings}</dd>
+                    <div className="rounded-xl border border-border/50 bg-muted/30 px-3.5 py-2.5">
+                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Rules
+                      </dt>
+                      <dd className="mt-1 text-xl font-extrabold tabular-nums">
+                        {pool._count.bindings}
+                      </dd>
                     </div>
                   </dl>
                   <p className="text-xs text-muted-foreground">
@@ -381,7 +391,7 @@ export default async function RunbookAgentPoolsPage({
                           <li key={binding.service.id}>
                             <Link
                               href={`/services/${binding.service.id}?tab=runbooks`}
-                              className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-card px-2 py-0.5 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               <Server aria-hidden="true" className="h-3 w-3" />
                               {binding.service.name}
@@ -394,7 +404,7 @@ export default async function RunbookAgentPoolsPage({
                     )}
                   </div>
                   {canManage && (
-                    <details className="group rounded-lg border px-3 py-2">
+                    <details className="group rounded-xl border border-border/60 bg-muted/20 px-3.5 py-2.5">
                       <summary className="cursor-pointer rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                         Dynamic label selector
                       </summary>
@@ -414,7 +424,7 @@ export default async function RunbookAgentPoolsPage({
                     </details>
                   )}
                 </div>
-                <div className="border-t px-5 py-3">
+                <div className="border-t border-border/60 px-5 py-3">
                   <Button asChild variant={isSelected ? 'secondary' : 'outline'} size="sm">
                     <Link
                       href={fleetHref(POOLS_PATH, { page, pool: pool.id })}

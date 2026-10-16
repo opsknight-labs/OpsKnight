@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { RunbookInput } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCanViewIncident, assertCapability } from '@/lib/rbac';
+import { assertCanViewIncident, assertCapability, getUserPermissions } from '@/lib/rbac';
 import {
   approveExecutionStep,
   cancelExecution,
@@ -152,8 +152,9 @@ export async function executePreviewedIncidentRunbookAction(
 }
 
 async function adhocIncidentContext(incidentId: string) {
-  const [actor] = await Promise.all([
+  const [actor, permissions] = await Promise.all([
     assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
+    getUserPermissions(),
     assertCanViewIncident(idSchema.parse(incidentId)),
   ]);
   const incident = await prisma.incident.findUnique({
@@ -161,7 +162,7 @@ async function adhocIncidentContext(incidentId: string) {
     select: { id: true, serviceId: true },
   });
   if (!incident) throw new RunbookDefinitionError('Incident was not found.');
-  return { actor, incident };
+  return { actor, permissions, incident };
 }
 
 async function publishedAdhocRunbook(runbookId: string) {
@@ -231,8 +232,38 @@ function adhocTarget(value: FormDataEntryValue | null) {
   throw new RunbookDefinitionError('Invalid Runbook execution target.');
 }
 
+async function assertAdhocRunbookAccess(
+  permissions: { capabilities: readonly string[] },
+  incident: { serviceId: string | null },
+  runbookId: string
+) {
+  const canReadAll = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL);
+  if (canReadAll) return;
+
+  const canReadScoped = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED);
+  if (!canReadScoped || !incident.serviceId) {
+    throw new RunbookDefinitionError('Runbook access denied for this incident.');
+  }
+
+  const bound = await prisma.serviceAutomationRule.findFirst({
+    where: {
+      runbookId: idSchema.parse(runbookId),
+      serviceId: incident.serviceId,
+      enabled: true,
+      detachedAt: null,
+    },
+    select: { id: true },
+  });
+  if (!bound) {
+    throw new RunbookDefinitionError(
+      'Runbook access denied: runbook is not attached to this incident’s service.'
+    );
+  }
+}
+
 async function adhocExecutionRequest(incidentId: string, runbookId: string, formData: FormData) {
-  const { actor, incident } = await adhocIncidentContext(incidentId);
+  const { actor, permissions, incident } = await adhocIncidentContext(incidentId);
+  await assertAdhocRunbookAccess(permissions, incident, runbookId);
   const runbook = await publishedAdhocRunbook(runbookId);
   return {
     runbookId: runbook.id,
@@ -245,13 +276,32 @@ async function adhocExecutionRequest(incidentId: string, runbookId: string, form
 }
 
 export async function searchAdhocIncidentRunbooksAction(incidentId: string, query: string) {
-  await adhocIncidentContext(incidentId);
+  const { permissions, incident } = await adhocIncidentContext(incidentId);
+  const canReadAll = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL);
+  const canReadScoped = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED);
+  if (!canReadAll && !canReadScoped) {
+    return [];
+  }
+  if (!canReadAll && !incident.serviceId) {
+    return [];
+  }
   const q = z.string().trim().max(100).catch('').parse(query);
   const runbooks = await prisma.runbook.findMany({
     where: {
       archivedAt: null,
       publishedVersion: { is: { state: 'PUBLISHED' } },
       ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+      ...(!canReadAll && incident.serviceId
+        ? {
+            serviceAutomationRules: {
+              some: {
+                serviceId: incident.serviceId,
+                enabled: true,
+                detachedAt: null,
+              },
+            },
+          }
+        : {}),
     },
     select: {
       id: true,
@@ -272,7 +322,8 @@ export async function searchAdhocIncidentRunbooksAction(incidentId: string, quer
 
 export async function loadAdhocIncidentRunbookAction(incidentId: string, runbookId: string) {
   try {
-    await adhocIncidentContext(incidentId);
+    const { permissions, incident } = await adhocIncidentContext(incidentId);
+    await assertAdhocRunbookAccess(permissions, incident, runbookId);
     const runbook = await publishedAdhocRunbook(runbookId);
     const steps = flattenSteps(parseRunbookDefinition(runbook.publishedVersion.definition));
     const [agents, pools] = await Promise.all([
