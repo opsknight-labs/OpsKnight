@@ -29,27 +29,29 @@ export function RunbookRouteError({
   }, [error]);
 
   return (
-    <div className="flex w-full justify-center px-4 py-12">
+    <div className="flex w-full justify-center px-4 py-16">
       <div
         role="alert"
-        className="w-full max-w-lg space-y-4 rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center"
+        className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xs"
       >
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-          <AlertCircle className="h-6 w-6 text-destructive" aria-hidden />
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{getUserFacingErrorMessage(error)}</p>
-          {error.digest && (
-            <p className="mt-2 font-mono text-xs text-muted-foreground">Reference: {error.digest}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button type="button" onClick={reset}>
+        <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-inset ring-destructive/20">
+          <AlertCircle className="h-5 w-5 text-destructive" aria-hidden />
+        </span>
+        <h2 className="mt-4 text-base font-semibold tracking-tight text-foreground">{title}</h2>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+          {getUserFacingErrorMessage(error)}
+        </p>
+        {error.digest && (
+          <p className="mt-3 inline-block max-w-full break-all rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
+            Reference: {error.digest}
+          </p>
+        )}
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button type="button" size="sm" onClick={reset}>
             <RefreshCw className="h-4 w-4" aria-hidden />
             Try again
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="outline" size="sm" asChild>
             <Link href={backHref}>{backLabel}</Link>
           </Button>
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Copy, ShieldCheck } from 'lucide-react';
+import { Check, Copy, ShieldCheck, TerminalSquare } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -27,26 +27,32 @@ function SetupBlock({ value, disabled = false }: { value: string; disabled?: boo
     }
   }
   return (
-    <div className="relative">
+    <div className="overflow-hidden rounded-lg border bg-muted/30">
+      <div className="flex items-center justify-between gap-2 border-b bg-muted/50 px-3 py-1.5">
+        <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <TerminalSquare className="h-3.5 w-3.5" aria-hidden="true" />
+          Shell
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1.5 px-2 text-xs"
+          onClick={copy}
+          disabled={disabled}
+        >
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
       {error && (
-        <p role="alert" className="mb-2 text-sm text-destructive">
+        <p role="alert" className="border-b px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-4 pr-24 text-xs leading-5">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-5">
         <code>{value}</code>
       </pre>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="absolute right-2 top-2"
-        onClick={copy}
-        disabled={disabled}
-      >
-        {copied ? <Check /> : <Copy />}
-        {copied ? 'Copied' : 'Copy'}
-      </Button>
     </div>
   );
 }
@@ -121,35 +127,38 @@ export default function AgentSetupInstructions({
   );
 
   return (
-    <div className="space-y-4 rounded-lg border bg-background p-4">
+    <div className="space-y-5 rounded-xl border bg-card p-5 shadow-xs">
       <div className="flex gap-3">
-        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-        <div>
-          <p className="font-semibold">Deploy this Agent</p>
-          <p className="text-xs text-muted-foreground">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-400">
+          <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Deploy this Agent</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
             Adjust the image and Agent-reachable URL, then copy one deployment method. The token is
             included only in this browser response and expires after 15 minutes.
           </p>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Enrollment deployment name: <code>{deployment.name}</code>. Keep this name with the
-        persisted Agent identity.
+        Enrollment deployment name:{' '}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono">{deployment.name}</code>. Keep this
+        name with the persisted Agent identity.
       </p>
-      <label className="block text-sm">
+      <label className="flex flex-col gap-1.5 text-xs font-medium sm:flex-row sm:items-center sm:gap-3">
         Deployment operation
         <select
           aria-label="Deployment operation"
           value={operation}
           onChange={event => setOperation(event.target.value as 'install' | 'upgrade')}
-          className="ml-2 rounded border bg-background p-2"
+          className="h-9 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-sm font-normal shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
         >
           <option value="install">Install new independent Agent</option>
           <option value="upgrade">Upgrade this installed Agent, preserving identity</option>
         </select>
       </label>
       {operation === 'upgrade' && (
-        <label className="block text-sm">
+        <label className="block space-y-1.5 text-xs font-medium">
           Existing deployment name
           <Input
             aria-label="Existing deployment name"
@@ -157,14 +166,14 @@ export default function AgentSetupInstructions({
             maxLength={45}
             onChange={event => setDeploymentName(event.target.value)}
           />
-          <span className="text-xs text-muted-foreground">
+          <span className="block text-xs font-normal text-muted-foreground">
             Match the saved installation name. Older installations may use opsknight-agent. Changing
             the Compose project name creates a different volume.
           </span>
         </label>
       )}
       {!validDeploymentName && operation === 'upgrade' && (
-        <p role="alert">
+        <p role="alert" className="text-sm text-destructive">
           Use a deployment name of at most 45 lowercase letters, numbers or hyphens.
         </p>
       )}
@@ -173,30 +182,39 @@ export default function AgentSetupInstructions({
         Use its new deployment name and a new volume; never reuse or copy the old identity.
       </p>
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="space-y-1">
-          <Label htmlFor="agent-setup-image">Agent image</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-setup-image" className="text-xs">
+            Agent image
+          </Label>
           <Input
             id="agent-setup-image"
             value={image}
+            className="font-mono text-xs"
             onChange={event => setImage(event.target.value)}
           />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="agent-setup-url">OpsKnight URL from Agent</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-setup-url" className="text-xs">
+            OpsKnight URL from Agent
+          </Label>
           <Input
             id="agent-setup-url"
             value={url}
+            className="font-mono text-xs"
             onChange={event => {
               setUrl(event.target.value);
               setEndpointConfirmed(false);
             }}
           />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="agent-setup-policy">Compose policy path</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-setup-policy" className="text-xs">
+            Compose policy path
+          </Label>
           <Input
             id="agent-setup-policy"
             value={policyPath}
+            className="font-mono text-xs"
             onChange={event => setPolicyPath(event.target.value)}
           />
         </div>
@@ -207,7 +225,10 @@ export default function AgentSetupInstructions({
         </p>
       )}
       {!distribution && (
-        <p role="alert" className="text-sm text-amber-700">
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800 dark:text-amber-200"
+        >
           No verified Agent release is available for this server. Install commands cannot be copied
           until compatible published artifacts are available.
         </p>
@@ -230,10 +251,11 @@ export default function AgentSetupInstructions({
           {endpointError}
         </p>
       )}
-      <label className="flex items-start gap-2 text-sm">
+      <label className="flex items-start gap-2.5 rounded-lg border bg-muted/30 p-3 text-sm">
         <input
           type="checkbox"
           checked={endpointConfirmed}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
           onChange={event => setEndpointConfirmed(event.target.checked)}
         />
         I confirmed this URL is reachable from the Agent host or cluster.
@@ -243,11 +265,11 @@ export default function AgentSetupInstructions({
         permissions require explicit provisioning; binary availability does not prove target
         authorization.
       </p>
-      <details className="rounded border p-3 text-sm">
-        <summary className="cursor-pointer font-medium">
+      <details className="group rounded-lg border p-3 text-sm">
+        <summary className="cursor-pointer rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Installation preflight and diagnostics
         </summary>
-        <ol className="mt-2 list-decimal space-y-2 pl-5">
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-xs leading-relaxed text-muted-foreground">
           <li>
             Endpoint and certificate trust: the generated curl command must succeed from the Agent
             host. Install the private CA in that host and container trust store if needed; do not

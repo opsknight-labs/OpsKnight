@@ -111,6 +111,9 @@ export interface RunbookExecutionRequest {
   sourceEventId?: string;
   expectedPlanDigest?: string;
   previewAuthorizationToken?: string;
+  /** Responder-selected target; only accepted for manual runs without a rule or suggestion. */
+  targetAgentId?: string;
+  targetAgentPoolId?: string;
 }
 
 /** Responder entry point. Absence of an actor never authorizes an automatic execution. */
@@ -335,12 +338,36 @@ async function prepareRunbookExecution(
     if (planSnapshot && planSnapshot.definitionChecksum !== version.checksum)
       throw new RunbookDefinitionError('Suggested definition checksum changed.');
     const steps = executionSteps(definition);
+    const targetOverride = Boolean(input.targetAgentId || input.targetAgentPoolId);
+    if (targetOverride) {
+      if (mode !== 'MANUAL' || binding || planSnapshot || !input.triggeredByUserId)
+        throw new RunbookDefinitionError(
+          'TARGET_OVERRIDE_NOT_ALLOWED: service rules and suggestions use their reviewed target.'
+        );
+      if (input.targetAgentId && input.targetAgentPoolId)
+        throw new RunbookDefinitionError(
+          'Select either a specific Agent or an Agent pool, not both.'
+        );
+      const target = input.targetAgentId
+        ? await tx.runbookAgent.findFirst({
+            where: { id: input.targetAgentId, status: { not: 'REVOKED' } },
+            select: { id: true },
+          })
+        : await tx.runbookAgentPool.findUnique({
+            where: { id: input.targetAgentPoolId },
+            select: { id: true },
+          });
+      if (!target)
+        throw new RunbookDefinitionError(
+          'TARGET_NOT_FOUND: the selected Agent or Agent pool is unavailable.'
+        );
+    }
     let resolvedTargetAgentId = planSnapshot
       ? planSnapshot.agentId
-      : (binding?.defaultAgentId ?? null);
+      : (binding?.defaultAgentId ?? input.targetAgentId ?? null);
     const resolvedTargetAgentPoolId = planSnapshot
       ? planSnapshot.agentPoolId
-      : (binding?.defaultAgentPoolId ?? null);
+      : (binding?.defaultAgentPoolId ?? input.targetAgentPoolId ?? null);
     if (
       steps.some(step => requiresAgent(step.type)) &&
       !resolvedTargetAgentId &&

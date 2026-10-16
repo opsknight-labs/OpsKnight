@@ -43,6 +43,7 @@ import {
   duplicateRunbook,
   restoreRunbook,
 } from '@/lib/runbooks/lifecycle';
+import { parseRunbookMetadataForm } from '@/lib/runbooks/metadata-form';
 
 const idSchema = z.string().cuid();
 
@@ -77,6 +78,7 @@ export async function createRunbookAction(formData: FormData) {
       name: readString(formData, 'name'),
       slug: readString(formData, 'slug'),
       description: readString(formData, 'description'),
+      ...parseRunbookMetadataForm(formData),
       definition: runbookTemplate(templateName),
       inputs: runbookTemplateInputs(templateName),
     },
@@ -95,6 +97,7 @@ export async function updateRunbookMetadataAction(runbookId: string, formData: F
       name: readString(formData, 'name'),
       slug: readString(formData, 'slug'),
       description: readString(formData, 'description'),
+      ...parseRunbookMetadataForm(formData),
     },
     actor.id
   );

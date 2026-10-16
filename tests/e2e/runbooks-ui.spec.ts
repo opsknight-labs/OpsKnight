@@ -213,7 +213,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const agentName = `UI Agent ${suffix}`;
   const poolName = `UI Pool ${suffix}`;
   const secretName = `ui-secret-${suffix}`;
-  await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
+  await page.getByRole('button', { name: 'Enroll agent', exact: true }).click();
   await page.getByLabel('Agent name', { exact: true }).fill(agentName);
   await page.getByLabel('Hostname hint (optional)').fill('ui-fixture.invalid');
   await page.getByRole('button', { name: 'Create enrollment', exact: true }).click();
@@ -233,7 +233,8 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .toBe(1);
   await page.keyboard.press('Escape');
   const poolCard = page.locator('.bg-card').filter({ visible: true }).filter({ hasText: poolName });
-  await poolCard.getByRole('button', { name: 'Manage pool' }).click();
+  await poolCard.getByRole('link', { name: 'Manage pool' }).click();
+  await page.waitForURL(/\/runbooks\/agents\/pools\?.*pool=/);
   await page.getByRole('combobox', { name: 'Agent to add' }).click();
   await page.getByPlaceholder('Search agent to add…').fill(agentName);
   await page.getByRole('option', { name: agentName, exact: true }).click();
@@ -259,12 +260,10 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const secret = await prisma.runbookSecret.findUniqueOrThrow({ where: { name: secretName } });
   expect(secret.valueEncrypted).not.toContain('ui-credential-initial');
   await page.keyboard.press('Escape');
-  const secretCard = page
-    .locator('.bg-card')
-    .filter({ visible: true })
-    .filter({ hasText: secretName });
-  await expect(secretCard.getByLabel('Secret value hidden')).toBeVisible();
-  await secretCard.getByRole('button', { name: 'Manage grants / Rotate' }).click();
+  const secretRow = page.getByRole('row').filter({ hasText: secretName });
+  await expect(secretRow.getByLabel('Secret value hidden')).toBeVisible();
+  await secretRow.getByRole('link', { name: 'Manage grants / Rotate' }).click();
+  await page.waitForURL(/\/runbooks\/agents\/secrets\?.*secret=/);
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
   await page.getByPlaceholder('Search grant to target…').fill(poolName);
   await page.getByRole('option', { name: `Pool · ${poolName}`, exact: true }).click();
@@ -273,6 +272,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .poll(async () => prisma.runbookSecretGrant.count({ where: { secretId: secret.id } }))
     .toBe(2);
   await page.getByLabel('New secret value', { exact: true }).fill('ui-credential-rotated');
+  await page.getByRole('checkbox', { name: /previous value cannot be restored/ }).check();
   await page.getByRole('button', { name: 'Rotate secret', exact: true }).click();
   await expect
     .poll(
@@ -282,13 +282,13 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .not.toBe(secret.valueEncrypted);
   await page.keyboard.press('Escape');
   await expect(page.getByText('ui-credential-rotated', { exact: true })).not.toBeVisible();
-  await expect(secretCard.getByLabel('Secret value hidden')).toBeVisible();
+  await expect(secretRow.getByLabel('Secret value hidden')).toBeVisible();
   // Stay in the client router: a hard navigation can abort the rotation action's pending RSC refresh in Firefox.
   await page
     .getByRole('navigation', { name: 'Infrastructure sections' })
     .getByRole('link', { name: /^agents/i })
     .click();
-  await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
+  await page.getByRole('button', { name: 'Enroll agent', exact: true }).click();
   const cancelledName = `UI cancelled enrollment ${Date.now()}`;
   await page.getByLabel('Agent name', { exact: true }).fill(cancelledName);
   await page.getByRole('button', { name: 'Create enrollment', exact: true }).click();
@@ -815,14 +815,22 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
         .getByRole('navigation', { name: 'Infrastructure sections' })
         .getByRole('link', { name: /^pools/i })
         .click();
-      await page.waitForURL('**/runbooks/agents?tab=pools**');
+      await page.waitForURL('**/runbooks/agents/pools');
       await noOverflow(page);
       await page
         .getByRole('navigation', { name: 'Infrastructure sections' })
         .getByRole('link', { name: /^secrets/i })
         .click();
-      await page.waitForURL('**/runbooks/agents?tab=secrets**');
+      await page.waitForURL('**/runbooks/agents/secrets');
       await noOverflow(page);
+      await page
+        .getByRole('navigation', { name: 'Infrastructure sections' })
+        .getByRole('link', { name: /^security/i })
+        .click();
+      await page.waitForURL('**/runbooks/agents/security');
+      await noOverflow(page);
+      await page.goto('/runbooks/agents?tab=pools');
+      await page.waitForURL('**/runbooks/agents/pools');
     }
   }
   await page.screenshot({ path: 'test-results/runbooks-incident-mobile.png', fullPage: true });
@@ -1010,10 +1018,10 @@ test('server pagination, administrator labels, effective capabilities and budget
     .getByRole('navigation', { name: 'Infrastructure sections' })
     .getByRole('link', { name: /^security/i })
     .click();
-  await page
-    .getByText('Automatic remediation budgets', { exact: true })
-    .filter({ visible: true })
-    .click();
+  await page.waitForURL('**/runbooks/agents/security');
+  await expect(
+    page.getByText('Automatic remediation budgets', { exact: true }).filter({ visible: true })
+  ).toBeVisible();
   await page
     .getByRole('spinbutton', { name: 'Automatic executions per incident', exact: true })
     .fill('2');
@@ -1035,10 +1043,9 @@ test('server pagination, administrator labels, effective capabilities and budget
           .runbookAutoExecutionsPerIncident
     )
     .toBe(2);
-  await page
-    .getByText('Pinned execution public key', { exact: true })
-    .filter({ visible: true })
-    .click();
+  await expect(
+    page.getByText('Pinned execution public key', { exact: true }).filter({ visible: true })
+  ).toBeVisible();
   const stageIdentity = page.getByRole('button', { name: 'Stage next signing identity' });
   if ((await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })) === 0) {
     await stageIdentity.click();

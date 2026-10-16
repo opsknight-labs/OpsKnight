@@ -1,5 +1,5 @@
-import PageLoadingSkeleton from '@/components/ui/PageLoadingSkeleton';
+import { RunbookPageSkeleton } from '@/components/runbooks/skeletons';
 
 export default function RunbookHealthLoading() {
-  return <PageLoadingSkeleton type="dashboard" />;
+  return <RunbookPageSkeleton variant="health" />;
 }
