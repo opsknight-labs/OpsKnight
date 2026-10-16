@@ -31,8 +31,9 @@ function unavailableReasons(report: unknown): string[] {
   if (!Array.isArray(report)) return [];
   return report.flatMap(entry => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
-    const item = entry as { available?: boolean; reason?: string };
-    return !item.available && item.reason ? [item.reason] : [];
+    const item = entry as { configured?: boolean; available?: boolean; reason?: string };
+    // Only flag as an issue if the capability was configured by policy but failed runtime detection
+    return item.configured && !item.available && item.reason ? [item.reason] : [];
   });
 }
 
