@@ -401,7 +401,7 @@ function buildBaseSpec(): Record<string, unknown> {
             incidentId: { type: 'string', nullable: true },
             status: { type: 'string' },
             triggeredByUserId: { type: 'string', nullable: true },
-            startedAt: { type: 'string', format: 'date-time' },
+            startedAt: { type: 'string', format: 'date-time', nullable: true },
             completedAt: { type: 'string', format: 'date-time', nullable: true },
             steps: { type: 'array', items: { type: 'object' } },
           },
@@ -1560,6 +1560,7 @@ function buildBaseSpec(): Record<string, unknown> {
             },
           ],
           requestBody: {
+            required: true,
             content: {
               'application/json': {
                 schema: {

@@ -425,7 +425,7 @@
     "requiredHeaders": [
       "Idempotency-Key"
     ],
-    "bodyRequired": false
+    "bodyRequired": true
   },
   "getRunbook": {
     "method": "GET",

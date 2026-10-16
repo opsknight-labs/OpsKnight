@@ -10,7 +10,7 @@ export async function readV2JsonBody(req: Request): Promise<unknown> {
     throw new AppError({ code: 'PAYLOAD_TOO_LARGE' });
   }
   const reader = req.body?.getReader();
-  if (!reader) throw new AppError({ code: 'INVALID_JSON' });
+  if (!reader) return {};
   const chunks: Uint8Array[] = [];
   let size = 0;
   try {
@@ -27,6 +27,7 @@ export async function readV2JsonBody(req: Request): Promise<unknown> {
   } finally {
     reader.releaseLock();
   }
+  if (size === 0) return {};
   const bytes = new Uint8Array(size);
   let offset = 0;
   for (const chunk of chunks) {

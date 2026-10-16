@@ -41,6 +41,19 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
           },
         };
       }
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- test double comparing a fixed fixture string
+      if (auth === 'Bearer user-token') {
+        return {
+          apiKey: { id: 'key_user', scopes: ['postmortems:read'] },
+          actor: {
+            id: 'usr_user',
+            role: 'USER',
+            status: 'ACTIVE',
+            teamIds: ['team_1'],
+            apiKey: { id: 'key_user', scopes: ['postmortems:read'] },
+          },
+        };
+      }
       return {
         apiKey: { id: 'key_admin', scopes: ['admin:manage', 'runbooks:execute'] },
         actor: {
@@ -217,5 +230,45 @@ describe('defineV2Route Endpoint Factory', () => {
     const res = await route(req);
     expect(res.status).toBe(202);
     expect(handlerSpy).toHaveBeenCalled();
+  });
+
+  it('allows scoped access when scopedFilter is declared on collection route', async () => {
+    const handlerSpy = vi.fn().mockResolvedValue({ status: 200, data: [] });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
+      scopedFilter: true,
+      handler: handlerSpy,
+    });
+
+    const req = new NextRequest('http://localhost:3000/api/v2/postmortems', {
+      method: 'GET',
+      headers: { authorization: 'Bearer user-token' },
+    });
+
+    const res = await route(req);
+    expect(res.status).toBe(200);
+    expect(handlerSpy).toHaveBeenCalled();
+  });
+
+  it('normalizes an absent body to {} for routes with bodySchema', async () => {
+    const handlerSpy = vi.fn().mockResolvedValue({ status: 200, data: { ok: true } });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
+      bodySchema: z.object({ incidentId: z.string().optional() }),
+      handler: handlerSpy,
+    });
+
+    const req = new NextRequest('http://localhost:3000/api/v2/runbooks/rb_1/execute', {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-token' },
+    });
+
+    const res = await route(req);
+    expect(res.status).toBe(200);
+    expect(handlerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: {},
+      })
+    );
   });
 });

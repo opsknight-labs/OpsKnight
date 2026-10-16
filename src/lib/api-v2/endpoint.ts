@@ -52,6 +52,7 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
   idempotent?: boolean;
   idempotencyRequired?: boolean;
   idempotencyScope?: string | ((ctx: { params: TParams; body: TBody }) => string);
+  scopedFilter?: boolean;
   handler: (ctx: V2RouteContext<TParams, TQuery, TBody>) => Promise<V2RouteHandlerResult<TResult>>;
 } & (
   | {
@@ -135,7 +136,11 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
               apiKey,
             });
           }
-          enforceV2ResourceAuthorization(actor, config.action, resource);
+          if (config.scopedFilter) {
+            enforceV2Authorization(actor, config.action, resource);
+          } else {
+            enforceV2ResourceAuthorization(actor, config.action, resource);
+          }
         } else if (!('isPublic' in config && config.isPublic)) {
           throw new AppError({
             code: 'AUTHORIZATION_DENIED',

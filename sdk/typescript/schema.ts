@@ -14,7 +14,7 @@ export type Notification = { "id": string; "channel": string; "status": string; 
 export type StatusPage = { "id": string; "name": string; "slug": string; "isDefault": boolean; "enabled": boolean; "description"?: string | null; "createdAt": string; "updatedAt": string; "publication"?: { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "lastError"?: string | null; "stale"?: boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type StatusPageAnnouncement = { "id": string; "title": string; "message": string; "type": string; "isActive": boolean; "startDate"?: string | null; "endDate"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type Runbook = { "id": string; "name": string; "slug": string; "description"?: string | null; "version": number; "steps"?: Array<RunbookStep>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
-export type RunbookExecution = { "id": string; "runbookId": string; "runbook"?: { "id"?: string; "name"?: string; "slug"?: string } & Record<string, unknown>; "incidentId"?: string | null; "status": string; "triggeredByUserId"?: string | null; "startedAt": string; "completedAt"?: string | null; "steps"?: Array<Record<string, unknown>> } & Record<string, unknown>;
+export type RunbookExecution = { "id": string; "runbookId": string; "runbook"?: { "id"?: string; "name"?: string; "slug"?: string } & Record<string, unknown>; "incidentId"?: string | null; "status": string; "triggeredByUserId"?: string | null; "startedAt": string | null; "completedAt"?: string | null; "steps"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type ServiceAccount = { "id": string; "name": string; "role": string; "description"?: string | null; "status": string; "teamIds"?: Array<string>; "activeTokensCount"?: number; "tokensTotal"?: number; "tokensTruncated"?: boolean; "tokens"?: Array<{ "id"?: string; "name"?: string; "prefix"?: string; "scopes"?: Array<string>; "status"?: "ACTIVE" | "EXPIRED" | "REVOKED"; "createdAt"?: string; "lastUsedAt"?: string | null; "expiresAt"?: string | null } & Record<string, unknown>>; "createdAt": string } & Record<string, unknown>;
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
@@ -89,7 +89,7 @@ export interface OperationRequests {
   listPostmortems: { "query"?: { "limit"?: number; "cursor"?: string; "incidentId"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: "true" | "false"; "search"?: string } };
   createPostmortem: { "headers"?: { "Idempotency-Key"?: string }; "body": { "incidentId": string; "title"?: string; "summary": string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED"; "isPublic"?: boolean } & Record<string, unknown> };
   getMetricsReport: { "query"?: { "serviceId"?: string; "days"?: number } };
-  executeRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body"?: { "incidentId"?: string | null; "serviceId"?: string | null; "bindingId"?: string | null; "expectedPlanDigest"?: string; "parameters"?: Record<string, unknown> } & Record<string, unknown> };
+  executeRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "incidentId"?: string | null; "serviceId"?: string | null; "bindingId"?: string | null; "expectedPlanDigest"?: string; "parameters"?: Record<string, unknown> } & Record<string, unknown> };
   getRunbook: { "params": { "id": string } };
   getRunbookExecution: { "params": { "id": string } };
   listRunbooks: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string } };
@@ -639,7 +639,7 @@ export const OPERATIONS = {
     "requiredHeaders": [
       "Idempotency-Key"
     ],
-    "bodyRequired": false
+    "bodyRequired": true
   },
   "getRunbook": {
     "method": "GET",

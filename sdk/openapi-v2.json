@@ -983,7 +983,10 @@
             ]
           },
           "startedAt": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "completedAt": {
@@ -7993,6 +7996,7 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
