@@ -111,10 +111,16 @@ export default function RuleWizard({
             >
               <div className="flex w-full items-center">
                 <span
-                  aria-hidden
+                  aria-hidden="true"
                   className={cn(
-                    'h-px flex-1',
-                    index === 0 ? 'opacity-0' : done || active ? 'bg-primary/60' : 'bg-border'
+                    'h-0.5 flex-1 rounded-full',
+                    index === 0
+                      ? 'opacity-0'
+                      : done
+                        ? 'bg-primary'
+                        : active
+                          ? 'bg-primary/40'
+                          : 'bg-border/70 dark:bg-border/50'
                   )}
                 />
                 <button
@@ -123,19 +129,23 @@ export default function RuleWizard({
                   onClick={() => move(index)}
                   aria-label={`Step ${index + 1}: ${item.title}${done ? ' · completed, go back' : ''}`}
                   className={cn(
-                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
-                    done && 'bg-primary text-primary-foreground ring-primary hover:bg-primary/90',
-                    active && 'bg-primary/10 text-primary ring-primary',
-                    !done && !active && 'bg-background text-muted-foreground ring-border'
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-4 ring-background shadow-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
+                    done && 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs',
+                    active && 'bg-primary/10 text-primary border border-primary/30',
+                    !done && !active && 'bg-muted/60 text-muted-foreground border border-border/70'
                   )}
                 >
-                  {done ? <Check className="h-3.5 w-3.5" aria-hidden /> : index + 1}
+                  {done ? <Check className="h-4 w-4" aria-hidden="true" /> : index + 1}
                 </button>
                 <span
-                  aria-hidden
+                  aria-hidden="true"
                   className={cn(
-                    'h-px flex-1',
-                    index === steps.length - 1 ? 'opacity-0' : done ? 'bg-primary/60' : 'bg-border'
+                    'h-0.5 flex-1 rounded-full',
+                    index === steps.length - 1
+                      ? 'opacity-0'
+                      : done
+                        ? 'bg-primary'
+                        : 'bg-border/70 dark:bg-border/50'
                   )}
                 />
               </div>

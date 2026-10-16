@@ -26,7 +26,16 @@ const LABELS = new Map<RunbookSkeletonVariant, string>([
 ]);
 
 function Card({ className, children }: { className?: string; children?: ReactNode }) {
-  return <div className={cn('rounded-xl border bg-card p-5 shadow-xs', className)}>{children}</div>;
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs',
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 function Header({
@@ -79,7 +88,10 @@ function Tiles({ count = 4 }: { count?: number }) {
       )}
     >
       {Array.from({ length: count }, (_, index) => (
-        <div key={index} className="rounded-xl border bg-card p-4 shadow-xs">
+        <div
+          key={index}
+          className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs"
+        >
           <Skeleton className="h-3 w-20" />
           <Skeleton className="mt-3 h-7 w-12" />
           <Skeleton className="mt-2 h-3 w-24" />

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Upload } from 'lucide-react';
-import { importRunbookAction } from '@/app/(app)/runbooks/[id]/version-actions';
+import { importRunbookAction } from '@/app/(app)/runbooks/actions';
 import {
   ActionForm,
   SubmitButton,
@@ -35,9 +35,9 @@ export function ImportRunbookDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="gap-1.5 shadow-2xs">
           <Upload className="h-4 w-4" aria-hidden="true" />
-          {triggerLabel}
+          <span>{triggerLabel}</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
@@ -93,3 +93,5 @@ export function ImportRunbookDialog({
     </Dialog>
   );
 }
+
+export default ImportRunbookDialog;

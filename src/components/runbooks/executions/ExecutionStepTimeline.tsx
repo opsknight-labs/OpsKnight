@@ -88,8 +88,8 @@ const NODE_RING: Record<ReturnType<typeof stepTone>, string> = {
 
 function AttemptDetails({ attempt }: { attempt: TimelineAttempt }) {
   return (
-    <details className="group rounded-lg border bg-background text-xs">
-      <summary className="flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-2 rounded-lg px-3 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-xl border border-border/70 dark:border-border/60 bg-card/60 text-xs">
+      <summary className="flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-2 rounded-xl px-3.5 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         <ChevronRight
           className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90"
           aria-hidden
@@ -101,7 +101,7 @@ function AttemptDetails({ attempt }: { attempt: TimelineAttempt }) {
         )}
         <span className="text-muted-foreground">· {attempt.claimedBy}</span>
       </summary>
-      <div className="space-y-3 border-t p-3 text-muted-foreground">
+      <div className="space-y-3 border-t border-border/60 p-3.5 text-muted-foreground">
         <ExecutionTroubleshooting status={attempt.status} code={attempt.errorCode} />
         {(attempt.errorCode || attempt.errorMessage) && (
           <p className="break-words font-medium text-destructive">
@@ -197,21 +197,21 @@ export function ExecutionStepTimeline({
           <li
             key={step.id}
             id={`step-${step.id}`}
-            className="relative scroll-mt-48 pb-5 pl-11 last:pb-0"
+            className={cn('relative scroll-mt-48 pl-12', !last && 'pb-6')}
           >
             {!last && (
               <span
                 aria-hidden="true"
                 className={cn(
-                  'absolute left-[15px] top-9 bottom-0 w-0.5 rounded-full',
-                  tone === 'success' ? 'bg-emerald-500/40' : 'bg-border'
+                  'absolute left-[17px] top-[50px] -bottom-0 w-0.5 rounded-full',
+                  tone === 'success' ? 'bg-emerald-500/50' : 'bg-border/70 dark:bg-border/50'
                 )}
               />
             )}
             <span
               aria-hidden="true"
               className={cn(
-                'absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-inset',
+                'absolute left-0 top-3.5 flex h-9 w-9 items-center justify-center rounded-full ring-4 ring-background shadow-xs z-10 transition-colors',
                 TONE_SURFACE[tone],
                 NODE_RING[tone]
               )}
@@ -221,19 +221,19 @@ export function ExecutionStepTimeline({
             <article
               aria-label={`Step ${index + 1}: ${step.name}`}
               className={cn(
-                'rounded-xl border bg-card shadow-xs',
-                failed && 'border-rose-500/40',
-                step.pendingApproval && 'border-amber-500/50'
+                'rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200 overflow-hidden',
+                failed && 'border-rose-500/40 bg-rose-500/[0.02]',
+                step.pendingApproval && 'border-amber-500/50 bg-amber-500/[0.02]'
               )}
             >
-              <header className="flex flex-wrap items-start justify-between gap-2 px-4 pt-3.5">
+              <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/50 px-5 py-3.5 bg-muted/20">
                 <div className="min-w-0 space-y-1">
                   <p className="flex min-w-0 items-baseline gap-2">
-                    <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
+                    <span className="shrink-0 text-xs font-bold text-muted-foreground uppercase tracking-wider tabular-nums">
                       Step {index + 1}
                     </span>
                     <span
-                      className="truncate text-sm font-semibold"
+                      className="truncate text-sm font-bold text-foreground"
                       title={`${step.name} · ${step.stepKey}`}
                     >
                       {step.name}
@@ -259,7 +259,7 @@ export function ExecutionStepTimeline({
                 </div>
                 <RunbookStatusBadge status={step.status} size="sm" />
               </header>
-              <div className="space-y-3 px-4 pb-3.5 pt-2">
+              <div className="space-y-3.5 p-5">
                 <p className="text-xs text-muted-foreground tabular-nums">
                   {step.startedAt ? `Started ${step.startedAt}` : 'Not started'}
                   {step.completedAt ? ` · Completed ${step.completedAt}` : ''} · Duration{' '}

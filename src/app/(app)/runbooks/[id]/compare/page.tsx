@@ -136,7 +136,7 @@ export default async function VersionComparePage({
       />
       <section
         aria-label="Choose versions"
-        className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs lg:flex-row lg:items-end lg:justify-between"
+        className="flex flex-col gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs lg:flex-row lg:items-end lg:justify-between"
       >
         <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-end">
           <input type="hidden" name="versionsPage" value={versionsPage} />

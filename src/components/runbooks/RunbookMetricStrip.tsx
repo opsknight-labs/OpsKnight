@@ -40,7 +40,7 @@ export function RunbookMetricStrip({ stats, className }: RunbookMetricStripProps
         const body = (
           <>
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-xs font-medium text-muted-foreground">
+              <span className="truncate text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 {stat.label}
               </span>
               {stat.icon ? (
@@ -56,7 +56,7 @@ export function RunbookMetricStrip({ stats, className }: RunbookMetricStripProps
               )}
             </div>
             <div
-              className={cn('mt-2 text-2xl font-semibold tracking-tight tabular-nums', toneClass)}
+              className={cn('mt-2 text-2xl font-extrabold tracking-tight tabular-nums', toneClass)}
             >
               {stat.value}
             </div>
@@ -66,10 +66,10 @@ export function RunbookMetricStrip({ stats, className }: RunbookMetricStripProps
           </>
         );
         const classes = cn(
-          'block h-full min-w-0 rounded-xl border bg-card p-4 shadow-xs transition-colors',
+          'block h-full min-w-0 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-all duration-200',
           stat.href &&
-            'hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          stat.active && 'border-primary/50 bg-primary/5 ring-1 ring-primary/30'
+            'hover:border-primary/40 hover:bg-accent/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          stat.active && 'border-primary/50 bg-primary/10 ring-2 ring-primary/20 shadow-xs'
         );
 
         return stat.href ? (

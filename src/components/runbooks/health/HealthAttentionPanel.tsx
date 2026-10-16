@@ -32,10 +32,10 @@ export function HealthAttentionPanel({
     return (
       <section
         aria-label="Automation health status"
-        className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-6 shadow-xs sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex items-start gap-4">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground border border-border/60 shadow-2xs">
             <Bot className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="space-y-1">
@@ -45,7 +45,7 @@ export function HealthAttentionPanel({
             </p>
           </div>
         </div>
-        <Button asChild size="sm" className="shrink-0 self-start sm:self-center">
+        <Button asChild size="sm" className="shrink-0 self-start sm:self-center shadow-xs">
           <Link href="/runbooks/agents">
             Enroll an Agent
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -81,16 +81,15 @@ export function HealthAttentionPanel({
     <section aria-label="Automation health status" className="space-y-3">
       <div
         className={cn(
-          'flex items-start gap-4 rounded-xl border p-5 shadow-xs',
-          tone === 'danger' && 'border-rose-500/30 bg-rose-500/5',
-          tone === 'warning' && 'border-amber-500/30 bg-amber-500/5',
-          tone === 'success' && 'border-emerald-500/30 bg-emerald-500/5',
-          tone === 'neutral' && 'bg-card'
+          'flex items-start gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-6 shadow-xs',
+          tone === 'danger' && 'border-rose-500/40 bg-rose-500/[0.04]',
+          tone === 'warning' && 'border-amber-500/40 bg-amber-500/[0.04]',
+          tone === 'success' && 'border-emerald-500/40 bg-emerald-500/[0.04]'
         )}
       >
         <span
           className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-1 ring-inset',
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-2xs',
             tone === 'danger'
               ? TONE_SURFACE.danger
               : tone === 'warning'
@@ -103,7 +102,7 @@ export function HealthAttentionPanel({
           <HeroIcon className="h-5 w-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 space-y-1">
-          <h3 className="text-base font-semibold tracking-tight text-foreground">{heroTitle}</h3>
+          <h3 className="text-base font-bold tracking-tight text-foreground">{heroTitle}</h3>
           <p className="text-sm leading-relaxed text-muted-foreground">{heroDescription}</p>
         </div>
       </div>
@@ -111,7 +110,7 @@ export function HealthAttentionPanel({
       {hasIssues && (
         <ul
           aria-label="Issues needing attention"
-          className="divide-y overflow-hidden rounded-xl border bg-card shadow-xs"
+          className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs"
         >
           {issues.map(issue => {
             const Icon =
@@ -120,12 +119,12 @@ export function HealthAttentionPanel({
             return (
               <li
                 key={issue.id}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 p-4.5 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <span
                     className={cn(
-                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset',
+                      'flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl border shadow-2xs',
                       danger ? TONE_SURFACE.danger : TONE_SURFACE.warning
                     )}
                   >
@@ -149,7 +148,7 @@ export function HealthAttentionPanel({
                     asChild
                     size="sm"
                     variant="outline"
-                    className="h-8 shrink-0 gap-1 self-start text-xs sm:self-center"
+                    className="h-8 shrink-0 gap-1 self-start text-xs sm:self-center shadow-2xs"
                   >
                     <Link href={issue.actionHref}>
                       <span>{issue.actionLabel || 'Investigate'}</span>

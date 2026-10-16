@@ -24,15 +24,18 @@ export function RuleSection({
     <section
       id={id}
       aria-labelledby={headingId}
-      className={cn('scroll-mt-20 rounded-xl border bg-card shadow-xs', className)}
+      className={cn(
+        'scroll-mt-20 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors',
+        className
+      )}
     >
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
             <Icon className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h2 id={headingId} className="text-sm font-semibold text-foreground">
+            <h2 id={headingId} className="text-sm font-bold tracking-tight text-foreground">
               {title}
             </h2>
             {description && (
@@ -70,40 +73,47 @@ export function RuleActionTile({
   last?: boolean;
 }) {
   return (
-    <li id={id} className="relative flex min-w-0 scroll-mt-20 gap-4">
-      {!last && <span aria-hidden className="absolute bottom-0 left-[15px] top-9 w-px bg-border" />}
+    <li id={id} className={cn('relative flex min-w-0 scroll-mt-20 gap-4', !last && 'pb-4')}>
+      {!last && (
+        <span
+          aria-hidden="true"
+          className="absolute left-[17px] top-9 -bottom-0 w-0.5 bg-border/70 dark:bg-border/50"
+        />
+      )}
       <span
-        aria-hidden
+        aria-hidden="true"
         className={cn(
-          'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-card text-xs font-semibold tabular-nums ring-1 ring-inset',
+          'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-4 ring-background shadow-xs z-10 transition-colors',
           tone === 'warning'
-            ? 'text-amber-700 ring-amber-500/40 dark:text-amber-300'
-            : 'text-primary ring-primary/30'
+            ? 'bg-amber-500/10 text-amber-700 border border-amber-500/30 dark:text-amber-300'
+            : 'bg-card text-primary border border-primary/30'
         )}
       >
         {step}
       </span>
       <div
         className={cn(
-          'min-w-0 flex-1 space-y-3 rounded-lg border p-4',
-          last ? '' : 'mb-3',
-          tone === 'warning' ? 'border-amber-500/40 bg-amber-500/5' : 'bg-muted/20'
+          'min-w-0 flex-1 space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border transition-colors',
+          tone === 'warning' && 'border-amber-500/40 bg-amber-500/[0.04]'
         )}
       >
-        <div className="space-y-0.5">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Icon
-              className={cn(
-                'h-4 w-4 shrink-0',
-                tone === 'warning' ? 'text-amber-600' : 'text-muted-foreground'
-              )}
-              aria-hidden
-            />
-            {title}
-          </h3>
-          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-lg shrink-0 border shadow-2xs',
+              tone === 'warning'
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                : 'bg-muted/80 text-muted-foreground border-border/60'
+            )}
+          >
+            <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 space-y-0.5">
+            <h3 className="text-sm font-bold tracking-tight text-foreground">{title}</h3>
+            <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+          </div>
         </div>
-        <div className="min-w-0">{children}</div>
+        <div className="min-w-0 pt-0.5">{children}</div>
       </div>
     </li>
   );
@@ -124,14 +134,14 @@ export function RuleSectionNav() {
   return (
     <nav
       aria-label="Rule evidence sections"
-      className="sticky top-0 z-20 -mx-1 overflow-x-auto rounded-xl border bg-background/95 p-1 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-background/80"
+      className="sticky top-0 z-20 -mx-1 overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-background/95 p-1.5 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-background/80"
     >
       <ul className="flex min-w-max gap-1">
         {RULE_SECTIONS.map(section => (
           <li key={section.id}>
             <a
               href={`#${section.id}`}
-              className="block whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="block whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {section.label}
             </a>

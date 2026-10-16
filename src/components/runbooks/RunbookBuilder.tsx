@@ -497,9 +497,9 @@ export default function RunbookBuilder({
           </Button>
           {selectedStep && selectedCatalog && selectedRisk ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-xs">
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
                     <selectedCatalog.icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
@@ -649,7 +649,7 @@ export default function RunbookBuilder({
           <fieldset
             key={inputIdentities.at(index) ?? index}
             disabled={readOnly}
-            className="grid min-w-0 gap-4 rounded-xl border bg-card p-5 shadow-xs sm:grid-cols-2"
+            className="grid min-w-0 gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs sm:grid-cols-2"
           >
             <legend className="float-left mb-1 flex w-full flex-wrap items-center gap-2 text-sm font-semibold sm:col-span-2">
               <span>
@@ -1127,7 +1127,7 @@ export default function RunbookBuilder({
       )}
 
       {!readOnly && (
-        <div className="sticky bottom-0 z-20 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="sticky bottom-0 z-20 rounded-2xl border border-border/80 dark:border-border/60 bg-background/95 dark:bg-background/80 px-5 py-3.5 shadow-lg backdrop-blur-md">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               <span aria-live="polite" className="inline-flex items-center gap-1.5 font-medium">

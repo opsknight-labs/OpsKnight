@@ -7,7 +7,6 @@ import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { StatTile } from '@/components/runbooks/ui/primitives';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
-import { ImportRunbookDialog } from '@/components/runbooks/detail/ImportRunbookDialog';
 import { LibraryFilterBar } from '@/components/runbooks/library/LibraryFilterBar';
 import {
   RunbookPagination,
@@ -136,14 +135,7 @@ export default async function RunbooksPage({
       <RunbookPageHeader
         title="Runbooks"
         description="Versioned, safety-checked recovery workflows your responders can run with confidence."
-        actions={
-          canManage ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <ImportRunbookDialog />
-              <CreateRunbookDialog teams={teams} />
-            </div>
-          ) : undefined
-        }
+        actions={canManage ? <CreateRunbookDialog teams={teams} /> : undefined}
       />
 
       <RunbookModuleNav summary={navigation} />

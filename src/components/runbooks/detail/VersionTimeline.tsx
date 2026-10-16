@@ -24,10 +24,22 @@ export type VersionTimelineItem = {
   retireAction?: RunbookFormAction;
 };
 
-const DOT_STYLES: Record<string, string> = {
-  PUBLISHED: 'bg-emerald-500 ring-emerald-500/20',
-  DRAFT: 'bg-amber-500 ring-amber-500/20',
-  RETIRED: 'bg-muted-foreground/50 ring-muted-foreground/10',
+const DOT_STYLES: Record<string, { ring: string; dot: string; glow: string }> = {
+  PUBLISHED: {
+    ring: 'border-emerald-500/30 bg-emerald-500/10 ring-emerald-500/20 text-emerald-600',
+    dot: 'bg-emerald-500',
+    glow: 'shadow-[0_0_8px_rgba(16,185,129,0.4)]',
+  },
+  DRAFT: {
+    ring: 'border-amber-500/30 bg-amber-500/10 ring-amber-500/20 text-amber-600',
+    dot: 'bg-amber-500',
+    glow: 'shadow-[0_0_8px_rgba(245,158,11,0.4)]',
+  },
+  RETIRED: {
+    ring: 'border-border/60 bg-muted/60 ring-border/40 text-muted-foreground',
+    dot: 'bg-muted-foreground/50',
+    glow: '',
+  },
 };
 
 function plural(count: number, word: string) {
@@ -45,29 +57,32 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
     );
   }
   return (
-    <ol aria-label="Version history" className="relative">
+    <ol aria-label="Version history" className="relative space-y-0">
       {versions.map((version, index) => {
         const isLast = index === versions.length - 1;
+        const style = DOT_STYLES[version.state] ?? DOT_STYLES.RETIRED;
         return (
-          <li key={version.id} className="relative pb-5 pl-9 last:pb-0">
+          <li key={version.id} className="relative pb-6 pl-10 last:pb-0">
             {!isLast && (
               <span
                 aria-hidden="true"
-                className="absolute bottom-0 left-[11px] top-7 w-px bg-border"
+                className="absolute left-[13px] top-[40px] -bottom-0 w-0.5 bg-border/70 dark:bg-border/50"
               />
             )}
             <span
               aria-hidden="true"
               className={cn(
-                'absolute left-[5px] top-[18px] h-3.5 w-3.5 rounded-full border-2 border-background ring-4',
-                DOT_STYLES[version.state] ?? DOT_STYLES.RETIRED
+                'absolute left-0 top-3 flex h-7 w-7 items-center justify-center rounded-full border ring-4 ring-background shadow-2xs z-10 transition-colors',
+                style.ring
               )}
-            />
+            >
+              <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', style.dot, style.glow)} />
+            </span>
             <article
               className={cn(
-                'flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs sm:flex-row sm:items-start sm:justify-between',
-                version.isCurrentPublished && 'border-emerald-500/30',
-                version.isCurrentDraft && 'border-amber-500/30'
+                'flex flex-col gap-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 sm:flex-row sm:items-start sm:justify-between',
+                version.isCurrentPublished && 'border-emerald-500/40 bg-emerald-500/[0.02]',
+                version.isCurrentDraft && 'border-amber-500/40 bg-amber-500/[0.02]'
               )}
             >
               <div className="min-w-0 space-y-1.5">

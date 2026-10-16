@@ -138,7 +138,7 @@ export function HealthDetailCards({
 
       <SectionCard icon={Bot} title="Agents requiring operator attention" bodyClassName="space-y-3">
         {totalUnhealthy && totalUnhealthy > 20 ? (
-          <div className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs">
+          <div className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-xs">
             <span className="text-muted-foreground">
               Showing first 20 of {totalUnhealthy} agents requiring attention
             </span>
@@ -151,7 +151,7 @@ export function HealthDetailCards({
           </div>
         ) : null}
         {unhealthyAgents.length > 0 && (
-          <ul className="divide-y overflow-hidden rounded-lg border">
+          <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/80 bg-background/50 shadow-2xs">
             {unhealthyAgents.map(agent => (
               <li key={agent.id}>
                 <Link

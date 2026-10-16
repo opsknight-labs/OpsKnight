@@ -129,10 +129,10 @@ export function AgentFleetTable({
 
   return (
     <div>
-      <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-xs lg:block">
+      <div className="hidden overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs lg:block">
         <table className="w-full text-left text-xs">
           <caption className="sr-only">Agent fleet</caption>
-          <thead className="border-b bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <thead className="border-b border-border/60 bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground">
             <tr>
               {[
                 'Agent',
@@ -256,7 +256,10 @@ export function AgentFleetTable({
         {agents.map(agent => {
           const reasons = unavailableReasons(agent.capabilityReport);
           return (
-            <li key={agent.id} className="space-y-3 rounded-xl border bg-card p-4 shadow-xs">
+            <li
+              key={agent.id}
+              className="space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs transition-all hover:border-primary/40 hover:shadow-md"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">

@@ -151,9 +151,9 @@ export default function RunbookExecutionPreview({
       {preview && (
         <section
           aria-label="Execution preview"
-          className="overflow-hidden rounded-xl border bg-card text-sm shadow-xs"
+          className="overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs text-sm shadow-xs"
         >
-          <header className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-4 py-3">
+          <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 bg-muted/20 px-5 py-3.5">
             <div className="min-w-0">
               <p className="text-sm font-semibold">Review the plan</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -240,7 +240,10 @@ export default function RunbookExecutionPreview({
             <PlanRow label={`Steps (${preview.steps.length})`}>
               <ol className="space-y-2">
                 {preview.steps.map((step, index) => (
-                  <li key={step.key} className="rounded-lg border bg-background p-3">
+                  <li
+                    key={step.key}
+                    className="rounded-xl border border-border/70 dark:border-border/60 bg-background/80 p-3.5 shadow-2xs"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums">
                         {index + 1}

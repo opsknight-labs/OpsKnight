@@ -41,20 +41,25 @@
 ## 3. Brand Identity & Design System Standards
 
 ### Aesthetic Principles
+
 - **Subtle, Elegant, and SRE-Focused**: Clean, high-contrast, modern engineering aesthetic.
 - **No Intrusive Clutter**: Avoid loud promotional cards, excessive marketing copy, or noisy gamification banners in transactional alerts and operations interfaces.
 
 ### Official Brand Logo
+
 - **Asset**: Background-less transparent logo (`/logo.png` or `public/logo.png`).
 - **Vector Fallback**: Authentic red shield with knight headset SVG fallback for offline or blocked image scenarios.
 - **Never Enclose in Dark Boxes**: Do not wrap the logo in an opaque dark square or squircle (`#0f172a`) in transparent or light-themed contexts.
 
 ### Official Brand Hyperlinks
+
 - All OpsKnight brand logos, brand names, and footer attributions across email templates and public interfaces **must link to `https://opsknight.com/`**.
 - In configurable components (`EmailStyles`), provide `brandUrl?: string` defaulting to `https://opsknight.com/`.
 
 ### Status Color Semantics
+
 Always use semantic color themes across badges, headers, accent borders, and primary buttons:
+
 - 🔴 **Critical / Triggered / High Urgency**: Crimson Red (`#881337` to `#e11d48`, border `#be123c`, bg `#fef2f2`).
 - 🟠 **Elevated / Medium Urgency / Acknowledged**: Warm Amber / Orange (`#78350f` to `#d97706`, border `#d97706`, bg `#fffbeb`).
 - 🟢 **Resolved / Operational / Success**: Emerald Green (`#047857` to `#059669`, border `#059669`, bg `#f0fdf4`).
@@ -62,7 +67,9 @@ Always use semantic color themes across badges, headers, accent borders, and pri
 - 🟣 **On-Call Shifts & Rotations**: Royal Violet (`#4c1d95` to `#7c3aed`, border `#7c3aed`, bg `#f5f3ff`).
 
 ### Big-Screen & Responsive Scaling
+
 Email templates and dashboard views must be responsive across all devices:
+
 - **Mobile (`<= 640px`)**: Full-width fluid containers, stacked action buttons (`padding: 14px 16px`), comfortable touch targets.
 - **Desktop (`>= 1024px`)**: Scaled layout with `860px` container width.
 - **27-inch / QHD Displays (`>= 1440px`)**: Expand to **1080px** width, `54px` padding, and `72px` logo.
@@ -73,6 +80,7 @@ Email templates and dashboard views must be responsive across all devices:
 ## 4. Backend, Security & RBAC Protocols
 
 ### Role-Based Access Control (RBAC)
+
 - Always verify user capabilities in Server Actions and API endpoints using `getUserPermissions()` from `@/lib/rbac`.
 - Check required capabilities explicitly:
   ```typescript
@@ -83,15 +91,18 @@ Email templates and dashboard views must be responsive across all devices:
   ```
 
 ### Input Validation & Sanitization
+
 - Every Server Action and API handler must parse arguments through a strict **Zod** schema (`z.object({...})`).
 - Always sanitize URLs using `sanitizeUrl()` (allowing only `http:`, `https:`, `mailto:`, and `tel:`).
 - Always escape dynamic HTML strings using `escapeHtml()` to prevent XSS.
 
 ### Encryption & Secrets
+
 - Sensitive credentials (Slack bot tokens, webhook secrets, integration keys) must be encrypted using AES-256-GCM (`encryptWithKey` from `@/lib/encryption`).
 - Never log plaintext secrets, passwords, or authentication headers in server logs.
 
 ### Multi-Tenant & Status Page Isolation
+
 - Verify tenant / organization / status-page ownership on every query and mutation to guarantee complete isolation.
 
 ---
@@ -136,7 +147,7 @@ Zero errors and zero warnings are required before pushing.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 

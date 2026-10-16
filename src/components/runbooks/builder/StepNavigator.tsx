@@ -66,9 +66,9 @@ export default function StepNavigator({
   return (
     <nav
       aria-label="Runbook steps navigation"
-      className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs"
+      className="flex flex-col overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs"
     >
-      <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Steps</h3>
           <p className="text-xs text-muted-foreground">
@@ -118,10 +118,10 @@ export default function StepNavigator({
             >
               <div
                 className={cn(
-                  'group relative flex items-stretch gap-1 rounded-lg border transition-colors',
+                  'group relative flex items-stretch gap-1 rounded-xl border transition-all',
                   isSelected
-                    ? 'border-primary/50 bg-primary/5 shadow-xs'
-                    : 'border-transparent hover:border-border hover:bg-muted/40',
+                    ? 'border-primary/50 bg-primary/10 shadow-xs'
+                    : 'border-transparent hover:border-border/80 hover:bg-muted/40',
                   isDropTarget && 'border-dashed border-primary',
                   dragIndex === index && 'opacity-50'
                 )}
@@ -152,7 +152,7 @@ export default function StepNavigator({
                   aria-keyshortcuts={readOnly ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
                   onClick={() => onSelectStep(index)}
                   onKeyDown={event => handleKeyDown(event, index)}
-                  className="flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-w-0 flex-1 items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span
                     className={cn(
