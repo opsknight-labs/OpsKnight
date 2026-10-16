@@ -45,6 +45,13 @@ export async function restorePasswordAccess(
     const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     if (policy.version !== expectedVersion)
       throw new Error('Policy changed. Reload the recovery console.');
+    // Self-service exists to keep password access while SSO is enforced. Outside SSO Required
+    // the exclusive recovery override would sign out every password session and block other
+    // local sign-ins, so administrators change their password through their profile instead.
+    if (actor.kind === 'admin' && policy.mode !== 'SSO_REQUIRED')
+      throw new Error(
+        'Password access recovery is only needed while SSO Required is active. Change your password from your profile instead.'
+      );
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${adminUserId} FOR UPDATE`;
     const current = await tx.user.findUniqueOrThrow({ where: { id: adminUserId } });
     if (

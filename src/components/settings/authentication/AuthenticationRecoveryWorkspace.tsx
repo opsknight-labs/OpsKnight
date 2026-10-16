@@ -189,16 +189,16 @@ export default function AuthenticationRecoveryWorkspace() {
       )}
 
       {/* Self-service password access for a normally signed-in administrator */}
-      {data.actor.kind === 'admin' && (
+      {data.actor.kind === 'admin' && data.mode === 'SSO_REQUIRED' && (
         <div className="space-y-3 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs text-sm">
           <div className="flex items-center gap-2 border-b border-border/70 pb-3">
             <ShieldCheck className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-sm text-foreground">Password access recovery</h3>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Set a password for your own administrator account, for example before an identity
-            provider outage or while your current SSO session is still active. To restore another
-            administrator, sign in with an emergency recovery account.
+            While SSO Required is active, set a password for your own administrator account, for
+            example before an identity provider outage or while your current SSO session is still
+            active. To restore another administrator, sign in with an emergency recovery account.
           </p>
           <PasswordAccessRecovery />
         </div>

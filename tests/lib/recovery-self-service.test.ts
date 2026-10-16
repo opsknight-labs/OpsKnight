@@ -14,9 +14,8 @@ vi.mock('@/lib/prisma', () => ({
 
 import prisma from '@/lib/prisma';
 import { relaxRequiredToOptional, restorePasswordAccess } from '@/lib/auth-control/recovery';
-import type { ControlActor } from '@/lib/auth-control/actor';
+import { lockControlActor, type ControlActor } from '@/lib/auth-control/actor';
 import { securityEvent } from '@/lib/auth-control/security-events';
-import { lockControlActor } from '@/lib/auth-control/actor';
 
 const admin: ControlActor = {
   kind: 'admin',
@@ -46,6 +45,27 @@ describe('administrator self-service password access recovery', () => {
     ).rejects.toThrow('only for your own account');
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it.each(['PASSWORD_ONLY', 'SSO_OPTIONAL'])(
+    'refuses self-service in %s, where it would block every other local sign-in',
+    async mode => {
+      const tx = {
+        authenticationPolicy: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'default', mode, version: 7 }),
+          update: vi.fn(),
+        },
+        user: { update: vi.fn() },
+      };
+      vi.mocked(prisma.$transaction).mockImplementation(async callback =>
+        (callback as unknown as (value: typeof tx) => unknown)(tx)
+      );
+      await expect(
+        restorePasswordAccess(admin, 'admin-self', password, 7, 'RESTORE PASSWORD ACCESS')
+      ).rejects.toThrow('only needed while SSO Required is active');
+      expect(tx.authenticationPolicy.update).not.toHaveBeenCalled();
+      expect(tx.user.update).not.toHaveBeenCalled();
+    }
+  );
 
   it('lets a normal administrator restore their own account under the fresh-session lock', async () => {
     const tx = {
