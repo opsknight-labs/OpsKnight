@@ -245,6 +245,20 @@ export async function getServiceAccount(id: string) {
   };
 }
 
+/** Stable machine identity: readable ASCII label plus 96 random bits, within SMTP's 64-byte local part. */
+export function generateServiceAccountEmail(name: string): string {
+  const label =
+    name
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 36)
+      .replace(/-+$/g, '') || 'account';
+  return `sa-${label}-${randomBytes(12).toString('hex')}@${SERVICE_ACCOUNT_DOMAIN}`;
+}
+
 export async function createServiceAccount(input: CreateServiceAccountInput) {
   if (!isAppRole(input.role)) {
     throw new AppError({
@@ -254,9 +268,8 @@ export async function createServiceAccount(input: CreateServiceAccountInput) {
     });
   }
 
-  const uniqueId = randomBytes(4).toString('hex');
   const safeName = input.name.trim();
-  const email = `sa_${Date.now()}_${uniqueId}@${SERVICE_ACCOUNT_DOMAIN}`;
+  const email = generateServiceAccountEmail(safeName);
 
   if (input.teamIds && input.teamIds.length > 0) {
     const found = await (input.tx ?? prisma).team.findMany({

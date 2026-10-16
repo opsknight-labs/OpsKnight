@@ -6,6 +6,7 @@ const auditMocks = vi.hoisted(() => ({ logAudit: vi.fn() }));
 vi.mock('@/lib/audit', () => ({ logAudit: auditMocks.logAudit }));
 
 import {
+  createServiceAccount,
   issueServiceAccountToken,
   listServiceAccounts,
   SERVICE_ACCOUNT_TOKEN_PREVIEW,
@@ -112,4 +113,25 @@ describe('service account token lifecycle', () => {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   });
+});
+
+it('persists the readable production identity when creating a service account', async () => {
+  const create = vi.fn(async () => ({ ...account('ACTIVE'), name: 'Production Deploy' }));
+  const tx = { user: { create } };
+  await createServiceAccount({
+    name: '  Production Deploy  ',
+    role: 'RESPONDER',
+    actorId: 'admin_1',
+    tx: tx as unknown as import('@prisma/client').Prisma.TransactionClient,
+  });
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({
+        name: 'Production Deploy',
+        email: expect.stringMatching(
+          /^sa-production-deploy-[a-f0-9]{24}@serviceaccount\.opsknight\.local$/
+        ),
+      }),
+    })
+  );
 });
