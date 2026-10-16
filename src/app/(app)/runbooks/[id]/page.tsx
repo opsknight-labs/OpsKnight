@@ -435,7 +435,7 @@ export default async function RunbookDetailPage({
                 className="bg-emerald-500/20 text-emerald-100 border-emerald-400/40 text-[10px] font-mono gap-1"
               >
                 <CheckCircle2 className="h-3 w-3 text-emerald-300" />
-                Live v{runbook.publishedVersion.version}
+                Published v{runbook.publishedVersion.version}
               </Badge>
             )}
             {runbook.draftVersion && (
