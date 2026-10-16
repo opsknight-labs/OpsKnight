@@ -2,6 +2,16 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AuthenticationPolicySettings from '@/components/settings/AuthenticationPolicySettings';
 import { changeAuthenticationMode } from '@/app/(app)/settings/system/authentication-actions';
+import { notify as toast } from '@/lib/toast';
+
+vi.mock('@/lib/toast', () => ({
+  notify: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  },
+}));
 
 vi.mock('@/app/(app)/settings/system/authentication-actions', () => ({
   changeAuthenticationMode: vi.fn(),
@@ -48,6 +58,10 @@ describe('authentication policy settings', () => {
       })
     );
     await waitFor(() => expect(screen.getByText(/Current mode: SSO Optional/)).toBeInTheDocument());
+    expect(toast.success).toHaveBeenCalledWith('Authentication update', {
+      description:
+        'Authentication policy updated. Disallowed sessions will be rejected on their next protected request.',
+    });
     expect(screen.getByRole('checkbox')).not.toBeChecked();
   });
 
@@ -66,6 +80,38 @@ describe('authentication policy settings', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Change authentication policy' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('changed elsewhere'));
+    expect(toast.error).toHaveBeenCalledWith('Action could not complete', {
+      description: 'Authentication policy changed elsewhere. Reload before retrying.',
+    });
     expect(screen.getByText(/Current mode: Password Only/)).toBeInTheDocument();
+  });
+
+  it('triggers top-right error toast when password verification fails', async () => {
+    vi.mocked(changeAuthenticationMode).mockRejectedValue(
+      new Error('Verify your current password before disabling SSO.')
+    );
+    render(
+      <AuthenticationPolicySettings
+        initialMode="SSO_OPTIONAL"
+        initialVersion={1}
+        legacyEmergencyConfigured={false}
+      />
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sign-in mode' }), {
+      target: { value: 'PASSWORD_ONLY' },
+    });
+    fireEvent.change(screen.getByLabelText('Verify your current password'), {
+      target: { value: 'wrong-password' },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Change authentication policy' }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Action could not complete', {
+        description: 'Verify your current password before disabling SSO.',
+      })
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Verify your current password before disabling SSO.'
+    );
   });
 });

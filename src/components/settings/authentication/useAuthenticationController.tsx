@@ -6,9 +6,11 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import { notify as toast } from '@/lib/toast';
 import { useHydrated } from '@/hooks/useHydrated';
 import type { authenticationDashboard, AuthenticationSection } from '@/lib/auth-control/dashboard';
 import type { enforcementPreview } from '@/lib/auth-control/oidc-revisions';
@@ -95,7 +97,36 @@ export function useAuthenticationController({
       );
     }
   }, []);
-  const [messageError, setMessageError] = useState(false);
+  const [messageError, setMessageErrorState] = useState(false);
+  const messageErrorRef = useRef(false);
+  const [message, setMessageState] = useState('');
+
+  const setMessageError = useCallback((isError: boolean) => {
+    messageErrorRef.current = isError;
+    setMessageErrorState(isError);
+  }, []);
+
+  const setMessage = useCallback((text: string, isError?: boolean) => {
+    if (isError !== undefined) {
+      messageErrorRef.current = isError;
+      setMessageErrorState(isError);
+    }
+    setMessageState(text);
+    if (text) {
+      if (messageErrorRef.current) {
+        toast.error('Action could not complete', {
+          description: text,
+        });
+      } else {
+        toast.success('Authentication update', {
+          description: text,
+        });
+      }
+    } else {
+      messageErrorRef.current = false;
+      setMessageErrorState(false);
+    }
+  }, []);
   const [restoreScope, setRestoreScope] = useState<'ADMIN_ONLY' | 'INSTANCE'>('ADMIN_ONLY');
   const [originRepairConfirmed, setOriginRepairConfirmed] = useState(false);
   const [modeConfirmed, setModeConfirmed] = useState(false);
@@ -190,7 +221,6 @@ export function useAuthenticationController({
   const [confirmation, setConfirmation] = useState(false);
   const hydrated = useHydrated();
   const [busy, setPending] = useState(false);
-  const [message, setMessage] = useState('');
   const [generatedRecovery, setGeneratedRecovery] = useState<{
     id: string;
     password: string;
@@ -239,7 +269,7 @@ export function useAuthenticationController({
         }
       });
     return () => controller.abort();
-  }, [activeTab, data.section]);
+  }, [activeTab, data.section, setMessage, setMessageError]);
   const pending = busy || sectionLoading || !hydrated;
   const perform = async (work: () => Promise<void>): Promise<boolean> => {
     setPending(true);

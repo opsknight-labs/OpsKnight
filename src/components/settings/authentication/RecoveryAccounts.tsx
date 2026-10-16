@@ -393,6 +393,7 @@ export default function RecoveryAccounts() {
                         setGeneratedRecovery({ id: result.id, password: result.password });
                       }
                       await refresh();
+                      setMessage('Recovery account created. Copy and store credentials safely.');
                     });
                     if (success) setCreating(false);
                   })()

@@ -34,8 +34,19 @@ export async function changeAuthenticationMode(input: unknown) {
   if (!session?.user?.id || !isAuthenticationFresh(authenticatedAt, 'admin')) {
     throw new Error('Sign in again before changing authentication policy.');
   }
-  if (!(await consumeAuthRateLimit('policy-change', session.user.id, 5, 300_000)).allowed) {
-    throw new Error('Too many authentication policy changes. Try again later.');
+  const rateLimit = await consumeAuthRateLimit('policy-change', session.user.id, 5, 300_000);
+  if (!rateLimit.allowed) {
+    const remainingMs = Math.max(1000, rateLimit.resetAt - Date.now());
+    const remainingSeconds = Math.ceil(remainingMs / 1000);
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    const timeText =
+      minutes > 0
+        ? seconds > 0
+          ? `${minutes}m ${seconds}s`
+          : `${minutes} minute${minutes === 1 ? '' : 's'}`
+        : `${seconds} second${seconds === 1 ? '' : 's'}`;
+    throw new Error(`Too many authentication policy changes. Try again in ${timeText}.`);
   }
   if (parsed.mode === 'SSO_REQUIRED') {
     const current = await getAuthenticationPolicy();

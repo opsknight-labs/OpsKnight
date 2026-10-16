@@ -8,6 +8,17 @@ import AuthenticationActionGuard, {
 } from '@/components/settings/authentication/AuthenticationActionGuard';
 import { Button } from '@/components/ui/shadcn/button';
 import { fixtureDashboard } from '../helpers/authentication-dashboard';
+import { notify as toast } from '@/lib/toast';
+
+vi.mock('@/lib/toast', () => ({
+  notify: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
 vi.mock('@/hooks/useHydrated', () => ({ useHydrated: () => true }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -27,7 +38,8 @@ const renderConsole = (
     />
   );
 };
-beforeEach(() =>
+beforeEach(() => {
+  vi.clearAllMocks();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: RequestInfo | URL) =>
@@ -40,8 +52,8 @@ beforeEach(() =>
         },
       })
     )
-  )
-);
+  );
+});
 afterEach(() => vi.unstubAllGlobals());
 describe('enterprise authentication experience', () => {
   it('makes action prerequisites both visible and associated with the disabled button', () => {
@@ -514,6 +526,159 @@ describe('enterprise authentication experience', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Disable identity' }));
     expect(screen.getByRole('checkbox', { name: /confirmed compromised/ })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Confirm recovery change' })).toBeDisabled();
+  });
+
+  it('surfaces action errors in the top-right toast notification banner when password verification or staging fails', async () => {
+    const request = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { action?: string };
+        if (body.action === 'mode') {
+          return new Response(
+            JSON.stringify({ error: 'Verify your current password before disabling SSO.' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+      return Response.json({
+        data: {
+          ...fixtureDashboard,
+          section:
+            new URL(String(url), 'https://instance.example.test').searchParams.get('section') ??
+            'policy',
+        },
+      });
+    });
+    vi.stubGlobal('fetch', request);
+    renderConsole('policy', {
+      ...fixtureDashboard,
+      mode: 'SSO_OPTIONAL',
+    });
+
+    // Attempt to change authentication mode to PASSWORD_ONLY
+    const details = screen.getByText('Change to Password Only or SSO Optional').closest('details');
+    expect(details).toBeDefined();
+    if (details) details.open = true;
+
+    // Check confirmation checkbox
+    const confirmCheckbox = screen.getByRole('checkbox', {
+      name: /I confirm this deliberate sign-in policy change/i,
+    });
+    fireEvent.click(confirmCheckbox);
+
+    // Enter password and click change
+    const passwordInput = screen.getByPlaceholderText('Enter your current administrator password');
+    fireEvent.change(passwordInput, { target: { value: 'wrong-pass' } });
+
+    const changeButton = screen.getByRole('button', { name: /Change authentication mode/i });
+    fireEvent.click(changeButton);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Action could not complete', {
+        description: 'Verify your current password before disabling SSO.',
+      });
+    });
+
+    // Inline alert remains visible as well
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Verify your current password before disabling SSO.'
+    );
+  });
+
+  it('surfaces successful updates in the top-right toast notification banner on staging draft', async () => {
+    let staged = false;
+    const request = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { action?: string };
+        if (body.action === 'stage') {
+          staged = true;
+          return Response.json({ data: { revisionId: 'rev-staged-1' } });
+        }
+      }
+      return Response.json({
+        data: {
+          ...fixtureDashboard,
+          section: 'connection',
+          revisions: staged
+            ? [
+                {
+                  id: 'rev-staged-1',
+                  baseConfigVersion: 1,
+                  configuration: {
+                    issuer: 'https://accounts.google.com',
+                    clientId: 'new-client-id',
+                    clientSecret: '',
+                    hasClientSecret: true,
+                    enabled: true,
+                    autoProvision: false,
+                    allowedDomains: [],
+                    roleMapping: [],
+                    customScopes: null,
+                    providerType: 'google' as const,
+                    providerLabel: null,
+                    organizationId: null,
+                    tokenEndpointAuthMethod: 'client_secret_basic' as const,
+                    profileMapping: {},
+                    sessionMaxAgeSeconds: null,
+                    sessionIdleTimeoutSeconds: null,
+                  },
+                  createdAt: '2026-10-15T00:00:00.000Z',
+                  discoveryVerifiedAt: '2026-10-15T00:00:00.000Z',
+                  activatedAt: null,
+                  previousRevisionId: null,
+                  testedAt: null,
+                  testedAdminId: null,
+                  createdByLabel: 'admin@example.test',
+                  verification: { state: 'required' as const },
+                },
+              ]
+            : [],
+        },
+      });
+    });
+    vi.stubGlobal('fetch', request);
+    renderConsole('connection', {
+      ...fixtureDashboard,
+      activeProvider: {
+        issuer: 'https://accounts.google.com',
+        clientId: 'original-client',
+        clientSecret: '',
+        hasClientSecret: true,
+        enabled: true,
+        autoProvision: false,
+        allowedDomains: [],
+        roleMapping: [],
+        customScopes: null,
+        providerType: 'google',
+        providerLabel: null,
+        organizationId: null,
+        tokenEndpointAuthMethod: 'client_secret_basic',
+        profileMapping: {},
+        sessionMaxAgeSeconds: null,
+        sessionIdleTimeoutSeconds: null,
+      },
+    });
+
+    // Make an edit to clientId and provide clientSecret
+    const clientInput = screen.getByRole('textbox', { name: /Client ID/i });
+    fireEvent.change(clientInput, { target: { value: 'new-client-id' } });
+    const secretInput = screen.getByLabelText(/Client secret/i);
+    fireEvent.change(secretInput, { target: { value: 'super-secret' } });
+
+    // Click Stage configuration
+    const stageButton = screen.getByRole('button', { name: 'Stage configuration' });
+    fireEvent.click(stageButton);
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Authentication update', {
+        description:
+          'Changes staged and discovery verified. Test administrator sign-in before activation.',
+      });
+    });
+
+    // Inline status remains visible as well
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Changes staged and discovery verified. Test administrator sign-in before activation.'
+    );
   });
 });
 

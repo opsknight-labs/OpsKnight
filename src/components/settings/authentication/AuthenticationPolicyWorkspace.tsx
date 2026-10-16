@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -9,6 +10,8 @@ import {
   Info,
   ChevronRight,
   UserCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useAuthenticationWorkspace } from './useAuthenticationController';
 import { authenticationRequest } from './request';
@@ -51,6 +54,7 @@ export default function AuthenticationPolicyWorkspace() {
     sectionClass,
   } = useAuthenticationWorkspace();
 
+  const [showPassword, setShowPassword] = useState(false);
   const selectedRevision = data.revisions.find(rev => rev.id === revisionId);
   // Emergency recovery may only step SSO Required back to SSO Optional from this panel.
   const recoverySession = data.actor.kind === 'emergency';
@@ -437,14 +441,24 @@ export default function AuthenticationPolicyWorkspace() {
                 <span className="font-medium text-foreground">
                   Current password (required for Password Only)
                 </span>
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={event => setPassword(event.target.value)}
-                  className={inputClass}
-                  placeholder="Enter your current administrator password"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={event => setPassword(event.target.value)}
+                    className={`${inputClass} pr-10`}
+                    placeholder="Enter your current administrator password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </label>
             )}
 
@@ -494,6 +508,9 @@ export default function AuthenticationPolicyWorkspace() {
                     });
                     setPassword('');
                     await refresh();
+                    setMessage(
+                      'Authentication mode updated. Disallowed sessions will be rejected on their next protected request.'
+                    );
                   })
                 }
               >

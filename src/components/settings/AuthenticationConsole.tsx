@@ -17,8 +17,10 @@ import {
   Loader2,
   ShieldAlert,
   CheckCircle2,
+  Timer,
 } from 'lucide-react';
 import type { AuthenticationSection } from '@/lib/auth-control/dashboard';
+import { useRateLimitCountdown, formatRemainingTime } from './authentication/useRateLimitCountdown';
 import {
   AuthenticationContext,
   useAuthenticationController,
@@ -58,6 +60,11 @@ function AuthenticationWorkspace() {
     sectionClass,
     emergencyOnly,
   } = useAuthenticationWorkspace();
+  const {
+    displayMessage: liveMessage,
+    isCooldown,
+    remainingSeconds,
+  } = useRateLimitCountdown(message);
   return (
     <div className="min-w-0 space-y-6">
       {/* Main SSO & Authentication Card Header */}
@@ -161,14 +168,27 @@ function AuthenticationWorkspace() {
           aria-live="polite"
         >
           {messageError ? (
-            <ShieldAlert className="h-4 w-4" />
+            isCooldown ? (
+              <Timer className="h-4 w-4 animate-pulse" />
+            ) : (
+              <ShieldAlert className="h-4 w-4" />
+            )
           ) : (
             <CheckCircle2 className="h-4 w-4" />
           )}
-          <AlertTitle>
-            {messageError ? 'Action could not complete' : 'Authentication update'}
+          <AlertTitle className="flex items-center gap-2 flex-wrap">
+            <span>{messageError ? 'Action could not complete' : 'Authentication update'}</span>
+            {isCooldown && remainingSeconds > 0 && (
+              <Badge
+                variant="outline"
+                className="border-destructive/30 bg-destructive/10 text-destructive text-[11px] font-semibold py-0"
+              >
+                <Timer className="h-3 w-3 mr-1" />
+                Retry in {formatRemainingTime(remainingSeconds)}
+              </Badge>
+            )}
           </AlertTitle>
-          <AlertDescription className="break-words">{message}</AlertDescription>
+          <AlertDescription className="break-words">{liveMessage}</AlertDescription>
         </Alert>
       )}
       <AuthenticationNavigationGuard />
@@ -300,6 +320,7 @@ function AuthenticationWorkspace() {
                     confirmation: 'RETRY SECURITY EMAIL',
                   });
                   await refresh();
+                  setMessage('Security alert delivery retry initiated.');
                 })
               }
               onRevoke={async sessionId => {
