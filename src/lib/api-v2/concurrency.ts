@@ -85,3 +85,17 @@ export function requireIfMatch(req: Request): number | null {
   }
   return parseIfMatch(req);
 }
+
+/** Authoring writes must compare an exact revision, never just resource existence. */
+export function requireRevisionIfMatch(req: Request): number {
+  const revision = requireIfMatch(req);
+  if (revision === null) {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage:
+        'If-Match must contain a concrete strong revision ETag; wildcard is unsupported.',
+      fields: [{ field: 'If-Match', code: 'invalid', message: 'Send the draft ETag.' }],
+    });
+  }
+  return revision;
+}

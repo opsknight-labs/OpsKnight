@@ -327,8 +327,9 @@ export function finalizeOpenApiSpec(base: Json): Json {
           name: 'If-Match',
           in: 'header',
           required: contract.preconditionRequired ?? false,
-          description:
-            'ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.',
+          description: contract.preconditionRequired
+            ? 'Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.'
+            : 'ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.',
           schema: { type: 'string' },
         });
       }

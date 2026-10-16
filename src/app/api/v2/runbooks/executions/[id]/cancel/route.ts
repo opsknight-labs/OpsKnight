@@ -16,9 +16,23 @@ export const POST = defineV2Route({
   handler: async ({ params, body, actor, apiKey, tx }) => {
     const execution = await tx!.runbookExecution.findFirst({
       where: { id: params.id },
-      select: { id: true, incidentId: true },
+      select: {
+        id: true,
+        incidentId: true,
+        triggeredByUserId: true,
+        service: { select: { teamId: true } },
+      },
     });
     if (!execution) throw new AppError({ code: 'EXECUTION_NOT_FOUND' });
+    // Administrators may stop any run. Other operators must own the run or belong
+    // to the owning service's team, including for executions with no incident.
+    if (
+      actor.role !== 'ADMIN' &&
+      execution.triggeredByUserId !== actor.id &&
+      !(execution.service?.teamId && actor.teamIds.includes(execution.service.teamId))
+    ) {
+      throw new AppError({ code: 'EXECUTION_NOT_FOUND' });
+    }
     if (execution.incidentId) {
       const incident = await tx!.incident.findFirst({
         where: { AND: [{ id: execution.incidentId }, incidentReadWhere(actor)] },

@@ -3,6 +3,7 @@ import { isValidInputValue, parseInputDefault } from './input-values';
 
 import { Prisma, type RunbookInput } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { runSerializableTransaction } from '@/lib/db-utils';
 import { logAudit } from '@/lib/audit';
 import {
   createServiceRunbookBindingSchema,
@@ -152,7 +153,9 @@ export async function createServiceBinding(
   const requestedEnabled = input.enabled;
   if (input.mode === 'AUTOMATIC') input.enabled = false;
   const trigger = initialTrigger ? createRunbookTriggerSchema.parse(initialTrigger) : undefined;
-  return prisma.$transaction(async tx => {
+  // Participate in lifecycle serializability: a row lock alone cannot refresh
+  // an archive transaction's earlier snapshot of the binding collection.
+  return runSerializableTransaction(async tx => {
     await lockRunbookForUpdate(tx, input.runbookId, { action: 'bind' });
     const service = await tx.service.findUnique({ where: { id: serviceId }, select: { id: true } });
     if (!service) throw new RunbookDefinitionError('Service not found.');
@@ -243,7 +246,7 @@ export async function updateServiceBinding(
   expectedConfigurationRevision?: number
 ) {
   const input = updateServiceRunbookBindingSchema.parse(raw);
-  return prisma.$transaction(async tx => {
+  return runSerializableTransaction(async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, bindingId);
     const requestedEnabled = input.enabled;
     const current = await tx.serviceAutomationRule.findFirst({
@@ -546,7 +549,7 @@ export async function activateServiceRule(
   actorId: string,
   confirmMatchAll: boolean
 ) {
-  return prisma.$transaction(async tx => {
+  return runSerializableTransaction(async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, ruleId);
     const rule = await tx.serviceAutomationRule.findFirst({
       where: { id: ruleId, serviceId, detachedAt: null },

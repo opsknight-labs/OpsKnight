@@ -6,17 +6,25 @@ import {
   createTestUser,
   createTestIncident,
   createTestService,
+  createTestTeam,
   resetDatabase,
   testPrisma,
 } from '../helpers/test-db';
 import { POST as createRunbookRoute } from '@/app/api/v2/runbooks/route';
-import { PATCH as editDraft } from '@/app/api/v2/runbooks/[id]/drafts/[versionId]/route';
+import {
+  GET as readDraft,
+  PATCH as editDraft,
+} from '@/app/api/v2/runbooks/[id]/drafts/[versionId]/route';
 import { POST as publishDraft } from '@/app/api/v2/runbooks/[id]/drafts/[versionId]/publish/route';
 import { POST as cloneDraft } from '@/app/api/v2/runbooks/[id]/drafts/route';
 import { POST as validateDraft } from '@/app/api/v2/runbooks/[id]/drafts/[versionId]/validate/route';
 import { POST as reopen } from '@/app/api/v2/incidents/[id]/reopen/route';
 import { POST as addParticipant } from '@/app/api/v2/schedules/[id]/layers/[layerId]/participants/route';
 import { PATCH as moveParticipant } from '@/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route';
+import { POST as previewRoute } from '@/app/api/v2/runbooks/[id]/executions/preview/route';
+import { POST as cancelRoute } from '@/app/api/v2/runbooks/executions/[id]/cancel/route';
+import { POST as addWatcher } from '@/app/api/v2/incidents/[id]/watchers/route';
+import type { AppRole } from '@/lib/authorization';
 import { createRunbook, updateDraftVersion, publishDraftVersion } from '@/lib/runbooks/versioning';
 
 type Handler = (
@@ -24,9 +32,10 @@ type Handler = (
   ctx: { params: Promise<Record<string, string>> }
 ) => Promise<Response>;
 async function credential(
-  scopes = ['admin:manage', 'runbooks:write', 'runbooks:publish', 'runbooks:execute']
+  scopes = ['admin:manage', 'runbooks:write', 'runbooks:publish', 'runbooks:execute'],
+  role: AppRole = 'ADMIN'
 ) {
-  const user = await createTestUser({ role: 'ADMIN' });
+  const user = await createTestUser({ role });
   const token = `ok_test_${randomUUID().replace(/-/g, '')}${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const key = await testPrisma.apiKey.create({
     data: {
@@ -58,7 +67,7 @@ function call(
         'content-type': 'application/json',
         ...(etag ? { 'if-match': etag } : {}),
       },
-      body: JSON.stringify(body),
+      ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
     }),
     { params: Promise.resolve(params) }
   );
@@ -76,6 +85,334 @@ describe('enterprise REST commands against PostgreSQL', () => {
       );
     await resetDatabase();
   }, 120_000);
+
+  it('enforces cancellation ownership and service-team boundaries without side effects on denial', async () => {
+    const owner = await credential(['runbooks:execute'], 'RESPONDER');
+    const outsider = await credential(['runbooks:execute', 'incidents:read'], 'RESPONDER');
+    const teammate = await credential(['runbooks:execute'], 'RESPONDER');
+    const administrator = await credential(['runbooks:execute']);
+    const team = await createTestTeam('Execution owners');
+    const otherTeam = await createTestTeam('Unrelated team');
+    await testPrisma.teamMember.createMany({
+      data: [
+        { teamId: team.id, userId: teammate.user.id, role: 'MEMBER' },
+        { teamId: otherTeam.id, userId: outsider.user.id, role: 'MEMBER' },
+      ],
+    });
+    const service = await createTestService('Owned execution service', team.id);
+    const unrelated = await createTestService('Other execution service', otherTeam.id);
+    const runbook = await createRunbook(
+      { name: 'Cancellation', slug: 'cancel', description: '' },
+      owner.user.id
+    );
+    const version = await publishDraftVersion(runbook.draftVersion.id, owner.user.id);
+    const makeExecution = (serviceId: string | null, triggeredByUserId: string | null) =>
+      testPrisma.runbookExecution.create({
+        data: {
+          runbookId: runbook.id,
+          runbookVersionId: version.id,
+          serviceId,
+          triggeredByUserId,
+          definitionChecksum: version.checksum,
+          deadlineAt: new Date(Date.now() + 60_000),
+        },
+      });
+    for (const [token, serviceId, triggeringUser, expected] of [
+      [outsider.token, null, owner.user.id, 404],
+      [outsider.token, service.id, owner.user.id, 404],
+      [teammate.token, unrelated.id, owner.user.id, 404],
+      [owner.token, null, owner.user.id, 202],
+      [teammate.token, service.id, null, 202],
+      [administrator.token, null, null, 202],
+    ] as const) {
+      const execution = await makeExecution(serviceId, triggeringUser);
+      const auditBefore = await testPrisma.auditLog.count();
+      const jobsBefore = await testPrisma.backgroundJob.count();
+      const response = await call(
+        cancelRoute,
+        token,
+        'POST',
+        `/runbooks/executions/${execution.id}/cancel`,
+        { id: execution.id },
+        { reason: 'Operator requested stop' }
+      );
+      expect(response.status).toBe(expected);
+      const stored = await testPrisma.runbookExecution.findUniqueOrThrow({
+        where: { id: execution.id },
+      });
+      expect(stored.status).toBe(expected === 202 ? 'CANCEL_REQUESTED' : 'QUEUED');
+      if (expected === 404) {
+        expect(await testPrisma.auditLog.count()).toBe(auditBefore);
+        expect(await testPrisma.backgroundJob.count()).toBe(jobsBefore);
+      }
+    }
+    const incident = await createTestIncident('Visible incident, unrelated operator', service.id);
+    const attached = await makeExecution(service.id, owner.user.id);
+    await testPrisma.runbookExecution.update({
+      where: { id: attached.id },
+      data: { incidentId: incident.id },
+    });
+    expect(
+      (
+        await call(
+          cancelRoute,
+          outsider.token,
+          'POST',
+          `/runbooks/executions/${attached.id}/cancel`,
+          { id: attached.id },
+          { reason: 'Unauthorized stop' }
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: attached.id } })).status
+    ).toBe('QUEUED');
+  });
+
+  it('rejects wildcard draft edit and publish with no version or audit changes', async () => {
+    const { token, user } = await credential();
+    const runbook = await createRunbook(
+      { name: 'Exact revision', slug: 'exact', description: '' },
+      user.id
+    );
+    const params = { id: runbook.id, versionId: runbook.draftVersion.id };
+    const audits = await testPrisma.auditLog.count();
+    for (const [handler, method, suffix, body] of [
+      [editDraft, 'PATCH', '', { definition }],
+      [publishDraft, 'POST', '/publish', {}],
+    ] as const) {
+      expect(
+        (
+          await call(
+            handler,
+            token,
+            method,
+            `/runbooks/${params.id}/drafts/${params.versionId}${suffix}`,
+            params,
+            body,
+            randomUUID(),
+            '*'
+          )
+        ).status
+      ).toBe(400);
+    }
+    const stored = await testPrisma.runbookVersion.findUniqueOrThrow({
+      where: { id: params.versionId },
+    });
+    expect(stored.state).toBe('DRAFT');
+    expect(stored.draftRevision).toBe(0);
+    expect(await testPrisma.auditLog.count()).toBe(audits);
+  });
+
+  it('round trips a privileged editing view without disclosing or erasing configuration and defaults', async () => {
+    const { token, user } = await credential();
+    const runbook = await createRunbook(
+      { name: 'Editable', slug: 'editable', description: '' },
+      user.id
+    );
+    const saved = await updateDraftVersion(
+      runbook.draftVersion.id,
+      {
+        definition: {
+          steps: [
+            {
+              key: 'one',
+              name: 'One',
+              type: 'BASH',
+              riskClass: 'NON_IDEMPOTENT',
+              config: { command: 'echo PRIVATE_COMMAND' },
+            },
+            {
+              key: 'two',
+              name: 'Two',
+              type: 'MANUAL',
+              config: { instructions: 'PRIVATE_INSTRUCTIONS' },
+            },
+          ],
+        },
+        inputs: [
+          {
+            key: 'count',
+            label: 'Count',
+            type: 'NUMBER',
+            required: false,
+            defaultValue: '42',
+            description: '',
+            sequence: 0,
+          },
+        ],
+        expectedDraftRevision: 0,
+      },
+      user.id
+    );
+    const params = { id: runbook.id, versionId: saved.id };
+    const path = `/runbooks/${params.id}/drafts/${params.versionId}`;
+    const response = await call(readDraft, token, 'GET', path, params, undefined);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const document = await response.json();
+    expect(JSON.stringify(document)).not.toContain('PRIVATE_');
+    expect(document.data.editable.inputs[0]).not.toHaveProperty('defaultValue');
+    const editable = document.data.editable;
+    editable.definition.steps.reverse();
+    editable.definition.steps[1].name = 'Renamed one';
+    const updated = await call(
+      editDraft,
+      token,
+      'PATCH',
+      path,
+      params,
+      editable,
+      randomUUID(),
+      response.headers.get('etag')!
+    );
+    expect(updated.status).toBe(200);
+    const stored = await testPrisma.runbookVersion.findUniqueOrThrow({
+      where: { id: saved.id },
+      include: { inputs: true },
+    });
+    expect(stored.definition).toMatchObject({
+      steps: [
+        { key: 'two', config: { instructions: 'PRIVATE_INSTRUCTIONS' } },
+        { key: 'one', name: 'Renamed one', config: { command: 'echo PRIVATE_COMMAND' } },
+      ],
+    });
+    expect(stored.inputs[0].defaultValue).toBe('42');
+    expect(
+      (
+        await call(
+          editDraft,
+          token,
+          'PATCH',
+          path,
+          params,
+          editable,
+          randomUUID(),
+          response.headers.get('etag')!
+        )
+      ).status
+    ).toBe(412);
+    const ordinary = await credential(['runbooks:read']);
+    expect((await call(readDraft, ordinary.token, 'GET', path, params, undefined)).status).toBe(
+      403
+    );
+  });
+
+  it('supports credential migration while retaining ordinary administrator compatibility', async () => {
+    const legacy = await credential(['admin:manage']);
+    const runbook = await createRunbook(
+      { name: 'Migrating', slug: 'migrating', description: '' },
+      legacy.user.id
+    );
+    const params = { id: runbook.id, versionId: runbook.draftVersion.id };
+    const draftPath = `/runbooks/${params.id}/drafts/${params.versionId}`;
+    expect((await call(readDraft, legacy.token, 'GET', draftPath, params, undefined)).status).toBe(
+      403
+    );
+    expect(
+      (
+        await call(
+          publishDraft,
+          legacy.token,
+          'POST',
+          `${draftPath}/publish`,
+          params,
+          {},
+          randomUUID(),
+          '"0"'
+        )
+      ).status
+    ).toBe(403);
+    expect(
+      (
+        await call(
+          previewRoute,
+          legacy.token,
+          'POST',
+          `/runbooks/${params.id}/executions/preview`,
+          { id: params.id },
+          {}
+        )
+      ).status
+    ).toBe(403);
+    // Rotate by issuing an explicitly scoped replacement for the same identity.
+    const replacementToken = `ok_test_${randomUUID().replace(/-/g, '')}${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    await testPrisma.apiKey.create({
+      data: {
+        name: 'Migrated token',
+        prefix: replacementToken.slice(0, 12),
+        tokenHash: hashTokenV2(replacementToken),
+        scopes: ['admin:manage', 'runbooks:write', 'runbooks:publish', 'runbooks:execute'],
+        userId: legacy.user.id,
+      },
+    });
+    expect(
+      (await call(readDraft, replacementToken, 'GET', draftPath, params, undefined)).status
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          publishDraft,
+          replacementToken,
+          'POST',
+          `${draftPath}/publish`,
+          params,
+          {},
+          randomUUID(),
+          '"0"'
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          previewRoute,
+          replacementToken,
+          'POST',
+          `/runbooks/${params.id}/executions/preview`,
+          { id: params.id },
+          {}
+        )
+      ).status
+    ).toBe(200);
+    const service = await createTestService('Ordinary administrator compatibility');
+    const incident = await createTestIncident('Resolved ordinary incident', service.id, {
+      status: 'RESOLVED',
+    });
+    expect(
+      (
+        await call(
+          reopen,
+          legacy.token,
+          'POST',
+          `/incidents/${incident.id}/reopen`,
+          { id: incident.id },
+          {}
+        )
+      ).status
+    ).toBe(200);
+  });
+
+  it('keeps the documented operational-only REST watcher policy even for self-follow', async () => {
+    const subscriber = await credential(['incidents:read', 'incidents:write'], 'USER');
+    const team = await createTestTeam('Subscribers');
+    await testPrisma.teamMember.create({
+      data: { teamId: team.id, userId: subscriber.user.id, role: 'MEMBER' },
+    });
+    const service = await createTestService('Visible service', team.id);
+    const incident = await createTestIncident('Visible incident', service.id);
+    const response = await call(
+      addWatcher,
+      subscriber.token,
+      'POST',
+      `/incidents/${incident.id}/watchers`,
+      { id: incident.id },
+      { userId: subscriber.user.id, role: 'FOLLOWER' }
+    );
+    expect(response.status).toBe(403);
+    expect(await testPrisma.incidentWatcher.count()).toBe(0);
+    expect(await testPrisma.incidentEvent.count({ where: { incidentId: incident.id } })).toBe(0);
+  });
 
   it('creates exactly one runbook and API audit under concurrent identical requests', async () => {
     const { token, key } = await credential();

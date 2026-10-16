@@ -45,7 +45,12 @@ import { PATCH, GET } from '@/app/api/v2/runbooks/[id]/drafts/[versionId]/route'
 import { POST as publish } from '@/app/api/v2/runbooks/[id]/drafts/[versionId]/publish/route';
 import { POST as validate } from '@/app/api/v2/runbooks/[id]/drafts/[versionId]/validate/route';
 import { createRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
-import { projectAuthoringVersion } from '@/lib/api-v2/runbook-authoring';
+import {
+  EditDraftV2Schema,
+  editableDraftResult,
+  restoreDraftConfiguration,
+  projectAuthoringVersion,
+} from '@/lib/api-v2/runbook-authoring';
 
 const runbookId = 'cmv7kbd0l000dxlzuo1cmhu1e';
 const versionId = 'cmv7kbd0l000exlzuo1cmhu1e';
@@ -57,7 +62,10 @@ function draft() {
     id: versionId,
     runbookId,
     version: 1,
-    state: 'DRAFT',
+    state: 'DRAFT' as const,
+    schemaVersion: 1,
+    createdById: 'admin',
+    publishedById: null,
     definition,
     checksum: computeDefinitionChecksum(definition),
     draftRevision: 3,
@@ -115,6 +123,14 @@ describe('runbook authoring REST boundaries', () => {
     expect(mocks.tx.runbookVersion.findFirst).not.toHaveBeenCalled();
     expect(mocks.tx.runbookVersion.updateMany).not.toHaveBeenCalled();
   });
+  it.each([PATCH, publish])('rejects wildcard revision preconditions', async handler => {
+    const response = await call(handler, handler === PATCH ? { definition } : {}, {
+      method: handler === PATCH ? 'PATCH' : 'POST',
+      etag: '*',
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.tx.runbookVersion.updateMany).not.toHaveBeenCalled();
+  });
   it('rejects stale draft revisions without mutating the draft', async () => {
     const response = await call(PATCH, { definition }, { method: 'PATCH', etag: '"2"' });
     expect(response.status).toBe(412);
@@ -125,6 +141,7 @@ describe('runbook authoring REST boundaries', () => {
     expect((await call(PATCH, { definition }, { method: 'PATCH' })).status).toBe(404);
     expect(mocks.tx.runbookVersion.findFirst).toHaveBeenCalledWith({
       where: { id: versionId, runbookId },
+      include: { inputs: { orderBy: { sequence: 'asc' } } },
     });
     expect(mocks.tx.runbookVersion.updateMany).not.toHaveBeenCalled();
   });
@@ -195,6 +212,7 @@ describe('runbook authoring REST boundaries', () => {
     expect((await call(GET, undefined, { method: 'GET' })).status).toBe(404);
     expect(mocks.tx.runbookVersion.findFirst).toHaveBeenCalledWith({
       where: { id: versionId, runbookId, state: 'DRAFT' },
+      include: { inputs: { orderBy: { sequence: 'asc' } } },
     });
   });
   it('never returns executable configuration or input defaults', () => {
@@ -258,5 +276,76 @@ describe('shared versioning transactions', () => {
       )
     ).rejects.toThrow('audit unavailable');
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('safe draft editing preservation', () => {
+  const saved = () => ({
+    ...draft(),
+    definition: {
+      steps: [
+        {
+          key: 'one',
+          name: 'One',
+          type: 'MANUAL',
+          config: { instructions: 'PRIVATE_PARENT' },
+          precheck: {
+            steps: [
+              {
+                key: 'check',
+                name: 'Check',
+                type: 'MANUAL',
+                config: { instructions: 'PRIVATE_CHILD' },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+  it('preserves nested configuration while accepting structural changes', () => {
+    const version = saved();
+    const editable = editableDraftResult(version).data.editable;
+    expect(JSON.stringify(editable)).not.toContain('PRIVATE_');
+    const body = EditDraftV2Schema.parse(editable);
+    body.definition.steps[0].name = 'Renamed';
+    const restored = restoreDraftConfiguration(body, version);
+    expect(restored.definition.steps[0]).toMatchObject({
+      name: 'Renamed',
+      config: { instructions: 'PRIVATE_PARENT' },
+      precheck: { steps: [{ config: { instructions: 'PRIVATE_CHILD' } }] },
+    });
+  });
+  it('uses explicit replacement configuration without merging private fields', () => {
+    const version = saved();
+    const body = EditDraftV2Schema.parse({
+      definition: {
+        steps: [
+          { key: 'one', name: 'One', type: 'MANUAL', config: { arbitrary: { steps: [null, 1] } } },
+        ],
+      },
+      preserveConfiguration: true,
+    });
+    expect(restoreDraftConfiguration(body, version).definition.steps[0].config).toEqual({
+      arbitrary: { steps: [null, 1] },
+    });
+  });
+  it('rejects a changed type when configuration is preserved', () => {
+    const version = saved();
+    const body = EditDraftV2Schema.parse({
+      definition: { steps: [{ key: 'one', name: 'One', type: 'BASH', config: {} }] },
+      preserveConfiguration: true,
+    });
+    expect(() => restoreDraftConfiguration(body, version)).toThrow(
+      expect.objectContaining({ status: 400 })
+    );
+  });
+  it('permits deliberate clearing without preservation', () => {
+    const version = saved();
+    const body = EditDraftV2Schema.parse({
+      definition: { steps: [{ key: 'one', name: 'One', type: 'MANUAL', config: {} }] },
+      preserveConfiguration: false,
+    });
+    expect(restoreDraftConfiguration(body, version).definition.steps[0].config).toEqual({});
   });
 });

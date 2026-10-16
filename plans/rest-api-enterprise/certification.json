@@ -150,5 +150,72 @@
       "url": "https://github.com/opsknight-labs/OpsKnight/security/dependabot/45"
     }
   ],
-  "dependencyFindingSource": "GitHub Dependabot open alerts on the default branch, verified 2026-10-16. The package lock is unchanged by this PR. High advisories did not list a patched version at verification time."
+  "dependencyFindingSource": "GitHub Dependabot open alerts on the default branch, verified 2026-10-16. The package lock is unchanged by this PR. High advisories did not list a patched version at verification time.",
+  "reviewFollowup": {
+    "reviewedCommit": "e917c3e08",
+    "verifiedAt": "2026-10-16T11:47:05.127364+00:00",
+    "scope": "Five PR #883 review findings and failing validation; remaining API parity stays deferred",
+    "findings": [
+      "Cancellation requires ADMIN, execution ownership or owning service-team membership; attached incident visibility also applies. Real PostgreSQL tests cover cross-user, cross-team and cross-service denials with no state, audit or queue changes.",
+      "Draft edit/publication require concrete strong revision ETags before replay and under lock; wildcard, missing and stale validators are covered.",
+      "Operational-only REST watcher writes are explicitly documented and tested for ordinary-user self-follow denial; eligible UI self-follow remains unchanged.",
+      "Privileged draft reads return a safe editable body; revision-bound key-based preservation retains hidden configurations and defaults across structural edits.",
+      "Credential migration checklist and real replacement-token tests preserve ordinary administrator behavior while requiring explicit runbook scopes and role capabilities."
+    ],
+    "raceRegression": "Binding creation, updates and activation use serializable retries alongside archive. A deterministic PostgreSQL lock gate starts the archive snapshot before binding insertion and verifies the committed binding ends disabled.",
+    "verification": [
+      {
+        "check": "Complete unit suite",
+        "status": "passed",
+        "files": 854,
+        "passed": 7236,
+        "skipped": 4,
+        "command": "node node_modules/vitest/vitest.mjs run -c vitest.unit.config.ts --no-file-parallelism --maxWorkers=1"
+      },
+      {
+        "check": "Canonical CI PostgreSQL suite",
+        "status": "passed",
+        "filesPassed": 76,
+        "filesSkipped": 5,
+        "passed": 521,
+        "skipped": 35,
+        "command": "node node_modules/vitest/vitest.mjs run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --exclude tests/integration/authentication-policy-database.test.ts --exclude tests/integration/emergency-authentication-database.test.ts --exclude tests/integration/oidc-staged-authentication-database.test.ts --exclude tests/integration/provider-feedback-isolation-database.test.ts --exclude tests/integration/emergency-password-database.test.ts",
+        "note": "Matches tests.yml: five specialized enterprise_sso_test suites run in their dedicated certification workflow; no assertions removed."
+      },
+      {
+        "check": "Production runbook browser matrix",
+        "status": "passed",
+        "passed": 36,
+        "browsers": [
+          "chromium",
+          "firefox",
+          "webkit"
+        ],
+        "command": "node node_modules/@playwright/test/cli.js test --config playwright.runbooks.config.ts --output /tmp/rest-review-runbook-results"
+      },
+      {
+        "check": "Production HTTPS recovery browsers",
+        "status": "passed",
+        "passed": 10,
+        "skipped": 2,
+        "flaky": 0,
+        "command": "python3 scripts/certify-enterprise-authentication-browser.py --build",
+        "evidence": "plans/certification/enterprise-sso-2.1-password-browser.json"
+      },
+      {
+        "check": "TypeScript, zero-warning changed-file ESLint, generated client drift, TypeScript SDK build and production build",
+        "status": "passed"
+      },
+      {
+        "check": "Python SDK HTTP fixtures under Python 3.12",
+        "status": "passed",
+        "passed": 9
+      }
+    ],
+    "fixtureNotes": [
+      "Canonical database and browser reruns used separate disposable databases in a PostgreSQL 16 container with a 4 GiB tmpfs, ordinary fsync and synchronous commit, and bounded WAL retention. No crash-durability or performance claim.",
+      "Interrupted runs after an earlier 512 MiB fixture filled are discarded; the final full reruns above passed.",
+      "Rate-limit tests pin their wall-clock window; queue-isolation fixtures are due before claiming, independent of small host/database clock skew."
+    ]
+  }
 }

@@ -79,7 +79,11 @@ beforeEach(() => {
       },
     ],
   });
-  mocks.tx.runbookExecution.findFirst.mockResolvedValue({ id: 'resource', incidentId: null });
+  mocks.tx.runbookExecution.findFirst.mockResolvedValue({
+    id: 'resource',
+    incidentId: null,
+    triggeredByUserId: 'operator',
+  });
   mocks.tx.incident.findFirst.mockResolvedValue({ id: 'incident' });
   mocks.cancel.mockResolvedValue(undefined);
   mocks.audit.mockResolvedValue(undefined);
@@ -124,10 +128,22 @@ describe('runbook preview and cancellation boundaries', () => {
     mocks.tx.runbookExecution.findFirst.mockResolvedValue({
       id: 'resource',
       incidentId: 'private-incident',
+      triggeredByUserId: 'operator',
     });
     mocks.tx.incident.findFirst.mockResolvedValue(null);
     expect((await call(cancel, { reason: 'Stop' })).status).toBe(404);
     expect(mocks.cancel).not.toHaveBeenCalled();
+  });
+  it('hides another operator incident-less execution and produces no side effects', async () => {
+    mocks.tx.runbookExecution.findFirst.mockResolvedValue({
+      id: 'resource',
+      incidentId: null,
+      triggeredByUserId: 'other',
+      service: { teamId: 'unrelated' },
+    });
+    expect((await call(cancel, { reason: 'Stop' })).status).toBe(404);
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
   });
   it('requires a bounded reason and does not accept a client-supplied final state', async () => {
     for (const body of [

@@ -29,6 +29,33 @@ const lifecycle = object({
   },
 });
 
+const authoringVersionSchema = object(
+  {
+    id,
+    runbookId: id,
+    version: { type: 'integer', minimum: 1 },
+    state: { type: 'string', enum: ['DRAFT', 'PUBLISHED', 'RETIRED'] },
+    checksum: string(),
+    draftRevision: integer,
+    publishedAt: { type: ['string', 'null'], format: 'date-time' },
+    createdAt: date,
+    updatedAt: date,
+    steps: { type: 'array', items: ref('RunbookStep') },
+  },
+  [
+    'id',
+    'runbookId',
+    'version',
+    'state',
+    'checksum',
+    'draftRevision',
+    'publishedAt',
+    'createdAt',
+    'updatedAt',
+    'steps',
+  ]
+);
+
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   IncidentWatcher: object({ id, incidentId: id, userId: id, role: string(), createdAt: date }, [
     'id',
@@ -166,31 +193,20 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     },
     ['key', 'label']
   ),
-  RunbookAuthoringVersion: object(
+  RunbookAuthoringVersion: authoringVersionSchema,
+  RunbookDraftRead: object(
     {
-      id,
-      runbookId: id,
-      version: { type: 'integer', minimum: 1 },
-      state: { type: 'string', enum: ['DRAFT', 'PUBLISHED', 'RETIRED'] },
-      checksum: string(),
-      draftRevision: integer,
-      publishedAt: { type: ['string', 'null'], format: 'date-time' },
-      createdAt: date,
-      updatedAt: date,
-      steps: { type: 'array', items: ref('RunbookStep') },
+      ...(authoringVersionSchema.properties as Record<string, Schema>),
+      editable: object(
+        {
+          definition: ref('RunbookDefinitionInput'),
+          inputs: { type: 'array', items: ref('RunbookInputDefinition') },
+          preserveConfiguration: { const: true },
+        },
+        ['definition', 'inputs', 'preserveConfiguration']
+      ),
     },
-    [
-      'id',
-      'runbookId',
-      'version',
-      'state',
-      'checksum',
-      'draftRevision',
-      'publishedAt',
-      'createdAt',
-      'updatedAt',
-      'steps',
-    ]
+    [...(authoringVersionSchema.required as string[]), 'editable']
   ),
   RunbookCreated: object(
     {
@@ -336,13 +352,19 @@ const operations: Operation[] = [
   {
     method: 'get',
     path: '/runbooks/{id}/drafts/{versionId}',
-    summary: 'Read a redacted version and its draft revision',
+    summary: 'Read an editable draft with hidden configuration and its revision',
   },
   {
     method: 'patch',
     path: '/runbooks/{id}/drafts/{versionId}',
     summary: 'Replace a draft definition with revision protection',
-    body: draftInput,
+    body: {
+      ...draftInput,
+      properties: {
+        ...(draftInput.properties as Record<string, Schema>),
+        preserveConfiguration: { type: 'boolean', default: false },
+      },
+    },
   },
   {
     method: 'post',

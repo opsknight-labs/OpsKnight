@@ -32,7 +32,10 @@
         "Explicit runbook authoring, publication and execution scopes",
         "Streaming body size and nesting limits",
         "Required If-Match for new sensitive draft writes",
-        "Shared domain commands join the outer idempotency/audit transaction"
+        "Shared domain commands join the outer idempotency/audit transaction",
+        "Concrete strong draft revision preconditions, including before idempotency replay",
+        "Execution cancellation ownership and service-team boundaries",
+        "Credential migration checklist with role and PostgreSQL compatibility tests"
       ],
       "remaining": [
         "Migrate older handwritten routes with equivalent resource contracts",
@@ -72,7 +75,9 @@
         "Revision conflicts, required retry keys and credential-attributed audit",
         "Shared execution boundary for previews and starts",
         "Optional reviewed-plan digest fence",
-        "Cancellation requests retain CANCEL_REQUESTED semantics"
+        "Cancellation requests retain CANCEL_REQUESTED semantics",
+        "Privileged editable draft views with revision-bound preservation of hidden configuration and defaults",
+        "Serializable binding enablement and deterministic archive snapshot race coverage"
       ],
       "remaining": [
         "Metadata/lifecycle endpoints",

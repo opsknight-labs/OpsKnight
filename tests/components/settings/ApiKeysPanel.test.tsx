@@ -141,7 +141,8 @@ describe('ApiKeysPanel Component', () => {
   it('does not offer reserved scopes, which currently grant nothing', () => {
     render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={true} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
-    expect(screen.queryByText(title('runbooks:write'))).toBeNull();
+    expect(screen.getByText(title('runbooks:write'))).toBeVisible();
+    expect(screen.getByText(title('runbooks:publish'))).toBeVisible();
     expect(screen.queryByText(title('users:write'))).toBeNull();
   });
 

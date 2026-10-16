@@ -17,7 +17,7 @@ const decisions: readonly ApiCapability[] = [
     title: 'Create, draft, validate and publish',
     status: 'available',
     explanation:
-      'Explicit authoring/publishing scopes and administrator capabilities; draft writes require If-Match and idempotency keys. Responses contain redacted summaries.',
+      'Explicit authoring/publishing scopes and administrator capabilities; draft writes require concrete revision ETags and idempotency keys. Privileged draft reads include a safe editable body that preserves hidden configuration.',
     operationIds: [
       'createRunbook',
       'createRunbookDraft',

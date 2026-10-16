@@ -164,7 +164,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'getRunbookDraft',
     'runbooks:write',
     'item',
-    'RunbookAuthoringVersion'
+    'RunbookDraftRead'
   ),
   op(
     'patch',

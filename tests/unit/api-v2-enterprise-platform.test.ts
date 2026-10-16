@@ -42,6 +42,39 @@ describe('explicit infrastructure privileges', () => {
   });
 });
 
+describe('runbook credential migration role compatibility', () => {
+  it.each(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const)(
+    'scopes retain the role boundary for %s',
+    role => {
+      for (const [action, scope] of [
+        [AUTHORIZATION_ACTIONS.RUNBOOK_MANAGE, 'runbooks:write'],
+        [AUTHORIZATION_ACTIONS.RUNBOOK_PUBLISH, 'runbooks:publish'],
+        [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE, 'runbooks:execute'],
+      ] as const) {
+        const upgraded = {
+          ...actor,
+          role,
+          apiKey: { id: 'replacement', scopes: ['admin:manage', scope] },
+        };
+        expect(authorize({ actor: upgraded, action }).allowed).toBe(
+          role === 'ADMIN' ||
+            (role === 'RESPONDER' && action === AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE)
+        );
+        expect(
+          authorize({
+            actor: { ...upgraded, apiKey: { id: 'old', scopes: ['admin:manage'] } },
+            action,
+          }).allowed
+        ).toBe(false);
+      }
+    }
+  );
+  it('retains the ordinary administrator scope behavior', () => {
+    expect(authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_MANAGE }).allowed).toBe(true);
+    expect(authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ }).allowed).toBe(true);
+  });
+});
+
 describe('resource authorization fails closed', () => {
   const scoped: AuthorizationActor = {
     ...actor,

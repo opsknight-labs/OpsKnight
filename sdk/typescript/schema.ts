@@ -29,6 +29,7 @@ export type RunbookDefinitionInput = { "steps": Array<RunbookStepInput>; "descri
 export type RunbookStepInput = { "key": string; "name": string; "type": "MANUAL" | "APPROVAL" | "CONDITION" | "WAIT" | "HTTP" | "LINUX_DIAGNOSTICS" | "SYSTEMD" | "DOCKER" | "KUBERNETES" | "BASH"; "riskClass"?: "READ_ONLY" | "IDEMPOTENT_WRITE" | "NON_IDEMPOTENT"; "description"?: string; "config"?: Record<string, unknown>; "verification"?: { "steps": Array<RunbookStepInput>; "delaySeconds"?: number }; "precheck"?: { "steps": Array<RunbookStepInput> }; "timeoutSeconds"?: number; "maxRetries"?: number; "requiresApproval"?: boolean };
 export type RunbookInputDefinition = { "key": string; "label": string; "type"?: "STRING" | "NUMBER" | "BOOLEAN" | "URL" | "DURATION" | "SECRET_REF" | "SELECT"; "required"?: boolean; "defaultValue"?: string; "description"?: string; "sequence"?: number; "options"?: Array<string> };
 export type RunbookAuthoringVersion = { "id": string; "runbookId": string; "version": number; "state": "DRAFT" | "PUBLISHED" | "RETIRED"; "checksum": string; "draftRevision": number; "publishedAt": string | null; "createdAt": string; "updatedAt": string; "steps": Array<RunbookStep> };
+export type RunbookDraftRead = { "id": string; "runbookId": string; "version": number; "state": "DRAFT" | "PUBLISHED" | "RETIRED"; "checksum": string; "draftRevision": number; "publishedAt": string | null; "createdAt": string; "updatedAt": string; "steps": Array<RunbookStep>; "editable": { "definition": RunbookDefinitionInput; "inputs": Array<RunbookInputDefinition>; "preserveConfiguration": true } };
 export type RunbookCreated = { "id": string; "name": string; "slug": string; "description": string; "draftVersionId": string; "draftVersion": RunbookAuthoringVersion };
 export type RunbookDraftValidation = { "valid": true; "versionId": string; "draftRevision": number; "checksum": string };
 export type ActionResult = { "success": boolean; "message"?: string } & Record<string, unknown>;
@@ -58,7 +59,7 @@ export interface OperationRequests {
   listRunbookVersions: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   createRunbookDraft: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "sourceVersionId": string } };
   getRunbookDraft: { "params": { "id": string; "versionId": string } };
-  updateRunbookDraft: { "params": { "id": string; "versionId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "definition": RunbookDefinitionInput; "inputs"?: Array<RunbookInputDefinition> } };
+  updateRunbookDraft: { "params": { "id": string; "versionId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "definition": RunbookDefinitionInput; "inputs"?: Array<RunbookInputDefinition>; "preserveConfiguration"?: boolean } };
   validateRunbookDraft: { "params": { "id": string; "versionId": string }; "body": Record<string, never> };
   publishRunbookDraft: { "params": { "id": string; "versionId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
   listAuditLogs: { "query"?: { "limit"?: number; "cursor"?: string; "action"?: string; "entityType"?: string; "entityId"?: string; "actorId"?: string } };
@@ -143,7 +144,7 @@ export interface OperationResponses {
   createRunbook: { "data": RunbookCreated; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookVersions: { "data": Array<RunbookAuthoringVersion>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createRunbookDraft: { "data": RunbookAuthoringVersion; "requestId": string; "timestamp": string } & Record<string, unknown>;
-  getRunbookDraft: { "data": RunbookAuthoringVersion; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookDraft: { "data": RunbookDraftRead; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateRunbookDraft: { "data": RunbookAuthoringVersion; "requestId": string; "timestamp": string } & Record<string, unknown>;
   validateRunbookDraft: { "data": RunbookDraftValidation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   publishRunbookDraft: { "data": RunbookAuthoringVersion; "requestId": string; "timestamp": string } & Record<string, unknown>;

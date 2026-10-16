@@ -5,7 +5,7 @@ import { authenticateV2Request, type V2ApiKeyIdentity } from './auth';
 import { enforceV2RateLimit, type V2OperationClass } from './rate-limit';
 import { enforceV2Authorization, enforceV2ResourceAuthorization } from './rbac';
 import { readV2JsonBody } from './request-body';
-import { requireIfMatch } from './concurrency';
+import { requireRevisionIfMatch } from './concurrency';
 import { apiV2Success, apiV2Created, apiV2NoContent, apiV2Error } from './response';
 import { runV2IdempotentMutation, idempotencyResponseHeaders } from './idempotency';
 import { parsePaginationParams } from './pagination';
@@ -144,7 +144,7 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
           });
         }
 
-        if (config.preconditionRequired) requireIfMatch(req);
+        if (config.preconditionRequired) requireRevisionIfMatch(req);
 
         // 7. Execute Handler (Idempotent vs Non-Idempotent)
         if (config.idempotent) {

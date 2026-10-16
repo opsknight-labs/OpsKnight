@@ -189,19 +189,25 @@ describe('legacy credential paths share the scrypt admission budget', () => {
   const legacyToken = (seed: string) => `ok_${seed.padEnd(43, 'a')}`;
 
   it('throttles 1.x-shaped lookups per address after the budget, without throttling modern tokens', async () => {
-    const req = get('/api/incidents', { 'x-forwarded-for': '198.51.100.31' });
-    for (let i = 0; i < LEGACY_AUTH_ADMISSION_LIMIT; i++) {
-      expect((await legacyHashCandidatesWithAdmission(req, legacyToken(`t${i}`))).status).toBe(
-        'ok'
+    // The budget is a fixed wall-clock minute; keep hashing from crossing its boundary.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 9, 16, 12, 0, 10));
+    try {
+      const req = get('/api/incidents', { 'x-forwarded-for': '198.51.100.31' });
+      for (let i = 0; i < LEGACY_AUTH_ADMISSION_LIMIT; i++) {
+        expect((await legacyHashCandidatesWithAdmission(req, legacyToken(`t${i}`))).status).toBe(
+          'ok'
+        );
+      }
+      expect((await legacyHashCandidatesWithAdmission(req, legacyToken('over'))).status).toBe(
+        'throttled'
       );
+      // A modern-format token never needs scrypt and is never throttled here.
+      expect(
+        (await legacyHashCandidatesWithAdmission(req, `ok_live_${'m'.repeat(40)}`)).status
+      ).toBe('ok');
+    } finally {
+      clock.mockRestore();
     }
-    expect((await legacyHashCandidatesWithAdmission(req, legacyToken('over'))).status).toBe(
-      'throttled'
-    );
-    // A modern-format token never needs scrypt and is never throttled here.
-    expect((await legacyHashCandidatesWithAdmission(req, `ok_live_${'m'.repeat(40)}`)).status).toBe(
-      'ok'
-    );
   });
 
   it('rejects malformed API keys on the legacy path without a database lookup', async () => {

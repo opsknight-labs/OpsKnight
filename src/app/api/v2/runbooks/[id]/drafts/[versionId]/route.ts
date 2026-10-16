@@ -7,6 +7,8 @@ import {
   EditDraftV2Schema,
   requireDraft,
   authoringVersionResult,
+  editableDraftResult,
+  restoreDraftConfiguration,
 } from '@/lib/api-v2/runbook-authoring';
 import { updateDraftVersion } from '@/lib/runbooks/versioning';
 import { AppError } from '@/lib/errors';
@@ -18,9 +20,10 @@ export const GET = defineV2Route({
   handler: async ({ params }) => {
     const version = await prisma.runbookVersion.findFirst({
       where: { id: params.versionId, runbookId: params.id, state: 'DRAFT' },
+      include: { inputs: { orderBy: { sequence: 'asc' } } },
     });
     if (!version) throw new AppError({ code: 'RUNBOOK_VERSION_NOT_FOUND' });
-    return authoringVersionResult(version);
+    return editableDraftResult(version);
   },
 });
 
@@ -36,7 +39,7 @@ export const PATCH = defineV2Route({
     const draft = await requireDraft(tx!, req, params);
     const updated = await updateDraftVersion(
       draft.id,
-      { ...body, expectedDraftRevision: draft.draftRevision },
+      { ...restoreDraftConfiguration(body, draft), expectedDraftRevision: draft.draftRevision },
       { id: actor.id, apiKeyId: apiKey.id },
       tx
     );

@@ -11,8 +11,8 @@ import {
 } from '@/components/settings/ApiExplorerPanel';
 
 describe('API Explorer Snippet Generator Verification', () => {
-  it('covers all 63 registered REST v2 operations', () => {
-    expect(V2_OPERATIONS).toHaveLength(63);
+  it('covers all 84 registered REST v2 operations', () => {
+    expect(V2_OPERATIONS).toHaveLength(84);
   });
 
   describe('Path Parameter Resolution', () => {
@@ -24,7 +24,12 @@ describe('API Explorer Snippet Generator Verification', () => {
         expect(resolved.startsWith('/')).toBe(true);
 
         if (op.path.includes('{id}')) {
-          expect(resolved).toMatch(/_(123456|[a-z0-9]+)/);
+          const segments = op.path.split('/');
+          const idIndex = segments.indexOf('{id}');
+          const sampleId = resolved.split('/').at(idIndex);
+          expect(sampleId).toMatch(
+            op.path.startsWith('/runbooks/{id}') ? /^c[a-z0-9]{24}$/ : /^[a-z0-9_]+$/
+          );
         }
       });
     }
@@ -46,7 +51,9 @@ describe('API Explorer Snippet Generator Verification', () => {
 
       it(`generates valid Bearer cURL snippet for ${endpointKey}`, () => {
         const snippet = getCurlSnippet(epDoc, 'https://api.test.opsknight.com', 'BEARER');
-        expect(snippet).toContain(`curl -X ${op.method.toUpperCase()} "https://api.test.opsknight.com/api/v2`);
+        expect(snippet).toContain(
+          `curl -X ${op.method.toUpperCase()} "https://api.test.opsknight.com/api/v2`
+        );
         expect(snippet).toContain('-H "Authorization: Bearer ok_live_your_api_key"');
         expect(snippet).not.toMatch(/\{[a-zA-Z0-9_-]+\}/);
 
@@ -62,7 +69,9 @@ describe('API Explorer Snippet Generator Verification', () => {
 
       it(`generates valid X-API-Key cURL snippet for ${endpointKey}`, () => {
         const snippet = getCurlSnippet(epDoc, 'https://api.test.opsknight.com', 'X_API_KEY');
-        expect(snippet).toContain(`curl -X ${op.method.toUpperCase()} "https://api.test.opsknight.com/api/v2`);
+        expect(snippet).toContain(
+          `curl -X ${op.method.toUpperCase()} "https://api.test.opsknight.com/api/v2`
+        );
         expect(snippet).toContain('-H "X-API-Key: ok_live_your_api_key"');
         expect(snippet).not.toContain('Authorization: Bearer');
       });

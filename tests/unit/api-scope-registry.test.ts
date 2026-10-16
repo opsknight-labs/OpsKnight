@@ -19,7 +19,8 @@ describe('API scope registry', () => {
 
   it('does not offer scopes that grant nothing on REST v2', () => {
     const issuable = issuableScopesForRole('ADMIN').map(d => d.scope);
-    expect(issuable).not.toContain(API_SCOPES.RUNBOOKS_WRITE);
+    expect(issuable).toContain(API_SCOPES.RUNBOOKS_WRITE);
+    expect(issuable).toContain(API_SCOPES.RUNBOOKS_PUBLISH);
     expect(issuable).not.toContain(API_SCOPES.USERS_WRITE);
     expect(issuable).toContain(API_SCOPES.RUNBOOKS_EXECUTE);
   });

@@ -1829,6 +1829,96 @@
           "steps"
         ]
       },
+      "RunbookDraftRead": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runbookId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED",
+              "RETIRED"
+            ]
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "draftRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "publishedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunbookStep"
+            }
+          },
+          "editable": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "definition": {
+                "$ref": "#/components/schemas/RunbookDefinitionInput"
+              },
+              "inputs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RunbookInputDefinition"
+                }
+              },
+              "preserveConfiguration": {
+                "const": true
+              }
+            },
+            "required": [
+              "definition",
+              "inputs",
+              "preserveConfiguration"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "runbookId",
+          "version",
+          "state",
+          "checksum",
+          "draftRevision",
+          "publishedAt",
+          "createdAt",
+          "updatedAt",
+          "steps",
+          "editable"
+        ]
+      },
       "RunbookCreated": {
         "type": "object",
         "additionalProperties": false,
@@ -11620,7 +11710,7 @@
         "tags": [
           "Runbooks"
         ],
-        "summary": "Read a redacted version and its draft revision",
+        "summary": "Read an editable draft with hidden configuration and its revision",
         "parameters": [
           {
             "name": "id",
@@ -11650,7 +11740,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/RunbookAuthoringVersion"
+                      "$ref": "#/components/schemas/RunbookDraftRead"
                     },
                     "requestId": {
                       "type": "string"
@@ -11754,7 +11844,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.",
+            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }
@@ -11777,6 +11867,10 @@
                     "items": {
                       "$ref": "#/components/schemas/RunbookInputDefinition"
                     }
+                  },
+                  "preserveConfiguration": {
+                    "type": "boolean",
+                    "default": false
                   }
                 },
                 "required": [
@@ -12055,7 +12149,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.",
+            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }
