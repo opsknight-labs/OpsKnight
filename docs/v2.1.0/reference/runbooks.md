@@ -32,10 +32,10 @@ controls and remain compatible with Advanced JSON. See the
 
 ## Inputs and risk
 
-Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, and `SECRET_REF`.
-Unconstrained `SELECT` is not accepted for new input definitions; use `STRING`
-until option-aware selection is implemented. The database retains its legacy
-enum value for compatibility, not as a constrained dropdown contract.
+Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, `SECRET_REF`
+and `SELECT`. SELECT definitions require explicit unique options; saved defaults,
+binding values and execution inputs must match an allowed option. See the
+[authoring guide](../guides/runbooks/author) for the current Builder controls.
 Input keys are unique and definitions specify required/default
 behavior. Values are validated when configuring and executing a binding.
 Secret references identify encrypted credentials and require a scoped grant.

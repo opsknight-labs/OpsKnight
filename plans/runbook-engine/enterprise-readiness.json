@@ -1,6 +1,6 @@
 {
   "auditDate": "2026-10-16",
-  "baseRevision": "b16cb86a4",
+  "baseRevision": "d8e67ae96",
   "releaseState": "BETA",
   "scope": "Enterprise readiness audit remediation from main; implementation and measured evidence are distinct from production certification",
   "correctnessAndSecurity": {
@@ -30,12 +30,16 @@
   "evidencePolicy": "CI artifacts record their actual source revision/topology/limitations. No planned or skipped physical test counts as passing evidence. Never infer production throughput from idle HTTP or direct-library claims.",
   "localVerification": {
     "runbookUnit": "341 passed, 3 skipped, 44 files (before final focused API error/Unicode additions)",
-    "postgresql": "92 passed in initial three-suite run; expanded enterprise suite includes 8 tests with bounded historical rewrite, read-only deadline and output safety assertions",
+    "postgresql": "94 passed, 3 files after rebase, using a fresh tmpfs-backed disposable PostgreSQL 15 fixture with all 225 migrations. The initial disk-backed run hit fixture hook timeouts and cascading SLA seed errors; no test assertions or timeouts were relaxed. This is transaction/state-machine coverage, not disk/HA durability certification.",
     "authenticatedHttp": "One measured workload passed at all four sizes; see evidence/authenticated-http-local-20261016.json. Pre-commit modified source, not exact-head hosted CI",
-    "physicalTargets": "Docker default/desktop-linux daemon probes and Kind listing timed out locally; new disposable CI job must produce actual evidence before this gate can pass",
+    "physicalTargets": "PASS: real Docker stop/start/restart and Kind Deployment scale 2/1 plus rollout restart, independent state observations; see evidence/physical-targets-local-20261016.json. Platform-specific image archive export avoids dangling multi-platform digest imports.",
     "releaseClaims": "Beta; no assertion that planned CI or physical qualification already passed",
-    "fullUnit": "6790 passed, 7 skipped, 832 files; later focused guards verified separately",
+    "fullUnit": "7019 passed, 4 skipped, 852 files after rebasing onto main with the latest UI, SELECT inputs and dependency upgrades",
     "typecheck": "pass",
-    "documentation": "342 v2.1 files have valid relative links; frontmatter and workflow YAML parsed"
+    "documentation": "342 v2.1 files have valid relative links; frontmatter and workflow YAML parsed",
+    "sourceProvenance": "Historical HTTP measurement predates the rebase and records that limitation. New physical evidence records its local source provenance. Hosted final-head CI is still required.",
+    "productionBuild": "pass after rebase (Next.js 16.4.1); upstream Next/PWA/Edge warnings retained",
+    "browser": "3 Chromium production journeys pass: publish/attach/trigger/approval/cancel; independent rules and evidence desktop/mobile; 100/1000/10000-rule rendering and true total counts. Full cross-browser matrix remains a hosted CI gate.",
+    "focusedUiAndAuthority": "19 focused component/authorization/download/disconnect tests pass after integrating the latest main UI"
   }
 }

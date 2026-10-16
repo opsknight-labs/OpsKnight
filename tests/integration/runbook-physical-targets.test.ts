@@ -114,7 +114,28 @@ suite('disposable physical Agent executor targets (not HA or release certificati
         '--wait',
         '120s',
       ]);
-      await command('kind', ['load', 'docker-image', 'busybox:1.37.0', '--name', id]);
+      // Docker's containerd image store may retain a multi-platform index with only
+      // the host manifest present. Export that platform instead of importing dangling digests.
+      const platform = (
+        await command('docker', [
+          'image',
+          'inspect',
+          '--format',
+          '{{.Os}}/{{.Architecture}}',
+          'busybox:1.37.0',
+        ])
+      ).stdout.trim();
+      const workloadArchive = join(dir, 'workload.tar');
+      await command('docker', [
+        'image',
+        'save',
+        '--platform',
+        platform,
+        '--output',
+        workloadArchive,
+        'busybox:1.37.0',
+      ]);
+      await command('kind', ['load', 'image-archive', workloadArchive, '--name', id]);
       await command('kubectl', ['create', 'namespace', id]);
       await command('kubectl', [
         '-n',

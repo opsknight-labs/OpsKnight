@@ -19,6 +19,7 @@ export type TimelineAttempt = {
   errorMessage: string | null;
   target: string;
   claimedBy: string;
+  agentLastContact?: string;
   queuedAt: string;
   claimedAt: string;
   startedAt: string;
@@ -68,6 +69,7 @@ export type ExecutionStepTimelineProps = {
   runbookName: string;
   steps: TimelineStep[];
   canApprove: boolean;
+  canDownloadArtifacts?: boolean;
   targetLabel: string;
   versionLabel: string;
 };
@@ -86,7 +88,13 @@ const NODE_RING: Record<ReturnType<typeof stepTone>, string> = {
   neutral: 'ring-border',
 };
 
-function AttemptDetails({ attempt }: { attempt: TimelineAttempt }) {
+function AttemptDetails({
+  attempt,
+  canDownloadArtifacts,
+}: {
+  attempt: TimelineAttempt;
+  canDownloadArtifacts: boolean;
+}) {
   return (
     <details className="group rounded-lg border bg-background text-xs">
       <summary className="flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-2 rounded-lg px-3 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
@@ -123,6 +131,8 @@ function AttemptDetails({ attempt }: { attempt: TimelineAttempt }) {
           <dd>{attempt.startedAt}</dd>
           <dt>Completed</dt>
           <dd>{attempt.completedAt}</dd>
+          <dt>Agent last contact</dt>
+          <dd>{attempt.agentLastContact ?? 'Not reported'}</dd>
           <dt>Lease expires</dt>
           <dd>{attempt.leaseExpiresAt}</dd>
           <dt>Exit code</dt>
@@ -135,6 +145,7 @@ function AttemptDetails({ attempt }: { attempt: TimelineAttempt }) {
             label={`Attempt ${attempt.attemptNumber} output`}
             output={attempt.outputPreview}
             artifactId={attempt.outputArtifactId}
+            canDownloadArtifacts={canDownloadArtifacts}
           />
         )}
         <details>
@@ -153,12 +164,16 @@ function AttemptDetails({ attempt }: { attempt: TimelineAttempt }) {
           <ul className="space-y-1">
             {attempt.artifacts.map(artifact => (
               <li key={artifact.id} className="break-all">
-                <a
-                  className="text-primary hover:underline"
-                  href={`/api/runbook-artifacts/${encodeURIComponent(artifact.id)}`}
-                >
-                  {artifact.kind}
-                </a>{' '}
+                {canDownloadArtifacts ? (
+                  <a
+                    className="text-primary hover:underline"
+                    href={`/api/runbook-artifacts/${encodeURIComponent(artifact.id)}`}
+                  >
+                    {artifact.kind}
+                  </a>
+                ) : (
+                  <span>{artifact.kind}</span>
+                )}{' '}
                 · {artifact.sizeBytes} bytes{artifact.truncated ? ' · Truncated' : ''} · SHA256{' '}
                 <span className="font-mono">{artifact.sha256}</span>
               </li>
@@ -175,6 +190,7 @@ export function ExecutionStepTimeline({
   runbookName,
   steps,
   canApprove,
+  canDownloadArtifacts = false,
   targetLabel,
   versionLabel,
 }: ExecutionStepTimelineProps) {
@@ -212,7 +228,9 @@ export function ExecutionStepTimeline({
               aria-hidden="true"
               className={cn(
                 'absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-inset',
+                // eslint-disable-next-line security/detect-object-injection -- tone is a finite value from stepTone(), not a request key.
                 TONE_SURFACE[tone],
+                // eslint-disable-next-line security/detect-object-injection -- tone is a finite value from stepTone(), not a request key.
                 NODE_RING[tone]
               )}
             >
@@ -372,15 +390,16 @@ export function ExecutionStepTimeline({
                         label="Step output"
                         output={step.outputPreview}
                         artifactId={step.outputArtifactId}
+                        canDownloadArtifacts={canDownloadArtifacts}
                         truncatedHint
                       />
                     )}
-                    {!step.outputPreview && step.outputArtifactId && (
+                    {!step.outputPreview && step.outputArtifactId && canDownloadArtifacts && (
                       <a
                         className="text-xs font-medium text-primary hover:underline"
                         href={`/api/runbook-artifacts/${encodeURIComponent(step.outputArtifactId)}`}
                       >
-                        Download full output
+                        Download sanitized output
                       </a>
                     )}
                     <div className="space-y-1.5 text-xs">
@@ -397,7 +416,11 @@ export function ExecutionStepTimeline({
                           </p>
                         )}
                         {step.attempts.map(attempt => (
-                          <AttemptDetails key={attempt.id} attempt={attempt} />
+                          <AttemptDetails
+                            key={attempt.id}
+                            attempt={attempt}
+                            canDownloadArtifacts={canDownloadArtifacts}
+                          />
                         ))}
                       </div>
                     )}
