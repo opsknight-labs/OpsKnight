@@ -52,7 +52,7 @@ export function RunbookFilters({
   return (
     <form
       method="get"
-      className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 shadow-xs"
+      className="flex flex-wrap items-end gap-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 shadow-xs"
     >
       {fields.map(field => (
         <label
@@ -66,7 +66,7 @@ export function RunbookFilters({
             type={field.type ?? 'text'}
             defaultValue={Object.entries(query).find(([name]) => name === field.name)?.[1] ?? ''}
             maxLength={200}
-            className="h-9 text-sm text-foreground"
+            className="h-9 rounded-xl text-xs text-foreground"
           />
         </label>
       ))}
@@ -80,7 +80,7 @@ export function RunbookFilters({
           />
         </div>
       )}
-      <Button type="submit" size="sm" className="h-9">
+      <Button type="submit" size="sm" className="h-9 rounded-xl text-xs font-medium shadow-2xs">
         Apply filters
       </Button>
     </form>

@@ -275,6 +275,7 @@ export function FormSelect({
   options,
   label,
   disabled,
+  className,
 }: {
   name: string;
   defaultValue?: string;
@@ -283,6 +284,7 @@ export function FormSelect({
   options: Array<{ value: string; label: string; disabled?: boolean }>;
   label: string;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <Select
@@ -292,14 +294,26 @@ export function FormSelect({
       onValueChange={onValueChange}
       disabled={disabled}
     >
-      <SelectTrigger id={name} aria-label={label}>
+      <SelectTrigger
+        id={name}
+        aria-label={label}
+        className={cn(
+          'h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus-visible:ring-2 focus-visible:ring-primary/40 focus:ring-2 focus:ring-primary/40 transition-colors',
+          className
+        )}
+      >
         <SelectValue placeholder={label} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
         {options
           .filter(option => option.value !== '')
           .map(option => (
-            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              disabled={option.disabled}
+              className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors focus:bg-primary/10 focus:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
+            >
               {option.label}
             </SelectItem>
           ))}

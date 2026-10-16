@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 
 export const nativeSelectClassName =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 px-3 py-1.5 text-xs font-medium shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 text-foreground cursor-pointer';
 
 export function RunbookDetailsSheet({
   runbook,

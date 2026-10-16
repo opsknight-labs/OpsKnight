@@ -170,7 +170,11 @@ export default async function VersionComparePage({
               {versionOptions}
             </select>
           </label>
-          <Button type="submit" size="sm" className="h-9">
+          <Button
+            type="submit"
+            size="sm"
+            className="h-9 rounded-xl text-xs font-medium shadow-2xs gap-1.5"
+          >
             <GitCompare className="h-4 w-4" aria-hidden="true" />
             Compare versions
           </Button>

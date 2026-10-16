@@ -133,14 +133,14 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
   };
 
   return (
-    <div className="rounded-xl border bg-card shadow-xs">
-      <form onSubmit={handleSearchSubmit} className="flex flex-wrap items-center gap-2 p-3">
+    <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs transition-colors">
+      <form onSubmit={handleSearchSubmit} className="flex flex-wrap items-center gap-2 p-3 sm:p-4">
         <SearchField
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           placeholder="Search by runbook name or execution ID"
           aria-label="Search executions"
-          className="min-w-[14rem] flex-1"
+          className="min-w-[14rem] flex-1 rounded-xl"
         />
 
         {/* Time Range Dropdown */}
@@ -155,13 +155,17 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
             }
           }}
         >
-          <SelectTrigger className="h-9 w-[140px] text-xs font-medium">
+          <SelectTrigger className="h-9 w-[145px] rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors">
             <Calendar className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
             <SelectValue placeholder="Time range" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
             {TIME_RANGE_OPTIONS.map(opt => (
-              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+              <SelectItem
+                key={opt.value}
+                value={opt.value}
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
                 {opt.label}
               </SelectItem>
             ))}
@@ -174,7 +178,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="h-9 w-[9.5rem] text-xs"
+              className="h-9 w-[9.5rem] rounded-xl text-xs"
               aria-label="From date"
             />
             <span className="text-xs text-muted-foreground">to</span>
@@ -182,7 +186,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="h-9 w-[9.5rem] text-xs"
+              className="h-9 w-[9.5rem] rounded-xl text-xs"
               aria-label="To date"
             />
           </div>
@@ -190,7 +194,11 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
 
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs font-medium">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+            >
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
               More filters
               {moreFiltersCount > 0 && (
@@ -200,7 +208,10 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 space-y-4 p-4 text-xs" align="end">
+          <PopoverContent
+            className="w-84 space-y-4 p-4 text-xs rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl"
+            align="end"
+          >
             <div>
               <p className="text-sm font-semibold">More filters</p>
               <p className="mt-0.5 text-muted-foreground">
@@ -218,12 +229,19 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
                   applyFilters({ trigger: val });
                 }}
               >
-                <SelectTrigger id="execution-filter-trigger" className="h-9 text-xs">
+                <SelectTrigger
+                  id="execution-filter-trigger"
+                  className="h-9 rounded-xl border border-input/80 dark:border-border/70 bg-background/80 shadow-2xs text-xs font-medium"
+                >
                   <SelectValue placeholder="Trigger" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
                   {TRIGGER_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    <SelectItem
+                      key={opt.value}
+                      value={opt.value}
+                      className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                    >
                       {opt.label}
                     </SelectItem>
                   ))}
@@ -302,18 +320,28 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
                     value={value === 'all' ? '' : value}
                     onChange={e => onChange(e.target.value)}
                     placeholder={label}
-                    className="h-8 font-mono text-xs"
+                    className="h-8 rounded-xl font-mono text-xs"
                   />
                 ))}
               </CollapsibleContent>
             </Collapsible>
-            <Button type="button" size="sm" className="w-full" onClick={() => applyFilters()}>
+            <Button
+              type="button"
+              size="sm"
+              className="w-full rounded-xl text-xs font-medium shadow-2xs"
+              onClick={() => applyFilters()}
+            >
               Apply filters
             </Button>
           </PopoverContent>
         </Popover>
 
-        <Button type="submit" size="sm" variant="secondary" className="h-9 text-xs">
+        <Button
+          type="submit"
+          size="sm"
+          variant="secondary"
+          className="h-9 rounded-xl text-xs font-medium shadow-2xs"
+        >
           Apply
         </Button>
 
@@ -323,7 +351,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
             variant="ghost"
             size="sm"
             onClick={clearAllFilters}
-            className="h-9 gap-1 text-xs text-muted-foreground hover:text-foreground"
+            className="h-9 gap-1 rounded-xl text-xs text-muted-foreground hover:text-foreground"
           >
             <RotateCcw className="h-3 w-3" aria-hidden />
             Reset
