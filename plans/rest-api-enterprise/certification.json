@@ -120,5 +120,35 @@
     "Invalid-token flood isolation under defined attack load",
     "Measured latency, pool saturation and query plans",
     "Independent security review and release approval"
-  ]
+  ],
+  "knownDependencyFindings": [
+    {
+      "alert": 43,
+      "package": "braces",
+      "severity": "high",
+      "scope": "runtime",
+      "affectedRange": "<= 3.0.3",
+      "firstPatchedVersion": null,
+      "url": "https://github.com/opsknight-labs/OpsKnight/security/dependabot/43"
+    },
+    {
+      "alert": 44,
+      "package": "http-cache-semantics",
+      "severity": "high",
+      "scope": "development",
+      "affectedRange": "<= 4.2.0",
+      "firstPatchedVersion": null,
+      "url": "https://github.com/opsknight-labs/OpsKnight/security/dependabot/44"
+    },
+    {
+      "alert": 45,
+      "package": "postcss-selector-parser",
+      "severity": "medium",
+      "scope": "development",
+      "affectedRange": "< 7.1.6",
+      "firstPatchedVersion": "7.1.6",
+      "url": "https://github.com/opsknight-labs/OpsKnight/security/dependabot/45"
+    }
+  ],
+  "dependencyFindingSource": "GitHub Dependabot open alerts on the default branch, verified 2026-10-16. The package lock is unchanged by this PR. High advisories did not list a patched version at verification time."
 }

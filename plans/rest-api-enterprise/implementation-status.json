@@ -120,7 +120,8 @@
         "Docker and Kind agent end-to-end tests",
         "1/2/4 replica, invalid-token flood and failover certification",
         "Measured database query plans, pool pressure and performance",
-        "Close all critical/high findings before release"
+        "Close all critical/high findings before release",
+        "Resolve default-branch Dependabot alerts 43 (braces, runtime high) and 44 (http-cache-semantics, development high); no patched version was listed when verified"
       ]
     }
   ],
