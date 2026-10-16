@@ -169,9 +169,13 @@ An artifact error does not by itself mean that the target action failed.
 
 Terminal state transitions enqueue a separate `FINALIZE_VERIFICATION` background job in the
 same state transaction. Verification runs after commit and cannot roll back a timeout,
-cancellation or failed execution. The deterministic `runbook-verification:<executionId>` job ID
-prevents duplicate enqueues. Repeated processing computes the same evidence from the same
-terminal snapshot. Command success and verified recovery remain separate conclusions.
+cancellation or failed execution. Each successful terminal transition increments `verificationRevision` and creates
+`runbook-verification:<executionId>:<revision>`. Late-result recovery clears the prior proof;
+a later terminal outcome schedules a fresh revision without modifying a previous worker’s
+processing or completed job. Workers skip obsolete revisions and lock the parent execution
+while persisting evidence, serializing with late-result recovery. Repeated processing computes
+the same evidence from the same terminal snapshot. Existing unversioned jobs remain readable
+during upgrades. Command success and verified recovery remain separate conclusions.
 
 Malformed historical definitions and missing versions fail the verification job with
 `RUNBOOK_VERIFICATION_DEFINITION_INVALID` or `RUNBOOK_VERIFICATION_VERSION_MISSING`.

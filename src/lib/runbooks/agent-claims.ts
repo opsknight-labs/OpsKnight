@@ -1,8 +1,9 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import type { Prisma, RunbookStepType } from '@prisma/client';
+import { Prisma, type RunbookStepType } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { enqueueVerificationEvidence } from './verification-evidence';
 import { emitAuditEvent } from '@/lib/audit';
 import {
   agentArtifactSchema,
@@ -858,6 +859,9 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
           );
         }
       }
+      // Verification holds this parent row before updating step evidence. Use the same
+      // lock order so an old snapshot cannot overwrite proof after late recovery.
+      await tx.$executeRaw`SELECT id FROM "RunbookExecution" WHERE id = ${attempt.executionStep.executionId} FOR UPDATE`;
       const outputPreview = input.outputPreview
         ? redactRunbookOutput(input.outputPreview)
         : undefined;
@@ -912,6 +916,11 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       if (recoveredStep.count !== 1) {
         throw new RunbookPreExecutionFenceError(input.attemptId, 'late result step state changed');
       }
+      // Previous proof describes the UNKNOWN snapshot; hide it until fresh terminal verification.
+      await tx.runbookExecutionStep.updateMany({
+        where: { executionId: attempt.executionStep.executionId },
+        data: { verificationResult: Prisma.DbNull },
+      });
       if (stepStatus === 'SUCCEEDED' && !cancellationRequested) {
         await tx.runbookExecution.updateMany({
           where: {
@@ -940,6 +949,15 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
             failureMessage: null,
           },
         });
+      }
+      const recoveredExecution = await tx.runbookExecution.findUniqueOrThrow({
+        where: { id: attempt.executionStep.executionId },
+        select: { status: true },
+      });
+      if (['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(recoveredExecution.status)) {
+        // A late failure/UNKNOWN can leave the parent terminal. Refresh that proof too;
+        // resumed executions will enqueue when their next terminal transition commits.
+        await enqueueVerificationEvidence(tx, attempt.executionStep.executionId);
       }
       await emitAuditEvent(
         {

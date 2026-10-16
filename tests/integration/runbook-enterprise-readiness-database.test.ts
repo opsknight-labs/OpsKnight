@@ -19,7 +19,12 @@ import {
 } from '../helpers/test-db';
 import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
 import { advanceExecution, processRunbookJob } from '@/lib/runbooks/orchestrator';
-import { submitAgentResult, storeAgentArtifact } from '@/lib/runbooks/agent-claims';
+import {
+  submitAgentResult,
+  storeAgentArtifact,
+  claimAgentAttempt,
+  fenceAgentAttempt,
+} from '@/lib/runbooks/agent-claims';
 import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
 
 const suite = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
@@ -27,7 +32,7 @@ const leaseToken = 'enterprise-fixture-lease-token-012345678901234567890';
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', () => {
   beforeEach(resetDatabase, 30000);
-  async function fixture(future = false, malformed = false) {
+  async function fixture(future = false, malformed = false, withVerification = false) {
     const service = await createTestService('Enterprise fixture');
     const incident = await createTestIncident('Deadline evidence', service.id);
     const runbook = await testPrisma.runbook.create({
@@ -42,6 +47,21 @@ suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', 
           riskClass: 'NON_IDEMPOTENT',
           requiresApproval: true,
           config: { action: 'restart', unit: 'fixture.service' },
+          ...(withVerification
+            ? {
+                verification: {
+                  steps: [
+                    {
+                      key: 'verify',
+                      name: 'Verify target',
+                      type: 'SYSTEMD',
+                      riskClass: 'READ_ONLY',
+                      config: { action: 'status', unit: 'fixture.service' },
+                    },
+                  ],
+                },
+              }
+            : {}),
         },
       ],
     };
@@ -59,7 +79,12 @@ suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', 
       data: { state: 'PUBLISHED' },
     });
     const agent = await testPrisma.runbookAgent.create({
-      data: { name: 'Enterprise fixture', status: 'ONLINE', lastHeartbeatAt: new Date() },
+      data: {
+        name: 'Enterprise fixture',
+        status: 'ONLINE',
+        lastHeartbeatAt: new Date(),
+        capabilities: ['RUNBOOK_SYSTEMD'],
+      },
     });
     const deadlineAt = new Date(Date.now() + (future ? 60000 : -1000));
     const execution = await testPrisma.runbookExecution.create({
@@ -69,6 +94,7 @@ suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', 
         serviceId: service.id,
         incidentId: incident.id,
         status: 'RUNNING',
+        resolvedTargetAgentId: agent.id,
         deadlineAt,
         definitionChecksum: version.checksum,
       },
@@ -102,6 +128,148 @@ suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', 
     });
     return { service, runbook, version, agent, execution, step, attempt };
   }
+  it.each(['COMPLETED', 'PROCESSING'] as const)(
+    'refreshes verification after FAILED → RUNNING → SUCCEEDED while the old job is %s',
+    async previousJobStatus => {
+      const f = await fixture(true, false, true);
+      const capturedAt = new Date(Date.now() - 2000).toISOString();
+      const evidence = { capturedAt, serviceState: 'active' };
+      await testPrisma.runbookExecutionStep.create({
+        data: {
+          executionId: f.execution.id,
+          stepKey: 'verify',
+          name: 'Verify target',
+          sequence: 1,
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          status: 'PENDING',
+          config: { action: 'status', unit: 'fixture.service' },
+        },
+      });
+      await testPrisma.runbookStepAttempt.update({
+        where: { id: f.attempt.id },
+        data: {
+          leaseExpiresAt: new Date(Date.now() - 1000),
+          preState: { capturedAt, serviceState: 'inactive' },
+          postState: evidence,
+        },
+      });
+      await reconcileRunbooks();
+      await advanceExecution(f.execution.id);
+      expect(
+        await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: f.execution.id } })
+      ).toMatchObject({
+        status: 'FAILED',
+        failureCode: 'UNKNOWN_OUTCOME',
+        verificationRevision: 1,
+      });
+      const oldId = `runbook-verification:${f.execution.id}:1`;
+      expect(await processJob(oldId)).toBe(true);
+      expect(
+        await testPrisma.runbookExecutionStep.findUniqueOrThrow({ where: { id: f.step.id } })
+      ).toMatchObject({ verificationResult: { verified: false } });
+      if (previousJobStatus === 'PROCESSING') {
+        // Model a worker that computed evidence but has not yet acknowledged its job.
+        await testPrisma.backgroundJob.update({
+          where: { id: oldId },
+          data: { status: 'PROCESSING' },
+        });
+      }
+      const oldJob = await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id: oldId } });
+      await submitAgentResult(f.agent.id, {
+        attemptId: f.attempt.id,
+        leaseToken,
+        producedAt: capturedAt,
+        status: 'SUCCEEDED',
+        exitCode: 0,
+        preState: { capturedAt, serviceState: 'inactive' },
+        postState: evidence,
+      });
+      expect(
+        await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: f.execution.id } })
+      ).toMatchObject({ status: 'RUNNING', completedAt: null });
+      expect(
+        await testPrisma.runbookExecutionStep.findUniqueOrThrow({ where: { id: f.step.id } })
+      ).toMatchObject({ verificationResult: null });
+      await advanceExecution(f.execution.id);
+      const claim = await claimAgentAttempt(f.agent.id, true);
+      expect(claim?.step.key).toBe('verify');
+      await fenceAgentAttempt({
+        attemptId: claim!.attemptId,
+        agentId: f.agent.id,
+        leaseToken: claim!.leaseToken,
+      });
+      await submitAgentResult(f.agent.id, {
+        attemptId: claim!.attemptId,
+        leaseToken: claim!.leaseToken,
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+        preState: evidence,
+        postState: evidence,
+      });
+      await advanceExecution(f.execution.id);
+      const final = await testPrisma.runbookExecution.findUniqueOrThrow({
+        where: { id: f.execution.id },
+      });
+      expect(final).toMatchObject({ status: 'SUCCEEDED', verificationRevision: 2 });
+      expect(await testPrisma.backgroundJob.findUniqueOrThrow({ where: { id: oldId } })).toEqual(
+        oldJob
+      );
+      const newId = `runbook-verification:${f.execution.id}:2`;
+      expect(await processJob(newId)).toBe(true);
+      const proof = (
+        await testPrisma.runbookExecutionStep.findUniqueOrThrow({ where: { id: f.step.id } })
+      ).verificationResult;
+      expect(proof).toMatchObject({ verified: true, capturedAt: final.completedAt!.toISOString() });
+      // A delayed old worker/retry cannot overwrite the newer proof or consume its job.
+      await processRunbookJob(oldJob.payload);
+      expect(
+        (await testPrisma.runbookExecutionStep.findUniqueOrThrow({ where: { id: f.step.id } }))
+          .verificationResult
+      ).toEqual(proof);
+      await Promise.all([advanceExecution(f.execution.id), advanceExecution(f.execution.id)]);
+      expect(
+        await testPrisma.backgroundJob.count({
+          where: { id: { startsWith: `runbook-verification:${f.execution.id}:` } },
+        })
+      ).toBe(2);
+      expect(
+        await testPrisma.runbookStepAttempt.count({ where: { executionStepId: f.step.id } })
+      ).toBe(1);
+    }
+  );
+  it('refreshes terminal failure evidence after a late failure and deduplicates redelivery', async () => {
+    const f = await fixture(true, false, true);
+    const producedAt = new Date(Date.now() - 2000).toISOString();
+    await testPrisma.runbookStepAttempt.update({
+      where: { id: f.attempt.id },
+      data: { leaseExpiresAt: new Date(Date.now() - 1000) },
+    });
+    await reconcileRunbooks();
+    await advanceExecution(f.execution.id);
+    expect(await processJob(`runbook-verification:${f.execution.id}:1`)).toBe(true);
+    const result = {
+      attemptId: f.attempt.id,
+      leaseToken,
+      producedAt,
+      status: 'FAILED' as const,
+      errorCode: 'POLICY_DENIED',
+    };
+    await submitAgentResult(f.agent.id, result);
+    expect(
+      await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: f.execution.id } })
+    ).toMatchObject({ status: 'FAILED', verificationRevision: 2 });
+    expect(await processJob(`runbook-verification:${f.execution.id}:2`)).toBe(true);
+    await submitAgentResult(f.agent.id, result);
+    expect(
+      await testPrisma.backgroundJob.count({
+        where: { id: { startsWith: `runbook-verification:${f.execution.id}:` } },
+      })
+    ).toBe(2);
+    expect(
+      await testPrisma.runbookExecutionStep.findUniqueOrThrow({ where: { id: f.step.id } })
+    ).toMatchObject({ verificationResult: { verified: false } });
+  });
   it.each([false, true])(
     'persists a maximum-output write result when artifact rejected=%s',
     async rejected => {
@@ -167,7 +335,7 @@ suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', 
         entry === 'reconcile' ? reconcileRunbooks() : advanceExecution(f.execution.id);
       await Promise.all([recover(), recover()]);
       const job = await testPrisma.backgroundJob.findUniqueOrThrow({
-        where: { id: `runbook-verification:${f.execution.id}` },
+        where: { id: `runbook-verification:${f.execution.id}:1` },
       });
       expect(job).toMatchObject({ status: 'PENDING', maxAttempts: 8 });
       await expect(processRunbookJob(job.payload)).rejects.toThrow(
@@ -210,7 +378,7 @@ suite('enterprise deadline, output and pagination contracts (real PostgreSQL)', 
     });
     await advanceExecution(f.execution.id);
     const job = await testPrisma.backgroundJob.findUniqueOrThrow({
-      where: { id: `runbook-verification:${f.execution.id}` },
+      where: { id: `runbook-verification:${f.execution.id}:1` },
     });
     await expect(processRunbookJob(job.payload)).rejects.toThrow(
       'RUNBOOK_VERIFICATION_DEFINITION_INVALID'

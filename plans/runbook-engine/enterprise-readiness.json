@@ -59,5 +59,18 @@
       "documentation": "v2.1 frontmatter passed; all 342 files have resolving relative links; workflow YAML and explicit real-database flag validated.",
       "hostedCi": "Pending the follow-up commit; no exact-head hosted pass claimed."
     }
+  },
+  "verificationRevisionFollowUp": {
+    "reviewedHead": "e3803968ff6dbb055de5421eca3be42de92e046b",
+    "implementation": "Add verificationRevision (default zero) and increment it atomically with each successful terminal transition. Each revision owns a new durable job. Obsolete workers skip before parsing or updating evidence; parent row locks serialize proof with late-result recovery. Clear stale proof on accepted late evidence. Terminal late failures also enqueue fresh proof; duplicate deliveries do not.",
+    "compatibility": "Additive migration; existing unversioned verification payloads remain supported. No existing processing/completed job is reset or overwritten.",
+    "regressions": "Real PostgreSQL FAILED \u2192 RUNNING \u2192 SUCCEEDED with authored Agent verification, both COMPLETED and PROCESSING prior jobs, true final evidence, unchanged old jobs, ignored old workers, no duplicate physical attempt, and repeated reconciliation; terminal late failure and duplicate result delivery.",
+    "qualification": "Beta hardening only; no new HA, sustained active workload or production distribution certification claimed.",
+    "localVerification": {
+      "postgresql": "108 passed across enterprise readiness (16), execution safety, review regressions, nonce maintenance and operational backlog (92). All migrations applied to a fresh disposable PostgreSQL 15 database.",
+      "runtime": "378 passed across 47 runtime/worker files; final focused verification/state-machine/route tests pass.",
+      "checks": "TypeScript, zero-warning modified-source ESLint, v2.1 frontmatter and all 342 relative-link files passed.",
+      "hostedCi": "A fresh exact-head CI run is required after this follow-up; earlier green CI belongs to e3803968."
+    }
   }
 }

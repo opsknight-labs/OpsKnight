@@ -3647,6 +3647,7 @@ model RunbookSuggestion {
 }
 
 model RunbookExecution {
+  verificationRevision Int @default(0)
   triggerRevision Int?
   id                        String                 @id @default(cuid())
   runbookId                 String

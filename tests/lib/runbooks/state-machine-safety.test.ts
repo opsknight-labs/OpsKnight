@@ -18,7 +18,7 @@ vi.mock('@/lib/prisma', () => ({
     runbookExecution: {
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
-      update: vi.fn(),
+      update: vi.fn().mockResolvedValue({ verificationRevision: 1 }),
       updateMany: vi.fn(),
       count: vi.fn(),
     },

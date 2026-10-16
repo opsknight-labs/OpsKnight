@@ -9,31 +9,42 @@ export async function enqueueVerificationEvidence(
   tx: Prisma.TransactionClient,
   executionId: string
 ) {
-  await tx.backgroundJob.upsert({
-    where: { id: `runbook-verification:${executionId}` },
-    create: {
-      id: `runbook-verification:${executionId}`,
+  // Called only by a successful terminal-state CAS, in that same transaction. A new
+  // revision gets its own job; never mutate a previous worker's processing/completed row.
+  const execution = await tx.runbookExecution.update({
+    where: { id: executionId },
+    data: { verificationRevision: { increment: 1 } },
+    select: { verificationRevision: true },
+  });
+  const revision = execution.verificationRevision;
+  const id = `runbook-verification:${executionId}:${revision}`;
+  await tx.backgroundJob.create({
+    data: {
+      id,
       type: 'RUNBOOK',
       status: 'PENDING',
       scheduledAt: new Date(),
       maxAttempts: 8,
-      payload: { kind: 'FINALIZE_VERIFICATION', executionId },
+      payload: { kind: 'FINALIZE_VERIFICATION', executionId, revision },
     },
-    update: {},
   });
 }
 
 export async function finalizeVerificationEvidence(
   tx: Prisma.TransactionClient,
-  executionId: string
+  executionId: string,
+  revision?: number
 ) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-verification:${executionId}`}))`;
+  // Serialize the snapshot with late-result recovery before touching step evidence.
+  await tx.$executeRaw`SELECT id FROM "RunbookExecution" WHERE id = ${executionId} FOR UPDATE`;
   const execution = await tx.runbookExecution.findUniqueOrThrow({
     where: { id: executionId },
     include: {
       steps: { include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } } },
     },
   });
+  if (revision !== undefined && execution.verificationRevision !== revision) return;
   if (!['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(execution.status)) return;
   const version = await tx.runbookVersion.findUnique({ where: { id: execution.runbookVersionId } });
   // These errors are recorded/retried by the durable job worker. Do not include historical input

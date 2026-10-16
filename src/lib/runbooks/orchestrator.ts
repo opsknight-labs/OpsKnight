@@ -52,7 +52,13 @@ import {
 import { lockRunbookForShare } from './locking';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('FINALIZE_VERIFICATION'), executionId: z.string().cuid() }).strict(),
+  z
+    .object({
+      kind: z.literal('FINALIZE_VERIFICATION'),
+      executionId: z.string().cuid(),
+      revision: z.number().int().positive().optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('ADVANCE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('RECONCILE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z
@@ -1609,7 +1615,9 @@ export async function processRunbookJob(raw: unknown): Promise<void> {
     return;
   }
   if (payload.kind === 'FINALIZE_VERIFICATION') {
-    await prisma.$transaction(tx => finalizeVerificationEvidence(tx, payload.executionId));
+    await prisma.$transaction(tx =>
+      finalizeVerificationEvidence(tx, payload.executionId, payload.revision)
+    );
     return;
   }
   const { evaluateIncidentTriggers } = await import('./triggers');
