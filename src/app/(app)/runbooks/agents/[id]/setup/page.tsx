@@ -8,6 +8,8 @@ import { getAppUrl } from '@/lib/app-url';
 import { getAgentDistribution } from '@/lib/runbooks/distribution';
 import { getExecutionSigningKey } from '@/lib/runbooks/execution-signing';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
+import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import AgentSetupInstructions from '@/components/runbooks/AgentSetupInstructions';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -37,7 +39,7 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
     .cuid()
     .parse((await params).id);
 
-  const [agent, user] = await Promise.all([
+  const [agent, user, navigation] = await Promise.all([
     prisma.runbookAgent.findUnique({
       where: { id },
       select: {
@@ -55,6 +57,7 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
       },
     }),
     getCurrentUser(),
+    getRunbookNavigationSummary(),
   ]);
 
   if (!agent) notFound();
@@ -253,6 +256,8 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
           </div>
         }
       />
+
+      <RunbookModuleNav summary={navigation} />
 
       {/* Operational Context Notice Banner matching Services */}
       <Alert className="border-primary/20 bg-primary/5 dark:bg-primary/10 text-primary">

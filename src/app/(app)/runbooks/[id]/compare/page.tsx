@@ -55,7 +55,7 @@ export default async function VersionComparePage({
   });
   if (!selection.success)
     return (
-      <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
         <RunbookPageHeader
           breadcrumbs={[
             { label: 'Runbooks', href: '/runbooks' },
@@ -116,7 +116,7 @@ export default async function VersionComparePage({
     </option>
   ));
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <RunbookPageHeader
         breadcrumbs={[
           { label: 'Runbooks', href: '/runbooks' },

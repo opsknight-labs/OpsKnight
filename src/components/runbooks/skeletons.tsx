@@ -61,9 +61,9 @@ function Header({
 
 function ModuleNav() {
   return (
-    <div className="inline-flex gap-1 rounded-xl border bg-muted/40 p-1">
-      {[64, 92, 72, 68].map(width => (
-        <Skeleton key={width} className="h-8 rounded-lg" style={{ width }} />
+    <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs">
+      {[0, 1, 2, 3].map(i => (
+        <Skeleton key={i} className="h-9 w-full rounded-lg" />
       ))}
     </div>
   );
@@ -284,10 +284,7 @@ export function RunbookPageSkeleton({ variant }: { variant: RunbookSkeletonVaria
   return (
     <div
       aria-busy="true"
-      className={cn(
-        'mx-auto w-full space-y-6 p-4 md:p-6',
-        variant === 'execution-detail' ? 'max-w-[1400px]' : 'max-w-[1600px]'
-      )}
+      className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8"
     >
       <span className="sr-only">Loading {LABELS.get(variant)}…</span>
       <Header breadcrumbs={detail || fleet} action={variant !== 'health'} />
