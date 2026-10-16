@@ -241,5 +241,21 @@
       "Existing execution completion/cancellation races and terminal-state safety"
     ],
     "limits": "Focused regression verification for this follow-up; prior full-suite and browser results are retained as historical evidence. New GitHub CI runs after push."
+  },
+  "serviceAccountPresentationFollowup": {
+    "scope": "Machine identities in API settings",
+    "changes": [
+      "Service account cards show display names and stable IDs; internal email omitted from card client payload.",
+      "Machine token owner labels and API activity actor labels use friendly names rather than reserved-domain addresses.",
+      "Inventory search supports machine names/account IDs; API key search includes owner names.",
+      "Stored identities, login isolation, REST compatibility and existing tokens retained."
+    ],
+    "verification": {
+      "relevantTests": 32,
+      "files": 4,
+      "typecheck": "passed",
+      "changedFileLint": "passed with zero warnings"
+    },
+    "limits": "No production account rows renamed; full browser/CI certification is not claimed for this follow-up."
   }
 }

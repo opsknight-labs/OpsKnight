@@ -80,6 +80,7 @@ export type ApiKey = {
   expiresAt?: string | null;
   expired?: boolean;
   ownerEmail?: string;
+  ownerLabel?: string;
 };
 
 type State = {
@@ -363,9 +364,9 @@ export default function ApiKeysPanel({
                         <TableCell className="font-medium text-xs text-foreground py-3.5">
                           <div className="space-y-0.5">
                             <span className="font-bold text-foreground">{key.name}</span>
-                            {key.ownerEmail && (
+                            {(key.ownerLabel || key.ownerEmail) && (
                               <span className="block text-[11px] text-muted-foreground font-normal">
-                                {key.ownerEmail}
+                                {key.ownerLabel || key.ownerEmail}
                               </span>
                             )}
                           </div>

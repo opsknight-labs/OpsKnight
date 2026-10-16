@@ -1,3 +1,4 @@
+import { buildServiceAccountWhere } from '@/lib/service-account-inventory';
 import { describe, expect, it } from 'vitest';
 import {
   buildKeyInventoryWhere,
@@ -26,11 +27,12 @@ describe('API key inventory query', () => {
     expect(where('EXPIRED')).toEqual({ revokedAt: null, expiresAt: { lte: now } });
   });
 
-  it('searches name, prefix and owner email', () => {
+  it('searches key name, prefix and friendly owner name or email', () => {
     const where = buildKeyInventoryWhere({}, { status: 'ALL', q: 'ci' }, now) as {
       AND: Array<{ OR: unknown[] }>;
     };
-    expect(where.AND[0].OR).toHaveLength(3);
+    expect(where.AND[0].OR).toHaveLength(4);
+    expect(where.AND[0].OR).toContainEqual({ user: { name: { contains: 'ci', mode: 'insensitive' } } });
   });
 
   it('round-trips a keyset cursor and ignores malformed params', () => {
@@ -46,5 +48,15 @@ describe('API key inventory query', () => {
       status: 'ALL',
       cursor: undefined,
     });
+  });
+});
+
+
+describe('service account inventory search', () => {
+  it('finds machine identities by name or account ID while retaining machine-only scope', () => {
+    expect(buildServiceAccountWhere({ role: 'ALL', q: 'production' })).toEqual({ AND: [
+      { email: { endsWith: '@serviceaccount.opsknight.local', mode: 'insensitive' } },
+      { OR: [{ name: { contains: 'production', mode: 'insensitive' } }, { id: { contains: 'production', mode: 'insensitive' } }] },
+    ] });
   });
 });

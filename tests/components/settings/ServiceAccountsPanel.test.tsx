@@ -26,7 +26,6 @@ const mockAccounts: ServiceAccountItem[] = [
   {
     id: 'sa-1',
     name: 'CI/CD Automation Bot',
-    email: 'sa-cicd@serviceaccount.opsknight.local',
     role: 'ADMIN',
     status: 'ACTIVE',
     createdAt: '2026-09-01T10:00:00Z',
@@ -57,7 +56,6 @@ const mockAccounts: ServiceAccountItem[] = [
   {
     id: 'sa-2',
     name: 'Pager Monitoring Relay',
-    email: 'sa-pager@serviceaccount.opsknight.local',
     role: 'RESPONDER',
     status: 'ACTIVE',
     createdAt: '2026-09-10T11:00:00Z',
@@ -88,7 +86,7 @@ describe('ServiceAccountsPanel Component', () => {
     vi.clearAllMocks();
   });
 
-  it('renders service accounts with name, email, role, and active token count', () => {
+  it('renders service accounts with friendly name, stable ID, role, and token count', () => {
     render(
       <ServiceAccountsPanel
         serviceAccounts={mockAccounts}
@@ -98,9 +96,10 @@ describe('ServiceAccountsPanel Component', () => {
     );
 
     expect(screen.getByText('CI/CD Automation Bot')).toBeDefined();
-    expect(screen.getByText('sa-cicd@serviceaccount.opsknight.local')).toBeDefined();
+    expect(screen.getByText('Account ID: sa-1')).toBeDefined();
     expect(screen.getByText('Pager Monitoring Relay')).toBeDefined();
-    expect(screen.getByText('sa-pager@serviceaccount.opsknight.local')).toBeDefined();
+    expect(screen.getByText('Account ID: sa-2')).toBeDefined();
+    expect(screen.queryByText(/@serviceaccount\.opsknight\.local/)).toBeNull();
     expect(screen.getByText(/2 active tokens/i)).toBeDefined();
     expect(screen.getByText(/1 active token/i)).toBeDefined();
   });
