@@ -593,20 +593,20 @@ function NestedChecks({
     <section
       aria-label={sectionLabel}
       data-testid={testId}
-      className="rounded-lg border bg-background/60 p-3 sm:p-4"
+      className="rounded-2xl border border-border/80 dark:border-border/60 bg-muted/20 backdrop-blur-xs p-4 sm:p-5"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5">
           <span
             className={cn(
-              'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1 ring-inset',
+              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset',
               phase === 'precheck' ? TONE_SURFACE.info : TONE_SURFACE.success
             )}
           >
             {phase === 'precheck' ? (
-              <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+              <ShieldAlert className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
             )}
           </span>
           <div>
@@ -624,7 +624,7 @@ function NestedChecks({
       </div>
 
       {checks.length > 0 && (
-        <ol className="mt-3 space-y-2" aria-label={`${label} ordered checks`}>
+        <ol className="mt-3 space-y-2.5" aria-label={`${label} ordered checks`}>
           {checks.map((check, index) => {
             const checkResult = validateStep(check, inputs);
             const checkErrors = checkResult.errors;
@@ -634,14 +634,14 @@ function NestedChecks({
             return (
               <li
                 key={identities.at(index) ?? check.key}
-                className="rounded-lg border bg-card shadow-xs"
+                className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs transition-all hover:border-primary/40"
               >
                 <details
                   open={issueCount > 0 || expandedChecks?.has(check.key) || undefined}
                   onToggle={event => onToggleCheck?.(check.key, event.currentTarget.open)}
                   className="group"
                 >
-                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-xl px-3.5 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <span className="flex min-w-0 items-center gap-2">
                       <ChevronRight
                         className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"

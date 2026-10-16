@@ -87,35 +87,41 @@ export default async function RunbookFleetSecurityPage() {
           >
             {activeKey ? (
               <section aria-labelledby="pinned-key-title" className="space-y-2">
-                <h3 id="pinned-key-title" className="text-sm font-semibold">
+                <h3 id="pinned-key-title" className="!text-sm !leading-snug font-semibold">
                   Pinned execution public key
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Set OPSKNIGHT_EXECUTION_PUBLIC_KEY on every Agent. Verify the value through your
                   trusted OpsKnight session.
                 </p>
-                <code className="block rounded-lg border bg-muted/40 p-3 font-mono text-xs break-all select-all">
+                <code className="block rounded-xl border border-border/80 dark:border-border/60 bg-muted/40 p-3.5 font-mono text-xs break-all select-all">
                   {activeKey.publicKey}
                 </code>
               </section>
             ) : (
-              <p className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground">
+              <p className="rounded-xl border border-dashed border-border/80 p-4 text-xs text-muted-foreground">
                 No active execution signing key is available yet.
               </p>
             )}
             {activeKey && (
-              <section aria-labelledby="key-rotation-title" className="space-y-3 border-t pt-4">
-                <h3 id="key-rotation-title" className="text-sm font-semibold">
+              <section
+                aria-labelledby="key-rotation-title"
+                className="space-y-3 border-t border-border/60 pt-4"
+              >
+                <h3 id="key-rotation-title" className="!text-sm !leading-snug font-semibold">
                   Overlapping rotation
                 </h3>
-                <ol className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
+                <ol className="grid gap-2.5 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
                   {[
                     'Stage the next signing identity.',
                     'Set OPSKNIGHT_EXECUTION_PUBLIC_KEYS to the trusted key map below on every Agent, including offline Agents.',
                     'Wait for fleet acknowledgement, then activate NEXT.',
                     'RETIRING keys keep a 24-hour grace period before they can be retired.',
                   ].map((step, index) => (
-                    <li key={index} className="flex gap-2 rounded-lg border bg-muted/20 p-3">
+                    <li
+                      key={index}
+                      className="flex gap-2.5 rounded-xl border border-border/80 dark:border-border/60 bg-muted/30 p-3.5"
+                    >
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary tabular-nums">
                         {index + 1}
                       </span>
@@ -123,7 +129,7 @@ export default async function RunbookFleetSecurityPage() {
                     </li>
                   ))}
                 </ol>
-                <code className="block rounded-lg border bg-muted/40 p-3 font-mono text-xs break-all">
+                <code className="block rounded-xl border border-border/80 dark:border-border/60 bg-muted/40 p-3.5 font-mono text-xs break-all">
                   {JSON.stringify(
                     Object.fromEntries(signingKeys.map(key => [key.id, key.publicKey]))
                   )}
@@ -143,7 +149,7 @@ export default async function RunbookFleetSecurityPage() {
                     <ActionForm
                       key={key.id}
                       action={rotateExecutionSigningIdentityAction}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-3.5 shadow-xs"
                     >
                       <input
                         type="hidden"

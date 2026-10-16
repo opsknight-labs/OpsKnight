@@ -25,6 +25,7 @@ export function RunbookRouteError({
       message: error.message,
       name: error.name,
       digest: error.digest,
+      stack: error.stack,
     });
   }, [error]);
 
@@ -37,10 +38,17 @@ export function RunbookRouteError({
         <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-inset ring-destructive/20">
           <AlertCircle className="h-5 w-5 text-destructive" aria-hidden />
         </span>
-        <h2 className="mt-4 text-base font-semibold tracking-tight text-foreground">{title}</h2>
+        <h2 className="mt-4 !text-base !leading-snug font-semibold tracking-tight text-foreground">
+          {title}
+        </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
           {getUserFacingErrorMessage(error)}
         </p>
+        {Boolean(error?.message) && (
+          <p className="mt-2 text-xs text-destructive font-mono break-all bg-destructive/10 p-2 rounded-md border border-destructive/20 text-left">
+            {error.name}: {error.message}
+          </p>
+        )}
         {error.digest && (
           <p className="mt-3 inline-block max-w-full break-all rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
             Reference: {error.digest}

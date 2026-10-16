@@ -225,7 +225,7 @@ export default async function RunbookHealthPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <RunbookLiveRefresh enabled={true} intervalMs={20000} />
       <RunbookPageHeader
         title="Automation Health"

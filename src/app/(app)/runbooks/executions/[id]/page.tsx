@@ -207,7 +207,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-5 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <RunbookPageHeader
         breadcrumbs={[
           { label: 'Runbooks', href: '/runbooks' },
@@ -247,7 +247,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
 
       <section
         aria-label="Execution summary"
-        className="sticky top-0 z-20 -mx-4 border-y bg-background/95 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-background/80 md:-mx-6 md:px-6"
+        className="sticky top-0 z-20 rounded-2xl border border-border/80 dark:border-border/60 bg-card/95 dark:bg-card/85 px-5 py-4 shadow-xs backdrop-blur-md supports-[backdrop-filter]:bg-card/80"
       >
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -288,7 +288,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               <Button
                 asChild
                 size="sm"
-                className="gap-1.5 bg-amber-600 text-white hover:bg-amber-700"
+                className="gap-1.5 bg-amber-600 text-white hover:bg-amber-700 shadow-xs"
               >
                 <a href={`#step-${waitingStep.id}`}>
                   <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -311,7 +311,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 asChild
                 size="sm"
                 variant={isFailure ? 'default' : 'outline'}
-                className="gap-1.5"
+                className="gap-1.5 shadow-2xs"
               >
                 <a href="#rerun">
                   <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -326,10 +326,10 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       {waitingStep && (
         <section
           aria-label="Approval needed"
-          className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] p-4"
+          className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.05] backdrop-blur-xs p-5 shadow-xs"
         >
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300 border border-amber-500/20 shadow-2xs">
               <ShieldAlert className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0">
@@ -345,7 +345,12 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               </p>
             </div>
           </div>
-          <Button asChild size="sm" variant="outline" className="border-amber-500/50 bg-background">
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="border-amber-500/50 bg-background/80 shadow-2xs"
+          >
             <a href={`#step-${waitingStep.id}`}>Review plan</a>
           </Button>
         </section>
@@ -354,7 +359,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       {(isFailure || execution.failureCode || execution.failureMessage) && (
         <section
           aria-label="Failure details"
-          className="space-y-3 rounded-xl border border-rose-500/40 bg-rose-500/[0.06] p-4 text-sm"
+          className="space-y-3 rounded-2xl border border-rose-500/40 bg-rose-500/[0.05] backdrop-blur-xs p-5 text-sm shadow-xs"
         >
           <div className="flex items-start gap-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/15 text-rose-700 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300">

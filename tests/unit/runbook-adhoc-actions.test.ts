@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   assertCapability: vi.fn(),
   assertCanViewIncident: vi.fn(),
+  getUserPermissions: vi.fn(),
   incidentFindUnique: vi.fn(),
   runbookFindFirst: vi.fn(),
   runbookFindMany: vi.fn(),
   agentFindMany: vi.fn(),
   poolFindMany: vi.fn(),
+  ruleFindFirst: vi.fn(),
   preview: vi.fn(),
   start: vi.fn(),
   revalidatePath: vi.fn(),
@@ -16,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/rbac', () => ({
   assertCapability: mocks.assertCapability,
   assertCanViewIncident: mocks.assertCanViewIncident,
+  getUserPermissions: mocks.getUserPermissions,
 }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('@/lib/prisma', () => ({
@@ -24,6 +27,7 @@ vi.mock('@/lib/prisma', () => ({
     runbook: { findFirst: mocks.runbookFindFirst, findMany: mocks.runbookFindMany },
     runbookAgent: { findMany: mocks.agentFindMany },
     runbookAgentPool: { findMany: mocks.poolFindMany },
+    serviceAutomationRule: { findFirst: mocks.ruleFindFirst },
   },
 }));
 vi.mock('@/lib/runbooks/orchestrator', () => ({
@@ -86,12 +90,18 @@ function form(entries: Record<string, string>) {
 describe('ad-hoc incident runbook actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.assertCapability.mockResolvedValue({ id: 'cuser00000001' });
+    mocks.assertCapability.mockResolvedValue({ id: 'cuser00000001', role: 'ADMIN' });
+    mocks.getUserPermissions.mockResolvedValue({
+      id: 'cuser00000001',
+      role: 'ADMIN',
+      capabilities: [CAPABILITIES.RUNBOOK_EXECUTE, CAPABILITIES.RUNBOOK_READ_ALL],
+    });
     mocks.assertCanViewIncident.mockResolvedValue(undefined);
     mocks.incidentFindUnique.mockResolvedValue({ id: INCIDENT, serviceId: SERVICE });
     mocks.runbookFindFirst.mockResolvedValue(publishedRunbook);
     mocks.preview.mockResolvedValue({ digest: DIGEST, authorizationToken: TOKEN });
     mocks.start.mockResolvedValue({ id: 'cexecution001' });
+    mocks.ruleFindFirst.mockResolvedValue({ id: 'crule00001' });
   });
 
   it('requires RUNBOOK_EXECUTE and incident access before previewing', async () => {
@@ -282,5 +292,45 @@ describe('ad-hoc incident runbook actions', () => {
       'safe',
     ]);
     expect(result.runbook).not.toHaveProperty('definition');
+  });
+
+  it('restricts ad-hoc search to incident service when user only has RUNBOOK_READ_SCOPED', async () => {
+    mocks.getUserPermissions.mockResolvedValue({
+      id: 'cuser00000001',
+      role: 'USER',
+      capabilities: [CAPABILITIES.RUNBOOK_EXECUTE, CAPABILITIES.RUNBOOK_READ_SCOPED],
+    });
+    mocks.runbookFindMany.mockResolvedValue([
+      { id: RUNBOOK, name: 'Restart API', description: '', publishedVersion: { version: 3 } },
+    ]);
+    await searchAdhocIncidentRunbooksAction(INCIDENT, 'restart');
+    expect(mocks.runbookFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          serviceAutomationRules: {
+            some: {
+              serviceId: SERVICE,
+              enabled: true,
+              detachedAt: null,
+            },
+          },
+        }),
+      })
+    );
+  });
+
+  it('rejects ad-hoc preview when scoped reader accesses runbook not bound to incident service', async () => {
+    mocks.getUserPermissions.mockResolvedValue({
+      id: 'cuser00000001',
+      role: 'USER',
+      capabilities: [CAPABILITIES.RUNBOOK_EXECUTE, CAPABILITIES.RUNBOOK_READ_SCOPED],
+    });
+    mocks.ruleFindFirst.mockResolvedValue(null);
+    const result = await previewAdhocIncidentRunbookAction(INCIDENT, RUNBOOK, form({}));
+    expect(result).toHaveProperty(
+      'error',
+      'Runbook access denied: runbook is not attached to this incident’s service.'
+    );
+    expect(mocks.preview).not.toHaveBeenCalled();
   });
 });

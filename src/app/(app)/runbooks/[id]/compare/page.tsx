@@ -55,7 +55,7 @@ export default async function VersionComparePage({
   });
   if (!selection.success)
     return (
-      <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
         <RunbookPageHeader
           breadcrumbs={[
             { label: 'Runbooks', href: '/runbooks' },
@@ -116,7 +116,7 @@ export default async function VersionComparePage({
     </option>
   ));
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <RunbookPageHeader
         breadcrumbs={[
           { label: 'Runbooks', href: '/runbooks' },
@@ -136,7 +136,7 @@ export default async function VersionComparePage({
       />
       <section
         aria-label="Choose versions"
-        className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs lg:flex-row lg:items-end lg:justify-between"
+        className="flex flex-col gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs lg:flex-row lg:items-end lg:justify-between"
       >
         <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-end">
           <input type="hidden" name="versionsPage" value={versionsPage} />
@@ -170,7 +170,11 @@ export default async function VersionComparePage({
               {versionOptions}
             </select>
           </label>
-          <Button type="submit" size="sm" className="h-9">
+          <Button
+            type="submit"
+            size="sm"
+            className="h-9 rounded-xl text-xs font-medium shadow-2xs gap-1.5"
+          >
             <GitCompare className="h-4 w-4" aria-hidden="true" />
             Compare versions
           </Button>

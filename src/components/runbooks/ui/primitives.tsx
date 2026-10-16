@@ -51,19 +51,19 @@ export function SectionCard({
     <section
       id={id}
       className={cn(
-        'scroll-mt-24 rounded-xl border bg-card shadow-xs',
-        tone === 'danger' && 'border-destructive/30',
-        tone === 'warning' && 'border-amber-500/30',
+        'scroll-mt-24 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors',
+        tone === 'danger' && 'border-destructive/40 bg-destructive/[0.02]',
+        tone === 'warning' && 'border-amber-500/40 bg-amber-500/[0.02]',
         className
       )}
     >
       {(title || actions) && (
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
           <div className="flex min-w-0 items-start gap-3">
             {Icon && (
               <span
                 className={cn(
-                  'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset',
+                  'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-2xs',
                   TONE_SURFACE[tone ?? 'brand']
                 )}
               >
@@ -71,7 +71,11 @@ export function SectionCard({
               </span>
             )}
             <div className="min-w-0">
-              {title && <h2 className="text-sm font-semibold text-foreground">{title}</h2>}
+              {title && (
+                <h2 className="!text-sm !font-bold !tracking-tight !leading-snug text-foreground">
+                  {title}
+                </h2>
+              )}
               {description && (
                 <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                   {description}
@@ -107,20 +111,31 @@ export function StatTile({
 }) {
   const body = (
     <>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        {Icon && <Icon className={cn('h-4 w-4', TONE_TEXT[tone])} aria-hidden />}
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+          {label}
+        </span>
+        {Icon && (
+          <span
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-lg border shadow-2xs shrink-0',
+              TONE_SURFACE[tone]
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" aria-hidden />
+          </span>
+        )}
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground tabular-nums">
+      <div className="mt-2 text-2xl font-extrabold tracking-tight text-foreground tabular-nums">
         {value}
       </div>
-      {hint && <div className="mt-1 truncate text-xs text-muted-foreground">{hint}</div>}
+      {hint && <div className="mt-1 truncate text-xs text-muted-foreground/80">{hint}</div>}
     </>
   );
   const classes = cn(
-    'block rounded-xl border bg-card p-4 shadow-xs transition-colors',
+    'block rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-all duration-200',
     href &&
-      'hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      'hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     className
   );
   return href ? (
@@ -147,12 +162,12 @@ export function Pill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium border shadow-2xs',
         TONE_SURFACE[tone],
         className
       )}
     >
-      {Icon && <Icon className="h-3 w-3" aria-hidden />}
+      {Icon && <Icon className="h-3 w-3 shrink-0" aria-hidden />}
       {children}
     </span>
   );

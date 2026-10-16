@@ -91,9 +91,9 @@ export function ExecutionRow({
   return (
     <li
       className={cn(
-        'group relative rounded-xl border bg-card shadow-xs transition-colors hover:bg-muted/40 focus-within:bg-muted/40',
-        'lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none lg:last:rounded-b-xl',
-        waitingApproval && 'border-amber-500/40'
+        'group relative rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs transition-all hover:bg-muted/40 focus-within:bg-muted/40',
+        'lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none',
+        waitingApproval && 'border-amber-500/40 bg-amber-500/[0.03]'
       )}
     >
       <div

@@ -145,10 +145,10 @@ export default function DetailTabs({
     <Tabs value={currentTab} onValueChange={handleTabChange} className={cn('space-y-6', className)}>
       {/* Centralized Elevated Navigation Header */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto">
+        <div className="overflow-x-auto pb-1 scrollbar-none flex-1 min-w-0 w-full">
           <TabsList
             className={cn(
-              'h-auto rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
+              'h-auto w-full rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
               layout === 'grid' && [
                 'grid min-w-[540px]',
                 tabs.length === 2 && 'grid-cols-2',

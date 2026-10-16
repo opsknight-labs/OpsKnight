@@ -62,12 +62,12 @@ export function ExecutionList({
       </div>
 
       {executions.length > 0 ? (
-        <div className="lg:rounded-xl lg:border lg:bg-card lg:shadow-xs">
+        <div className="overflow-hidden lg:rounded-2xl lg:border lg:border-border/80 dark:lg:border-border/60 lg:bg-card/90 dark:lg:bg-card/50 lg:backdrop-blur-xs lg:shadow-xs">
           <div
             aria-hidden="true"
             className={cn(
               EXECUTION_GRID,
-              'sticky top-0 z-10 hidden gap-x-4 rounded-t-xl border-b bg-muted/80 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-muted/60 lg:grid'
+              'sticky top-0 z-10 hidden gap-x-4 border-b border-border/60 bg-muted/60 px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground backdrop-blur-xs lg:grid'
             )}
           >
             {EXECUTION_COLUMNS.map(column => (
@@ -75,7 +75,7 @@ export function ExecutionList({
             ))}
             <span className="text-right">Actions</span>
           </div>
-          <ul className="space-y-2 lg:space-y-0 lg:divide-y">
+          <ul className="space-y-3 lg:space-y-0 lg:divide-y lg:divide-border/60">
             {executions.map(execution => (
               <ExecutionRow
                 key={execution.id}

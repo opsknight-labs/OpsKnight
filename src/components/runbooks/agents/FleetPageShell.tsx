@@ -24,7 +24,7 @@ export function FleetPageShell({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <RunbookPageHeader
         title={title}
         description={description}

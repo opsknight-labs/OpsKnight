@@ -103,7 +103,7 @@ export default function AgentEnrollmentForm({
       <Stepper current={issued ? 1 : 0} />
       <section aria-labelledby="enroll-step-token" className="space-y-4">
         <div>
-          <h3 id="enroll-step-token" className="text-sm font-semibold">
+          <h3 id="enroll-step-token" className="!text-sm !leading-snug font-semibold">
             1. Create an enrollment token
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -176,7 +176,7 @@ export default function AgentEnrollmentForm({
             </div>
           </div>
           <section aria-labelledby="enroll-step-install" className="space-y-3">
-            <h3 id="enroll-step-install" className="text-sm font-semibold">
+            <h3 id="enroll-step-install" className="!text-sm !leading-snug font-semibold">
               2. Install the Agent
             </h3>
             <AgentSetupInstructions
@@ -194,7 +194,7 @@ export default function AgentEnrollmentForm({
           >
             <Activity className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             <div className="space-y-1">
-              <h3 id="enroll-step-verify" className="text-sm font-semibold">
+              <h3 id="enroll-step-verify" className="!text-sm !leading-snug font-semibold">
                 3. Verify the first heartbeat
               </h3>
               <p className="text-xs leading-relaxed text-muted-foreground">
