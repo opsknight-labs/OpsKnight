@@ -24,21 +24,32 @@ export type VersionTimelineItem = {
   retireAction?: RunbookFormAction;
 };
 
-const DOT_STYLES: Record<string, { ring: string; dot: string; glow: string }> = {
+const DOT_STYLES: Record<
+  string,
+  {
+    ring: string;
+    dot: string;
+    glow: string;
+    pulseRing: string;
+  }
+> = {
   PUBLISHED: {
-    ring: 'border-emerald-500/30 bg-emerald-500/10 ring-emerald-500/20 text-emerald-600',
-    dot: 'bg-emerald-500',
-    glow: 'shadow-[0_0_8px_rgba(16,185,129,0.4)]',
+    ring: 'border-emerald-500/40 bg-emerald-500/10 ring-emerald-500/20 text-emerald-600 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:ring-emerald-400/20 dark:text-emerald-400',
+    dot: 'bg-emerald-500 dark:bg-emerald-400',
+    glow: 'shadow-[0_0_10px_rgba(16,185,129,0.5)]',
+    pulseRing: 'bg-emerald-400 dark:bg-emerald-300',
   },
   DRAFT: {
-    ring: 'border-amber-500/30 bg-amber-500/10 ring-amber-500/20 text-amber-600',
-    dot: 'bg-amber-500',
-    glow: 'shadow-[0_0_8px_rgba(245,158,11,0.4)]',
+    ring: 'border-amber-500/40 bg-amber-500/10 ring-amber-500/20 text-amber-600 dark:border-amber-400/40 dark:bg-amber-400/10 dark:ring-amber-400/20 dark:text-amber-400',
+    dot: 'bg-amber-500 dark:bg-amber-400',
+    glow: 'shadow-[0_0_10px_rgba(245,158,11,0.5)]',
+    pulseRing: 'bg-amber-400 dark:bg-amber-300',
   },
   RETIRED: {
-    ring: 'border-border/60 bg-muted/60 ring-border/40 text-muted-foreground',
-    dot: 'bg-muted-foreground/50',
+    ring: 'border-border/70 bg-muted/70 ring-border/40 text-muted-foreground',
+    dot: 'bg-muted-foreground/60',
     glow: '',
+    pulseRing: '',
   },
 };
 
@@ -66,23 +77,41 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
             {!isLast && (
               <span
                 aria-hidden="true"
-                className="absolute left-[13px] top-[40px] -bottom-0 w-0.5 bg-border/70 dark:bg-border/50"
+                className="absolute left-[13px] top-6 -bottom-6 w-0.5 bg-border/70 dark:bg-border/50"
               />
             )}
             <span
               aria-hidden="true"
               className={cn(
-                'absolute left-0 top-3 flex h-7 w-7 items-center justify-center rounded-full border ring-4 ring-background shadow-2xs z-10 transition-colors',
-                style.ring
+                'absolute left-0 top-3.5 flex h-7 w-7 items-center justify-center rounded-full border ring-4 ring-background shadow-xs z-10 transition-colors',
+                style.ring,
+                version.isCurrentPublished && 'shadow-[0_0_14px_rgba(16,185,129,0.35)]'
               )}
             >
-              <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', style.dot, style.glow)} />
+              {version.isCurrentPublished && (
+                <span
+                  className={cn(
+                    'absolute inline-flex h-full w-full rounded-full opacity-40 animate-ping motion-reduce:hidden',
+                    style.pulseRing
+                  )}
+                  aria-hidden="true"
+                />
+              )}
+              <span
+                className={cn(
+                  'relative inline-flex h-2.5 w-2.5 rounded-full shrink-0 z-10 transition-transform',
+                  style.dot,
+                  style.glow
+                )}
+              />
             </span>
             <article
               className={cn(
                 'flex flex-col gap-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 sm:flex-row sm:items-start sm:justify-between',
-                version.isCurrentPublished && 'border-emerald-500/40 bg-emerald-500/[0.02]',
-                version.isCurrentDraft && 'border-amber-500/40 bg-amber-500/[0.02]'
+                version.isCurrentPublished &&
+                  'border-emerald-500/40 bg-emerald-500/[0.02] shadow-[0_0_24px_-12px_rgba(16,185,129,0.2)] dark:border-emerald-500/30 dark:bg-emerald-500/[0.03]',
+                version.isCurrentDraft &&
+                  'border-amber-500/40 bg-amber-500/[0.02] shadow-[0_0_24px_-12px_rgba(245,158,11,0.2)] dark:border-amber-500/30 dark:bg-amber-500/[0.03]'
               )}
             >
               <div className="min-w-0 space-y-1.5">
@@ -96,8 +125,24 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
                     </Link>
                   </h3>
                   <RunbookStatusBadge status={version.state} context="lifecycle" size="sm" />
-                  {version.isCurrentPublished && <Pill tone="success">Live</Pill>}
-                  {version.isCurrentDraft && <Pill tone="warning">Editable</Pill>}
+                  {version.isCurrentPublished && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">
+                      <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      </span>
+                      <span>Live</span>
+                    </span>
+                  )}
+                  {version.isCurrentDraft && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300 shadow-2xs">
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>Editable</span>
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {version.publishedAtLabel
