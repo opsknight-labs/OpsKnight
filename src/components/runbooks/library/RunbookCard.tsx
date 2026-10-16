@@ -106,7 +106,7 @@ export function RunbookCard({
   return (
     <article
       className={cn(
-        'bg-card group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/50 focus-within:shadow-md hover:border-border hover:shadow-md hover:-translate-y-0.5',
+        'group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/50 focus-within:shadow-md hover:border-border hover:shadow-md hover:-translate-y-0.5',
         isList
           ? 'flex-col gap-3.5 p-4 sm:flex-row sm:items-center sm:gap-6'
           : 'flex-col p-5 sm:p-6',

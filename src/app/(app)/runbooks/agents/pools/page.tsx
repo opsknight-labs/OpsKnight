@@ -312,7 +312,7 @@ export default async function RunbookAgentPoolsPage({
                 key={pool.id}
                 aria-label={pool.name}
                 className={cn(
-                  'bg-card flex flex-col rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs transition-all duration-200 hover:border-primary/40 hover:shadow-md',
+                  'flex flex-col rounded-2xl border border-border/80 dark:border-border/60 bg-card backdrop-blur-xs shadow-xs transition-all duration-200 hover:border-primary/40 hover:shadow-md',
                   isSelected && 'border-primary/50 ring-2 ring-primary/20 shadow-md'
                 )}
               >
