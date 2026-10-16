@@ -1177,7 +1177,7 @@ async function main() {
   // 5. Seed Real Executions for rich history
   if (checkoutApi && pgRunbook.publishedVersionId) {
     const rule = await prisma.serviceAutomationRule.findFirst({
-      where: { runbookId: pgRunbook.id },
+      where: { runbookId: pgRunbook.id, serviceId: checkoutApi.id },
     });
     if (rule) {
       // Recent successful run
@@ -1229,7 +1229,7 @@ async function main() {
 
   if (checkoutApi && k8sRunbook.publishedVersionId) {
     const rule = await prisma.serviceAutomationRule.findFirst({
-      where: { runbookId: k8sRunbook.id },
+      where: { runbookId: k8sRunbook.id, serviceId: checkoutApi.id },
     });
     if (rule) {
       const started = hoursAgo(5);

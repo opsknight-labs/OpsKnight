@@ -73,7 +73,7 @@ export function ArchivedRuleCard({
   binding: ServiceRunbookBinding;
 }) {
   return (
-    <article className="rounded-2xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs p-5 sm:p-6 shadow-xs">
+    <article className="bg-card rounded-2xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs p-5 sm:p-6 shadow-xs">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted border border-border/60 text-muted-foreground shadow-2xs">
@@ -132,7 +132,7 @@ export function RuleCard({
   const readinessView = binding.readiness ? readinessPresentation(binding.readiness.state) : null;
 
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200">
+    <article className="bg-card group relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200">
       <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1.5', accent)} />
       <div className="space-y-4 p-5 sm:p-6 pl-6 sm:pl-7">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">

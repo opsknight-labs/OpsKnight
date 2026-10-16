@@ -106,7 +106,7 @@ export function RunbookCard({
   return (
     <article
       className={cn(
-        'group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/50 focus-within:shadow-md hover:border-border hover:shadow-md hover:-translate-y-0.5',
+        'bg-card group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/50 focus-within:shadow-md hover:border-border hover:shadow-md hover:-translate-y-0.5',
         isList
           ? 'flex-col gap-3.5 p-4 sm:flex-row sm:items-center sm:gap-6'
           : 'flex-col p-5 sm:p-6',
@@ -146,10 +146,10 @@ export function RunbookCard({
             <RunbookStatusBadge status={statusLabel} size="sm" context="lifecycle" />
             {isPublished && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">
-                <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                </span>
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0"
+                  aria-hidden="true"
+                />
                 <span>Live v{runbook.publishedVersion}</span>
               </span>
             )}
