@@ -1,0 +1,117 @@
+{
+  "measuredAt": "2026-10-16T04:02:19.902Z",
+  "sourceRevision": null,
+  "samples": [
+    {
+      "agents": 10,
+      "simultaneousLongPolls": 10,
+      "rounds": 2,
+      "waitSeconds": 25,
+      "elapsedMs": 50278.654875,
+      "httpP50Ms": 25094.931083,
+      "httpP95Ms": 25174.746,
+      "httpP99Ms": 25174.746,
+      "coalescedAvailabilityQueries": 36,
+      "incidentReadP95Ms": 21.25,
+      "databaseConnections": 11,
+      "artifactBytes": 0,
+      "cpuMicroseconds": {
+        "user": 362175,
+        "system": 48050
+      },
+      "memoryBytes": {
+        "rss": 100089856,
+        "heapTotal": 35422208,
+        "heapUsed": 33164688,
+        "external": 3697928,
+        "arrayBuffers": 76610
+      }
+    },
+    {
+      "agents": 100,
+      "simultaneousLongPolls": 100,
+      "rounds": 2,
+      "waitSeconds": 25,
+      "elapsedMs": 50605.871375,
+      "httpP50Ms": 25217.203833000007,
+      "httpP95Ms": 25336.519125000006,
+      "httpP99Ms": 25345.83825,
+      "coalescedAvailabilityQueries": 45,
+      "incidentReadP95Ms": 18.680584000001545,
+      "databaseConnections": 11,
+      "artifactBytes": 0,
+      "cpuMicroseconds": {
+        "user": 1003056,
+        "system": 86660
+      },
+      "memoryBytes": {
+        "rss": 124747776,
+        "heapTotal": 40140800,
+        "heapUsed": 37862864,
+        "external": 3723552,
+        "arrayBuffers": 102194
+      }
+    },
+    {
+      "agents": 500,
+      "simultaneousLongPolls": 500,
+      "rounds": 2,
+      "waitSeconds": 25,
+      "elapsedMs": 52950.594333000015,
+      "httpP50Ms": 25838.552250000008,
+      "httpP95Ms": 26161.840916,
+      "httpP99Ms": 26514.228375000006,
+      "coalescedAvailabilityQueries": 50,
+      "incidentReadP95Ms": 16.954750000004424,
+      "databaseConnections": 11,
+      "artifactBytes": 0,
+      "cpuMicroseconds": {
+        "user": 3680818,
+        "system": 246896
+      },
+      "memoryBytes": {
+        "rss": 155779072,
+        "heapTotal": 78938112,
+        "heapUsed": 57850528,
+        "external": 3749508,
+        "arrayBuffers": 128150
+      }
+    },
+    {
+      "agents": 1000,
+      "simultaneousLongPolls": 1000,
+      "rounds": 2,
+      "waitSeconds": 25,
+      "elapsedMs": 59836.23254199998,
+      "httpP50Ms": 26570.26775,
+      "httpP95Ms": 29591.090375,
+      "httpP99Ms": 29669.966917000012,
+      "coalescedAvailabilityQueries": 56,
+      "incidentReadP95Ms": 15.965416999999434,
+      "databaseConnections": 11,
+      "artifactBytes": 0,
+      "cpuMicroseconds": {
+        "user": 7033722,
+        "system": 471284
+      },
+      "memoryBytes": {
+        "rss": 219021312,
+        "heapTotal": 121929728,
+        "heapUsed": 82955152,
+        "external": 3832281,
+        "arrayBuffers": 145387
+      }
+    }
+  ],
+  "limitations": [
+    "Loopback HTTP route adapter with real signatures, nonce persistence and PostgreSQL; not the production Next/TLS/proxy topology",
+    "Idle claims; no physical actions, active dispatch latency or recovery-load measurement",
+    "Two 25-second rounds per size; not sustained production capacity",
+    "Load generator and handler share a process; CPU/memory include both",
+    "Incident reads share the database; other notification/escalation workloads are not certified"
+  ],
+  "sourceProvenance": {
+    "baseRevision": "b16cb86a4",
+    "state": "Local uncommitted enterprise-remediation worktree; this is pre-commit evidence, not exact-head hosted CI"
+  }
+}

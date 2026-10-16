@@ -11,6 +11,7 @@ import {
   type AgentJobResultInput,
 } from './schemas';
 import { sha256 } from './agent-auth';
+import { sanitizeCompressedArtifact } from './artifact-safety';
 import { redactRunbookOutput } from './redaction';
 import { resolveSecretInputValues } from './secrets';
 import {
@@ -985,11 +986,18 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       return { accepted: true, duplicate: true, status: attempt.status };
     }
     const resultProducedAt = input.producedAt ? new Date(input.producedAt) : new Date();
-    if (resultProducedAt > attempt.executionStep.execution.deadlineAt) {
-      throw new RunbookPreExecutionFenceError(
-        input.attemptId,
-        'result was produced after the execution deadline'
-      );
+    if (resultProducedAt > new Date(Date.now() + 60_000)) {
+      throw new RunbookPreExecutionFenceError(input.attemptId, 'result timestamp is in the future');
+    }
+    if (
+      resultProducedAt > attempt.executionStep.execution.deadlineAt &&
+      !['CANCELLED', 'UNKNOWN'].includes(input.status)
+    ) {
+      // Reporting an outcome does not extend execution authority. Writes completed after
+      // the deadline remain uncertain; preserve the evidence rather than stranding RUNNING.
+      input.status = attempt.executionStep.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN';
+      input.errorCode =
+        input.status === 'UNKNOWN' ? 'TIMED_OUT_WITH_UNKNOWN_OUTCOME' : 'EXECUTION_TIMEOUT';
     }
     const cancellationRequested =
       Boolean(attempt.executionStep.execution.cancelRequestedAt) ||
@@ -1035,6 +1043,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       isRetryableFailure(attempt.executionStep.riskClass, input.errorCode);
     const shouldRetry =
       !cancellationRequested &&
+      attempt.executionStep.execution.deadlineAt > new Date() &&
       (retryUnknown || retryFailed) &&
       attempt.attemptNumber <= attempt.executionStep.maxRetries;
     const completed = await tx.runbookStepAttempt.updateMany({
@@ -1118,11 +1127,15 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
 
 export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInput) {
   const input = agentArtifactSchema.parse(raw);
-  const content = Buffer.from(input.contentBase64, 'base64');
+  let content = Buffer.from(input.contentBase64, 'base64');
   if (content.length === 0 || content.length > 10 * 1024 * 1024) {
     throw new Error('Compressed artifact must be between 1 byte and 10 MiB.');
   }
   if (sha256(content) !== input.sha256) throw new Error('Artifact checksum does not match.');
+  const sanitized = await sanitizeCompressedArtifact(content);
+  content = sanitized.content;
+  input.sha256 = sha256(content);
+  input.truncated ||= sanitized.truncated;
   return prisma.$transaction(async tx => {
     const existing = await tx.runbookArtifact.findFirst({
       where: {
@@ -1151,7 +1164,7 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
             leaseExpiresAt: { gt: now },
             executionStep: {
               execution: {
-                deadlineAt: { gt: now },
+                status: { in: ['RUNNING', 'WAITING_AGENT', 'CANCEL_REQUESTED'] },
               },
             },
           },

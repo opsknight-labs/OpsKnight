@@ -21,6 +21,24 @@ export default function ExecutionTroubleshooting({
           {guidance.title} · {guidance.category}
         </p>
         <p className="mt-0.5 leading-relaxed text-muted-foreground">{guidance.action}</p>
+      {(status === 'UNKNOWN' ||
+        code === 'UNKNOWN_OUTCOME' ||
+        code === 'TIMED_OUT_WITH_UNKNOWN_OUTCOME') && (
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li>
+            Preserve the execution, attempt, Agent identity and plan digest. Inspect the last
+            contact, lease expiry and captured evidence below.
+          </li>
+          <li>
+            Independently check the service, container or Kubernetes target. A missing result does
+            not mean the write failed.
+          </li>
+          <li>
+            Record the observed outcome in the incident timeline before authorizing a new execution.
+            Do not retry an uncertain write automatically.
+          </li>
+        </ol>
+      )}
       </div>
     </aside>
   );

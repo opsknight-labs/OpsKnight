@@ -97,9 +97,7 @@ export async function loadPolicy(path: string): Promise<{ policy: AgentPolicy; h
             names: t.names !== undefined ? stringList(t.names) : undefined,
             actions: t.actions !== undefined ? stringList(t.actions) : undefined,
             maxReplicas:
-              t.maxReplicas !== undefined
-                ? boundedInteger(t.maxReplicas, 0, 0, 10000)
-                : undefined,
+              t.maxReplicas !== undefined ? boundedInteger(t.maxReplicas, 0, 0, 10000) : undefined,
           };
         })
       : undefined,
@@ -169,6 +167,16 @@ export function assertPolicyAllows(attempt: ClaimedAttempt, policy: AgentPolicy)
     const namespace = String(config.namespace ?? 'default');
     const resource = String(config.resource ?? 'pods').toLowerCase();
     const name = String(config.name ?? '');
+    if (
+      resource
+        .split(',')
+        .some(item =>
+          ['secret', 'secrets', 'configmap', 'configmaps', 'cm'].includes(item.split('.')[0]!)
+        )
+    )
+      throw new Error(
+        'LOCAL_POLICY_DENIED: Credential-bearing Kubernetes resources cannot be captured as diagnostic output.'
+      );
 
     if (
       !(policy.kubernetesActions ?? ['get', 'describe', 'logs', 'rollout-restart']).includes(action)
@@ -180,7 +188,10 @@ export function assertPolicyAllows(attempt: ClaimedAttempt, policy: AgentPolicy)
         if (!matchesAllowlist(namespace, [target.namespace])) return false;
         if (
           target.resources &&
-          !matchesAllowlist(resource, target.resources.map(r => r.toLowerCase()))
+          !matchesAllowlist(
+            resource,
+            target.resources.map(r => r.toLowerCase())
+          )
         ) {
           return false;
         }

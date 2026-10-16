@@ -130,7 +130,7 @@ export default async function AutomationRulePage({
   ).length;
   const permissions = await getUserPermissions();
   const canManage = await assertCanModifyService(input.id)
-    .then(() => true)
+    .then(() => permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE))
     .catch(() => false);
   const presentation = describeBinding(
     rule,
@@ -218,6 +218,35 @@ export default async function AutomationRulePage({
           </>
         }
       />
+
+      <section
+        aria-label="What the evidence establishes"
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        {[
+          [
+            'Configuration',
+            'Validates version, typed inputs, trigger and target selection. It performs no action.',
+          ],
+          [
+            'Agent policy',
+            'A fresh signed allowlist check for this exact configuration. It does not grant platform permissions.',
+          ],
+          [
+            'Execution preview',
+            'Review the frozen plan and approval gates. Preview neither runs commands nor proves target health.',
+          ],
+          [
+            'Target verification',
+            'Requires a completed action and authored checks with healthy post-state. Investigate UNKNOWN outcomes independently.',
+          ],
+        ].map(([title, description]) => (
+          <div key={title} className="rounded-lg border p-3 text-sm">
+            <h2 className="font-semibold">{title}</h2>
+            <p className="mt-1 text-muted-foreground">{description}</p>
+          </div>
+        ))}
+      </section>
 
       {rule.detachedAt && (
         <div className="flex items-start gap-3 rounded-xl border border-dashed bg-muted/30 px-4 py-3 text-sm">

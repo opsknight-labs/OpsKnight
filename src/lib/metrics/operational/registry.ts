@@ -1126,6 +1126,14 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_runbook_claim_availability_probes_total',
+    help: 'Coalesced process-local queue availability database probes',
+    kind: 'counter',
+    labels: ['result'],
+    scope: 'counter',
+    estimatedMaxSeries: 2,
+  },
+  {
     name: 'opsknight_runbook_artifacts',
     help: 'Runbook artifacts currently retained in PostgreSQL',
     kind: 'gauge',

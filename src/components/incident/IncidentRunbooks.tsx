@@ -508,7 +508,7 @@ export default async function IncidentRunbooks({
                                   </ul>
                                 </details>
                               )}
-                              {step.outputArtifactId && (
+                              {step.outputArtifactId && permissions.capabilities.includes(CAPABILITIES.RUNBOOK_ARTIFACT_DOWNLOAD) && (
                                 <Link
                                   href={`/api/runbook-artifacts/${step.outputArtifactId}`}
                                   className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"

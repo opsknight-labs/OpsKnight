@@ -1,9 +1,8 @@
 import { spawn } from 'node:child_process';
 import type { AgentPolicy, ClaimedAttempt } from './types';
 import { executeNetworkDiagnostic } from './network-diagnostics';
-import { captureEvidence } from './evidence';
+import { captureEvidence, containerEvidenceFormat } from './evidence';
 import { assertPolicyAllows } from './policy';
-
 
 export interface ExecutionResult {
   status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
@@ -24,8 +23,7 @@ export function containerHealthPassed(output: string): boolean {
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const state = parsed as Record<string, unknown>;
       const healthObj = (state.Health ?? state.Healthcheck ?? state.health ?? state.healthcheck) as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       if (healthObj && typeof healthObj === 'object') {
         const status = String(healthObj.Status ?? healthObj.status ?? '');
         return status.toLowerCase() === 'healthy';
@@ -152,14 +150,21 @@ export function commandFor(
       const args =
         action === 'logs'
           ? ['logs', '--tail', '500', String(config.container)]
-          : action === 'health'
+          : action === 'inspect'
             ? [
                 'inspect',
                 '--format',
-                '{{json .State}}',
+                '{{json .Id}} {{json .Name}} {{json .State.Status}} {{json .State.Running}} {{json .State.ExitCode}}',
                 String(config.container),
               ]
-            : [action, String(config.container)];
+            : action === 'health'
+              ? [
+                  'inspect',
+                  '--format',
+                  containerEvidenceFormat(config.runtime),
+                  String(config.container),
+                ]
+              : [action, String(config.container)];
       return { command: config.runtime === 'podman' ? 'podman' : 'docker', args };
     }
     case 'KUBERNETES': {
@@ -203,17 +208,12 @@ export function commandFor(
       }
       if (action === 'logs') {
         if (!name) throw new Error('Kubernetes logs requires a target resource name.');
-        const target = ['pod', 'pods'].includes(resource.toLowerCase()) ? name : `${resource}/${name}`;
+        const target = ['pod', 'pods'].includes(resource.toLowerCase())
+          ? name
+          : `${resource}/${name}`;
         return {
           command: 'kubectl',
-          args: [
-            '-n',
-            namespace,
-            'logs',
-            target,
-            '--tail=500',
-            '--limit-bytes=262144',
-          ],
+          args: ['-n', namespace, 'logs', target, '--tail=500', '--limit-bytes=262144'],
         };
       }
       if (!['get', 'describe'].includes(action)) {
@@ -221,12 +221,15 @@ export function commandFor(
       }
       return {
         command: 'kubectl',
+        // Describe includes literal environment values. Return only operational status fields.
         args: [
           '-n',
           namespace,
-          action,
+          'get',
           resource,
           ...(name ? [name] : []),
+          '-o',
+          'jsonpath={.metadata.name} {.status.phase} {.status.replicas} {.status.readyReplicas} {.status.availableReplicas} {.status.conditions[*].type} {.status.conditions[*].status} {.items[*].metadata.name} {.items[*].status.phase}',
         ],
       };
     }

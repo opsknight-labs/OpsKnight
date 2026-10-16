@@ -739,6 +739,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     }
   }
   await page.goto(`/services/${serviceId}/automations/${rule.id}`);
+  await expect(page.getByRole('region', { name: 'What the evidence establishes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: ruleName, exact: true })).toBeVisible();
   await page
     .getByRole('button', { name: 'Validate configuration · No execution', exact: true })
@@ -1136,6 +1137,7 @@ test('service rule rendering stays bounded at 100, 1000 and 10000 rules', async 
     for (let i = 0; i < 5; i++) {
       const started = performance.now();
       await page.goto(`/services/${service.id}?tab=runbooks`);
+      await expect(page.getByRole('tab', { name: /^Runbooks/ })).toContainText(String(size));
       await expect(
         page.getByText('20 rules on this page', { exact: true }).filter({ visible: true })
       ).toBeVisible();

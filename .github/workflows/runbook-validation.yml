@@ -151,6 +151,7 @@ jobs:
         env: { VITEST_USE_REAL_DB: '1' }
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1
+          tests/integration/runbook-enterprise-readiness-database.test.ts
           tests/integration/runbook-execution-safety.test.ts
           tests/integration/runbook-preview-authorization.test.ts
           tests/integration/runbook-lifecycle-database.test.ts
@@ -162,6 +163,74 @@ jobs:
           tests/integration/runbook-worker-evidence-database.test.ts
           tests/integration/runbook-review-regressions-database.test.ts
           tests/integration/encryption-migration.test.ts
+
+  physical-targets:
+    needs: changes
+    if: needs.changes.outputs.runbooks == 'true'
+    name: Disposable Docker and Kind physical actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUNBOOK_PHYSICAL_TARGETS: 'true'
+      RUNBOOK_PHYSICAL_EVIDENCE: plans/runbook-engine/evidence/physical-targets-current.json
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - name: Install verified Kind tooling
+        run: |
+          curl --fail --silent --show-error --location https://github.com/kubernetes-sigs/kind/releases/download/v0.30.0/kind-linux-amd64 -o /tmp/rbe-kind
+          curl --fail --silent --show-error --location https://github.com/kubernetes-sigs/kind/releases/download/v0.30.0/kind-linux-amd64.sha256sum -o /tmp/rbe-kind.sha256sum
+          expected=$(awk '{print $1}' /tmp/rbe-kind.sha256sum)
+          printf '%s  %s\n' "$expected" /tmp/rbe-kind | sha256sum --check -
+          sudo install -m 0755 /tmp/rbe-kind /usr/local/bin/kind
+      - name: Exercise real target mutations through the Agent executor
+        run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-physical-targets.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runbook-physical-target-evidence
+          path: plans/runbook-engine/evidence/physical-targets-current.json
+          if-no-files-found: error
+
+  authenticated-http-capacity:
+    needs: changes
+    if: needs.changes.outputs.runbooks == 'true'
+    name: Authenticated HTTP idle-fleet capacity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: opsknight
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rbe_http_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U opsknight -d rbe_http_test"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://opsknight:test_password@localhost:5432/rbe_http_test
+      DIRECT_URL: postgresql://opsknight:test_password@localhost:5432/rbe_http_test
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+      RUNBOOK_HTTP_CAPACITY: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - name: Apply isolated database migrations
+        run: npx prisma migrate deploy
+      - name: Measure signed HTTP claims at 10, 100, 500 and 1000 Agents
+        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 tests/integration/runbook-authenticated-http-capacity.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runbook-authenticated-http-evidence
+          path: plans/runbook-engine/evidence/authenticated-http-current.json
+          if-no-files-found: error
 
   deployment-candidate:
     needs: changes

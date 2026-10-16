@@ -56,6 +56,7 @@ export const CAPABILITIES = {
   RUNBOOK_EXECUTE: 'runbook.execute',
   RUNBOOK_APPROVE: 'runbook.approve',
   RUNBOOK_MANAGE: 'runbook.manage',
+  RUNBOOK_ARTIFACT_DOWNLOAD: 'runbook.artifact.download',
   RUNBOOK_PUBLISH: 'runbook.publish',
   RUNBOOK_AGENT_MANAGE: 'runbook.agent.manage',
   RUNBOOK_SECRET_MANAGE: 'runbook.secret.manage',

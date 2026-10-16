@@ -1,0 +1,41 @@
+{
+  "auditDate": "2026-10-16",
+  "baseRevision": "b16cb86a4",
+  "releaseState": "BETA",
+  "scope": "Enterprise readiness audit remediation from main; implementation and measured evidence are distinct from production certification",
+  "correctnessAndSecurity": {
+    "deadlineStateMachine": "Shared deadline finalizer for advancement/reconciliation; retain running attempts, stop queued work, accept fenced pre-deadline results, classify post-deadline writes UNKNOWN and prevent deadline retries",
+    "configurationAuthority": "All eight service-rule mutation/policy boundaries require service modification plus runbook.manage; UI follows the same capability",
+    "outputPipeline": "Shaped Docker/Kubernetes commands, rejected Secret/ConfigMap capture, shared Agent sanitization before spooling, bounded gzip/UTF-8 validation and sanitization before server storage, separate download capability, download audit, legacy download sanitization and explicit bounded historical rewrite",
+    "idleClaims": "One-second negative-only availability hint with coalesced database probes, no cached authority, existing live claim fences, wait-budget and disconnect handling",
+    "serviceCount": "Independent active-rule count across cursors/search; hidden when not loaded",
+    "uiAssurance": "Rule overview distinguishes configuration, Agent policy, preview and target verification; UNKNOWN details include an investigation checklist"
+  },
+  "repeatableQualification": {
+    "functional": "Existing version/rule/trigger/approval/cancel/secret/key/pool/outbox suites plus new adversarial authorization, artifacts, deadline races and pagination regressions",
+    "physicalDockerKind": "New disposable executor test and dedicated CI job: Docker stop/start/restart and Kubernetes scale/rollout restart, with independently observed target state and uploaded evidence",
+    "authenticatedHttp": "New signed actual-HTTP 10/100/500/1000-Agent idle workload, two 25-second rounds per size, shared incident-read sentinel, connections, query counts, p50/p95/p99, CPU/memory and artifact bytes",
+    "faultSafety": "Existing lease/spool/start-marker/recovery/cancel/revocation tests retained; deadline race/expiry proof expanded",
+    "operations": "Existing backlog/lease/maintenance alerts retained; v2.1 qualification guide includes observability, data protection, privilege boundaries, upgrade/rollback and operator review"
+  },
+  "unqualifiedReleaseGates": [
+    "Native Systemd and Podman physical actions on supported hosts",
+    "Physical failure phases before/after claim/start/write/result upload across deployment topologies",
+    "Multi-node Agent placement and persistent storage movement, PostgreSQL primary failover, network partitions and full-disk recovery",
+    "Sustained authenticated active execution/trigger bursts, concurrent policy changes at the 100-Agent boundary, fairness and shared notification/escalation workloads",
+    "Published x64/arm64 release asset fresh install, compatibility, upgrade, rollback and key rotation",
+    "Independent human keyboard/screen-reader/mobile/error-recovery review",
+    "Enterprise data-protection approval for historical artifacts, backups and output collection"
+  ],
+  "evidencePolicy": "CI artifacts record their actual source revision/topology/limitations. No planned or skipped physical test counts as passing evidence. Never infer production throughput from idle HTTP or direct-library claims.",
+  "localVerification": {
+    "runbookUnit": "341 passed, 3 skipped, 44 files (before final focused API error/Unicode additions)",
+    "postgresql": "92 passed in initial three-suite run; expanded enterprise suite includes 8 tests with bounded historical rewrite, read-only deadline and output safety assertions",
+    "authenticatedHttp": "One measured workload passed at all four sizes; see evidence/authenticated-http-local-20261016.json. Pre-commit modified source, not exact-head hosted CI",
+    "physicalTargets": "Docker default/desktop-linux daemon probes and Kind listing timed out locally; new disposable CI job must produce actual evidence before this gate can pass",
+    "releaseClaims": "Beta; no assertion that planned CI or physical qualification already passed",
+    "fullUnit": "6790 passed, 7 skipped, 832 files; later focused guards verified separately",
+    "typecheck": "pass",
+    "documentation": "342 v2.1 files have valid relative links; frontmatter and workflow YAML parsed"
+  }
+}

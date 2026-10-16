@@ -3,6 +3,7 @@ import { authenticatedContactReady } from './contact-readiness';
 // Identity and policy paths come only from the local operator's environment, never API input.
 import { createHash } from 'node:crypto';
 import { uptime } from 'node:os';
+import { sanitizeOutputText } from './output-safety';
 import { gzipSync } from 'node:zlib';
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -172,7 +173,7 @@ function redactSecretInputs(attempt: ClaimedAttempt, output: string): string {
     .map(key => Object.entries(attempt.inputValues).find(([name]) => name === key)?.[1])
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .sort((left, right) => right.length - left.length);
-  return secretValues.reduce((redacted, value) => redacted.split(value).join('[REDACTED]'), output);
+  return sanitizeOutputText(output, secretValues);
 }
 
 function redactEvidence(
