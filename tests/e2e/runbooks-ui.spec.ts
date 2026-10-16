@@ -188,7 +188,9 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
     .getByLabel('Input 1 label', { exact: true })
     .fill('Service unit');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Changes saved.' })).toBeVisible();
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
+  ).toBeVisible();
   await page.reload();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await expect(
@@ -345,7 +347,9 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   );
   await page.getByRole('button', { name: 'Apply JSON to builder' }).click();
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Changes saved.' })).toBeVisible();
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Publish draft', exact: true }).click();
   await page
     .getByRole('alertdialog')
@@ -417,14 +421,8 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   );
   await page.getByRole('button', { name: 'Save trigger', exact: true }).click();
   await expect(
-    page
-      .getByRole('dialog')
-      .locator('form')
-      .filter({
-        has: page.getByRole('button', { name: 'Save trigger', exact: true }),
-      })
-      .getByRole('status')
-  ).toHaveText('Changes saved.');
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' })
+  ).toBeVisible();
   const binding = await prisma.serviceAutomationRule.findFirstOrThrow({
     where: { serviceId, runbookId: id },
   });
@@ -435,7 +433,6 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await expect(triggerForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
     String(triggerRevision + 1)
   );
-  await expect(triggerForm.getByRole('status')).toHaveText('Changes saved.');
   expect(
     (
       await prisma.runbookTrigger.findFirstOrThrow({
@@ -458,7 +455,9 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await expect(configurationForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
     String(configurationRevision + 1)
   );
-  await expect(configurationForm.getByRole('status')).toHaveText('Changes saved.');
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' }).first()
+  ).toBeVisible();
   expect(
     (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } })).name
   ).toBe('Browser verified rule');
@@ -724,7 +723,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     });
     if (width < 1024 && (await closeNavigation.isVisible())) await closeNavigation.click();
     await page
-      .getByRole('heading', { name: 'Service Automations', exact: true })
+      .getByRole('heading', { name: /^Service [Aa]utomations$/i })
       .evaluate(element => element.scrollIntoView({ block: 'start' }));
     await noOverflow(page);
     await page.screenshot({
@@ -1026,7 +1025,9 @@ test('server pagination, administrator labels, effective capabilities and budget
     .fill('0');
   await page.getByRole('button', { name: 'Save remediation budgets' }).click();
   // Later browsers may already have these DB values; wait for the action's UI response too.
-  await expect(page.getByRole('status').filter({ hasText: 'Changes saved.' })).toBeVisible();
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' })
+  ).toBeVisible();
   await expect
     .poll(
       async () =>

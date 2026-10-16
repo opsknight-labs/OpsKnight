@@ -18,7 +18,7 @@ import { lockRunbookForUpdate, lockServiceRuleForUpdate } from './locking';
 import { requiresAgent } from './types';
 
 export function validateBindingInputValues(
-  definitions: Pick<RunbookInput, 'key' | 'type' | 'required'>[],
+  definitions: (Pick<RunbookInput, 'key' | 'type' | 'required'> & { options?: string[] })[],
   values: Record<string, unknown>
 ): void {
   const known = new Set(definitions.map(input => input.key));
@@ -36,6 +36,10 @@ export function validateBindingInputValues(
     if (!valid)
       throw new RunbookDefinitionError(
         `Runbook input "${input.key}" is not a valid ${input.type.toLowerCase()}.`
+      );
+    if (input.type === 'SELECT' && !(input.options ?? []).includes(value as string))
+      throw new RunbookDefinitionError(
+        `Runbook input "${input.key}" must be one of its configured options.`
       );
   }
 }

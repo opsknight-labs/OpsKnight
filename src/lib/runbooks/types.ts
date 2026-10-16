@@ -254,6 +254,7 @@ export const RUNBOOK_INPUT_TYPES = [
   'URL',
   'DURATION',
   'SECRET_REF',
+  'SELECT',
 ] as const;
 export type RunbookInputType = (typeof RUNBOOK_INPUT_TYPES)[number];
 

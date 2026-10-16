@@ -40,6 +40,7 @@ import {
   SelectItem,
 } from '@/components/ui/shadcn/select';
 
+import { notify } from '@/lib/toast';
 import { RunbookModuleNav } from './RunbookModuleNav';
 import { RunbookStatusBadge } from './RunbookStatusBadge';
 
@@ -98,10 +99,12 @@ export function ActionForm({
   children,
   className,
   onSuccess,
+  successMessage = 'Changes saved',
 }: {
   action: RunbookFormAction;
   children: ReactNode;
   className?: string;
+  successMessage?: string;
   onSuccess?: (result?: {
     saved?: boolean;
     draftRevision?: number;
@@ -132,17 +135,21 @@ export function ActionForm({
   >(async (_state, data: FormData) => {
     try {
       const result = await action(data);
-      if (result?.error) return { error: result.error };
+      if (result?.error) {
+        notify.error(result.error);
+        return { error: result.error };
+      }
       const successPayload = { saved: true, ...(result || {}) };
+      notify.success(successMessage);
       onSuccess?.(successPayload);
       router.refresh();
       return successPayload;
     } catch (error) {
       unstable_rethrow(error);
-      return {
-        error:
-          'Could not complete this action. Check your configuration and permissions, then try again.',
-      };
+      const message =
+        'Could not complete this action. Check your configuration and permissions, then try again.';
+      notify.error(message);
+      return { error: message };
     }
   }, {});
   return (
@@ -164,11 +171,6 @@ export function ActionForm({
             className="col-span-full rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
           >
             {state.error}
-          </p>
-        )}
-        {state.saved && (
-          <p role="status" className="col-span-full text-sm text-muted-foreground">
-            Changes saved.
           </p>
         )}
       </InvalidFormContext.Provider>
@@ -207,12 +209,14 @@ export function ConfirmAction({
   description,
   label,
   variant = 'destructive',
+  successMessage = 'Changes applied',
 }: {
   action: RunbookFormAction;
   title: string;
   description: string;
   label: string;
   variant?: ComponentProps<typeof Button>['variant'];
+  successMessage?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -227,7 +231,12 @@ export function ConfirmAction({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        <ActionForm action={action} onSuccess={() => setOpen(false)} className="space-y-3">
+        <ActionForm
+          action={action}
+          successMessage={successMessage}
+          onSuccess={() => setOpen(false)}
+          className="space-y-3"
+        >
           <div className="flex flex-wrap justify-end gap-2">
             <AlertDialogCancel>Keep unchanged</AlertDialogCancel>
             <SubmitButton variant={variant} pendingLabel="Applying…">

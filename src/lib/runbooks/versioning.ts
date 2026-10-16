@@ -51,6 +51,7 @@ export function toInputCreateMany(inputs: RunbookInputInput[]) {
     defaultValue: input.defaultValue,
     description: input.description,
     sequence: input.sequence ?? index,
+    options: input.type === 'SELECT' ? (input.options ?? []) : [],
   }));
 }
 
