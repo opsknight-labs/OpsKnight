@@ -74,6 +74,37 @@ export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
 
 docker compose -p ${deployment.name} -f deploy/compose/docker-compose.agent.yml -f deploy/compose/docker-compose.agent.enrollment-file.yml up -d opsknight-agent`;
+
+  const docker = `${captureToken}
+trap 'rm -rf "$agent_credential_dir"' EXIT
+docker volume create ${deployment.name}_data
+docker run -d \\
+  --name ${deployment.name} \\
+  --restart unless-stopped \\
+  -v ${deployment.name}_data:/var/lib/opsknight-agent \\
+  -v "$agent_credential_dir/enrollment-token:/etc/opsknight-agent/token:ro" \\
+  -v /var/run/docker.sock:/var/run/docker.sock \\
+  -e OPSKNIGHT_AGENT_URL=${shellQuote(url)} \\
+  -e OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH="/etc/opsknight-agent/token" \\
+  -e OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)} \\
+  ${shellQuote(image)}
+rm -rf "$agent_credential_dir"
+trap - EXIT`;
+
+  const podman = `${captureToken}
+trap 'rm -rf "$agent_credential_dir"' EXIT
+podman volume create ${deployment.name}_data
+podman run -d \\
+  --name ${deployment.name} \\
+  --restart unless-stopped \\
+  -v ${deployment.name}_data:/var/lib/opsknight-agent:Z \\
+  -v "$agent_credential_dir/enrollment-token:/etc/opsknight-agent/token:ro,Z" \\
+  -e OPSKNIGHT_AGENT_URL=${shellQuote(url)} \\
+  -e OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH="/etc/opsknight-agent/token" \\
+  -e OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)} \\
+  ${shellQuote(image)}
+rm -rf "$agent_credential_dir"
+trap - EXIT`;
   const swarm = `${captureToken}
 trap 'rm -rf "$agent_credential_dir"' EXIT
 docker secret create ${deployment.enrollmentSecret} - < "$agent_credential_dir/enrollment-token"
@@ -145,6 +176,31 @@ export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
 export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
 docker compose -p ${deployment.name} -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent`,
+      docker: `# Update container while preserving identity volume.
+set -euo pipefail
+docker pull ${shellQuote(image)}
+docker stop ${deployment.name} 2>/dev/null || true
+docker rm ${deployment.name} 2>/dev/null || true
+docker run -d \\
+  --name ${deployment.name} \\
+  --restart unless-stopped \\
+  -v ${deployment.name}_data:/var/lib/opsknight-agent \\
+  -v /var/run/docker.sock:/var/run/docker.sock \\
+  -e OPSKNIGHT_AGENT_URL=${shellQuote(url)} \\
+  -e OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)} \\
+  ${shellQuote(image)}`,
+      podman: `# Update container while preserving identity volume.
+set -euo pipefail
+podman pull ${shellQuote(image)}
+podman stop ${deployment.name} 2>/dev/null || true
+podman rm ${deployment.name} 2>/dev/null || true
+podman run -d \\
+  --name ${deployment.name} \\
+  --restart unless-stopped \\
+  -v ${deployment.name}_data:/var/lib/opsknight-agent:Z \\
+  -e OPSKNIGHT_AGENT_URL=${shellQuote(url)} \\
+  -e OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)} \\
+  ${shellQuote(image)}`,
       swarm: `# Update only this service; retain its pinned node, secrets and identity volume.
 docker service update --image ${shellQuote(image)} ${deployment.name}_opsknight-agent`,
       helm: `# Require an existing release. Reuse its URL, policy, Secret and PVC.
@@ -169,5 +225,5 @@ rm -rf "$agent_credential_dir"
 trap - EXIT`
         : '',
     };
-  return { compose, swarm, helm, kustomize, linux };
+  return { compose, docker, podman, swarm, helm, kustomize, linux };
 }

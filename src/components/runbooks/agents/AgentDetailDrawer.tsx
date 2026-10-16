@@ -191,30 +191,66 @@ export function AgentDetailDrawer({
             const unavailableCapabilities = report.filter(e => e.configured && !e.available);
             const outOfScopeCapabilities = report.filter(e => !e.configured);
 
-            const hasK8s =
-              activeCapabilities.some(e => e.type === 'KUBERNETES') ||
-              (Array.isArray(agent.capabilities) &&
-                agent.capabilities.includes('RUNBOOK_KUBERNETES'));
-            const hasDocker =
-              activeCapabilities.some(e => e.type === 'DOCKER') ||
-              (Array.isArray(agent.capabilities) &&
-                (agent.capabilities.includes('RUNBOOK_DOCKER_RUNTIME') ||
-                  agent.capabilities.includes('RUNBOOK_DOCKER')));
-            const hasSystemd =
-              activeCapabilities.some(e => e.type === 'SYSTEMD') ||
-              (Array.isArray(agent.capabilities) && agent.capabilities.includes('RUNBOOK_SYSTEMD'));
+            const activeTypes = new Set(activeCapabilities.map(e => e.type));
+            const activeNames = new Set(activeCapabilities.map(e => e.name));
+            const labelsStr = JSON.stringify(agent.labels || {}).toLowerCase();
+            const nameLower = (agent.name || '').toLowerCase();
+            const platformLower = (agent.platform || '').toLowerCase();
+            const agentCaps = Array.isArray(agent.capabilities)
+              ? agent.capabilities.map(c => String(c).toUpperCase())
+              : [];
 
-            const runtimeEnv = hasK8s
+            const isK8s =
+              activeTypes.has('KUBERNETES') ||
+              labelsStr.includes('kubernetes') ||
+              labelsStr.includes('"tier":"kubernetes"') ||
+              labelsStr.includes('cluster') ||
+              nameLower.includes('k8s') ||
+              nameLower.includes('kube') ||
+              platformLower.includes('k8s') ||
+              platformLower.includes('kube');
+
+            const isPodman =
+              activeNames.has('Podman') ||
+              activeTypes.has('PODMAN') ||
+              labelsStr.includes('podman') ||
+              nameLower.includes('podman');
+
+            const isDocker =
+              (activeTypes.has('DOCKER') && !isPodman) ||
+              labelsStr.includes('docker') ||
+              nameLower.includes('docker');
+
+            const isSystemd =
+              activeTypes.has('SYSTEMD') ||
+              labelsStr.includes('systemd') ||
+              labelsStr.includes('db-replica') ||
+              labelsStr.includes('database') ||
+              nameLower.includes('db') ||
+              nameLower.includes('systemd');
+
+            const runtimeEnv = isK8s
               ? {
-                  title: 'Kubernetes Cluster (In-Cluster Pod)',
+                  title: 'Kubernetes Workload Cluster',
                   badge: 'Kubernetes',
                   icon: <Boxes className="h-3.5 w-3.5 text-emerald-500" />,
                   badgeClassName:
                     'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
                   description:
                     'Running as a containerized pod inside a Kubernetes cluster with direct API access and in-cluster ServiceAccount authentication.',
+                  platformDetails: [
+                    {
+                      label: 'Cluster Context',
+                      value: (agent.labels as Record<string, string> | undefined)?.cluster
+                        ? `Cluster: ${(agent.labels as Record<string, string>).cluster}`
+                        : 'In-Cluster / Context',
+                    },
+                    { label: 'Workload Targets', value: 'Deployments, StatefulSets, Pods, Events' },
+                    { label: 'Remediation', value: 'Rollout restart, scale, status validation' },
+                    { label: 'Safety Policy', value: 'Approval-gated non-idempotent writes' },
+                  ],
                 }
-              : hasDocker
+              : isDocker
                 ? {
                     title: 'Docker Container Host',
                     badge: 'Docker Host',
@@ -223,30 +259,59 @@ export function AgentDetailDrawer({
                       'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
                     description:
                       'Connected to local Docker daemon socket (/var/run/docker.sock) for container lifecycle and health management.',
+                    platformDetails: [
+                      { label: 'Daemon Socket', value: '/var/run/docker.sock' },
+                      { label: 'Target Scope', value: 'Policy allowlisted containers' },
+                      { label: 'Remediation', value: 'Inspect, healthcheck, start, restart' },
+                      { label: 'Safety Policy', value: 'Approval-gated restarts' },
+                    ],
                   }
-                : hasSystemd
+                : isPodman
                   ? {
-                      title: 'Native Linux Host (Systemd)',
-                      badge: 'Systemd Host',
-                      icon: <Cpu className="h-3.5 w-3.5 text-violet-500" />,
+                      title: 'Podman Container Host',
+                      badge: 'Podman Host',
+                      icon: <Layers className="h-3.5 w-3.5 text-purple-500" />,
                       badgeClassName:
-                        'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
+                        'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400',
                       description:
-                        'Running directly on a Linux host with systemd service unit management capabilities.',
+                        'Running with Podman rootless container runtime and SELinux volume isolation.',
+                      platformDetails: [
+                        { label: 'Runtime Engine', value: 'Podman (Rootless / Rootful)' },
+                        { label: 'Isolation', value: 'SELinux volume labeling (:Z)' },
+                        { label: 'Remediation', value: 'Inspect, logs, start, restart' },
+                        { label: 'Safety Policy', value: 'Approval-gated restarts' },
+                      ],
                     }
-                  : {
-                      title: `${agent.platform || 'Linux'} Agent Host`,
-                      badge: 'Agent Host',
-                      icon: <Server className="h-3.5 w-3.5 text-primary" />,
-                      badgeClassName:
-                        'border-muted-foreground/30 bg-muted/40 text-muted-foreground',
-                      description: 'Standard runtime execution agent.',
-                    };
+                  : isSystemd
+                    ? {
+                        title: 'Native Linux Host (Systemd)',
+                        badge: 'Systemd Host',
+                        icon: <Cpu className="h-3.5 w-3.5 text-violet-500" />,
+                        badgeClassName:
+                          'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
+                        description:
+                          'Running directly on a Linux host with systemd service unit management capabilities.',
+                        platformDetails: [
+                          { label: 'Init System', value: 'systemd (systemctl / journalctl)' },
+                          { label: 'Target Units', value: 'Policy allowlisted service units' },
+                          { label: 'Remediation', value: 'Status check, start, restart' },
+                          { label: 'Safety Policy', value: 'Approval-gated service restarts' },
+                        ],
+                      }
+                    : {
+                        title: `${agent.platform || 'Linux'} Agent Host`,
+                        badge: 'Agent Host',
+                        icon: <Server className="h-3.5 w-3.5 text-primary" />,
+                        badgeClassName:
+                          'border-muted-foreground/30 bg-muted/40 text-muted-foreground',
+                        description: 'Standard runtime execution agent.',
+                        platformDetails: [],
+                      };
 
             return (
               <div className="space-y-4">
                 {/* Runtime Environment Identity Card */}
-                <div className="rounded-xl border bg-card/60 p-4 shadow-xs space-y-2.5">
+                <div className="rounded-xl border bg-card/60 p-4 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Hosting Environment
@@ -270,6 +335,29 @@ export function AgentDetailDrawer({
                       {runtimeEnv.description}
                     </p>
                   </div>
+
+                  {/* Platform-Specific Technical Specifications */}
+                  {runtimeEnv.platformDetails.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-border/50 text-xs">
+                      {runtimeEnv.platformDetails.map((detail, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg bg-muted/30 px-2.5 py-1.5 border border-border/40 space-y-0.5"
+                        >
+                          <span className="block text-[10px] uppercase font-mono text-muted-foreground font-semibold">
+                            {detail.label}
+                          </span>
+                          <span
+                            className="block text-[11px] font-medium text-foreground truncate"
+                            title={detail.value}
+                          >
+                            {detail.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <span className="text-muted-foreground/70">Node/Host:</span>
@@ -332,8 +420,25 @@ export function AgentDetailDrawer({
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
-                      No active capabilities available on this agent.
+                    <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground space-y-2">
+                      <p>
+                        {agentCaps.length > 0
+                          ? `Awaiting agent heartbeat check-in to verify ${agentCaps.length} registered ${agentCaps.length === 1 ? 'capability' : 'capabilities'}.`
+                          : 'No active capabilities verified on this agent.'}
+                      </p>
+                      {agentCaps.length > 0 && (
+                        <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+                          {agentCaps.map(cap => (
+                            <Badge
+                              key={cap}
+                              variant="outline"
+                              className="font-mono text-[10px] bg-muted/40 text-muted-foreground border-border/60"
+                            >
+                              {cap.replace(/^RUNBOOK_/, '')}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
