@@ -217,5 +217,29 @@
       "Interrupted runs after an earlier 512 MiB fixture filled are discarded; the final full reruns above passed.",
       "Rate-limit tests pin their wall-clock window; queue-isolation fixtures are due before claiming, independent of small host/database clock skew."
     ]
+  },
+  "runbookRobustnessFollowup": {
+    "reviewedCommit": "03df2c405",
+    "changes": [
+      "REST start/cancel delegate API credential attribution to the canonical transactional RUNBOOK_EXECUTION domain audit; duplicate REST business records removed.",
+      "Cancellation update accepts only active states; existing CANCEL_REQUESTED returns success without changing original reason/time or repeating audit/advance job.",
+      "Documented intentional global responder start versus owner/service-team cancellation policy with negative role and scope tests."
+    ],
+    "verification": {
+      "apiAndRunbookUnitTests": 641,
+      "unitFiles": 66,
+      "postgresTests": 81,
+      "postgresFiles": 2,
+      "typecheck": "passed",
+      "changedFileLint": "passed with zero warnings"
+    },
+    "postgresCoverage": [
+      "One canonical API-attributed start/cancellation audit",
+      "Repeated distinct-key requests and UI repeat preserve original cancellation and job count",
+      "Four distinct-key concurrent requests on an active execution create one cancellation audit and one job",
+      "Cross-service responder starts and USER/AUDITOR/missing-scope denials",
+      "Existing execution completion/cancellation races and terminal-state safety"
+    ],
+    "limits": "Focused regression verification for this follow-up; prior full-suite and browser results are retained as historical evidence. New GitHub CI runs after push."
   }
 }

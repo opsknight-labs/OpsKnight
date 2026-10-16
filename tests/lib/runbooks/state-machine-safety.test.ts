@@ -87,7 +87,7 @@ describe('Runbooks State Machine Safety and Invariants', () => {
     expect(prisma.runbookExecution.updateMany).toHaveBeenCalledWith({
       where: {
         id: 'exec_1',
-        status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+        status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'PAUSED'] },
       },
       data: {
         status: 'CANCEL_REQUESTED',
@@ -101,6 +101,15 @@ describe('Runbooks State Machine Safety and Invariants', () => {
         payload: { kind: 'ADVANCE_EXECUTION', executionId: 'exec_1' },
       }),
     });
+  });
+
+  it('accepts an existing cancellation without repeating queue or audit work', async () => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 0 });
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'CANCEL_REQUESTED' } as never);
+    await expect(cancelExecution('exec_1', 'user_1', 'repeat')).resolves.toBeUndefined();
+    expect(prisma.backgroundJob.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('rejects cancellation on an already terminal execution', async () => {

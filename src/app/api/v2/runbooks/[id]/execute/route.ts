@@ -1,6 +1,6 @@
 import prisma from '@/lib/prisma';
 import { preconditionFailed } from '@/lib/api-v2/concurrency';
-import { defineV2Route, logV2Audit, RunbookExecuteV2Schema } from '@/lib/api-v2';
+import { defineV2Route, RunbookExecuteV2Schema } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { previewRunbookExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
 import { z } from 'zod';
@@ -20,7 +20,6 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
     const { id } = params;
     const resolved = await resolveV2RunbookExecution(db, params, body, actor);
     const resolvedServiceId = resolved.serviceId;
-    const resolvedBindingId = resolved.bindingId;
 
     // 1. Preview execution boundary and generate authorized execution plan
     const preview = await previewRunbookExecution(
@@ -41,23 +40,9 @@ export const POST = defineV2Route<{ id: string }, unknown, z.infer<typeof Runboo
         expectedPlanDigest: preview.digest,
         previewAuthorizationToken: preview.authorizationToken,
       },
-      tx
-    );
-
-    await logV2Audit({
-      action: 'runbook.execution_started',
-      entityType: 'RUNBOOK',
-      entityId: id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: {
-        executionId: execution.id,
-        incidentId: body.incidentId ?? null,
-        serviceId: resolvedServiceId ?? null,
-        bindingId: resolvedBindingId ?? null,
-      },
       tx,
-    });
+      { apiClientId: apiKey.id }
+    );
 
     return {
       status: 202,

@@ -104,6 +104,11 @@ function executionSteps(definition: ReturnType<typeof parseRunbookDefinition>) {
   return flattenSteps(definition).map((step, sequence) => ({ ...step, sequence }));
 }
 
+/** Server-supplied provenance; never part of the executable request or preview digest. */
+export interface RunbookExecutionAuditContext {
+  apiClientId: string;
+}
+
 export interface RunbookExecutionRequest {
   runbookId: string;
   runbookVersionId?: string;
@@ -127,14 +132,15 @@ export interface RunbookExecutionRequest {
 /** Responder entry point. Absence of an actor never authorizes an automatic execution. */
 export async function startRunbookExecution(
   input: RunbookExecutionRequest,
-  externalTx?: Prisma.TransactionClient
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
 ) {
   if (!input.triggeredByUserId || !input.expectedPlanDigest || !input.previewAuthorizationToken) {
     throw new RunbookDefinitionError(
       'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder and preview are required.'
     );
   }
-  const result = await prepareRunbookExecution(input, false, 'MANUAL', externalTx);
+  const result = await prepareRunbookExecution(input, false, 'MANUAL', externalTx, auditContext);
   if (!('id' in result)) throw new Error('Execution was not created.');
   return result;
 }
@@ -191,7 +197,8 @@ async function prepareRunbookExecution(
   input: RunbookExecutionRequest,
   previewOnly: boolean,
   mode: 'MANUAL' | 'AUTOMATIC',
-  externalTx?: Prisma.TransactionClient
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
 ) {
   const runner = async (tx: Prisma.TransactionClient) => {
     await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
@@ -862,10 +869,12 @@ async function prepareRunbookExecution(
     await logAudit(
       {
         action: 'runbook.execution.started',
+        ...(auditContext ? { source: 'API' as const } : {}),
         entityType: 'RUNBOOK_EXECUTION',
         entityId: execution.id,
         actorId: input.triggeredByUserId,
         details: {
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
           runbookId: runbook.id,
           versionId: version.id,
           previewGrant: authorization
@@ -1587,26 +1596,38 @@ export async function cancelExecution(
   executionId: string,
   actorId: string,
   reason?: string,
-  externalTx?: Prisma.TransactionClient
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
 ) {
   const command = async (tx: Prisma.TransactionClient) => {
     const result = await tx.runbookExecution.updateMany({
       where: {
         id: executionId,
-        status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+        status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'PAUSED'] },
       },
       data: { status: 'CANCEL_REQUESTED', cancelRequestedAt: new Date(), failureMessage: reason },
     });
-    if (result.count !== 1)
+    if (result.count !== 1) {
+      const existing = await tx.runbookExecution.findUnique({
+        where: { id: executionId },
+        select: { status: true },
+      });
+      // Natural idempotence applies across different HTTP retry keys and UI/API callers.
+      if (existing?.status === 'CANCEL_REQUESTED') return;
       throw new RunbookExecutionInvalidTransitionError(executionId, 'TERMINAL', 'CANCEL_REQUESTED');
+    }
     await enqueueAdvance(tx, executionId);
     await logAudit(
       {
         action: 'runbook.execution.cancel.requested',
+        ...(auditContext ? { source: 'API' as const } : {}),
         entityType: 'RUNBOOK_EXECUTION',
         entityId: executionId,
         actorId,
-        details: { reason: reason ?? null },
+        details: {
+          reason: reason ?? null,
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
+        },
       },
       tx
     );

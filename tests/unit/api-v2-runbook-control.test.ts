@@ -118,11 +118,10 @@ describe('runbook preview and cancellation boundaries', () => {
       'resource',
       'operator',
       'Stop requested by operator',
-      mocks.tx
+      mocks.tx,
+      { apiClientId: 'key' }
     );
-    expect(mocks.audit).toHaveBeenCalledWith(
-      expect.objectContaining({ tx: mocks.tx, actorId: 'operator', apiKeyId: 'key' })
-    );
+    expect(mocks.audit).not.toHaveBeenCalled();
   });
   it('hides a missing or inaccessible incident-linked execution', async () => {
     mocks.tx.runbookExecution.findFirst.mockResolvedValue({

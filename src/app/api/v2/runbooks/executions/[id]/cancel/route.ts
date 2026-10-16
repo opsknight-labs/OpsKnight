@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
-import { logV2Audit } from '@/lib/api-v2/audit';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { cancelExecution } from '@/lib/runbooks/orchestrator';
 import { incidentReadWhere } from '@/lib/authorization-filters';
@@ -40,16 +39,7 @@ export const POST = defineV2Route({
       });
       if (!incident) throw new AppError({ code: 'EXECUTION_NOT_FOUND' });
     }
-    await cancelExecution(execution.id, actor.id, body.reason, tx);
-    await logV2Audit({
-      action: 'runbook.execution.cancel_requested',
-      entityType: 'RUNBOOK',
-      entityId: execution.id,
-      actorId: actor.id,
-      apiKeyId: apiKey.id,
-      details: { executionId: execution.id },
-      tx,
-    });
+    await cancelExecution(execution.id, actor.id, body.reason, tx, { apiClientId: apiKey.id });
     return {
       status: 202,
       data: {

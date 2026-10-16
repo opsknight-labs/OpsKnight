@@ -21,6 +21,8 @@ import { POST as validateDraft } from '@/app/api/v2/runbooks/[id]/drafts/[versio
 import { POST as reopen } from '@/app/api/v2/incidents/[id]/reopen/route';
 import { POST as addParticipant } from '@/app/api/v2/schedules/[id]/layers/[layerId]/participants/route';
 import { PATCH as moveParticipant } from '@/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route';
+import { POST as executeRoute } from '@/app/api/v2/runbooks/[id]/execute/route';
+import { cancelExecution } from '@/lib/runbooks/orchestrator';
 import { POST as previewRoute } from '@/app/api/v2/runbooks/[id]/executions/preview/route';
 import { POST as cancelRoute } from '@/app/api/v2/runbooks/executions/[id]/cancel/route';
 import { POST as addWatcher } from '@/app/api/v2/incidents/[id]/watchers/route';
@@ -85,6 +87,151 @@ describe('enterprise REST commands against PostgreSQL', () => {
       );
     await resetDatabase();
   }, 120_000);
+
+  it('records one credential-attributed start and naturally deduplicates cancellation across keys', async () => {
+    const { token, user, key } = await credential();
+    const runbook = await createRunbook(
+      { name: 'Canonical audit', slug: 'canonical', description: '' },
+      user.id
+    );
+    await publishDraftVersion(runbook.draftVersion.id, user.id);
+    const started = await call(
+      executeRoute,
+      token,
+      'POST',
+      `/runbooks/${runbook.id}/execute`,
+      { id: runbook.id },
+      {},
+      'start-one'
+    );
+    expect(started.status).toBe(202);
+    const executionId = (await started.json()).data.executionId;
+    const starts = await testPrisma.auditLog.findMany({ where: { entityId: executionId } });
+    expect(starts).toHaveLength(1);
+    expect(starts[0]).toMatchObject({
+      action: 'runbook.execution.started',
+      entityType: 'RUNBOOK_EXECUTION',
+      actorId: user.id,
+      details: { source: 'API', metadata: { apiClientId: key.id } },
+    });
+    expect(
+      await testPrisma.auditLog.count({ where: { action: 'runbook.execution_started' } })
+    ).toBe(0);
+    const path = `/runbooks/executions/${executionId}/cancel`;
+    const params = { id: executionId };
+    expect(
+      (
+        await call(
+          cancelRoute,
+          token,
+          'POST',
+          path,
+          params,
+          { reason: 'Original stop' },
+          'cancel-first'
+        )
+      ).status
+    ).toBe(202);
+    const original = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: executionId },
+    });
+    const jobs = await testPrisma.backgroundJob.count({ where: { type: 'RUNBOOK' } });
+    const responses = await Promise.all(
+      ['cancel-second', 'cancel-third', 'cancel-fourth'].map(id =>
+        call(cancelRoute, token, 'POST', path, params, { reason: 'Repeated stop' }, id)
+      )
+    );
+    expect(responses.map(response => response.status)).toEqual([202, 202, 202]);
+    await cancelExecution(executionId, user.id, 'UI repeat');
+    const current = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: executionId },
+    });
+    expect(current.cancelRequestedAt).toEqual(original.cancelRequestedAt);
+    expect(current.failureMessage).toBe('Original stop');
+    expect(await testPrisma.backgroundJob.count({ where: { type: 'RUNBOOK' } })).toBe(jobs);
+    const audits = await testPrisma.auditLog.findMany({
+      where: { entityId: executionId, action: { contains: 'cancel' } },
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      action: 'runbook.execution.cancel.requested',
+      entityType: 'RUNBOOK_EXECUTION',
+      details: { source: 'API', metadata: { apiClientId: key.id } },
+    });
+  });
+
+  it('commits one cancellation transition when distinct keys race on an active execution', async () => {
+    const { token, user } = await credential();
+    const runbook = await createRunbook(
+      { name: 'Cancel race', slug: 'cancel-race', description: '' },
+      user.id
+    );
+    const version = await publishDraftVersion(runbook.draftVersion.id, user.id);
+    const execution = await testPrisma.runbookExecution.create({
+      data: {
+        runbookId: runbook.id,
+        runbookVersionId: version.id,
+        triggeredByUserId: user.id,
+        definitionChecksum: version.checksum,
+        deadlineAt: new Date(Date.now() + 60_000),
+      },
+    });
+    const responses = await Promise.all(
+      Array.from({ length: 4 }, (_, index) =>
+        call(
+          cancelRoute,
+          token,
+          'POST',
+          `/runbooks/executions/${execution.id}/cancel`,
+          { id: execution.id },
+          { reason: `Stop ${index}` },
+          `parallel-${index}`
+        )
+      )
+    );
+    expect(responses.map(response => response.status)).toEqual([202, 202, 202, 202]);
+    expect(
+      await testPrisma.auditLog.count({
+        where: { entityId: execution.id, action: 'runbook.execution.cancel.requested' },
+      })
+    ).toBe(1);
+    expect(
+      await testPrisma.backgroundJob.count({
+        where: { type: 'RUNBOOK', payload: { path: ['executionId'], equals: execution.id } },
+      })
+    ).toBe(1);
+  });
+
+  it('allows responder starts across service teams while rejecting lower roles and missing execution scopes', async () => {
+    const admin = await credential();
+    const team = await createTestTeam('Other service team');
+    const service = await createTestService('Global execution policy', team.id);
+    const runbook = await createRunbook(
+      { name: 'Execution policy', slug: 'execution-policy', description: '' },
+      admin.user.id
+    );
+    await publishDraftVersion(runbook.draftVersion.id, admin.user.id);
+    for (const [role, scopes, expected] of [
+      ['RESPONDER', ['runbooks:execute'], 202],
+      ['RESPONDER', ['runbooks:read'], 403],
+      ['ADMIN', ['admin:manage'], 403],
+      ['USER', ['runbooks:execute'], 403],
+      ['AUDITOR', ['runbooks:execute'], 403],
+    ] as const) {
+      const caller = await credential([...scopes], role);
+      const before = await testPrisma.runbookExecution.count();
+      const response = await call(
+        executeRoute,
+        caller.token,
+        'POST',
+        `/runbooks/${runbook.id}/execute`,
+        { id: runbook.id },
+        { serviceId: service.id }
+      );
+      expect(response.status).toBe(expected);
+      expect(await testPrisma.runbookExecution.count()).toBe(before + (expected === 202 ? 1 : 0));
+    }
+  });
 
   it('enforces cancellation ownership and service-team boundaries without side effects on denial', async () => {
     const owner = await credential(['runbooks:execute'], 'RESPONDER');
