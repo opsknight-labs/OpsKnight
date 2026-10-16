@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable security/detect-object-injection -- step types, risk levels, and phase types are closed union keys */
 
 import { useState, type ReactNode } from 'react';
 import {

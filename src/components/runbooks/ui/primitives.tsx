@@ -119,6 +119,7 @@ export function StatTile({
           <span
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded-lg border shadow-2xs shrink-0',
+              // eslint-disable-next-line security/detect-object-injection -- tone is a typed enum of known tokens
               TONE_SURFACE[tone]
             )}
           >
@@ -163,6 +164,7 @@ export function Pill({
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium border shadow-2xs',
+        // eslint-disable-next-line security/detect-object-injection -- tone is a typed enum of known tokens
         TONE_SURFACE[tone],
         className
       )}

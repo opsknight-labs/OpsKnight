@@ -1,4 +1,12 @@
-import { Activity, BookOpen, CheckCircle2, PencilLine, Server, Workflow } from 'lucide-react';
+import {
+  Activity,
+  Archive,
+  BookOpen,
+  CheckCircle2,
+  PencilLine,
+  Server,
+  Workflow,
+} from 'lucide-react';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -97,7 +105,6 @@ export default async function RunbooksPage({
       }),
       getPopularRunbookTags(),
     ]);
-  void archivedCount;
   const [permissions, runbooks, navigation] = await Promise.all([
     getUserPermissions(),
     prisma.runbook.findMany({
@@ -180,6 +187,14 @@ export default async function RunbooksPage({
             icon: <PencilLine className="h-3.5 w-3.5 text-amber-200" />,
             valueClassName: draftCount > 0 ? 'text-amber-200' : undefined,
             href: '/runbooks?status=draft',
+          },
+          {
+            label: 'Archived',
+            value: archivedCount,
+            icon: <Archive className="h-3.5 w-3.5 text-slate-300" />,
+            valueClassName: archivedCount > 0 ? 'text-slate-300' : undefined,
+            href: '/runbooks?status=archived',
+            active: filter.status === 'archived' || filter.tab === 'archived',
           },
           {
             label: 'Running Now',

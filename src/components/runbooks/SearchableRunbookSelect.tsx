@@ -112,6 +112,7 @@ export function SearchableRunbookSelect({
             ? `All ${fallbackLabel}`
             : 'All'));
 
+  // eslint-disable-next-line security/detect-object-injection -- kind is a closed union of known select types
   const KindIcon = KIND_ICONS[kind] ?? Server;
 
   const handleSelect = (val: string) => {

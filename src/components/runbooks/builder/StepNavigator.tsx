@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable security/detect-object-injection -- step types and risk levels are closed union keys */
 
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { stepRequiresApproval } from '@/lib/runbooks/safety';

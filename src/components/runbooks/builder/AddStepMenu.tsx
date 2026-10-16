@@ -43,6 +43,7 @@ export default function AddStepMenu({
               </p>
               <div className="space-y-0.5">
                 {category.types.map(type => {
+                  // eslint-disable-next-line security/detect-object-injection -- type is a closed union of known step types
                   const entry = STEP_CATALOG[type];
                   const Icon = entry.icon;
                   const descriptionId = `add-step-${type}-description`;

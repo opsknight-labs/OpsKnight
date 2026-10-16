@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- StepChange is a closed enum */
 import { Minus, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
