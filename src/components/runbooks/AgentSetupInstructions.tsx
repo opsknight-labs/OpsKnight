@@ -118,7 +118,9 @@ export default function AgentSetupInstructions({
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [expiresAt]);
-  const [image, setImage] = useState(distribution?.manifest.image.reference ?? '');
+  const [image, setImage] = useState(
+    distribution?.manifest.image.reference ?? 'ghcr.io/opsknight-labs/opsknight-agent:latest'
+  );
   const [url, setUrl] = useState(appUrl && !validateAgentEndpoint(appUrl) ? appUrl : '');
   const [endpointConfirmed, setEndpointConfirmed] = useState(false);
   const endpointError = validateAgentEndpoint(url);
@@ -127,10 +129,9 @@ export default function AgentSetupInstructions({
     (operation === 'upgrade' && !validDeploymentName) ||
     Boolean(endpointError) ||
     !endpointConfirmed ||
-    !distribution ||
-    image !== distribution.manifest.image.reference;
+    (distribution ? image !== distribution.manifest.image.reference : !image.trim());
 
-  const [policyPath, setPolicyPath] = useState('../../agent/policy.container.json');
+  const [policyPath, setPolicyPath] = useState('agent/policy.container.json');
   const snippets = useMemo(
     () =>
       agentSetupCommands({
