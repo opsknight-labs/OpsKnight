@@ -11,7 +11,8 @@ import {
   parsePaginationParams,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import type { Prisma } from '@prisma/client';
+import { Role, type Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
 export const GET = withV2Observability(async function GET(req: NextRequest) {
@@ -23,7 +24,10 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { limit, cursor } = parsePaginationParams(searchParams);
     const search = searchParams.get('search')?.trim();
-    const role = searchParams.get('role')?.trim();
+    // Validate against the real enum: an unknown value is a 400, never a Prisma error (500).
+    const role = z
+      .object({ role: z.nativeEnum(Role).optional() })
+      .parse({ role: searchParams.get('role')?.trim() || undefined }).role;
 
     const filters: Prisma.UserWhereInput[] = [];
     if (search) {
@@ -36,7 +40,7 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
     }
 
     if (role) {
-      filters.push({ role: role as Prisma.EnumRoleFilter['equals'] });
+      filters.push({ role });
     }
 
     const cursorWhere = buildCursorWhere(cursor);

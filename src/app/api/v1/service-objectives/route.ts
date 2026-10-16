@@ -7,22 +7,31 @@ import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { serviceObjectiveCreateSchema } from '@/lib/slo/schemas';
 import { logger } from '@/lib/logger';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { v1ErrorResponse } from '@/lib/api-v1-errors';
 
 export async function GET(request: NextRequest) {
-  const actor = await getCurrentAuthorizationActor();
-  const serviceId = new URL(request.url).searchParams.get('serviceId');
-  const objectives = await prisma.serviceObjective.findMany({
-    where: {
-      activeTo: null,
-      ...(serviceId ? { serviceId } : {}),
-      ...serviceObjectiveReadWhere(actor),
-    },
-    include: { service: { select: { id: true, name: true } } },
-    orderBy: { activeFrom: 'desc' },
-  });
-  return jsonOk(
-    objectives.map(objective => ({ ...objective, id: objective.lineageId, versionId: objective.id }))
-  );
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    const serviceId = new URL(request.url).searchParams.get('serviceId');
+    const objectives = await prisma.serviceObjective.findMany({
+      where: {
+        activeTo: null,
+        ...(serviceId ? { serviceId } : {}),
+        ...serviceObjectiveReadWhere(actor),
+      },
+      include: { service: { select: { id: true, name: true } } },
+      orderBy: { activeFrom: 'desc' },
+    });
+    return jsonOk(
+      objectives.map(objective => ({
+        ...objective,
+        id: objective.lineageId,
+        versionId: objective.id,
+      }))
+    );
+  } catch (error) {
+    return v1ErrorResponse(error, 'list service objectives');
+  }
 }
 
 export async function POST(request: NextRequest) {

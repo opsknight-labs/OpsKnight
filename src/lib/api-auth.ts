@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashLegacyTokenCandidates, hashTokenV2 } from '@/lib/api-keys';
+import { hashTokenV2 } from '@/lib/api-keys';
+import { isWellFormedApiToken } from '@/lib/api-v2/auth';
+import { legacyHashCandidatesWithAdmission } from '@/lib/legacy-token-admission';
 
 function extractApiKey(req: NextRequest) {
   const header = req.headers.get('authorization') || '';
@@ -14,9 +16,21 @@ function extractApiKey(req: NextRequest) {
   return direct?.trim() || null;
 }
 
-export async function authenticateApiKey(req: NextRequest) {
+type ApiKeyRecord = NonNullable<Awaited<ReturnType<typeof prisma.apiKey.findFirst>>>;
+
+export type ApiKeyAuthResult =
+  | { status: 'ok'; key: ApiKeyRecord }
+  | { status: 'invalid' }
+  | { status: 'throttled'; retryAfter: number };
+
+/**
+ * API-key authentication for /api/v1 and the older /api/* routes, with the same admission
+ * protections as REST v2: malformed tokens are rejected without database work, and the
+ * expensive 1.x scrypt fallback runs under the shared legacy-hash budget and concurrency cap.
+ */
+export async function authenticateApiKeyDetailed(req: NextRequest): Promise<ApiKeyAuthResult> {
   const token = extractApiKey(req);
-  if (!token) return null;
+  if (!token || !isWellFormedApiToken(token)) return { status: 'invalid' };
 
   const v2Hash = hashTokenV2(token);
   const activeFilter = {
@@ -32,10 +46,11 @@ export async function authenticateApiKey(req: NextRequest) {
   // or the ENCRYPTION_KEY-derived secret) and 2.0 HMACs signed with
   // NEXTAUTH_SECRET before an independent API_KEY_SECRET was configured.
   if (!apiKey) {
-    const legacyHashes = await hashLegacyTokenCandidates(token);
-    if (legacyHashes.length > 0) {
+    const legacy = await legacyHashCandidatesWithAdmission(req, token);
+    if (legacy.status === 'throttled') return legacy;
+    if (legacy.candidates.length > 0) {
       apiKey = await prisma.apiKey.findFirst({
-        where: { tokenHash: { in: legacyHashes }, ...activeFilter },
+        where: { tokenHash: { in: legacy.candidates }, ...activeFilter },
       });
     }
 
@@ -47,11 +62,11 @@ export async function authenticateApiKey(req: NextRequest) {
           lastUsedAt: new Date(),
         },
       });
-      return { ...apiKey, tokenHash: v2Hash };
+      return { status: 'ok', key: { ...apiKey, tokenHash: v2Hash } };
     }
   }
 
-  if (!apiKey) return null;
+  if (!apiKey) return { status: 'invalid' };
 
   await prisma.apiKey.updateMany({
     where: {
@@ -61,7 +76,16 @@ export async function authenticateApiKey(req: NextRequest) {
     data: { lastUsedAt: new Date() },
   });
 
-  return apiKey;
+  return { status: 'ok', key: apiKey };
+}
+
+/**
+ * Legacy contract: the key, or null. A throttled legacy-hash attempt also yields null (401), so
+ * existing callers keep their behaviour; use authenticateApiKeyDetailed to answer 429.
+ */
+export async function authenticateApiKey(req: NextRequest) {
+  const result = await authenticateApiKeyDetailed(req);
+  return result.status === 'ok' ? result.key : null;
 }
 
 export function hasApiScopes(scopes: string[] | null | undefined, required: string[]) {

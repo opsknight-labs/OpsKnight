@@ -6,23 +6,28 @@ import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { serviceObjectiveCreateSchema, serviceObjectiveUpdateSchema } from '@/lib/slo/schemas';
 import { logger } from '@/lib/logger';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { v1ErrorResponse } from '@/lib/api-v1-errors';
 
 const idSchema = z.string().regex(/^[a-z0-9_-]{1,64}$/i);
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await getCurrentAuthorizationActor();
-  const id = idSchema.parse((await params).id);
-  const objective = await prisma.serviceObjective.findFirst({
-    where: {
-      lineageId: id,
-      activeTo: null,
-      ...serviceObjectiveReadWhere(actor),
-    },
-    include: { service: { select: { id: true, name: true } } },
-  });
-  return objective
-    ? jsonOk({ ...objective, id: objective.lineageId, versionId: objective.id })
-    : jsonError('Service objective not found', 404);
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    const id = idSchema.parse((await params).id);
+    const objective = await prisma.serviceObjective.findFirst({
+      where: {
+        lineageId: id,
+        activeTo: null,
+        ...serviceObjectiveReadWhere(actor),
+      },
+      include: { service: { select: { id: true, name: true } } },
+    });
+    return objective
+      ? jsonOk({ ...objective, id: objective.lineageId, versionId: objective.id })
+      : jsonError('Service objective not found', 404);
+  } catch (error) {
+    return v1ErrorResponse(error, 'read service objective');
+  }
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
