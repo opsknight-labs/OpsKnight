@@ -2,17 +2,14 @@
 /* eslint-disable react-hooks/purity -- performance.now() is an event-handler latency measurement triggered by user click */
 
 import React, { useState } from 'react';
+import { Terminal, Code2, Copy, Check, Play, Loader2, ExternalLink, Sparkles } from 'lucide-react';
 import {
-  Terminal,
-  Code2,
-  Copy,
-  Check,
-  Play,
-  Loader2,
-  ExternalLink,
-  Sparkles,
-} from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/shadcn/card';
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/shadcn/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -42,6 +39,9 @@ interface ScenarioDef {
   expectedResponse: Record<string, unknown>;
 }
 
+// OpsKnight resource ids (cuid and prefixed ids) use only these characters.
+const RESOURCE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
 const SCENARIOS: ScenarioDef[] = [
   {
     id: 'events',
@@ -51,7 +51,9 @@ const SCENARIOS: ScenarioDef[] = [
     path: '/api/events',
     scope: 'events:write',
     description: 'Ingest monitoring signals, telemetry spikes, or heartbeats into OpsKnight.',
-    params: [{ name: 'serviceId', label: 'Service ID', placeholder: 'ID of a service in this workspace' }],
+    params: [
+      { name: 'serviceId', label: 'Service ID', placeholder: 'ID of a service in this workspace' },
+    ],
     payload: {
       event_action: 'trigger',
       dedup_key: 'api-gateway-5xx-spike',
@@ -112,7 +114,8 @@ const SCENARIOS: ScenarioDef[] = [
     expectedResponse: {
       status: 'success',
       authenticated: true,
-      message: 'API Key verified successfully. Your programmatic connection to OpsKnight is working.',
+      message:
+        'API Key verified successfully. Your programmatic connection to OpsKnight is working.',
       authMethod: 'Bearer',
       key: {
         id: 'key_prod_ingest',
@@ -197,22 +200,44 @@ export default function DeveloperQuickstartCard({
   // Identifiers for scenarios that act on a specific resource. Samples show a clear placeholder
   // (never an invented id) until the user enters a real one.
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
-  const fill = (scenario: ScenarioDef, text: string) =>
-    (scenario.params ?? []).reduce(
-      (out, param) =>
-        out.split(`{${param.name}}`).join(
-          paramValues[param.name]?.trim() || `YOUR_${param.name.replace(/([A-Z])/g, '_$1').toUpperCase()}`
-        ),
-      text
-    );
+  const placeholderFor = (name: string) => `YOUR_${name.replace(/([A-Z])/g, '_$1').toUpperCase()}`;
+  const paramValue = (name: string) =>
+    (Object.entries(paramValues).find(([key]) => key === name)?.[1] ?? '').trim();
+  const isValidResourceId = (value: string) => RESOURCE_ID_PATTERN.test(value);
+  // Substitute into strings token by token; `encode` URL-encodes values placed in a path.
+  const substitute = (scenario: ScenarioDef, text: string, encode: boolean) =>
+    (scenario.params ?? []).reduce((out, param) => {
+      const value = paramValue(param.name);
+      const replacement = value && isValidResourceId(value) ? value : placeholderFor(param.name);
+      return out
+        .split(`{${param.name}}`)
+        .join(encode ? encodeURIComponent(replacement) : replacement);
+    }, text);
+  // Walk the payload object instead of re-parsing JSON text, so no entered value can break it.
+  const substituteDeep = (scenario: ScenarioDef, value: unknown): unknown => {
+    if (typeof value === 'string') return substitute(scenario, value, false);
+    if (Array.isArray(value)) return value.map(item => substituteDeep(scenario, item));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, nested]) => [key, substituteDeep(scenario, nested)])
+      );
+    }
+    return value;
+  };
   const resolve = (scenario: ScenarioDef) => ({
-    path: fill(scenario, scenario.path),
+    path: substitute(scenario, scenario.path, true),
     payload: scenario.payload
-      ? (JSON.parse(fill(scenario, JSON.stringify(scenario.payload))) as Record<string, unknown>)
+      ? (substituteDeep(scenario, scenario.payload) as Record<string, unknown>)
       : undefined,
   });
+  const invalidParams = (scenario: ScenarioDef) =>
+    (scenario.params ?? []).filter(
+      param => paramValue(param.name) && !isValidResourceId(paramValue(param.name))
+    );
   const missingParams = (scenario: ScenarioDef) =>
-    (scenario.params ?? []).filter(param => !paramValues[param.name]?.trim());
+    (scenario.params ?? []).filter(
+      param => !paramValue(param.name) || !isValidResourceId(paramValue(param.name))
+    );
 
   const activeScenario = SCENARIOS.find(s => s.id === activeScenarioId) ?? SCENARIOS[0];
 
@@ -253,7 +278,9 @@ ${headerLine.replace(/ \\$/, '')}`;
         : `    'X-API-Key': '${effectiveToken}',`;
 
     if (scenario.method === 'POST') {
-      const bodyFormatted = JSON.stringify(resolve(scenario).payload, null, 4).replace(/^/gm, '    ').trim();
+      const bodyFormatted = JSON.stringify(resolve(scenario).payload, null, 4)
+        .replace(/^/gm, '    ')
+        .trim();
       return `const response = await fetch('${fullUrl}', {
   method: 'POST',
   headers: {
@@ -401,7 +428,9 @@ print(response.json())`;
       const durationMs = Math.round(performance.now() - start);
       setTestResult({
         status: res.status,
-        statusText: res.statusText || (res.status === 200 ? 'OK' : res.status === 202 ? 'Accepted' : 'Response'),
+        statusText:
+          res.statusText ||
+          (res.status === 200 ? 'OK' : res.status === 202 ? 'Accepted' : 'Response'),
         durationMs,
         data: json,
       });
@@ -430,7 +459,10 @@ print(response.json())`;
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <CardTitle className="text-sm font-bold">Developer API Quickstart</CardTitle>
-                <Badge variant="outline" className="text-[10px] font-mono font-medium text-muted-foreground">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-mono font-medium text-muted-foreground"
+                >
                   {baseUrl}
                 </Badge>
                 {revealedSecret && (
@@ -479,15 +511,17 @@ print(response.json())`;
             aria-describedby="quickstart-live-key-help"
           />
           <p id="quickstart-live-key-help" className="text-[11px] text-muted-foreground">
-            Used only for &quot;Run Live Test&quot; requests from this page. It is not saved or shown
-            in the code samples. Requests that change data ask for confirmation first.
+            Used only for &quot;Run Live Test&quot; requests from this page. It is not saved or
+            shown in the code samples. Requests that change data ask for confirmation first.
           </p>
         </div>
 
         {/* 2. Interactive Header Format Switcher & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-xl border border-border/70 bg-muted/20">
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-muted-foreground text-[11px] font-medium">Header formats supported:</span>
+            <span className="text-muted-foreground text-[11px] font-medium">
+              Header formats supported:
+            </span>
             <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5 shadow-2xs">
               <button
                 type="button"
@@ -547,7 +581,8 @@ print(response.json())`;
               Common Developer Scenarios
             </span>
             <span className="text-[11px] text-muted-foreground">
-              Required Scope: <code className="font-mono text-foreground font-medium">{activeScenario.scope}</code>
+              Required Scope:{' '}
+              <code className="font-mono text-foreground font-medium">{activeScenario.scope}</code>
             </span>
           </div>
 
@@ -583,12 +618,12 @@ print(response.json())`;
                       {sc.id === 'events'
                         ? '1. Ingest Alert'
                         : sc.id === 'incidents'
-                        ? '2. Incidents'
-                        : sc.id === 'sample'
-                        ? '3. Sample Ping'
-                        : sc.id === 'acknowledge'
-                        ? '4. Acknowledge'
-                        : '5. Services'}
+                          ? '2. Incidents'
+                          : sc.id === 'sample'
+                            ? '3. Sample Ping'
+                            : sc.id === 'acknowledge'
+                              ? '4. Acknowledge'
+                              : '5. Services'}
                     </span>
                   </div>
                   <span className="text-[10px] text-muted-foreground truncate w-full font-mono">
@@ -612,7 +647,11 @@ print(response.json())`;
         </div>
 
         {/* 5. Language Tabs & Code Display */}
-        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as LanguageType)} className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={v => setActiveTab(v as LanguageType)}
+          className="w-full"
+        >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
             <TabsList className="h-8 bg-muted/60">
               <TabsTrigger value="curl" className="text-xs gap-1.5 h-7">
@@ -673,7 +712,11 @@ print(response.json())`;
                 }
                 className="h-7 text-xs gap-1.5"
               >
-                {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                {copied ? (
+                  <Check className="h-3 w-3 text-emerald-500" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
                 {copied ? 'Copied!' : 'Copy'}
               </Button>
             </div>
@@ -685,17 +728,23 @@ print(response.json())`;
               <>
                 {/* cURL */}
                 <TabsContent value="curl" className="m-0">
-                  <pre className="leading-relaxed whitespace-pre-wrap">{generateCurl(activeScenario)}</pre>
+                  <pre className="leading-relaxed whitespace-pre-wrap">
+                    {generateCurl(activeScenario)}
+                  </pre>
                 </TabsContent>
 
                 {/* Node.js */}
                 <TabsContent value="node" className="m-0">
-                  <pre className="leading-relaxed whitespace-pre-wrap">{generateNode(activeScenario)}</pre>
+                  <pre className="leading-relaxed whitespace-pre-wrap">
+                    {generateNode(activeScenario)}
+                  </pre>
                 </TabsContent>
 
                 {/* Python */}
                 <TabsContent value="python" className="m-0">
-                  <pre className="leading-relaxed whitespace-pre-wrap">{generatePython(activeScenario)}</pre>
+                  <pre className="leading-relaxed whitespace-pre-wrap">
+                    {generatePython(activeScenario)}
+                  </pre>
                 </TabsContent>
               </>
             ) : (
@@ -767,8 +816,17 @@ print(response.json())`;
                     setParamValues(prev => ({ ...prev, [param.name]: event.target.value }))
                   }
                   placeholder={param.placeholder}
+                  aria-invalid={invalidParams(activeScenario).some(p => p.name === param.name)}
                   className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
+                {invalidParams(activeScenario).some(p => p.name === param.name) && (
+                  <span
+                    role="alert"
+                    className="text-[11px] font-normal text-rose-600 dark:text-rose-400"
+                  >
+                    IDs contain only letters, numbers, hyphens and underscores.
+                  </span>
+                )}
               </label>
             ))}
           </div>
@@ -793,10 +851,12 @@ print(response.json())`;
                     : ''}
                 </Badge>
                 <span className="text-[11px] text-muted-foreground">
-                  Latency: <span className="font-semibold text-foreground">{testResult.durationMs}ms</span>
+                  Latency:{' '}
+                  <span className="font-semibold text-foreground">{testResult.durationMs}ms</span>
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  Route: <code className="font-mono text-foreground">{resolve(activeScenario).path}</code>
+                  Route:{' '}
+                  <code className="font-mono text-foreground">{resolve(activeScenario).path}</code>
                 </span>
               </div>
 

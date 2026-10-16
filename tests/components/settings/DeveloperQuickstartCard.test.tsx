@@ -189,4 +189,41 @@ describe('DeveloperQuickstartCard Component', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/incidents/inc_real_1/acknowledge');
   });
+  it('treats unusual characters in a resource id as invalid input instead of crashing', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" />);
+    selectScenario(/ingest alert/i);
+    fireEvent.change(screen.getByLabelText(/api key for live tests/i), {
+      target: { value: 'ok_live_realkey123' },
+    });
+    // A quote would have broken the old JSON-text substitution.
+    fireEvent.change(screen.getByLabelText(/service id/i), { target: { value: 'svc"}, "x' } });
+
+    expect(screen.getByRole('alert').textContent).toMatch(/letters, numbers/);
+    const run = screen.getByRole('button', { name: /run live test/i }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    // The sample still renders, with the placeholder rather than the invalid value.
+    expect(document.body.textContent).toContain('YOUR_SERVICE_ID');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('URL-encodes path parameters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DeveloperQuickstartCard appUrl="https://api.test.opsknight.com" />);
+    selectScenario(/acknowledge/i);
+    fireEvent.change(screen.getByLabelText(/api key for live tests/i), {
+      target: { value: 'ok_live_realkey123' },
+    });
+    fireEvent.change(screen.getByLabelText(/incident id/i), { target: { value: '../admin' } });
+    expect(
+      (screen.getByRole('button', { name: /run live test/i }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText(/incident id/i), { target: { value: 'inc_Real-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /run live test/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send request/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/incidents/inc_Real-1/acknowledge');
+  });
 });
