@@ -5,12 +5,15 @@ import {
   apiV2Error,
   apiV2Success,
   authenticateV2Request,
+  buildCursorWhere,
   enforceV2Authorization,
   enforceV2RateLimit,
+  formatCursorPagination,
   idempotencyResponseHeaders,
-  logV2Audit,
-  runV2IdempotentMutation,
   IncidentNoteV2Schema,
+  logV2Audit,
+  parsePaginationParams,
+  runV2IdempotentMutation,
 } from '@/lib/api-v2';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -52,9 +55,12 @@ export const GET = withV2Observability(async function GET(
       assignedTeamId: incident.teamId,
     });
 
+    // Bounded and cursor-paginated: an incident can accumulate thousands of notes.
+    const { limit, cursor } = parsePaginationParams(new URL(req.url).searchParams);
     const notes = await prisma.incidentNote.findMany({
-      where: { incidentId: id },
-      orderBy: { createdAt: 'desc' },
+      where: { AND: [{ incidentId: id }, buildCursorWhere(cursor) as Prisma.IncidentNoteWhereInput] },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       select: {
         id: true,
         content: true,
@@ -64,7 +70,8 @@ export const GET = withV2Observability(async function GET(
       },
     });
 
-    return apiV2Success(notes, { headers: rlHeaders });
+    const page = formatCursorPagination(notes, limit);
+    return apiV2Success(page.data, { pagination: page.pagination, headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

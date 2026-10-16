@@ -29,7 +29,8 @@ export const GET = withV2Observability(async function GET(
       },
     });
 
-    if (!runbook || runbook.archivedAt) {
+    // Same visibility as the collection: only published, non-archived runbooks exist over REST.
+    if (!runbook || runbook.archivedAt || !runbook.publishedVersion) {
       throw new AppError({
         code: 'RUNBOOK_NOT_FOUND',
         userMessage: `Runbook with id '${id}' was not found.`,
@@ -44,7 +45,7 @@ export const GET = withV2Observability(async function GET(
       name: runbook.name,
       slug: runbook.slug,
       description: runbook.description,
-      version: runbook.publishedVersion?.version ?? 1,
+      version: runbook.publishedVersion.version,
       steps,
       createdAt: runbook.createdAt,
       updatedAt: runbook.updatedAt,

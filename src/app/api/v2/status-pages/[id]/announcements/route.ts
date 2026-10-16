@@ -1,13 +1,17 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import {
   apiV2Created,
   apiV2Error,
   apiV2Success,
   authenticateV2Request,
+  buildCursorWhere,
   enforceV2Authorization,
   enforceV2RateLimit,
+  formatCursorPagination,
   idempotencyResponseHeaders,
+  parsePaginationParams,
   runV2IdempotentAuditedMutation,
   StatusPageAnnouncementV2Schema,
 } from '@/lib/api-v2';
@@ -33,9 +37,17 @@ export const GET = withV2Observability(async function GET(
       });
     }
 
+    // Bounded and cursor-paginated: announcements accumulate over the life of a page.
+    const { limit, cursor } = parsePaginationParams(new URL(req.url).searchParams);
     const announcements = await prisma.statusPageAnnouncement.findMany({
-      where: { statusPageId: id },
-      orderBy: { createdAt: 'desc' },
+      where: {
+        AND: [
+          { statusPageId: id },
+          buildCursorWhere(cursor) as Prisma.StatusPageAnnouncementWhereInput,
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       select: {
         id: true,
         title: true,
@@ -49,7 +61,8 @@ export const GET = withV2Observability(async function GET(
       },
     });
 
-    return apiV2Success(announcements, { headers: rlHeaders });
+    const result = formatCursorPagination(announcements, limit);
+    return apiV2Success(result.data, { pagination: result.pagination, headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

@@ -2,17 +2,14 @@
 /* eslint-disable react-hooks/purity -- performance.now() is an event-handler latency measurement triggered by user click */
 
 import React, { useState } from 'react';
+import { Terminal, Code2, Copy, Check, Play, Loader2, ExternalLink, Sparkles } from 'lucide-react';
 import {
-  Terminal,
-  Code2,
-  Copy,
-  Check,
-  Play,
-  Loader2,
-  ExternalLink,
-  Sparkles,
-} from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/shadcn/card';
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/shadcn/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -36,9 +33,14 @@ interface ScenarioDef {
   scope: string;
   description: string;
   payload?: Record<string, unknown>;
+  /** Real identifiers the caller must supply; `{name}` in path or payload is replaced. */
+  params?: Array<{ name: string; label: string; placeholder: string }>;
   expectedStatus: number;
   expectedResponse: Record<string, unknown>;
 }
+
+// OpsKnight resource ids (cuid and prefixed ids) use only these characters.
+const RESOURCE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 const SCENARIOS: ScenarioDef[] = [
   {
@@ -49,10 +51,13 @@ const SCENARIOS: ScenarioDef[] = [
     path: '/api/events',
     scope: 'events:write',
     description: 'Ingest monitoring signals, telemetry spikes, or heartbeats into OpsKnight.',
+    params: [
+      { name: 'serviceId', label: 'Service ID', placeholder: 'ID of a service in this workspace' },
+    ],
     payload: {
       event_action: 'trigger',
       dedup_key: 'api-gateway-5xx-spike',
-      service_id: 'srv_prod_api_gateway',
+      service_id: '{serviceId}',
       payload: {
         summary: '5xx Error Rate > 5% on Production API Gateway',
         source: 'datadog-agent',
@@ -109,7 +114,8 @@ const SCENARIOS: ScenarioDef[] = [
     expectedResponse: {
       status: 'success',
       authenticated: true,
-      message: 'API Key verified successfully. Your programmatic connection to OpsKnight is working.',
+      message:
+        'API Key verified successfully. Your programmatic connection to OpsKnight is working.',
       authMethod: 'Bearer',
       key: {
         id: 'key_prod_ingest',
@@ -125,9 +131,10 @@ const SCENARIOS: ScenarioDef[] = [
     badgeNumber: 4,
     title: '4. Acknowledge Incident (POST /api/v2/incidents/{id}/acknowledge)',
     method: 'POST',
-    path: '/api/v2/incidents/inc_9f8d1e2a/acknowledge',
+    path: '/api/v2/incidents/{incidentId}/acknowledge',
     scope: 'incidents:write',
     description: 'Acknowledge an operational alert programmatically to halt escalation timeouts.',
+    params: [{ name: 'incidentId', label: 'Incident ID', placeholder: 'ID of an open incident' }],
     payload: {
       note: 'On-call engineer actively mitigating gateway error spike.',
     },
@@ -183,7 +190,54 @@ export default function DeveloperQuickstartCard({
   } | null>(null);
 
   const baseUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://api.opsknight.com';
+  // Snippets show a placeholder unless a key was just generated on this page.
   const effectiveToken = revealedSecret || 'ok_live_your_api_key';
+  // Live tests need a real key. It lives only in this component's memory: never persisted,
+  // never put in a URL, and cleared when the page unloads.
+  const [testKeyInput, setTestKeyInput] = useState('');
+  const liveKey = testKeyInput.trim() || revealedSecret || '';
+
+  // Identifiers for scenarios that act on a specific resource. Samples show a clear placeholder
+  // (never an invented id) until the user enters a real one.
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+  const placeholderFor = (name: string) => `YOUR_${name.replace(/([A-Z])/g, '_$1').toUpperCase()}`;
+  const paramValue = (name: string) =>
+    (Object.entries(paramValues).find(([key]) => key === name)?.[1] ?? '').trim();
+  const isValidResourceId = (value: string) => RESOURCE_ID_PATTERN.test(value);
+  // Substitute into strings token by token; `encode` URL-encodes values placed in a path.
+  const substitute = (scenario: ScenarioDef, text: string, encode: boolean) =>
+    (scenario.params ?? []).reduce((out, param) => {
+      const value = paramValue(param.name);
+      const replacement = value && isValidResourceId(value) ? value : placeholderFor(param.name);
+      return out
+        .split(`{${param.name}}`)
+        .join(encode ? encodeURIComponent(replacement) : replacement);
+    }, text);
+  // Walk the payload object instead of re-parsing JSON text, so no entered value can break it.
+  const substituteDeep = (scenario: ScenarioDef, value: unknown): unknown => {
+    if (typeof value === 'string') return substitute(scenario, value, false);
+    if (Array.isArray(value)) return value.map(item => substituteDeep(scenario, item));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, nested]) => [key, substituteDeep(scenario, nested)])
+      );
+    }
+    return value;
+  };
+  const resolve = (scenario: ScenarioDef) => ({
+    path: substitute(scenario, scenario.path, true),
+    payload: scenario.payload
+      ? (substituteDeep(scenario, scenario.payload) as Record<string, unknown>)
+      : undefined,
+  });
+  const invalidParams = (scenario: ScenarioDef) =>
+    (scenario.params ?? []).filter(
+      param => paramValue(param.name) && !isValidResourceId(paramValue(param.name))
+    );
+  const missingParams = (scenario: ScenarioDef) =>
+    (scenario.params ?? []).filter(
+      param => !paramValue(param.name) || !isValidResourceId(paramValue(param.name))
+    );
 
   const activeScenario = SCENARIOS.find(s => s.id === activeScenarioId) ?? SCENARIOS[0];
 
@@ -198,14 +252,14 @@ export default function DeveloperQuickstartCard({
   };
 
   const generateCurl = (scenario: ScenarioDef) => {
-    const fullUrl = `${baseUrl}${scenario.path}`;
+    const fullUrl = `${baseUrl}${resolve(scenario).path}`;
     const headerLine =
       authFormat === 'BEARER'
         ? `  -H "Authorization: Bearer ${effectiveToken}" \\`
         : `  -H "X-API-Key: ${effectiveToken}" \\`;
 
     if (scenario.method === 'POST') {
-      const payloadString = JSON.stringify(scenario.payload, null, 2);
+      const payloadString = JSON.stringify(resolve(scenario).payload, null, 2);
       return `curl -X POST ${fullUrl} \\
 ${headerLine}
   -H "Content-Type: application/json" \\
@@ -217,14 +271,16 @@ ${headerLine.replace(/ \\$/, '')}`;
   };
 
   const generateNode = (scenario: ScenarioDef) => {
-    const fullUrl = `${baseUrl}${scenario.path}`;
+    const fullUrl = `${baseUrl}${resolve(scenario).path}`;
     const headersObj =
       authFormat === 'BEARER'
         ? `    'Authorization': 'Bearer ${effectiveToken}',`
         : `    'X-API-Key': '${effectiveToken}',`;
 
     if (scenario.method === 'POST') {
-      const bodyFormatted = JSON.stringify(scenario.payload, null, 4).replace(/^/gm, '    ').trim();
+      const bodyFormatted = JSON.stringify(resolve(scenario).payload, null, 4)
+        .replace(/^/gm, '    ')
+        .trim();
       return `const response = await fetch('${fullUrl}', {
   method: 'POST',
   headers: {
@@ -249,14 +305,14 @@ console.log(data);`;
   };
 
   const generatePython = (scenario: ScenarioDef) => {
-    const fullUrl = `${baseUrl}${scenario.path}`;
+    const fullUrl = `${baseUrl}${resolve(scenario).path}`;
     const headersPy =
       authFormat === 'BEARER'
         ? `        "Authorization": "Bearer ${effectiveToken}",`
         : `        "X-API-Key": "${effectiveToken}",`;
 
     if (scenario.method === 'POST') {
-      const bodyFormatted = JSON.stringify(scenario.payload, null, 4)
+      const bodyFormatted = JSON.stringify(resolve(scenario).payload, null, 4)
         .replace(/: true/g, ': True')
         .replace(/: false/g, ': False')
         .replace(/: null/g, ': None')
@@ -306,8 +362,40 @@ print(response.json())`;
 
   const activeSnippet = getCodeSnippet(activeScenario, activeTab);
 
+  // Success means a 2xx that actually authenticated: /api/sample answers 200 with
+  // `authenticated: false` for a bad key, and status 0 marks a request that never completed.
+  const resultSucceeded =
+    !!testResult &&
+    testResult.status >= 200 &&
+    testResult.status < 300 &&
+    !(
+      testResult.data &&
+      typeof testResult.data === 'object' &&
+      (testResult.data as { data?: { authenticated?: unknown } }).data?.authenticated === false
+    ) &&
+    !(
+      testResult.data &&
+      typeof testResult.data === 'object' &&
+      (testResult.data as { authenticated?: unknown }).authenticated === false
+    );
+
   // Live test runner execution
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const isMutation = activeScenario.method !== 'GET';
+
+  // Requests that change data need an explicit second click on the inline confirmation.
+  const requestLiveTest = () => {
+    if (!liveKey || missingParams(activeScenario).length > 0) return;
+    if (isMutation) {
+      setAwaitingConfirmation(true);
+      return;
+    }
+    void executeLiveTest();
+  };
+
   const executeLiveTest = async () => {
+    if (!liveKey || missingParams(activeScenario).length > 0) return;
+    setAwaitingConfirmation(false);
     setIsRunningTest(true);
     setTestResult(null);
     const start = performance.now();
@@ -317,16 +405,17 @@ print(response.json())`;
         'Content-Type': 'application/json',
       };
       if (authFormat === 'BEARER') {
-        headers['Authorization'] = `Bearer ${effectiveToken}`;
+        headers['Authorization'] = `Bearer ${liveKey}`;
       } else {
-        headers['X-API-Key'] = effectiveToken;
+        headers['X-API-Key'] = liveKey;
       }
 
       // Execute request against current origin
-      const res = await fetch(activeScenario.path, {
+      const target = resolve(activeScenario);
+      const res = await fetch(target.path, {
         method: activeScenario.method,
         headers,
-        body: activeScenario.payload ? JSON.stringify(activeScenario.payload) : undefined,
+        body: target.payload ? JSON.stringify(target.payload) : undefined,
       });
 
       let json: unknown = null;
@@ -339,18 +428,19 @@ print(response.json())`;
       const durationMs = Math.round(performance.now() - start);
       setTestResult({
         status: res.status,
-        statusText: res.statusText || (res.status === 200 ? 'OK' : res.status === 202 ? 'Accepted' : 'Response'),
+        statusText:
+          res.statusText ||
+          (res.status === 200 ? 'OK' : res.status === 202 ? 'Accepted' : 'Response'),
         durationMs,
         data: json,
       });
-    } catch {
-      const durationMs = Math.round(performance.now() - start);
-      // Fallback with mock verification if offline or mock environment
+    } catch (error) {
+      // Report the failure as it is; never substitute the sample response for a real result.
       setTestResult({
-        status: activeScenario.expectedStatus,
-        statusText: activeScenario.expectedStatus === 200 ? 'OK' : 'Accepted',
-        durationMs,
-        data: activeScenario.expectedResponse,
+        status: 0,
+        statusText: 'Network error',
+        durationMs: Math.round(performance.now() - start),
+        data: { error: error instanceof Error ? error.message : 'The request could not be sent.' },
       });
     } finally {
       setIsRunningTest(false);
@@ -369,7 +459,10 @@ print(response.json())`;
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <CardTitle className="text-sm font-bold">Developer API Quickstart</CardTitle>
-                <Badge variant="outline" className="text-[10px] font-mono font-medium text-muted-foreground">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-mono font-medium text-muted-foreground"
+                >
                   {baseUrl}
                 </Badge>
                 {revealedSecret && (
@@ -401,10 +494,34 @@ print(response.json())`;
       </CardHeader>
 
       <CardContent className="p-4 sm:p-5 space-y-4">
+        {/* Live-test credential: kept in memory only */}
+        <div className="flex flex-col gap-1.5 rounded-xl border border-border/70 bg-muted/20 p-2.5">
+          <label htmlFor="quickstart-live-key" className="text-[11px] font-medium text-foreground">
+            API key for live tests
+          </label>
+          <input
+            id="quickstart-live-key"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={testKeyInput}
+            onChange={event => setTestKeyInput(event.target.value)}
+            placeholder={revealedSecret ? 'Using the key you just generated' : 'ok_live_…'}
+            className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-describedby="quickstart-live-key-help"
+          />
+          <p id="quickstart-live-key-help" className="text-[11px] text-muted-foreground">
+            Used only for &quot;Run Live Test&quot; requests from this page. It is not saved or
+            shown in the code samples. Requests that change data ask for confirmation first.
+          </p>
+        </div>
+
         {/* 2. Interactive Header Format Switcher & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-xl border border-border/70 bg-muted/20">
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-muted-foreground text-[11px] font-medium">Header formats supported:</span>
+            <span className="text-muted-foreground text-[11px] font-medium">
+              Header formats supported:
+            </span>
             <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5 shadow-2xs">
               <button
                 type="button"
@@ -464,7 +581,8 @@ print(response.json())`;
               Common Developer Scenarios
             </span>
             <span className="text-[11px] text-muted-foreground">
-              Required Scope: <code className="font-mono text-foreground font-medium">{activeScenario.scope}</code>
+              Required Scope:{' '}
+              <code className="font-mono text-foreground font-medium">{activeScenario.scope}</code>
             </span>
           </div>
 
@@ -478,6 +596,7 @@ print(response.json())`;
                   onClick={() => {
                     setActiveScenarioId(sc.id);
                     setTestResult(null);
+                    setAwaitingConfirmation(false);
                   }}
                   className={`flex flex-col items-start gap-1 p-2 rounded-lg border text-left transition-all ${
                     isSelected
@@ -499,12 +618,12 @@ print(response.json())`;
                       {sc.id === 'events'
                         ? '1. Ingest Alert'
                         : sc.id === 'incidents'
-                        ? '2. Incidents'
-                        : sc.id === 'sample'
-                        ? '3. Sample Ping'
-                        : sc.id === 'acknowledge'
-                        ? '4. Acknowledge'
-                        : '5. Services'}
+                          ? '2. Incidents'
+                          : sc.id === 'sample'
+                            ? '3. Sample Ping'
+                            : sc.id === 'acknowledge'
+                              ? '4. Acknowledge'
+                              : '5. Services'}
                     </span>
                   </div>
                   <span className="text-[10px] text-muted-foreground truncate w-full font-mono">
@@ -528,7 +647,11 @@ print(response.json())`;
         </div>
 
         {/* 5. Language Tabs & Code Display */}
-        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as LanguageType)} className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={v => setActiveTab(v as LanguageType)}
+          className="w-full"
+        >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
             <TabsList className="h-8 bg-muted/60">
               <TabsTrigger value="curl" className="text-xs gap-1.5 h-7">
@@ -550,8 +673,17 @@ print(response.json())`;
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={executeLiveTest}
-                disabled={isRunningTest}
+                onClick={requestLiveTest}
+                disabled={isRunningTest || !liveKey || missingParams(activeScenario).length > 0}
+                title={
+                  !liveKey
+                    ? 'Enter an API key above to run live tests'
+                    : missingParams(activeScenario).length > 0
+                      ? `Enter ${missingParams(activeScenario)
+                          .map(param => param.label)
+                          .join(' and ')} to run this test`
+                      : undefined
+                }
                 className="h-7 text-xs gap-1.5 border-primary/30 hover:bg-primary/5 text-primary"
               >
                 {isRunningTest ? (
@@ -580,7 +712,11 @@ print(response.json())`;
                 }
                 className="h-7 text-xs gap-1.5"
               >
-                {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                {copied ? (
+                  <Check className="h-3 w-3 text-emerald-500" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
                 {copied ? 'Copied!' : 'Copy'}
               </Button>
             </div>
@@ -592,17 +728,23 @@ print(response.json())`;
               <>
                 {/* cURL */}
                 <TabsContent value="curl" className="m-0">
-                  <pre className="leading-relaxed whitespace-pre-wrap">{generateCurl(activeScenario)}</pre>
+                  <pre className="leading-relaxed whitespace-pre-wrap">
+                    {generateCurl(activeScenario)}
+                  </pre>
                 </TabsContent>
 
                 {/* Node.js */}
                 <TabsContent value="node" className="m-0">
-                  <pre className="leading-relaxed whitespace-pre-wrap">{generateNode(activeScenario)}</pre>
+                  <pre className="leading-relaxed whitespace-pre-wrap">
+                    {generateNode(activeScenario)}
+                  </pre>
                 </TabsContent>
 
                 {/* Python */}
                 <TabsContent value="python" className="m-0">
-                  <pre className="leading-relaxed whitespace-pre-wrap">{generatePython(activeScenario)}</pre>
+                  <pre className="leading-relaxed whitespace-pre-wrap">
+                    {generatePython(activeScenario)}
+                  </pre>
                 </TabsContent>
               </>
             ) : (
@@ -626,24 +768,95 @@ print(response.json())`;
         </Tabs>
 
         {/* 5. Live Test Result Drawer (Shows actual runtime test output) */}
+        {awaitingConfirmation && (
+          <div
+            role="alertdialog"
+            aria-labelledby="quickstart-confirm-title"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3"
+          >
+            <p id="quickstart-confirm-title" className="text-xs text-foreground">
+              <span className="font-mono font-semibold">
+                {activeScenario.method} {resolve(activeScenario).path}
+              </span>{' '}
+              sends a real request that changes data in this workspace.
+            </p>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setAwaitingConfirmation(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => void executeLiveTest()}
+              >
+                Send request
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {activeScenario.params && activeScenario.params.length > 0 && (
+          <div className="grid gap-2 sm:grid-cols-2 rounded-xl border border-border/70 bg-muted/20 p-2.5">
+            {activeScenario.params.map(param => (
+              <label key={param.name} className="flex flex-col gap-1 text-[11px] font-medium">
+                {param.label} (required for live test)
+                <input
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={paramValues[param.name] ?? ''}
+                  onChange={event =>
+                    setParamValues(prev => ({ ...prev, [param.name]: event.target.value }))
+                  }
+                  placeholder={param.placeholder}
+                  aria-invalid={invalidParams(activeScenario).some(p => p.name === param.name)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                {invalidParams(activeScenario).some(p => p.name === param.name) && (
+                  <span
+                    role="alert"
+                    className="text-[11px] font-normal text-rose-600 dark:text-rose-400"
+                  >
+                    IDs contain only letters, numbers, hyphens and underscores.
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+        )}
+
         {testResult && (
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 space-y-2 animate-in fade-in-50 duration-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Badge
                   className={
-                    testResult.status < 300
+                    resultSucceeded
                       ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 text-[10px]'
                       : 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 text-[10px]'
                   }
                 >
-                  HTTP {testResult.status} {testResult.statusText}
+                  {testResult.status === 0
+                    ? 'Request failed'
+                    : `HTTP ${testResult.status} ${testResult.statusText}`}
+                  {testResult.status !== 0 && !resultSucceeded && testResult.status < 300
+                    ? ' · not authenticated'
+                    : ''}
                 </Badge>
                 <span className="text-[11px] text-muted-foreground">
-                  Latency: <span className="font-semibold text-foreground">{testResult.durationMs}ms</span>
+                  Latency:{' '}
+                  <span className="font-semibold text-foreground">{testResult.durationMs}ms</span>
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  Route: <code className="font-mono text-foreground">{activeScenario.path}</code>
+                  Route:{' '}
+                  <code className="font-mono text-foreground">{resolve(activeScenario).path}</code>
                 </span>
               </div>
 

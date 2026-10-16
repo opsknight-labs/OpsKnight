@@ -164,7 +164,9 @@ export function apiV2Error(
         message: f.message ?? 'Invalid value',
       }));
     }
-    if (error.details) {
+    // Internal errors are a serialization boundary: their message is already replaced by the
+    // generic one, and their diagnostic details must not reach the client either.
+    if (error.details && error.exposure !== 'internal' && publicError.code !== 'INTERNAL_ERROR') {
       meta = sanitizeJsonValue(error.details);
     }
   } else if (typeof error === 'string') {

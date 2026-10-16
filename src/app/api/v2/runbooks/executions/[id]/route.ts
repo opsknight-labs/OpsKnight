@@ -10,6 +10,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { redactRunbookOutput } from '@/lib/runbooks/redaction';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -58,7 +59,14 @@ export const GET = withV2Observability(async function GET(
       triggeredByUserId: execution.triggeredByUserId,
       startedAt: execution.startedAt,
       completedAt: execution.completedAt,
-      steps: execution.steps,
+      // Defense in depth: agent errors are redacted when stored, but never trust stored text to be
+      // free of secrets or unbounded; redact and bound again at the public boundary.
+      steps: execution.steps.map(step => ({
+        ...step,
+        errorMessage: step.errorMessage
+          ? redactRunbookOutput(step.errorMessage).slice(0, 2000)
+          : step.errorMessage,
+      })),
       createdAt: execution.createdAt,
       updatedAt: execution.updatedAt,
     };

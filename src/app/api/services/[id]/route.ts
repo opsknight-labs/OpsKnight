@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const apiKey = await authenticateApiKey(req);
     if (!apiKey) {
       return jsonError(
-        new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+        new AppError({ code: 'API_KEY_INVALID' })
       );
     }
 

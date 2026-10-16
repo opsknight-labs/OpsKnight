@@ -16,7 +16,8 @@ import { withV2Observability } from '@/lib/api-v2/observability';
 export const GET = withV2Observability(async function GET(req: NextRequest) {
   try {
     const { apiKey, actor } = await authenticateV2Request(req);
-    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
+    // Aggregations are expensive: use the stricter search/export budget.
+    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'SEARCH_EXPORT');
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.REPORT_READ);
 
     const { searchParams } = new URL(req.url);

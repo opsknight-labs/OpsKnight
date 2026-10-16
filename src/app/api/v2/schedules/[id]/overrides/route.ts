@@ -8,6 +8,7 @@ import {
   enforceV2Authorization,
   enforceV2RateLimit,
   logV2Audit,
+  parsePaginationParams,
   ScheduleOverrideV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -15,6 +16,7 @@ import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { createScheduleOverrideMutation } from '@/lib/schedules/mutations';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { decodeCursor, encodeCursor } from '@/lib/api-v2/pagination';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -51,9 +53,22 @@ export const GET = withV2Observability(async function GET(
       });
     }
 
+    // Bounded and cursor-paginated, keeping the established order (latest start first). The signed
+    // cursor carries the last row's start time and id, so paging is stable on (start, id).
+    const { limit, cursor } = parsePaginationParams(new URL(req.url).searchParams);
+    const after = cursor ? decodeCursor(cursor) : null;
+    const afterStart = after ? new Date(after.createdAt) : null;
     const overrides = await prisma.onCallOverride.findMany({
-      where: { scheduleId: id },
-      orderBy: { start: 'desc' },
+      where: {
+        AND: [
+          { scheduleId: id },
+          ...(after && afterStart
+            ? [{ OR: [{ start: { lt: afterStart } }, { start: afterStart, id: { lt: after.id } }] }]
+            : []),
+        ],
+      },
+      orderBy: [{ start: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       select: {
         id: true,
         scheduleId: true,
@@ -66,13 +81,22 @@ export const GET = withV2Observability(async function GET(
       },
     });
 
-    const dto = overrides.map(o => ({
+    const hasMore = overrides.length > limit;
+    const rows = hasMore ? overrides.slice(0, limit) : overrides;
+    const last = rows[rows.length - 1];
+    const pagination = {
+      limit,
+      hasMore,
+      nextCursor:
+        hasMore && last ? encodeCursor({ id: last.id, createdAt: last.start.toISOString() }) : null,
+    };
+    const dto = rows.map(o => ({
       ...o,
       startDate: o.start,
       endDate: o.end,
     }));
 
-    return apiV2Success(dto, { headers: rlHeaders });
+    return apiV2Success(dto, { pagination, headers: rlHeaders });
   } catch (error) {
     return apiV2Error(error, req);
   }

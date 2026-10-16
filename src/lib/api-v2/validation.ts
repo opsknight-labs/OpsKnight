@@ -183,7 +183,10 @@ export const StatusPageCreateV2Schema = z.object({
     .max(100)
     .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase letters, numbers, and hyphens'),
   isDefault: z.boolean().default(false),
-  description: z.string().trim().max(1000).optional().nullable(),
+  // Status pages have no description column; reject rather than silently drop it.
+  description: z
+    .never({ message: 'description is not supported for status pages over REST.' })
+    .optional(),
 });
 
 export const StatusPageUpdateV2Schema = z.object({
@@ -196,7 +199,9 @@ export const StatusPageUpdateV2Schema = z.object({
     .regex(/^[a-z0-9-]+$/)
     .optional(),
   isDefault: z.boolean().optional(),
-  description: z.string().trim().max(1000).optional().nullable(),
+  description: z
+    .never({ message: 'description is not supported for status pages over REST.' })
+    .optional(),
   enabled: z.boolean().optional(),
 });
 
@@ -261,7 +266,13 @@ export const PostmortemCreateV2Schema = z.object({
   rootCause: z.string().trim().max(5000).optional(),
   resolution: z.string().trim().max(5000).optional(),
   mitigation: z.string().trim().max(5000).optional(),
-  impact: z.string().trim().max(5000).optional(),
+  // Accepting and then dropping a field would report success for data that was never stored.
+  impact: z
+    .never({
+      message:
+        'impact is not supported over REST: postmortem impact is structured data managed in the product UI.',
+    })
+    .optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED']).default('DRAFT'),
   isPublic: z.boolean().default(true),
@@ -273,7 +284,13 @@ export const PostmortemUpdateV2Schema = z.object({
   rootCause: z.string().trim().max(5000).optional(),
   resolution: z.string().trim().max(5000).optional(),
   mitigation: z.string().trim().max(5000).optional(),
-  impact: z.string().trim().max(5000).optional(),
+  // Accepting and then dropping a field would report success for data that was never stored.
+  impact: z
+    .never({
+      message:
+        'impact is not supported over REST: postmortem impact is structured data managed in the product UI.',
+    })
+    .optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
   isPublic: z.boolean().optional(),
