@@ -1,8 +1,16 @@
 import Link from 'next/link';
-import { GitBranch, GitCompare } from 'lucide-react';
+import {
+  Archive,
+  Check,
+  CheckCircle2,
+  GitBranch,
+  GitCompare,
+  History,
+  PencilLine,
+} from 'lucide-react';
 import { ConfirmAction, type RunbookFormAction } from '@/components/runbooks/RunbookControls';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
-import { EmptyHint, Pill } from '@/components/runbooks/ui/primitives';
+import { EmptyHint } from '@/components/runbooks/ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 
@@ -24,32 +32,28 @@ export type VersionTimelineItem = {
   retireAction?: RunbookFormAction;
 };
 
-const DOT_STYLES: Record<
+const NODE_CONFIG: Record<
   string,
   {
     ring: string;
-    dot: string;
-    glow: string;
-    pulseRing: string;
+    icon: typeof Check;
+    iconClass: string;
   }
 > = {
   PUBLISHED: {
-    ring: 'border-emerald-500/40 bg-emerald-500/10 ring-emerald-500/20 text-emerald-600 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:ring-emerald-400/20 dark:text-emerald-400',
-    dot: 'bg-emerald-500 dark:bg-emerald-400',
-    glow: 'shadow-[0_0_10px_rgba(16,185,129,0.5)]',
-    pulseRing: 'bg-emerald-400 dark:bg-emerald-300',
+    ring: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-400',
+    icon: Check,
+    iconClass: 'h-3.5 w-3.5',
   },
   DRAFT: {
-    ring: 'border-amber-500/40 bg-amber-500/10 ring-amber-500/20 text-amber-600 dark:border-amber-400/40 dark:bg-amber-400/10 dark:ring-amber-400/20 dark:text-amber-400',
-    dot: 'bg-amber-500 dark:bg-amber-400',
-    glow: 'shadow-[0_0_10px_rgba(245,158,11,0.5)]',
-    pulseRing: 'bg-amber-400 dark:bg-amber-300',
+    ring: 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:border-amber-400/50 dark:bg-amber-400/10 dark:text-amber-400',
+    icon: PencilLine,
+    iconClass: 'h-3.5 w-3.5',
   },
   RETIRED: {
-    ring: 'border-border/70 bg-muted/70 ring-border/40 text-muted-foreground',
-    dot: 'bg-muted-foreground/60',
-    glow: '',
-    pulseRing: '',
+    ring: 'border-border/80 bg-muted/80 text-muted-foreground',
+    icon: Archive,
+    iconClass: 'h-3 w-3',
   },
 };
 
@@ -71,47 +75,33 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
     <ol aria-label="Version history" className="relative space-y-0">
       {versions.map((version, index) => {
         const isLast = index === versions.length - 1;
-        const style = DOT_STYLES[version.state] ?? DOT_STYLES.RETIRED;
+        const config = NODE_CONFIG[version.state] ?? NODE_CONFIG.RETIRED;
+        const NodeIcon = config.icon;
+
         return (
-          <li key={version.id} className="relative pb-6 pl-10 last:pb-0">
+          <li key={version.id} className="relative pb-6 pl-12 last:pb-0">
             {!isLast && (
               <span
                 aria-hidden="true"
-                className="absolute left-[13px] top-6 -bottom-6 w-0.5 bg-border/70 dark:bg-border/50"
+                className="absolute left-[15px] top-8 -bottom-6 w-0.5 bg-border/60 dark:bg-border/40"
               />
             )}
             <span
               aria-hidden="true"
               className={cn(
-                'absolute left-0 top-3.5 flex h-7 w-7 items-center justify-center rounded-full border ring-4 ring-background shadow-xs z-10 transition-colors',
-                style.ring,
-                version.isCurrentPublished && 'shadow-[0_0_14px_rgba(16,185,129,0.35)]'
+                'absolute left-0 top-3.5 flex h-8 w-8 items-center justify-center rounded-full border ring-4 ring-background shadow-2xs z-10 transition-colors',
+                config.ring
               )}
             >
-              {version.isCurrentPublished && (
-                <span
-                  className={cn(
-                    'absolute inline-flex h-full w-full rounded-full opacity-40 animate-ping motion-reduce:hidden',
-                    style.pulseRing
-                  )}
-                  aria-hidden="true"
-                />
-              )}
-              <span
-                className={cn(
-                  'relative inline-flex h-2.5 w-2.5 rounded-full shrink-0 z-10 transition-transform',
-                  style.dot,
-                  style.glow
-                )}
-              />
+              <NodeIcon className={config.iconClass} strokeWidth={2.5} aria-hidden="true" />
             </span>
             <article
               className={cn(
-                'flex flex-col gap-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 sm:flex-row sm:items-start sm:justify-between',
+                'flex flex-col gap-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-5 shadow-xs hover:border-border hover:shadow-md transition-all duration-200 sm:flex-row sm:items-start sm:justify-between',
                 version.isCurrentPublished &&
-                  'border-emerald-500/40 bg-emerald-500/[0.02] shadow-[0_0_24px_-12px_rgba(16,185,129,0.2)] dark:border-emerald-500/30 dark:bg-emerald-500/[0.03]',
+                  'border-emerald-500/40 bg-emerald-500/[0.02] dark:border-emerald-500/30 dark:bg-emerald-500/[0.03]',
                 version.isCurrentDraft &&
-                  'border-amber-500/40 bg-amber-500/[0.02] shadow-[0_0_24px_-12px_rgba(245,158,11,0.2)] dark:border-amber-500/30 dark:bg-amber-500/[0.03]'
+                  'border-amber-500/40 bg-amber-500/[0.02] dark:border-amber-500/30 dark:bg-amber-500/[0.03]'
               )}
             >
               <div className="min-w-0 space-y-1.5">
@@ -127,10 +117,10 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
                   <RunbookStatusBadge status={version.state} context="lifecycle" size="sm" />
                   {version.isCurrentPublished && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">
-                      <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
-                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      </span>
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0"
+                        aria-hidden="true"
+                      />
                       <span>Live</span>
                     </span>
                   )}
@@ -140,7 +130,7 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
                         className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
                         aria-hidden="true"
                       />
-                      <span>Editable</span>
+                      <span>Editable Draft</span>
                     </span>
                   )}
                 </div>
@@ -173,7 +163,12 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
               {(version.compareHref || version.restoreAction || version.retireAction) && (
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {version.compareHref && (
-                    <Button asChild variant="outline" size="sm">
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-xl text-xs gap-1.5 shadow-2xs"
+                    >
                       <Link href={version.compareHref}>
                         <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
                         Compare with published
