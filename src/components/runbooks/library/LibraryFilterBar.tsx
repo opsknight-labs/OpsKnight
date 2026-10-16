@@ -91,8 +91,8 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
   const visibleTags = popularTags.filter(item => item.tag !== activeTag).slice(0, MAX_TAG_CHIPS);
 
   return (
-    <div className="space-y-3 rounded-xl border bg-card p-3 shadow-xs sm:p-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-colors">
+      <div className="flex flex-wrap items-center gap-2.5">
         <form
           role="search"
           onSubmit={e => {

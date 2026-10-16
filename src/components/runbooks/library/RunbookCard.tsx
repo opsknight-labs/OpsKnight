@@ -106,16 +106,32 @@ export function RunbookCard({
   return (
     <article
       className={cn(
-        'group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-md hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5',
-        isList ? 'flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-6' : 'flex-col p-5 sm:p-6',
-        isArchived && 'bg-muted/30 opacity-75'
+        'group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/50 focus-within:shadow-md hover:border-border hover:shadow-md hover:-translate-y-0.5',
+        isList
+          ? 'flex-col gap-3.5 p-4 sm:flex-row sm:items-center sm:gap-6'
+          : 'flex-col p-5 sm:p-6',
+        isPublished &&
+          'shadow-[0_0_24px_-12px_rgba(16,185,129,0.12)] hover:border-emerald-500/40 hover:shadow-[0_0_24px_-8px_rgba(16,185,129,0.2)]',
+        !isPublished &&
+          !isArchived &&
+          'shadow-[0_0_24px_-12px_rgba(245,158,11,0.12)] hover:border-amber-500/40 hover:shadow-[0_0_24px_-8px_rgba(245,158,11,0.2)]',
+        isArchived && 'bg-muted/30 opacity-75 hover:opacity-100'
       )}
     >
       <div className={cn('min-w-0 flex-1', isList ? 'space-y-1.5' : 'space-y-3.5')}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs group-hover:scale-105 transition-transform">
-              <BookOpen className="h-4 w-4" aria-hidden="true" />
+            <div
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border shadow-2xs group-hover:scale-105 transition-all',
+                isPublished
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                  : isArchived
+                    ? 'bg-muted/60 text-muted-foreground border-border/60'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+              )}
+            >
+              <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
             </div>
             <h2 className="min-w-0 text-base font-bold leading-snug tracking-tight">
               <Link
@@ -128,11 +144,23 @@ export function RunbookCard({
           </div>
           <div className="relative z-10 flex flex-wrap items-center justify-end gap-1.5 shrink-0">
             <RunbookStatusBadge status={statusLabel} size="sm" context="lifecycle" />
-            {isPublished && <Pill className="font-mono">v{runbook.publishedVersion}</Pill>}
+            {isPublished && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">
+                <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                <span>Live v{runbook.publishedVersion}</span>
+              </span>
+            )}
             {runbook.draftVersion && isPublished && (
-              <Pill tone="warning" className="font-mono">
-                draft v{runbook.draftVersion}
-              </Pill>
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300 font-mono shadow-2xs">
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
+                  aria-hidden="true"
+                />
+                <span>draft v{runbook.draftVersion}</span>
+              </span>
             )}
           </div>
         </div>
