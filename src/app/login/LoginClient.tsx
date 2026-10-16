@@ -230,11 +230,11 @@ export default function LoginClient({
             <button
               type="button"
               onClick={() => setShowPasswordSet(false)}
-              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 transition-colors cursor-pointer"
+              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full border border-slate-300/70 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 dark:border-white/25 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Dismiss message"
               title="Dismiss"
             >
-              <X className="h-3.5 w-3.5 stroke-[2.25]" />
+              <X className="h-3.5 w-3.5 stroke-[2.5]" />
             </button>
           </div>
         )}
@@ -261,11 +261,11 @@ export default function LoginClient({
             <button
               type="button"
               onClick={() => setError('')}
-              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 transition-colors cursor-pointer"
+              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full border border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
               aria-label="Dismiss error"
               title="Dismiss"
             >
-              <X className="h-3.5 w-3.5 stroke-[2.25]" />
+              <X className="h-3.5 w-3.5 stroke-[2.5]" />
             </button>
           </div>
         )}
