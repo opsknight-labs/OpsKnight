@@ -33,6 +33,7 @@ export default function AuthenticationAccessWorkspace() {
     pending,
     perform,
     update,
+    setMessage,
     inputClass,
     sectionClass,
     scimSection,
@@ -264,6 +265,7 @@ export default function AuthenticationAccessWorkspace() {
                     claims: JSON.parse(claims),
                   })
                 );
+                setMessage('Identity and role preview generated.');
               })
             }
           >

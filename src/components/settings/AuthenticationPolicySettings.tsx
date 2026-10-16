@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { changeAuthenticationMode } from '@/app/(app)/settings/system/authentication-actions';
 import type { AuthenticationMode } from '@/lib/authentication-policy-evaluator';
+import { notify as toast } from '@/lib/toast';
+import { Eye, EyeOff } from 'lucide-react';
+import { useRateLimitCountdown } from './authentication/useRateLimitCountdown';
 
 const labels = {
   PASSWORD_ONLY: 'Password Only',
@@ -25,6 +28,8 @@ export default function AuthenticationPolicySettings({
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const { displayMessage: liveMessage } = useRateLimitCountdown(message);
   return (
     <section
       className="space-y-4 rounded-lg border border-border p-4 sm:p-6"
@@ -54,13 +59,15 @@ export default function AuthenticationPolicySettings({
             setCurrent(result);
             setConfirmed(false);
             setPassword('');
-            setMessage(
-              'Authentication policy updated. Disallowed sessions will be rejected on their next protected request.'
-            );
+            const successMessage =
+              'Authentication policy updated. Disallowed sessions will be rejected on their next protected request.';
+            setMessage(successMessage);
+            toast.success('Authentication update', { description: successMessage });
           } catch (error) {
-            setMessage(
-              error instanceof Error ? error.message : 'Unable to change authentication policy.'
-            );
+            const errorMessage =
+              error instanceof Error ? error.message : 'Unable to change authentication policy.';
+            setMessage(errorMessage);
+            toast.error('Action could not complete', { description: errorMessage });
           } finally {
             setPending(false);
           }
@@ -101,16 +108,26 @@ export default function AuthenticationPolicySettings({
         {mode === 'PASSWORD_ONLY' && mode !== current.mode && (
           <label className="block space-y-1 text-sm" htmlFor="policy-current-password">
             <span>Verify your current password</span>
-            <input
-              id="policy-current-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              disabled={pending}
-              required
-              className="block w-full rounded-md border border-border bg-background p-2 sm:max-w-md"
-            />
+            <div className="relative sm:max-w-md">
+              <input
+                id="policy-current-password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                disabled={pending}
+                required
+                className="block w-full rounded-md border border-border bg-background p-2 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </label>
         )}
         <label className="flex items-start gap-2 text-sm">
@@ -132,7 +149,7 @@ export default function AuthenticationPolicySettings({
           {pending ? 'Updating…' : 'Change authentication policy'}
         </button>
         <p role="status" aria-live="polite" className="text-sm">
-          {message}
+          {liveMessage}
         </p>
       </form>
     </section>

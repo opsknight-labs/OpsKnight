@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import {
   KeyRound,
   ShieldAlert,
@@ -10,6 +11,8 @@ import {
   ChevronRight,
   ShieldCheck,
   UserCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import AuthenticationActionGuard, { actionAvailability } from './AuthenticationActionGuard';
 import RecoveryAccounts from './RecoveryAccounts';
@@ -36,6 +39,8 @@ export default function AuthenticationRecoveryWorkspace() {
     inputClass,
     sectionClass,
   } = useAuthenticationWorkspace();
+
+  const [showReauthPassword, setShowReauthPassword] = useState(false);
 
   return (
     <section className={sectionClass} aria-labelledby="emergency-access-title">
@@ -179,6 +184,7 @@ export default function AuthenticationRecoveryWorkspace() {
                 void perform(async () => {
                   await authenticationRequest({ action: 'retireLegacy' });
                   await refresh();
+                  setMessage('Legacy emergency password retired successfully.');
                 })
               }
             >
@@ -231,23 +237,38 @@ export default function AuthenticationRecoveryWorkspace() {
                         '/api/auth/emergency'
                       );
                       await refresh();
+                      setMessage('Recovery credentials verified successfully.');
                     } finally {
                       setRecoveryReauthPassword('');
                     }
                   });
                 }}
               >
-                <input
-                  aria-label="Recovery password for fresh verification"
-                  className={inputClass}
-                  type="password"
-                  placeholder="Enter recovery password"
-                  autoComplete="current-password"
-                  required
-                  value={recoveryReauthPassword}
-                  onChange={event => setRecoveryReauthPassword(event.target.value)}
-                  disabled={pending}
-                />
+                <div className="relative flex-1">
+                  <input
+                    aria-label="Recovery password for fresh verification"
+                    className={`${inputClass} pr-10`}
+                    type={showReauthPassword ? 'text' : 'password'}
+                    placeholder="Enter recovery password"
+                    autoComplete="current-password"
+                    required
+                    value={recoveryReauthPassword}
+                    onChange={event => setRecoveryReauthPassword(event.target.value)}
+                    disabled={pending}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowReauthPassword(prev => !prev)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={showReauthPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showReauthPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
                 <Button type="submit" disabled={pending} className="shrink-0 gap-1.5">
                   <RefreshCw className="h-4 w-4" />
                   Verify recovery password again
@@ -354,6 +375,7 @@ function PasswordAccessRecovery() {
   const selfService = data.actor.kind === 'admin';
   const targetId = selfService ? data.actor.id : adminId;
   const self = data.users.find(user => user.id === data.actor.id);
+  const [showRestorePassword, setShowRestorePassword] = useState(false);
 
   return (
     <details className="group rounded-xl border border-border/80 bg-muted/20 p-4 transition-all open:ring-1 open:ring-border">
@@ -416,14 +438,24 @@ function PasswordAccessRecovery() {
 
         <label className="block space-y-1.5 text-xs font-medium">
           <span className="text-foreground">New strong administrator password</span>
-          <input
-            className={inputClass}
-            type="password"
-            placeholder="Enter a new strong password"
-            autoComplete="new-password"
-            value={password}
-            onChange={event => setPassword(event.target.value)}
-          />
+          <div className="relative">
+            <input
+              className={`${inputClass} pr-10`}
+              type={showRestorePassword ? 'text' : 'password'}
+              placeholder="Enter a new strong password"
+              autoComplete="new-password"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowRestorePassword(prev => !prev)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={showRestorePassword ? 'Hide password' : 'Show password'}
+            >
+              {showRestorePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </label>
 
         <label className="flex items-start gap-2.5 cursor-pointer select-none">

@@ -220,10 +220,25 @@ export async function POST(request: NextRequest) {
           'changeEmergencyMethod',
         ].includes(input.action)
     );
-    if (
-      !(await consumeAuthRateLimit('auth-control', `${actor.kind}:${actor.id}`, 60, 300000)).allowed
-    )
-      throw new Error('Too many authentication operations. Try again later.');
+    const controlRateLimit = await consumeAuthRateLimit(
+      'auth-control',
+      `${actor.kind}:${actor.id}`,
+      60,
+      300000
+    );
+    if (!controlRateLimit.allowed) {
+      const remainingMs = Math.max(1000, controlRateLimit.resetAt - Date.now());
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+      const timeText =
+        minutes > 0
+          ? seconds > 0
+            ? `${minutes}m ${seconds}s`
+            : `${minutes} minute${minutes === 1 ? '' : 's'}`
+          : `${seconds} second${seconds === 1 ? '' : 's'}`;
+      throw new Error(`Too many authentication operations. Try again in ${timeText}.`);
+    }
     switch (input.action) {
       case 'repairOrigin':
         return json(await repairCanonicalOrigin(actor, input.expectedVersion));
