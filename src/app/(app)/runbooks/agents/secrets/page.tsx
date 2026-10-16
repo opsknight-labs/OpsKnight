@@ -21,6 +21,7 @@ import {
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
 } from '@/components/runbooks/RunbookPagination';
+
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -267,7 +268,7 @@ export default async function RunbookSecretsPage({
           >
             <div aria-labelledby="secret-detail-title" className="space-y-6">
               <section aria-labelledby="secret-grants-title" className="space-y-3">
-                <h3 id="secret-grants-title" className="text-sm font-semibold">
+                <h3 id="secret-grants-title" className="!text-sm !leading-snug font-semibold">
                   Grants
                 </h3>
                 {grants.length > 0 ? (
@@ -357,7 +358,7 @@ export default async function RunbookSecretsPage({
                 aria-labelledby="secret-rotate-title"
                 className="space-y-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:p-5"
               >
-                <h3 id="secret-rotate-title" className="text-sm font-semibold">
+                <h3 id="secret-rotate-title" className="!text-sm !leading-snug font-semibold">
                   Rotate value
                 </h3>
                 <ActionForm

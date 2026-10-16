@@ -197,7 +197,7 @@ export function ExecutionStepTimeline({
           <li
             key={step.id}
             id={`step-${step.id}`}
-            className={cn('relative scroll-mt-48 pl-12', !last && 'pb-6')}
+            className={cn('relative scroll-mt-48', !last && 'pb-6')}
           >
             {!last && (
               <span
@@ -221,7 +221,7 @@ export function ExecutionStepTimeline({
             <article
               aria-label={`Step ${index + 1}: ${step.name}`}
               className={cn(
-                'rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200 overflow-hidden',
+                'ml-12 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200 overflow-hidden',
                 failed && 'border-rose-500/40 bg-rose-500/[0.02]',
                 step.pendingApproval && 'border-amber-500/50 bg-amber-500/[0.02]'
               )}

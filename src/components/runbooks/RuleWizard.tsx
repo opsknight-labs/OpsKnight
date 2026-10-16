@@ -171,7 +171,7 @@ export default function RuleWizard({
           ref={heading}
           tabIndex={-1}
           id={id}
-          className="text-base font-semibold tracking-tight outline-none"
+          className="!text-base !leading-snug font-semibold tracking-tight outline-none"
         >
           {step?.title}
         </h3>

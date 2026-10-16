@@ -72,7 +72,9 @@ export function SectionCard({
             )}
             <div className="min-w-0">
               {title && (
-                <h2 className="text-sm font-bold tracking-tight text-foreground">{title}</h2>
+                <h2 className="!text-sm !font-bold !tracking-tight !leading-snug text-foreground">
+                  {title}
+                </h2>
               )}
               {description && (
                 <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">

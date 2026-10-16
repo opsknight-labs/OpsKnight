@@ -87,7 +87,7 @@ export default async function RunbookFleetSecurityPage() {
           >
             {activeKey ? (
               <section aria-labelledby="pinned-key-title" className="space-y-2">
-                <h3 id="pinned-key-title" className="text-sm font-semibold">
+                <h3 id="pinned-key-title" className="!text-sm !leading-snug font-semibold">
                   Pinned execution public key
                 </h3>
                 <p className="text-xs text-muted-foreground">
@@ -108,7 +108,7 @@ export default async function RunbookFleetSecurityPage() {
                 aria-labelledby="key-rotation-title"
                 className="space-y-3 border-t border-border/60 pt-4"
               >
-                <h3 id="key-rotation-title" className="text-sm font-semibold">
+                <h3 id="key-rotation-title" className="!text-sm !leading-snug font-semibold">
                   Overlapping rotation
                 </h3>
                 <ol className="grid gap-2.5 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">

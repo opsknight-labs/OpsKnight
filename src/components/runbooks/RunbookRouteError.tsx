@@ -38,7 +38,9 @@ export function RunbookRouteError({
         <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-inset ring-destructive/20">
           <AlertCircle className="h-5 w-5 text-destructive" aria-hidden />
         </span>
-        <h2 className="mt-4 text-base font-semibold tracking-tight text-foreground">{title}</h2>
+        <h2 className="mt-4 !text-base !leading-snug font-semibold tracking-tight text-foreground">
+          {title}
+        </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
           {getUserFacingErrorMessage(error)}
         </p>

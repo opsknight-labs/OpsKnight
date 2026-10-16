@@ -79,7 +79,7 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
         const NodeIcon = config.icon;
 
         return (
-          <li key={version.id} className="relative pb-6 pl-12 last:pb-0">
+          <li key={version.id} className="relative pb-6 last:pb-0">
             {!isLast && (
               <span
                 aria-hidden="true"
@@ -97,7 +97,7 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
             </span>
             <article
               className={cn(
-                'flex flex-col gap-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-5 shadow-xs hover:border-border hover:shadow-md transition-all duration-200 sm:flex-row sm:items-start sm:justify-between',
+                'ml-12 flex flex-col gap-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-5 shadow-xs hover:border-border hover:shadow-md transition-all duration-200 sm:flex-row sm:items-start sm:justify-between',
                 version.isCurrentPublished &&
                   'border-emerald-500/40 bg-emerald-500/[0.02] dark:border-emerald-500/30 dark:bg-emerald-500/[0.03]',
                 version.isCurrentDraft &&
@@ -106,7 +106,7 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
             >
               <div className="min-w-0 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold">
+                  <h3 className="!text-sm !leading-snug font-semibold">
                     <Link
                       className="rounded-sm text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       href={version.viewHref}

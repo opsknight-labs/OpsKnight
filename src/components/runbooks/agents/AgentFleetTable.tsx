@@ -264,7 +264,9 @@ export function AgentFleetTable({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <StatusDot status={agent.effectiveStatus} />
-                    <h3 className="truncate text-sm font-semibold text-foreground">{agent.name}</h3>
+                    <h3 className="truncate !text-sm !leading-snug font-semibold text-foreground">
+                      {agent.name}
+                    </h3>
                   </div>
                   <p className="mt-0.5 truncate pl-4 font-mono text-[11px] text-muted-foreground">
                     {agent.hostname || 'Awaiting enrollment handshake'}

@@ -506,7 +506,7 @@ export default function RunbookBuilder({
                     <h2
                       id={`step-heading-${activeStepId}`}
                       tabIndex={-1}
-                      className="break-words text-lg font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="break-words !text-lg !leading-snug font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       Step {selectedStepIndex + 1}: {selectedStep.name || 'Untitled step'}
                     </h2>

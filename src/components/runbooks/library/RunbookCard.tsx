@@ -133,7 +133,7 @@ export function RunbookCard({
             >
               <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
             </div>
-            <h2 className="min-w-0 text-base font-bold leading-snug tracking-tight">
+            <h2 className="min-w-0 !text-base !leading-snug font-bold tracking-tight">
               <Link
                 href={href}
                 className="break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:underline group-hover:text-primary transition-colors"

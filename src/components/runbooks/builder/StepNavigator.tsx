@@ -70,7 +70,7 @@ export default function StepNavigator({
     >
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Steps</h3>
+          <h3 className="!text-sm !leading-snug font-semibold text-foreground">Steps</h3>
           <p className="text-xs text-muted-foreground">
             <span className="tabular-nums">{steps.length}</span>{' '}
             {steps.length === 1 ? 'step runs' : 'steps run'} top to bottom

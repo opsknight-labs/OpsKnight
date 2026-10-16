@@ -49,6 +49,13 @@ import { parseRunbookMetadataForm } from '@/lib/runbooks/metadata-form';
 
 const idSchema = z.string().cuid();
 
+function revalidateAgentFleet() {
+  revalidatePath('/runbooks/agents');
+  revalidatePath('/runbooks/agents/pools');
+  revalidatePath('/runbooks/agents/secrets');
+  revalidatePath('/runbooks/agents/security');
+}
+
 export async function rotateRunbookSecretAction(secretId: string, formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   await rotateRunbookSecret(
@@ -56,7 +63,7 @@ export async function rotateRunbookSecretAction(secretId: string, formData: Form
     { value: readString(formData, 'value') },
     actor.id
   );
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 function readString(formData: FormData, key: string): string {
@@ -288,7 +295,7 @@ export async function createAgentEnrollmentAction(
         expiresAt: enrollment.enrollmentExpiresAt.toISOString(),
       },
     });
-    revalidatePath('/runbooks/agents');
+    revalidateAgentFleet();
     return {
       token: enrollment.token,
       executionPublicKey: enrollment.executionPublicKey,
@@ -326,7 +333,7 @@ export async function revokeAgentAction(agentId: string) {
       tx
     );
   });
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 function parseTarget(value: string) {
@@ -361,7 +368,7 @@ export async function createAgentPoolAction(formData: FormData) {
       tx
     );
   });
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function updateSchedulingLabelsAction(formData: FormData) {
@@ -384,7 +391,7 @@ export async function updateSchedulingLabelsAction(formData: FormData) {
       tx
     );
   });
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function rotateExecutionSigningIdentityAction(formData: FormData) {
@@ -403,7 +410,7 @@ export async function rotateExecutionSigningIdentityAction(formData: FormData) {
     if (error instanceof RunbookSigningRotationError) return { error: error.message };
     throw error;
   }
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function updateRunbookArtifactRetentionAction(formData: FormData) {
@@ -469,7 +476,7 @@ export async function updateIncidentRemediationBudgetAction(formData: FormData) 
       tx
     );
   });
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function addAgentToPoolAction(formData: FormData) {
@@ -493,7 +500,7 @@ export async function addAgentToPoolAction(formData: FormData) {
       tx
     );
   });
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function removeAgentFromPoolAction(memberId: string) {
@@ -516,7 +523,7 @@ export async function removeAgentFromPoolAction(memberId: string) {
       tx
     );
   });
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function createRunbookSecretAction(formData: FormData) {
@@ -530,7 +537,7 @@ export async function createRunbookSecretAction(formData: FormData) {
     parseTarget(readString(formData, 'target')),
     actor.id
   );
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function grantRunbookSecretAction(secretId: string, formData: FormData) {
@@ -540,11 +547,11 @@ export async function grantRunbookSecretAction(secretId: string, formData: FormD
     parseTarget(readString(formData, 'target')),
     actor.id
   );
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }
 
 export async function revokeRunbookSecretGrantAction(grantId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   await revokeRunbookSecretGrant(idSchema.parse(grantId), actor.id);
-  revalidatePath('/runbooks/agents');
+  revalidateAgentFleet();
 }

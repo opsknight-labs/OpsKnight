@@ -39,7 +39,9 @@ export function HealthAttentionPanel({
             <Bot className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="space-y-1">
-            <h3 className="text-base font-semibold tracking-tight">No Agents configured</h3>
+            <h3 className="!text-base !leading-snug font-semibold tracking-tight">
+              No Agents configured
+            </h3>
             <p className="text-sm text-muted-foreground">
               Fleet health is unknown until an Agent reports a heartbeat.
             </p>
@@ -102,7 +104,9 @@ export function HealthAttentionPanel({
           <HeroIcon className="h-5 w-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 space-y-1">
-          <h3 className="text-base font-bold tracking-tight text-foreground">{heroTitle}</h3>
+          <h3 className="!text-base !leading-snug font-bold tracking-tight text-foreground">
+            {heroTitle}
+          </h3>
           <p className="text-sm leading-relaxed text-muted-foreground">{heroDescription}</p>
         </div>
       </div>

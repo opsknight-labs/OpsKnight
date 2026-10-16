@@ -318,11 +318,13 @@ export default async function RunbookAgentPoolsPage({
               >
                 <div className="space-y-2 border-b border-border/60 px-5 py-4">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex min-w-0 items-start gap-2.5">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
                         <Network className="h-4 w-4" aria-hidden="true" />
                       </span>
-                      <h2 className="break-words text-sm font-semibold">{pool.name}</h2>
+                      <h2 className="break-words !text-sm !leading-snug font-semibold">
+                        {pool.name}
+                      </h2>
                     </div>
                     <Pill tone={pool.mode === 'SHARED_TARGET' ? 'info' : 'neutral'}>
                       {pool.mode === 'SHARED_TARGET' ? 'Shared target' : 'Local hosts'}

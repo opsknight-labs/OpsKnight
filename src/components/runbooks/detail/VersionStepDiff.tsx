@@ -57,7 +57,7 @@ function DiffPane({
         side && !tone && 'bg-muted/20'
       )}
     >
-      <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <h3 className="flex items-center gap-1.5 !text-xs !leading-normal font-medium text-muted-foreground">
         {tone === 'before' && side && (
           <Minus className="h-3 w-3 text-rose-600 dark:text-rose-400" aria-hidden="true" />
         )}
@@ -101,7 +101,7 @@ function StepDiffCard({
         <Badge variant="outline" className={cn('font-mono text-[10px]', style.badge)}>
           {step.change}
         </Badge>
-        <h2 className="break-all font-mono text-sm font-semibold">{step.key}</h2>
+        <h2 className="break-all font-mono !text-sm !leading-snug font-semibold">{step.key}</h2>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <DiffPane
