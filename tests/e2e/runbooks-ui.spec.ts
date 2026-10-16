@@ -1072,6 +1072,7 @@ test('server pagination, administrator labels, effective capabilities and budget
         'Every enrolled Agent, including offline Agents, must acknowledge the NEXT trusted key.'
       )
       .filter({ visible: true })
+      .first()
   ).toBeVisible();
   expect(await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })).toBe(1);
 });
