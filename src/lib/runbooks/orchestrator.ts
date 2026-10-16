@@ -22,7 +22,7 @@ import {
 import { matchesCondition, validateAndMatchTrigger } from './matcher';
 import { redactRunbookDisplayName } from './display-name';
 import { finalizeExecutionDeadline } from './deadline';
-import { finalizeVerificationEvidence } from './verification-evidence';
+import { enqueueVerificationEvidence, finalizeVerificationEvidence } from './verification-evidence';
 import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
@@ -52,6 +52,7 @@ import {
 import { lockRunbookForShare } from './locking';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('FINALIZE_VERIFICATION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('ADVANCE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('RECONCILE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z
@@ -1360,6 +1361,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_FAILED',
               'Runbook execution failed due to an unknown step outcome during cancellation.'
             );
+            await enqueueVerificationEvidence(tx, executionId);
           }
         } else {
           const cancelled = await tx.runbookExecution.updateMany({
@@ -1373,6 +1375,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_CANCELLED',
               'Runbook execution cancelled.'
             );
+            await enqueueVerificationEvidence(tx, executionId);
           }
         }
       }
@@ -1408,7 +1411,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_FAILED',
           `Runbook failed at step: ${failed.name}`
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1430,7 +1433,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_COMPLETED',
           'Runbook execution completed.'
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1603,6 +1606,10 @@ export async function processRunbookJob(raw: unknown): Promise<void> {
   const payload = jobPayloadSchema.parse(raw);
   if (payload.kind === 'ADVANCE_EXECUTION' || payload.kind === 'RECONCILE_EXECUTION') {
     await advanceExecution(payload.executionId);
+    return;
+  }
+  if (payload.kind === 'FINALIZE_VERIFICATION') {
+    await prisma.$transaction(tx => finalizeVerificationEvidence(tx, payload.executionId));
     return;
   }
   const { evaluateIncidentTriggers } = await import('./triggers');

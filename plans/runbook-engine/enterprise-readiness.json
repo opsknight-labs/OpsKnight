@@ -41,5 +41,23 @@
     "productionBuild": "pass after rebase (Next.js 16.4.1); upstream Next/PWA/Edge warnings retained",
     "browser": "3 Chromium production journeys pass: publish/attach/trigger/approval/cancel; independent rules and evidence desktop/mobile; 100/1000/10000-rule rendering and true total counts. Full cross-browser matrix remains a hosted CI gate.",
     "focusedUiAndAuthority": "19 focused component/authorization/download/disconnect tests pass after integrating the latest main UI"
+  },
+  "reviewRemediation": {
+    "reviewedHead": "3a1dd6f21184d6d73cf65b09bf1041d231935641",
+    "deadlineRecovery": "Terminal transitions enqueue deterministic FINALIZE_VERIFICATION jobs. Parsing and evidence persistence run after state commit; malformed/missing definitions fail only the evidence job with safe error codes. Cancellation and repeated/concurrent recovery retain terminal state and one incident event.",
+    "outputContract": "Shared 10 MiB decoded cap; marker bytes included; re-bound after sanitization with gzip headroom. Artifact upload errors persist a bounded sanitized explanation and never suppress execution-result submission; transient interrupted deliveries recover from the spool. Results have a bounded 1 MiB request allowance for JSON escaping of the maximum valid preview/error/evidence schema. Metadata fsync failures cannot block already-durable outcomes; successful artifact retries remove obsolete failure notices.",
+    "evidenceProtection": "Signed pre/post-state evidence sanitized independently at server persistence; UTF-8 previews remain inside the byte budget.",
+    "claimLatency": "Disable JIT compilation only in the short Agent claim transaction. The 10,000-ineligible-write backlog regression passes with the original 2-second statement timeout and 1-second lock timeout.",
+    "browserAssertions": "Scope signing error to main and SSO revocation confirmation to the authentication component, preserving inline feedback and toast. Signing-key case initializes its real setup prerequisite and supports isolated execution. Configurable validated RUNBOOK_UI_PORT prevents concurrent fixture conflicts.",
+    "capacityWorkflow": "Explicit VITEST_USE_REAL_DB environment flag added for clarity; the existing integration configuration already supplied it and both original hosted capacity runs passed.",
+    "localVerification": {
+      "runtime": "381 passed across 48 files; final 16 focused result transport, spool and route checks passed after output/storage/body-budget refinements; Agent esbuild bundle passed.",
+      "postgresql": "105 passed across enterprise readiness, nonce maintenance, operational backlog, execution safety and review regressions. Disposable PostgreSQL 15 with all migrations, including real result/artifact persistence and durable verification-worker error reporting.",
+      "build": "Production build passed; upstream framework/PWA warnings remain.",
+      "browsers": "Signing-key workflow: 3 passed across Chromium, Firefox and WebKit. Production HTTPS authentication/recovery certification: 10 passed, 2 existing Chromium-only hardware-key skips across the same browsers. Fresh owned fixtures removed after checks.",
+      "qualification": "Source/fixture regressions only; no additional physical, sustained active-load, multi-node HA or published-distribution certification claimed.",
+      "documentation": "v2.1 frontmatter passed; all 342 files have resolving relative links; workflow YAML and explicit real-database flag validated.",
+      "hostedCi": "Pending the follow-up commit; no exact-head hosted pass claimed."
+    }
   }
 }

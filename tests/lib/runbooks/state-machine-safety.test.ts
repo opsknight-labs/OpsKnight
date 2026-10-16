@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
-import { cancelExecution, completeStep, approveExecutionStep, advanceExecution } from '@/lib/runbooks/orchestrator';
+import {
+  cancelExecution,
+  completeStep,
+  approveExecutionStep,
+  advanceExecution,
+} from '@/lib/runbooks/orchestrator';
 import { claimAgentAttempt } from '@/lib/runbooks/agent-claims';
 import { computePlanDigest } from '@/lib/runbooks/definition';
 import { RunbookExecutionInvalidTransitionError } from '@/lib/runbooks/errors';
@@ -50,6 +55,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     backgroundJob: {
       create: vi.fn(),
+      upsert: vi.fn(),
     },
     incidentEvent: {
       create: vi.fn(),
@@ -168,9 +174,7 @@ describe('Runbooks State Machine Safety and Invariants', () => {
     ] as never);
 
     // Locked candidate returned by SKIP LOCKED is candidate2 directly
-    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
-      { id: 'att_valid' },
-    ] as never);
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ id: 'att_valid' }] as never);
 
     // Attempt claim on candidate2 succeeds
     vi.mocked(prisma.runbookStepAttempt.updateMany).mockResolvedValueOnce({ count: 1 });
@@ -183,7 +187,9 @@ describe('Runbooks State Machine Safety and Invariants', () => {
   });
 
   it('completeStep updates step and transitions active execution to RUNNING, enqueuing advance', async () => {
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'RUNNING' } as never);
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({
+      status: 'RUNNING',
+    } as never);
     vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValueOnce({ count: 1 });
     vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 1 });
     vi.mocked(prisma.backgroundJob.create).mockResolvedValueOnce({ id: 'job_advance' } as never);
@@ -214,7 +220,9 @@ describe('Runbooks State Machine Safety and Invariants', () => {
   });
 
   it('completeStep does not mutate child step if parent execution is already terminal', async () => {
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'CANCELLED' } as never);
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({
+      status: 'CANCELLED',
+    } as never);
     const stepUpdateSpy = vi.mocked(prisma.runbookExecutionStep.updateMany);
     stepUpdateSpy.mockClear();
 
@@ -224,13 +232,15 @@ describe('Runbooks State Machine Safety and Invariants', () => {
   });
 
   it('completeStep rolls back via exception if parent CAS loses concurrent race', async () => {
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'RUNNING' } as never);
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({
+      status: 'RUNNING',
+    } as never);
     vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValueOnce({ count: 1 });
     vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 0 });
 
-    await expect(
-      completeStep('exec_1', 'step_1', 'SUCCEEDED', 'Late output')
-    ).rejects.toThrow(RunbookExecutionInvalidTransitionError);
+    await expect(completeStep('exec_1', 'step_1', 'SUCCEEDED', 'Late output')).rejects.toThrow(
+      RunbookExecutionInvalidTransitionError
+    );
   });
 
   it('approveExecutionStep rolls back and does not emit event/audit if parent transition loses', async () => {

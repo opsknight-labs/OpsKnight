@@ -635,7 +635,11 @@ test('revokes another user session and then signs out cleanly after self revocat
       .getByRole('checkbox', { name: /registered session will lose access immediately/ })
       .check();
     await page.getByRole('button', { name: 'Confirm session revocation', exact: true }).click();
-    await expect(page.getByText('Session revoked successfully.', { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByLabel('SSO / Authentication', { exact: true })
+        .getByText('Session revoked successfully.', { exact: true })
+    ).toBeVisible();
     await expect(page.getByRole('dialog')).toBeHidden();
     const invalidated = await other.request.get(`${origin}/api/auth/session`);
     expect((await invalidated.json())?.user?.id).toBeFalsy();
@@ -657,11 +661,13 @@ test('revokes another user session and then signs out cleanly after self revocat
     await page.waitForURL(
       url => url.pathname === '/login' && url.searchParams.get('sessionRevoked') === '1'
     );
-    await expect(
-      page.getByText('Your session was revoked successfully. Sign in again to continue.', {
-        exact: true,
-      })
-    ).toBeVisible();
+    const revokedNotice = page.getByRole('status').filter({
+      hasText: 'Your session was revoked successfully. Sign in again to continue.',
+    });
+    await expect(revokedNotice).toBeVisible();
+    await expect(revokedNotice).toHaveText(
+      'Your session was revoked successfully. Sign in again to continue.'
+    );
     expect(protectedReads).toHaveLength(0);
   } finally {
     await Promise.allSettled([admin.close(), other.close()]);

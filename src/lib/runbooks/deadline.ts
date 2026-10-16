@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
-import { finalizeVerificationEvidence } from './verification-evidence';
+import { enqueueVerificationEvidence } from './verification-evidence';
 
 /** Stop new work at the deadline, retaining fenced in-flight attempts until their outcome is known. */
 export async function finalizeExecutionDeadline(
@@ -109,7 +109,7 @@ export async function finalizeExecutionDeadline(
           'RUNBOOK_FAILED',
           'Runbook execution timed out with an unverified write outcome.'
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     } else {
       const timedOut = await tx.runbookExecution.updateMany({
@@ -130,7 +130,7 @@ export async function finalizeExecutionDeadline(
           'RUNBOOK_FAILED',
           'Runbook execution timed out.'
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     }
   }

@@ -150,3 +150,32 @@ payloads. Invalid/oversized legacy records are counted as rejected and produce
 exit status 2; inspect them through an authorized data-protection process. A
 rewrite cannot remove copies from old backups or prior downloads. Do not run the
 rewrite while preserving original hashes for an active evidence investigation.
+
+## Execution results, logs and recovery evidence
+
+The Agent bounds decoded output to a shared 10 MiB contract, including truncation markers.
+It bounds again after sanitization and reserves compression overhead before uploading gzip.
+Result requests accept up to 1 MiB to account for JSON escaping of valid previews and typed evidence.
+The server validates gzip and UTF-8 and retains at most 1 MiB of sanitized text including the
+truncation marker. Logs remain potentially sensitive; sanitization cannot identify arbitrary
+application credentials that have no recognizable structure.
+
+Artifact upload failure does not suppress an execution result. The Agent persists a bounded
+`Artifact unavailable` preview and submits the original status, exit code and physical evidence.
+If result submission also fails, the durable spool retains the outcome for retry.
+A metadata write failure leaves the original spooled outcome intact and does not stop its submission. Transient
+artifact uploads may be retried with that result; permanently rejected artifacts are omitted.
+An artifact error does not by itself mean that the target action failed.
+
+Terminal state transitions enqueue a separate `FINALIZE_VERIFICATION` background job in the
+same state transaction. Verification runs after commit and cannot roll back a timeout,
+cancellation or failed execution. The deterministic `runbook-verification:<executionId>` job ID
+prevents duplicate enqueues. Repeated processing computes the same evidence from the same
+terminal snapshot. Command success and verified recovery remain separate conclusions.
+
+Malformed historical definitions and missing versions fail the verification job with
+`RUNBOOK_VERIFICATION_DEFINITION_INVALID` or `RUNBOOK_VERIFICATION_VERSION_MISSING`.
+Normal background-job retries and failed-job reporting apply; inspect those jobs when evidence
+is missing. Do not retry a physical write merely to repair missing verification metadata.
+Previews, error messages and signed structured evidence are sanitized at the persistence boundary;
+execution details also sanitize historical evidence before sending it to the browser.

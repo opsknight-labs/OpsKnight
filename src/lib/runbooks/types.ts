@@ -280,6 +280,7 @@ export const RUNBOOK_JOB_KINDS = [
   'EVALUATE_TRIGGER',
   'ADVANCE_EXECUTION',
   'RECONCILE_EXECUTION',
+  'FINALIZE_VERIFICATION',
 ] as const;
 export type RunbookJobKind = (typeof RUNBOOK_JOB_KINDS)[number];
 

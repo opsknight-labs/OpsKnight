@@ -42,7 +42,7 @@ function sanitizePlainText(output: string): string {
       // eslint-disable-next-line security/detect-unsafe-regex
       .replace(/\b(authorization["']?\s*:\s*)(?:bearer\s+|basic\s+)?[^\s,;]+/gi, '$1[REDACTED]')
       .replace(
-        /\b([\w.-]*(?:password|passwd|pwd|token|secret|credential|api[_-]?key)[\w.-]*)["']?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi,
+        /\b([\w.-]*(?:password|passwd|pwd|token|secret|credential|api[_-]?key)[\w.-]*)["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
         '$1=[REDACTED]'
       )
       .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[REDACTED AWS ACCESS KEY]')

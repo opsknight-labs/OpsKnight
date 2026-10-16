@@ -14,6 +14,8 @@ const policy: AgentPolicy = {
     '[[ "$BASH_ENV" == /dev/null ]]',
     'printf "%s|%s" "$OPSKNIGHT_INPUT_SERVICE" "$OPSKNIGHT_INPUT_REPLICAS"',
     "printf '0123456789'",
+    "printf 'x%.0s' {1..2000}",
+    'head -c 10485800 /dev/zero',
     'exit 99',
     'sleep 30',
     'exit 1',
@@ -104,12 +106,25 @@ describe('runbook Agent executor', () => {
 
   it('bounds captured output and marks truncation', async () => {
     const result = await executeAttempt(
-      attempt("printf '0123456789'"),
-      { ...policy, maxOutputBytes: 5 },
+      attempt("printf 'x%.0s' {1..2000}"),
+      { ...policy, maxOutputBytes: 1024 },
       new AbortController().signal
     );
     expect(result.status).toBe('SUCCEEDED');
-    expect(result.output).toBe('01234\n[output truncated]');
+    expect(Buffer.byteLength(result.output)).toBeLessThanOrEqual(1024);
+    expect(result.output.endsWith('\n[output truncated]')).toBe(true);
+    expect(result.output.startsWith('x'.repeat(1000))).toBe(true);
+  });
+
+  it('includes the marker inside the maximum 10 MiB output contract', async () => {
+    const result = await executeAttempt(
+      attempt('head -c 10485800 /dev/zero'),
+      { ...policy, maxOutputBytes: 10 * 1024 * 1024 },
+      new AbortController().signal
+    );
+    expect(result.status).toBe('SUCCEEDED');
+    expect(Buffer.byteLength(result.output)).toBe(10 * 1024 * 1024);
+    expect(result.output.endsWith('\n[output truncated]')).toBe(true);
   });
 
   it('does not start work when cancellation is already requested', async () => {

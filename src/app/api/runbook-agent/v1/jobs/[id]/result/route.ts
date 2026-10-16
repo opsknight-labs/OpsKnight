@@ -1,3 +1,4 @@
+import { MAX_AGENT_RESULT_BODY_BYTES } from '../../../../../../../../agent/src/output-limits';
 import { jsonOk } from '@/lib/api-response';
 import { authenticatedAgentJson, agentApiError } from '@/lib/runbooks/agent-api';
 import { submitAgentResult } from '@/lib/runbooks/agent-claims';
@@ -9,7 +10,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const [{ id }, { agent, json }] = await Promise.all([
       context.params,
-      authenticatedAgentJson(request, 128 * 1024),
+      authenticatedAgentJson(request, MAX_AGENT_RESULT_BODY_BYTES),
     ]);
     const payload = agentJobResultSchema.parse({
       ...(json as Record<string, unknown>),

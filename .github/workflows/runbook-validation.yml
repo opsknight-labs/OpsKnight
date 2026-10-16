@@ -215,6 +215,7 @@ jobs:
       DATABASE_URL: postgresql://opsknight:test_password@localhost:5432/rbe_http_test
       DIRECT_URL: postgresql://opsknight:test_password@localhost:5432/rbe_http_test
       ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+      VITEST_USE_REAL_DB: '1'
       RUNBOOK_HTTP_CAPACITY: 'true'
     steps:
       - uses: actions/checkout@v7

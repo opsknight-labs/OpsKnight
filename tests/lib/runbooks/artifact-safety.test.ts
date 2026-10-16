@@ -75,3 +75,13 @@ it('bounds nested structured output before reaching stack exhaustion', () => {
   expect(text).not.toContain('must-not-leak');
   expect(text).toContain('REDACTED NESTED OUTPUT');
 });
+
+it('removes multiline quoted credentials and query-string tokens from legacy text', async () => {
+  const legacy =
+    'APP_PASSWORD="first sensitive line\nsecond sensitive line"\nhttps://app.test/path?access_token=query-credential&mode=read';
+  const normalized = await sanitizeCompressedArtifact(gzipSync(Buffer.from(legacy)));
+  const text = gunzipSync(normalized.content).toString();
+  for (const secret of ['first sensitive line', 'second sensitive line', 'query-credential'])
+    expect(text).not.toContain(secret);
+  expect(text).toContain('[REDACTED]');
+});

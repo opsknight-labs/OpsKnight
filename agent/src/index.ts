@@ -1,10 +1,10 @@
 #!/usr/bin/env node
+import { deliverSpoolRecord } from './result-delivery';
+import { boundOutput } from './output-limits';
 import { authenticatedContactReady } from './contact-readiness';
 // Identity and policy paths come only from the local operator's environment, never API input.
-import { createHash } from 'node:crypto';
 import { uptime } from 'node:os';
 import { sanitizeOutputText } from './output-safety';
-import { gzipSync } from 'node:zlib';
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,45 +127,6 @@ async function loadIdentity(
     await saveIdentity(identity, targetPath);
     return identity;
   }
-}
-
-async function uploadOutput(
-  client: AgentClient,
-  attempt: Pick<ClaimedAttempt, 'attemptId' | 'leaseToken'>,
-  output: string
-): Promise<string | undefined> {
-  if (Buffer.byteLength(output) <= 32_768) return undefined;
-  const text = output;
-  let content = gzipSync(Buffer.from(text, 'utf8'));
-  let truncated = text.endsWith('[output truncated]');
-  const MAX_ARTIFACT_SIZE = 10 * 1024 * 1024;
-  if (content.length > MAX_ARTIFACT_SIZE) {
-    const targetRatio = (9.5 * 1024 * 1024) / content.length;
-    let maxBytes = Math.floor(Buffer.byteLength(text, 'utf8') * targetRatio);
-    while (maxBytes > 0) {
-      const sliced = sliceUtf8Safe(text, maxBytes);
-      const withMarker = `${sliced}\n[output truncated]`;
-      const compressed = gzipSync(Buffer.from(withMarker, 'utf8'));
-      if (compressed.length <= MAX_ARTIFACT_SIZE) {
-        content = compressed;
-        truncated = true;
-        break;
-      }
-      maxBytes = Math.floor(maxBytes * 0.9);
-    }
-    if (content.length > MAX_ARTIFACT_SIZE) return undefined;
-  }
-  const artifact = await client.uploadArtifact({
-    attemptId: attempt.attemptId,
-    leaseToken: attempt.leaseToken,
-    kind: 'OUTPUT',
-    mediaType: 'text/plain; charset=utf-8',
-    encoding: 'gzip',
-    contentBase64: content.toString('base64'),
-    sha256: createHash('sha256').update(content).digest('hex'),
-    truncated,
-  });
-  return artifact?.id;
 }
 
 function redactSecretInputs(attempt: ClaimedAttempt, output: string): string {
@@ -374,15 +335,7 @@ export async function run(options: RunAgentOptions = {}) {
       }
       for (const record of records) {
         try {
-          const { localOutput, ...result } = record;
-          if (localOutput && !result.outputArtifactId) {
-            const artifactId = await uploadOutput(client, record, localOutput);
-            if (artifactId) {
-              result.outputArtifactId = artifactId;
-              await spool.put({ ...record, outputArtifactId: artifactId });
-            }
-          }
-          await client.submit(result);
+          await deliverSpoolRecord(client, spool, record);
           await spool.remove(record.attemptId);
           submittedCount += 1;
         } catch (error) {
@@ -765,7 +718,10 @@ export async function run(options: RunAgentOptions = {}) {
         activeController = null;
         active -= 1;
         inFlightError = null;
-        const redactedOutput = redactSecretInputs(attempt, result.output);
+        const redactedOutput = boundOutput(
+          redactSecretInputs(attempt, result.output),
+          policy.maxOutputBytes
+        ).text;
         const record: SpoolRecord = {
           attemptId: attempt.attemptId,
           leaseToken: attempt.leaseToken,
@@ -774,7 +730,7 @@ export async function run(options: RunAgentOptions = {}) {
           preState: result.preState ? redactEvidence(attempt, result.preState) : undefined,
           postState: result.postState ? redactEvidence(attempt, result.postState) : undefined,
           exitCode: result.exitCode,
-          outputPreview: redactedOutput.slice(0, 32_768),
+          outputPreview: sliceUtf8Safe(redactedOutput, 32_768),
           localOutput: redactedOutput,
           errorCode: result.errorCode,
           errorMessage: result.errorMessage

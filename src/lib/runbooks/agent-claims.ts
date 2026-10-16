@@ -12,7 +12,7 @@ import {
 } from './schemas';
 import { sha256 } from './agent-auth';
 import { sanitizeCompressedArtifact } from './artifact-safety';
-import { redactRunbookOutput } from './redaction';
+import { redactRunbookOutput, redactRunbookEvidence } from './redaction';
 import { resolveSecretInputValues } from './secrets';
 import {
   isSecretReference,
@@ -160,6 +160,9 @@ export async function claimAgentAttempt(
     try {
       const claimedAttempt = await prisma.$transaction(
         async tx => {
+          // This is a bounded OLTP lookup, not an analytical query. Large ineligible
+          // backlogs can otherwise trigger PostgreSQL JIT compilation before yielding a row.
+          await tx.$executeRaw`SET LOCAL jit = off`;
           await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
           await tx.$executeRaw`SET LOCAL lock_timeout = '1000ms'`;
           const now = new Date();
@@ -874,8 +877,8 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
           outputArtifactId: input.outputArtifactId,
           errorCode: input.errorCode,
           errorMessage: input.errorMessage ? redactRunbookOutput(input.errorMessage) : undefined,
-          preState: input.preState as Prisma.InputJsonValue | undefined,
-          postState: input.postState as Prisma.InputJsonValue | undefined,
+          preState: redactRunbookEvidence(input.preState),
+          postState: redactRunbookEvidence(input.postState),
           leaseToken: null,
           leaseExpiresAt: null,
         },
@@ -1056,8 +1059,8 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
         outputArtifactId: input.outputArtifactId,
         errorCode: input.errorCode,
         errorMessage: input.errorMessage ? redactRunbookOutput(input.errorMessage) : undefined,
-        preState: input.preState as Prisma.InputJsonValue | undefined,
-        postState: input.postState as Prisma.InputJsonValue | undefined,
+        preState: redactRunbookEvidence(input.preState),
+        postState: redactRunbookEvidence(input.postState),
         leaseToken: null,
         leaseExpiresAt: null,
       },
