@@ -91,53 +91,58 @@ describe('Agent Container & Process Lifecycle Tests', () => {
       expect(zombieCheckRes.status).toBe(0);
       // Zombie count must be 0
       expect(zombieCheckRes.stdout.trim()).toBe('0');
-    }
+    },
+    60_000
   );
 
-  it.runIf(hasDockerAgentImage)('verifies container handles SIGTERM signal gracefully', () => {
-    // Launch a container with tini sleeping in background, then send SIGTERM
-    const containerName = `test-tini-sigterm-${Date.now()}`;
-    const startRes = spawnSync(
-      'docker',
-      [
-        'run',
-        '-d',
-        '--name',
-        containerName,
-        '--read-only',
-        '--cap-drop=ALL',
-        '--security-opt=no-new-privileges:true',
-        '--tmpfs',
-        '/tmp:rw,noexec,nosuid,size=16m',
-        '--entrypoint',
-        '/sbin/tini',
-        agentImage,
-        '--',
-        'sleep',
-        '60',
-      ],
-      { encoding: 'utf8', timeout: 10000 }
-    );
-    expect(startRes.status).toBe(0);
+  it.runIf(hasDockerAgentImage)(
+    'verifies container handles SIGTERM signal gracefully',
+    () => {
+      // Launch a container with tini sleeping in background, then send SIGTERM
+      const containerName = `test-tini-sigterm-${Date.now()}`;
+      const startRes = spawnSync(
+        'docker',
+        [
+          'run',
+          '-d',
+          '--name',
+          containerName,
+          '--read-only',
+          '--cap-drop=ALL',
+          '--security-opt=no-new-privileges:true',
+          '--tmpfs',
+          '/tmp:rw,noexec,nosuid,size=16m',
+          '--entrypoint',
+          '/sbin/tini',
+          agentImage,
+          '--',
+          'sleep',
+          '60',
+        ],
+        { encoding: 'utf8', timeout: 10000 }
+      );
+      expect(startRes.status).toBe(0);
 
-    try {
-      // Send SIGTERM to the container
-      const killRes = spawnSync('docker', ['kill', '--signal=SIGTERM', containerName], {
-        encoding: 'utf8',
-        timeout: 10000,
-      });
-      expect(killRes.status).toBe(0);
+      try {
+        // Send SIGTERM to the container
+        const killRes = spawnSync('docker', ['kill', '--signal=SIGTERM', containerName], {
+          encoding: 'utf8',
+          timeout: 10000,
+        });
+        expect(killRes.status).toBe(0);
 
-      // Verify the container has terminated
-      const waitRes = spawnSync('docker', ['wait', containerName], {
-        encoding: 'utf8',
-        timeout: 10000,
-      });
-      expect(waitRes.status).toBe(0);
-    } finally {
-      spawnSync('docker', ['rm', '-f', containerName], { timeout: 5000 });
-    }
-  });
+        // Verify the container has terminated
+        const waitRes = spawnSync('docker', ['wait', containerName], {
+          encoding: 'utf8',
+          timeout: 10000,
+        });
+        expect(waitRes.status).toBe(0);
+      } finally {
+        spawnSync('docker', ['rm', '-f', containerName], { timeout: 5000 });
+      }
+    },
+    60_000
+  );
 
   it.runIf(hasDockerAgentImage)(
     'proves Podman inspect, logs and restart execute successfully via rootless Unix socket',
@@ -218,7 +223,8 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         { encoding: 'utf8', timeout: 15000 }
       );
       expect(res.status).toBe(0);
-    }
+    },
+    60_000
   );
 
   it('verifies identity and spool persistence across process executions', async () => {
