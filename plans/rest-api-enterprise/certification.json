@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-16",
+  "releaseStatus": "not_certified",
+  "scope": "Incremental REST v2 operational commands, runbook authoring/control and generated clients",
+  "baseCommit": "d8e67ae96",
+  "runtime": {
+    "node": "20.20.2",
+    "postgres": "16.15 aarch64 Alpine",
+    "python": "3.12-alpine",
+    "next": "16.4.1"
+  },
+  "results": [
+    {
+      "check": "API, authorization, watcher UI, Explorer and runbook contract regression",
+      "status": "passed",
+      "files": 32,
+      "tests": 371,
+      "command": "node node_modules/vitest/vitest.mjs run --no-file-parallelism --maxWorkers=1 tests/unit/api-v2-*.test.ts tests/actions/incident-subscription-access.test.ts tests/components/settings/ApiExplorerPanel.test.tsx tests/lib/runbooks/authoring-contract.test.ts tests/lib/runbooks/state-machine-safety.test.ts tests/lib/authorization-policy.test.ts"
+    },
+    {
+      "check": "Broader runbook regression",
+      "status": "passed",
+      "files": 39,
+      "tests": 317,
+      "command": "node node_modules/vitest/vitest.mjs run --no-file-parallelism --maxWorkers=1 tests/lib/runbooks",
+      "note": "Overlaps with two suites above; counts are not additive."
+    },
+    {
+      "check": "PostgreSQL baseline plus expanded command runtime",
+      "status": "passed",
+      "files": 2,
+      "tests": 29,
+      "command": "VITEST_USE_REAL_DB=1 node node_modules/vitest/vitest.mjs run --no-file-parallelism --maxWorkers=1 tests/integration/api-v2-runtime.test.ts tests/integration/api-v2-enterprise-runtime.test.ts",
+      "storage": "Dedicated PostgreSQL 16 container with tmpfs data; fsync was not disabled."
+    },
+    {
+      "check": "Disk-backed PostgreSQL baseline",
+      "status": "passed",
+      "files": 1,
+      "tests": 21,
+      "note": "Executed separately before rebasing onto current main. Not a performance or durability certification."
+    },
+    {
+      "check": "Python client HTTP fixture workflows",
+      "status": "passed",
+      "tests": 9,
+      "command": "python -m unittest discover -s tests/sdk -p 'test_*.py'"
+    },
+    {
+      "check": "Both clients against built application",
+      "status": "passed",
+      "command": "npm run certify:api:clients:live",
+      "requirements": [
+        "Build application and TypeScript SDK first",
+        "Dedicated DATABASE_URL ending in _test",
+        "Docker with Python 3.12 image",
+        "Free local port 3159 or API_SDK_TEST_PORT"
+      ],
+      "typescript": [
+        "Authenticated runbook creation and replay",
+        "Validation and publication with If-Match",
+        "Preview and reviewed-plan execution",
+        "Cancellation request semantics"
+      ],
+      "python": [
+        "Authenticated creation, validation and publication",
+        "Bounded cursor traversal across real API pages"
+      ]
+    },
+    {
+      "check": "TypeScript",
+      "status": "passed",
+      "command": "node node_modules/typescript/bin/tsc --noEmit"
+    },
+    {
+      "check": "Changed-file ESLint",
+      "status": "passed",
+      "warnings": 0,
+      "note": "Generator and generated TypeScript schema are linted explicitly with --no-ignore."
+    },
+    {
+      "check": "Generated clients/OpenAPI drift",
+      "status": "passed",
+      "command": "npm run api:clients:check"
+    },
+    {
+      "check": "TypeScript SDK package build",
+      "status": "passed",
+      "command": "npm run build --prefix sdk/typescript"
+    },
+    {
+      "check": "Application production build",
+      "status": "passed",
+      "command": "npm run build",
+      "warnings": [
+        "Middleware convention deprecation",
+        "Ambiguous Tailwind ease utility",
+        "Next.js dependency process.cwd Edge Runtime warning"
+      ]
+    }
+  ],
+  "verifiedInvariants": [
+    "Concurrent identical create requests produce one runbook and audit",
+    "Conflicting draft writers produce one success and one 412",
+    "Duplicate publication requests replay without a second publication audit",
+    "An injected database audit failure rolls back runbook, draft and replay state",
+    "UI and REST publication commands produce matching checksums and revisions",
+    "Published versions retire without violating database immutability",
+    "SELECT options survive validation, publication and cloning",
+    "Participant moves are safe to retry",
+    "Broad admin scope alone cannot authorize runbook authoring",
+    "Preview responses omit executable configuration, input values and internal capability tokens",
+    "Cancellation acceptance is distinct from confirmed termination"
+  ],
+  "notCertified": [
+    "Remaining capability catalog workflows",
+    "Docker/Kind target execution and isolation",
+    "1/2/4 replica HA and failover",
+    "Invalid-token flood isolation under defined attack load",
+    "Measured latency, pool saturation and query plans",
+    "Independent security review and release approval"
+  ],
+  "knownDependencyFindings": [
+    {
+      "alert": 43,
+      "package": "braces",
+      "severity": "high",
+      "scope": "runtime",
+      "affectedRange": "<= 3.0.3",
+      "firstPatchedVersion": null,
+      "url": "https://github.com/opsknight-labs/OpsKnight/security/dependabot/43"
+    },
+    {
+      "alert": 44,
+      "package": "http-cache-semantics",
+      "severity": "high",
+      "scope": "development",
+      "affectedRange": "<= 4.2.0",
+      "firstPatchedVersion": null,
+      "url": "https://github.com/opsknight-labs/OpsKnight/security/dependabot/44"
+    },
+    {
+      "alert": 45,
+      "package": "postcss-selector-parser",
+      "severity": "medium",
+      "scope": "development",
+      "affectedRange": "< 7.1.6",
+      "firstPatchedVersion": "7.1.6",
+      "url": "https://github.com/opsknight-labs/OpsKnight/security/dependabot/45"
+    }
+  ],
+  "dependencyFindingSource": "GitHub Dependabot open alerts on the default branch, verified 2026-10-16. The package lock is unchanged by this PR. High advisories did not list a patched version at verification time.",
+  "reviewFollowup": {
+    "reviewedCommit": "e917c3e08",
+    "verifiedAt": "2026-10-16T11:47:05.127364+00:00",
+    "scope": "Five PR #883 review findings and failing validation; remaining API parity stays deferred",
+    "findings": [
+      "Cancellation requires ADMIN, execution ownership or owning service-team membership; attached incident visibility also applies. Real PostgreSQL tests cover cross-user, cross-team and cross-service denials with no state, audit or queue changes.",
+      "Draft edit/publication require concrete strong revision ETags before replay and under lock; wildcard, missing and stale validators are covered.",
+      "Operational-only REST watcher writes are explicitly documented and tested for ordinary-user self-follow denial; eligible UI self-follow remains unchanged.",
+      "Privileged draft reads return a safe editable body; revision-bound key-based preservation retains hidden configurations and defaults across structural edits.",
+      "Credential migration checklist and real replacement-token tests preserve ordinary administrator behavior while requiring explicit runbook scopes and role capabilities."
+    ],
+    "raceRegression": "Binding creation, updates and activation use serializable retries alongside archive. A deterministic PostgreSQL lock gate starts the archive snapshot before binding insertion and verifies the committed binding ends disabled.",
+    "verification": [
+      {
+        "check": "Complete unit suite",
+        "status": "passed",
+        "files": 854,
+        "passed": 7236,
+        "skipped": 4,
+        "command": "node node_modules/vitest/vitest.mjs run -c vitest.unit.config.ts --no-file-parallelism --maxWorkers=1"
+      },
+      {
+        "check": "Canonical CI PostgreSQL suite",
+        "status": "passed",
+        "filesPassed": 76,
+        "filesSkipped": 5,
+        "passed": 521,
+        "skipped": 35,
+        "command": "node node_modules/vitest/vitest.mjs run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --exclude tests/integration/authentication-policy-database.test.ts --exclude tests/integration/emergency-authentication-database.test.ts --exclude tests/integration/oidc-staged-authentication-database.test.ts --exclude tests/integration/provider-feedback-isolation-database.test.ts --exclude tests/integration/emergency-password-database.test.ts",
+        "note": "Matches tests.yml: five specialized enterprise_sso_test suites run in their dedicated certification workflow; no assertions removed."
+      },
+      {
+        "check": "Production runbook browser matrix",
+        "status": "passed",
+        "passed": 36,
+        "browsers": [
+          "chromium",
+          "firefox",
+          "webkit"
+        ],
+        "command": "node node_modules/@playwright/test/cli.js test --config playwright.runbooks.config.ts --output /tmp/rest-review-runbook-results"
+      },
+      {
+        "check": "Production HTTPS recovery browsers",
+        "status": "passed",
+        "passed": 10,
+        "skipped": 2,
+        "flaky": 0,
+        "command": "python3 scripts/certify-enterprise-authentication-browser.py --build",
+        "evidence": "plans/certification/enterprise-sso-2.1-password-browser.json"
+      },
+      {
+        "check": "TypeScript, zero-warning changed-file ESLint, generated client drift, TypeScript SDK build and production build",
+        "status": "passed"
+      },
+      {
+        "check": "Python SDK HTTP fixtures under Python 3.12",
+        "status": "passed",
+        "passed": 9
+      }
+    ],
+    "fixtureNotes": [
+      "Canonical database and browser reruns used separate disposable databases in a PostgreSQL 16 container with a 4 GiB tmpfs, ordinary fsync and synchronous commit, and bounded WAL retention. No crash-durability or performance claim.",
+      "Interrupted runs after an earlier 512 MiB fixture filled are discarded; the final full reruns above passed.",
+      "Rate-limit tests pin their wall-clock window; queue-isolation fixtures are due before claiming, independent of small host/database clock skew."
+    ]
+  },
+  "runbookRobustnessFollowup": {
+    "reviewedCommit": "03df2c405",
+    "changes": [
+      "REST start/cancel delegate API credential attribution to the canonical transactional RUNBOOK_EXECUTION domain audit; duplicate REST business records removed.",
+      "Cancellation update accepts only active states; existing CANCEL_REQUESTED returns success without changing original reason/time or repeating audit/advance job.",
+      "Documented intentional global responder start versus owner/service-team cancellation policy with negative role and scope tests."
+    ],
+    "verification": {
+      "apiAndRunbookUnitTests": 641,
+      "unitFiles": 66,
+      "postgresTests": 81,
+      "postgresFiles": 2,
+      "typecheck": "passed",
+      "changedFileLint": "passed with zero warnings"
+    },
+    "postgresCoverage": [
+      "One canonical API-attributed start/cancellation audit",
+      "Repeated distinct-key requests and UI repeat preserve original cancellation and job count",
+      "Four distinct-key concurrent requests on an active execution create one cancellation audit and one job",
+      "Cross-service responder starts and USER/AUDITOR/missing-scope denials",
+      "Existing execution completion/cancellation races and terminal-state safety"
+    ],
+    "limits": "Focused regression verification for this follow-up; prior full-suite and browser results are retained as historical evidence. New GitHub CI runs after push."
+  },
+  "serviceAccountPresentationFollowup": {
+    "scope": "Machine identities in API settings",
+    "changes": [
+      "Service account cards show display names and stable IDs; internal email omitted from card client payload.",
+      "Machine token owner labels and API activity actor labels use friendly names rather than reserved-domain addresses.",
+      "Inventory search supports machine names/account IDs; API key search includes owner names.",
+      "Stored identities, login isolation, REST compatibility and existing tokens retained."
+    ],
+    "verification": {
+      "relevantTests": 32,
+      "files": 4,
+      "typecheck": "passed",
+      "changedFileLint": "passed with zero warnings"
+    },
+    "limits": "No production account rows renamed; full browser/CI certification is not claimed for this follow-up."
+  }
+}

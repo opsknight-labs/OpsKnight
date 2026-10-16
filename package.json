@@ -95,7 +95,11 @@
     "load:verify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/verify-results.ts",
     "load:metrics": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/metrics.ts",
     "load:providers": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/providers/server.ts",
-    "load:certify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/topology.ts"
+    "load:certify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/topology.ts",
+    "api:clients": "TS_NODE_PROJECT=tsconfig.script.json node -r ts-node/register -r tsconfig-paths/register scripts/api-v2/generate-clients.ts",
+    "api:clients:check": "npm run api:clients -- --check",
+    "test:api:clients": "vitest run tests/unit/api-v2-sdk.test.ts && python3 -m unittest discover -s tests/sdk -p \"test_*.py\"",
+    "certify:api:clients:live": "node tests/sdk/live-workflows.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1149.0",

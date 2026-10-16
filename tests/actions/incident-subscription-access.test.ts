@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   assertCanViewIncident: vi.fn(),
   watcherUpsert: vi.fn(),
+  watcherFindUnique: vi.fn(),
+  userFindFirst: vi.fn(),
   watcherFindFirst: vi.fn(),
   watcherDeleteMany: vi.fn(),
   eventCreate: vi.fn(),
@@ -32,11 +34,15 @@ describe('incident self-subscription actions', () => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'user-1', role: 'USER' });
     mocks.assertCanViewIncident.mockResolvedValue({ id: 'user-1', role: 'USER' });
     mocks.watcherUpsert.mockResolvedValue({ id: 'watcher-1' });
+    mocks.watcherFindUnique.mockResolvedValue(null);
+    mocks.userFindFirst.mockResolvedValue({ id: 'user-1', name: 'User' });
     mocks.watcherDeleteMany.mockResolvedValue({ count: 1 });
     mocks.eventCreate.mockResolvedValue({ id: 'event-1' });
     mocks.transaction.mockImplementation(async callback =>
       callback({
+        user: { findFirst: mocks.userFindFirst },
         incidentWatcher: {
+          findUnique: mocks.watcherFindUnique,
           upsert: mocks.watcherUpsert,
           findFirst: mocks.watcherFindFirst,
           deleteMany: mocks.watcherDeleteMany,
@@ -75,7 +81,7 @@ describe('incident self-subscription actions', () => {
   });
 
   it('allows a USER to remove only their own watcher record', async () => {
-    mocks.watcherFindFirst.mockResolvedValue({ userId: 'user-1' });
+    mocks.watcherFindFirst.mockResolvedValue({ id: 'watcher-1', userId: 'user-1' });
 
     await removeWatcher('inc-1', 'watcher-1');
 
@@ -85,7 +91,7 @@ describe('incident self-subscription actions', () => {
   });
 
   it('denies a USER removing another subscriber', async () => {
-    mocks.watcherFindFirst.mockResolvedValue({ userId: 'user-2' });
+    mocks.watcherFindFirst.mockResolvedValue({ id: 'watcher-2', userId: 'user-2' });
 
     await expect(removeWatcher('inc-1', 'watcher-2')).rejects.toMatchObject({
       code: 'AUTHORIZATION_DENIED',
@@ -95,14 +101,14 @@ describe('incident self-subscription actions', () => {
 
   it('keeps responder management of other subscribers', async () => {
     mocks.getCurrentUser.mockResolvedValue({ id: 'responder-1', role: 'RESPONDER' });
-    mocks.watcherFindFirst.mockResolvedValue({ userId: 'user-2' });
+    mocks.watcherFindFirst.mockResolvedValue({ id: 'watcher-2', userId: 'user-2' });
 
     await addWatcher('inc-1', 'user-2', 'STAKEHOLDER');
     await removeWatcher('inc-1', 'watcher-2');
 
     expect(mocks.assertCanViewIncident).not.toHaveBeenCalled();
     expect(mocks.watcherDeleteMany).toHaveBeenCalledWith({
-      where: { id: 'watcher-2', incidentId: 'inc-1' },
+      where: { id: 'watcher-2', incidentId: 'inc-1', userId: 'user-2' },
     });
   });
 });

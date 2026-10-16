@@ -1,9 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
 import { describe, expect, it } from 'vitest';
-import {
-  ENDPOINT_SAMPLES,
-  getVerifiedSampleBody,
-} from '@/lib/api-v2/endpoint-samples';
+import { ENDPOINT_SAMPLES, getVerifiedSampleBody } from '@/lib/api-v2/endpoint-samples';
 import {
   IncidentCreateV2Schema,
   IncidentUpdateV2Schema,
@@ -74,7 +71,9 @@ describe('API v2 Endpoint Verified Samples', () => {
     });
   }
 
-  it('provides verified samples for all 24 mutation endpoints with request bodies', () => {
-    expect(Object.keys(ENDPOINT_SAMPLES)).toHaveLength(24);
+  it('retains samples for every established request body', () => {
+    expect(Object.keys(ENDPOINT_SAMPLES).length).toBeGreaterThanOrEqual(
+      Object.keys(schemaMap).length
+    );
   });
 });

@@ -1,5 +1,6 @@
 import {
   API_SCOPES,
+  EXPLICIT_API_SCOPES,
   CAPABILITIES,
   hasCapability,
   type ApiScope,
@@ -36,6 +37,7 @@ export const AUTHORIZATION_ACTIONS = {
   RUNBOOK_READ: 'runbook.read',
   RUNBOOK_EXECUTE: 'runbook.execute',
   RUNBOOK_MANAGE: 'runbook.manage',
+  RUNBOOK_PUBLISH: 'runbook.publish',
   AUDIT_READ: 'audit.read',
   REPORT_READ: 'report.read',
   POSTMORTEM_READ: 'postmortem.read',
@@ -102,6 +104,7 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.RUNBOOK_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.RUNBOOK_PUBLISH]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.AUDIT_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.REPORT_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.POSTMORTEM_READ]?: AuthorizationResource;
@@ -336,6 +339,10 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     },
   ],
   [
+    AUTHORIZATION_ACTIONS.RUNBOOK_PUBLISH,
+    { global: CAPABILITIES.RUNBOOK_PUBLISH, apiScope: API_SCOPES.RUNBOOKS_PUBLISH },
+  ],
+  [
     AUTHORIZATION_ACTIONS.AUDIT_READ,
     {
       global: CAPABILITIES.AUDIT_READ,
@@ -421,7 +428,10 @@ export function authorize<A extends AuthorizationAction>(
     actor.apiKey &&
     policy.apiScope &&
     !actor.apiKey.scopes.includes(policy.apiScope) &&
-    !actor.apiKey.scopes.includes(API_SCOPES.ADMIN_MANAGE)
+    !(
+      actor.apiKey.scopes.includes(API_SCOPES.ADMIN_MANAGE) &&
+      !EXPLICIT_API_SCOPES.has(policy.apiScope)
+    )
   ) {
     return {
       allowed: false,

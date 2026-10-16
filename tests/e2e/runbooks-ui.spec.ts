@@ -238,6 +238,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.getByRole('combobox', { name: 'Agent to add' }).click();
   await page.getByPlaceholder('Search agent to add…').fill(agentName);
   await page.getByRole('option', { name: agentName, exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Agent to add' })).toContainText(agentName);
   await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
   await expect
     .poll(async () => prisma.runbookAgentPoolMember.count({ where: { agentId: agent.id } }))
@@ -253,6 +254,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.getByRole('combobox', { name: 'Initial secret grant' }).click();
   await page.getByPlaceholder('Search initial secret grant…').fill(agentName);
   await page.getByRole('option', { name: `Agent · ${agentName}`, exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Initial secret grant' })).toContainText(agentName);
   await page.getByRole('button', { name: 'Create encrypted secret', exact: true }).click();
   await expect
     .poll(async () => prisma.runbookSecret.count({ where: { name: secretName } }))
@@ -267,6 +269,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
   await page.getByPlaceholder('Search grant to target…').fill(poolName);
   await page.getByRole('option', { name: `Pool · ${poolName}`, exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Grant to target' })).toContainText(poolName);
   await page.getByRole('button', { name: 'Grant access', exact: true }).click();
   await expect
     .poll(async () => prisma.runbookSecretGrant.count({ where: { secretId: secret.id } }))

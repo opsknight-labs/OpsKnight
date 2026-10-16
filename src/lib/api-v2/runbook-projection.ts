@@ -4,10 +4,10 @@ import { requiresAgent, type RunbookStepType } from '@/lib/runbooks/types';
  * Public, read-only view of a runbook step.
  *
  * A step's `config` holds executable material: shell commands, HTTP targets and
- * headers, environment values and secret references. The REST surface only reads
- * and executes runbooks, so it exposes what a caller needs to understand and run
+ * headers, environment values and secret references. The public library projection exposes what a caller needs to understand and run
  * one (what it is, how risky it is, whether it needs approval or an agent) and
- * never the configuration. Definition authoring stays in the product UI.
+ * never the configuration. Privileged draft authoring uses a separate editable
+ * projection with revision-bound preservation of hidden configuration.
  */
 export interface ApiRunbookStep {
   key: string;

@@ -60,6 +60,7 @@ export function buildKeyInventoryWhere(
         { name: { contains: filters.q, mode: 'insensitive' } },
         { prefix: { contains: filters.q, mode: 'insensitive' } },
         { user: { email: { contains: filters.q, mode: 'insensitive' } } },
+        { user: { name: { contains: filters.q, mode: 'insensitive' } } },
       ],
     });
   }

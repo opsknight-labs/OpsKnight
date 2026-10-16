@@ -1,0 +1,710 @@
+{
+  "listIncidentWatchers": {
+    "method": "GET",
+    "path": "/incidents/{id}/watchers",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setIncidentWatcher": {
+    "method": "POST",
+    "path": "/incidents/{id}/watchers",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "removeIncidentWatcher": {
+    "method": "DELETE",
+    "path": "/incidents/{id}/watchers/{watcherId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "previewRunbookExecution": {
+    "method": "POST",
+    "path": "/runbooks/{id}/executions/preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "cancelRunbookExecution": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/cancel",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "addScheduleParticipant": {
+    "method": "POST",
+    "path": "/schedules/{id}/layers/{layerId}/participants",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "moveScheduleParticipant": {
+    "method": "PATCH",
+    "path": "/schedules/{id}/layers/{layerId}/participants/{userId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "removeScheduleParticipant": {
+    "method": "DELETE",
+    "path": "/schedules/{id}/layers/{layerId}/participants/{userId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "unsuppressIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/unsuppress",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "suppressIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/suppress",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "unsnoozeIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/unsnooze",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "snoozeIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/snooze",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "unacknowledgeIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/unacknowledge",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "reopenIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/reopen",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "createRunbook": {
+    "method": "POST",
+    "path": "/runbooks",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookVersions": {
+    "method": "GET",
+    "path": "/runbooks/{id}/versions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookDraft": {
+    "method": "POST",
+    "path": "/runbooks/{id}/drafts",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookDraft": {
+    "method": "GET",
+    "path": "/runbooks/{id}/drafts/{versionId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookDraft": {
+    "method": "PATCH",
+    "path": "/runbooks/{id}/drafts/{versionId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateRunbookDraft": {
+    "method": "POST",
+    "path": "/runbooks/{id}/drafts/{versionId}/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "publishRunbookDraft": {
+    "method": "POST",
+    "path": "/runbooks/{id}/drafts/{versionId}/publish",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listAuditLogs": {
+    "method": "GET",
+    "path": "/audit-logs",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getEscalationPolicy": {
+    "method": "GET",
+    "path": "/escalation-policies/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateEscalationPolicy": {
+    "method": "PATCH",
+    "path": "/escalation-policies/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "deleteEscalationPolicy": {
+    "method": "DELETE",
+    "path": "/escalation-policies/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listEscalationPolicies": {
+    "method": "GET",
+    "path": "/escalation-policies",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createEscalationPolicy": {
+    "method": "POST",
+    "path": "/escalation-policies",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "acknowledgeIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/acknowledge",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "assignIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/assign",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listIncidentNotes": {
+    "method": "GET",
+    "path": "/incidents/{id}/notes",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "addIncidentNote": {
+    "method": "POST",
+    "path": "/incidents/{id}/notes",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "resolveIncident": {
+    "method": "POST",
+    "path": "/incidents/{id}/resolve",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncident": {
+    "method": "GET",
+    "path": "/incidents/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateIncident": {
+    "method": "PATCH",
+    "path": "/incidents/{id}",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getIncidentTimeline": {
+    "method": "GET",
+    "path": "/incidents/{id}/timeline",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidents": {
+    "method": "GET",
+    "path": "/incidents",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createIncident": {
+    "method": "POST",
+    "path": "/incidents",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getIntegration": {
+    "method": "GET",
+    "path": "/integrations/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateIntegration": {
+    "method": "PATCH",
+    "path": "/integrations/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listIntegrations": {
+    "method": "GET",
+    "path": "/integrations",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "retryNotification": {
+    "method": "POST",
+    "path": "/notifications/{id}/retry",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listNotifications": {
+    "method": "GET",
+    "path": "/notifications",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getPostmortem": {
+    "method": "GET",
+    "path": "/postmortems/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updatePostmortem": {
+    "method": "PATCH",
+    "path": "/postmortems/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "deletePostmortem": {
+    "method": "DELETE",
+    "path": "/postmortems/{id}",
+    "kind": "none",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listPostmortems": {
+    "method": "GET",
+    "path": "/postmortems",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createPostmortem": {
+    "method": "POST",
+    "path": "/postmortems",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getMetricsReport": {
+    "method": "GET",
+    "path": "/reports/metrics",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "executeRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/execute",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getRunbook": {
+    "method": "GET",
+    "path": "/runbooks/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookExecution": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbooks": {
+    "method": "GET",
+    "path": "/runbooks",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getScheduleOnCall": {
+    "method": "GET",
+    "path": "/schedules/{id}/on-call",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listScheduleOverrides": {
+    "method": "GET",
+    "path": "/schedules/{id}/overrides",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createScheduleOverride": {
+    "method": "POST",
+    "path": "/schedules/{id}/overrides",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getSchedule": {
+    "method": "GET",
+    "path": "/schedules/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateSchedule": {
+    "method": "PATCH",
+    "path": "/schedules/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "deleteSchedule": {
+    "method": "DELETE",
+    "path": "/schedules/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listSchedules": {
+    "method": "GET",
+    "path": "/schedules",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createSchedule": {
+    "method": "POST",
+    "path": "/schedules",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getServiceAccount": {
+    "method": "GET",
+    "path": "/service-accounts/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteServiceAccount": {
+    "method": "DELETE",
+    "path": "/service-accounts/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "revokeServiceAccountToken": {
+    "method": "DELETE",
+    "path": "/service-accounts/{id}/tokens/{tokenId}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "issueServiceAccountToken": {
+    "method": "POST",
+    "path": "/service-accounts/{id}/tokens",
+    "kind": "item",
+    "idempotency": "never",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listServiceAccounts": {
+    "method": "GET",
+    "path": "/service-accounts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceAccount": {
+    "method": "POST",
+    "path": "/service-accounts",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getService": {
+    "method": "GET",
+    "path": "/services/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateService": {
+    "method": "PATCH",
+    "path": "/services/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "deleteService": {
+    "method": "DELETE",
+    "path": "/services/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServices": {
+    "method": "GET",
+    "path": "/services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createService": {
+    "method": "POST",
+    "path": "/services",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listStatusPageAnnouncements": {
+    "method": "GET",
+    "path": "/status-pages/{id}/announcements",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createStatusPageAnnouncement": {
+    "method": "POST",
+    "path": "/status-pages/{id}/announcements",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getStatusPage": {
+    "method": "GET",
+    "path": "/status-pages/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPage": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listStatusPages": {
+    "method": "GET",
+    "path": "/status-pages",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createStatusPage": {
+    "method": "POST",
+    "path": "/status-pages",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getTeam": {
+    "method": "GET",
+    "path": "/teams/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateTeam": {
+    "method": "PATCH",
+    "path": "/teams/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "deleteTeam": {
+    "method": "DELETE",
+    "path": "/teams/{id}",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listTeams": {
+    "method": "GET",
+    "path": "/teams",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createTeam": {
+    "method": "POST",
+    "path": "/teams",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getUser": {
+    "method": "GET",
+    "path": "/users/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listUsers": {
+    "method": "GET",
+    "path": "/users",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  }
+}

@@ -75,7 +75,6 @@ export type ServiceAccountToken = {
 export type ServiceAccountItem = {
   id: string;
   name: string;
-  email: string;
   role: string;
   status: string;
   createdAt: string;
@@ -312,7 +311,7 @@ export default function ServiceAccountsPanel({
                 name="sq"
                 defaultValue={inventory.q}
                 aria-label="Search service accounts"
-                placeholder="Search service accounts by name or email..."
+                placeholder="Search service accounts by name or account ID..."
                 className="h-9 text-xs pl-8 bg-background"
               />
             </div>
@@ -408,7 +407,7 @@ export default function ServiceAccountsPanel({
                         </Badge>
                       </div>
 
-                      <p className="text-xs font-mono text-muted-foreground truncate">{sa.email}</p>
+                      <p className="text-xs font-mono text-muted-foreground truncate">Account ID: {sa.id}</p>
 
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap pt-0.5">
                         <span>Created {sa.createdAt}</span>

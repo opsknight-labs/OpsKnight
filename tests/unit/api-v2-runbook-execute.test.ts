@@ -310,7 +310,8 @@ describe('POST /api/v2/runbooks/[id]/execute execution boundary & authorization'
         expectedPlanDigest: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
         previewAuthorizationToken: 'token1234567890token1234567890token1234567890token1234567890',
       }),
-      expect.anything()
+      expect.anything(),
+      { apiClientId: 'key_resp_1' }
     );
   });
 

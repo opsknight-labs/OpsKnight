@@ -97,7 +97,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.SCHEDULES_WRITE,
     'Schedules manage',
     'Schedules',
-    'Create and update schedules and create overrides. Layer and rotation editing is not available over REST.',
+    'Create and update schedules, manage rotation participants, and create overrides. Layer configuration editing is not available over REST.',
     { write: true }
   ),
   [S.TEAMS_READ]: def(S.TEAMS_READ, 'Teams read', 'Teams', 'List and read teams.', {
@@ -190,8 +190,15 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.RUNBOOKS_WRITE,
     'Runbooks author',
     'Runbooks',
-    'Reserved: runbook definition authoring and publication is not available over REST.',
-    { write: true, issuableBy: ADMINS, status: 'reserved' }
+    'Create runbooks and edit drafts. Requires an explicit scope; publishing requires runbooks:publish.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.RUNBOOKS_PUBLISH]: def(
+    S.RUNBOOKS_PUBLISH,
+    'Runbooks publish',
+    'Runbooks',
+    'Publish validated runbook drafts. Must be granted explicitly.',
+    { write: true, issuableBy: ADMINS }
   ),
   [S.AUDIT_READ]: def(
     S.AUDIT_READ,
@@ -251,7 +258,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.ADMIN_MANAGE,
     'Administrator',
     'Administration',
-    'Administrator-level access across the API. Grant only to trusted automation.',
+    'Administrator access to ordinary API operations. Runbook authoring, publishing and execution require explicit scopes.',
     { write: true, issuableBy: ADMINS }
   ),
 };

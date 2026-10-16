@@ -62,7 +62,7 @@ export function buildServiceAccountWhere(
     and.push({
       OR: [
         { name: { contains: filters.q, mode: 'insensitive' } },
-        { email: { contains: filters.q, mode: 'insensitive' } },
+        { id: { contains: filters.q, mode: 'insensitive' } },
       ],
     });
   }

@@ -1,3 +1,4 @@
+import { EXPLICIT_API_SCOPES } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
 import {
   authorize,
@@ -60,7 +61,22 @@ export function enforceV2Authorization(
 
 export function hasV2Scope(actor: AuthorizationActor, scope: string): boolean {
   if (!actor.apiKey) return true;
-  if (actor.apiKey.scopes.includes('admin:manage')) return true;
+  if (actor.apiKey.scopes.includes('admin:manage') && !EXPLICIT_API_SCOPES.has(scope)) return true;
   return actor.apiKey.scopes.includes(scope);
 }
 
+/** A resource-scoped collection decision is never sufficient for a handler. */
+export function enforceV2ResourceAuthorization(
+  actor: AuthorizationActor,
+  action: AuthorizationAction,
+  resource?: AuthorizationResource
+): void {
+  enforceV2Authorization(actor, action, resource);
+  const decision = authorize({ actor, action, resource });
+  if (decision.allowed && decision.scope === 'resource' && !resource) {
+    throw new AppError({
+      code: 'AUTHORIZATION_DENIED',
+      userMessage: 'This operation requires an explicit resource authorization check.',
+    });
+  }
+}

@@ -39,7 +39,7 @@ import {
   parseServiceAccountFilters,
   SERVICE_ACCOUNT_PAGE_SIZE,
 } from '@/lib/service-account-inventory';
-import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
+import { SERVICE_ACCOUNT_DOMAIN, isServiceAccountEmail } from '@/lib/service-account-identity';
 import {
   API_ACTIVITY_PAGE_SIZE,
   buildApiActivityWhere,
@@ -224,7 +224,7 @@ export default async function ApiKeysSettingsPage({
 
   let rawKeys: Array<
     Awaited<
-      ReturnType<typeof prisma.apiKey.findMany<{ include: { user: { select: { email: true } } } }>>
+      ReturnType<typeof prisma.apiKey.findMany<{ include: { user: { select: { email: true, name: true } } } }>>
     >[number]
   > = [];
   let nextKeyCursor: string | null = null;
@@ -233,7 +233,7 @@ export default async function ApiKeysSettingsPage({
     const [rows, matches] = await Promise.all([
       prisma.apiKey.findMany({
         where: buildKeyInventoryWhere(keyScope, keyFilters, now),
-        include: { user: { select: { email: true } } },
+        include: { user: { select: { email: true, name: true } } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: KEY_INVENTORY_PAGE_SIZE + 1,
       }),
@@ -254,7 +254,9 @@ export default async function ApiKeysSettingsPage({
     name: key.name,
     prefix: key.prefix,
     scopes: key.scopes,
-    ownerEmail: key.user.email,
+    ownerLabel: isServiceAccountEmail(key.user.email)
+      ? key.user.name || 'Service account'
+      : key.user.email,
     createdAt: formatDateTime(key.createdAt, timeZone, { format: 'date' }),
     lastUsedAt: key.lastUsedAt
       ? formatDateTime(key.lastUsedAt, timeZone, { format: 'date' })
@@ -359,7 +361,6 @@ export default async function ApiKeysSettingsPage({
   const formattedServiceAccounts: ServiceAccountItem[] = rawServiceAccounts.map(sa => ({
     id: sa.id,
     name: sa.name,
-    email: sa.email,
     role: sa.role,
     status: sa.status,
     createdAt: formatDateTime(sa.createdAt, timeZone, { format: 'date' }),
@@ -432,8 +433,8 @@ export default async function ApiKeysSettingsPage({
     action: log.action,
     entityType: log.entityType,
     entityId: log.entityId,
-    actorEmail: log.actorEmail,
-    actorName: log.actorName,
+    actorEmail: isServiceAccountEmail(log.actorEmail) ? null : log.actorEmail,
+    actorName: log.actorName || (isServiceAccountEmail(log.actorEmail) ? 'Service account' : null),
     createdAt: formatDateTime(log.createdAt, timeZone, { format: 'datetime' }),
     details: sanitizeAuditDetails(log.details),
     ip: maskIp(log.ip),
@@ -445,7 +446,7 @@ export default async function ApiKeysSettingsPage({
       <DetailHeroBanner
         tag="Developer & Programmatic Access Workspace"
         title="Developer & API Access"
-        subtitle="Manage personal API keys, machine service accounts, inspect all 38 v2 REST endpoints, and monitor API gateway activity."
+        subtitle={`Manage personal API keys, machine service accounts, inspect all ${endpointCount} v2 REST endpoints, and monitor API gateway activity.`}
         icon={
           <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
             <Key className="h-8 w-8" />

@@ -4,6 +4,34 @@
  */
 
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
+  'POST /incidents/{id}/watchers': { userId: 'usr_789012', role: 'FOLLOWER' },
+  'POST /runbooks/{id}/executions/preview': { parameters: {} },
+  'POST /runbooks/executions/{id}/cancel': {
+    reason: 'Operator requested stop after investigation.',
+  },
+  'POST /runbooks': {
+    name: 'Manual verification',
+    slug: 'manual-verification',
+    description: 'Operator verification workflow',
+  },
+  'POST /runbooks/{id}/drafts': { sourceVersionId: 'clrunbookversion0000000001' },
+  'PATCH /runbooks/{id}/drafts/{versionId}': {
+    definition: { steps: [{ key: 'verify', name: 'Verify recovery', type: 'MANUAL', config: {} }] },
+    inputs: [],
+  },
+  'POST /runbooks/{id}/drafts/{versionId}/validate': {},
+  'POST /runbooks/{id}/drafts/{versionId}/publish': {},
+  'POST /incidents/{id}/reopen': { note: 'The symptom has returned.' },
+  'POST /incidents/{id}/unacknowledge': {},
+  'POST /incidents/{id}/snooze': {
+    snoozedUntil: '2099-01-01T01:00:00.000Z',
+    note: 'Scheduled investigation.',
+  },
+  'POST /incidents/{id}/unsnooze': {},
+  'POST /incidents/{id}/suppress': { note: 'Confirmed expected maintenance.' },
+  'POST /incidents/{id}/unsuppress': {},
+  'POST /schedules/{id}/layers/{layerId}/participants': { userId: 'usr_789012' },
+  'PATCH /schedules/{id}/layers/{layerId}/participants/{userId}': { direction: 'up' },
   'POST /incidents': {
     title: 'Elevated API error rates on checkout service',
     serviceId: 'srv_prod_checkout',
@@ -27,7 +55,8 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
     assigneeId: 'usr_789012',
   },
   'POST /incidents/{id}/notes': {
-    content: 'Traffic successfully rerouted to secondary cluster; 5xx error rate normalized to 0.01%.',
+    content:
+      'Traffic successfully rerouted to secondary cluster; 5xx error rate normalized to 0.01%.',
   },
   'POST /services': {
     name: 'Payment Gateway API',
@@ -107,7 +136,8 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'POST /service-accounts': {
     name: 'Terraform Automation',
     role: 'RESPONDER',
-    description: 'Machine service account for CI/CD pipeline automation and infrastructure provisioning',
+    description:
+      'Machine service account for CI/CD pipeline automation and infrastructure provisioning',
     teamIds: ['team_platform'],
   },
   'POST /service-accounts/{id}/tokens': {
@@ -118,7 +148,8 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'POST /postmortems': {
     incidentId: 'inc_123456',
     title: 'Postmortem: Checkout Latency Spike in EU Region',
-    summary: 'Database connection pool exhaustion caused elevated 5xx error rates during morning traffic peak.',
+    summary:
+      'Database connection pool exhaustion caused elevated 5xx error rates during morning traffic peak.',
     rootCause: 'Unindexed query on orders table saturated active connection pool.',
     resolution: 'Applied database index concurrently and increased max connection pool limit.',
     lessons: 'Add query latency monitoring and pre-flight index verification to CI checks.',
@@ -134,7 +165,10 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
 /**
  * Retrieve verified sample body for an endpoint method and path.
  */
-export function getVerifiedSampleBody(method: string, path: string): Record<string, unknown> | undefined {
+export function getVerifiedSampleBody(
+  method: string,
+  path: string
+): Record<string, unknown> | undefined {
   const key = `${method.toUpperCase()} ${path}`;
   // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
   return ENDPOINT_SAMPLES[key];

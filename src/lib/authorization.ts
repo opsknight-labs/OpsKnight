@@ -87,6 +87,7 @@ export const API_SCOPES = {
   RUNBOOKS_READ: 'runbooks:read',
   RUNBOOKS_EXECUTE: 'runbooks:execute',
   RUNBOOKS_WRITE: 'runbooks:write',
+  RUNBOOKS_PUBLISH: 'runbooks:publish',
   AUDIT_READ: 'audit:read',
   REPORTS_READ: 'reports:read',
   POSTMORTEMS_READ: 'postmortems:read',
@@ -98,6 +99,13 @@ export const API_SCOPES = {
   ADMIN_MANAGE: 'admin:manage',
 } as const;
 
+/** Infrastructure permissions are never implied by a broad administrator credential. */
+export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
+  API_SCOPES.RUNBOOKS_WRITE,
+  API_SCOPES.RUNBOOKS_PUBLISH,
+  API_SCOPES.RUNBOOKS_EXECUTE,
+]);
+
 export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];
 
 export function isApiScope(value: unknown): value is ApiScope {
@@ -105,7 +113,12 @@ export function isApiScope(value: unknown): value is ApiScope {
 }
 
 export function isWriteApiScope(scope: ApiScope): boolean {
-  return scope.endsWith(':write') || scope.endsWith(':execute') || scope === 'admin:manage';
+  return (
+    scope.endsWith(':write') ||
+    scope.endsWith(':execute') ||
+    scope.endsWith(':publish') ||
+    scope === 'admin:manage'
+  );
 }
 
 const ADMIN_CAPABILITIES = new Set<Capability>(Object.values(CAPABILITIES));
