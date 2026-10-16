@@ -21,7 +21,8 @@ import {
 } from './definition';
 import { matchesCondition, validateAndMatchTrigger } from './matcher';
 import { redactRunbookDisplayName } from './display-name';
-import { finalizeVerificationEvidence } from './verification-evidence';
+import { finalizeExecutionDeadline } from './deadline';
+import { enqueueVerificationEvidence, finalizeVerificationEvidence } from './verification-evidence';
 import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
@@ -51,6 +52,13 @@ import {
 import { lockRunbookForShare } from './locking';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('FINALIZE_VERIFICATION'),
+      executionId: z.string().cuid(),
+      revision: z.number().int().positive().optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('ADVANCE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('RECONCILE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z
@@ -1359,6 +1367,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_FAILED',
               'Runbook execution failed due to an unknown step outcome during cancellation.'
             );
+            await enqueueVerificationEvidence(tx, executionId);
           }
         } else {
           const cancelled = await tx.runbookExecution.updateMany({
@@ -1372,6 +1381,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_CANCELLED',
               'Runbook execution cancelled.'
             );
+            await enqueueVerificationEvidence(tx, executionId);
           }
         }
       }
@@ -1379,122 +1389,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
     return;
   }
   if (execution.deadlineAt <= new Date()) {
-    await prisma.$transaction(async tx => {
-      await tx.runbookStepAttempt.updateMany({
-        where: {
-          executionStep: { executionId },
-          status: { in: ['PENDING', 'CLAIMED'] },
-        },
-        data: {
-          status: 'TIMED_OUT',
-          completedAt: new Date(),
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          status: { in: ['PENDING', 'READY', 'WAITING_APPROVAL', 'WAITING_AGENT'] },
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'WAIT',
-          status: 'RUNNING',
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'HTTP',
-          status: 'RUNNING',
-          riskClass: 'READ_ONLY',
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'HTTP',
-          status: 'RUNNING',
-          riskClass: { not: 'READ_ONLY' },
-        },
-        data: {
-          status: 'UNKNOWN',
-          completedAt: new Date(),
-          errorCode: 'TIMED_OUT_WITH_UNKNOWN_OUTCOME',
-          outputPreview:
-            'Execution timed out while HTTP write operation was in flight; outcome is unknown.',
-        },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          status: 'RUNNING',
-          type: {
-            notIn: ['HTTP', 'WAIT', 'LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'],
-          },
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      const active = await tx.runbookStepAttempt.count({
-        where: { executionStep: { executionId }, status: 'RUNNING' },
-      });
-      if (active === 0) {
-        const hasUnknown = await tx.runbookExecutionStep.count({
-          where: { executionId, status: 'UNKNOWN' },
-        });
-        if (hasUnknown > 0) {
-          const failed = await tx.runbookExecution.updateMany({
-            where: {
-              id: executionId,
-              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-            },
-            data: {
-              status: 'FAILED',
-              completedAt: new Date(),
-              failureCode: 'UNKNOWN_OUTCOME',
-              failureMessage:
-                'Execution timed out while one or more write steps had unverified outcomes.',
-            },
-          });
-          if (failed.count === 1) {
-            await addIncidentRunbookEvent(
-              tx,
-              execution.incidentId,
-              'RUNBOOK_FAILED',
-              'Runbook execution timed out with an unverified write outcome.'
-            );
-            await finalizeVerificationEvidence(tx, executionId);
-          }
-        } else {
-          const timedOut = await tx.runbookExecution.updateMany({
-            where: {
-              id: executionId,
-              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-            },
-            data: {
-              status: 'TIMED_OUT',
-              completedAt: new Date(),
-              failureCode: 'EXECUTION_TIMEOUT',
-            },
-          });
-          if (timedOut.count === 1) {
-            await addIncidentRunbookEvent(
-              tx,
-              execution.incidentId,
-              'RUNBOOK_FAILED',
-              'Runbook execution timed out.'
-            );
-            await finalizeVerificationEvidence(tx, executionId);
-          }
-        }
-      }
-    });
+    await prisma.$transaction(tx => finalizeExecutionDeadline(tx, executionId));
     return;
   }
   const failed = execution.steps.find(
@@ -1522,7 +1417,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_FAILED',
           `Runbook failed at step: ${failed.name}`
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1544,7 +1439,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_COMPLETED',
           'Runbook execution completed.'
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1717,6 +1612,12 @@ export async function processRunbookJob(raw: unknown): Promise<void> {
   const payload = jobPayloadSchema.parse(raw);
   if (payload.kind === 'ADVANCE_EXECUTION' || payload.kind === 'RECONCILE_EXECUTION') {
     await advanceExecution(payload.executionId);
+    return;
+  }
+  if (payload.kind === 'FINALIZE_VERIFICATION') {
+    await prisma.$transaction(tx =>
+      finalizeVerificationEvidence(tx, payload.executionId, payload.revision)
+    );
     return;
   }
   const { evaluateIncidentTriggers } = await import('./triggers');

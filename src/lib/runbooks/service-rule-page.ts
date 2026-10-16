@@ -20,6 +20,7 @@ export async function getServiceRulePage(
       /* Invalid cursors restart at the first page. */
     }
   }
+  const total = await db.serviceAutomationRule.count({ where: { serviceId, detachedAt: null } });
   const rows = await db.serviceAutomationRule.findMany({
     where: {
       serviceId,
@@ -82,6 +83,7 @@ export async function getServiceRulePage(
   const last = rules.at(-1);
   return {
     rules,
+    total,
     hasNext: rows.length > SERVICE_RULE_PAGE_SIZE,
     nextCursor: last
       ? Buffer.from(

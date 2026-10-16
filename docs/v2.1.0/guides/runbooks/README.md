@@ -42,3 +42,6 @@ For API integrations, see the [v2 API reference](../../reference/api/v2).
 Bound executions use the rule's saved inputs; request parameters cannot override
 them. The [Runbook reference](../../reference/runbooks) documents maintenance
 limits and the distinction between measured checks and release qualification.
+
+For staged enterprise qualification, physical target tests and authenticated HTTP
+measurements, follow [Runbook qualification](../../operate/deploy/runbook-qualification).

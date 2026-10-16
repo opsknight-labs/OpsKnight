@@ -10,6 +10,7 @@ export type ExecutionOutputViewerProps = {
   label: string;
   output: string;
   artifactId?: string | null;
+  canDownloadArtifacts?: boolean;
   truncatedHint?: boolean;
 };
 
@@ -20,6 +21,7 @@ export function ExecutionOutputViewer({
   label,
   output,
   artifactId,
+  canDownloadArtifacts = false,
   truncatedHint,
 }: ExecutionOutputViewerProps) {
   const [wrap, setWrap] = useState(true);
@@ -81,11 +83,11 @@ export function ExecutionOutputViewer({
             )}
             {copied ? 'Copied' : 'Copy'}
           </Button>
-          {artifactId && (
+          {artifactId && canDownloadArtifacts && (
             <Button asChild variant="ghost" size="sm" className={TOOL_BUTTON}>
               <a href={`/api/runbook-artifacts/${encodeURIComponent(artifactId)}`}>
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Download full output
+                Download sanitized output
               </a>
             </Button>
           )}

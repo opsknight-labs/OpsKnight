@@ -470,6 +470,7 @@ export default async function IncidentRunbooks({
                               aria-hidden="true"
                               className={cn(
                                 'absolute left-0 top-0.5 flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-inset',
+                                // eslint-disable-next-line security/detect-object-injection -- tone is a finite value from stepTone(), not a request key.
                                 TONE_SURFACE[tone]
                               )}
                             >
@@ -508,15 +509,18 @@ export default async function IncidentRunbooks({
                                   </ul>
                                 </details>
                               )}
-                              {step.outputArtifactId && (
-                                <Link
-                                  href={`/api/runbook-artifacts/${step.outputArtifactId}`}
-                                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                                >
-                                  <Download className="h-3.5 w-3.5" aria-hidden /> Download full
-                                  output
-                                </Link>
-                              )}
+                              {step.outputArtifactId &&
+                                permissions.capabilities.includes(
+                                  CAPABILITIES.RUNBOOK_ARTIFACT_DOWNLOAD
+                                ) && (
+                                  <Link
+                                    href={`/api/runbook-artifacts/${step.outputArtifactId}`}
+                                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                  >
+                                    <Download className="h-3.5 w-3.5" aria-hidden /> Download full
+                                    output
+                                  </Link>
+                                )}
                               {step.status === 'WAITING_APPROVAL' && (
                                 <div className="mt-3 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-3.5">
                                   <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200">

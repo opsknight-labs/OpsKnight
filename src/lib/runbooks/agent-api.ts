@@ -189,6 +189,8 @@ export function agentApiError(error: unknown) {
       'Compressed artifact must be between 1 byte and 1 MiB.',
       'Compressed artifact must be between 1 byte and 10 MiB.',
       'Artifact checksum does not match.',
+      'Artifact must be valid gzip with at most 10 MiB of decoded text.',
+      'Artifact must contain valid UTF-8 text.',
     ].includes(message)
   ) {
     return jsonError(message, 400);

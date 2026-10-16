@@ -6,7 +6,7 @@ product_area: authorization
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-03
+  verified_at: 2026-10-16
   evidence:
     - src/lib/authorization.ts
 ---
@@ -57,6 +57,15 @@ resource scope remain authoritative.
 - `retention.holds.manage`
 - `retention.manage`
 - `retention.read`
+- `runbook.agent.manage`
+- `runbook.approve`
+- `runbook.artifact.download`
+- `runbook.execute`
+- `runbook.manage`
+- `runbook.publish`
+- `runbook.read.all`
+- `runbook.read.scoped`
+- `runbook.secret.manage`
 - `schedule.read.all`
 - `schedule.read.scoped`
 - `service.read.all`

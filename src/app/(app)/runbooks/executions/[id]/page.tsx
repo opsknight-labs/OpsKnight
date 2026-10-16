@@ -85,7 +85,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
             select: {
               targetAgent: { select: { name: true } },
               targetAgentPool: { select: { name: true } },
-              claimedAgent: { select: { name: true } },
+              claimedAgent: { select: { name: true, lastHeartbeatAt: true } },
               leaseExpiresAt: true,
               planDigest: true,
               preState: true,
@@ -190,6 +190,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
         errorMessage: att.errorMessage ? redactRunbookOutput(att.errorMessage) : null,
         target: att.targetAgent?.name ?? att.targetAgentPool?.name ?? 'Control plane',
         claimedBy: att.claimedAgent?.name ?? 'Unclaimed',
+        agentLastContact: fmt(att.claimedAgent?.lastHeartbeatAt ?? null, 'Not reported'),
         queuedAt: fmt(att.createdAt, 'Not recorded'),
         claimedAt: fmt(att.claimedAt, att.claimedAgent ? 'Not recorded' : 'Unclaimed'),
         startedAt: fmt(att.startedAt, 'Not started'),
@@ -406,6 +407,9 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
             runbookName={runbookName}
             steps={timelineSteps}
             canApprove={canApprove}
+            canDownloadArtifacts={permissions.capabilities.includes(
+              CAPABILITIES.RUNBOOK_ARTIFACT_DOWNLOAD
+            )}
             targetLabel={targetLabel}
             versionLabel={versionLabel}
           />

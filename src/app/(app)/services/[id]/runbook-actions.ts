@@ -92,7 +92,7 @@ function executionTarget(value: FormDataEntryValue | null) {
 async function bindingActor(serviceId: string) {
   const [actor] = await Promise.all([
     assertCanModifyService(serviceId),
-    assertCapability(CAPABILITIES.RUNBOOK_READ_ALL),
+    assertCapability(CAPABILITIES.RUNBOOK_MANAGE),
   ]);
   return actor;
 }

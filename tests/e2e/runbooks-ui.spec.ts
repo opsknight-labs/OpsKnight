@@ -739,6 +739,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     }
   }
   await page.goto(`/services/${serviceId}/automations/${rule.id}`);
+  await expect(page.getByRole('region', { name: 'What the evidence establishes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: ruleName, exact: true })).toBeVisible();
   await page
     .getByRole('button', { name: 'Validate configuration · No execution', exact: true })
@@ -1014,6 +1015,12 @@ test('server pagination, administrator labels, effective capabilities and budget
     )
     .toEqual({ env: 'prod', host: 'node-a' });
   await page.keyboard.press('Escape');
+  // Initialize signing through the real setup page; this case must also run in isolation.
+  await page.goto(`/runbooks/agents/${agent.id}/setup`);
+  await expect
+    .poll(() => prisma.runbookExecutionSigningKey.count({ where: { state: 'ACTIVE' } }))
+    .toBe(1);
+  await page.goto(`/runbooks/agents?q=${encodeURIComponent(agent.name)}`);
   await page
     .getByRole('navigation', { name: 'Infrastructure sections' })
     .getByRole('link', { name: /^security/i })
@@ -1060,6 +1067,7 @@ test('server pagination, administrator labels, effective capabilities and budget
   await page.getByRole('button', { name: 'Activate acknowledged identity' }).click();
   await expect(
     page
+      .getByRole('main')
       .getByText(
         'Every enrolled Agent, including offline Agents, must acknowledge the NEXT trusted key.'
       )
@@ -1136,6 +1144,7 @@ test('service rule rendering stays bounded at 100, 1000 and 10000 rules', async 
     for (let i = 0; i < 5; i++) {
       const started = performance.now();
       await page.goto(`/services/${service.id}?tab=runbooks`);
+      await expect(page.getByRole('tab', { name: /^Runbooks/ })).toContainText(String(size));
       await expect(
         page.getByText('20 rules on this page', { exact: true }).filter({ visible: true })
       ).toBeVisible();
@@ -1364,7 +1373,7 @@ test('editing an active Automatic rule warns, pauses it and leads to reactivatio
     .getByRole('link', { name: 'Recheck policy and reactivate from Rule evidence' })
     .click();
   await expect(page).toHaveURL(
-    `http://127.0.0.1:3205/services/${service.id}/automations/${rule.id}`
+    `${new URL(page.url()).origin}/services/${service.id}/automations/${rule.id}`
   );
   await expect(page.getByRole('heading', { name: 'Activate Automatic rule' })).toBeVisible();
 });

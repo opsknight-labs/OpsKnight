@@ -1,3 +1,4 @@
+vi.mock('@/lib/runbooks/claim-availability', () => ({ mayHaveAgentWork: async () => true }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST as startRoute } from '../../../src/app/api/runbook-agent/v1/jobs/[id]/start/route';
 import { POST as resultRoute } from '../../../src/app/api/runbook-agent/v1/jobs/[id]/result/route';
