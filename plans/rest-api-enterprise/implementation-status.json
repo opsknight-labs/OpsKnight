@@ -8,7 +8,10 @@
     "capabilities": "src/lib/api-v2/capability-catalog.ts",
     "operations": "src/lib/api-v2/openapi-registry.ts",
     "mutationContracts": "src/lib/api-v2/mutation-contract.ts",
-    "openapi": "sdk/openapi-v2.json"
+    "openapi": "sdk/openapi-v2.json",
+    "coveragePlan": "plans/rest-api-enterprise/complete-feature-coverage-plan.md",
+    "workflowInventory": "plans/rest-api-enterprise/workflow-inventory.json",
+    "commandStandard": "plans/rest-api-enterprise/domain-command-standard.md"
   },
   "phases": [
     {
@@ -135,5 +138,22 @@
     "The temporary memory-backed database proves transaction behavior, not crash durability.",
     "The admin:manage runbook scope change requires the documented credential migration.",
     "Live SDK tests used a local production build and isolated PostgreSQL, not a customer production deployment."
-  ]
+  ],
+  "followupDelivery": {
+    "id": "API-13",
+    "branch": "feat/api-13-enterprise-contracts",
+    "worktree": "opsknight-api-contracts",
+    "status": "in_progress",
+    "delivered": [
+      "Capability-family source mapping and delivery ownership",
+      "Preserved complete feature coverage plan and eight pending release gates",
+      "Shared command and operation admission standard",
+      "Inventory, source-path and registered mutation contract drift checks"
+    ],
+    "remaining": [
+      "Per-operation UI/domain extraction and authorization review in each owning delivery",
+      "Integration and certification of the separate service-automation branch before API-14",
+      "All endpoint-family implementations and combined-system certification"
+    ]
+  }
 }
