@@ -18,7 +18,6 @@ import {
   PlayCircle,
   Server,
   ShieldAlert,
-  Tag,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -41,7 +40,6 @@ import {
   updateRunbookMetadataAction,
 } from '../actions';
 import { retireVersionAction } from './version-actions';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import DetailTabs from '@/components/ui/DetailTabs';
 import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import {

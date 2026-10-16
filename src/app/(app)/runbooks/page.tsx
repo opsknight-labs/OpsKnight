@@ -1,12 +1,4 @@
-import {
-  Activity,
-  Archive,
-  BookOpen,
-  CheckCircle2,
-  PencilLine,
-  Server,
-  Workflow,
-} from 'lucide-react';
+import { Activity, BookOpen, CheckCircle2, PencilLine, Server, Workflow } from 'lucide-react';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -25,7 +17,6 @@ import { runbookLibraryFilterSchema } from '@/lib/runbooks/schemas';
 import { buildRunbookLibraryWhere } from '@/lib/runbooks/lifecycle';
 import { isValidRunbookTag } from '@/lib/runbooks/metadata-form';
 import { getUserTimeZone } from '@/lib/timezone';
-import { cn } from '@/lib/utils';
 import { z } from 'zod';
 
 export const revalidate = 0;
@@ -106,6 +97,7 @@ export default async function RunbooksPage({
       }),
       getPopularRunbookTags(),
     ]);
+  void archivedCount;
   const [permissions, runbooks, navigation] = await Promise.all([
     getUserPermissions(),
     prisma.runbook.findMany({

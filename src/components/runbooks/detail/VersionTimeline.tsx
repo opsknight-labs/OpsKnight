@@ -1,13 +1,5 @@
 import Link from 'next/link';
-import {
-  Archive,
-  Check,
-  CheckCircle2,
-  GitBranch,
-  GitCompare,
-  History,
-  PencilLine,
-} from 'lucide-react';
+import { Archive, Check, GitBranch, GitCompare, PencilLine } from 'lucide-react';
 import { ConfirmAction, type RunbookFormAction } from '@/components/runbooks/RunbookControls';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { EmptyHint } from '@/components/runbooks/ui/primitives';
