@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +45,23 @@ import StepNavigator from './builder/StepNavigator';
 import StepEditor from './builder/StepEditor';
 import ReadinessBar from './builder/ReadinessBar';
 import { validateRunbook } from './builder/validation';
+import { JsonCodeEditor } from './builder/JsonCodeEditor';
+
+function firstSchemaIssue(result: {
+  success: boolean;
+  error?: { issues: { path: PropertyKey[]; message: string }[] };
+}): string | null {
+  if (result.success) return null;
+  const issues = result.error?.issues ?? [];
+  const path = issues[0]?.path.map(String).join('.');
+  const where = path ? ` at ${path}` : '';
+  return `Does not match the runbook schema${where} (${issues.length || 1} issue${issues.length === 1 ? '' : 's'}). Apply to see details.`;
+}
+
+const validateDefinitionJson = (parsed: unknown) =>
+  firstSchemaIssue(runbookDefinitionSchema.safeParse(parsed));
+const validateInputsJson = (parsed: unknown) =>
+  firstSchemaIssue(runbookInputsSchema.safeParse(parsed));
 
 export function collectAllReferencedInputKeys(def: RunbookDefinition): Set<string> {
   const referenced = new Set<string>();
@@ -660,7 +678,12 @@ export default function RunbookBuilder({
                 label={`Input ${index + 1} type`}
                 value={input.type}
                 disabled={readOnly}
-                onValueChange={v => update({ type: v as RunbookInputInput['type'] })}
+                onValueChange={v =>
+                  update({
+                    type: v as RunbookInputInput['type'],
+                    options: v === 'SELECT' ? (input.options ?? []) : undefined,
+                  })
+                }
                 options={RUNBOOK_INPUT_TYPES.map(t => ({
                   value: t,
                   label: t.replaceAll('_', ' '),
@@ -676,6 +699,33 @@ export default function RunbookBuilder({
                 onChange={e => update({ defaultValue: e.target.value })}
               />
             </div>
+            {input.type === 'SELECT' && (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor={`input-options-${identity}`}>Options · one per line</Label>
+                <Textarea
+                  id={`input-options-${identity}`}
+                  aria-label={`Input ${index + 1} options`}
+                  value={(input.options ?? []).join('\n')}
+                  disabled={readOnly}
+                  rows={Math.min(8, Math.max(3, (input.options?.length ?? 0) + 1))}
+                  onChange={e =>
+                    update({
+                      options: e.target.value
+                        .split('\n')
+                        .map(option => option.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                  className={cn('font-mono text-xs', currentErrors?.options && 'border-destructive')}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Responders choose one of these values. The default must match an option.
+                </p>
+                {currentErrors?.options && (
+                  <p className="text-xs text-destructive">{currentErrors.options}</p>
+                )}
+              </div>
+            )}
             {currentErrors?.general && (
               <p role="alert" className="text-xs text-destructive sm:col-span-2">
                 {currentErrors.general}
@@ -904,35 +954,29 @@ export default function RunbookBuilder({
         Refresh JSON from builder
       </Button>
 
-      <div className="space-y-1.5">
-        <Label>Definition JSON</Label>
-        <Textarea
-          aria-label="Definition JSON"
-          value={advancedDefinition}
-          onChange={e => {
-            setAdvancedDefinition(e.target.value);
-            setUnappliedJson(true);
-          }}
-          readOnly={readOnly}
-          className="min-h-72 font-mono text-xs"
-          spellCheck={false}
-        />
-      </div>
+      <JsonCodeEditor
+        label="Definition JSON"
+        value={advancedDefinition}
+        onChange={next => {
+          setAdvancedDefinition(next);
+          setUnappliedJson(true);
+        }}
+        readOnly={readOnly}
+        minRows={18}
+        validate={validateDefinitionJson}
+      />
 
-      <div className="space-y-1.5">
-        <Label>Typed inputs JSON</Label>
-        <Textarea
-          aria-label="Typed inputs JSON"
-          value={advancedInputs}
-          onChange={e => {
-            setAdvancedInputs(e.target.value);
-            setUnappliedJson(true);
-          }}
-          readOnly={readOnly}
-          className="min-h-40 font-mono text-xs"
-          spellCheck={false}
-        />
-      </div>
+      <JsonCodeEditor
+        label="Typed inputs JSON"
+        value={advancedInputs}
+        onChange={next => {
+          setAdvancedInputs(next);
+          setUnappliedJson(true);
+        }}
+        readOnly={readOnly}
+        minRows={8}
+        validate={validateInputsJson}
+      />
 
       {!readOnly && (
         <Button
@@ -964,6 +1008,7 @@ export default function RunbookBuilder({
   return (
     <ActionForm
       action={action}
+      successMessage="Draft saved"
       className="space-y-6 max-sm:[&_input]:min-h-11 max-sm:[&_button]:min-h-11 max-sm:[&_[role=combobox]]:min-h-11"
       onSuccess={result => {
         setDirty(false);

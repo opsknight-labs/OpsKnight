@@ -3513,6 +3513,7 @@ model RunbookInput {
   defaultValue     String?
   description      String           @default("")
   sequence         Int              @default(0)
+  options          String[]         @default([])
 
   runbookVersion RunbookVersion @relation(fields: [runbookVersionId], references: [id], onDelete: Cascade)
 

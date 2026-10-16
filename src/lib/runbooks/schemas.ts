@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { parseInputDefault } from './input-values';
+import { MAX_SELECT_OPTIONS, selectOptionsIssue } from './input-options';
 import { runbookEvidenceSchema } from './evidence';
 import { schedulingLabelsSchema } from './labels';
 import { conditionContextFieldSchema } from './conditions';
@@ -227,9 +228,15 @@ export const runbookInputSchema = z
     defaultValue: z.string().max(2000).optional(),
     description: z.string().trim().max(1000).default(''),
     sequence: z.number().int().min(0).default(0),
+    options: z.array(z.string().trim().min(1).max(200)).max(MAX_SELECT_OPTIONS).optional(),
   })
   .strict()
   .superRefine((input, ctx) => {
+    const optionIssue = selectOptionsIssue(input);
+    if (optionIssue) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['options'], message: optionIssue });
+      return;
+    }
     try {
       parseInputDefault(input);
     } catch (error) {

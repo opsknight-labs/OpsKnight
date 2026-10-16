@@ -12,6 +12,7 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import { describeBinding } from '@/lib/runbooks/presentation/binding-contract';
 import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
 import RuleConfigurationCheck from '@/components/runbooks/RuleConfigurationCheck';
 import RunbookExecutionPreview from '@/components/runbooks/RunbookExecutionPreview';
@@ -44,6 +45,7 @@ export default async function AutomationRulePage({
       defaultAgent: { select: { id: true, name: true } },
       defaultAgentPool: { select: { id: true, name: true } },
       createdBy: { select: { name: true } },
+      service: { select: { name: true } },
       executions: {
         orderBy: { createdAt: 'desc' },
         take: 50,
@@ -93,33 +95,67 @@ export default async function AutomationRulePage({
     <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
       <RunbookPageHeader
         title={rule.name || rule.runbook.name}
-        description={`Service automation rule ${rule.id} · Created by ${rule.createdBy?.name ?? 'Unavailable user'}`}
+        breadcrumbs={[
+          { label: 'Services', href: '/services' },
+          { label: rule.service?.name ?? 'Service', href: `/services/${input.id}?tab=runbooks` },
+          { label: 'Automations', href: `/services/${input.id}?tab=runbooks` },
+          { label: rule.name || rule.runbook.name },
+        ]}
+        badge={
+          <Badge variant="outline">
+            {rule.detachedAt ? 'Archived' : rule.enabled ? rule.mode.toLowerCase() : 'Paused'}
+          </Badge>
+        }
+        description={
+          <>
+            Runs{' '}
+            <Link href={`/runbooks/${rule.runbookId}`} className="font-medium hover:underline">
+              {rule.runbook.name}
+            </Link>{' '}
+            · Created by {rule.createdBy?.name ?? 'Unavailable user'}
+          </>
+        }
       />
       <ol
         aria-label="Rule lifecycle"
-        className="grid gap-3 rounded-lg border p-4 sm:grid-cols-4 text-sm"
+        className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"
       >
-        <li>
-          <strong>1. Configure</strong>
-          <p>
+        <li className="space-y-1 rounded-xl border bg-card p-4">
+          <strong className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs text-primary">
+              1
+            </span>
+            Configure
+          </strong>
+          <p className="text-muted-foreground">
             {selectedVersion
               ? `Version ${selectedVersion.version} selected`
               : 'Select a published version'}
           </p>
-          <Link href={`/services/${input.id}?tab=runbooks`} className="underline">
+          <Link href={`/services/${input.id}?tab=runbooks`} className="text-primary hover:underline">
             Manage service rules
           </Link>
         </li>
-        <li>
-          <strong>2. Validate</strong>
-          <p>{readiness.state.replaceAll('_', ' ')}</p>
-          <a href="#checks" className="underline">
+        <li className="space-y-1 rounded-xl border bg-card p-4">
+          <strong className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs text-primary">
+              2
+            </span>
+            Validate
+          </strong>
+          <p className="text-muted-foreground">{readiness.state.replaceAll('_', ' ')}</p>
+          <a href="#checks" className="text-primary hover:underline">
             Review configuration and policy checks
           </a>
         </li>
-        <li>
-          <strong>3. Activate</strong>
-          <p>
+        <li className="space-y-1 rounded-xl border bg-card p-4">
+          <strong className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs text-primary">
+              3
+            </span>
+            Activate
+          </strong>
+          <p className="text-muted-foreground">
             {rule.detachedAt
               ? 'Detached; activation unavailable'
               : rule.enabled
@@ -127,32 +163,44 @@ export default async function AutomationRulePage({
                 : 'Rule paused'}
           </p>
           {rule.mode === 'AUTOMATIC' && readiness.eligibleAgents !== null && (
-            <p>
+            <p className="text-xs text-muted-foreground">
               {certifiedAgents} / {readiness.eligibleAgents} Agents have fresh accepted policy
               evidence. {Math.max(0, readiness.eligibleAgents - certifiedAgents)} still require
               certification.
             </p>
           )}
         </li>
-        <li>
-          <strong>4. Monitor</strong>
-          <p>{rule.executions.length} recent executions</p>
-          <a href="#history" className="underline">
+        <li className="space-y-1 rounded-xl border bg-card p-4">
+          <strong className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs text-primary">
+              4
+            </span>
+            Monitor
+          </strong>
+          <p className="text-muted-foreground">{rule.executions.length} recent executions</p>
+          <a href="#history" className="text-primary hover:underline">
             Inspect outcomes and evidence
           </a>
         </li>
       </ol>
-      <nav aria-label="Rule evidence sections" className="flex flex-wrap gap-3">
+      <nav
+        aria-label="Rule evidence sections"
+        className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-1 rounded-lg border bg-background/95 p-1 backdrop-blur"
+      >
         {['overview', 'checks', 'trigger', 'target', 'version', 'history', 'policy', 'audit'].map(
           section => (
-            <a key={section} href={`#${section}`} className="text-primary underline capitalize">
+            <a
+              key={section}
+              href={`#${section}`}
+              className="rounded-md px-3 py-1.5 text-xs font-medium capitalize text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
               {section}
             </a>
           )
         )}
       </nav>
-      <section id="checks" className="rounded-lg border p-4 space-y-4">
-        <h2 className="font-semibold">Check and run this rule</h2>
+      <section id="checks" className="scroll-mt-16 space-y-4 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Check and run this rule</h2>
         <RuleConfigurationCheck
           action={validateRuleConfigurationAction.bind(null, input.id, rule.id)}
         />
@@ -205,8 +253,8 @@ export default async function AutomationRulePage({
           </p>
         )}
       </section>
-      <section id="overview" className="rounded-lg border p-4 space-y-2">
-        <h2 className="font-semibold">Overview</h2>
+      <section id="overview" className="scroll-mt-16 space-y-2 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Overview</h2>
         <Badge variant="outline">{rule.enabled ? rule.mode : 'PAUSED'}</Badge>
         <p>
           {readiness.state.replaceAll('_', ' ')} · checked {readiness.checkedAt}
@@ -217,8 +265,8 @@ export default async function AutomationRulePage({
           </p>
         ))}
       </section>
-      <section id="trigger" className="rounded-lg border p-4 space-y-2">
-        <h2 className="font-semibold">Trigger</h2>
+      <section id="trigger" className="scroll-mt-16 space-y-2 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Trigger</h2>
         <p>{presentation.trigger}</p>
         {rule.detachedAt && (
           <p>
@@ -244,8 +292,8 @@ export default async function AutomationRulePage({
           </article>
         ))}
       </section>
-      <section id="target" className="rounded-lg border p-4">
-        <h2 className="font-semibold">Target and permissions</h2>
+      <section id="target" className="scroll-mt-16 space-y-2 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Target and permissions</h2>
         <p>{presentation.target}</p>
         <p>Online and capable does not establish local allowlist or target-side permission.</p>
         {rule.defaultAgentId && (
@@ -257,8 +305,8 @@ export default async function AutomationRulePage({
           </Link>
         )}
       </section>
-      <section id="version" className="rounded-lg border p-4">
-        <h2 className="font-semibold">Version and inputs</h2>
+      <section id="version" className="scroll-mt-16 space-y-2 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Version and inputs</h2>
         <p>
           {rule.versionStrategy} · v{selectedVersion?.version}
         </p>
@@ -274,26 +322,43 @@ export default async function AutomationRulePage({
           </pre>
         </details>
       </section>
-      <section id="history" className="space-y-2">
-        <h2 className="font-semibold">Execution history · latest 50</h2>
-        {rule.executions.map(execution => (
-          <article key={execution.id} className="rounded border p-3 flex flex-wrap gap-3">
-            <Link href={`/runbooks/executions/${execution.id}`} className="text-primary underline">
-              {execution.status} · {execution.createdAt.toISOString()}
-            </Link>
-            {execution.incidentId && (
-              <Link href={`/incidents/${execution.incidentId}`} className="text-primary underline">
-                Source incident
+      <section id="history" className="scroll-mt-16 space-y-3 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Execution history · latest 50</h2>
+        {rule.executions.length === 0 && (
+          <p className="text-sm text-muted-foreground">This rule has not run yet.</p>
+        )}
+        <ul className="divide-y rounded-lg border">
+          {rule.executions.map(execution => (
+            <li
+              key={execution.id}
+              className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 text-sm"
+            >
+              <Link
+                href={`/runbooks/executions/${execution.id}`}
+                className="flex items-center gap-2 font-medium hover:underline"
+              >
+                <RunbookStatusBadge status={execution.status} />
+                <time dateTime={execution.createdAt.toISOString()}>
+                  {execution.createdAt.toISOString()}
+                </time>
               </Link>
-            )}
-            <span className="text-xs break-all">
-              Frozen checksum {execution.definitionChecksum}
-            </span>
-          </article>
-        ))}
+              {execution.incidentId && (
+                <Link
+                  href={`/incidents/${execution.incidentId}`}
+                  className="text-primary hover:underline"
+                >
+                  Source incident
+                </Link>
+              )}
+              <span className="ml-auto break-all font-mono text-[11px] text-muted-foreground">
+                {execution.definitionChecksum.slice(0, 12)}
+              </span>
+            </li>
+          ))}
+        </ul>
       </section>
-      <section id="policy" className="space-y-2">
-        <h2 className="font-semibold">Read-only policy evidence · latest 20</h2>
+      <section id="policy" className="scroll-mt-16 space-y-2 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Read-only policy evidence · latest 20</h2>
         {checks.map(check => (
           <article key={check.id} className="rounded border p-3 text-sm">
             {check.status} · Agent {check.agentId} ·{' '}
@@ -309,8 +374,8 @@ export default async function AutomationRulePage({
           permissions or future configuration.
         </p>
       </section>
-      <section id="audit" className="rounded-lg border p-4">
-        <h2 className="font-semibold">Audit</h2>
+      <section id="audit" className="scroll-mt-16 space-y-2 rounded-xl border bg-card p-5">
+        <h2 className="text-base font-semibold">Audit</h2>
         {permissions.capabilities.includes(CAPABILITIES.AUDIT_READ) ? (
           <Link
             href={`/audit?entityType=RUNBOOK&entityId=${rule.runbookId}`}
