@@ -446,7 +446,7 @@ export default async function ApiKeysSettingsPage({
       <DetailHeroBanner
         tag="Developer & Programmatic Access Workspace"
         title="Developer & API Access"
-        subtitle="Manage personal API keys, machine service accounts, inspect all 38 v2 REST endpoints, and monitor API gateway activity."
+        subtitle={`Manage personal API keys, machine service accounts, inspect all ${endpointCount} v2 REST endpoints, and monitor API gateway activity.`}
         icon={
           <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
             <Key className="h-8 w-8" />
