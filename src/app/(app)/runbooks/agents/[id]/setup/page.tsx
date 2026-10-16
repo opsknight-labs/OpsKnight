@@ -8,6 +8,10 @@ import { getAppUrl } from '@/lib/app-url';
 import { getAgentDistribution } from '@/lib/runbooks/distribution';
 import { getExecutionSigningKey } from '@/lib/runbooks/execution-signing';
 import AgentSetupInstructions from '@/components/runbooks/AgentSetupInstructions';
+import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { EmptyHint } from '@/components/runbooks/ui/primitives';
+import { Button } from '@/components/ui/shadcn/button';
+import { ArrowLeft, ArrowUpCircle, ShieldX } from 'lucide-react';
 export const dynamic = 'force-dynamic';
 export default async function AgentLifecyclePage({ params }: { params: Promise<{ id: string }> }) {
   await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
@@ -20,12 +24,27 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
     select: { id: true, name: true, status: true },
   });
   if (!agent) notFound();
+  const breadcrumbs = [
+    { label: 'Runbooks', href: '/runbooks' },
+    { label: 'Execution Infrastructure', href: '/runbooks/agents' },
+    { label: agent.name },
+  ];
   if (agent.status === 'REVOKED')
     return (
-      <p>
-        This identity is revoked. Create a new enrollment to replace it.{' '}
-        <Link href="/runbooks/agents">Return to Agents</Link>
-      </p>
+      <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
+        <RunbookPageHeader title={`Upgrade ${agent.name}`} breadcrumbs={breadcrumbs} />
+        <EmptyHint
+          icon={ShieldX}
+          title="This identity is revoked. Create a new enrollment to replace it."
+          description="Revoked Agents cannot be upgraded in place. Enroll a new Agent with a new deployment name and volume."
+          className="bg-card"
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/runbooks/agents">Return to Agents</Link>
+            </Button>
+          }
+        />
+      </div>
     );
   const [appUrl, distribution, key] = await Promise.all([
     getAppUrl(),
@@ -33,13 +52,13 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
     getExecutionSigningKey(),
   ]);
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
-      <h1 className="text-xl font-semibold">Upgrade {agent.name}</h1>
-      <p>
-        Use the deployment name saved during installation. Agents installed with older instructions
-        may use the original name opsknight-agent. Confirm the existing project, stack, release or
-        Deployment before applying an upgrade. Preserve its identity volume and local policy.
-      </p>
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
+      <RunbookPageHeader
+        title={`Upgrade ${agent.name}`}
+        icon={ArrowUpCircle}
+        breadcrumbs={breadcrumbs}
+        description="Use the deployment name saved during installation. Agents installed with older instructions may use the original name opsknight-agent. Confirm the existing project, stack, release or Deployment before applying an upgrade. Preserve its identity volume and local policy."
+      />
       <AgentSetupInstructions
         agentId={agent.id}
         token=""
@@ -49,9 +68,12 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
         initialOperation="upgrade"
         expiresAt="2000-01-01T00:00:00Z"
       />
-      <Link href="/runbooks/agents" className="underline">
-        Return to Agent health and diagnostics
-      </Link>
+      <Button asChild variant="ghost" size="sm" className="gap-1.5">
+        <Link href="/runbooks/agents">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Return to Agent health and diagnostics
+        </Link>
+      </Button>
     </div>
   );
 }

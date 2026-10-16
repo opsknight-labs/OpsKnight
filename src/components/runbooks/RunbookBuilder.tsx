@@ -1,16 +1,29 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Code2, ListOrdered, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ChevronRight,
+  Code2,
+  ListChecks,
+  ListOrdered,
+  Lock,
+  Plus,
+  Save,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react';
 import DetailTabs from '@/components/ui/DetailTabs';
 import { registerNavigationGuard } from '@/lib/client-navigation-guard';
-import EmptyState from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
+import { stepRequiresApproval } from '@/lib/runbooks/safety';
+import { EmptyHint, Pill } from './ui/primitives';
+import { RISK_META, STEP_CATALOG } from './builder/step-catalog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -415,74 +428,102 @@ export default function RunbookBuilder({
     if (selectedStepId) document.getElementById(`step-heading-${selectedStepId}`)?.focus();
   }, [selectedStepId]);
 
-  const builderView = (
-    <div className="space-y-6">
-      <div className="rounded-xl border bg-muted/20 p-3 sm:p-4 text-xs text-muted-foreground hidden sm:flex flex-wrap items-center justify-between gap-3">
-        <span>
-          Steps execute in strict top-to-bottom sequence. Mutations require explicit approval or
-          non-idempotent safeguards. Agent policy remains authoritative.
-        </span>
-      </div>
+  const selectedCatalog = selectedStep ? STEP_CATALOG[selectedStep.type] : null;
+  const selectedRisk = selectedStep ? RISK_META[selectedStep.riskClass] : null;
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left column: Step navigator */}
+  const builderView = (
+    <div className="space-y-4">
+      <ReadinessBar
+        definition={definition}
+        errorCount={errorCount}
+        stepErrors={stepErrors}
+        inputErrors={inputErrors}
+        generalInputErrors={generalInputErrors}
+        onNavigateToStep={handleNavigateToStep}
+        onNavigateToInputs={handleNavigateToInputs}
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <div
-          className={`lg:col-span-5 xl:col-span-4 min-w-0 ${mobileEditorOpen ? 'hidden lg:block' : 'block'}`}
+          className={cn(
+            'min-w-0 lg:col-span-4 xl:col-span-3',
+            mobileEditorOpen ? 'hidden lg:block' : 'block'
+          )}
         >
-          <StepNavigator
-            steps={definition.steps}
-            stepIdentities={stepIdentities}
-            selectedIndex={selectedStepIndex}
-            stepErrors={stepErrors}
-            readOnly={readOnly}
-            onSelectStep={handleSelectStep}
-            onMoveStep={moveStep}
-            onDuplicateStep={duplicateStep}
-            onRemoveStep={removeStep}
-            onAddStep={addStep}
-          />
+          <div className="lg:sticky lg:top-4">
+            <StepNavigator
+              steps={definition.steps}
+              stepIdentities={stepIdentities}
+              selectedIndex={selectedStepIndex}
+              stepErrors={stepErrors}
+              readOnly={readOnly}
+              onSelectStep={handleSelectStep}
+              onMoveStep={moveStep}
+              onDuplicateStep={duplicateStep}
+              onRemoveStep={removeStep}
+              onAddStep={addStep}
+            />
+            <details className="group mt-3 hidden px-1 text-xs text-muted-foreground lg:block">
+              <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <ChevronRight
+                  className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                />
+                How this works
+              </summary>
+              <p className="mt-1.5 pl-5 leading-relaxed">
+                Steps run strictly top to bottom. Anything that changes a system needs a safe-write
+                classification or approval, and Agent policy on the host always has the final say.
+              </p>
+            </details>
+          </div>
         </div>
 
-        {/* Right column: Active step editor */}
         <div
-          className={`lg:col-span-7 xl:col-span-8 min-w-0 ${mobileEditorOpen ? 'block' : 'hidden lg:block'}`}
+          className={cn(
+            'min-w-0 lg:col-span-8 xl:col-span-9',
+            mobileEditorOpen ? 'block' : 'hidden lg:block'
+          )}
         >
           <Button
             type="button"
             variant="outline"
-            className="mb-3 min-h-11 lg:hidden"
+            size="sm"
+            className="mb-3 min-h-11 gap-1.5 lg:hidden"
             onClick={() => setMobileEditorOpen(false)}
           >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to steps
           </Button>
-          {selectedStep ? (
-            <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-2xs space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-                <div>
-                  <h2
-                    id={`step-heading-${activeStepId}`}
-                    tabIndex={-1}
-                    className="text-base font-semibold text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    Step {selectedStepIndex + 1}: {selectedStep.name || 'Untitled step'}
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                    Key: {selectedStep.key} · Type: {selectedStep.type.replaceAll('_', ' ')}
-                  </p>
+          {selectedStep && selectedCatalog && selectedRisk ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-5 shadow-xs">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+                    <selectedCatalog.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2
+                      id={`step-heading-${activeStepId}`}
+                      tabIndex={-1}
+                      className="break-words text-lg font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Step {selectedStepIndex + 1}: {selectedStep.name || 'Untitled step'}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {selectedCatalog.label} ·{' '}
+                      <span className="font-mono">{selectedStep.key}</span> · step{' '}
+                      <span className="tabular-nums">{selectedStepIndex + 1}</span> of{' '}
+                      <span className="tabular-nums">{definition.steps.length}</span>
+                    </p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {selectedStep.riskClass === 'NON_IDEMPOTENT' ? (
-                    <Badge variant="destructive" className="text-xs">
-                      MUTATION
-                    </Badge>
-                  ) : selectedStep.riskClass === 'IDEMPOTENT_WRITE' ? (
-                    <Badge variant="warning" className="text-xs">
-                      WRITE
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-xs">
-                      READ ONLY
-                    </Badge>
+                  <Pill tone={selectedRisk.tone}>{selectedRisk.label}</Pill>
+                  {stepRequiresApproval(selectedStep) && (
+                    <Pill tone="warning" icon={Lock}>
+                      Approval
+                    </Pill>
                   )}
                 </div>
               </div>
@@ -509,35 +550,23 @@ export default function RunbookBuilder({
               />
             </div>
           ) : (
-            <EmptyState
+            <EmptyHint
+              icon={ListOrdered}
               title="No step selected"
-              description="Select a step from the navigator to configure its actions, prechecks, and verification."
+              description="Pick a step on the left to edit its action, safety settings and checks."
             />
           )}
         </div>
       </div>
-
-      {/* Sticky Bottom Readiness Bar */}
-      <ReadinessBar
-        definition={definition}
-        errorCount={errorCount}
-        dirty={dirty}
-        unappliedJson={unappliedJson}
-        draftRevision={draftRevision}
-        stepErrors={stepErrors}
-        inputErrors={inputErrors}
-        generalInputErrors={generalInputErrors}
-        onNavigateToStep={handleNavigateToStep}
-        onNavigateToInputs={handleNavigateToInputs}
-      />
     </div>
   );
 
   const inputEditor = (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Define reusable parameters for this runbook. Parameters can be bound to services, passed at
-        manual launch, or evaluated from incident metadata.
+        Inputs let one runbook work across services. Responders fill them in at launch, service
+        rules can bind them, and steps reference them as{' '}
+        <code className="rounded bg-muted px-1 font-mono text-xs">{'${{ inputs.key }}'}</code>.
       </p>
       {generalInputErrors.length > 0 && (
         <div
@@ -620,10 +649,18 @@ export default function RunbookBuilder({
           <fieldset
             key={inputIdentities.at(index) ?? index}
             disabled={readOnly}
-            className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2 bg-card"
+            className="grid min-w-0 gap-4 rounded-xl border bg-card p-5 shadow-xs sm:grid-cols-2"
           >
-            <legend className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Parameter {index + 1}: {input.label || input.key}
+            <legend className="float-left mb-1 flex w-full flex-wrap items-center gap-2 text-sm font-semibold sm:col-span-2">
+              <span>
+                Input {index + 1}: {input.label || input.key}
+              </span>
+              <code className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] font-normal text-muted-foreground">
+                {'${{ inputs.'}
+                {input.key}
+                {' }}'}
+              </code>
+              {input.required && <Pill tone="warning">required</Pill>}
             </legend>
             <div className="space-y-1.5">
               <Label>Key</Label>
@@ -716,7 +753,10 @@ export default function RunbookBuilder({
                         .filter(Boolean),
                     })
                   }
-                  className={cn('font-mono text-xs', currentErrors?.options && 'border-destructive')}
+                  className={cn(
+                    'font-mono text-xs',
+                    currentErrors?.options && 'border-destructive'
+                  )}
                 />
                 <p className="text-xs text-muted-foreground">
                   Responders choose one of these values. The default must match an option.
@@ -815,10 +855,10 @@ export default function RunbookBuilder({
       })}
 
       {inputs.length === 0 && (
-        <EmptyState
-          title="No inputs defined"
-          description="Add typed parameters to reuse this workflow across multiple environments or incidents."
-          size="sm"
+        <EmptyHint
+          icon={SlidersHorizontal}
+          title="No inputs yet"
+          description="Add typed inputs to reuse this workflow across services, environments and incidents."
         />
       )}
 
@@ -1063,7 +1103,13 @@ export default function RunbookBuilder({
             icon: <ListOrdered className="h-4 w-4" />,
             content: builderView,
           },
-          { id: 'inputs', label: 'Inputs', count: inputs.length, content: inputEditor },
+          {
+            id: 'inputs',
+            label: 'Inputs',
+            icon: <SlidersHorizontal className="h-4 w-4" />,
+            count: inputs.length,
+            content: inputEditor,
+          },
           {
             id: 'advanced',
             label: 'Advanced · Edit JSON',
@@ -1081,36 +1127,59 @@ export default function RunbookBuilder({
       )}
 
       {!readOnly && (
-        <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              if (errorCount > 0) handleNavigateToStep(0);
-              setValidationMessage(
-                errorCount > 0
-                  ? 'Draft has configuration issues. Review the checks below.'
-                  : 'Draft configuration checks passed. Validation does not execute actions or check live Agent policy.'
-              );
-            }}
-          >
-            Validate draft
-          </Button>
-          <SubmitButton
-            pendingLabel="Saving draft…"
-            disabled={unappliedJson || pendingKeys.size > 0 || errorCount > 0}
-          >
-            <ShieldCheck className="h-4 w-4" />
-            Save draft
-          </SubmitButton>
-          {validationMessage && (
-            <p role="status" className="text-xs text-muted-foreground">
-              {validationMessage}
-            </p>
-          )}
-          <span aria-live="polite" className="text-xs text-muted-foreground font-medium">
-            {dirty ? 'Unsaved changes' : 'Saved draft'}
-          </span>
+        <div className="sticky bottom-0 z-20 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <span aria-live="polite" className="inline-flex items-center gap-1.5 font-medium">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'h-2 w-2 rounded-full',
+                    unappliedJson || dirty ? 'bg-amber-500' : 'bg-emerald-500'
+                  )}
+                />
+                {unappliedJson ? 'Unapplied JSON' : dirty ? 'Unsaved changes' : 'Saved draft'}
+              </span>
+              <span className="tabular-nums text-muted-foreground">Revision {draftRevision}</span>
+              {validationMessage && (
+                <p role="status" className="text-muted-foreground">
+                  {validationMessage}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 max-sm:w-full">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="max-sm:flex-1"
+                onClick={() => {
+                  if (errorCount > 0) {
+                    const firstStepWithIssue = [...stepErrors.keys()].sort((a, b) => a - b).at(0);
+                    if (firstStepWithIssue !== undefined) handleNavigateToStep(firstStepWithIssue);
+                    else handleNavigateToInputs();
+                  }
+                  setValidationMessage(
+                    errorCount > 0
+                      ? `${errorCount} ${errorCount === 1 ? 'issue needs' : 'issues need'} fixing before you can save.`
+                      : 'All checks pass. Validation doesn’t run actions or check live Agent policy.'
+                  );
+                }}
+              >
+                <ListChecks className="h-4 w-4" aria-hidden="true" />
+                Validate draft
+              </Button>
+              <SubmitButton
+                size="sm"
+                className="max-sm:flex-1"
+                pendingLabel="Saving draft…"
+                disabled={unappliedJson || pendingKeys.size > 0 || errorCount > 0}
+              >
+                <Save className="h-4 w-4" aria-hidden="true" />
+                Save draft
+              </SubmitButton>
+            </div>
+          </div>
         </div>
       )}
     </ActionForm>

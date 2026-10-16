@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { SearchableRunbookSelect } from '../SearchableRunbookSelect';
 import { Input } from '@/components/ui/shadcn/input';
+import { SearchField } from '../ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
@@ -58,12 +59,10 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
       platform,
       capability,
       label,
-      tab: query.tab || 'agents',
       ...(isAttention ? { attention: '1' } : {}),
       ...overrides,
     };
 
-    if (merged.tab && merged.tab !== 'agents') params.set('tab', merged.tab);
     if (merged.q?.trim()) params.set('q', merged.q.trim());
     if (merged.status && merged.status !== 'all') params.set('status', merged.status);
     if (merged.pool && merged.pool !== 'all') params.set('pool', merged.pool);
@@ -83,26 +82,25 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
     setPlatform('all');
     setCapability('');
     setLabel('');
-    const baseParams = query.tab && query.tab !== 'agents' ? `?tab=${query.tab}` : '';
-    router.push(`${pathname}${baseParams}`);
+    router.push(pathname);
   };
 
   return (
-    <div className="space-y-3 rounded-xl border bg-card/60 p-3.5 shadow-2xs backdrop-blur-xs">
+    <div className="space-y-3 rounded-xl border bg-card p-3 shadow-xs">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <form
           onSubmit={e => {
             e.preventDefault();
             applyFilters();
           }}
-          className="relative flex-1"
+          className="min-w-0 flex-1"
         >
-          <Input
+          <SearchField
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search agents by name or hostname…"
             aria-label="Search agents"
-            className="h-9 w-full bg-background text-xs pl-3 pr-8"
+            className="w-full"
           />
         </form>
 
@@ -115,16 +113,31 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               applyFilters({ status: val });
             }}
           >
-            <SelectTrigger className="h-9 w-[130px] text-xs bg-background" aria-label="Filter by status">
+            <SelectTrigger
+              className="h-9 w-[130px] text-xs bg-background"
+              aria-label="Filter by status"
+            >
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="text-xs">All active</SelectItem>
-              <SelectItem value="ONLINE" className="text-xs">Online</SelectItem>
-              <SelectItem value="DEGRADED" className="text-xs">Degraded</SelectItem>
-              <SelectItem value="OFFLINE" className="text-xs">Offline</SelectItem>
-              <SelectItem value="ENROLLING" className="text-xs">Enrolling</SelectItem>
-              <SelectItem value="REVOKED" className="text-xs">Revoked</SelectItem>
+              <SelectItem value="all" className="text-xs">
+                All active
+              </SelectItem>
+              <SelectItem value="ONLINE" className="text-xs">
+                Online
+              </SelectItem>
+              <SelectItem value="DEGRADED" className="text-xs">
+                Degraded
+              </SelectItem>
+              <SelectItem value="OFFLINE" className="text-xs">
+                Offline
+              </SelectItem>
+              <SelectItem value="ENROLLING" className="text-xs">
+                Enrolling
+              </SelectItem>
+              <SelectItem value="REVOKED" className="text-xs">
+                Revoked
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -151,14 +164,25 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               applyFilters({ platform: val });
             }}
           >
-            <SelectTrigger className="h-9 w-[130px] text-xs bg-background" aria-label="Filter by platform">
+            <SelectTrigger
+              className="h-9 w-[130px] text-xs bg-background"
+              aria-label="Filter by platform"
+            >
               <SelectValue placeholder="Platform" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="text-xs">All platforms</SelectItem>
-              <SelectItem value="linux" className="text-xs">Linux</SelectItem>
-              <SelectItem value="darwin" className="text-xs">macOS (Darwin)</SelectItem>
-              <SelectItem value="win32" className="text-xs">Windows</SelectItem>
+              <SelectItem value="all" className="text-xs">
+                All platforms
+              </SelectItem>
+              <SelectItem value="linux" className="text-xs">
+                Linux
+              </SelectItem>
+              <SelectItem value="darwin" className="text-xs">
+                macOS (Darwin)
+              </SelectItem>
+              <SelectItem value="win32" className="text-xs">
+                Windows
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -170,7 +194,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
                 size="sm"
                 className="h-9 text-xs gap-1.5"
               >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Advanced</span>
                 {(Boolean(capability) || Boolean(label)) && (
                   <Badge variant="default" className="ml-1 px-1 py-0 text-[10px] h-4">
@@ -188,7 +212,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               onClick={resetFilters}
               className="h-9 text-xs gap-1 text-muted-foreground hover:text-foreground"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Reset</span>
             </Button>
           )}
@@ -199,7 +223,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             onClick={() => applyFilters()}
             className="h-9 text-xs gap-1.5"
           >
-            <Filter className="h-3.5 w-3.5" />
+            <Filter className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Apply filters</span>
           </Button>
         </div>

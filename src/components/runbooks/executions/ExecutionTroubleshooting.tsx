@@ -1,3 +1,4 @@
+import { Lightbulb } from 'lucide-react';
 import { runbookTroubleshooting } from '@/lib/runbooks/presentation/troubleshooting';
 
 export default function ExecutionTroubleshooting({
@@ -12,12 +13,15 @@ export default function ExecutionTroubleshooting({
   return (
     <aside
       aria-label="Troubleshooting guidance"
-      className="my-2 rounded-lg border bg-muted/20 p-3 text-xs"
+      className="flex items-start gap-2.5 rounded-lg border bg-muted/30 p-3 text-xs"
     >
-      <p className="font-semibold">
-        {guidance.title} · {guidance.category}
-      </p>
-      <p className="mt-1 text-muted-foreground">{guidance.action}</p>
+      <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0">
+        <p className="font-semibold text-foreground">
+          {guidance.title} · {guidance.category}
+        </p>
+        <p className="mt-0.5 leading-relaxed text-muted-foreground">{guidance.action}</p>
+      </div>
     </aside>
   );
 }

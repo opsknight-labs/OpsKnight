@@ -123,8 +123,20 @@ export async function updateRunbookMetadata(
         entityType: 'RUNBOOK',
         entityId: runbookId,
         actorId,
-        oldValue: { name: current.name, slug: current.slug, description: current.description },
-        newValue: { name: updated.name, slug: updated.slug, description: updated.description },
+        oldValue: {
+          name: current.name,
+          slug: current.slug,
+          description: current.description,
+          ownerTeamId: current.ownerTeamId,
+          tags: current.tags,
+        },
+        newValue: {
+          name: updated.name,
+          slug: updated.slug,
+          description: updated.description,
+          ownerTeamId: updated.ownerTeamId,
+          tags: updated.tags,
+        },
       },
       tx
     );
@@ -304,6 +316,7 @@ export async function cloneVersionToDraft(versionId: string, actorId: string) {
                   defaultValue: item.defaultValue,
                   description: item.description,
                   sequence: item.sequence,
+                  options: item.options,
                 })),
               },
             }
@@ -362,6 +375,82 @@ export async function archiveRunbook(runbookId: string, actorId: string) {
       tx
     );
     return runbook;
+  });
+}
+
+/**
+ * Retires a superseded published version. The current published version, drafts and versions
+ * pinned by active automation rules are refused; the DB trigger permits PUBLISHED -> RETIRED only.
+ */
+export async function retireRunbookVersion(versionId: string, actorId: string) {
+  return prisma.$transaction(async tx => {
+    const target = await tx.runbookVersion.findUnique({
+      where: { id: versionId },
+      select: { runbookId: true },
+    });
+    if (!target) throw new RunbookVersionNotFoundError(versionId);
+    await lockRunbookForUpdate(tx, target.runbookId, { action: 'retire a version of' });
+    const version = await tx.runbookVersion.findUniqueOrThrow({
+      where: { id: versionId },
+      select: {
+        id: true,
+        runbookId: true,
+        version: true,
+        state: true,
+        checksum: true,
+        runbookAsPublished: { select: { id: true } },
+      },
+    });
+    if (version.state === 'RETIRED') {
+      throw new RunbookDefinitionError(`Version ${version.version} is already retired.`, {
+        versionId,
+      });
+    }
+    if (version.state !== 'PUBLISHED') {
+      throw new RunbookDefinitionError(
+        'Drafts cannot be retired. Publish the draft or leave it unpublished.',
+        { versionId }
+      );
+    }
+    if (version.runbookAsPublished) {
+      throw new RunbookDefinitionError(
+        `Version ${version.version} is the current published version. Publish a newer version before retiring it.`,
+        { versionId }
+      );
+    }
+    const pinnedRules = await tx.serviceAutomationRule.count({
+      where: { runbookVersionId: versionId, versionStrategy: 'PINNED', detachedAt: null },
+    });
+    if (pinnedRules > 0) {
+      throw new RunbookDefinitionError(
+        `Version ${version.version} is pinned by ${pinnedRules} automation ${
+          pinnedRules === 1 ? 'rule' : 'rules'
+        }. Move those rules to another version or detach them before retiring.`,
+        { versionId, pinnedRules }
+      );
+    }
+    const retired = await tx.runbookVersion.updateMany({
+      where: { id: versionId, state: 'PUBLISHED' },
+      data: { state: 'RETIRED' },
+    });
+    if (retired.count !== 1) throw new RunbookVersionImmutableError(versionId, 'RETIRED');
+    await logAudit(
+      {
+        action: 'runbook.version_retired',
+        entityType: 'RUNBOOK_VERSION',
+        entityId: versionId,
+        actorId,
+        oldValue: { state: 'PUBLISHED' },
+        newValue: {
+          state: 'RETIRED',
+          runbookId: version.runbookId,
+          version: version.version,
+          checksum: version.checksum,
+        },
+      },
+      tx
+    );
+    return { id: version.id, runbookId: version.runbookId, version: version.version };
   });
 }
 

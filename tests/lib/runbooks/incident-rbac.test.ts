@@ -26,6 +26,10 @@ vi.mock('@/components/incident/runbook-actions', () => ({
   dismissIncidentRunbookSuggestionAction: vi.fn(),
   executePreviewedIncidentRunbookAction: vi.fn(),
   previewIncidentRunbookAction: vi.fn(),
+  searchAdhocIncidentRunbooksAction: vi.fn(),
+  loadAdhocIncidentRunbookAction: vi.fn(),
+  previewAdhocIncidentRunbookAction: vi.fn(),
+  executeAdhocIncidentRunbookAction: vi.fn(),
 }));
 import IncidentRunbooks from '@/components/incident/IncidentRunbooks';
 

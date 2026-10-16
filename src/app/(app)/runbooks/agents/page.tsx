@@ -1,44 +1,25 @@
-import { getAgentDistribution } from '@/lib/runbooks/distribution';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getAgentDistribution } from '@/lib/runbooks/distribution';
 import {
   getRunbookDatabaseNow,
   getRunbookFleetSummary,
   getRunbookNavigationSummary,
 } from '@/lib/runbooks/presentation/summaries';
 import { resolveEffectiveAgentStatus } from '@/lib/runbooks/presentation/contracts';
-import { SearchableRunbookSelect } from '@/components/runbooks/SearchableRunbookSelect';
-import { KeyRound, Network } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bot, Server } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getAppUrl } from '@/lib/app-url';
-import AgentEnrollmentForm from '@/components/runbooks/AgentEnrollmentForm';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { AgentFleetTable } from '@/components/runbooks/agents/AgentFleetTable';
 import { AgentFilterBar } from '@/components/runbooks/agents/AgentFilterBar';
-import EmptyState from '@/components/ui/EmptyState';
-import {
-  ActionForm,
-  ConfigureSheet,
-  ConfirmAction,
-  FormSelect,
-  SubmitButton,
-} from '@/components/runbooks/RunbookControls';
-import { Badge } from '@/components/ui/shadcn/badge';
-import { Button } from '@/components/ui/shadcn/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/shadcn/card';
-import { Input } from '@/components/ui/shadcn/input';
-import { Textarea } from '@/components/ui/shadcn/textarea';
-import { Label } from '@/components/ui/shadcn/label';
-import { RunbookAgentStatus, type Prisma } from '@prisma/client';
+import { EnrollAgentSheet } from '@/components/runbooks/agents/EnrollAgentSheet';
+import { FleetPageShell } from '@/components/runbooks/agents/FleetPageShell';
+import { buildAgentWhere } from '@/components/runbooks/agents/agent-query';
+import { legacyFleetRedirect } from '@/components/runbooks/agents/fleet-routes';
+import { Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import { runbookAgentFilterSchema } from '@/lib/runbooks/schemas';
 import { schedulingLabelsSchema } from '@/lib/runbooks/pool-labels';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
@@ -47,21 +28,50 @@ import {
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
 } from '@/components/runbooks/RunbookPagination';
-import {
-  addAgentToPoolAction,
-  createAgentPoolAction,
-  createRunbookSecretAction,
-  grantRunbookSecretAction,
-  removeAgentFromPoolAction,
-  revokeRunbookSecretGrantAction,
-  rotateRunbookSecretAction,
-  updateSchedulingLabelsAction,
-  rotateExecutionSigningIdentityAction,
-  updateIncidentRemediationBudgetAction,
-  updateRunbookArtifactRetentionAction,
-} from '../actions';
 
 export const revalidate = 0;
+
+const STATUS_CARDS = [
+  { status: 'ONLINE', key: 'online', label: 'Online', subtext: 'Fresh heartbeat', tone: 'success' },
+  {
+    status: 'DEGRADED',
+    key: 'degraded',
+    label: 'Degraded',
+    subtext: 'Reporting faults',
+    tone: 'warning',
+  },
+  {
+    status: 'OFFLINE',
+    key: 'offline',
+    label: 'Offline',
+    subtext: 'Missed heartbeats',
+    tone: 'danger',
+  },
+  {
+    status: 'ENROLLING',
+    key: 'enrolling',
+    label: 'Enrolling',
+    subtext: 'Awaiting handshake',
+    tone: 'info',
+  },
+] as const;
+
+const ENROLLMENT_STEPS = [
+  {
+    title: 'Create an enrollment token',
+    description:
+      'A single-use token valid for 15 minutes. The Agent private key never leaves the host.',
+  },
+  {
+    title: 'Install the Agent',
+    description:
+      'Copy a Compose, Swarm, Helm, Kustomize or Linux command pinned to the verified release.',
+  },
+  {
+    title: 'Verify the first heartbeat',
+    description: 'The Agent appears here as Online once it authenticates and reports capabilities.',
+  },
+];
 
 export default async function RunbookAgentsPage({
   searchParams,
@@ -69,34 +79,24 @@ export default async function RunbookAgentsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
-  const [permissions, user, appUrl, distribution] = await Promise.all([
-    getUserPermissions(),
-    getCurrentUser(),
-    getAppUrl(),
-    getAgentDistribution(),
-  ]);
+  const rawParams = await searchParams;
+  const legacyTarget = legacyFleetRedirect(rawParams);
+  if (legacyTarget) redirect(legacyTarget);
+
+  const [permissions, user] = await Promise.all([getUserPermissions(), getCurrentUser()]);
   const userTimeZone = getUserTimeZone(user);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
-  const { query, page: requestedPage } = runbookPageQuery(await searchParams);
-  const [now, fleet, navigation, poolTotal, secretTotal] = await Promise.all([
+  const { query, page: requestedPage } = runbookPageQuery(rawParams);
+  const filterQuery = Object.fromEntries(Object.entries(query).filter(([key]) => key !== 'tab'));
+  const [now, fleet, navigation, appUrl, distribution] = await Promise.all([
     getRunbookDatabaseNow(),
     getRunbookFleetSummary(),
     getRunbookNavigationSummary(),
-    prisma.runbookAgentPool.count(),
-    canManageSecrets ? prisma.runbookSecret.count() : Promise.resolve(0),
+    canManage ? getAppUrl() : Promise.resolve(undefined),
+    canManage ? getAgentDistribution() : Promise.resolve(null),
   ]);
-  const tab =
-    ['agents', 'pools', 'secrets', 'security'].includes(query.tab) &&
-    (query.tab !== 'secrets' || canManageSecrets)
-      ? query.tab
-      : 'agents';
-  const onlineSince = new Date(now.getTime() - 90000);
-  const activePoolId = typeof query.poolId === 'string' ? query.poolId : '';
-  const memberPage = Math.max(1, Math.min(10000, Number(query.memberPage) || 1));
-  const activeSecretId = typeof query.secretId === 'string' ? query.secretId : '';
-  const grantPage = Math.max(1, Math.min(10000, Number(query.grantPage) || 1));
-  const statusFilter = Object.values(RunbookAgentStatus).find(status => status === query.status);
+
   const label = query.label ?? '';
   const split = label.indexOf('=');
   const labelKey = split > 0 ? label.slice(0, split) : '';
@@ -104,8 +104,9 @@ export default async function RunbookAgentsPage({
   const labels = schedulingLabelsSchema.safeParse(
     labelKey && labelValue ? { [labelKey]: labelValue } : {}
   );
+  const status = runbookAgentFilterSchema.shape.status.safeParse(query.status);
   const filter = runbookAgentFilterSchema.parse({
-    status: statusFilter,
+    status: status.success ? status.data : undefined,
     q: query.q,
     poolId: query.pool,
     platform: query.platform?.slice(0, 100),
@@ -113,745 +114,170 @@ export default async function RunbookAgentsPage({
     labels: labels.success ? labels.data : undefined,
     page: requestedPage,
   });
-  const conditions: Prisma.RunbookAgentWhereInput[] = [];
-
-  const attentionFilter = query.attention === '1';
-
-  if (query.q) {
-    conditions.push({
-      OR: [
-        { name: { contains: query.q, mode: 'insensitive' } },
-        { hostname: { contains: query.q, mode: 'insensitive' } },
-      ],
-    });
-  }
-
-  if (attentionFilter) {
-    conditions.push({
-      status: { not: 'REVOKED' },
-      OR: [
-        { status: { not: 'ONLINE' } },
-        { lastHeartbeatAt: null },
-        { lastHeartbeatAt: { lt: onlineSince } },
-        { lastError: { not: '' } },
-        { deadLetterDepth: { gt: 0 } },
-      ],
-    });
-    if (statusFilter) {
-      if (statusFilter === 'OFFLINE') {
-        conditions.push({
-          OR: [
-            { status: 'OFFLINE' },
-            {
-              status: { in: ['ONLINE', 'DEGRADED'] },
-              OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: onlineSince } }],
-            },
-          ],
-        });
-      } else if (statusFilter === 'ONLINE' || statusFilter === 'DEGRADED') {
-        conditions.push({ status: statusFilter, lastHeartbeatAt: { gte: onlineSince } });
-      } else {
-        conditions.push({ status: statusFilter });
-      }
-    }
-  } else if (!statusFilter) {
-    conditions.push({ status: { not: 'REVOKED' } });
-  } else if (statusFilter === 'OFFLINE') {
-    conditions.push({
-      OR: [
-        { status: 'OFFLINE' },
-        {
-          status: { in: ['ONLINE', 'DEGRADED'] },
-          OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: onlineSince } }],
-        },
-      ],
-    });
-  } else if (statusFilter === 'ONLINE' || statusFilter === 'DEGRADED') {
-    conditions.push({ status: statusFilter, lastHeartbeatAt: { gte: onlineSince } });
-  } else {
-    conditions.push({ status: statusFilter });
-  }
-
-  if (filter.poolId) {
-    conditions.push({ poolMemberships: { some: { poolId: filter.poolId } } });
-  }
-  if (filter.platform) {
-    conditions.push({ platform: filter.platform });
-  }
-  if (filter.capability) {
-    conditions.push({ capabilities: { array_contains: [filter.capability] } });
-  }
-  if (filter.labels) {
-    for (const [key, value] of Object.entries(filter.labels)) {
-      conditions.push({ labels: { path: [key], equals: value } });
-    }
-  }
-
-  const agentWhere: Prisma.RunbookAgentWhereInput =
-    conditions.length > 0 ? { AND: conditions } : {};
+  const attention = query.attention === '1';
+  const agentWhere = buildAgentWhere({ ...filter, attention }, new Date(now.getTime() - 90000));
   const agentTotal = await prisma.runbookAgent.count({ where: agentWhere });
-  const panelTotal = tab === 'pools' ? poolTotal : tab === 'secrets' ? secretTotal : agentTotal;
-  const page = Math.min(requestedPage, Math.max(1, Math.ceil(panelTotal / RUNBOOK_PAGE_SIZE)));
-  const signingKeys =
-    canManage && tab === 'security'
-      ? await prisma.runbookExecutionSigningKey.findMany({
-          where: { state: { not: 'RETIRED' } },
-          select: { id: true, publicKey: true, state: true, retiredAt: true },
-          orderBy: { createdAt: 'asc' },
-        })
-      : [];
-  const budget =
-    tab === 'security'
-      ? await prisma.systemSettings.findUnique({ where: { id: 'default' } })
-      : null;
-  const [agents, pools, secrets, signingKey, activePoolMembers, activeSecretGrants] =
-    await Promise.all([
-      tab === 'agents'
-        ? prisma.runbookAgent.findMany({
-            where: agentWhere,
-            skip: (page - 1) * RUNBOOK_PAGE_SIZE,
-            take: RUNBOOK_PAGE_SIZE,
-            include: {
-              poolMemberships: { include: { pool: true }, take: 20 },
-              _count: { select: { poolMemberships: true } },
-            },
-            orderBy: [{ name: 'asc' }, { id: 'asc' }],
-          })
-        : Promise.resolve([]),
-      tab === 'pools'
-        ? prisma.runbookAgentPool.findMany({
-            skip: (page - 1) * RUNBOOK_PAGE_SIZE,
-            take: RUNBOOK_PAGE_SIZE,
-            include: {
-              members: {
-                take: 20,
-                orderBy: { id: 'asc' },
-                include: { agent: { select: { id: true, name: true } } },
-              },
-              _count: { select: { bindings: true, members: true } },
-            },
-            orderBy: [{ name: 'asc' }, { id: 'asc' }],
-          })
-        : Promise.resolve([]),
-      canManageSecrets && tab === 'secrets'
-        ? prisma.runbookSecret.findMany({
-            skip: (page - 1) * RUNBOOK_PAGE_SIZE,
-            take: RUNBOOK_PAGE_SIZE,
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              createdAt: true,
-              updatedAt: true,
-              _count: { select: { grants: true } },
-              grants: {
-                take: 20,
-                orderBy: { id: 'asc' },
-                include: {
-                  agent: { select: { name: true } },
-                  agentPool: { select: { name: true } },
-                },
-              },
-            },
-            orderBy: { name: 'asc' },
-          })
-        : Promise.resolve([]),
-      canManage && tab === 'security'
-        ? prisma.runbookExecutionSigningKey.findFirst({
-            where: { state: 'ACTIVE' },
-            select: { publicKey: true },
-          })
-        : Promise.resolve(null),
-      tab === 'pools' && activePoolId && memberPage > 1
-        ? prisma.runbookAgentPoolMember.findMany({
-            where: { poolId: activePoolId },
-            skip: (memberPage - 1) * 20,
-            take: 20,
-            orderBy: { id: 'asc' },
-            include: { agent: { select: { id: true, name: true } } },
-          })
-        : Promise.resolve(null),
-      canManageSecrets && tab === 'secrets' && activeSecretId && grantPage > 1
-        ? prisma.runbookSecretGrant.findMany({
-            where: { secretId: activeSecretId },
-            skip: (grantPage - 1) * 20,
-            take: 20,
-            orderBy: { id: 'asc' },
-            include: { agent: { select: { name: true } }, agentPool: { select: { name: true } } },
-          })
-        : Promise.resolve(null),
-    ]);
-
-  const agentListData = agents.map(agent => {
-    const effectiveStatus = resolveEffectiveAgentStatus(agent, now);
-
-    return {
-      id: agent.id,
-      name: agent.name,
-      hostname: agent.hostname,
-      status: agent.status,
-      effectiveStatus,
-      platform: agent.platform,
-      version: agent.version,
-      lastHeartbeatAt: agent.lastHeartbeatAt?.toISOString() ?? null,
-      capabilities: agent.capabilities,
-      capabilityReport: agent.capabilityReport,
-      labels: agent.labels,
-      poolMemberships: agent.poolMemberships,
-      activeAttemptCount: agent.activeAttemptCount,
-      spoolDepth: agent.spoolDepth,
-      deadLetterDepth: agent.deadLetterDepth,
-      trustedSigningKeys: agent.trustedSigningKeys,
-      lastError: agent.lastError,
-      totalPoolCount: agent._count?.poolMemberships ?? agent.poolMemberships.length,
-    };
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(agentTotal / RUNBOOK_PAGE_SIZE)));
+  const agents = await prisma.runbookAgent.findMany({
+    where: agentWhere,
+    skip: (page - 1) * RUNBOOK_PAGE_SIZE,
+    take: RUNBOOK_PAGE_SIZE,
+    include: {
+      poolMemberships: { include: { pool: true }, take: 20 },
+      _count: { select: { poolMemberships: true } },
+    },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
   });
 
-  const agentPanel = (
-    <section className="space-y-4">
-      <AgentFleetTable agents={agentListData} userTimeZone={userTimeZone} canManage={canManage} />
-    </section>
-  );
+  const agentListData = agents.map(agent => ({
+    id: agent.id,
+    name: agent.name,
+    hostname: agent.hostname,
+    status: agent.status,
+    effectiveStatus: resolveEffectiveAgentStatus(agent, now),
+    platform: agent.platform,
+    version: agent.version,
+    lastHeartbeatAt: agent.lastHeartbeatAt?.toISOString() ?? null,
+    capabilities: agent.capabilities,
+    capabilityReport: agent.capabilityReport,
+    labels: agent.labels,
+    poolMemberships: agent.poolMemberships,
+    activeAttemptCount: agent.activeAttemptCount,
+    spoolDepth: agent.spoolDepth,
+    deadLetterDepth: agent.deadLetterDepth,
+    trustedSigningKeys: agent.trustedSigningKeys,
+    lastError: agent.lastError,
+    totalPoolCount: agent._count?.poolMemberships ?? agent.poolMemberships.length,
+  }));
 
-  const securityPanel = (
-    <section className="space-y-4">
-      {permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
-        <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
-          <summary className="cursor-pointer font-semibold text-sm">
-            Automatic remediation budgets
-          </summary>
-          <ActionForm
-            action={updateIncidentRemediationBudgetAction}
-            className="mt-3 grid gap-3 sm:grid-cols-3"
-          >
-            <Field label="Automatic executions per incident">
-              <Input
-                name="executions"
-                aria-label="Automatic executions per incident"
-                type="number"
-                min={0}
-                max={100}
-                defaultValue={budget?.runbookAutoExecutionsPerIncident ?? 3}
-              />
-            </Field>
-            <Field label="Automatic writes per incident">
-              <Input
-                name="writes"
-                aria-label="Automatic writes per incident"
-                type="number"
-                min={0}
-                max={100}
-                defaultValue={budget?.runbookAutoWritesPerIncident ?? 3}
-              />
-            </Field>
-            <Field label="Automatic non-idempotent actions per incident">
-              <Input
-                name="nonIdempotent"
-                aria-label="Automatic non-idempotent actions per incident"
-                type="number"
-                min={0}
-                max={100}
-                defaultValue={budget?.runbookAutoNonIdempotentPerIncident ?? 0}
-              />
-            </Field>
-            <SubmitButton>Save remediation budgets</SubmitButton>
-          </ActionForm>
-        </details>
-      )}
-      {permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE) && (
-        <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
-          <summary className="cursor-pointer font-semibold text-sm">
-            Execution artifact retention
-          </summary>
-          <ActionForm action={updateRunbookArtifactRetentionAction} className="mt-3 space-y-3">
-            <Field label="Artifact retention days">
-              <Input
-                name="days"
-                type="number"
-                min={1}
-                max={3650}
-                required
-                defaultValue={
-                  budget?.runbookArtifactRetentionDays ??
-                  Math.min(
-                    3650,
-                    Math.max(
-                      1,
-                      Number.parseInt(process.env.RUNBOOK_ARTIFACT_RETENTION_DAYS ?? '30', 10) || 30
-                    )
-                  )
-                }
-              />
-            </Field>
-            <p className="text-sm text-muted-foreground">
-              The next reconciliation permanently deletes artifact contents older than this policy.
-              Execution records remain, but deleted output cannot be recovered. Export evidence
-              before shortening retention.
-            </p>
-            <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" name="confirm" required />I understand this policy permanently
-              deletes expired evidence.
-            </label>
-            <SubmitButton>Save artifact retention policy</SubmitButton>
-          </ActionForm>
-        </details>
-      )}
-      {canManage && signingKey && (
-        <details className="rounded-xl border bg-card p-4">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Pinned execution public key
-          </summary>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Set OPSKNIGHT_EXECUTION_PUBLIC_KEY on every Agent. Verify the value through your trusted
-            OpsKnight session.
-          </p>
-          <code className="mt-2 block break-all select-all text-xs">{signingKey.publicKey}</code>
-          <p className="mt-3 text-xs">
-            For overlapping rotation, set OPSKNIGHT_EXECUTION_PUBLIC_KEYS to this trusted key map on
-            every Agent, wait for fleet acknowledgement, then activate NEXT. RETIRING keys have a
-            24-hour grace period.
-          </p>
-          <code className="mt-2 block break-all text-xs">
-            {JSON.stringify(Object.fromEntries(signingKeys.map(key => [key.id, key.publicKey])))}
-          </code>
-          <ActionForm action={rotateExecutionSigningIdentityAction}>
-            <input type="hidden" name="operation" value="stage" />
-            <SubmitButton disabled={signingKeys.some(key => key.state === 'NEXT')}>
-              Stage next signing identity
-            </SubmitButton>
-          </ActionForm>
-          {signingKeys
-            .filter(key => key.state !== 'ACTIVE')
-            .map(key => (
-              <ActionForm key={key.id} action={rotateExecutionSigningIdentityAction}>
-                <input
-                  type="hidden"
-                  name="operation"
-                  value={key.state === 'NEXT' ? 'activate' : 'retire'}
-                />
-                <input type="hidden" name="keyId" value={key.id} />
-                <p className="mt-2 text-xs">
-                  {key.state} · {key.id}
-                  {key.state === 'RETIRING' && key.retiredAt
-                    ? ` · Grace ends ${formatDateTime(key.retiredAt, userTimeZone, { format: 'datetime' })}`
-                    : ''}
-                </p>
-                <SubmitButton>
-                  {key.state === 'NEXT'
-                    ? 'Activate acknowledged identity'
-                    : 'Retire after grace period'}
-                </SubmitButton>
-              </ActionForm>
-            ))}
-        </details>
-      )}
-    </section>
-  );
-
-  const poolPanel = (
-    <section className="space-y-4">
-      {canManage && (
-        <ConfigureSheet
-          title="Create Agent pool"
-          description="Choose target semantics explicitly."
-          trigger={<Button>Create pool</Button>}
-        >
-          <ActionForm action={createAgentPoolAction} className="space-y-4">
-            <Field label="Name">
-              <Input name="name" aria-label="Pool name" required />
-            </Field>
-            <Field label="Description">
-              <Input name="description" aria-label="Pool description" />
-            </Field>
-            <Field label="Match labels (JSON)">
-              <Textarea name="matchLabels" aria-label="Pool match labels" defaultValue="{}" />
-            </Field>
-            <FormSelect
-              name="mode"
-              label="Pool semantics"
-              defaultValue="SHARED_TARGET"
-              options={[
-                { value: 'SHARED_TARGET', label: 'Shared target · any healthy member' },
-                { value: 'LOCAL_HOSTS', label: 'Local hosts · distinct machines' },
-              ]}
-            />
-            <p className="text-xs text-muted-foreground">
-              Writes to a multi-member local-host pool require a specific Agent.
-            </p>
-            <SubmitButton>Create pool</SubmitButton>
-          </ActionForm>
-        </ConfigureSheet>
-      )}
-      <div className="grid gap-4 md:grid-cols-2">
-        {pools.map(pool => {
-          const members =
-            pool.id === activePoolId && activePoolMembers ? activePoolMembers : pool.members;
-          const currentMemberPage = pool.id === activePoolId ? memberPage : 1;
-          return (
-            <Card key={pool.id} className="rounded-xl">
-              <CardHeader>
-                <CardTitle className="text-base">{pool.name}</CardTitle>
-                {canManage && (
-                  <details>
-                    <summary className="cursor-pointer text-xs">Dynamic label selector</summary>
-                    <ActionForm action={updateSchedulingLabelsAction}>
-                      <input type="hidden" name="id" value={pool.id} />
-                      <input type="hidden" name="kind" value="pool" />
-                      <Textarea
-                        name="labels"
-                        aria-label={`Selector for ${pool.name}`}
-                        defaultValue={JSON.stringify(pool.matchLabels)}
-                      />
-                      <SubmitButton>Save pool selector</SubmitButton>
-                    </ActionForm>
-                  </details>
-                )}
-                <CardDescription>{pool.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">{pool.mode.replaceAll('_', ' ')}</Badge>
-                  <Badge variant="secondary">
-                    {pool._count.members} Agents · {pool._count.bindings} bindings
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {pool.mode === 'SHARED_TARGET'
-                    ? 'Any healthy member can operate the same target.'
-                    : 'Each Agent represents a different machine. Select a specific Agent for writes.'}
-                </p>
-                <ConfigureSheet
-                  title={`Manage ${pool.name}`}
-                  description="Membership changes affect future claims and write-target validation."
-                  trigger={
-                    <Button variant="outline" size="sm">
-                      Manage pool
-                    </Button>
-                  }
-                >
-                  {members.map(member => (
-                    <div
-                      key={member.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
-                    >
-                      <span className="text-sm">
-                        {member.agent.name} · {member.source.toLowerCase()}
-                      </span>
-                      {canManage && member.source === 'EXPLICIT' && (
-                        <ConfirmAction
-                          action={removeAgentFromPoolAction.bind(null, member.id)}
-                          title={`Remove ${member.agent.name}?`}
-                          description="This Agent will no longer receive new work targeted to this pool."
-                          label="Remove"
-                          variant="outline"
-                        />
-                      )}
-                    </div>
-                  ))}
-                  {canManage && (
-                    <ActionForm action={addAgentToPoolAction} className="space-y-3">
-                      <input type="hidden" name="poolId" value={pool.id} />
-                      <SearchableRunbookSelect
-                        kind="agent"
-                        name="agentId"
-                        label="Agent to add"
-                        required
-                      />
-                      <SubmitButton>Add Agent</SubmitButton>
-                    </ActionForm>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Members {members.length} of {pool._count.members}
-                  </p>
-                  {currentMemberPage > 1 && (
-                    <Link
-                      className="text-primary text-xs"
-                      href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage - 1}`}
-                    >
-                      Previous members
-                    </Link>
-                  )}
-                  {currentMemberPage * 20 < pool._count.members && (
-                    <Link
-                      className="text-primary text-xs"
-                      href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage + 1}`}
-                    >
-                      Next members
-                    </Link>
-                  )}
-                  {pool._count.members === 0 && <EmptyState title="No members" size="sm" />}
-                </ConfigureSheet>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      {pools.length === 0 && (
-        <EmptyState
-          icon={<Network />}
-          title="No Agent pools"
-          description="Group Agents that can safely share an execution target."
-        />
-      )}
-    </section>
-  );
-
-  const secretPanel = (
-    <section className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Credentials are encrypted at rest. Values are never displayed; secret-backed Agent steps
-        require HTTPS.
-      </p>
-      {canManageSecrets && (
-        <ConfigureSheet
-          title="Create scoped secret"
-          description="Grant the credential only to the Agent or pool that requires it."
-          trigger={<Button>Create secret</Button>}
-        >
-          <ActionForm action={createRunbookSecretAction} className="space-y-4">
-            <Field label="Name">
-              <Input name="name" aria-label="Secret name" required />
-            </Field>
-            <Field label="Value">
-              <Input
-                name="value"
-                aria-label="Secret value"
-                type="password"
-                required
-                autoComplete="new-password"
-              />
-            </Field>
-            <Field label="Description">
-              <Input name="description" aria-label="Secret description" />
-            </Field>
-            <SearchableRunbookSelect
-              kind="target"
-              name="target"
-              label="Initial secret grant"
-              required
-            />
-            <SubmitButton>Create encrypted secret</SubmitButton>
-          </ActionForm>
-        </ConfigureSheet>
-      )}
-      <div className="grid gap-4 md:grid-cols-2">
-        {secrets.map(secret => {
-          const grants =
-            secret.id === activeSecretId && activeSecretGrants ? activeSecretGrants : secret.grants;
-          const currentGrantPage = secret.id === activeSecretId ? grantPage : 1;
-          return (
-            <Card key={secret.id} className="rounded-xl">
-              <CardHeader>
-                <CardTitle className="text-base">{secret.name}</CardTitle>
-                <CardDescription>{secret.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="font-mono text-muted-foreground" aria-label="Secret value hidden">
-                  ••••••••••••••••
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Created {formatDateTime(secret.createdAt, userTimeZone, { format: 'date' })} ·
-                  Updated {formatDateTime(secret.updatedAt, userTimeZone, { format: 'date' })}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Granted to{' '}
-                  {secret.grants
-                    .map(grant => grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target')
-                    .join(', ') || 'no targets'}
-                </p>
-                <ConfigureSheet
-                  title={`Manage ${secret.name}`}
-                  description="Values stay hidden. Review grants and rotate credentials when needed."
-                  trigger={
-                    <Button variant="outline" size="sm">
-                      Manage grants / Rotate
-                    </Button>
-                  }
-                >
-                  <p className="text-xs text-muted-foreground">
-                    Grants {grants.length} of {secret._count.grants}
-                  </p>
-                  {currentGrantPage > 1 && (
-                    <Link
-                      className="text-primary text-xs"
-                      href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage - 1}`}
-                    >
-                      Previous grants
-                    </Link>
-                  )}
-                  {currentGrantPage * 20 < secret._count.grants && (
-                    <Link
-                      className="text-primary text-xs"
-                      href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage + 1}`}
-                    >
-                      Next grants
-                    </Link>
-                  )}
-                  {grants.map(grant => (
-                    <div
-                      key={grant.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
-                    >
-                      <span className="text-sm">
-                        {grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target'}
-                      </span>
-                      <ConfirmAction
-                        action={revokeRunbookSecretGrantAction.bind(null, grant.id)}
-                        title="Revoke this secret grant?"
-                        description="The target can no longer resolve this credential for new steps. Previously resolved values cannot be recalled."
-                        label="Revoke grant"
-                        variant="outline"
-                      />
-                    </div>
-                  ))}
-                  {canManageSecrets && (
-                    <ActionForm
-                      action={grantRunbookSecretAction.bind(null, secret.id)}
-                      className="space-y-3"
-                    >
-                      <SearchableRunbookSelect
-                        kind="target"
-                        name="target"
-                        label="Grant to target"
-                        required
-                      />
-                      <SubmitButton>Grant access</SubmitButton>
-                    </ActionForm>
-                  )}
-                  <ActionForm
-                    action={rotateRunbookSecretAction.bind(null, secret.id)}
-                    className="space-y-3 border-t pt-4"
-                  >
-                    <Field label="New secret value">
-                      <Input
-                        name="value"
-                        aria-label="New secret value"
-                        type="password"
-                        required
-                        autoComplete="new-password"
-                      />
-                    </Field>
-                    <SubmitButton pendingLabel="Rotating…" variant="outline">
-                      Rotate secret
-                    </SubmitButton>
-                  </ActionForm>
-                </ConfigureSheet>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      {secrets.length === 0 && (
-        <EmptyState
-          icon={<KeyRound />}
-          title="No scoped secrets"
-          description="Create encrypted credentials and grant each to a specific Agent or pool."
-        />
-      )}
-    </section>
-  );
+  const hasFilters = Object.keys(filterQuery).some(key => key !== 'page');
+  const firstEnrollment = fleet.enrolled === 0 && agentTotal === 0 && !hasFilters;
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
-      {/* Compact Page Header */}
-      <RunbookPageHeader
-        title="Execution Infrastructure"
-        description="Outbound-only native Agents, explicit worker pools, and cryptographically isolated credentials."
-        actions={
-          canManage ? (
-            <ConfigureSheet
-              title="Enroll an Agent"
-              description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
-              trigger={<Button>Add Agent</Button>}
-            >
-              <AgentEnrollmentForm
+    <FleetPageShell
+      title="Execution Infrastructure"
+      icon={Server}
+      description={`Outbound-only native Agents, explicit worker pools, and cryptographically isolated credentials. Fleet evaluated at ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}
+      navigation={navigation}
+      canManageSecrets={canManageSecrets}
+      actions={
+        canManage ? (
+          <EnrollAgentSheet
+            label="Enroll agent"
+            userTimeZone={userTimeZone}
+            appUrl={appUrl}
+            distribution={distribution}
+          />
+        ) : undefined
+      }
+    >
+      {firstEnrollment ? (
+        <SectionCard
+          icon={Bot}
+          title="No Agents enrolled yet"
+          description="Agents connect outbound to OpsKnight and run diagnostic and remediation steps on your hosts. Nothing listens for inbound connections."
+        >
+          <ol className="grid gap-4 md:grid-cols-3">
+            {ENROLLMENT_STEPS.map((step, index) => (
+              <li key={step.title} className="flex gap-3 rounded-lg border bg-muted/20 p-4">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary ring-1 ring-inset ring-primary/20 tabular-nums">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-semibold">{step.title}</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {step.description}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-5 flex flex-wrap items-center gap-3 border-t pt-5">
+            {canManage ? (
+              <EnrollAgentSheet
+                label="Enroll your first Agent"
+                variant="outline"
                 userTimeZone={userTimeZone}
                 appUrl={appUrl}
                 distribution={distribution}
               />
-            </ConfigureSheet>
-          ) : undefined
-        }
-      />
-
-      {/* Modern Metric Strip */}
-      <RunbookMetricStrip
-        stats={[
-          {
-            label: 'Enrolled Agents',
-            value: fleet.enrolled,
-            subtext: `${fleet.online} online · ${fleet.offline} offline · ${fleet.enrolling} enrolling`,
-            tone: fleet.online > 0 ? 'success' : 'default',
-          },
-          {
-            label: 'Worker Pools',
-            value: poolTotal,
-            subtext: 'Target pools',
-          },
-          {
-            label: 'Pending Results',
-            value: fleet.spoolDepth,
-            subtext: 'Spool depth',
-          },
-          {
-            label: 'Dead Letters',
-            value: fleet.deadLetterDepth,
-            tone: fleet.deadLetterDepth > 0 ? 'warning' : 'default',
-            subtext: 'Unclaimed events',
-          },
-        ]}
-      />
-
-      {/* Persistent Module Navigation */}
-      <RunbookModuleNav summary={navigation} />
-
-      {/* Search & Attribute Filters */}
-      {tab === 'agents' && <AgentFilterBar key={JSON.stringify(query)} query={query} />}
-
-      {tab === 'agents' && query.attention === '1' && (
-        <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">
-              Filtered by Health: Agents requiring operator attention
-            </span>
-            <span className="text-amber-700 dark:text-amber-300">({agentTotal} matching)</span>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Ask an administrator with Agent management permission to enroll the first Agent.
+              </p>
+            )}
           </div>
-          <Link href="/runbooks/agents" className="font-medium text-primary hover:underline ml-2">
-            Show all agents
-          </Link>
-        </div>
+        </SectionCard>
+      ) : (
+        <>
+          <section aria-label="Fleet health" className="space-y-3">
+            <RunbookMetricStrip
+              stats={STATUS_CARDS.map(card => {
+                const active = filter.status === card.status && !attention;
+                return {
+                  label: card.label,
+                  value: fleet[card.key],
+                  subtext: card.subtext,
+                  tone: fleet[card.key] > 0 ? card.tone : 'default',
+                  active,
+                  href: active ? '/runbooks/agents' : `/runbooks/agents?status=${card.status}`,
+                };
+              })}
+            />
+            {(fleet.deadLetterDepth > 0 || fleet.spoolDepth > 0) && (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Pill tone={fleet.spoolDepth > 0 ? 'info' : 'neutral'}>
+                  <span className="tabular-nums">{fleet.spoolDepth}</span> pending results spooled
+                </Pill>
+                <Pill tone={fleet.deadLetterDepth > 0 ? 'danger' : 'neutral'}>
+                  <span className="tabular-nums">{fleet.deadLetterDepth}</span> dead-letter events
+                </Pill>
+                {fleet.deadLetterDepth > 0 && (
+                  <Link
+                    href="/runbooks/agents?attention=1"
+                    className="inline-flex items-center gap-1 rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Review Agents needing attention
+                    <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                  </Link>
+                )}
+              </div>
+            )}
+          </section>
+
+          <AgentFilterBar key={JSON.stringify(filterQuery)} query={filterQuery} />
+
+          {attention && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="font-semibold">
+                  Filtered by Health: Agents requiring operator attention
+                </span>
+                <span className="tabular-nums text-amber-700 dark:text-amber-300">
+                  ({agentTotal} matching)
+                </span>
+              </div>
+              <Link
+                href="/runbooks/agents"
+                className="rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Show all agents
+              </Link>
+            </div>
+          )}
+
+          <section aria-label="Agent fleet">
+            <AgentFleetTable
+              agents={agentListData}
+              userTimeZone={userTimeZone}
+              canManage={canManage}
+              filtered={hasFilters}
+            />
+          </section>
+          <RunbookPagination page={page} total={agentTotal} query={filterQuery} />
+        </>
       )}
-
-      {/* Tabbed Infrastructure Modules */}
-      <nav aria-label="Infrastructure sections" className="flex gap-2 overflow-x-auto">
-        {['agents', 'pools', ...(canManageSecrets ? ['secrets'] : []), 'security'].map(section => (
-          <Link
-            key={section}
-            href={`/runbooks/agents?tab=${section}`}
-            aria-current={tab === section ? 'page' : undefined}
-            className={`rounded-md px-4 py-2 text-sm capitalize ${tab === section ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
-          >
-            {section}
-          </Link>
-        ))}
-      </nav>
-      {tab === 'agents'
-        ? agentPanel
-        : tab === 'pools'
-          ? poolPanel
-          : tab === 'secrets'
-            ? secretPanel
-            : securityPanel}
-      {tab !== 'security' && <RunbookPagination page={page} total={panelTotal} query={query} />}
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-    </div>
+    </FleetPageShell>
   );
 }

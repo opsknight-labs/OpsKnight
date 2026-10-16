@@ -1,10 +1,12 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Workflow } from 'lucide-react';
+import { ArrowRight, Clock, Hash, Layers, PlayCircle, Users } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
+import { Pill } from '../ui/primitives';
 import { formatDateTime } from '@/lib/timezone';
+import { formatRelativeShort } from '@/lib/mobile-time';
+import { cn } from '@/lib/utils';
 
 export type RunbookCardData = {
   id: string;
@@ -17,6 +19,8 @@ export type RunbookCardData = {
   archivedAt?: string | null;
   updatedAt: string;
   sampleServices?: string[];
+  ownerTeam?: { id: string; name: string } | null;
+  tags?: string[];
   lastExecution?: {
     id: string;
     status: string;
@@ -30,131 +34,168 @@ export type RunbookCardProps = {
   runbook: RunbookCardData;
   userTimeZone: string;
   canManage?: boolean;
+  density?: 'grid' | 'list';
+  updatedLabel?: string;
 };
 
-export function RunbookCard({ runbook, userTimeZone }: RunbookCardProps) {
+const MAX_VISIBLE_TAGS = 4;
+
+function plural(count: number, word: string) {
+  return `${new Intl.NumberFormat('en-US').format(count)} ${word}${count === 1 ? '' : 's'}`;
+}
+
+export function RunbookCard({
+  runbook,
+  userTimeZone,
+  density = 'grid',
+  updatedLabel,
+}: RunbookCardProps) {
   const isArchived = Boolean(runbook.archivedAt);
   const isPublished = !isArchived && runbook.publishedVersion !== null;
-
   const statusLabel = isArchived ? 'ARCHIVED' : isPublished ? 'PUBLISHED' : 'DRAFT';
+  const href = `/runbooks/${runbook.id}`;
+  const isList = density === 'list';
 
-  // Last execution summary
+  const tags = runbook.tags ?? [];
+  const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
+  const hiddenTagCount = tags.length - visibleTags.length;
+  const services = runbook.sampleServices ?? [];
+  const updated =
+    updatedLabel ?? formatDateTime(runbook.updatedAt, userTimeZone, { format: 'date' });
   const lastExec = runbook.lastExecution;
-  const lastExecDurationSec =
-    lastExec?.startedAt && lastExec.completedAt
-      ? Math.max(
-          0,
-          Math.round(
-            (new Date(lastExec.completedAt).getTime() - new Date(lastExec.startedAt).getTime()) /
-              1000
-          )
-        )
-      : null;
+
+  const meta = (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground',
+        isList && 'sm:justify-end'
+      )}
+    >
+      <span
+        className="inline-flex items-center gap-1.5"
+        title={services.length ? services.join(', ') : undefined}
+      >
+        <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="tabular-nums">{plural(runbook.bindings, 'service binding')}</span>
+      </span>
+      {lastExec ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="sr-only">Last run:</span>
+          <RunbookStatusBadge status={lastExec.status} size="sm" context="execution" />
+          <time
+            dateTime={lastExec.createdAt}
+            title={formatDateTime(lastExec.createdAt, userTimeZone, { format: 'datetime' })}
+            suppressHydrationWarning
+          >
+            {formatRelativeShort(lastExec.createdAt, userTimeZone)}
+          </time>
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+          Never run
+        </span>
+      )}
+      <span className="inline-flex items-center gap-1.5">
+        <PlayCircle className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="tabular-nums">{plural(runbook.executions, 'run')}</span>
+      </span>
+    </div>
+  );
 
   return (
-    <div
-      className={`group relative flex flex-col justify-between rounded-xl border p-5 shadow-2xs transition-all ${
-        isArchived
-          ? 'bg-muted/30 border-border/80 opacity-80'
-          : 'bg-card/90 border-border hover:border-primary/40 hover:shadow-xs hover:bg-card'
-      }`}
+    <article
+      className={cn(
+        'group relative flex rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] focus-within:border-primary/40 hover:border-primary/40 hover:shadow-sm',
+        isList ? 'flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-6' : 'flex-col p-5',
+        isArchived && 'bg-muted/30'
+      )}
     >
-      <div className="space-y-3">
-        {/* Top Header: Title, Status Badge, Version info */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
-          <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-heading text-base sm:text-lg font-bold tracking-tight">
-                <Link
-                  href={`/runbooks/${runbook.id}`}
-                  className="text-foreground group-hover:text-primary transition-colors underline-offset-4 hover:underline"
-                >
-                  {runbook.name}
-                </Link>
-              </h2>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-center">
-            <RunbookStatusBadge status={statusLabel} />
-            {isPublished && (
-              <Badge variant="outline" className="font-mono text-xs px-2 py-0.5">
-                v{runbook.publishedVersion}
-              </Badge>
-            )}
+      <div className={cn('min-w-0 flex-1', isList ? 'space-y-1.5' : 'space-y-3')}>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 text-base font-semibold leading-snug tracking-tight">
+            <Link
+              href={href}
+              className="break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:underline group-hover:text-primary"
+            >
+              {runbook.name}
+            </Link>
+          </h2>
+          <div className="relative z-10 flex flex-wrap items-center justify-end gap-1.5">
+            <RunbookStatusBadge status={statusLabel} size="sm" context="lifecycle" />
+            {isPublished && <Pill className="font-mono">v{runbook.publishedVersion}</Pill>}
             {runbook.draftVersion && isPublished && (
-              <Badge
-                variant="secondary"
-                className="text-[11px] px-1.5 py-0 text-amber-600 dark:text-amber-400"
-              >
-                draft v{runbook.draftVersion} pending
-              </Badge>
+              <Pill tone="warning" className="font-mono">
+                draft v{runbook.draftVersion}
+              </Pill>
             )}
           </div>
         </div>
 
-        {/* Description */}
-        <p className="line-clamp-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
-          {runbook.description || 'No description provided for this operational workflow.'}
+        <p
+          className={cn(
+            'text-sm leading-relaxed text-muted-foreground',
+            isList ? 'line-clamp-1' : 'line-clamp-2 min-h-[2lh]'
+          )}
+        >
+          {runbook.description || 'No description yet.'}
         </p>
 
-        {/* Operational Context: Service Bindings & Targets */}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pt-1">
-          <div className="flex items-center gap-1.5">
-            <Workflow className="h-3.5 w-3.5 text-muted-foreground/70" />
-            <span className="font-medium text-foreground">
-              {runbook.bindings} {runbook.bindings === 1 ? 'service binding' : 'service bindings'}
-            </span>
-          </div>
-
-          {runbook.sampleServices && runbook.sampleServices.length > 0 && (
-            <div className="flex items-center gap-1">
-              <span>·</span>
-              <span className="text-muted-foreground font-mono text-[11px] truncate max-w-[200px]">
-                {runbook.sampleServices.join(', ')}
-              </span>
-            </div>
+        <div className="relative z-10 flex flex-wrap items-center gap-1.5">
+          {runbook.ownerTeam ? (
+            <Pill icon={Users} tone="neutral" className="text-foreground">
+              <span className="sr-only">Owner team: </span>
+              {runbook.ownerTeam.name}
+            </Pill>
+          ) : (
+            <Pill icon={Users} className="border border-dashed border-border bg-transparent ring-0">
+              No owner
+            </Pill>
           )}
-
-          {isArchived && (
-            <span className="text-amber-600 dark:text-amber-400 text-[11px] font-medium">
-              · All service bindings disabled
-            </span>
+          {tags.length > 0 && (
+            <ul className="flex flex-wrap items-center gap-1.5" aria-label="Tags">
+              {visibleTags.map(tag => (
+                <li key={tag}>
+                  <Link
+                    href={`/runbooks?tag=${encodeURIComponent(tag)}`}
+                    aria-label={`Filter by tag ${tag}`}
+                    className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 font-mono text-[11px] text-muted-foreground ring-1 ring-inset ring-border transition-colors hover:text-foreground hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Hash className="h-2.5 w-2.5" aria-hidden="true" />
+                    {tag}
+                  </Link>
+                </li>
+              ))}
+              {hiddenTagCount > 0 && (
+                <li className="text-[11px] text-muted-foreground">+{hiddenTagCount}</li>
+              )}
+            </ul>
           )}
         </div>
       </div>
 
-      {/* Operational Stats Strip & Actions */}
-      <div className="mt-4 pt-3.5 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Last Execution Info */}
-          {lastExec ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px]">Last run:</span>
-              <RunbookStatusBadge status={lastExec.status} size="sm" showIcon={false} />
-              {lastExecDurationSec !== null && (
-                <span className="font-mono text-[11px]">({lastExecDurationSec}s)</span>
-              )}
-            </div>
-          ) : (
-            <span className="text-[11px] italic">No execution history yet</span>
-          )}
-
-          <span>·</span>
-          <span>{runbook.executions} total runs</span>
-          <span>·</span>
-          <span>Updated {formatDateTime(runbook.updatedAt, userTimeZone, { format: 'date' })}</span>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
-            <Link href={`/runbooks/${runbook.id}`}>
+      <div
+        className={cn(
+          'relative z-10 flex flex-wrap items-center justify-between gap-3',
+          isList ? 'sm:shrink-0 sm:flex-col sm:items-end sm:gap-2' : 'mt-4 border-t pt-4'
+        )}
+      >
+        {meta}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {isArchived ? 'Archived · bindings disabled' : `Updated ${updated}`}
+          </span>
+          <Button asChild variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+            <Link href={href}>
               <span>Open</span>
-              <ArrowRight className="h-3 w-3" />
+              <ArrowRight
+                className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
             </Link>
           </Button>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

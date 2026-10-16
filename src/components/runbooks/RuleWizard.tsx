@@ -1,12 +1,33 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
+import { cn } from '@/lib/utils';
+
+export type RuleWizardStep = { title: string; description?: string; content: ReactNode };
+
+const REVIEW_LABELS = new Map([
+  ['mode', 'Execution mode'],
+  ['versionStrategy', 'Version strategy'],
+  ['runbookVersionId', 'Pinned version'],
+  ['ruleName', 'Rule name'],
+  ['enabled', 'Initial status'],
+  ['executionTarget', 'Target'],
+  ['agentSelector', 'Label selector'],
+  ['initialTrigger', 'Trigger'],
+]);
 
 export default function RuleWizard({
   steps,
+  summary = [],
+  submit,
 }: {
-  steps: Array<{ title: string; content: ReactNode }>;
+  steps: RuleWizardStep[];
+  /** Review rows for values that are not form fields. */
+  summary?: Array<[string, string]>;
+  /** Final-step primary action, rendered in the sticky footer. */
+  submit?: ReactNode;
 }) {
   const [current, setCurrent] = useState(0);
   const [review, setReview] = useState<Array<[string, string]>>([]);
@@ -40,22 +61,12 @@ export default function RuleWizard({
     }
     if (next === steps.length - 1) {
       const form = root.current?.closest('form');
-      const labels = new Map([
-        ['ruleName', 'Rule name'],
-        ['mode', 'Execution mode'],
-        ['versionStrategy', 'Version strategy'],
-        ['runbookVersionId', 'Version'],
-        ['executionTarget', 'Target'],
-        ['agentSelector', 'Label selector'],
-        ['initialTrigger', 'Trigger'],
-        ['enabled', 'Initial status'],
-      ]);
       if (form)
         setReview(
           Array.from(new FormData(form).entries())
-            .filter(([name]) => labels.has(name) || name.startsWith('input:'))
+            .filter(([name]) => REVIEW_LABELS.has(name) || name.startsWith('input:'))
             .map(([name, value]) => {
-              const label = labels.get(name) ?? `Input: ${name.slice(6)}`;
+              const label = REVIEW_LABELS.get(name) ?? `Input: ${name.slice(6)}`;
               const field = form.elements.namedItem(name);
               const masked =
                 name.startsWith('input:') &&
@@ -65,83 +76,154 @@ export default function RuleWizard({
               const inputLabel =
                 field instanceof HTMLElement ? field.getAttribute('aria-label') : null;
               const selectedText = document.getElementById(name)?.textContent;
-              return [
-                inputLabel || label,
-                masked ? 'Configured · Values masked in review' : selectedText || String(value),
-              ];
+              const text =
+                name === 'agentSelector' && String(value) === '{}'
+                  ? 'No label restriction'
+                  : selectedText || String(value);
+              return [inputLabel || label, masked ? 'Configured · Values masked in review' : text];
             })
         );
     }
     setCurrent(next);
     requestAnimationFrame(() => heading.current?.focus());
   }
+  const step = steps.at(current);
+  const last = current === steps.length - 1;
+  const rows = [...summary, ...review];
   return (
     <div
       ref={root}
-      className="space-y-4 min-w-0"
+      className="flex min-w-0 flex-1 flex-col"
       onKeyDown={event => {
-        if (
-          event.key === 'Enter' &&
-          event.target instanceof HTMLInputElement &&
-          current < steps.length - 1
-        )
+        if (event.key === 'Enter' && event.target instanceof HTMLInputElement && !last)
           event.preventDefault();
       }}
     >
-      <ol aria-label="Rule setup progress" className="flex flex-wrap gap-2 text-sm">
-        {steps.map((step, index) => (
-          <li
-            key={step.title}
-            aria-current={index === current ? 'step' : undefined}
-            className={index === current ? 'font-semibold text-primary' : 'text-muted-foreground'}
-          >
-            {index + 1}. {step.title}
-          </li>
-        ))}
+      <ol aria-label="Rule setup progress" className="flex items-start">
+        {steps.map((item, index) => {
+          const done = index < current;
+          const active = index === current;
+          return (
+            <li
+              key={item.title}
+              aria-current={active ? 'step' : undefined}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center"
+            >
+              <div className="flex w-full items-center">
+                <span
+                  aria-hidden
+                  className={cn(
+                    'h-px flex-1',
+                    index === 0 ? 'opacity-0' : done || active ? 'bg-primary/60' : 'bg-border'
+                  )}
+                />
+                <button
+                  type="button"
+                  disabled={!done}
+                  onClick={() => move(index)}
+                  aria-label={`Step ${index + 1}: ${item.title}${done ? ' · completed, go back' : ''}`}
+                  className={cn(
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
+                    done && 'bg-primary text-primary-foreground ring-primary hover:bg-primary/90',
+                    active && 'bg-primary/10 text-primary ring-primary',
+                    !done && !active && 'bg-background text-muted-foreground ring-border'
+                  )}
+                >
+                  {done ? <Check className="h-3.5 w-3.5" aria-hidden /> : index + 1}
+                </button>
+                <span
+                  aria-hidden
+                  className={cn(
+                    'h-px flex-1',
+                    index === steps.length - 1 ? 'opacity-0' : done ? 'bg-primary/60' : 'bg-border'
+                  )}
+                />
+              </div>
+              <span
+                aria-hidden
+                className={cn(
+                  'hidden px-1 text-[11px] leading-tight sm:block',
+                  active ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                )}
+              >
+                {item.title}
+              </span>
+            </li>
+          );
+        })}
       </ol>
-      <h3 ref={heading} tabIndex={-1} id={id} className="font-semibold outline-none">
-        {steps.at(current)?.title}
-      </h3>
-      {current === steps.length - 1 && review.length > 0 && (
-        <dl aria-label="Rule configuration review" className="rounded border p-3 text-sm space-y-2">
-          {review.map(([name, value], index) => (
-            <div key={`${name}-${index}`} className="grid gap-1 sm:grid-cols-2">
-              <dt className="font-medium break-words">{name}</dt>
-              <dd className="break-all text-muted-foreground">{value || 'Not configured'}</dd>
+
+      <div className="mt-6 space-y-1">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground tabular-nums">
+          Step {current + 1} of {steps.length}
+        </p>
+        <h3
+          ref={heading}
+          tabIndex={-1}
+          id={id}
+          className="text-base font-semibold tracking-tight outline-none"
+        >
+          {step?.title}
+        </h3>
+        {step?.description && (
+          <p className="text-xs leading-relaxed text-muted-foreground">{step.description}</p>
+        )}
+      </div>
+
+      {last && rows.length > 0 && (
+        <dl
+          aria-label="Rule configuration review"
+          className="mt-4 divide-y rounded-xl border bg-muted/20 text-sm"
+        >
+          {rows.map(([name, value], index) => (
+            <div
+              key={`${name}-${index}`}
+              className="grid gap-1 px-4 py-2.5 sm:grid-cols-[minmax(0,10rem)_1fr] sm:gap-4"
+            >
+              <dt className="break-words text-xs font-medium text-muted-foreground">{name}</dt>
+              <dd className="break-all text-foreground">{value || 'Not configured'}</dd>
             </div>
           ))}
         </dl>
       )}
-      {steps.map((step, index) => (
+
+      {steps.map((item, index) => (
         <div
           data-rule-wizard-step
-          key={step.title}
+          key={item.title}
           hidden={index !== current}
           aria-labelledby={id}
-          className="space-y-3"
+          className="mt-4 space-y-4 pb-6"
         >
-          {step.content}
+          {item.content}
         </div>
       ))}
-      <div className="flex flex-wrap gap-2">
-        {current > 0 && (
+
+      <div className="sticky bottom-0 z-10 -mx-6 mt-auto flex flex-wrap items-center justify-between gap-2 border-t bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        {current > 0 ? (
           <Button
             type="button"
-            variant="outline"
-            className="min-h-11"
+            variant="ghost"
+            className="gap-1.5"
             onClick={() => move(current - 1)}
           >
+            <ArrowLeft className="h-4 w-4" aria-hidden />
             Back
           </Button>
+        ) : (
+          <span aria-hidden />
         )}
-        {current < steps.length - 1 && (
+        {last ? (
+          submit
+        ) : (
           <Button
             type="button"
             disabled={invalid}
-            className="min-h-11"
+            className="gap-1.5"
             onClick={() => move(current + 1)}
           >
             Continue to {steps[current + 1]?.title.toLowerCase()}
+            <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>
         )}
       </div>

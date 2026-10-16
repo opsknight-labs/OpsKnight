@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import type { RunbookInput } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCanViewIncident, assertCapability } from '@/lib/rbac';
@@ -10,6 +11,9 @@ import {
   cancelExecution,
   startRunbookExecution,
 } from '@/lib/runbooks/orchestrator';
+import { flattenSteps, parseRunbookDefinition } from '@/lib/runbooks/definition';
+import { RunbookDefinitionError } from '@/lib/runbooks/errors';
+import { requiresAgent } from '@/lib/runbooks/types';
 
 const idSchema = z.string().cuid();
 
@@ -139,6 +143,211 @@ export async function executePreviewedIncidentRunbookAction(
         .string()
         .regex(/^[a-f0-9]{64}$/)
         .parse(data.get('previewAuthorizationToken')),
+    });
+    revalidatePath(`/incidents/${incidentId}`);
+  } catch (error) {
+    const { toPublicAppError } = await import('@/lib/errors');
+    return { error: toPublicAppError(error).message };
+  }
+}
+
+async function adhocIncidentContext(incidentId: string) {
+  const [actor] = await Promise.all([
+    assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
+    assertCanViewIncident(idSchema.parse(incidentId)),
+  ]);
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    select: { id: true, serviceId: true },
+  });
+  if (!incident) throw new RunbookDefinitionError('Incident was not found.');
+  return { actor, incident };
+}
+
+async function publishedAdhocRunbook(runbookId: string) {
+  const runbook = await prisma.runbook.findFirst({
+    where: {
+      id: idSchema.parse(runbookId),
+      archivedAt: null,
+      publishedVersion: { is: { state: 'PUBLISHED' } },
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      publishedVersion: {
+        select: {
+          id: true,
+          version: true,
+          definition: true,
+          inputs: { orderBy: { sequence: 'asc' } },
+        },
+      },
+    },
+  });
+  if (!runbook?.publishedVersion)
+    throw new RunbookDefinitionError('Runbook is not published or was archived.');
+  return { ...runbook, publishedVersion: runbook.publishedVersion };
+}
+
+function adhocInputValues(
+  formData: FormData,
+  definitions: Pick<RunbookInput, 'key' | 'type'>[]
+): Record<string, unknown> {
+  const known = new Set(definitions.map(input => `input:${input.key}`));
+  for (const name of formData.keys())
+    if (name.startsWith('input:') && !known.has(name))
+      throw new RunbookDefinitionError(
+        'Runbook inputs changed. Reload and review the published version.'
+      );
+  const values: Record<string, unknown> = {};
+  for (const input of definitions) {
+    const raw = formData.get(`input:${input.key}`);
+    if (input.type === 'BOOLEAN') {
+      values[input.key] = raw === 'true';
+      continue;
+    }
+    if (typeof raw !== 'string' || raw === '') continue;
+    if (input.type === 'NUMBER') {
+      const number = Number(raw);
+      if (!Number.isFinite(number))
+        throw new RunbookDefinitionError(`${input.key} must be a valid number.`);
+      values[input.key] = number;
+    } else if (input.type === 'SECRET_REF') {
+      values[input.key] = raw.startsWith('secret://') ? raw : `secret://${raw}`;
+    } else {
+      values[input.key] = raw;
+    }
+  }
+  return values;
+}
+
+function adhocTarget(value: FormDataEntryValue | null) {
+  const raw = typeof value === 'string' ? value : '';
+  if (!raw || raw === 'none') return {};
+  const [kind, id] = raw.split(':', 2);
+  if (kind === 'agent') return { targetAgentId: idSchema.parse(id) };
+  if (kind === 'pool') return { targetAgentPoolId: idSchema.parse(id) };
+  throw new RunbookDefinitionError('Invalid Runbook execution target.');
+}
+
+async function adhocExecutionRequest(incidentId: string, runbookId: string, formData: FormData) {
+  const { actor, incident } = await adhocIncidentContext(incidentId);
+  const runbook = await publishedAdhocRunbook(runbookId);
+  return {
+    runbookId: runbook.id,
+    serviceId: incident.serviceId,
+    incidentId: incident.id,
+    inputValues: adhocInputValues(formData, runbook.publishedVersion.inputs),
+    ...adhocTarget(formData.get('executionTarget')),
+    triggeredByUserId: actor.id,
+  };
+}
+
+export async function searchAdhocIncidentRunbooksAction(incidentId: string, query: string) {
+  await adhocIncidentContext(incidentId);
+  const q = z.string().trim().max(100).catch('').parse(query);
+  const runbooks = await prisma.runbook.findMany({
+    where: {
+      archivedAt: null,
+      publishedVersion: { is: { state: 'PUBLISHED' } },
+      ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      publishedVersion: { select: { version: true } },
+    },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    take: 20,
+  });
+  return runbooks.map(runbook => ({
+    id: runbook.id,
+    name: runbook.name,
+    description: runbook.description,
+    version: runbook.publishedVersion?.version ?? null,
+  }));
+}
+
+export async function loadAdhocIncidentRunbookAction(incidentId: string, runbookId: string) {
+  try {
+    await adhocIncidentContext(incidentId);
+    const runbook = await publishedAdhocRunbook(runbookId);
+    const steps = flattenSteps(parseRunbookDefinition(runbook.publishedVersion.definition));
+    const [agents, pools] = await Promise.all([
+      prisma.runbookAgent.findMany({
+        where: { status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] } },
+        take: 100,
+        select: { id: true, name: true, hostname: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.runbookAgentPool.findMany({
+        take: 100,
+        select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+    return {
+      runbook: {
+        id: runbook.id,
+        name: runbook.name,
+        description: runbook.description,
+        version: runbook.publishedVersion.version,
+        inputs: runbook.publishedVersion.inputs.map(input => ({
+          key: input.key,
+          label: input.label,
+          type: input.type,
+          required: input.required,
+          defaultValue: input.defaultValue,
+          description: input.description,
+          options: input.options,
+        })),
+        requiresAgent: steps.some(step => requiresAgent(step.type)),
+        hasAgentWrite: steps.some(
+          step => requiresAgent(step.type) && step.riskClass !== 'READ_ONLY'
+        ),
+        hasWrite: steps.some(step => step.riskClass !== 'READ_ONLY'),
+      },
+      targets: { agents, pools },
+    };
+  } catch (error) {
+    const { toPublicAppError } = await import('@/lib/errors');
+    return { error: toPublicAppError(error).message };
+  }
+}
+
+export async function previewAdhocIncidentRunbookAction(
+  incidentId: string,
+  runbookId: string,
+  formData: FormData
+) {
+  try {
+    const { previewRunbookExecution } = await import('@/lib/runbooks/orchestrator');
+    return {
+      preview: await previewRunbookExecution(
+        await adhocExecutionRequest(incidentId, runbookId, formData)
+      ),
+    };
+  } catch (error) {
+    const { toPublicAppError } = await import('@/lib/errors');
+    return { error: toPublicAppError(error).message };
+  }
+}
+
+export async function executeAdhocIncidentRunbookAction(
+  incidentId: string,
+  runbookId: string,
+  formData: FormData
+) {
+  try {
+    const digest = z.string().regex(/^[a-f0-9]{64}$/);
+    const expectedPlanDigest = digest.parse(formData.get('previewDigest'));
+    const previewAuthorizationToken = digest.parse(formData.get('previewAuthorizationToken'));
+    await startRunbookExecution({
+      ...(await adhocExecutionRequest(incidentId, runbookId, formData)),
+      expectedPlanDigest,
+      previewAuthorizationToken,
     });
     revalidatePath(`/incidents/${incidentId}`);
   } catch (error) {

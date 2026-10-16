@@ -1,5 +1,5 @@
-import PageLoadingSkeleton from '@/components/ui/PageLoadingSkeleton';
+import { RunbookPageSkeleton } from '@/components/runbooks/skeletons';
 
 export default function RunbookExecutionLoading() {
-  return <PageLoadingSkeleton type="detail" />;
+  return <RunbookPageSkeleton variant="execution-detail" />;
 }

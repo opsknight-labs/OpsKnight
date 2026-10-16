@@ -1,18 +1,12 @@
 import React from 'react';
 import { Badge } from '@/components/ui/shadcn/badge';
 
-export function AgentCapabilitySummary({
-  capabilities,
-}: {
-  capabilities: unknown;
-}) {
+export function AgentCapabilitySummary({ capabilities }: { capabilities: unknown }) {
   if (!Array.isArray(capabilities) || capabilities.length === 0) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
 
-  const items = capabilities
-    .filter((v): v is string => typeof v === 'string')
-    .slice(0, 4);
+  const items = capabilities.filter((v): v is string => typeof v === 'string').slice(0, 4);
 
   return (
     <div className="flex flex-wrap gap-1" aria-label="Configured capabilities">
@@ -22,7 +16,7 @@ export function AgentCapabilitySummary({
           <Badge
             key={cap}
             variant="outline"
-            className="px-1.5 py-0 text-[10px] font-mono tracking-tight bg-muted/30"
+            className="rounded-full bg-muted/40 px-2 py-0 font-mono text-[10px] font-medium tracking-tight text-muted-foreground"
           >
             {cleanName}
           </Badge>

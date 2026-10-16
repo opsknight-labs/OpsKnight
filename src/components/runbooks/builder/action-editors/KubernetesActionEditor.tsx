@@ -22,11 +22,18 @@ const KUBERNETES_ACTIONS = [
   { value: 'logs', label: 'Logs (Container log output)' },
   { value: 'events', label: 'Events (Cluster events for object)' },
   { value: 'rollout-status', label: 'Rollout Status (Monitor deployment progress)' },
-  { value: 'rollout-restart', label: 'Rollout Restart (Trigger rolling reload - Approval Required)' },
+  {
+    value: 'rollout-restart',
+    label: 'Rollout Restart (Trigger rolling reload - Approval Required)',
+  },
   { value: 'scale', label: 'Scale (Adjust replica count)' },
 ];
 
-function resourceOptionsFor(action: string, inputs: RunbookInputInput[] = [], currentResource = '') {
+function resourceOptionsFor(
+  action: string,
+  inputs: RunbookInputInput[] = [],
+  currentResource = ''
+) {
   let base: { value: string; label: string }[];
   if (['rollout-restart', 'rollout-status'].includes(action)) {
     base = [
@@ -153,7 +160,9 @@ export default function KubernetesActionEditor({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor={`k8s-action-${editorId}`}>Kubernetes Action</Label>
+          <Label htmlFor={`k8s-action-${editorId}`} className="text-xs">
+            Action
+          </Label>
           <div className="mt-1.5">
             <FormSelect
               name={`k8s-action-${editorId}`}
@@ -168,7 +177,9 @@ export default function KubernetesActionEditor({
         </div>
 
         <div>
-          <Label htmlFor={`k8s-namespace-${editorId}`}>Namespace</Label>
+          <Label htmlFor={`k8s-namespace-${editorId}`} className="text-xs">
+            Namespace
+          </Label>
           <div className="mt-1.5">
             <Input
               id={`k8s-namespace-${editorId}`}
@@ -186,7 +197,9 @@ export default function KubernetesActionEditor({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor={`k8s-resource-${editorId}`}>Resource Type</Label>
+          <Label htmlFor={`k8s-resource-${editorId}`} className="text-xs">
+            Resource type
+          </Label>
           <div className="mt-1.5">
             <FormSelect
               name={`k8s-resource-${editorId}`}
@@ -205,8 +218,8 @@ export default function KubernetesActionEditor({
         </div>
 
         <div>
-          <Label htmlFor={`k8s-name-${editorId}`}>
-            Resource Name {requiresName && <span className="text-destructive">*</span>}
+          <Label htmlFor={`k8s-name-${editorId}`} className="text-xs">
+            Resource name {requiresName && <span className="text-destructive">*</span>}
           </Label>
           <div className="mt-1.5">
             <Input
@@ -223,18 +236,20 @@ export default function KubernetesActionEditor({
             <p className="mt-1 text-xs text-destructive">{resourceNameError}</p>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">
-              {requiresName ? 'Name is required for this action.' : 'Optional: leave blank for all matching resources.'}
+              {requiresName
+                ? 'Name is required for this action.'
+                : 'Optional: leave blank for all matching resources.'}
             </p>
           )}
         </div>
       </div>
 
       {isScale && (
-        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-3">
+        <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <Label className="font-semibold text-foreground">
-                Desired Replicas <span className="text-destructive">*</span>
+              <Label className="text-xs font-medium text-foreground">
+                Desired replicas <span className="text-destructive">*</span>
               </Label>
               <p className="text-xs text-muted-foreground">
                 {replicaMode === 'fixed'
@@ -247,6 +262,7 @@ export default function KubernetesActionEditor({
                 <Button
                   type="button"
                   variant={replicaMode === 'fixed' ? 'secondary' : 'ghost'}
+                  aria-pressed={replicaMode === 'fixed'}
                   size="sm"
                   className="h-6 text-[11px] px-2 font-medium"
                   onClick={handleSwitchToFixed}
@@ -256,6 +272,7 @@ export default function KubernetesActionEditor({
                 <Button
                   type="button"
                   variant={replicaMode === 'input' ? 'secondary' : 'ghost'}
+                  aria-pressed={replicaMode === 'input'}
                   size="sm"
                   className="h-6 text-[11px] px-2 font-medium"
                   onClick={handleSwitchToInput}
@@ -288,7 +305,8 @@ export default function KubernetesActionEditor({
                 <p className="text-xs font-medium text-destructive">{errors.replicas}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  ⚠️ <strong>Safe Handling:</strong> Clearing this field keeps it unconfigured. Setting explicitly to <code className="font-mono font-bold">0</code> executes a scale-to-zero shutdown.
+                  Leave empty while drafting. <code className="font-mono font-semibold">0</code>{' '}
+                  scales the workload to zero.
                 </p>
               )}
             </div>
@@ -303,37 +321,37 @@ export default function KubernetesActionEditor({
                 onChange={e => onChange({ ...config, replicas: e.target.value })}
                 className={`font-mono text-xs ${errors.replicas ? 'border-destructive' : ''}`}
               />
-              {inputs.filter(i => i.type === 'NUMBER').length > 0 &&
-                !readOnly && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                    <span className="text-[11px] text-muted-foreground">Suggested inputs:</span>
-                    {inputs
-                      .filter(i => i.type === 'NUMBER')
-                      .map(i => {
-                        const templateVal = `\${{ inputs.${i.key} }}`;
-                        const isSelected = rawReplicas === templateVal;
-                        return (
-                          <button
-                            key={i.key}
-                            type="button"
-                            onClick={() => onChange({ ...config, replicas: templateVal })}
-                            className={`rounded px-1.5 py-0.5 font-mono text-[11px] border transition-colors ${
-                              isSelected
-                                ? 'bg-primary text-primary-foreground border-primary font-medium'
-                                : 'bg-background hover:bg-muted text-foreground'
-                            }`}
-                          >
-                            {templateVal}
-                          </button>
-                        );
-                      })}
-                  </div>
-                )}
+              {inputs.filter(i => i.type === 'NUMBER').length > 0 && !readOnly && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[11px] text-muted-foreground">Suggested inputs:</span>
+                  {inputs
+                    .filter(i => i.type === 'NUMBER')
+                    .map(i => {
+                      const templateVal = `\${{ inputs.${i.key} }}`;
+                      const isSelected = rawReplicas === templateVal;
+                      return (
+                        <button
+                          key={i.key}
+                          type="button"
+                          onClick={() => onChange({ ...config, replicas: templateVal })}
+                          className={`rounded px-1.5 py-0.5 font-mono text-[11px] border transition-colors ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground border-primary font-medium'
+                              : 'bg-background hover:bg-muted text-foreground'
+                          }`}
+                        >
+                          {templateVal}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
               {errors.replicas ? (
                 <p className="text-xs font-medium text-destructive">{errors.replicas}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Template reference evaluated safely at execution time from resolved runbook inputs.
+                  Template reference evaluated safely at execution time from resolved runbook
+                  inputs.
                 </p>
               )}
             </div>

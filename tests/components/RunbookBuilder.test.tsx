@@ -524,6 +524,9 @@ describe('Runbook nested check builder', () => {
 
     const addStepBtn = screen.getByRole('button', { name: 'Add Step' });
     fireEvent.click(addStepBtn);
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Linux' })).getByRole('button', { name: 'Systemd' })
+    );
 
     const saved = parseRunbookDefinition(
       JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)

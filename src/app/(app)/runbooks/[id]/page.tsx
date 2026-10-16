@@ -4,7 +4,21 @@ import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { Copy, History, Settings2 } from 'lucide-react';
+import {
+  Archive,
+  FileX,
+  Hash,
+  History,
+  Layers,
+  LayoutDashboard,
+  Lock,
+  PencilLine,
+  PlayCircle,
+  ShieldAlert,
+  Tag,
+  Users,
+  Workflow,
+} from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -21,10 +35,9 @@ import {
   saveDraftAction,
   updateRunbookMetadataAction,
 } from '../actions';
+import { retireVersionAction } from './version-actions';
 import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
-import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import DetailTabs from '@/components/ui/DetailTabs';
-import EmptyState from '@/components/ui/EmptyState';
 import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import {
   ActionForm,
@@ -33,11 +46,14 @@ import {
   StatusBadge,
   SubmitButton,
 } from '@/components/runbooks/RunbookControls';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
+import { RunbookOverview, computeSuccessRate } from '@/components/runbooks/detail/RunbookOverview';
+import { VersionTimeline } from '@/components/runbooks/detail/VersionTimeline';
+import { RunbookDetailsSheet } from '@/components/runbooks/detail/RunbookDetailsSheet';
+import { RunbookActionsMenu } from '@/components/runbooks/detail/RunbookActionsMenu';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
-import { Textarea } from '@/components/ui/shadcn/textarea';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
@@ -73,51 +89,92 @@ export default async function RunbookDetailPage({
     Math.max(1, Math.ceil(runbookMeta._count.bindings / 20))
   );
 
-  const [permissions, user, runbook, navigation] = await Promise.all([
-    permissionsPromise,
-    userPromise,
-    prisma.runbook.findUnique({
-      where: { id },
-      include: {
-        draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        versions: {
-          orderBy: { version: 'desc' },
-          skip: (versionPage - 1) * 20,
-          take: 20,
-          select: {
-            id: true,
-            version: true,
-            state: true,
-            publishedAt: true,
-            createdAt: true,
-            checksum: true,
-            _count: { select: { executions: true } },
+  const [permissions, user, runbook, navigation, serviceCount, topServiceGroups] =
+    await Promise.all([
+      permissionsPromise,
+      userPromise,
+      prisma.runbook.findUnique({
+        where: { id },
+        include: {
+          ownerTeam: { select: { id: true, name: true } },
+          draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+          publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+          versions: {
+            orderBy: { version: 'desc' },
+            skip: (versionPage - 1) * 20,
+            take: 20,
+            select: {
+              id: true,
+              version: true,
+              state: true,
+              publishedAt: true,
+              createdAt: true,
+              checksum: true,
+              publishedBy: { select: { name: true, email: true } },
+              _count: {
+                select: {
+                  executions: true,
+                  bindings: { where: { versionStrategy: 'PINNED', detachedAt: null } },
+                },
+              },
+            },
           },
+          bindings: {
+            include: { service: { select: { id: true, name: true } } },
+            orderBy: { createdAt: 'desc' },
+            skip: (bindingPage - 1) * 20,
+            take: 20,
+          },
+          executions: {
+            orderBy: { createdAt: 'desc' },
+            take: 30,
+            select: {
+              id: true,
+              status: true,
+              incidentId: true,
+              createdAt: true,
+              runbookVersion: { select: { version: true } },
+            },
+          },
+          _count: { select: { executions: true, bindings: true, versions: true } },
         },
-        bindings: {
-          include: { service: { select: { id: true, name: true } } },
-          orderBy: { createdAt: 'desc' },
-          skip: (bindingPage - 1) * 20,
-          take: 20,
-        },
-        executions: {
-          orderBy: { createdAt: 'desc' },
-          take: 30,
-          select: { id: true, status: true, incidentId: true, createdAt: true },
-        },
-        _count: { select: { executions: true, bindings: true, versions: true } },
-      },
-    }),
-    navigationPromise,
-  ]);
+      }),
+      navigationPromise,
+      prisma.service.count({ where: { runbookBindings: { some: { runbookId: id } } } }),
+      prisma.serviceAutomationRule.groupBy({
+        by: ['serviceId'],
+        where: { runbookId: id },
+        _count: { _all: true },
+        orderBy: { _count: { serviceId: 'desc' } },
+        take: 5,
+      }),
+    ]);
   if (!runbook) notFound();
   const userTimeZone = getUserTimeZone(user);
   const isArchived = Boolean(runbook.archivedAt);
   const hasManageCapability = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE);
   const canManage = hasManageCapability && !isArchived;
   const canPublish = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_PUBLISH) && !isArchived;
-  const deleteEligibility = hasManageCapability ? await checkRunbookDeleteEligibility(id) : null;
+  type NamedEntity = { id: string; name: string };
+  const [deleteEligibility, topServiceNames, teams] = await Promise.all([
+    hasManageCapability ? checkRunbookDeleteEligibility(id) : null,
+    topServiceGroups.length
+      ? prisma.service.findMany({
+          where: { id: { in: topServiceGroups.map(group => group.serviceId) } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve<NamedEntity[]>([]),
+    canManage
+      ? prisma.team.findMany({
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+          take: 500,
+        })
+      : Promise.resolve<NamedEntity[]>([]),
+  ]);
+  if (runbook.ownerTeam && !teams.some(team => team.id === runbook.ownerTeam!.id)) {
+    teams.unshift(runbook.ownerTeam);
+  }
 
   const runbookSlug = runbook.slug;
   const runbookName = runbook.name;
@@ -158,242 +215,378 @@ export default async function RunbookDetailPage({
       })
     : null;
   const source = selectedVersion ?? runbook.draftVersion ?? runbook.publishedVersion;
-  const builder = source ? (
-    <div className="space-y-4">
-      {!runbook.draftVersion && canManage && (
-        <ActionForm action={cloneVersionAction.bind(null, source.id, runbook.id)}>
-          <SubmitButton pendingLabel="Cloning…">
-            <Copy className="h-4 w-4" />
-            Create next editable draft
-          </SubmitButton>
-        </ActionForm>
-      )}
-      <RunbookBuilder
-        key={source.id}
-        initialEditorTab={query.editor}
-        initialStepIdentities={parseRunbookDefinition(source.definition).steps.map(() =>
-          randomUUID()
-        )}
-        initialInputIdentities={source.inputs.map(() => randomUUID())}
-        initialDefinition={parseRunbookDefinition(source.definition)}
-        initialInputs={source.inputs.map(
-          ({ key, label, type, required, defaultValue, description, sequence }) => ({
-            key,
-            label,
-            type: type === 'SELECT' ? 'STRING' : type,
-            required,
-            ...(defaultValue === null ? {} : { defaultValue }),
-            description,
-            sequence,
-          })
-        )}
-        action={saveDraftAction.bind(null, source.id, runbook.id)}
-        initialDraftRevision={source.draftRevision}
-        readOnly={!canManage || source.state !== 'DRAFT'}
-      />
-    </div>
-  ) : (
-    <EmptyState title="No definition available" />
-  );
-  return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
-      <RunbookPageHeader
-        breadcrumbs={[{ label: 'Runbooks', href: '/runbooks' }, { label: runbook.name }]}
-        title={runbook.name}
-        description={runbook.description || runbook.slug}
-        badge={
-          <div className="flex items-center gap-1.5">
-            {runbook.publishedVersion && (
-              <Badge variant="success">Published v{runbook.publishedVersion.version}</Badge>
-            )}
-            {runbook.draftVersion && (
-              <Badge variant="warning">Draft v{runbook.draftVersion.version}</Badge>
-            )}
-            {runbook.archivedAt && <Badge variant="secondary">Archived</Badge>}
-          </div>
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline">
-              <Link href={`/runbooks/${id}/compare`}>Compare versions &amp; rule impact</Link>
-            </Button>
-            {canPublish && runbook.draftVersion && (
-              <ConfirmAction
-                action={publishDraftAction.bind(null, runbook.draftVersion.id, runbook.id)}
-                label="Publish draft"
-                variant="default"
-                title={`Publish immutable v${runbook.draftVersion.version}?`}
-                description="Only the saved draft is published. Save any builder changes first. Published definitions cannot be edited."
-              />
-            )}
-            {hasManageCapability && (
-              <ConfirmAction
-                action={duplicateRunbookAction.bind(null, runbook.id)}
-                label="Duplicate"
-                variant="outline"
-                title={`Duplicate ${runbook.name}?`}
-                description={
-                  runbook.draftVersion
-                    ? `Creates a new draft copy of this runbook based on its current draft (v${runbook.draftVersion.version}).`
-                    : runbook.publishedVersion
-                      ? `Creates a new draft copy of this runbook based on its published version (v${runbook.publishedVersion.version}).`
-                      : 'Creates a new draft copy of this runbook with identical metadata.'
-                }
-              />
-            )}
-            {isArchived && hasManageCapability && (
-              <ConfirmAction
-                action={handleRestoreRunbook}
-                label="Restore Runbook"
-                variant="default"
-                title={`Restore ${runbook.name}?`}
-                description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
-              />
-            )}
-            {canManage && (
-              <ConfigureSheet
-                title="Runbook details"
-                description="Stable metadata shared by every version."
-                trigger={
-                  <Button variant="secondary" size="sm">
-                    <Settings2 className="h-4 w-4" />
-                    Details
-                  </Button>
-                }
+  const nextDraftSource = runbook.draftVersion
+    ? null
+    : (runbook.publishedVersion ?? runbook.versions[0] ?? null);
+  const exportHref = `/api/runbooks/${id}/export`;
+  const draftExportHref =
+    runbook.draftVersion && runbook.publishedVersion
+      ? `${exportHref}?version=${runbook.draftVersion.id}`
+      : null;
+  const formatTimestamp = (value: Date) =>
+    formatDateTime(value, userTimeZone, { format: 'datetime' });
+
+  const sourceDefinition = source ? parseRunbookDefinition(source.definition) : null;
+  const builder =
+    source && sourceDefinition ? (
+      <div className="space-y-4">
+        {source.state !== 'DRAFT' && (
+          <div
+            role="note"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+          >
+            <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              Version {source.version} is {source.state.toLowerCase()} and read-only.
+              {canManage &&
+                !runbook.draftVersion &&
+                ' Create the next editable draft to make changes.'}
+            </span>
+            {runbook.draftVersion && source.id !== runbook.draftVersion.id && (
+              <Link
+                className="font-medium text-primary underline-offset-4 hover:underline"
+                href={`/runbooks/${id}?tab=builder`}
               >
-                <ActionForm
-                  action={updateRunbookMetadataAction.bind(null, runbook.id)}
-                  className="space-y-4"
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="metadata-name">Name</Label>
-                    <Input
-                      id="metadata-name"
-                      name="name"
-                      defaultValue={runbook.name}
-                      required
-                      maxLength={200}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="metadata-slug">Slug</Label>
-                    <Input
-                      id="metadata-slug"
-                      name="slug"
-                      defaultValue={runbook.slug}
-                      required
-                      maxLength={120}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="metadata-description">Description</Label>
-                    <Textarea
-                      id="metadata-description"
-                      name="description"
-                      defaultValue={runbook.description}
-                    />
-                  </div>
-                  <SubmitButton>Save details</SubmitButton>
-                </ActionForm>
-                <ConfirmAction
-                  action={archiveRunbookAction.bind(null, runbook.id)}
-                  title={`Archive ${runbook.name}?`}
-                  description="This removes the Runbook from the active library and prevents new executions. Existing execution history is retained."
-                  label="Archive Runbook"
-                />
-              </ConfigureSheet>
+                Open draft v{runbook.draftVersion.version}
+              </Link>
             )}
           </div>
-        }
+        )}
+        <RunbookBuilder
+          key={source.id}
+          initialEditorTab={query.editor}
+          initialStepIdentities={sourceDefinition.steps.map(() => randomUUID())}
+          initialInputIdentities={source.inputs.map(() => randomUUID())}
+          initialDefinition={sourceDefinition}
+          initialInputs={source.inputs.map(
+            ({ key, label, type, required, defaultValue, description, sequence, options }) => ({
+              key,
+              label,
+              type,
+              required,
+              ...(defaultValue === null ? {} : { defaultValue }),
+              description,
+              sequence,
+              ...(type === 'SELECT' ? { options } : {}),
+            })
+          )}
+          action={saveDraftAction.bind(null, source.id, runbook.id)}
+          initialDraftRevision={source.draftRevision}
+          readOnly={!canManage || source.state !== 'DRAFT'}
+        />
+      </div>
+    ) : (
+      <EmptyHint
+        icon={FileX}
+        title="No definition available"
+        description="This runbook has no saved version yet."
       />
-      {isArchived && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-sm">This runbook is archived</p>
-              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                Archived runbooks cannot be edited, published, or executed. Historical executions
-                are preserved.
-              </p>
+    );
+
+  const servicesById = new Map(topServiceNames.map(service => [service.id, service.name]));
+  const overviewExecutions = runbook.executions.map(execution => ({
+    id: execution.id,
+    status: execution.status,
+    createdAtLabel: formatTimestamp(execution.createdAt),
+    incidentId: execution.incidentId,
+    version: execution.runbookVersion?.version ?? null,
+  }));
+  const overview = (
+    <RunbookOverview
+      runbookId={id}
+      publishedVersion={
+        runbook.publishedVersion
+          ? {
+              version: runbook.publishedVersion.version,
+              publishedAtLabel: runbook.publishedVersion.publishedAt
+                ? formatTimestamp(runbook.publishedVersion.publishedAt)
+                : null,
+            }
+          : null
+      }
+      draftVersion={
+        runbook.draftVersion
+          ? {
+              version: runbook.draftVersion.version,
+              revision: runbook.draftVersion.draftRevision,
+            }
+          : null
+      }
+      serviceCount={serviceCount}
+      executionCount={runbook._count.executions}
+      lastExecution={overviewExecutions[0] ?? null}
+      successRate={computeSuccessRate(runbook.executions.map(execution => execution.status))}
+      services={topServiceGroups.flatMap(group => {
+        const name = servicesById.get(group.serviceId);
+        return name ? [{ id: group.serviceId, name, ruleCount: group._count._all }] : [];
+      })}
+      recentExecutions={overviewExecutions.slice(0, 5)}
+      definitionSummary={
+        source && sourceDefinition
+          ? {
+              version: source.version,
+              state: source.state,
+              stepCount: sourceDefinition.steps.length,
+              inputs: source.inputs.map(input => ({
+                key: input.key,
+                label: input.label,
+                type: input.type,
+                required: input.required,
+              })),
+            }
+          : null
+      }
+    />
+  );
+
+  const publishedId = runbook.publishedVersionId;
+  const publishedNumber = runbook.publishedVersion?.version;
+  const versionItems = runbook.versions.map(version => ({
+    id: version.id,
+    version: version.version,
+    state: version.state,
+    isCurrentPublished: version.id === publishedId,
+    isCurrentDraft: version.id === runbook.draftVersionId,
+    publishedByLabel: version.publishedBy?.name || version.publishedBy?.email || null,
+    publishedAtLabel: version.publishedAt ? formatTimestamp(version.publishedAt) : null,
+    createdAtLabel: formatTimestamp(version.createdAt),
+    checksum: version.checksum,
+    executionCount: version._count.executions,
+    pinnedRuleCount: version._count.bindings,
+    viewHref: `/runbooks/${id}?version=${version.id}&tab=builder`,
+    compareHref:
+      publishedId && publishedNumber !== undefined && version.id !== publishedId
+        ? version.version < publishedNumber
+          ? `/runbooks/${id}/compare?base=${version.id}&next=${publishedId}`
+          : `/runbooks/${id}/compare?base=${publishedId}&next=${version.id}`
+        : null,
+    restoreAction:
+      canManage && !runbook.draftVersionId && version.state !== 'DRAFT'
+        ? cloneVersionAction.bind(null, version.id, runbook.id)
+        : undefined,
+    retireAction:
+      canPublish && version.state === 'PUBLISHED' && version.id !== publishedId
+        ? retireVersionAction.bind(null, version.id, runbook.id)
+        : undefined,
+  }));
+
+  const primaryAction =
+    isArchived && hasManageCapability ? (
+      <ConfirmAction
+        action={handleRestoreRunbook}
+        label="Restore Runbook"
+        variant="default"
+        title={`Restore ${runbook.name}?`}
+        description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
+        successMessage="Runbook restored"
+      />
+    ) : canPublish && runbook.draftVersion ? (
+      <ConfirmAction
+        action={publishDraftAction.bind(null, runbook.draftVersion.id, runbook.id)}
+        label="Publish draft"
+        variant="default"
+        title={`Publish immutable v${runbook.draftVersion.version}?`}
+        description="Only the saved draft is published. Save any builder changes first. Published definitions cannot be edited."
+        successMessage="Draft published"
+      />
+    ) : canManage && nextDraftSource ? (
+      <ActionForm
+        action={cloneVersionAction.bind(null, nextDraftSource.id, runbook.id)}
+        successMessage="Draft created"
+      >
+        <SubmitButton size="sm" pendingLabel="Creating draft…">
+          <PencilLine className="h-4 w-4" aria-hidden="true" />
+          Create next editable draft
+        </SubmitButton>
+      </ActionForm>
+    ) : null;
+
+  return (
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-3 sm:p-4 md:p-6">
+      <header className="space-y-3">
+        <RunbookPageHeader
+          breadcrumbs={[{ label: 'Runbooks', href: '/runbooks' }, { label: runbook.name }]}
+          title={runbook.name}
+          description={runbook.description || undefined}
+          badge={
+            <div className="flex flex-wrap items-center gap-1.5">
+              {runbook.publishedVersion && (
+                <Pill tone="success" className="font-mono">
+                  Published v{runbook.publishedVersion.version}
+                </Pill>
+              )}
+              {runbook.draftVersion && (
+                <Pill tone="warning" className="font-mono">
+                  Draft v{runbook.draftVersion.version}
+                </Pill>
+              )}
+              {!runbook.publishedVersion && !runbook.draftVersion && <Pill>No active version</Pill>}
+              {runbook.archivedAt && <Pill icon={Archive}>Archived</Pill>}
             </div>
-            {hasManageCapability && (
-              <ConfirmAction
-                action={handleRestoreRunbook}
-                title={`Restore ${runbook.name}?`}
-                description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
-                label="Restore Runbook"
-                variant="outline"
+          }
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {primaryAction}
+              {canManage && (
+                <RunbookDetailsSheet
+                  runbook={{
+                    name: runbook.name,
+                    slug: runbook.slug,
+                    description: runbook.description,
+                    ownerTeamId: runbook.ownerTeamId,
+                    tags: runbook.tags,
+                  }}
+                  teams={teams}
+                  action={updateRunbookMetadataAction.bind(null, runbook.id)}
+                  archiveAction={archiveRunbookAction.bind(null, runbook.id)}
+                />
+              )}
+              <RunbookActionsMenu
+                runbookId={id}
+                runbookName={runbook.name}
+                canRun={Boolean(runbook.publishedVersion) && !isArchived}
+                exportHref={runbook.publishedVersion || runbook.draftVersion ? exportHref : null}
+                draftExportHref={draftExportHref}
+                duplicateAction={
+                  hasManageCapability ? duplicateRunbookAction.bind(null, runbook.id) : undefined
+                }
+                duplicateDescription={
+                  runbook.draftVersion
+                    ? `Creates a new draft copy based on the current draft (v${runbook.draftVersion.version}).`
+                    : runbook.publishedVersion
+                      ? `Creates a new draft copy based on the published version (v${runbook.publishedVersion.version}).`
+                      : 'Creates a new draft copy with identical metadata.'
+                }
               />
-            )}
+            </div>
+          }
+        />
+        <dl className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <dt className="flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" aria-hidden="true" />
+              Owner
+            </dt>
+            <dd className="font-medium text-foreground">
+              {runbook.ownerTeam ? (
+                <Link
+                  href={`/teams/${runbook.ownerTeam.id}`}
+                  className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {runbook.ownerTeam.name}
+                </Link>
+              ) : (
+                <span className="font-normal text-muted-foreground">No owner team</span>
+              )}
+            </dd>
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <dt className="flex items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+              Tags
+            </dt>
+            <dd className="flex min-w-0 flex-wrap gap-1">
+              {runbook.tags.length ? (
+                runbook.tags.map(tag => (
+                  <Link
+                    key={tag}
+                    href={`/runbooks?tag=${encodeURIComponent(tag)}`}
+                    className="rounded-full px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset ring-border transition-colors hover:text-foreground hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {tag}
+                  </Link>
+                ))
+              ) : (
+                <span>None</span>
+              )}
+            </dd>
+          </div>
+          <div className="flex items-center gap-2">
+            <dt className="flex items-center gap-1.5">
+              <Hash className="h-3.5 w-3.5" aria-hidden="true" />
+              Slug
+            </dt>
+            <dd className="font-mono text-foreground/80">{runbook.slug}</dd>
+          </div>
+        </dl>
+      </header>
+      {isArchived && (
+        <div
+          role="note"
+          className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200"
+        >
+          <Archive className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-semibold">This runbook is archived</p>
+            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
+              It can’t be edited, published or run. Execution history is preserved.
+            </p>
           </div>
         </div>
       )}
-      <RunbookMetricStrip
-        stats={[
-          { label: 'Services', value: runbook._count.bindings },
-          { label: 'Executions', value: runbook._count.executions },
-          { label: 'Versions', value: runbook._count.versions },
-        ]}
-        className="hidden md:grid"
-      />
       <RunbookModuleNav summary={navigation} />
       <DetailTabs
+        defaultTab={runbook.draftVersion ? 'builder' : 'overview'}
         tabs={[
-          { id: 'builder', label: 'Builder & Inputs', content: builder },
+          {
+            id: 'overview',
+            label: 'Overview',
+            icon: <LayoutDashboard className="h-4 w-4" />,
+            content: overview,
+          },
+          {
+            id: 'builder',
+            label: 'Workflow',
+            icon: <Workflow className="h-4 w-4" />,
+            content: builder,
+          },
           {
             id: 'versions',
             label: 'Versions',
             icon: <History className="h-4 w-4" />,
             count: runbook._count.versions,
             content: (
-              <section className="space-y-3">
-                <RunbookPagination
-                  page={versionPage}
-                  total={runbook._count.versions}
-                  query={query}
-                />
-                {runbook.versions.map(version => (
-                  <div
-                    key={version.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4"
-                  >
-                    <div className="space-y-1">
-                      <h2 className="font-semibold">
-                        <Link
-                          className="text-primary hover:underline"
-                          href={`/runbooks/${id}?version=${version.id}&tab=builder`}
-                        >
-                          Version {version.version}
-                        </Link>
-                      </h2>
-                      <p className="break-all text-xs text-muted-foreground">
-                        {version._count.executions} executions · checksum{' '}
-                        {version.checksum.slice(0, 12)}
-                      </p>
-                    </div>
-                    <StatusBadge status={version.state} />
-                  </div>
-                ))}
-              </section>
+              <SectionCard
+                title="Version history"
+                description="Published versions are immutable. Compare any version with the live one before rolling forward."
+                icon={History}
+                actions={
+                  <RunbookPagination
+                    page={versionPage}
+                    total={runbook._count.versions}
+                    query={query}
+                  />
+                }
+              >
+                <VersionTimeline versions={versionItems} />
+              </SectionCard>
             ),
           },
           {
             id: 'bindings',
-            label: 'Service Bindings',
+            label: 'Usage',
+            icon: <Layers className="h-4 w-4" />,
             count: runbook._count.bindings,
             content: (
-              <section className="space-y-3">
-                {runbook._count.bindings > 20 && (
-                  <div className="flex items-center justify-between text-xs text-muted-foreground pb-2">
-                    <span>
-                      Showing {(bindingPage - 1) * 20 + 1}–
-                      {Math.min(bindingPage * 20, runbook._count.bindings)} of{' '}
-                      {runbook._count.bindings} bindings
-                    </span>
-                    <div className="flex gap-2">
+              <SectionCard
+                title="Service bindings"
+                description="Services that can run this runbook, and which version they follow."
+                icon={Layers}
+                bodyClassName="p-0"
+                actions={
+                  runbook._count.bindings > 20 ? (
+                    <nav
+                      aria-label="Binding pages"
+                      className="flex items-center gap-3 text-xs text-muted-foreground"
+                    >
+                      <span className="tabular-nums">
+                        {(bindingPage - 1) * 20 + 1}–
+                        {Math.min(bindingPage * 20, runbook._count.bindings)} of{' '}
+                        {runbook._count.bindings}
+                      </span>
                       {bindingPage > 1 && (
                         <Link
-                          className="text-primary hover:underline"
+                          className="font-medium text-primary hover:underline"
                           href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage - 1}`}
                         >
                           Previous
@@ -401,172 +594,212 @@ export default async function RunbookDetailPage({
                       )}
                       {bindingPage * 20 < runbook._count.bindings && (
                         <Link
-                          className="text-primary hover:underline"
+                          className="font-medium text-primary hover:underline"
                           href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage + 1}`}
                         >
                           Next
                         </Link>
                       )}
-                    </div>
+                    </nav>
+                  ) : undefined
+                }
+              >
+                {runbook.bindings.length > 0 ? (
+                  <ul className="divide-y">
+                    {runbook.bindings.map(binding => (
+                      <li key={binding.id}>
+                        <Link
+                          href={`/services/${binding.service.id}?tab=runbooks`}
+                          className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium">
+                              {binding.service.name}
+                            </span>
+                            {binding.name && (
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {binding.name}
+                              </span>
+                            )}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <Pill tone={binding.versionStrategy === 'PINNED' ? 'info' : 'neutral'}>
+                              {binding.versionStrategy === 'PINNED' ? 'Pinned' : 'Latest published'}
+                            </Pill>
+                            <Pill tone={binding.enabled ? 'success' : 'neutral'}>
+                              {binding.enabled ? binding.mode : 'DISABLED'}
+                            </Pill>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="p-5">
+                    <EmptyHint
+                      icon={Layers}
+                      title="No service bindings"
+                      description="Attach the published runbook from a service’s Runbooks tab."
+                    />
                   </div>
                 )}
-                {runbook.bindings.map(binding => (
-                  <Link
-                    key={binding.id}
-                    href={`/services/${binding.service.id}?tab=runbooks`}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 hover:border-primary/30"
-                  >
-                    <span className="font-semibold">{binding.service.name}</span>
-                    <Badge variant="outline">{binding.enabled ? binding.mode : 'DISABLED'}</Badge>
-                  </Link>
-                ))}
-                {runbook.bindings.length === 0 && (
-                  <EmptyState
-                    title="No service bindings"
-                    description="Attach this published Runbook from a service’s Runbooks tab."
-                  />
-                )}
-              </section>
+              </SectionCard>
             ),
           },
           {
             id: 'executions',
             label: 'Executions',
+            icon: <PlayCircle className="h-4 w-4" />,
             count: runbook._count.executions,
             content: (
-              <section className="space-y-3">
-                <Link
-                  className="text-sm text-primary hover:underline"
-                  href={`/runbooks/executions?runbook=${runbook.id}`}
-                >
-                  View all executions
-                </Link>
-                {runbook.executions.map(execution => (
-                  <div
-                    key={execution.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4"
-                  >
-                    <div>
-                      <p className="text-sm">
-                        {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
-                      </p>
-                      <Link
-                        className="block text-sm text-primary hover:underline"
-                        href={`/runbooks/executions/${execution.id}`}
+              <SectionCard
+                title="Recent executions"
+                description="The latest 30 runs across all versions."
+                icon={PlayCircle}
+                bodyClassName="p-0"
+                actions={
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/runbooks/executions?runbook=${runbook.id}`}>
+                      View all executions
+                    </Link>
+                  </Button>
+                }
+              >
+                {runbook.executions.length > 0 ? (
+                  <ul className="divide-y">
+                    {runbook.executions.map(execution => (
+                      <li
+                        key={execution.id}
+                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
                       >
-                        Open full execution
-                      </Link>
-                      {execution.incidentId && (
-                        <Link
-                          className="text-sm text-primary hover:underline"
-                          href={`/incidents/${execution.incidentId}?tab=runbooks`}
-                        >
-                          Inspect incident execution
-                        </Link>
-                      )}
-                    </div>
-                    <StatusBadge status={execution.status} />
+                        <div className="min-w-0 space-y-0.5">
+                          <Link
+                            className="block text-sm font-medium underline-offset-4 hover:underline"
+                            href={`/runbooks/executions/${execution.id}`}
+                          >
+                            {formatTimestamp(execution.createdAt)}
+                            <span className="sr-only"> · Open full execution</span>
+                          </Link>
+                          <p className="text-xs text-muted-foreground">
+                            {execution.runbookVersion
+                              ? `Version ${execution.runbookVersion.version}`
+                              : 'Version unknown'}
+                            {execution.incidentId && (
+                              <>
+                                {' · '}
+                                <Link
+                                  className="text-primary underline-offset-4 hover:underline"
+                                  href={`/incidents/${execution.incidentId}?tab=runbooks`}
+                                >
+                                  Inspect incident execution
+                                </Link>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                        <StatusBadge status={execution.status} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="p-5">
+                    <EmptyHint
+                      icon={PlayCircle}
+                      title="No executions yet"
+                      description="Run history appears here after responders start this runbook."
+                    />
                   </div>
-                ))}
-                {runbook.executions.length === 0 && (
-                  <EmptyState
-                    title="No executions yet"
-                    description="Execution history appears after responders start this Runbook."
-                  />
                 )}
-              </section>
+              </SectionCard>
             ),
           },
         ]}
       />
       {hasManageCapability && (
-        <div className="rounded-xl border border-destructive/20 bg-card p-5 space-y-4">
-          <div>
-            <h3 className="font-semibold text-sm text-foreground">Danger Zone</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Lifecycle operations and irreversible entity state changes.
-            </p>
-          </div>
-          <div className="divide-y divide-border/60">
-            {/* Archive / Restore row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3">
-              <div>
-                <p className="text-xs font-medium text-foreground">
-                  {isArchived ? 'Restore to active library' : 'Archive runbook'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isArchived
-                    ? 'Re-enables this runbook for ongoing management. Bindings remain disabled until reviewed.'
-                    : 'Disables all executions and bindings while preserving execution and audit history.'}
-                </p>
-              </div>
-              {isArchived ? (
-                <ConfirmAction
-                  action={handleRestoreRunbook}
-                  title={`Restore ${runbook.name}?`}
-                  description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
-                  label="Restore Runbook"
-                  variant="outline"
-                />
-              ) : (
-                <ConfirmAction
-                  action={archiveRunbookAction.bind(null, runbook.id)}
-                  title={`Archive ${runbook.name}?`}
-                  description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
-                  label="Archive Runbook"
-                  variant="outline"
-                />
-              )}
+        <SectionCard
+          tone="danger"
+          icon={ShieldAlert}
+          title="Danger zone"
+          description="Lifecycle changes that affect every service using this runbook."
+          bodyClassName="divide-y divide-border/60 py-0"
+        >
+          <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                {isArchived ? 'Restore to active library' : 'Archive runbook'}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {isArchived
+                  ? 'Re-enables management. Bindings stay disabled until reviewed.'
+                  : 'Disables all executions and bindings while preserving execution and audit history.'}
+              </p>
             </div>
+            {isArchived ? (
+              <ConfirmAction
+                action={handleRestoreRunbook}
+                title={`Restore ${runbook.name}?`}
+                description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
+                label="Restore Runbook"
+                variant="outline"
+                successMessage="Runbook restored"
+              />
+            ) : (
+              <ConfirmAction
+                action={archiveRunbookAction.bind(null, runbook.id)}
+                title={`Archive ${runbook.name}?`}
+                description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
+                label="Archive Runbook"
+                variant="outline"
+              />
+            )}
+          </div>
 
-            {/* Permanent deletion row */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 py-3">
-              <div className="space-y-1 max-w-xl">
-                <p className="text-xs font-medium text-destructive">Permanently delete runbook</p>
-                {deleteEligibility?.canDelete ? (
-                  <p className="text-xs text-muted-foreground">
-                    This runbook has zero published versions and zero executions. Deletion is
-                    permanent and cannot be undone.
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {deleteEligibility?.reason ??
-                      'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.'}
-                  </p>
-                )}
-              </div>
-              {deleteEligibility?.canDelete && (
-                <ConfigureSheet
-                  title={`Delete ${runbook.name}`}
-                  description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
-                  trigger={
-                    <Button variant="destructive" size="sm" className="h-8 text-xs">
-                      Delete runbook
-                    </Button>
-                  }
-                >
-                  <ActionForm action={handleDeleteRunbook} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="delete-confirmation" className="text-xs">
-                        Confirm runbook name or slug
-                      </Label>
-                      <Input
-                        id="delete-confirmation"
-                        name="confirmation"
-                        placeholder={runbook.slug}
-                        required
-                        className="text-xs font-mono"
-                      />
-                    </div>
-                    <SubmitButton variant="destructive" pendingLabel="Deleting…">
-                      Permanently delete runbook
-                    </SubmitButton>
-                  </ActionForm>
-                </ConfigureSheet>
-              )}
+          <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-start">
+            <div className="max-w-xl space-y-1">
+              <p className="text-sm font-medium text-destructive">Permanently delete runbook</p>
+              <p className="text-xs text-muted-foreground">
+                {deleteEligibility?.canDelete
+                  ? 'This runbook has no published versions and no executions. Deletion is permanent.'
+                  : (deleteEligibility?.reason ??
+                    'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.')}
+              </p>
             </div>
+            {deleteEligibility?.canDelete && (
+              <ConfigureSheet
+                title={`Delete ${runbook.name}`}
+                description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
+                trigger={
+                  <Button variant="destructive" size="sm">
+                    Delete runbook
+                  </Button>
+                }
+              >
+                <ActionForm
+                  action={handleDeleteRunbook}
+                  className="space-y-4"
+                  successMessage="Runbook deleted"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="delete-confirmation" className="text-xs">
+                      Confirm runbook name or slug
+                    </Label>
+                    <Input
+                      id="delete-confirmation"
+                      name="confirmation"
+                      placeholder={runbook.slug}
+                      required
+                      autoComplete="off"
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <SubmitButton variant="destructive" pendingLabel="Deleting…">
+                    Permanently delete runbook
+                  </SubmitButton>
+                </ActionForm>
+              </ConfigureSheet>
+            )}
           </div>
-        </div>
+        </SectionCard>
       )}
     </div>
   );

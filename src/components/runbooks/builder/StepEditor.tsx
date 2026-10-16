@@ -1,23 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   ArrowDown,
   ArrowUp,
+  ChevronRight,
   Clock,
+  FileText,
   Info,
+  ListChecks,
+  Lock,
   Plus,
   ShieldAlert,
   ShieldCheck,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { cn } from '@/lib/utils';
 import { FormSelect } from '../RunbookControls';
+import { Pill, SectionCard, TONE_SURFACE } from '../ui/primitives';
+import { RISK_META, STEP_CATALOG } from './step-catalog';
 import {
   RUNBOOK_STEP_TYPES,
   DEFAULT_STEP_TIMEOUT_SECONDS,
@@ -142,266 +150,241 @@ export default function StepEditor({
     }
   };
 
-  return (
+  const catalog = STEP_CATALOG[step.type];
+  const approvalChecked = step.requiresApproval || isMandatoryApproval;
+  const checks = depth < 3 && (
     <>
-      {/* Mini Sequence Header: Before Checks */}
-      {depth < 3 && (
-        <NestedChecks
-          key={`precheck-${editorId}`}
-          phase="precheck"
-          step={step}
-          inputs={inputs}
-          depth={depth}
-          readOnly={readOnly}
-          onChange={onChange}
-          expandedChecks={expandedChecks}
-          onToggleCheck={onToggleCheck}
-        />
-      )}
+      <NestedChecks
+        key={`precheck-${editorId}`}
+        phase="precheck"
+        step={step}
+        inputs={inputs}
+        depth={depth}
+        readOnly={readOnly}
+        onChange={onChange}
+        expandedChecks={expandedChecks}
+        onToggleCheck={onToggleCheck}
+      />
+      <NestedChecks
+        key={`verification-${editorId}`}
+        phase="verification"
+        step={step}
+        inputs={inputs}
+        depth={depth}
+        readOnly={readOnly}
+        onChange={onChange}
+        expandedChecks={expandedChecks}
+        onToggleCheck={onToggleCheck}
+      />
+    </>
+  );
 
-      {/* Main Action Workspace Card */}
-      <div className="rounded-xl border bg-card p-5 shadow-2xs space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">
-              {depth === 1 ? 'Action Execution' : 'Check Execution'}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Define the physical command, probe, or mutation executed on the target.
-            </p>
-          </div>
-          <div className="w-56">
-            <FormSelect
-              name={`step-type-${editorId}`}
-              label="Step type"
-              value={step.type}
-              disabled={readOnly}
-              onValueChange={(v: string) => handleTypeChange(v as RunbookStepType)}
-              options={RUNBOOK_STEP_TYPES.map(type => ({
-                value: type,
-                label: type.replaceAll('_', ' '),
-              }))}
-            />
-            <p className="mt-1.5 text-[11px] text-muted-foreground flex items-start gap-1">
-              <Info className="h-3 w-3 shrink-0 text-muted-foreground/70 mt-0.5" />
-              <span>{AGENT_PREREQUISITES[step.type]}</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Step Metadata */}
+  return (
+    <div className="space-y-4">
+      <EditorSection
+        depth={depth}
+        icon={FileText}
+        title="Basics"
+        description="A clear name helps responders recognise this step in live timelines."
+      >
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor={`step-name-${editorId}`}>
-              Step Name <span className="text-destructive">*</span>
-            </Label>
-            <div className="mt-1.5">
-              <Input
-                id={`step-name-${editorId}`}
-                aria-label="Step name"
-                placeholder="e.g. Restart checkout service"
-                value={step.name}
-                maxLength={200}
-                disabled={readOnly}
-                onChange={e => onChange({ name: e.target.value })}
-                className={errors.name ? 'border-destructive' : ''}
-              />
-            </div>
-            {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name}</p>}
-          </div>
-
-          <div>
-            <Label htmlFor={`step-key-${editorId}`}>
-              Step Key <span className="text-destructive">*</span>
-            </Label>
-            <div className="mt-1.5">
-              <Input
-                id={`step-key-${editorId}`}
-                aria-label="Step key"
-                placeholder="e.g. restart_checkout"
-                value={step.key}
-                disabled={readOnly}
-                onChange={e => onChange({ key: e.target.value })}
-                className={errors.key ? 'border-destructive' : ''}
-              />
-            </div>
-            {errors.key ? (
-              <p className="mt-1 text-xs text-destructive">{errors.key}</p>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Unique identifier referenced in logs, telemetry, and triggers.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor={`step-desc-${editorId}`}>Description / Responder Instructions</Label>
-          <div className="mt-1.5">
-            <Textarea
-              id={`step-desc-${editorId}`}
-              aria-label="Step description"
-              placeholder="Explain the intent of this step and expected outcome..."
-              value={step.description ?? ''}
+          <Field id={`step-name-${editorId}`} label="Step name" required error={errors.name}>
+            <Input
+              id={`step-name-${editorId}`}
+              aria-label="Step name"
+              placeholder="e.g. Restart checkout service"
+              value={step.name}
+              maxLength={200}
               disabled={readOnly}
-              onChange={e => onChange({ description: e.target.value })}
-              className="text-xs min-h-16"
+              onChange={e => onChange({ name: e.target.value })}
+              className={errors.name ? 'border-destructive' : ''}
             />
-          </div>
+          </Field>
+          <Field
+            id={`step-key-${editorId}`}
+            label="Step key"
+            required
+            error={errors.key}
+            hint="Unique ID used in logs, outputs and conditions."
+          >
+            <Input
+              id={`step-key-${editorId}`}
+              aria-label="Step key"
+              placeholder="e.g. restart_checkout"
+              value={step.key}
+              disabled={readOnly}
+              onChange={e => onChange({ key: e.target.value })}
+              className={cn('font-mono text-xs', errors.key && 'border-destructive')}
+            />
+          </Field>
         </div>
+        <Field id={`step-type-${editorId}`} label="Step type">
+          <FormSelect
+            name={`step-type-${editorId}`}
+            label="Step type"
+            value={step.type}
+            disabled={readOnly}
+            onValueChange={(v: string) => handleTypeChange(v as RunbookStepType)}
+            options={RUNBOOK_STEP_TYPES.map(type => ({
+              value: type,
+              label: STEP_CATALOG[type].label,
+            }))}
+          />
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{AGENT_PREREQUISITES[step.type]}</span>
+          </p>
+        </Field>
+        <Field
+          id={`step-desc-${editorId}`}
+          label="Responder notes"
+          optional
+          hint="Why this step exists and what “good” looks like."
+        >
+          <Textarea
+            id={`step-desc-${editorId}`}
+            aria-label="Step description"
+            placeholder="Explain the intent of this step and the expected outcome…"
+            value={step.description ?? ''}
+            disabled={readOnly}
+            onChange={e => onChange({ description: e.target.value })}
+            className="min-h-16 text-sm"
+          />
+        </Field>
+      </EditorSection>
 
-        {/* Action-Specific Typed Form */}
-        <div className="rounded-xl border bg-muted/10 p-4">
-          {step.type === 'HTTP' && (
-            <HttpActionEditor
-              config={step.config}
-              errors={errors}
-              inputs={inputs}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
+      <EditorSection
+        depth={depth}
+        icon={catalog.icon}
+        title={depth === 1 ? `Action · ${catalog.label}` : `Check · ${catalog.label}`}
+        description={catalog.description}
+      >
+        {step.type === 'HTTP' && (
+          <HttpActionEditor
+            config={step.config}
+            errors={errors}
+            inputs={inputs}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {step.type === 'KUBERNETES' && (
+          <KubernetesActionEditor
+            config={step.config}
+            errors={errors}
+            inputs={inputs}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {step.type === 'SYSTEMD' && (
+          <SystemdActionEditor
+            config={step.config}
+            errors={errors}
+            inputs={inputs}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {step.type === 'DOCKER' && (
+          <DockerActionEditor
+            config={step.config}
+            errors={errors}
+            inputs={inputs}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {step.type === 'LINUX_DIAGNOSTICS' && (
+          <LinuxDiagnosticsEditor
+            config={step.config}
+            errors={errors}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {step.type === 'BASH' && (
+          <BashActionEditor
+            config={step.config}
+            errors={errors}
+            inputs={inputs}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {step.type === 'CONDITION' && (
+          <ConditionActionEditor
+            config={step.config}
+            errors={errors}
+            inputs={inputs}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {step.type === 'WAIT' && (
+          <WaitActionEditor
+            config={step.config}
+            errors={errors}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+        {(step.type === 'MANUAL' || step.type === 'APPROVAL') && (
+          <ManualActionEditor
+            config={step.config}
+            errors={errors}
+            editorId={editorId}
+            readOnly={readOnly}
+            onChange={handleConfigChange}
+          />
+        )}
+      </EditorSection>
+
+      <EditorSection
+        depth={depth}
+        icon={ShieldCheck}
+        title="Safety"
+        description="How risky this step is and what has to happen before it runs."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            id={`step-risk-${editorId}`}
+            label="Risk"
+            hint={
+              <>
+                Minimum for this action:{' '}
+                <span className="font-medium text-foreground">{RISK_META[minRisk].label}</span>
+              </>
+            }
+          >
+            <FormSelect
+              name={`step-risk-${editorId}`}
+              label="Risk classification"
+              value={step.riskClass}
+              disabled={readOnly || minRisk === 'NON_IDEMPOTENT'}
+              onValueChange={(v: string) => handleRiskClassChange(v as RunbookRiskClass)}
+              options={[
+                { value: 'READ_ONLY', label: 'Read-only · safe to retry' },
+                { value: 'IDEMPOTENT_WRITE', label: 'Safe write · same result if repeated' },
+                { value: 'NON_IDEMPOTENT', label: 'Mutation · always needs approval' },
+              ]}
             />
-          )}
-
-          {step.type === 'KUBERNETES' && (
-            <KubernetesActionEditor
-              config={step.config}
-              errors={errors}
-              inputs={inputs}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-
-          {step.type === 'SYSTEMD' && (
-            <SystemdActionEditor
-              config={step.config}
-              errors={errors}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-
-          {step.type === 'DOCKER' && (
-            <DockerActionEditor
-              config={step.config}
-              errors={errors}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-
-          {step.type === 'LINUX_DIAGNOSTICS' && (
-            <LinuxDiagnosticsEditor
-              config={step.config}
-              errors={errors}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-
-          {step.type === 'BASH' && (
-            <BashActionEditor
-              config={step.config}
-              errors={errors}
-              inputs={inputs}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-
-          {step.type === 'CONDITION' && (
-            <ConditionActionEditor
-              config={step.config}
-              errors={errors}
-              inputs={inputs}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-
-          {step.type === 'WAIT' && (
-            <WaitActionEditor
-              config={step.config}
-              errors={errors}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-
-          {(step.type === 'MANUAL' || step.type === 'APPROVAL') && (
-            <ManualActionEditor
-              config={step.config}
-              errors={errors}
-              editorId={editorId}
-              readOnly={readOnly}
-              onChange={handleConfigChange}
-            />
-          )}
-        </div>
-
-        {/* Safety, Risk & Approval Controls */}
-        <div className="grid gap-4 rounded-xl border p-4 bg-muted/20 sm:grid-cols-2">
-          <div>
-            <Label htmlFor={`step-risk-${editorId}`}>Risk Classification</Label>
-            <div className="mt-1.5">
-              <FormSelect
-                name={`step-risk-${editorId}`}
-                label="Risk classification"
-                value={step.riskClass}
-                disabled={readOnly || minRisk === 'NON_IDEMPOTENT'}
-                onValueChange={(v: string) => handleRiskClassChange(v as RunbookRiskClass)}
-                options={[
-                  { value: 'READ_ONLY', label: 'READ ONLY (Safe to retry)' },
-                  { value: 'IDEMPOTENT_WRITE', label: 'IDEMPOTENT WRITE (Can repeat safely)' },
-                  { value: 'NON_IDEMPOTENT', label: 'NON IDEMPOTENT (Destructive mutation)' },
-                ]}
-              />
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Required minimum: <strong>{minRisk.replaceAll('_', ' ')}</strong> based on step
-              action.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <Label>Approval Gate Policy</Label>
-            <label className="flex items-start gap-2 text-xs cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={step.requiresApproval || isMandatoryApproval}
-                disabled={readOnly || isMandatoryApproval}
-                onChange={e => onChange({ requiresApproval: e.target.checked })}
-                className="mt-0.5"
-              />
-              <div>
-                <span className="font-semibold text-foreground">
-                  {isMandatoryApproval
-                    ? 'Mandatory Approval Gate'
-                    : 'Require Explicit Human Approval'}
-                </span>
-                <p className="text-muted-foreground">
-                  {isMandatoryApproval
-                    ? 'Non-idempotent mutations always require explicit responder approval before execution.'
-                    : 'Execution will pause until an on-call responder confirms execution of this step.'}
-                </p>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {/* Step Timeout */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-          <div className="max-w-xs">
-            <Label htmlFor={`step-timeout-${editorId}`}>Execution Timeout (Seconds)</Label>
-            <div className="mt-1.5 flex items-center gap-2">
+          </Field>
+          <Field
+            id={`step-timeout-${editorId}`}
+            label="Timeout"
+            error={errors.timeoutSeconds}
+            hint={`Seconds. Defaults to ${DEFAULT_STEP_TIMEOUT_SECONDS}s.`}
+          >
+            <div className="flex items-center gap-2">
               <Input
                 id={`step-timeout-${editorId}`}
                 aria-label="Step timeout"
@@ -415,39 +398,148 @@ export default function StepEditor({
                 }
                 disabled={readOnly}
                 onChange={e => handleTimeoutChange(e.target.value)}
-                className={`w-32 ${errors.timeoutSeconds ? 'border-destructive' : ''}`}
+                className={cn('w-32 tabular-nums', errors.timeoutSeconds && 'border-destructive')}
               />
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" /> default {DEFAULT_STEP_TIMEOUT_SECONDS}s
-              </span>
+              <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              The overall runbook deadline and Agent policy maximum runtime can shorten this
-              timeout. Agent claims use a {DEFAULT_LEASE_DURATION_SECONDS}s renewable lease; this is
-              not the execution timeout.
-            </p>
-            {errors.timeoutSeconds && (
-              <p className="mt-1 text-xs text-destructive">{errors.timeoutSeconds}</p>
-            )}
-          </div>
+          </Field>
         </div>
-      </div>
 
-      {/* Mini Sequence Footer: After Checks (Verification) */}
-      {depth < 3 && (
-        <NestedChecks
-          key={`verification-${editorId}`}
-          phase="verification"
-          step={step}
-          inputs={inputs}
-          depth={depth}
-          readOnly={readOnly}
-          onChange={onChange}
-          expandedChecks={expandedChecks}
-          onToggleCheck={onToggleCheck}
-        />
+        <label
+          className={cn(
+            'flex items-start gap-3 rounded-lg border p-3 text-sm transition-colors',
+            approvalChecked ? 'border-amber-500/30 bg-amber-500/5' : 'bg-muted/20',
+            !(readOnly || isMandatoryApproval) && 'cursor-pointer hover:bg-muted/40'
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={approvalChecked}
+            disabled={readOnly || isMandatoryApproval}
+            onChange={e => onChange({ requiresApproval: e.target.checked })}
+            className="mt-0.5 h-4 w-4 accent-primary"
+          />
+          <span className="min-w-0">
+            <span className="flex items-center gap-1.5 font-medium text-foreground">
+              <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              {isMandatoryApproval ? 'Approval always required' : 'Require approval before running'}
+            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {isMandatoryApproval
+                ? 'Mutations, manual tasks and approval steps always wait for a responder.'
+                : 'The run pauses until an on-call responder approves this step.'}
+            </span>
+          </span>
+        </label>
+
+        {depth === 1 && (
+          <details className="group rounded-lg text-xs text-muted-foreground">
+            <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium text-foreground/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <ChevronRight
+                className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
+                aria-hidden="true"
+              />
+              How safety works
+            </summary>
+            <div className="mt-2 space-y-1.5 pl-5 leading-relaxed">
+              <p>
+                Risk can be raised but never set below what the action needs. Agent policy on the
+                host is always authoritative and can still block a step.
+              </p>
+              <p>
+                The overall runbook deadline and Agent maximum runtime can shorten this timeout.
+                Agents claim work with a {DEFAULT_LEASE_DURATION_SECONDS}s renewable lease; that
+                lease is not the execution timeout.
+              </p>
+            </div>
+          </details>
+        )}
+      </EditorSection>
+
+      {checks &&
+        (depth === 1 ? (
+          <EditorSection
+            depth={depth}
+            icon={ListChecks}
+            title="Checks"
+            description="Prove it’s safe to act first, then prove the action worked."
+          >
+            {checks}
+          </EditorSection>
+        ) : (
+          checks
+        ))}
+    </div>
+  );
+}
+
+function EditorSection({
+  depth,
+  icon,
+  title,
+  description,
+  children,
+}: {
+  depth: number;
+  icon: LucideIcon;
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  if (depth === 1) {
+    return (
+      <SectionCard icon={icon} title={title} description={description} bodyClassName="space-y-4">
+        {children}
+      </SectionCard>
+    );
+  }
+  const Icon = icon;
+  return (
+    <div className="space-y-3 border-t pt-4 first:border-t-0 first:pt-0">
+      <h5 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        {title}
+      </h5>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  id,
+  label,
+  required,
+  optional,
+  hint,
+  error,
+  children,
+}: {
+  id: string;
+  label: string;
+  required?: boolean;
+  optional?: boolean;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <Label htmlFor={id} className="flex items-center gap-1 text-xs font-medium">
+        {label}
+        {required && (
+          <span className="text-destructive" aria-hidden="true">
+            *
+          </span>
+        )}
+        {optional && <span className="font-normal text-muted-foreground">(optional)</span>}
+      </Label>
+      {children}
+      {error ? (
+        <p className="text-xs text-destructive">{error}</p>
+      ) : (
+        hint && <p className="text-xs text-muted-foreground">{hint}</p>
       )}
-    </>
+    </div>
   );
 }
 
@@ -501,31 +593,34 @@ function NestedChecks({
     <section
       aria-label={sectionLabel}
       data-testid={testId}
-      className={`rounded-xl border p-4 ${
-        phase === 'precheck'
-          ? 'bg-sky-500/5 border-sky-500/20'
-          : 'bg-emerald-500/5 border-emerald-500/20'
-      }`}
+      className="rounded-lg border bg-background/60 p-3 sm:p-4"
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {phase === 'precheck' ? (
-            <ShieldAlert className="h-4 w-4 text-sky-500 shrink-0" />
-          ) : (
-            <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
-          )}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5">
+          <span
+            className={cn(
+              'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1 ring-inset',
+              phase === 'precheck' ? TONE_SURFACE.info : TONE_SURFACE.success
+            )}
+          >
+            {phase === 'precheck' ? (
+              <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          </span>
           <div>
-            <h4 className="font-semibold text-sm text-foreground">{label} Checks</h4>
+            <h4 className="text-sm font-medium text-foreground">{label} checks</h4>
             <p className="text-xs text-muted-foreground">
               {phase === 'precheck'
-                ? 'Prechecks verify prerequisites before the main action runs. Failure halts execution.'
-                : 'Verifications independently prove recovery after the action runs. Failure marks execution failed.'}
+                ? 'Run before the action. If one fails, the run stops safely.'
+                : 'Run after the action to prove recovery. If one fails, the run is marked failed.'}
             </p>
           </div>
         </div>
-        <Badge variant="outline" className="text-xs">
+        <Pill className="tabular-nums">
           {checks.length} {checks.length === 1 ? 'check' : 'checks'}
-        </Badge>
+        </Pill>
       </div>
 
       {checks.length > 0 && (
@@ -533,43 +628,48 @@ function NestedChecks({
           {checks.map((check, index) => {
             const checkResult = validateStep(check, inputs);
             const checkErrors = checkResult.errors;
-            const hasCheckErrors = Object.keys(checkErrors).length > 0;
+            const issueCount = Object.keys(checkErrors).length;
+            const checkRisk = RISK_META[check.riskClass];
 
             return (
               <li
                 key={identities.at(index) ?? check.key}
-                className="rounded-lg border bg-card p-3 shadow-2xs"
+                className="rounded-lg border bg-card shadow-xs"
               >
                 <details
-                  open={hasCheckErrors || expandedChecks?.has(check.key) || undefined}
+                  open={issueCount > 0 || expandedChecks?.has(check.key) || undefined}
                   onToggle={event => onToggleCheck?.(check.key, event.currentTarget.open)}
+                  className="group"
                 >
-                  <summary className="cursor-pointer break-words text-sm font-medium flex items-center justify-between">
-                    <span className="flex items-center gap-2 min-w-0">
+                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <ChevronRight
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+                        aria-hidden="true"
+                      />
                       <span className="truncate">
                         {index + 1}. {check.name || 'Untitled check'}
                       </span>
-                      {hasCheckErrors && (
+                      {issueCount > 0 && (
                         <Badge
                           variant="destructive"
-                          className="text-[10px] py-0 px-1.5 shrink-0 flex items-center gap-1"
+                          className="flex shrink-0 items-center gap-1 px-1.5 py-0 text-[10px]"
                         >
-                          <AlertCircle className="h-3 w-3" />
-                          {Object.keys(checkErrors).length}{' '}
-                          {Object.keys(checkErrors).length === 1 ? 'issue' : 'issues'}
+                          <AlertCircle className="h-3 w-3" aria-hidden="true" />
+                          {issueCount} {issueCount === 1 ? 'issue' : 'issues'}
                         </Badge>
                       )}
                     </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge variant={check.riskClass === 'READ_ONLY' ? 'secondary' : 'warning'}>
-                        {check.riskClass === 'READ_ONLY' ? 'READ ONLY' : 'WRITE'}
-                      </Badge>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <Pill tone={checkRisk.tone}>{checkRisk.label}</Pill>
                       {(check.requiresApproval || check.riskClass === 'NON_IDEMPOTENT') && (
-                        <Badge variant="warning">APPROVAL</Badge>
+                        <Pill tone="warning" icon={Lock}>
+                          Approval
+                        </Pill>
                       )}
-                    </div>
+                    </span>
                   </summary>
-                  <div className="mt-3 pt-3 border-t">
+                  <div className="border-t p-3 sm:p-4">
                     <StepEditor
                       step={check}
                       inputs={inputs}
@@ -589,38 +689,41 @@ function NestedChecks({
                 </details>
 
                 {!readOnly && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-1 border-t px-2 py-1">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       aria-label={`Move ${check.name} up in ${label}`}
                       disabled={index === 0}
                       onClick={() => move(index, -1)}
                     >
-                      <ArrowUp className="h-4 w-4" />
+                      <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       aria-label={`Move ${check.name} down in ${label}`}
                       disabled={index === checks.length - 1}
                       onClick={() => move(index, 1)}
                     >
-                      <ArrowDown className="h-4 w-4" />
+                      <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
+                      className="ml-auto h-8 gap-1 text-xs text-muted-foreground hover:text-destructive"
                       aria-label={`Remove ${check.name} from ${label}`}
                       onClick={() => {
                         setIdentities(identities.filter((_, pos) => pos !== index));
                         commit(checks.filter((_, pos) => pos !== index));
                       }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       Remove
                     </Button>
                   </div>
@@ -633,7 +736,7 @@ function NestedChecks({
 
       {!readOnly && depth < 3 && checks.length < 10 && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="w-48">
+          <div className="w-full sm:w-52">
             <FormSelect
               name={`${phase}-type-${step.key}`}
               label={`${label} check type`}
@@ -641,7 +744,7 @@ function NestedChecks({
               onValueChange={(v: string) => setType(v as RunbookStepType)}
               options={RUNBOOK_STEP_TYPES.map(val => ({
                 value: val,
-                label: val.replaceAll('_', ' '),
+                label: STEP_CATALOG[val].label,
               }))}
             />
           </div>
@@ -655,7 +758,7 @@ function NestedChecks({
               commit([...checks, newBuilderStep(type, key)]);
             }}
           >
-            <Plus className="h-4 w-4 mr-1" />
+            <Plus className="h-4 w-4" aria-hidden="true" />
             {phase === 'precheck' ? 'Add precheck' : 'Add verification'}
           </Button>
         </div>

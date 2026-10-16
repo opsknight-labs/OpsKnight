@@ -603,6 +603,7 @@ model Team {
   incidentTemplates IncidentTemplate[]
   incidents         Incident[]
   dashboards        Dashboard[]
+  runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
 }
@@ -3459,8 +3460,11 @@ model Runbook {
   publishedVersionId String?   @unique
   archivedAt         DateTime?
   createdById        String?
+  ownerTeamId        String?
+  tags               String[]  @default([])
 
   createdBy        User?                   @relation("RunbookCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  ownerTeam        Team?                   @relation("RunbookOwnerTeam", fields: [ownerTeamId], references: [id], onDelete: SetNull)
   draftVersion     RunbookVersion?         @relation("RunbookDraft", fields: [draftVersionId], references: [id], onDelete: SetNull)
   publishedVersion RunbookVersion?         @relation("RunbookPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
   versions         RunbookVersion[]        @relation("RunbookVersions")
@@ -3469,6 +3473,9 @@ model Runbook {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ownerTeamId])
+  @@index([tags], type: Gin)
 }
 
 model RunbookVersion {

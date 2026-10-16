@@ -3,20 +3,16 @@
 import Link from 'next/link';
 import {
   AlertCircle,
+  Archive,
   BookOpen,
-  CheckCircle2,
   ChevronDown,
-  Clock,
+  FileSearch,
   Play,
   Settings2,
-  Shield,
-  Sparkles,
   Target,
-  Zap,
 } from 'lucide-react';
 import {
   ActionForm,
-  ConfigureSheet,
   ConfirmAction,
   FormSelect,
   SubmitButton,
@@ -25,6 +21,7 @@ import RunbookSelectorBuilder from '@/components/runbooks/RunbookSelectorBuilder
 import AutomaticTargetGuard from '@/components/runbooks/AutomaticTargetGuard';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import Field from '@/components/runbooks/RunbookField';
+import { Pill } from '@/components/runbooks/ui/primitives';
 import {
   checkRulePolicyAction,
   configureRunbookTriggerAction,
@@ -33,9 +30,7 @@ import {
   pauseRuleAction,
   updateRunbookBindingAction,
 } from '@/app/(app)/services/[id]/runbook-actions';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { cn } from '@/lib/utils';
@@ -44,35 +39,25 @@ import {
   describeBinding,
   type RunbookResource,
 } from '@/lib/runbooks/presentation/binding-contract';
+import {
+  RULE_STATUS_STYLE,
+  RuleStatusPill,
+} from '@/components/service/automation-rule/RuleStatusPill';
+import {
+  TONE_DOT,
+  TONE_TEXT,
+  readinessPresentation,
+  ruleStatusKind,
+} from '@/components/service/automation-rule/rule-presentation';
 import RunbookBindingVersionInputs from '../RunbookBindingVersionInputs';
-import { InputSummary, TriggerConditionRow, hasAgentWrites } from './rule-fields';
+import { InputSummary, TriggerConditionRows, hasAgentWrites } from './rule-fields';
+import { RuleSheet, SheetGroup, SheetJumpNav } from './RuleSheet';
 import type {
   AvailableRunbook,
   ServiceRunbookAgent,
   ServiceRunbookAgentPool,
   ServiceRunbookBinding,
 } from '../ServiceRunbooks';
-
-const MODE_STYLES = {
-  AUTOMATIC: {
-    label: 'Automatic',
-    icon: Zap,
-    accent: 'before:bg-indigo-500',
-    badge: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
-  },
-  SUGGESTED: {
-    label: 'Suggested',
-    icon: Sparkles,
-    accent: 'before:bg-amber-500',
-    badge: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  },
-  MANUAL: {
-    label: 'Manual',
-    icon: Play,
-    accent: 'before:bg-sky-500',
-    badge: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  },
-} as const;
 
 function relative(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -88,26 +73,31 @@ export function ArchivedRuleCard({
   binding: ServiceRunbookBinding;
 }) {
   return (
-    <Card className="border-dashed bg-muted/20">
-      <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">{binding.name || binding.runbook.name}</CardTitle>
-          <Badge variant="outline">Archived</Badge>
+    <article className="rounded-xl border border-dashed bg-card/60 p-5 shadow-xs">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <Archive className="h-4 w-4" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h3 className="break-words text-sm font-semibold text-foreground">
+              {binding.name || binding.runbook.name}
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">Rule detached · Archived history</p>
+          </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <p>Rule detached · Archived history</p>
-        <p className="text-muted-foreground">
-          This rule cannot execute. Its configuration, suggestions and execution evidence are
-          retained.
-        </p>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/services/${serviceId}/automations/${binding.id}`}>
-            View archived rule evidence
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
+        <RuleStatusPill kind="ARCHIVED" />
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        This rule cannot run. Its configuration, suggestions and execution evidence are kept.
+      </p>
+      <Button asChild variant="outline" size="sm" className="mt-4 h-8 gap-1.5">
+        <Link href={`/services/${serviceId}/automations/${binding.id}`}>
+          <FileSearch className="h-3.5 w-3.5" aria-hidden />
+          View archived rule evidence
+        </Link>
+      </Button>
+    </article>
   );
 }
 
@@ -134,119 +124,99 @@ export function RuleCard({
     binding.presentation ??
     describeBinding(binding, availableAgents, availableAgentPools, loadErrors);
   const lastExecution = binding.executions?.[0];
-  const mode = MODE_STYLES[binding.mode as keyof typeof MODE_STYLES] ?? MODE_STYLES.MANUAL;
-  const ModeIcon = mode.icon;
+  const kind = ruleStatusKind({ mode: binding.mode, enabled: binding.enabled, detachedAt: null });
+  const accent = RULE_STATUS_STYLE.get(kind)?.accent;
   const rulePath = `/services/${serviceId}/automations/${binding.id}`;
   const blocked = binding.readiness?.checks.filter(check => check.state === 'blocked') ?? [];
   const executionCount = binding._count?.executions ?? binding.executions?.length ?? 0;
+  const readinessView = binding.readiness ? readinessPresentation(binding.readiness.state) : null;
 
   return (
-    <Card
-      className={cn(
-        'group relative overflow-hidden border-border/80 transition-shadow hover:shadow-sm',
-        'before:absolute before:inset-y-0 before:left-0 before:w-1',
-        binding.enabled ? mode.accent : 'before:bg-muted-foreground/30'
-      )}
-    >
-      <CardHeader className="space-y-3 pb-3 pl-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <CardTitle className="text-base font-semibold">
+    <article className="group relative overflow-hidden rounded-xl border bg-card shadow-xs transition-shadow hover:shadow-sm">
+      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1', accent)} />
+      <div className="space-y-4 p-5 pl-6">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold leading-6">
               <Link
                 href={rulePath}
-                className="break-words text-foreground underline-offset-4 hover:text-primary hover:underline"
+                className="break-words rounded-sm text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {binding.name || binding.runbook.name}
               </Link>
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
+            </h3>
+            <p className="line-clamp-1 text-xs text-muted-foreground">
               Runs <span className="font-medium text-foreground/80">{binding.runbook.name}</span>
               {binding.runbook.description ? ` · ${binding.runbook.description}` : ''}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className={cn('gap-1 text-[11px] font-medium', binding.enabled && mode.badge)}
-            >
-              {binding.enabled ? (
-                <>
-                  <ModeIcon className="h-3 w-3" aria-hidden /> {mode.label}
-                </>
-              ) : (
-                'Paused'
-              )}
-            </Badge>
-            <Badge variant="outline" className="gap-1 text-[11px] font-medium">
-              {binding.versionStrategy === 'PINNED' ? (
-                <>
-                  <Shield className="h-3 w-3 text-muted-foreground" aria-hidden />v
-                  {binding.runbookVersion?.version ?? '?'} pinned
-                </>
-              ) : (
-                'Latest published'
-              )}
-            </Badge>
+            <RuleStatusPill kind={kind} />
+            <Pill>
+              {binding.versionStrategy === 'PINNED'
+                ? `v${binding.runbookVersion?.version ?? '?'} pinned`
+                : 'Latest published'}
+            </Pill>
           </div>
         </div>
-        <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
-          <Target className="h-3.5 w-3.5" aria-hidden />
-          Target: {presentation.target} · Trigger: {presentation.trigger}
-        </p>
-      </CardHeader>
 
-      <CardContent className="space-y-4 pl-6 pt-0">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border bg-muted/20 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Last run
-            </p>
-            {lastExecution ? (
-              <Link
-                href={`/runbooks/executions/${lastExecution.id}`}
-                className="mt-1 flex flex-wrap items-center gap-2 text-sm hover:underline"
-              >
-                <RunbookStatusBadge status={lastExecution.status} />
-                <span className="text-xs text-muted-foreground">
-                  {relative(lastExecution.createdAt)}
+        <p className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+          <Target className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 break-words">
+            Target: {presentation.target} · Trigger: {presentation.trigger}
+          </span>
+        </p>
+
+        <dl className="grid grid-cols-3 divide-x rounded-lg border bg-muted/30">
+          <div className="min-w-0 px-3 py-2.5">
+            <dt className="text-[11px] font-medium text-muted-foreground">Last run</dt>
+            <dd className="mt-1 min-w-0">
+              {lastExecution ? (
+                <Link
+                  href={`/runbooks/executions/${lastExecution.id}`}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <RunbookStatusBadge status={lastExecution.status} size="sm" />
+                  <span className="text-[11px] text-muted-foreground">
+                    {relative(lastExecution.createdAt)}
+                  </span>
+                </Link>
+              ) : (
+                <span className="text-sm text-muted-foreground">Never run</span>
+              )}
+            </dd>
+          </div>
+          <div className="min-w-0 px-3 py-2.5">
+            <dt className="text-[11px] font-medium text-muted-foreground">Executions</dt>
+            <dd className="mt-1 text-sm font-semibold tabular-nums">{executionCount}</dd>
+          </div>
+          <div className="min-w-0 px-3 py-2.5">
+            <dt className="text-[11px] font-medium text-muted-foreground">Readiness</dt>
+            <dd className="mt-1 text-sm">
+              {readinessView ? (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 font-medium',
+                    TONE_TEXT[readinessView.tone]
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn('h-2 w-2 shrink-0 rounded-full', TONE_DOT[readinessView.tone])}
+                  />
+                  {readinessView.label}
                 </span>
-              </Link>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">Never run</p>
-            )}
+              ) : (
+                <span className="text-muted-foreground">Not checked</span>
+              )}
+            </dd>
           </div>
-          <div className="rounded-lg border bg-muted/20 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Executions
-            </p>
-            <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
-              <Clock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              {executionCount}
-            </p>
-          </div>
-          <div className="rounded-lg border bg-muted/20 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Readiness
-            </p>
-            {binding.readiness ? (
-              <p className="mt-1 flex items-center gap-1.5 text-sm">
-                {binding.readiness.state === 'BLOCKED' ? (
-                  <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-hidden />
-                ) : (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
-                )}
-                {binding.readiness.state.replaceAll('_', ' ').toLowerCase()}
-              </p>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">Not checked</p>
-            )}
-          </div>
-        </div>
+        </dl>
 
         {!binding.readiness && (
           <p className="text-xs text-muted-foreground">
             {binding.enabled
-              ? 'Target and policy readiness not assessed. Open Rule evidence or check this page.'
+              ? 'Readiness not checked yet. Open Rule evidence or check visible rules.'
               : 'Rule paused · Target checks not run.'}
           </p>
         )}
@@ -254,27 +224,23 @@ export function RuleCard({
           <section
             aria-label="Rule readiness"
             className={cn(
-              'space-y-2 rounded-lg border p-3 text-xs',
-              binding.readiness.state === 'BLOCKED' && 'border-destructive/40 bg-destructive/5'
+              'space-y-1.5 text-xs',
+              blocked.length > 0 &&
+                'rounded-lg bg-destructive/5 p-3 ring-1 ring-inset ring-destructive/20'
             )}
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={binding.readiness.state === 'BLOCKED' ? 'danger' : 'outline'}>
-                {binding.readiness.state.replaceAll('_', ' ')}
-              </Badge>
-              <span>
-                {binding.readiness.eligibleAgents === null
-                  ? binding.readiness.state === 'PAUSED'
-                    ? 'Target checks paused'
-                    : binding.readiness.checks.some(
-                          check => check.code === 'INCIDENT_CONTEXT_REQUIRED'
-                        )
-                      ? 'Target requires incident context'
-                      : 'Target check unavailable'
-                  : `${binding.readiness.eligibleAgents} matching online Agents`}{' '}
-                · checked {new Date(binding.readiness.checkedAt).toLocaleTimeString()}
-              </span>
-            </div>
+            <p className="text-muted-foreground">
+              {binding.readiness.eligibleAgents === null
+                ? binding.readiness.state === 'PAUSED'
+                  ? 'Target checks paused'
+                  : binding.readiness.checks.some(
+                        check => check.code === 'INCIDENT_CONTEXT_REQUIRED'
+                      )
+                    ? 'Target requires incident context'
+                    : 'Target check unavailable'
+                : `${binding.readiness.eligibleAgents} matching online Agents`}{' '}
+              · checked {new Date(binding.readiness.checkedAt).toLocaleTimeString()}
+            </p>
             {blocked.slice(0, 3).map(check => (
               <p key={check.code} className="flex items-start gap-1.5">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
@@ -288,26 +254,31 @@ export function RuleCard({
             ))}
           </section>
         )}
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-          {binding.enabled && (
-            <Button asChild size="sm" className="h-8 gap-1.5">
-              <Link href={`${rulePath}#checks`}>
-                <Play className="h-3.5 w-3.5" aria-hidden />
-                Run now
-              </Link>
-            </Button>
-          )}
-          <Button asChild variant="outline" size="sm" className="h-8">
-            <Link href={rulePath}>Rule evidence</Link>
-          </Button>
-          <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5">
-            <Link href={`/runbooks/${binding.runbookId}`}>
-              <BookOpen className="h-3.5 w-3.5" aria-hidden />
-              <span>View Runbook</span>
+      <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-5 py-3 pl-6">
+        {binding.enabled && (
+          <Button asChild size="sm" className="h-8 gap-1.5">
+            <Link href={`${rulePath}#run-now`}>
+              <Play className="h-3.5 w-3.5" aria-hidden />
+              Run now
             </Link>
           </Button>
-          {canManage && configurationAvailable && (
+        )}
+        <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
+          <Link href={rulePath}>
+            <FileSearch className="h-3.5 w-3.5" aria-hidden />
+            Rule evidence
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5">
+          <Link href={`/runbooks/${binding.runbookId}`}>
+            <BookOpen className="h-3.5 w-3.5" aria-hidden />
+            <span>View Runbook</span>
+          </Link>
+        </Button>
+        {canManage && configurationAvailable && (
+          <div className="sm:ml-auto">
             <RuleConfigureSheet
               serviceId={serviceId}
               binding={binding}
@@ -315,30 +286,30 @@ export function RuleCard({
               availableAgents={availableAgents}
               availableAgentPools={availableAgentPools}
             />
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        <details className="group/manage rounded-lg border bg-muted/10 [&_summary::-webkit-details-marker]:hidden">
-          <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-2 px-3 text-sm font-medium">
-            Manage rule
-            <ChevronDown
-              className="h-4 w-4 text-muted-foreground transition-transform group-open/manage:rotate-180"
-              aria-hidden
+      <details className="group/manage border-t [&_summary::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-5 pl-6 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+          Manage rule
+          <ChevronDown
+            className="h-4 w-4 transition-transform group-open/manage:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        <div className="space-y-4 border-t px-5 py-4 pl-6">
+          <div>
+            <h4 className="mb-2 text-xs font-semibold text-foreground">Inputs</h4>
+            <InputSummary
+              definitions={
+                binding.runbookVersion?.inputs ?? binding.runbook.publishedVersion?.inputs ?? []
+              }
+              values={binding.inputValues as Record<string, unknown>}
             />
-          </summary>
-          <div className="space-y-4 border-t p-3">
-            <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Inputs
-              </h4>
-              <InputSummary
-                definitions={
-                  binding.runbookVersion?.inputs ?? binding.runbook.publishedVersion?.inputs ?? []
-                }
-                values={binding.inputValues as Record<string, unknown>}
-              />
-            </div>
-            {canManage && (
+          </div>
+          {canManage && (
+            <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
                 {configurationAvailable && (
                   <ActionForm
@@ -354,6 +325,14 @@ export function RuleCard({
                     </SubmitButton>
                   </ActionForm>
                 )}
+                <ActionForm
+                  action={duplicateRuleAction.bind(null, serviceId, binding.id)}
+                  successMessage="Paused copy created"
+                >
+                  <SubmitButton variant="outline" size="sm" pendingLabel="Duplicating…">
+                    Duplicate paused rule
+                  </SubmitButton>
+                </ActionForm>
                 {binding.enabled && (
                   <ConfirmAction
                     action={pauseRuleAction.bind(null, serviceId, binding.id)}
@@ -363,26 +342,18 @@ export function RuleCard({
                     successMessage="Rule paused"
                   />
                 )}
-                <ActionForm
-                  action={duplicateRuleAction.bind(null, serviceId, binding.id)}
-                  successMessage="Paused copy created"
-                >
-                  <SubmitButton variant="outline" size="sm">
-                    Duplicate paused rule
-                  </SubmitButton>
-                </ActionForm>
               </div>
-            )}
-            {canManage && configurationAvailable && (
-              <p className="text-xs text-muted-foreground">
-                Agent policy checks compare this frozen configuration with each Agent&apos;s local
-                policy. They do not run a step or verify target-side permissions.
-              </p>
-            )}
-          </div>
-        </details>
-      </CardContent>
-    </Card>
+              {configurationAvailable && (
+                <p className="text-xs text-muted-foreground">
+                  Policy checks compare this configuration with each Agent&apos;s local policy.
+                  Nothing runs.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </details>
+    </article>
   );
 }
 
@@ -399,10 +370,11 @@ function RuleConfigureSheet({
   availableAgents: ServiceRunbookAgent[];
   availableAgentPools: ServiceRunbookAgentPool[];
 }) {
+  const automatic = binding.mode === 'AUTOMATIC';
   return (
-    <ConfigureSheet
-      title={`Configure ${binding.runbook.name}`}
-      description="Review version, inputs, target and trigger policy before saving."
+    <RuleSheet
+      title={`Configure ${binding.name || binding.runbook.name}`}
+      description={`Runs ${binding.runbook.name}. Changes apply to future runs; existing executions are unaffected.`}
       trigger={
         <Button variant="outline" size="sm" className="h-8 gap-1.5">
           <Settings2 className="h-3.5 w-3.5" aria-hidden />
@@ -410,162 +382,199 @@ function RuleConfigureSheet({
         </Button>
       }
     >
-      {binding.mode === 'AUTOMATIC' && (
+      <SheetJumpNav
+        label="Rule configuration sections"
+        items={[
+          { id: 'rule-config-version', label: 'Version & inputs' },
+          { id: 'rule-config-target', label: 'Target' },
+          { id: 'rule-config-trigger', label: 'Trigger' },
+          { id: 'rule-config-danger', label: 'Danger zone', tone: 'danger' },
+        ]}
+      />
+      {automatic && (
         <div
           role="note"
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+          className="mb-6 flex items-start gap-2.5 rounded-lg bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-500/30 dark:text-amber-100"
         >
-          Saving configuration or trigger conditions pauses this Automatic rule immediately.{' '}
-          <Link className="underline" href={`/services/${serviceId}/automations/${binding.id}`}>
-            Recheck policy and reactivate from Rule evidence
-          </Link>{' '}
-          after every save. Suggestions and execution history are retained.
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          <p>
+            Saving configuration or trigger conditions pauses this Automatic rule immediately.{' '}
+            <Link
+              className="font-medium underline underline-offset-2"
+              href={`/services/${serviceId}/automations/${binding.id}`}
+            >
+              Recheck policy and reactivate from Rule evidence
+            </Link>{' '}
+            after every save. Suggestions and execution history are kept.
+          </p>
         </div>
       )}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold">Version, target and inputs</h3>
-        <ActionForm
-          key={`configuration-${binding.id}`}
-          action={updateRunbookBindingAction.bind(null, serviceId, binding.id)}
-          className="grid gap-3 rounded-lg border p-4 lg:grid-cols-4"
-          successMessage="Rule configuration saved"
-        >
-          <div key={binding.configurationRevision} className="contents">
-            <input
-              type="hidden"
-              name="expectedConfigurationRevision"
-              value={binding.configurationRevision}
-            />
-            <RunbookBindingVersionInputs
-              initialMode={binding.mode}
-              runbookId={binding.runbookId}
-              versions={[
-                ...new Map(
-                  [
-                    ...(availableRunbooks
-                      .find(item => item.id === binding.runbookId)
-                      ?.versions.map(version => ({
-                        ...version,
-                        inputs: version.inputs ?? [],
-                      })) ?? []),
-                    ...(binding.runbookVersion ? [binding.runbookVersion] : []),
-                    ...(binding.runbook.publishedVersion ? [binding.runbook.publishedVersion] : []),
-                  ].map(version => [version.id, version])
-                ).values(),
-              ].map(version => ({
-                ...version,
-                hasAgentWrite: hasAgentWrites(version.definition),
-              }))}
-              publishedVersionId={binding.runbook.publishedVersionId ?? ''}
-              initialStrategy={binding.versionStrategy}
-              initialVersionId={binding.runbookVersionId}
-              values={binding.inputValues as Record<string, unknown>}
-              targets={{
-                agents: availableAgents,
-                pools: availableAgentPools,
-                defaultValue: binding.defaultAgentId
-                  ? `agent:${binding.defaultAgentId}`
-                  : binding.defaultAgentPoolId
-                    ? `pool:${binding.defaultAgentPoolId}`
-                    : 'none',
-              }}
-            />
-            <RunbookSelectorBuilder initialValue={binding.agentSelector} />
-            <AutomaticTargetGuard />
-            <Field label="Rule name">
-              <Input name="ruleName" defaultValue={binding.name ?? ''} maxLength={200} />
-            </Field>
-            <Field label="Status">
-              <FormSelect
-                name="enabled"
-                label="Binding status"
-                defaultValue={String(binding.enabled)}
-                options={[
-                  { value: 'true', label: 'Enabled' },
-                  { value: 'false', label: 'Disabled' },
-                ]}
-              />
-            </Field>
-            <div className="order-2 flex gap-2 lg:col-span-4">
-              <SubmitButton>
-                <Settings2 className="h-3.5 w-3.5" aria-hidden />
-                {binding.mode === 'AUTOMATIC' ? 'Save and pause Automatic rule' : 'Save binding'}
-              </SubmitButton>
-            </div>
-          </div>
-        </ActionForm>
-      </section>
 
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold">Trigger</h3>
-        <ActionForm
-          key={`trigger-${binding.id}`}
-          action={configureRunbookTriggerAction.bind(null, serviceId, binding.id)}
-          className="grid gap-3 rounded-lg border p-4 lg:grid-cols-3"
-        >
-          <div key={binding.configurationRevision} className="contents">
-            <input
-              type="hidden"
-              name="expectedConfigurationRevision"
-              value={binding.configurationRevision}
-            />
-            <Field label="Trigger event">
-              <FormSelect
-                name="event"
-                label="Trigger event"
-                defaultValue="INCIDENT_CREATED"
-                options={[{ value: 'INCIDENT_CREATED', label: 'Incident created' }]}
-              />
-            </Field>
-            <Field label="Condition logic">
-              <FormSelect
-                name="conditionLogic"
-                label="Condition logic"
-                defaultValue={binding.triggers?.[0]?.conditionLogic ?? 'AND'}
-                options={[
-                  { value: 'AND', label: 'Match all' },
-                  { value: 'OR', label: 'Match any' },
-                ]}
-              />
-            </Field>
-            <div className="flex items-end">
-              <SubmitButton variant="outline" pendingLabel="Saving trigger…">
-                {binding.mode === 'AUTOMATIC' ? 'Save trigger and pause Automatic rule' : 'Save trigger'}
-              </SubmitButton>
-            </div>
-            <div className="space-y-3 lg:col-span-3">
-              <Label>Conditions</Label>
-              {(binding.triggers?.[0]?.conditions ?? []).map(condition => (
-                <TriggerConditionRow
-                  key={condition.id}
-                  field={condition.field}
-                  operator={condition.operator}
-                  value={condition.value}
+      <ActionForm
+        key={`configuration-${binding.id}`}
+        action={updateRunbookBindingAction.bind(null, serviceId, binding.id)}
+        className="flex flex-col gap-8"
+        successMessage="Rule configuration saved"
+      >
+        <div key={binding.configurationRevision} className="contents">
+          <input
+            type="hidden"
+            name="expectedConfigurationRevision"
+            value={binding.configurationRevision}
+          />
+          <RunbookBindingVersionInputs
+            layout="sections"
+            initialMode={binding.mode}
+            runbookId={binding.runbookId}
+            versions={[
+              ...new Map(
+                [
+                  ...(availableRunbooks
+                    .find(item => item.id === binding.runbookId)
+                    ?.versions.map(version => ({
+                      ...version,
+                      inputs: version.inputs ?? [],
+                    })) ?? []),
+                  ...(binding.runbookVersion ? [binding.runbookVersion] : []),
+                  ...(binding.runbook.publishedVersion ? [binding.runbook.publishedVersion] : []),
+                ].map(version => [version.id, version])
+              ).values(),
+            ].map(version => ({
+              ...version,
+              hasAgentWrite: hasAgentWrites(version.definition),
+            }))}
+            publishedVersionId={binding.runbook.publishedVersionId ?? ''}
+            initialStrategy={binding.versionStrategy}
+            initialVersionId={binding.runbookVersionId}
+            values={binding.inputValues as Record<string, unknown>}
+            targets={{
+              agents: availableAgents,
+              pools: availableAgentPools,
+              defaultValue: binding.defaultAgentId
+                ? `agent:${binding.defaultAgentId}`
+                : binding.defaultAgentPoolId
+                  ? `pool:${binding.defaultAgentPoolId}`
+                  : 'none',
+            }}
+            targetExtras={
+              <>
+                <RunbookSelectorBuilder initialValue={binding.agentSelector} />
+                <AutomaticTargetGuard />
+              </>
+            }
+          />
+          <SheetGroup title="Rule details" description="Name and whether the rule can run.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Rule name">
+                <Input
+                  name="ruleName"
+                  defaultValue={binding.name ?? ''}
+                  placeholder={binding.runbook.name}
+                  maxLength={200}
                 />
-              ))}
-              <TriggerConditionRow />
+              </Field>
+              <div className="space-y-2">
+                <Label htmlFor="enabled">Status</Label>
+                <FormSelect
+                  name="enabled"
+                  label="Binding status"
+                  defaultValue={String(binding.enabled)}
+                  options={[
+                    { value: 'true', label: 'Enabled' },
+                    { value: 'false', label: 'Disabled' },
+                  ]}
+                />
+              </div>
+            </div>
+          </SheetGroup>
+          <div className="sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center justify-between gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+            <p className="text-xs text-muted-foreground">
+              {automatic
+                ? 'Saving pauses this Automatic rule.'
+                : 'Saves version, target and inputs.'}
+            </p>
+            <SubmitButton>
+              {automatic ? 'Save and pause Automatic rule' : 'Save binding'}
+            </SubmitButton>
+          </div>
+        </div>
+      </ActionForm>
+
+      <ActionForm
+        key={`trigger-${binding.id}`}
+        action={configureRunbookTriggerAction.bind(null, serviceId, binding.id)}
+        className="mt-8 flex flex-col gap-4 border-t pt-8"
+      >
+        <div key={binding.configurationRevision} className="contents">
+          <input
+            type="hidden"
+            name="expectedConfigurationRevision"
+            value={binding.configurationRevision}
+          />
+          <SheetGroup
+            id="rule-config-trigger"
+            title="Trigger"
+            description="What starts this rule. Automatic runs still stop at approval gates."
+            className="space-y-4"
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="event">Trigger event</Label>
+                <FormSelect
+                  name="event"
+                  label="Trigger event"
+                  defaultValue="INCIDENT_CREATED"
+                  options={[{ value: 'INCIDENT_CREATED', label: 'Incident created' }]}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="conditionLogic">Condition logic</Label>
+                <FormSelect
+                  name="conditionLogic"
+                  label="Condition logic"
+                  defaultValue={binding.triggers?.[0]?.conditionLogic ?? 'AND'}
+                  options={[
+                    { value: 'AND', label: 'Match all' },
+                    { value: 'OR', label: 'Match any' },
+                  ]}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Conditions</p>
+              <TriggerConditionRows conditions={binding.triggers?.[0]?.conditions ?? []} />
               <p className="text-xs text-muted-foreground">
-                Leave the final field empty to add no condition. Comma-separate values for “is one
-                of” operators. Automatic mode still stops at approval gates.
+                Rows set to “No additional condition” are ignored. Comma-separate values for “is one
+                of”.
               </p>
             </div>
-          </div>
-        </ActionForm>
-      </section>
+            <div className="flex justify-end">
+              <SubmitButton variant="outline" pendingLabel="Saving trigger…">
+                {automatic ? 'Save trigger and pause Automatic rule' : 'Save trigger'}
+              </SubmitButton>
+            </div>
+          </SheetGroup>
+        </div>
+      </ActionForm>
 
-      <section className="space-y-2 rounded-lg border border-destructive/30 p-4">
-        <h3 className="text-sm font-semibold text-destructive">Danger zone</h3>
-        <p className="text-xs text-muted-foreground">
-          Detaching archives the rule. History and evidence are kept.
-        </p>
-        <ConfirmAction
-          action={detachRunbookAction.bind(null, serviceId, binding.id)}
-          title={`Detach ${binding.runbook.name}?`}
-          description="This rule will be archived and disabled. Pending suggestions cannot be started. Suggestion history, configuration and execution links are retained."
-          label="Detach Runbook"
-          successMessage="Rule detached"
-        />
-      </section>
-    </ConfigureSheet>
+      <SheetGroup
+        id="rule-config-danger"
+        title="Danger zone"
+        className="mb-6 mt-8 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Detaching archives the rule so it can no longer run. History and evidence are kept.
+          </p>
+          <ConfirmAction
+            action={detachRunbookAction.bind(null, serviceId, binding.id)}
+            title={`Detach ${binding.runbook.name}?`}
+            description="This rule will be archived and disabled. Pending suggestions cannot be started. Suggestion history, configuration and execution links are retained."
+            label="Detach Runbook"
+            successMessage="Rule detached"
+          />
+        </div>
+      </SheetGroup>
+    </RuleSheet>
   );
 }
