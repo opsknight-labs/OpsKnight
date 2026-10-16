@@ -1,26 +1,22 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { BookOpen, Plus, ShieldCheck } from 'lucide-react';
 import { useVersionConfiguration } from '@/components/runbooks/useVersionConfiguration';
-import {
-  ActionForm,
-  ConfigureSheet,
-  FormSelect,
-  SubmitButton,
-} from '@/components/runbooks/RunbookControls';
+import { ActionForm, FormSelect, SubmitButton } from '@/components/runbooks/RunbookControls';
 import RunbookTargetSelect from '@/components/runbooks/RunbookTargetSelect';
 import RunbookSelectorBuilder from '@/components/runbooks/RunbookSelectorBuilder';
 import AutomaticTargetGuard from '@/components/runbooks/AutomaticTargetGuard';
 import RuleWizard from '@/components/runbooks/RuleWizard';
 import Field from '@/components/runbooks/RunbookField';
+import { Pill } from '@/components/runbooks/ui/primitives';
 import { attachRunbookAction } from '@/app/(app)/services/[id]/runbook-actions';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import RunbookBindingVersionInputs from '../RunbookBindingVersionInputs';
 import { InputFields, hasAgentWrites } from './rule-fields';
+import { RuleSheet } from './RuleSheet';
 import type {
   AvailableRunbook,
   ServiceRunbookAgent,
@@ -48,10 +44,7 @@ export function CreateRuleSheet({
   const metadata = runbook?.versions.find(
     version => version.id === (selectedVersionId ?? runbook.publishedVersionId)
   );
-  const loaded = useVersionConfiguration(
-    metadata?.metadataOnly ? metadata.id : null,
-    runbook?.id
-  );
+  const loaded = useVersionConfiguration(metadata?.metadataOnly ? metadata.id : null, runbook?.id);
   const version = metadata?.metadataOnly ? loaded.data : metadata;
   const versionWrites = version
     ? (version.hasAgentWrite ??
@@ -59,9 +52,9 @@ export function CreateRuleSheet({
     : false;
 
   return (
-    <ConfigureSheet
-      title="Create service automation rule"
-      description="Pick a workflow from the library, then set its version, target, inputs and trigger."
+    <RuleSheet
+      title="Create automation rule"
+      description="Attach a library workflow to this service. Nothing runs when you save."
       trigger={
         <Button size="sm" className="h-9 gap-1.5">
           <Plus className="h-4 w-4" aria-hidden />
@@ -69,9 +62,9 @@ export function CreateRuleSheet({
         </Button>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
         <div className="space-y-2">
-          <Label>Workflow</Label>
+          <Label htmlFor="selectedRunbook">Workflow</Label>
           <FormSelect
             name="selectedRunbook"
             label="Choose workflow"
@@ -86,160 +79,188 @@ export function CreateRuleSheet({
             }))}
           />
         </div>
-
         {runbook && (
-          <ActionForm
-            key={runbook.id}
-            action={attachRunbookAction.bind(null, serviceId)}
-            className="space-y-4 rounded-xl border bg-muted/10 p-4"
-            successMessage="Rule created"
-          >
-            <input
-              type="hidden"
-              name="runbookSelection"
-              value={`${runbook.id}:${runbook.publishedVersionId}`}
-            />
-            <div className="rounded-lg border bg-background p-3">
-              <div className="flex items-center justify-between gap-2 text-sm font-semibold">
-                <span>{runbook.name}</span>
-                <Badge variant="outline" className="text-[11px]">
-                  v{runbook.publishedVersion?.version ?? '1'} published
-                </Badge>
+          <div className="flex items-start gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+              <BookOpen className="h-4 w-4" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="truncate text-sm font-medium">{runbook.name}</p>
+                <Pill tone="success">v{runbook.publishedVersion?.version ?? '1'} published</Pill>
               </div>
-              {runbook.description && (
-                <p className="mt-1 text-xs text-muted-foreground">{runbook.description}</p>
-              )}
+              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                {runbook.description || 'No description provided.'}
+              </p>
             </div>
-
-            <RuleWizard
-              steps={[
-                {
-                  title: 'Version and mode',
-                  content: (
-                    <>
-                      <RunbookBindingVersionInputs
-                        initialMode="MANUAL"
-                        runbookId={runbook.id}
-                        versions={[
-                          ...new Map(
-                            [
-                              ...runbook.versions,
-                              ...(runbook.publishedVersion ? [runbook.publishedVersion] : []),
-                            ].map(item => [item.id, item])
-                          ).values(),
-                        ].map(item => ({
-                          ...item,
-                          hasAgentWrite: item.hasAgentWrite ?? hasAgentWrites(item.definition),
-                          inputs: item.inputs ?? [],
-                        }))}
-                        publishedVersionId={runbook.publishedVersionId ?? ''}
-                        initialStrategy="LATEST_PUBLISHED"
-                        initialVersionId={null}
-                        values={{}}
-                        includeInputs={false}
-                        onVersionChange={setSelectedVersionId}
-                      />
-                      <Field label="Rule name">
-                        <Input name="ruleName" placeholder="Production recovery" maxLength={200} />
-                      </Field>
-                      <Field label="Initial status">
-                        <FormSelect
-                          name="enabled"
-                          label="Initial rule status"
-                          defaultValue="false"
-                          options={[
-                            { value: 'false', label: 'Save paused · Review checks before enabling' },
-                            {
-                              value: 'true',
-                              label: 'Enable Manual/Suggested · Automatic saves paused',
-                            },
-                          ]}
-                        />
-                      </Field>
-                    </>
-                  ),
-                },
-                {
-                  title: 'Target and inputs',
-                  content: (
-                    <>
-                      <Field label="Execution target">
-                        <RunbookTargetSelect
-                          agents={agents}
-                          pools={pools}
-                          hasAgentWrite={versionWrites}
-                        />
-                      </Field>
-                      {metadata?.metadataOnly && !version && (
-                        <p data-form-invalid="true" role="status">
-                          {loaded.error
-                            ? 'Version configuration unavailable. Reload to retry.'
-                            : 'Loading selected version configuration…'}
-                        </p>
-                      )}
-                      <RunbookSelectorBuilder />
-                      <AutomaticTargetGuard />
-                      {(version?.inputs?.length ?? 0) > 0 && (
-                        <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
-                          <InputFields
-                            key={version?.id}
-                            definitions={version?.inputs ?? []}
-                            values={{}}
-                          />
-                        </div>
-                      )}
-                    </>
-                  ),
-                },
-                {
-                  title: 'Trigger',
-                  content: (
-                    <>
-                      <Field label="Initial trigger">
-                        <FormSelect
-                          name="initialTrigger"
-                          label="Initial trigger"
-                          defaultValue="none"
-                          options={[
-                            { value: 'none', label: 'No trigger · Not armed' },
-                            {
-                              value: 'INCIDENT_CREATED',
-                              label: 'Incident created · Every new incident',
-                            },
-                          ]}
-                        />
-                      </Field>
-                      <p className="text-sm text-muted-foreground">
-                        Manual mode never arms a trigger. Incident-created triggers apply to future
-                        events. After saving, use Configure to narrow conditions before enabling
-                        automation.
-                      </p>
-                    </>
-                  ),
-                },
-                {
-                  title: 'Review and save',
-                  content: (
-                    <>
-                      <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                        <li>Automatic rules always save paused.</li>
-                        <li>
-                          Activate them from Rule evidence after fresh configuration and Agent policy
-                          checks.
-                        </li>
-                        <li>Configuration checks do not prove platform permissions.</li>
-                      </ul>
-                      <div className="pt-2 lg:col-span-3">
-                        <SubmitButton pendingLabel="Attaching…">Attach {runbook.name}</SubmitButton>
-                      </div>
-                    </>
-                  ),
-                },
-              ]}
-            />
-          </ActionForm>
+          </div>
         )}
       </div>
-    </ConfigureSheet>
+
+      {runbook && (
+        <ActionForm
+          key={runbook.id}
+          action={attachRunbookAction.bind(null, serviceId)}
+          className="mt-6 flex flex-1 flex-col"
+          successMessage="Rule created"
+        >
+          <input
+            type="hidden"
+            name="runbookSelection"
+            value={`${runbook.id}:${runbook.publishedVersionId}`}
+          />
+          <RuleWizard
+            summary={[
+              [
+                'Workflow',
+                `${runbook.name} · v${runbook.publishedVersion?.version ?? '1'} published`,
+              ],
+            ]}
+            submit={<SubmitButton pendingLabel="Attaching…">Attach {runbook.name}</SubmitButton>}
+            steps={[
+              {
+                title: 'Version and mode',
+                description:
+                  'Choose how the rule runs and which published version it uses. Pin a version to freeze behaviour.',
+                content: (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <Field label="Rule name">
+                        <Input
+                          name="ruleName"
+                          placeholder={`${runbook.name} · production`}
+                          maxLength={200}
+                        />
+                      </Field>
+                    </div>
+                    <RunbookBindingVersionInputs
+                      initialMode="MANUAL"
+                      runbookId={runbook.id}
+                      versions={[
+                        ...new Map(
+                          [
+                            ...runbook.versions,
+                            ...(runbook.publishedVersion ? [runbook.publishedVersion] : []),
+                          ].map(item => [item.id, item])
+                        ).values(),
+                      ].map(item => ({
+                        ...item,
+                        hasAgentWrite: item.hasAgentWrite ?? hasAgentWrites(item.definition),
+                        inputs: item.inputs ?? [],
+                      }))}
+                      publishedVersionId={runbook.publishedVersionId ?? ''}
+                      initialStrategy="LATEST_PUBLISHED"
+                      initialVersionId={null}
+                      values={{}}
+                      includeInputs={false}
+                      onVersionChange={setSelectedVersionId}
+                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="enabled">Initial status</Label>
+                      <FormSelect
+                        name="enabled"
+                        label="Initial rule status"
+                        defaultValue="false"
+                        options={[
+                          { value: 'false', label: 'Save paused · Review checks before enabling' },
+                          {
+                            value: 'true',
+                            label: 'Enable Manual/Suggested · Automatic saves paused',
+                          },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                title: 'Target and inputs',
+                description:
+                  'Pick where the workflow runs and fill in its inputs. Leave the target empty for control-plane-only workflows.',
+                content: (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="executionTarget">Execution target</Label>
+                      <RunbookTargetSelect
+                        agents={agents}
+                        pools={pools}
+                        hasAgentWrite={versionWrites}
+                      />
+                    </div>
+                    {metadata?.metadataOnly && !version && (
+                      <p
+                        data-form-invalid="true"
+                        role="status"
+                        className="text-xs text-muted-foreground"
+                      >
+                        {loaded.error
+                          ? 'Version configuration unavailable. Reload to retry.'
+                          : 'Loading selected version configuration…'}
+                      </p>
+                    )}
+                    <RunbookSelectorBuilder />
+                    <AutomaticTargetGuard />
+                    <div className="space-y-3 border-t pt-4">
+                      <p className="text-sm font-medium">Inputs</p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <InputFields
+                          key={version?.id}
+                          definitions={version?.inputs ?? []}
+                          values={{}}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ),
+              },
+              {
+                title: 'Trigger',
+                description:
+                  'Decide what starts this rule. You can narrow it with conditions after saving.',
+                content: (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="initialTrigger">Initial trigger</Label>
+                      <FormSelect
+                        name="initialTrigger"
+                        label="Initial trigger"
+                        defaultValue="none"
+                        options={[
+                          { value: 'none', label: 'No trigger · Not armed' },
+                          {
+                            value: 'INCIDENT_CREATED',
+                            label: 'Incident created · Every new incident',
+                          },
+                        ]}
+                      />
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Manual rules never arm a trigger. Incident-created triggers apply to future
+                      incidents only — use Configure to add conditions before enabling automation.
+                    </p>
+                  </>
+                ),
+              },
+              {
+                title: 'Review and save',
+                description: 'Check the summary below. Saving attaches the rule; nothing runs yet.',
+                content: (
+                  <div className="flex items-start gap-3 rounded-lg bg-primary/5 p-3 text-xs ring-1 ring-inset ring-primary/15">
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                    <ul className="space-y-1 text-muted-foreground">
+                      <li>Automatic rules always save paused until checks pass.</li>
+                      <li>
+                        Activate them from Rule evidence after configuration and policy checks.
+                      </li>
+                      <li>Configuration checks do not prove platform permissions.</li>
+                    </ul>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </ActionForm>
+      )}
+    </RuleSheet>
   );
 }

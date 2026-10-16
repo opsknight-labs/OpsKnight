@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { FormSelect } from '../../RunbookControls';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
+import InputReferenceChips from '../InputReferenceChips';
 
 interface HttpActionEditorProps {
   config: Record<string, unknown>;
@@ -67,53 +68,62 @@ export default function HttpActionEditor({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div>
-          <Label htmlFor={`http-method-${editorId}`}>HTTP Method</Label>
-          <div className="mt-1.5">
-            <FormSelect
-              name={`http-method-${editorId}`}
-              label="HTTP Method"
-              value={method}
-              disabled={readOnly}
-              onValueChange={handleMethodChange}
-              options={HTTP_METHODS.map(m => ({ value: m, label: m }))}
-            />
-          </div>
+      <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
+        <div className="space-y-1.5">
+          <Label htmlFor={`http-method-${editorId}`} className="text-xs">
+            Method
+          </Label>
+          <FormSelect
+            name={`http-method-${editorId}`}
+            label="HTTP Method"
+            value={method}
+            disabled={readOnly}
+            onValueChange={handleMethodChange}
+            options={HTTP_METHODS.map(m => ({ value: m, label: m }))}
+          />
         </div>
 
-        <div className="sm:col-span-2">
-          <Label htmlFor={`http-url-${editorId}`}>Endpoint URL</Label>
-          <div className="mt-1.5">
-            <Input
-              id={`http-url-${editorId}`}
-              aria-label="URL or input reference"
-              placeholder="https://api.internal/health or ${{ inputs.url }}"
-              value={url}
-              disabled={readOnly}
-              onChange={e => update({ url: e.target.value })}
-              className={errors.url ? 'border-destructive' : ''}
-            />
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`http-url-${editorId}`} className="text-xs">
+            Endpoint URL
+          </Label>
+          <Input
+            id={`http-url-${editorId}`}
+            aria-label="URL or input reference"
+            placeholder="https://api.internal/health"
+            value={url}
+            disabled={readOnly}
+            onChange={e => update({ url: e.target.value })}
+            className={`font-mono text-xs ${errors.url ? 'border-destructive' : ''}`}
+          />
           {errors.url ? (
-            <p className="mt-1 text-xs text-destructive">{errors.url}</p>
+            <p className="text-xs text-destructive">{errors.url}</p>
           ) : (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Absolute URL or parameter template like{' '}
-              <code className="text-[11px] font-mono">{'${{ inputs.api_url }}'}</code>.
+            <p className="text-xs text-muted-foreground">
+              Absolute URL. Redirects are rejected and output is size-limited.
             </p>
           )}
         </div>
       </div>
 
-      <div>
-        <Label htmlFor={`http-headers-${editorId}`}>Request headers (JSON object)</Label>
+      <InputReferenceChips
+        inputs={inputs}
+        readOnly={readOnly}
+        label="Append to URL"
+        onInsert={reference => update({ url: `${url}${reference}` })}
+      />
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`http-headers-${editorId}`} className="text-xs">
+          Request headers <span className="font-normal text-muted-foreground">(JSON object)</span>
+        </Label>
         <Textarea
           id={`http-headers-${editorId}`}
           aria-label="Request headers"
           disabled={readOnly}
           value={headerText}
-          className="mt-1.5 font-mono text-xs"
+          spellCheck={false}
+          className="font-mono text-xs"
           onChange={event => {
             setHeaderText(event.target.value);
             try {
@@ -143,8 +153,10 @@ export default function HttpActionEditor({
           secret-backed requests.
         </p>
       </div>
-      <div>
-        <Label htmlFor={`http-status-${editorId}`}>Expected HTTP status (optional)</Label>
+      <div className="max-w-xs space-y-1.5">
+        <Label htmlFor={`http-status-${editorId}`} className="text-xs">
+          Expected status <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
         <Input
           id={`http-status-${editorId}`}
           aria-label="Expected HTTP status"
@@ -160,57 +172,30 @@ export default function HttpActionEditor({
             onChange(next);
           }}
         />
-        <p className="text-xs text-muted-foreground">
-          Without an expected status, any 2xx response succeeds. Output is bounded; redirects are
-          rejected.
-        </p>
+        <p className="text-xs text-muted-foreground">Leave empty to accept any 2xx response.</p>
       </div>
 
       {!isNoBodyMethod && (
-        <div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor={`http-body-${editorId}`}>Request Body</Label>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor={`http-body-${editorId}`} className="text-xs">
+              Request body
+            </Label>
             <span className="text-xs text-muted-foreground">
-              {isObjectBody ? 'Structured JSON payload' : 'JSON or plaintext payload'}
+              {isObjectBody ? 'Structured JSON' : 'JSON or plain text'}
             </span>
           </div>
-          <div className="mt-1.5">
-            <Textarea
-              id={`http-body-${editorId}`}
-              aria-label="Request body"
-              placeholder='{"status": "maintenance"}'
-              value={bodyString}
-              disabled={readOnly}
-              onChange={e => handleBodyChange(e.target.value)}
-              className="font-mono text-xs min-h-24"
-              spellCheck={false}
-            />
-          </div>
-          {errors.body && <p className="mt-1 text-xs text-destructive">{errors.body}</p>}
-        </div>
-      )}
-
-      {inputs.length > 0 && (
-        <div className="rounded-lg border bg-muted/20 p-2.5 text-xs">
-          <span className="font-medium text-muted-foreground">Available Input Variables: </span>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {inputs.map(input => (
-              <button
-                key={input.key}
-                type="button"
-                disabled={readOnly}
-                onClick={() =>
-                  update({
-                    url: url ? `${url}\${{ inputs.${input.key} }}` : `\${{ inputs.${input.key} }}`,
-                  })
-                }
-                className="rounded border bg-background px-1.5 py-0.5 font-mono text-[11px] hover:bg-muted"
-                title={`Click to append \${{ inputs.${input.key} }}`}
-              >
-                {`\${{ inputs.${input.key} }}`}
-              </button>
-            ))}
-          </div>
+          <Textarea
+            id={`http-body-${editorId}`}
+            aria-label="Request body"
+            placeholder='{"status": "maintenance"}'
+            value={bodyString}
+            disabled={readOnly}
+            onChange={e => handleBodyChange(e.target.value)}
+            className="min-h-24 font-mono text-xs"
+            spellCheck={false}
+          />
+          {errors.body && <p className="text-xs text-destructive">{errors.body}</p>}
         </div>
       )}
     </div>

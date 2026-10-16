@@ -6,7 +6,7 @@ import {
   disallowedScopesForRole,
   issuableScopesForRole,
 } from '@/lib/api-scope-registry';
-import { resolveTokenExpiry } from '@/lib/api-v2/service-accounts';
+import { generateServiceAccountEmail, resolveTokenExpiry } from '@/lib/api-v2/service-accounts';
 import { isServiceAccountIdentity } from '@/lib/service-account-identity';
 
 describe('API scope registry', () => {
@@ -19,7 +19,8 @@ describe('API scope registry', () => {
 
   it('does not offer scopes that grant nothing on REST v2', () => {
     const issuable = issuableScopesForRole('ADMIN').map(d => d.scope);
-    expect(issuable).not.toContain(API_SCOPES.RUNBOOKS_WRITE);
+    expect(issuable).toContain(API_SCOPES.RUNBOOKS_WRITE);
+    expect(issuable).toContain(API_SCOPES.RUNBOOKS_PUBLISH);
     expect(issuable).not.toContain(API_SCOPES.USERS_WRITE);
     expect(issuable).toContain(API_SCOPES.RUNBOOKS_EXECUTE);
   });
@@ -79,5 +80,36 @@ describe('service account identity', () => {
         jobTitle: 'Service Account',
       })
     ).toBe(false);
+  });
+});
+
+describe('production service account identity format', () => {
+  it('uses a readable name, a 96-bit random suffix and the reserved domain', () => {
+    expect(generateServiceAccountEmail('Production Deploy')).toMatch(
+      /^sa-production-deploy-[a-f0-9]{24}@serviceaccount\.opsknight\.local$/
+    );
+  });
+  it.each(['A'.repeat(100), 'Café / Deploy + API', '机器人', '---', '  Team @ Domain.test  '])(
+    'generates a bounded ASCII identity for %s',
+    name => {
+      const email = generateServiceAccountEmail(name);
+      const local = email.split('@')[0];
+      expect(local.length).toBeLessThanOrEqual(64);
+      expect(local).toMatch(/^sa-[a-z0-9-]+-[a-f0-9]{24}$/);
+      expect(isServiceAccountIdentity({ email })).toBe(true);
+    }
+  );
+  it('does not collide for accounts with the same display name', () => {
+    const identities = new Set(
+      Array.from({ length: 100 }, () => generateServiceAccountEmail('Production Deploy'))
+    );
+    expect(identities.size).toBe(100);
+  });
+  it('continues recognizing existing timestamp identities', () => {
+    expect(
+      isServiceAccountIdentity({
+        email: 'sa_1792166039840_4eaf8d76@serviceaccount.opsknight.local',
+      })
+    ).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { DEFAULT_STEP_TIMEOUT_SECONDS, isSafeToRetryAfterUnknown } from './types';
+import { finalizeExecutionDeadline } from './deadline';
 import { retryDelayMs } from './safety';
 
 export async function reconcileRunbooks(limit = 100, connection?: Prisma.TransactionClient) {
@@ -60,47 +61,8 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
     orderBy: { deadlineAt: 'asc' },
     take: limit,
   });
-  for (const { id: executionId, incidentId } of overdueExecutions) {
-    await transaction(async tx => {
-      const timedOut = await tx.runbookExecution.updateMany({
-        where: {
-          id: executionId,
-          deadlineAt: { lte: now },
-          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
-        },
-        data: { status: 'TIMED_OUT', completedAt: now, failureCode: 'EXECUTION_TIMEOUT' },
-      });
-      if (timedOut.count !== 1) return;
-      await tx.runbookStepAttempt.updateMany({
-        where: {
-          executionStep: { executionId },
-          status: { in: ['PENDING', 'CLAIMED'] },
-        },
-        data: {
-          status: 'TIMED_OUT',
-          completedAt: now,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          errorCode: 'EXECUTION_TIMEOUT',
-        },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          status: { in: ['PENDING', 'READY', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
-        },
-        data: { status: 'CANCELLED', completedAt: now, errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      if (incidentId) {
-        await tx.incidentEvent.create({
-          data: {
-            incidentId,
-            type: 'RUNBOOK_FAILED',
-            message: 'Runbook execution timed out.',
-          },
-        });
-      }
-    });
+  for (const { id: executionId } of overdueExecutions) {
+    await transaction(tx => finalizeExecutionDeadline(tx, executionId, now));
   }
   const expired = await db.runbookStepAttempt.findMany({
     where: {
@@ -113,7 +75,9 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
     take: limit,
     include: {
       executionStep: {
-        include: { execution: { select: { cancelRequestedAt: true, status: true } } },
+        include: {
+          execution: { select: { cancelRequestedAt: true, status: true, deadlineAt: true } },
+        },
       },
       targetAgentPool: { select: { mode: true } },
     },
@@ -248,6 +212,9 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
       if (marked.count !== 1) return;
       const safeRetry =
         isSafeToRetryAfterUnknown(attempt.executionStep.riskClass) &&
+        !attempt.executionStep.execution.cancelRequestedAt &&
+        attempt.executionStep.execution.deadlineAt > now &&
+        ['RUNNING', 'WAITING_AGENT'].includes(attempt.executionStep.execution.status) &&
         attempt.attemptNumber <= attempt.executionStep.maxRetries;
       if (safeRetry) {
         const localHostRetry = attempt.targetAgentPool?.mode === 'LOCAL_HOSTS';

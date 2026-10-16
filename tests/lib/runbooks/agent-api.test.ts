@@ -137,3 +137,11 @@ describe('readBoundedRequestBody streaming bounds', () => {
     expect(body).toBe(content);
   });
 });
+
+it.each([
+  'Artifact must be valid gzip with at most 10 MiB of decoded text.',
+  'Artifact must contain valid UTF-8 text.',
+])('maps rejected artifact content to a client error: %s', async message => {
+  const response = agentApiError(new Error(message));
+  expect(response.status).toBe(400);
+});

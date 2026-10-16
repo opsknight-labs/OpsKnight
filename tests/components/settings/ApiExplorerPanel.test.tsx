@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import ApiExplorerPanel, { type ApiEndpointDoc } from '@/components/settings/ApiExplorerPanel';
+import ApiExplorerPanel, {
+  getCurlSnippet,
+  getJsSnippet,
+  getPythonSnippet,
+  type ApiEndpointDoc,
+} from '@/components/settings/ApiExplorerPanel';
 
 const mockEndpoints: ApiEndpointDoc[] = [
   {
@@ -59,7 +64,9 @@ describe('ApiExplorerPanel Component', () => {
   });
 
   it('renders endpoint items with HTTP method, path, tag, and scope badge', () => {
-    render(<ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />);
+    render(
+      <ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />
+    );
 
     expect(screen.getAllByText('/api/v2/incidents').length).toBe(2);
     expect(screen.getByText('/api/v2/services/{id}')).toBeDefined();
@@ -69,7 +76,9 @@ describe('ApiExplorerPanel Component', () => {
   });
 
   it('filters endpoints by search query', () => {
-    render(<ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />);
+    render(
+      <ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />
+    );
 
     const searchInput = screen.getByPlaceholderText(/search endpoints by path or keyword/i);
     fireEvent.change(searchInput, { target: { value: 'DELETE' } });
@@ -79,7 +88,9 @@ describe('ApiExplorerPanel Component', () => {
   });
 
   it('expands an endpoint to view parameters and request tabs', () => {
-    render(<ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />);
+    render(
+      <ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />
+    );
 
     const deleteCard = screen.getByText('/api/v2/services/{id}');
     fireEvent.click(deleteCard);
@@ -92,7 +103,9 @@ describe('ApiExplorerPanel Component', () => {
   });
 
   it('generates HTTP 204 safe response handling in JavaScript and Python snippets for DELETE endpoints', () => {
-    render(<ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />);
+    render(
+      <ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />
+    );
 
     // Expand the DELETE endpoint
     const deleteCard = screen.getByText('/api/v2/services/{id}');
@@ -134,19 +147,25 @@ describe('ApiExplorerPanel Component', () => {
   });
 
   it('supports expand all and collapse all toggles', () => {
-    render(<ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />);
+    render(
+      <ApiExplorerPanel endpoints={mockEndpoints} appUrl="https://api.test.opsknight.local" />
+    );
 
     const expandAllButton = screen.getByRole('button', { name: /expand all/i });
     fireEvent.click(expandAllButton);
 
-    expect(screen.getByText('Retrieve paginated incidents with team boundary checks.')).toBeDefined();
+    expect(
+      screen.getByText('Retrieve paginated incidents with team boundary checks.')
+    ).toBeDefined();
     expect(screen.getByText('Trigger a new incident and run escalation policies.')).toBeDefined();
     expect(screen.getByText('Remove service definition and dependencies.')).toBeDefined();
 
     const collapseAllButton = screen.getByRole('button', { name: /collapse all/i });
     fireEvent.click(collapseAllButton);
 
-    expect(screen.queryByText('Retrieve paginated incidents with team boundary checks.')).toBeNull();
+    expect(
+      screen.queryByText('Retrieve paginated incidents with team boundary checks.')
+    ).toBeNull();
   });
 
   it('toggles authentication header format between Bearer and X-API-Key', () => {
@@ -177,7 +196,9 @@ describe('ApiExplorerPanel Component', () => {
     fireEvent.click(deleteCard);
 
     // Should resolve {id} to srv_123456 instead of raw {id}
-    expect(container.textContent).toContain('https://api.test.opsknight.local/api/v2/services/srv_123456');
+    expect(container.textContent).toContain(
+      'https://api.test.opsknight.local/api/v2/services/srv_123456'
+    );
   });
 
   it('renders gracefully without crashing when endpoints array is empty', () => {
@@ -185,5 +206,31 @@ describe('ApiExplorerPanel Component', () => {
 
     expect(screen.getByText(/Showing/i)).toBeDefined();
     expect(screen.getByText(/No matching REST endpoints found/i)).toBeDefined();
+  });
+});
+
+describe('required preconditions in code examples', () => {
+  const draft: ApiEndpointDoc = {
+    method: 'PATCH',
+    path: '/runbooks/{id}/drafts/{versionId}',
+    tag: 'Runbooks',
+    summary: 'Edit draft',
+    description: '',
+    parameters: [
+      { name: 'If-Match', in: 'header', required: true },
+      { name: 'Idempotency-Key', in: 'header', required: true },
+    ],
+    requestBody: { sample: { definition: { steps: [] } } },
+  };
+  it('includes required revision and retry headers in all three languages', () => {
+    for (const snippet of [getCurlSnippet(draft), getJsSnippet(draft), getPythonSnippet(draft)]) {
+      expect(snippet).toContain('If-Match');
+      expect(snippet).toContain('"3"');
+      expect(snippet).toContain('Idempotency-Key');
+      expect(snippet).toContain('cmv7kbd0l000dxlzuo1cmhu1e');
+      expect(snippet).toContain('cmv7kbd0l000exlzuo1cmhu1e');
+      expect(snippet).not.toContain('{versionId}');
+    }
+    expect(getCurlSnippet(draft)).not.toContain('\\n');
   });
 });

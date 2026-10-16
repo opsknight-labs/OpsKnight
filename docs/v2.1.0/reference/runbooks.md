@@ -32,10 +32,10 @@ controls and remain compatible with Advanced JSON. See the
 
 ## Inputs and risk
 
-Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, and `SECRET_REF`.
-Unconstrained `SELECT` is not accepted for new input definitions; use `STRING`
-until option-aware selection is implemented. The database retains its legacy
-enum value for compatibility, not as a constrained dropdown contract.
+Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, `SECRET_REF`
+and `SELECT`. SELECT definitions require explicit unique options; saved defaults,
+binding values and execution inputs must match an allowed option. See the
+[authoring guide](../guides/runbooks/author) for the current Builder controls.
 Input keys are unique and definitions specify required/default
 behavior. Values are validated when configuring and executing a binding.
 Secret references identify encrypted credentials and require a scoped grant.
@@ -75,7 +75,7 @@ namespace/action/`kubernetesMaxReplicas` authorization. Restart remains
 Attempts persist bounded structured `preState` and `postState` snapshots. They
 include CPU load/cores (not CPU percentage), memory, load, and relevant service,
 container, Kubernetes, network, disk, process or log evidence when available.
-Incident step details show changes and retain downloadable raw output artifacts.
+Incident step details show changes and retain downloadable sanitized output artifacts for authorized administrators.
 Secret input values are redacted from evidence and output.
 
 `Verified recovery` is a persisted verification result, not an execution status.
@@ -257,3 +257,56 @@ HA and fault scenarios, sustained authenticated workload measurements, and human
 accessibility review. Candidate builds, simulations and a successful preview
 cannot substitute for those environment-specific results. Follow
 [Agent operations](../operate/deploy/agent-operations) for deployment prerequisites.
+
+## Enterprise safety and output access
+
+Service rule creation, edits, trigger changes, activation, pause, duplication,
+detachment and policy-check requests require **both** service modification
+authority and `runbook.manage`. A service-team responder's read/execute/approve
+permissions do not grant rule administration. UI controls follow the same rule;
+server actions enforce it independently.
+
+Deadline handling is shared by worker advancement and recovery. Once the deadline
+passes, pending/claimed attempts lose authority. A running Agent attempt stays
+fenced and nonterminal while its result or lease expiry is reconciled. A result
+produced before deadline may still be recorded with its valid lease. A write
+reported after deadline is recorded as UNKNOWN, rather than successful or
+silently discarded. UNKNOWN writes require independent target verification;
+recovery never schedules a deadline-expired retry.
+
+Agent output passes through shared credential sanitization before local spooling.
+Docker inspect/health and Kubernetes diagnostics project operational state rather
+than dumping environment/configuration payloads. Agent policy rejects Secret and
+ConfigMap resource capture. The control plane independently validates gzip/UTF-8,
+limits decompression to 10 MiB, sanitizes text and retains at most 1 MiB plus a
+truncation marker before recompressing and persisting. Stored checksums and byte
+quotas describe this sanitized payload. Repeated normalized uploads remain
+idempotent. These limits complement the existing per-attempt/execution quotas.
+
+Artifact downloads require `runbook.artifact.download` in addition to Runbook read
+and resource access. The built-in ADMIN role holds this capability; RESPONDER and
+AUDITOR do not. Downloads are audited and sanitized again, including artifacts
+stored before this change. The `x-content-sha256` header describes the returned
+sanitized gzip. A historical artifact's stored hash may describe its older payload.
+Invalid or oversized legacy gzip cannot be downloaded through this endpoint.
+
+Pattern matching cannot identify every credential in arbitrary application logs.
+Treat output as sensitive operational data, avoid collecting credentials, use
+encrypted PostgreSQL storage/backups and restrict database/spool access. Existing
+historical database rows and backups require an operator's data-protection review
+and retention process; download sanitization does not rewrite old backups.
+
+## Idle Agent claim behavior
+
+A process-local negative queue hint coalesces concurrent availability probes and
+expires after one second. It caches no Agent authority, lease or eligible result.
+Every actual claim still checks live Agent status, policy, permissions and lease
+fences. Newly available work can incur the one-second hint delay plus the existing
+2–5 second polling cadence. Long polls respect their remaining wait budget and
+abort when the client disconnects.
+
+`opsknight_runbook_claim_availability_probes_total{result="empty"}` measures
+coalesced database probes; `result="work"` reports a nonempty hint. A pending but
+ineligible backlog still requires Agent-specific eligibility checks. This reduces
+idle repeated-query cost; it does not establish fleet capacity. See the
+[enterprise qualification guide](../operate/deploy/runbook-qualification).

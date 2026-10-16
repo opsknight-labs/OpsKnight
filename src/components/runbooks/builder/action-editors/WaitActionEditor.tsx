@@ -45,37 +45,37 @@ export default function WaitActionEditor({
 
   return (
     <div className="space-y-4">
-      <div className="max-w-xs">
-        <Label htmlFor={`wait-duration-${editorId}`}>Wait Duration (Seconds)</Label>
-        <div className="mt-1.5">
-          <Input
-            id={`wait-duration-${editorId}`}
-            aria-label="Wait duration (seconds)"
-            type="number"
-            min={0}
-            max={86400}
-            placeholder="e.g. 30"
-            value={rawDuration === undefined || rawDuration === null ? '' : String(rawDuration)}
-            disabled={readOnly}
-            onChange={e => handleChange(e.target.value)}
-            className={errors.durationSeconds ? 'border-destructive' : ''}
-          />
-        </div>
-        {errors.durationSeconds && (
-          <p className="mt-1 text-xs text-destructive">{errors.durationSeconds}</p>
+      <div className="max-w-xs space-y-1.5">
+        <Label htmlFor={`wait-duration-${editorId}`} className="text-xs">
+          Duration <span className="font-normal text-muted-foreground">(seconds)</span>
+        </Label>
+        <Input
+          id={`wait-duration-${editorId}`}
+          aria-label="Wait duration (seconds)"
+          type="number"
+          min={0}
+          max={86400}
+          placeholder="e.g. 30"
+          value={rawDuration === undefined || rawDuration === null ? '' : String(rawDuration)}
+          disabled={readOnly}
+          onChange={e => handleChange(e.target.value)}
+          className={`tabular-nums ${errors.durationSeconds ? 'border-destructive' : ''}`}
+        />
+        {errors.durationSeconds ? (
+          <p className="text-xs text-destructive">{errors.durationSeconds}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Survives worker restarts. Still bound by the step timeout and overall deadline.
+          </p>
         )}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Waiting is durable across worker restarts and remains subject to the overall deadline and
-        step timeout.
-      </p>
       {hasValidNum && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          <Clock className="h-4 w-4 shrink-0 text-primary" />
+          <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            Pauses workflow execution for <strong>{formatDuration(numDuration)}</strong> before
-            continuing to the next step.
+            Pauses for <strong className="text-foreground">{formatDuration(numDuration)}</strong>,
+            then continues to the next step.
           </span>
         </div>
       )}

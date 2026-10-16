@@ -14,6 +14,7 @@ import type { Prisma } from '@prisma/client';
 
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
+  scopedFilter: true,
   querySchema: PostmortemListQuerySchema,
   handler: async ({ actor, query, pagination }) => {
     const accessWhere = postmortemReadWhere(actor);

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { RunbookInput } from '@prisma/client';
+import { Plus, X } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { FormSelect } from '@/components/runbooks/RunbookControls';
 import Field from '@/components/runbooks/RunbookField';
@@ -145,10 +147,14 @@ export function TriggerConditionRow({
   field = '',
   operator = 'EQUALS',
   value = '',
+  index,
+  onRemove,
 }: {
   field?: string;
   operator?: string;
   value?: unknown;
+  index?: number;
+  onRemove?: () => void;
 }) {
   const knownField = TRIGGER_FIELDS.some(([candidate]) => candidate === field);
   const displayedValue = Array.isArray(value)
@@ -157,7 +163,7 @@ export function TriggerConditionRow({
       ? ''
       : String(value);
   return (
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div className="grid items-center gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_2.25rem]">
       <FormSelect
         name="conditionField"
         label="Trigger condition field"
@@ -189,6 +195,78 @@ export function TriggerConditionRow({
         defaultValue={displayedValue}
         placeholder="Match value"
       />
+      {onRemove ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 justify-self-end text-muted-foreground hover:text-destructive"
+          aria-label={`Remove condition ${(index ?? 0) + 1}`}
+          onClick={onRemove}
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </Button>
+      ) : (
+        <span aria-hidden />
+      )}
+    </div>
+  );
+}
+
+/** Editable list of trigger conditions; starts with one empty row when none exist. */
+export function TriggerConditionRows({
+  conditions,
+}: {
+  conditions: Array<{ id: string; field: string; operator: string; value: unknown }>;
+}) {
+  const [rows, setRows] = useState(() =>
+    conditions.length > 0
+      ? conditions
+      : [{ id: 'new-0', field: '', operator: 'EQUALS', value: '' as unknown }]
+  );
+  return (
+    <div role="group" aria-label="Trigger conditions" className="space-y-2">
+      {rows.length > 0 && (
+        <div
+          aria-hidden
+          className="hidden gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_2.25rem]"
+        >
+          <span>Field</span>
+          <span>Operator</span>
+          <span>Value</span>
+        </div>
+      )}
+      {rows.map((row, index) => (
+        <TriggerConditionRow
+          key={row.id}
+          index={index}
+          field={row.field}
+          operator={row.operator}
+          value={row.value}
+          onRemove={() => setRows(current => current.filter(item => item.id !== row.id))}
+        />
+      ))}
+      {rows.length === 0 && (
+        <p className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+          No conditions · Matches every new incident.
+        </p>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        disabled={rows.length >= 20}
+        onClick={() =>
+          setRows(current => [
+            ...current,
+            { id: `new-${crypto.randomUUID()}`, field: '', operator: 'EQUALS', value: '' },
+          ])
+        }
+      >
+        <Plus className="h-3.5 w-3.5" aria-hidden />
+        Add condition
+      </Button>
     </div>
   );
 }

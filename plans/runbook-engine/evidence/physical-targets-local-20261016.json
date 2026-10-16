@@ -1,0 +1,244 @@
+{
+  "measuredAt": "2026-10-16T10:38:16.698Z",
+  "sourceRevision": null,
+  "evidence": [
+    {
+      "platform": "docker",
+      "action": "stop",
+      "status": "SUCCEEDED",
+      "preState": {
+        "capturedAt": "2026-10-16T10:36:24.437Z",
+        "cpu": {
+          "load1": 84.85107421875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25624330240,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          84.85107421875,
+          39.50927734375,
+          21.34033203125
+        ],
+        "containerState": "{\"Running\":true,\"Paused\":false,\"Restarting\":false,\"Dead\":false,\"Health\":null}"
+      },
+      "postState": {
+        "capturedAt": "2026-10-16T10:36:29.409Z",
+        "cpu": {
+          "load1": 84.14208984375,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25617285120,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          84.14208984375,
+          40.11474609375,
+          21.66015625
+        ],
+        "containerState": "{\"Running\":false,\"Paused\":false,\"Restarting\":false,\"Dead\":false,\"Health\":null}"
+      },
+      "independentlyRunning": false
+    },
+    {
+      "platform": "docker",
+      "action": "start",
+      "status": "SUCCEEDED",
+      "preState": {
+        "capturedAt": "2026-10-16T10:36:30.097Z",
+        "cpu": {
+          "load1": 84.14208984375,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25633013760,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          84.14208984375,
+          40.11474609375,
+          21.66015625
+        ],
+        "containerState": "{\"Running\":false,\"Paused\":false,\"Restarting\":false,\"Dead\":false,\"Health\":null}"
+      },
+      "postState": {
+        "capturedAt": "2026-10-16T10:36:32.446Z",
+        "cpu": {
+          "load1": 84.85107421875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25648332800,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          84.85107421875,
+          40.99267578125,
+          22.078125
+        ],
+        "containerState": "{\"Running\":true,\"Paused\":false,\"Restarting\":false,\"Dead\":false,\"Health\":null}"
+      },
+      "independentlyRunning": true
+    },
+    {
+      "platform": "docker",
+      "action": "restart",
+      "status": "SUCCEEDED",
+      "preState": {
+        "capturedAt": "2026-10-16T10:36:33.128Z",
+        "cpu": {
+          "load1": 84.85107421875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25615400960,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          84.85107421875,
+          40.99267578125,
+          22.078125
+        ],
+        "containerState": "{\"Running\":true,\"Paused\":false,\"Restarting\":false,\"Dead\":false,\"Health\":null}"
+      },
+      "postState": {
+        "capturedAt": "2026-10-16T10:36:39.199Z",
+        "cpu": {
+          "load1": 85.82373046875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25619726336,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          85.82373046875,
+          41.92236328125,
+          22.51708984375
+        ],
+        "containerState": "{\"Running\":true,\"Paused\":false,\"Restarting\":false,\"Dead\":false,\"Health\":null}"
+      },
+      "independentlyRunning": true
+    },
+    {
+      "platform": "kubernetes",
+      "action": "scale",
+      "replicas": 2,
+      "status": "SUCCEEDED",
+      "preState": {
+        "capturedAt": "2026-10-16T10:38:08.872Z",
+        "cpu": {
+          "load1": 87.85546875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25496748032,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          87.85546875,
+          54.64599609375,
+          29.40380859375
+        ],
+        "kubernetesState": {
+          "desired": 1,
+          "ready": 1,
+          "observedGeneration": 1,
+          "generation": 1
+        }
+      },
+      "postState": {
+        "capturedAt": "2026-10-16T10:38:09.794Z",
+        "cpu": {
+          "load1": 87.85546875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25587007488,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          87.85546875,
+          54.64599609375,
+          29.40380859375
+        ],
+        "kubernetesState": {
+          "desired": 2,
+          "ready": 0,
+          "observedGeneration": 2,
+          "generation": 2
+        }
+      },
+      "independentlyReadyReplicas": 2
+    },
+    {
+      "platform": "kubernetes",
+      "action": "scale",
+      "replicas": 1,
+      "status": "SUCCEEDED",
+      "preState": {
+        "capturedAt": "2026-10-16T10:38:12.632Z",
+        "cpu": {
+          "load1": 87.70654296875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25589153792,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          87.70654296875,
+          55.16650390625,
+          29.7353515625
+        ],
+        "kubernetesState": {
+          "desired": 2,
+          "ready": 2,
+          "observedGeneration": 2,
+          "generation": 2
+        }
+      },
+      "postState": {
+        "capturedAt": "2026-10-16T10:38:13.128Z",
+        "cpu": {
+          "load1": 87.70654296875,
+          "cores": 12
+        },
+        "memory": {
+          "usedBytes": 25564594176,
+          "totalBytes": 25769803776
+        },
+        "load": [
+          87.70654296875,
+          55.16650390625,
+          29.7353515625
+        ],
+        "kubernetesState": {
+          "desired": 1,
+          "ready": 2,
+          "observedGeneration": 3,
+          "generation": 3
+        }
+      },
+      "independentlyReadyReplicas": 1
+    },
+    {
+      "platform": "kubernetes",
+      "action": "rollout-restart",
+      "status": "SUCCEEDED",
+      "independentlyConverged": true
+    }
+  ],
+  "limitations": [
+    "Direct executor tests; protocol authorization covered separately",
+    "Single-node Kind and Docker daemon",
+    "No native Systemd/Podman, node/database failover or released upgrade certification"
+  ],
+  "sourceProvenance": {
+    "baseRevision": "d8e67ae96",
+    "implementationParent": "52be2c40c",
+    "state": "Local worktree with the platform-specific Kind archive fix and integration changes; not exact-head hosted CI"
+  }
+}

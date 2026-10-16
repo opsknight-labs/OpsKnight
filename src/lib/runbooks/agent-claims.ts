@@ -1,8 +1,9 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import type { Prisma, RunbookStepType } from '@prisma/client';
+import { Prisma, type RunbookStepType } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { enqueueVerificationEvidence } from './verification-evidence';
 import { emitAuditEvent } from '@/lib/audit';
 import {
   agentArtifactSchema,
@@ -11,7 +12,8 @@ import {
   type AgentJobResultInput,
 } from './schemas';
 import { sha256 } from './agent-auth';
-import { redactRunbookOutput } from './redaction';
+import { sanitizeCompressedArtifact } from './artifact-safety';
+import { redactRunbookOutput, redactRunbookEvidence } from './redaction';
 import { resolveSecretInputValues } from './secrets';
 import {
   isSecretReference,
@@ -159,6 +161,9 @@ export async function claimAgentAttempt(
     try {
       const claimedAttempt = await prisma.$transaction(
         async tx => {
+          // This is a bounded OLTP lookup, not an analytical query. Large ineligible
+          // backlogs can otherwise trigger PostgreSQL JIT compilation before yielding a row.
+          await tx.$executeRaw`SET LOCAL jit = off`;
           await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
           await tx.$executeRaw`SET LOCAL lock_timeout = '1000ms'`;
           const now = new Date();
@@ -854,6 +859,9 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
           );
         }
       }
+      // Verification holds this parent row before updating step evidence. Use the same
+      // lock order so an old snapshot cannot overwrite proof after late recovery.
+      await tx.$executeRaw`SELECT id FROM "RunbookExecution" WHERE id = ${attempt.executionStep.executionId} FOR UPDATE`;
       const outputPreview = input.outputPreview
         ? redactRunbookOutput(input.outputPreview)
         : undefined;
@@ -873,8 +881,8 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
           outputArtifactId: input.outputArtifactId,
           errorCode: input.errorCode,
           errorMessage: input.errorMessage ? redactRunbookOutput(input.errorMessage) : undefined,
-          preState: input.preState as Prisma.InputJsonValue | undefined,
-          postState: input.postState as Prisma.InputJsonValue | undefined,
+          preState: redactRunbookEvidence(input.preState),
+          postState: redactRunbookEvidence(input.postState),
           leaseToken: null,
           leaseExpiresAt: null,
         },
@@ -908,6 +916,11 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       if (recoveredStep.count !== 1) {
         throw new RunbookPreExecutionFenceError(input.attemptId, 'late result step state changed');
       }
+      // Previous proof describes the UNKNOWN snapshot; hide it until fresh terminal verification.
+      await tx.runbookExecutionStep.updateMany({
+        where: { executionId: attempt.executionStep.executionId },
+        data: { verificationResult: Prisma.DbNull },
+      });
       if (stepStatus === 'SUCCEEDED' && !cancellationRequested) {
         await tx.runbookExecution.updateMany({
           where: {
@@ -936,6 +949,15 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
             failureMessage: null,
           },
         });
+      }
+      const recoveredExecution = await tx.runbookExecution.findUniqueOrThrow({
+        where: { id: attempt.executionStep.executionId },
+        select: { status: true },
+      });
+      if (['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(recoveredExecution.status)) {
+        // A late failure/UNKNOWN can leave the parent terminal. Refresh that proof too;
+        // resumed executions will enqueue when their next terminal transition commits.
+        await enqueueVerificationEvidence(tx, attempt.executionStep.executionId);
       }
       await emitAuditEvent(
         {
@@ -985,11 +1007,18 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       return { accepted: true, duplicate: true, status: attempt.status };
     }
     const resultProducedAt = input.producedAt ? new Date(input.producedAt) : new Date();
-    if (resultProducedAt > attempt.executionStep.execution.deadlineAt) {
-      throw new RunbookPreExecutionFenceError(
-        input.attemptId,
-        'result was produced after the execution deadline'
-      );
+    if (resultProducedAt > new Date(Date.now() + 60_000)) {
+      throw new RunbookPreExecutionFenceError(input.attemptId, 'result timestamp is in the future');
+    }
+    if (
+      resultProducedAt > attempt.executionStep.execution.deadlineAt &&
+      !['CANCELLED', 'UNKNOWN'].includes(input.status)
+    ) {
+      // Reporting an outcome does not extend execution authority. Writes completed after
+      // the deadline remain uncertain; preserve the evidence rather than stranding RUNNING.
+      input.status = attempt.executionStep.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN';
+      input.errorCode =
+        input.status === 'UNKNOWN' ? 'TIMED_OUT_WITH_UNKNOWN_OUTCOME' : 'EXECUTION_TIMEOUT';
     }
     const cancellationRequested =
       Boolean(attempt.executionStep.execution.cancelRequestedAt) ||
@@ -1035,6 +1064,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       isRetryableFailure(attempt.executionStep.riskClass, input.errorCode);
     const shouldRetry =
       !cancellationRequested &&
+      attempt.executionStep.execution.deadlineAt > new Date() &&
       (retryUnknown || retryFailed) &&
       attempt.attemptNumber <= attempt.executionStep.maxRetries;
     const completed = await tx.runbookStepAttempt.updateMany({
@@ -1047,8 +1077,8 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
         outputArtifactId: input.outputArtifactId,
         errorCode: input.errorCode,
         errorMessage: input.errorMessage ? redactRunbookOutput(input.errorMessage) : undefined,
-        preState: input.preState as Prisma.InputJsonValue | undefined,
-        postState: input.postState as Prisma.InputJsonValue | undefined,
+        preState: redactRunbookEvidence(input.preState),
+        postState: redactRunbookEvidence(input.postState),
         leaseToken: null,
         leaseExpiresAt: null,
       },
@@ -1118,11 +1148,15 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
 
 export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInput) {
   const input = agentArtifactSchema.parse(raw);
-  const content = Buffer.from(input.contentBase64, 'base64');
+  let content = Buffer.from(input.contentBase64, 'base64');
   if (content.length === 0 || content.length > 10 * 1024 * 1024) {
     throw new Error('Compressed artifact must be between 1 byte and 10 MiB.');
   }
   if (sha256(content) !== input.sha256) throw new Error('Artifact checksum does not match.');
+  const sanitized = await sanitizeCompressedArtifact(content);
+  content = sanitized.content;
+  input.sha256 = sha256(content);
+  input.truncated ||= sanitized.truncated;
   return prisma.$transaction(async tx => {
     const existing = await tx.runbookArtifact.findFirst({
       where: {
@@ -1151,7 +1185,7 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
             leaseExpiresAt: { gt: now },
             executionStep: {
               execution: {
-                deadlineAt: { gt: now },
+                status: { in: ['RUNNING', 'WAITING_AGENT', 'CANCEL_REQUESTED'] },
               },
             },
           },

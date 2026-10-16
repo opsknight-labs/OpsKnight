@@ -1,25 +1,14 @@
 'use client';
+/* eslint-disable security/detect-object-injection -- step types and risk levels are closed union keys */
 
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { stepRequiresApproval } from '@/lib/runbooks/safety';
-import {
-  ArrowDown,
-  ArrowUp,
-  Copy,
-  Plus,
-  Trash2,
-  AlertCircle,
-  ShieldAlert,
-  CheckCircle2,
-} from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, Copy, GripVertical, Lock, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
-import { FormSelect } from '../RunbookControls';
-import {
-  RUNBOOK_STEP_TYPES,
-  type RunbookStepDefinition,
-  type RunbookStepType,
-} from '@/lib/runbooks/types';
+import { cn } from '@/lib/utils';
+import type { RunbookStepDefinition, RunbookStepType } from '@/lib/runbooks/types';
+import AddStepMenu from './AddStepMenu';
+import { RISK_META, STEP_CATALOG } from './step-catalog';
 
 interface StepNavigatorProps {
   steps: RunbookStepDefinition[];
@@ -46,204 +35,250 @@ export default function StepNavigator({
   onRemoveStep,
   onAddStep,
 }: StepNavigatorProps) {
-  const [newStepType, setNewStepType] = useState<RunbookStepType>('SYSTEMD');
+  const [announcement, setAnnouncement] = useState('');
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const listRef = useRef<HTMLOListElement>(null);
+  const label = (step: RunbookStepDefinition | undefined) => step?.name || 'Untitled step';
+
+  const move = (index: number, offset: number) => {
+    const target = index + offset;
+    if (target < 0 || target >= steps.length || offset === 0) return;
+    onMoveStep(index, offset);
+    setAnnouncement(
+      `Moved ${label(steps.at(index))} to position ${target + 1} of ${steps.length}.`
+    );
+  };
+
+  const focusStep = (index: number) =>
+    listRef.current
+      ?.querySelectorAll<HTMLButtonElement>('button[data-step-select]')
+      .item(index)
+      ?.focus();
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const offset = event.key === 'ArrowUp' ? -1 : 1;
+    if (event.altKey && !readOnly) move(index, offset);
+    else focusStep(Math.min(steps.length - 1, Math.max(0, index + offset)));
+  };
 
   return (
     <nav
       aria-label="Runbook steps navigation"
-      className="flex flex-col h-full rounded-xl border bg-card/60 shadow-2xs overflow-hidden"
+      className="flex flex-col overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs"
     >
-      <div className="flex items-center justify-between border-b px-3 sm:px-4 py-2 sm:py-3 bg-muted/20">
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <div>
-          <h3 className="font-semibold text-xs tracking-wider uppercase text-muted-foreground">
-            Workflow Steps
-          </h3>
-          <span className="text-xs text-muted-foreground font-medium">
-            {steps.length} {steps.length === 1 ? 'step' : 'steps'} configured
-          </span>
+          <h3 className="!text-sm !leading-snug font-semibold text-foreground">Steps</h3>
+          <p className="text-xs text-muted-foreground">
+            <span className="tabular-nums">{steps.length}</span>{' '}
+            {steps.length === 1 ? 'step runs' : 'steps run'} top to bottom
+          </p>
         </div>
+        {!readOnly && steps.length > 1 && (
+          <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground xl:inline">
+            Alt + ↑↓ to reorder
+          </kbd>
+        )}
       </div>
 
       <ol
+        ref={listRef}
         aria-label="Runbook steps"
-        className="flex-1 overflow-y-auto p-1.5 sm:p-2 space-y-1.5 list-none max-h-40 sm:max-h-56 lg:max-h-[calc(100vh-16rem)]"
-        tabIndex={0}
+        className="max-h-56 flex-1 list-none space-y-1 overflow-y-auto p-2 sm:max-h-72 lg:max-h-[calc(100vh-18rem)]"
       >
         {steps.map((step, index) => {
           const isSelected = index === selectedIndex;
           const errors = stepErrors.get(index);
-          const hasErrors = errors && Object.keys(errors).length > 0;
+          const errorTotal = errors ? Object.keys(errors).length : 0;
           const isApprovalRequired = stepRequiresApproval(step);
-          const hasNestedChecks = Boolean(
-            (step.precheck?.steps && step.precheck.steps.length > 0) ||
-            (step.verification?.steps && step.verification.steps.length > 0)
-          );
+          const catalog = STEP_CATALOG[step.type];
+          const TypeIcon = catalog.icon;
+          const risk = RISK_META[step.riskClass];
+          const beforeCount = step.precheck?.steps.length ?? 0;
+          const afterCount = step.verification?.steps.length ?? 0;
+          const isDropTarget = dragIndex !== null && dropIndex === index && dragIndex !== index;
 
           return (
-            <li key={stepIdentities.at(index) ?? step.key} className="list-none">
+            <li
+              key={stepIdentities.at(index) ?? step.key}
+              className="list-none"
+              onDragOver={event => {
+                if (dragIndex === null) return;
+                event.preventDefault();
+                setDropIndex(index);
+              }}
+              onDrop={event => {
+                event.preventDefault();
+                if (dragIndex !== null) move(dragIndex, index - dragIndex);
+                setDragIndex(null);
+                setDropIndex(null);
+              }}
+            >
               <div
-                className={`group relative flex flex-col rounded-lg border p-2.5 transition-all text-left ${
+                className={cn(
+                  'group relative flex items-stretch gap-1 rounded-xl border transition-all',
                   isSelected
-                    ? 'border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/20'
-                    : 'border-border/60 hover:border-border hover:bg-muted/40'
-                }`}
+                    ? 'border-primary/50 bg-primary/10 shadow-xs'
+                    : 'border-transparent hover:border-border/80 hover:bg-muted/40',
+                  isDropTarget && 'border-dashed border-primary',
+                  dragIndex === index && 'opacity-50'
+                )}
               >
-                {/* Semantic selection button */}
+                {!readOnly && (
+                  <span
+                    draggable
+                    onDragStart={event => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      setDragIndex(index);
+                    }}
+                    onDragEnd={() => {
+                      setDragIndex(null);
+                      setDropIndex(null);
+                    }}
+                    title="Drag to reorder"
+                    aria-hidden="true"
+                    className="hidden cursor-grab items-center pl-1 text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing sm:flex"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </span>
+                )}
                 <button
                   type="button"
+                  data-step-select
                   aria-current={isSelected ? 'step' : undefined}
-                  aria-label={`Step ${index + 1}: ${step.name || 'Untitled step'}`}
+                  aria-label={`Step ${index + 1}: ${label(step)}`}
+                  aria-keyshortcuts={readOnly ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
                   onClick={() => onSelectStep(index)}
-                  className="flex flex-col text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded p-0.5 cursor-pointer"
+                  onKeyDown={event => handleKeyDown(event, index)}
+                  className="flex min-w-0 flex-1 items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <div className="flex items-start justify-between gap-2 w-full">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                          isSelected
-                            ? 'bg-primary text-primary-foreground'
-                            : hasErrors
-                              ? 'bg-destructive/20 text-destructive font-bold'
-                              : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        {index + 1}
+                  <span
+                    className={cn(
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums',
+                      isSelected
+                        ? 'bg-primary text-primary-foreground'
+                        : errorTotal > 0
+                          ? 'bg-destructive/15 text-destructive'
+                          : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="truncate text-sm font-medium text-foreground">
+                      {step.name || (
+                        <em className="font-normal text-muted-foreground">Untitled step</em>
+                      )}
+                    </h4>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <TypeIcon className="h-3 w-3" aria-hidden="true" />
+                        {catalog.label}
                       </span>
-                      <h4 className="truncate text-xs font-semibold text-foreground">
-                        {step.name || (
-                          <em className="text-muted-foreground font-normal">Untitled step</em>
-                        )}
-                      </h4>
-                    </div>
-
-                    {hasErrors ? (
-                      <span
-                        title={`${Object.keys(errors).length} validation issues`}
-                        className="text-destructive shrink-0"
-                      >
-                        <AlertCircle className="h-4 w-4" />
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className={cn('h-1.5 w-1.5 rounded-full', risk.dot)}
+                          aria-hidden="true"
+                        />
+                        {risk.label}
                       </span>
-                    ) : isSelected ? (
-                      <CheckCircle2 className="h-4 w-4 text-primary shrink-0 opacity-80" />
-                    ) : null}
+                      {isApprovalRequired && (
+                        <span
+                          className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400"
+                          title="Needs human approval before it runs"
+                        >
+                          <Lock className="h-3 w-3" aria-hidden="true" />
+                          Approval
+                        </span>
+                      )}
+                    </span>
+                    {(beforeCount > 0 || afterCount > 0) && (
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                        Before: {beforeCount} · After: {afterCount}
+                      </span>
+                    )}
                   </div>
-
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] py-0 px-1.5 uppercase font-mono"
+                  {errorTotal > 0 && (
+                    <span
+                      className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-destructive"
+                      title={`${errorTotal} validation ${errorTotal === 1 ? 'issue' : 'issues'}`}
                     >
-                      {step.type.replaceAll('_', ' ')}
-                    </Badge>
-
-                    {step.riskClass === 'NON_IDEMPOTENT' ? (
-                      <Badge variant="destructive" className="text-[10px] py-0 px-1.5">
-                        MUTATION
-                      </Badge>
-                    ) : step.riskClass === 'IDEMPOTENT_WRITE' ? (
-                      <Badge variant="warning" className="text-[10px] py-0 px-1.5">
-                        WRITE
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
-                        READ
-                      </Badge>
-                    )}
-
-                    {isApprovalRequired && (
-                      <span
-                        title="Human approval required before execution"
-                        className="flex items-center gap-0.5 rounded px-1 text-[10px] font-medium bg-warning/20 text-warning-foreground"
-                      >
-                        <ShieldAlert className="h-3 w-3 text-warning" />
-                        GATE
+                      <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span className="tabular-nums">{errorTotal}</span>
+                      <span className="sr-only">
+                        {' '}
+                        validation {errorTotal === 1 ? 'issue' : 'issues'}
                       </span>
-                    )}
-
-                    {hasNestedChecks && (
-                      <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
-                        Has safety checks
-                      </span>
-                    )}
-                  </div>
-
-                  {hasNestedChecks && (
-                    <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      Before: {step.precheck?.steps.length ?? 0} · After:{' '}
-                      {step.verification?.steps.length ?? 0}
-                    </p>
+                    </span>
                   )}
                 </button>
 
-                {hasNestedChecks && (
-                  <details className="mt-2 text-xs">
-                    <summary className="min-h-11 cursor-pointer py-3">
-                      Before and after checks
-                    </summary>
-                    <ul className="space-y-1 pl-3">
-                      {['precheck', 'verification'].flatMap(phase => {
-                        const checks =
-                          phase === 'precheck' ? step.precheck?.steps : step.verification?.steps;
-                        return (checks ?? []).map(check => (
-                          <li key={check.key} className="break-words">
-                            {phase === 'precheck' ? 'Before' : 'After'}: {check.name} ·{' '}
-                            {check.type.replaceAll('_', ' ')}
-                          </li>
-                        ));
-                      })}
-                    </ul>
-                  </details>
-                )}
-                {/* Separate Actions Toolbar */}
                 {!readOnly && (
-                  <div className="mt-2 flex items-center justify-end gap-1 border-t border-border/40 pt-1.5">
-                    <div className="flex items-center gap-0.5">
+                  <div
+                    className={cn(
+                      'flex shrink-0 items-center gap-0.5 pr-1 transition-opacity',
+                      !isSelected &&
+                        'lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100'
+                    )}
+                  >
+                    <div className="flex flex-col">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-11 w-11 sm:h-8 sm:w-8"
+                        className="h-7 w-7 max-sm:h-11 max-sm:w-11"
                         title={`Move ${step.name} up`}
                         aria-label={`Move ${step.name} up`}
                         disabled={index === 0}
-                        onClick={() => onMoveStep(index, -1)}
+                        onClick={() => move(index, -1)}
                       >
-                        <ArrowUp className="h-3 w-3" />
+                        <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-11 w-11 sm:h-8 sm:w-8"
+                        className="h-7 w-7 max-sm:h-11 max-sm:w-11"
                         title={`Move ${step.name} down`}
                         aria-label={`Move ${step.name} down`}
                         disabled={index === steps.length - 1}
-                        onClick={() => onMoveStep(index, 1)}
+                        onClick={() => move(index, 1)}
                       >
-                        <ArrowDown className="h-3 w-3" />
+                        <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
+                    </div>
+                    <div className="flex flex-col">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-11 w-11 sm:h-8 sm:w-8"
+                        className="h-7 w-7 max-sm:h-11 max-sm:w-11"
                         title={`Duplicate ${step.name}`}
                         aria-label={`Duplicate ${step.name}`}
-                        onClick={() => onDuplicateStep(index)}
+                        onClick={() => {
+                          onDuplicateStep(index);
+                          setAnnouncement(`Duplicated ${label(step)}.`);
+                        }}
                       >
-                        <Copy className="h-3 w-3" />
+                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 text-destructive hover:text-destructive"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive max-sm:h-11 max-sm:w-11"
                         title={`Remove ${step.name}`}
                         aria-label={`Remove ${step.name}`}
                         disabled={steps.length === 1}
-                        onClick={() => onRemoveStep(index)}
+                        onClick={() => {
+                          onRemoveStep(index);
+                          setAnnouncement(`Removed ${label(step)}. Discard changes to undo.`);
+                        }}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -254,28 +289,20 @@ export default function StepNavigator({
         })}
       </ol>
 
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
       {!readOnly && (
-        <div className="border-t bg-muted/20 p-2.5 space-y-2">
-          <FormSelect
-            name="nav-add-step-type"
-            label="Step type"
-            value={newStepType}
-            onValueChange={(v: string) => setNewStepType(v as RunbookStepType)}
-            options={RUNBOOK_STEP_TYPES.map(type => ({
-              value: type,
-              label: type.replaceAll('_', ' '),
-            }))}
+        <div className="border-t p-2.5">
+          <AddStepMenu
+            onAddStep={type => {
+              onAddStep(type);
+              setAnnouncement(
+                `Added ${STEP_CATALOG[type].label} step at position ${steps.length + 1}.`
+              );
+            }}
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full text-xs font-semibold"
-            onClick={() => onAddStep(newStepType)}
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Add Step
-          </Button>
         </div>
       )}
     </nav>

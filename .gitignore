@@ -103,3 +103,10 @@ test-results/
 
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
+
+# REST SDK build and Python caches
+/sdk/typescript/dist/
+/sdk/python/build/
+/sdk/python/*.egg-info/
+__pycache__/
+*.pyc

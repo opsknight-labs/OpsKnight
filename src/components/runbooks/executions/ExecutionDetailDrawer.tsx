@@ -3,7 +3,7 @@
 import React from 'react';
 import { TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import Link from 'next/link';
-import { ArrowUpRight, ExternalLink, Layers } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, ExternalLink } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -13,8 +13,13 @@ import {
 } from '@/components/ui/shadcn/sheet';
 import { Button } from '@/components/ui/shadcn/button';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
+import { KeyValueGrid } from '../ui/primitives';
 import { ExecutionProgressBar } from './ExecutionProgressBar';
+import { ExecutionRerunPanel } from './ExecutionRerunPanel';
+import { StepStatusIcon } from './StepStatusIcon';
+import { executionDurationSeconds, formatDurationSeconds } from './format';
 import { formatDateTime } from '@/lib/timezone';
+import { isTerminalExecutionStatus, type RunbookExecutionStatus } from '@/lib/runbooks/types';
 
 export type ExecutionItemData = {
   id: string;
@@ -34,6 +39,7 @@ export type ExecutionItemData = {
   totalSteps: number;
   completedSteps: number;
   failedStepName?: string | null;
+  rerunBlockedReason?: string | null;
   steps?: Array<{
     id: string;
     stepKey: string;
@@ -49,6 +55,8 @@ export type ExecutionDetailDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userTimeZone: string;
+  nowIso?: string;
+  canExecute?: boolean;
 };
 
 export function ExecutionDetailDrawer({
@@ -56,192 +64,173 @@ export function ExecutionDetailDrawer({
   open,
   onOpenChange,
   userTimeZone,
+  nowIso,
+  canExecute = false,
 }: ExecutionDetailDrawerProps) {
   if (!execution) return null;
 
-  const durationSec = execution.startedAt
-    ? Math.max(
-        0,
-        Math.round(
-          ((execution.completedAt ? new Date(execution.completedAt) : new Date()).getTime() -
-            new Date(execution.startedAt).getTime()) /
-            1000
-        )
-      )
-    : null;
-
-  const durationText =
-    durationSec !== null
-      ? durationSec >= 60
-        ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
-        : `${durationSec}s`
-      : 'Not started';
+  const durationText = formatDurationSeconds(
+    executionDurationSeconds(
+      execution.startedAt,
+      execution.completedAt,
+      nowIso ?? execution.completedAt ?? execution.startedAt ?? execution.createdAt
+    )
+  );
+  const terminal = isTerminalExecutionStatus(execution.status as RunbookExecutionStatus);
+  const fmt = (value: string) => formatDateTime(value, userTimeZone, { format: 'datetime' });
+  const target = execution.resolvedTargetAgent
+    ? `Agent · ${execution.resolvedTargetAgent.name}`
+    : execution.resolvedTargetAgentPool
+      ? `Pool · ${execution.resolvedTargetAgentPool.name}`
+      : 'Control plane';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-6 space-y-6">
-        <SheetHeader className="space-y-2 pb-4 border-b">
-          <div className="flex items-center justify-between gap-3">
+      <SheetContent className="w-full space-y-5 overflow-y-auto p-6 sm:max-w-xl">
+        <SheetHeader className="space-y-2 border-b pb-4 text-left">
+          <div className="flex items-center justify-between gap-3 pr-8">
             <RunbookStatusBadge status={execution.status} />
-            <span className="font-mono text-xs text-muted-foreground select-all">
+            <span
+              className="select-all truncate font-mono text-[11px] text-muted-foreground"
+              title={execution.id}
+            >
               {execution.id}
             </span>
           </div>
-          <SheetTitle className="text-xl font-bold tracking-tight">
+          <SheetTitle
+            className="truncate text-xl font-semibold tracking-tight"
+            title={execution.runbook.name}
+          >
             {execution.runbook.name}
           </SheetTitle>
           <SheetDescription className="text-xs text-muted-foreground">
-            Version {execution.runbookVersion.version} · Executed via OpsKnight Automation Engine
+            Version {execution.runbookVersion.version}
+            {execution.service ? ` · ${execution.service.name}` : ''}
           </SheetDescription>
         </SheetHeader>
 
-        <Button asChild className="w-full"><Link href={`/runbooks/executions/${execution.id}`}>Open full execution <ArrowUpRight className="ml-2 h-4 w-4" /></Link></Button>
-        {/* Primary Operational Meta */}
-        <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-3.5 text-xs">
-          <div>
-            <span className="text-muted-foreground block text-[11px]">Service</span>
-            <span className="font-semibold text-foreground">
-              {execution.service?.name || 'Unbound execution'}
-            </span>
-          </div>
-          <div>
-            <span className="text-muted-foreground block text-[11px]">Trigger Source</span>
-            <span className="font-medium text-foreground">
-              {execution.triggeredByType ? TRIGGER_LABELS[execution.triggeredByType] : 'Not reported'}{execution.triggeredByUser ? ` (${execution.triggeredByUser.name})` : ''}
-            </span>
-          </div>
-          <div>
-            <span className="text-muted-foreground block text-[11px]">Execution Target</span>
-            <span className="font-medium text-foreground">
-              {execution.resolvedTargetAgent
-                ? `Agent · ${execution.resolvedTargetAgent.name}`
-                : execution.resolvedTargetAgentPool
-                ? `Pool · ${execution.resolvedTargetAgentPool.name}`
-                : 'Control plane'}
-            </span>
-          </div>
-          <div>
-            <span className="text-muted-foreground block text-[11px]">Duration</span>
-            <span className="font-medium text-foreground">{durationText}</span>
-          </div>
-        </div>
-
-        {/* Incident Linking Card */}
-        {execution.incidentId && (
-          <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
-            <div className="space-y-0.5">
-              <span className="font-semibold text-primary">Attached Incident</span>
-              <p className="text-muted-foreground">
-                {execution.incidentTitle || `Incident ID ${execution.incidentId.slice(0, 10)}...`}
-              </p>
-            </div>
-            <Button asChild size="sm" variant="default" className="gap-1 h-8 text-xs">
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" className="gap-1.5">
+            <Link href={`/runbooks/executions/${execution.id}`}>
+              Open full execution <ArrowUpRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </Button>
+          {execution.incidentId && (
+            <Button asChild size="sm" variant="outline" className="gap-1.5">
               <Link href={`/incidents/${execution.incidentId}?tab=runbooks`}>
-                <span>View Incident</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
+                View incident <ArrowUpRight className="h-4 w-4" aria-hidden />
               </Link>
             </Button>
-          </div>
-        )}
+          )}
+          <Button asChild size="sm" variant="ghost" className="gap-1.5">
+            <Link href={`/runbooks/${execution.runbook.id}`}>
+              Inspect runbook <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </Button>
+        </div>
 
-        {/* Progress & Steps Summary */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold flex items-center gap-1.5">
-              <Layers className="h-4 w-4 text-muted-foreground" />
-              <span>Execution Steps</span>
-            </h4>
-            <span className="text-xs text-muted-foreground">
-              {execution.completedSteps} of {execution.totalSteps} complete
-            </span>
-          </div>
-
-          <ExecutionProgressBar
-            totalSteps={execution.totalSteps}
-            completedSteps={execution.completedSteps}
-            status={execution.status}
-            showLabel={false}
-            className="max-w-none"
-          />
+        <section
+          aria-label="Progress"
+          className="space-y-3 rounded-xl border bg-card p-4 shadow-xs"
+        >
+          {execution.totalSteps > 0 ? (
+            <ExecutionProgressBar
+              totalSteps={execution.totalSteps}
+              completedSteps={execution.completedSteps}
+              status={execution.status}
+              size="lg"
+              className="max-w-none"
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">No steps reported yet.</p>
+          )}
 
           {execution.failedStepName && (
-            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400">
-              <span className="font-semibold block">Step requires attention:</span>
-              <span>{execution.failedStepName}</span>
-            </div>
+            <p className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-700 dark:text-rose-300">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                Step requires attention:{' '}
+                <span className="font-mono font-medium">{execution.failedStepName}</span>
+              </span>
+            </p>
           )}
 
           {execution.steps && execution.steps.length > 0 ? (
-            <div className="divide-y rounded-lg border bg-card">
+            <ol aria-label="Steps" className="relative space-y-0.5">
               {execution.steps.map((st, i) => (
-                <div key={st.id || i} className="flex items-center justify-between p-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-muted-foreground">{i + 1}.</span>
-                    <span className="font-medium">{st.stepKey}</span>
-                  </div>
+                <li key={st.id || i} className="relative flex items-center gap-3 py-1.5 text-xs">
+                  {i < execution.steps!.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[9px] top-6 h-[calc(100%-0.75rem)] w-px bg-border"
+                    />
+                  )}
+                  <span className="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-background">
+                    <StepStatusIcon status={st.status} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium" title={st.stepKey}>
+                    {st.stepKey}
+                  </span>
                   <RunbookStatusBadge status={st.status} size="sm" />
-                </div>
+                </li>
               ))}
-            </div>
+            </ol>
           ) : (
-            <div className="rounded-lg border bg-card/60 p-4 text-center text-xs text-muted-foreground">
-              Step traces are streaming live or available in the incident command center.
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Step details appear here once the run starts.
+            </p>
           )}
-        </div>
+        </section>
 
-        {/* Timestamps */}
-        <div className="space-y-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-          <div className="flex justify-between">
-            <span>Queued</span>
-            <span className="font-mono">
-              {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
-            </span>
-          </div>
-          {execution.startedAt && (
-            <div className="flex justify-between">
-              <span>Started</span>
-              <span className="font-mono">
-                {formatDateTime(execution.startedAt, userTimeZone, { format: 'datetime' })}
-              </span>
-            </div>
-          )}
-          {execution.completedAt && (
-            <div className="flex justify-between">
-              <span>Completed</span>
-              <span className="font-mono">
-                {formatDateTime(execution.completedAt, userTimeZone, { format: 'datetime' })}
-              </span>
-            </div>
-          )}
-        </div>
+        <KeyValueGrid
+          className="rounded-xl border bg-card p-4 shadow-xs"
+          items={[
+            { label: 'Service', value: execution.service?.name || 'No service' },
+            {
+              label: 'Trigger',
+              value: `${execution.triggeredByType ? TRIGGER_LABELS[execution.triggeredByType] : 'Not reported'}${execution.triggeredByUser ? ` · ${execution.triggeredByUser.name}` : ''}`,
+            },
+            { label: 'Target', value: target },
+            { label: 'Duration', value: <span className="tabular-nums">{durationText}</span> },
+            {
+              label: 'Queued',
+              value: <span className="tabular-nums">{fmt(execution.createdAt)}</span>,
+            },
+            {
+              label: 'Started',
+              value: (
+                <span className="tabular-nums">
+                  {execution.startedAt ? fmt(execution.startedAt) : 'Not started'}
+                </span>
+              ),
+            },
+            ...(execution.completedAt
+              ? [
+                  {
+                    label: 'Completed',
+                    value: <span className="tabular-nums">{fmt(execution.completedAt)}</span>,
+                  },
+                ]
+              : []),
+            ...(execution.incidentId
+              ? [
+                  {
+                    label: 'Incident',
+                    value: execution.incidentTitle || 'View incident',
+                    wide: true,
+                  },
+                ]
+              : []),
+          ]}
+        />
 
-        {/* Footer Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm" className="gap-1 text-xs">
-              <Link href={`/runbooks/${execution.runbook.id}`}>
-                <span>Inspect Runbook</span>
-                <ExternalLink className="h-3 w-3" />
-              </Link>
-            </Button>
-            <Button asChild variant="secondary" size="sm" className="gap-1 text-xs">
-              <Link href={`/runbooks/executions/${execution.id}`}>
-                <span>Diagnostics</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
-
-          {execution.incidentId && (
-            <Button asChild size="sm" className="gap-1 text-xs">
-              <Link href={`/incidents/${execution.incidentId}?tab=runbooks`}>
-                <span>Open Incident Console</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          )}
-        </div>
+        {terminal && (
+          <ExecutionRerunPanel
+            executionId={execution.id}
+            blockedReason={execution.rerunBlockedReason ?? null}
+            canExecute={canExecute}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );

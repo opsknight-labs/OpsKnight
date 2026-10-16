@@ -456,7 +456,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   ] = await Promise.allSettled([
     loadRunbookView
       ? getServiceRulePage(id, rulesAfter, prisma, { state: rulesState, search: rulesSearch })
-      : Promise.resolve({ rules: [], hasNext: false, nextCursor: undefined }),
+      : Promise.resolve({ rules: [], hasNext: false, nextCursor: undefined, total: 0 }),
     loadRunbookView
       ? prisma.runbook.findMany({
           where: {
@@ -1329,7 +1329,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
         runbooksCount={
-          runbooksLoadErrors.includes('bindings') ? undefined : serviceAutomationRules.length
+          !loadRunbookView || runbooksLoadErrors.includes('bindings')
+            ? undefined
+            : serviceAutomationRulesResult.status === 'fulfilled'
+              ? serviceAutomationRulesResult.value.total
+              : undefined
         }
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
@@ -1375,7 +1379,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               }))}
               availableAgents={availableRunbookAgents}
               availableAgentPools={availableRunbookAgentPools}
-              canManage={canManageService}
+              canManage={canManageService && hasCapability(actor.role, CAPABILITIES.RUNBOOK_MANAGE)}
               loadErrors={runbooksLoadErrors}
             />
           )

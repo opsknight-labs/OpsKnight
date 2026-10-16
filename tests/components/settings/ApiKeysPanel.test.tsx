@@ -79,6 +79,12 @@ describe('ApiKeysPanel Component', () => {
     expect(within(screen.getByRole('table')).getByText('Expired')).toBeDefined();
   });
 
+  it('uses the friendly machine owner label without exposing its internal email', () => {
+    render(<ApiKeysPanel keys={[{ ...mockKeys[0], ownerLabel: 'Production Deployment', ownerEmail: 'sa_1792166039840_4eaf8d76@serviceaccount.opsknight.local' }]} canCreateWriteKeys={true} />);
+    expect(screen.getByText('Production Deployment')).toBeDefined();
+    expect(screen.queryByText(/@serviceaccount\.opsknight\.local/)).toBeNull();
+  });
+
   it('sends search and status to the server as URL params instead of filtering in the browser', () => {
     const { container } = render(
       <ApiKeysPanel
@@ -141,7 +147,8 @@ describe('ApiKeysPanel Component', () => {
   it('does not offer reserved scopes, which currently grant nothing', () => {
     render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={true} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
-    expect(screen.queryByText(title('runbooks:write'))).toBeNull();
+    expect(screen.getByText(title('runbooks:write'))).toBeVisible();
+    expect(screen.getByText(title('runbooks:publish'))).toBeVisible();
     expect(screen.queryByText(title('users:write'))).toBeNull();
   });
 

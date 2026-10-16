@@ -7,8 +7,9 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
 import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
-import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { StatTile } from '@/components/runbooks/ui/primitives';
+import { Bot, HeartPulse, ListOrdered, Play, ShieldCheck } from 'lucide-react';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { RunbookLiveRefresh } from '@/components/runbooks/RunbookLiveRefresh';
 import {
@@ -91,19 +92,67 @@ export default async function RunbookHealthPage() {
       actionLabel: 'Inspect worker deployment',
     });
 
-  if (health.fleet.unhealthy > 0) {
-    const total = health.fleet.unhealthy;
+  if (health.fleet.offline > 0) {
+    const total = health.fleet.offline;
+    issues.push({
+      id: 'offline-agents',
+      type: 'agent',
+      severity: 'danger',
+      title: `${total} ${total === 1 ? 'Agent' : 'Agents'} Offline`,
+      description:
+        'No heartbeat within 90 seconds. Work targeted at these Agents cannot be claimed until they reconnect.',
+      actionHref: '/runbooks/agents?status=OFFLINE',
+      actionLabel: 'Review offline Agents',
+    });
+  }
+
+  if (health.fleet.degraded > 0) {
+    const total = health.fleet.degraded;
+    issues.push({
+      id: 'degraded-agents',
+      type: 'agent',
+      severity: 'warning',
+      title: `${total} ${total === 1 ? 'Agent' : 'Agents'} Degraded`,
+      description: 'These Agents are connected but report runtime or capability faults.',
+      actionHref: '/runbooks/agents?status=DEGRADED',
+      actionLabel: 'Review degraded Agents',
+    });
+  }
+
+  if (health.fleet.enrolling > 0) {
+    const total = health.fleet.enrolling;
+    issues.push({
+      id: 'enrolling-agents',
+      type: 'agent',
+      severity: 'warning',
+      title: `${total} Pending ${total === 1 ? 'Enrollment' : 'Enrollments'}`,
+      description:
+        'Enrollment tokens were issued but the Agent has not completed its first handshake.',
+      actionHref: '/runbooks/agents?status=ENROLLING',
+      actionLabel: 'Review enrollments',
+    });
+  }
+
+  const otherUnhealthy = Math.max(
+    0,
+    health.fleet.unhealthy - health.fleet.offline - health.fleet.degraded - health.fleet.enrolling
+  );
+  if (otherUnhealthy > 0) {
+    const faulted = unhealthyAgents.filter(agent => agent.lastError || agent.deadLetterDepth > 0);
     issues.push({
       id: 'unhealthy-agents',
       type: 'agent',
       severity: 'danger',
-      title: `${total} ${total === 1 ? 'Agent' : 'Agents'} Requiring Attention`,
+      title: `${otherUnhealthy} ${otherUnhealthy === 1 ? 'Agent' : 'Agents'} Requiring Attention`,
       description:
-        total > 20
-          ? `Showing first 20 of ${total} agents requiring attention: ${unhealthyAgents.map(a => a.name).join(', ')}...`
-          : `Unresponsive heartbeats or dead-letter queue build-ups detected on: ${unhealthyAgents.map(a => a.name).join(', ')}.`,
+        faulted.length > 0
+          ? `Reported errors or dead-letter build-ups detected, including: ${faulted
+              .slice(0, 5)
+              .map(a => a.name)
+              .join(', ')}${faulted.length > 5 ? '…' : '.'}`
+          : 'Reported errors or dead-letter build-ups detected.',
       actionHref: '/runbooks/agents?attention=1',
-      actionLabel: total > 20 ? `View all ${total} agents` : 'Inspect Agents',
+      actionLabel: 'Inspect Agents',
     });
   }
 
@@ -140,8 +189,8 @@ export default async function RunbookHealthPage() {
       title: `${expiredLeases} Expired Execution ${expiredLeases === 1 ? 'Lease' : 'Leases'}`,
       description:
         'Active step lease expired before completion report. System will re-queue or self-fence.',
-      actionHref: '/runbooks/executions',
-      actionLabel: 'Inspect Queue',
+      actionHref: '/runbooks/executions?status=RUNNING',
+      actionLabel: 'Inspect running executions',
     });
   }
 
@@ -176,71 +225,75 @@ export default async function RunbookHealthPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <RunbookLiveRefresh enabled={true} intervalMs={20000} />
-      {/* Compact Header */}
       <RunbookPageHeader
         title="Automation Health"
+        icon={HeartPulse}
         description={`Continuous health surveillance across execution workers, queues and agents. Last evaluated at ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}
         badge={<RunbookStatusBadge status={health.health} context="health" />}
       />
 
-      {/* Modern Metric Strip */}
-      <RunbookMetricStrip
-        stats={[
-          {
-            label: 'Active Executions',
-            value: activeExecutions,
-            tone: typeof activeExecutions === 'number' && activeExecutions > 0 ? 'info' : 'default',
-            subtext: `${activeExecutions} in-flight`,
-          },
-          {
-            label: 'Healthy Fleet',
-            value: `${health.fleet.enrolled - health.fleet.unhealthy}/${health.fleet.enrolled}`,
-            tone: !health.fleet.enrolled
-              ? 'default'
-              : health.fleet.unhealthy === 0
-                ? 'success'
-                : 'danger',
-            subtext: health.fleet.enrolled
-              ? `${health.fleet.unhealthy} require attention`
-              : 'No Agents configured',
-          },
-          {
-            label: 'Queue Pending',
-            value: pending,
-            tone: pending > 20 ? 'warning' : 'default',
-            subtext: `${oldest}s oldest`,
-          },
-          {
-            label: 'Safety Controls',
-            value: attention
-              ? `${issues.length} ${issues.length === 1 ? 'Alert' : 'Alerts'}`
-              : health.health === 'UNKNOWN'
-                ? 'Unknown'
-                : 'Nominal',
-            tone: attention ? 'warning' : health.health === 'UNKNOWN' ? 'default' : 'success',
-            subtext: attention
-              ? 'Action required'
-              : health.health === 'UNKNOWN'
-                ? 'Status unknown'
-                : 'Zero tripped',
-          },
-        ]}
-      />
-
-      {/* Persistent Module Navigation */}
       <RunbookModuleNav summary={navigation} />
 
-      {/* 1. What Needs Attention? */}
       <HealthAttentionPanel
         health={health.health}
         issues={issues}
         agentsCount={health.fleet.enrolled}
-        totalUnhealthy={health.fleet.unhealthy}
       />
 
-      {/* 2. Technical Detail Cards */}
+      <section aria-label="Health indicators" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          label="Active executions"
+          icon={Play}
+          value={activeExecutions}
+          tone={typeof activeExecutions === 'number' && activeExecutions > 0 ? 'info' : 'neutral'}
+          hint={`${activeExecutions} in-flight`}
+          href="/runbooks/executions"
+        />
+        <StatTile
+          label="Healthy fleet"
+          icon={Bot}
+          value={`${health.fleet.enrolled - health.fleet.unhealthy}/${health.fleet.enrolled}`}
+          tone={
+            !health.fleet.enrolled ? 'neutral' : health.fleet.unhealthy === 0 ? 'success' : 'danger'
+          }
+          hint={
+            health.fleet.enrolled
+              ? `${health.fleet.unhealthy} require attention`
+              : 'No Agents configured'
+          }
+          href={health.fleet.unhealthy ? '/runbooks/agents?attention=1' : '/runbooks/agents'}
+        />
+        <StatTile
+          label="Queue pending"
+          icon={ListOrdered}
+          value={pending}
+          tone={pending > 20 ? 'warning' : 'neutral'}
+          hint={`${oldest}s oldest`}
+          href="/runbooks/executions?status=QUEUED"
+        />
+        <StatTile
+          label="Safety controls"
+          icon={ShieldCheck}
+          value={
+            attention
+              ? `${issues.length} ${issues.length === 1 ? 'Alert' : 'Alerts'}`
+              : health.health === 'UNKNOWN'
+                ? 'Unknown'
+                : 'Nominal'
+          }
+          tone={attention ? 'warning' : health.health === 'UNKNOWN' ? 'neutral' : 'success'}
+          hint={
+            attention
+              ? 'Action required'
+              : health.health === 'UNKNOWN'
+                ? 'Status unknown'
+                : 'Zero tripped'
+          }
+        />
+      </section>
+
       <HealthDetailCards
         localWorker={localWorker}
         pending={pending}

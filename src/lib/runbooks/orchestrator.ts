@@ -21,7 +21,8 @@ import {
 } from './definition';
 import { matchesCondition, validateAndMatchTrigger } from './matcher';
 import { redactRunbookDisplayName } from './display-name';
-import { finalizeVerificationEvidence } from './verification-evidence';
+import { finalizeExecutionDeadline } from './deadline';
+import { enqueueVerificationEvidence, finalizeVerificationEvidence } from './verification-evidence';
 import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
@@ -51,6 +52,13 @@ import {
 import { lockRunbookForShare } from './locking';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('FINALIZE_VERIFICATION'),
+      executionId: z.string().cuid(),
+      revision: z.number().int().positive().optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('ADVANCE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('RECONCILE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z
@@ -96,6 +104,11 @@ function executionSteps(definition: ReturnType<typeof parseRunbookDefinition>) {
   return flattenSteps(definition).map((step, sequence) => ({ ...step, sequence }));
 }
 
+/** Server-supplied provenance; never part of the executable request or preview digest. */
+export interface RunbookExecutionAuditContext {
+  apiClientId: string;
+}
+
 export interface RunbookExecutionRequest {
   runbookId: string;
   runbookVersionId?: string;
@@ -111,19 +124,23 @@ export interface RunbookExecutionRequest {
   sourceEventId?: string;
   expectedPlanDigest?: string;
   previewAuthorizationToken?: string;
+  /** Responder-selected target; only accepted for manual runs without a rule or suggestion. */
+  targetAgentId?: string;
+  targetAgentPoolId?: string;
 }
 
 /** Responder entry point. Absence of an actor never authorizes an automatic execution. */
 export async function startRunbookExecution(
   input: RunbookExecutionRequest,
-  externalTx?: Prisma.TransactionClient
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
 ) {
   if (!input.triggeredByUserId || !input.expectedPlanDigest || !input.previewAuthorizationToken) {
     throw new RunbookDefinitionError(
       'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder and preview are required.'
     );
   }
-  const result = await prepareRunbookExecution(input, false, 'MANUAL', externalTx);
+  const result = await prepareRunbookExecution(input, false, 'MANUAL', externalTx, auditContext);
   if (!('id' in result)) throw new Error('Execution was not created.');
   return result;
 }
@@ -180,7 +197,8 @@ async function prepareRunbookExecution(
   input: RunbookExecutionRequest,
   previewOnly: boolean,
   mode: 'MANUAL' | 'AUTOMATIC',
-  externalTx?: Prisma.TransactionClient
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
 ) {
   const runner = async (tx: Prisma.TransactionClient) => {
     await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
@@ -335,12 +353,36 @@ async function prepareRunbookExecution(
     if (planSnapshot && planSnapshot.definitionChecksum !== version.checksum)
       throw new RunbookDefinitionError('Suggested definition checksum changed.');
     const steps = executionSteps(definition);
+    const targetOverride = Boolean(input.targetAgentId || input.targetAgentPoolId);
+    if (targetOverride) {
+      if (mode !== 'MANUAL' || binding || planSnapshot || !input.triggeredByUserId)
+        throw new RunbookDefinitionError(
+          'TARGET_OVERRIDE_NOT_ALLOWED: service rules and suggestions use their reviewed target.'
+        );
+      if (input.targetAgentId && input.targetAgentPoolId)
+        throw new RunbookDefinitionError(
+          'Select either a specific Agent or an Agent pool, not both.'
+        );
+      const target = input.targetAgentId
+        ? await tx.runbookAgent.findFirst({
+            where: { id: input.targetAgentId, status: { not: 'REVOKED' } },
+            select: { id: true },
+          })
+        : await tx.runbookAgentPool.findUnique({
+            where: { id: input.targetAgentPoolId },
+            select: { id: true },
+          });
+      if (!target)
+        throw new RunbookDefinitionError(
+          'TARGET_NOT_FOUND: the selected Agent or Agent pool is unavailable.'
+        );
+    }
     let resolvedTargetAgentId = planSnapshot
       ? planSnapshot.agentId
-      : (binding?.defaultAgentId ?? null);
+      : (binding?.defaultAgentId ?? input.targetAgentId ?? null);
     const resolvedTargetAgentPoolId = planSnapshot
       ? planSnapshot.agentPoolId
-      : (binding?.defaultAgentPoolId ?? null);
+      : (binding?.defaultAgentPoolId ?? input.targetAgentPoolId ?? null);
     if (
       steps.some(step => requiresAgent(step.type)) &&
       !resolvedTargetAgentId &&
@@ -827,10 +869,12 @@ async function prepareRunbookExecution(
     await logAudit(
       {
         action: 'runbook.execution.started',
+        ...(auditContext ? { source: 'API' as const } : {}),
         entityType: 'RUNBOOK_EXECUTION',
         entityId: execution.id,
         actorId: input.triggeredByUserId,
         details: {
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
           runbookId: runbook.id,
           versionId: version.id,
           previewGrant: authorization
@@ -1332,6 +1376,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_FAILED',
               'Runbook execution failed due to an unknown step outcome during cancellation.'
             );
+            await enqueueVerificationEvidence(tx, executionId);
           }
         } else {
           const cancelled = await tx.runbookExecution.updateMany({
@@ -1345,6 +1390,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_CANCELLED',
               'Runbook execution cancelled.'
             );
+            await enqueueVerificationEvidence(tx, executionId);
           }
         }
       }
@@ -1352,122 +1398,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
     return;
   }
   if (execution.deadlineAt <= new Date()) {
-    await prisma.$transaction(async tx => {
-      await tx.runbookStepAttempt.updateMany({
-        where: {
-          executionStep: { executionId },
-          status: { in: ['PENDING', 'CLAIMED'] },
-        },
-        data: {
-          status: 'TIMED_OUT',
-          completedAt: new Date(),
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          status: { in: ['PENDING', 'READY', 'WAITING_APPROVAL', 'WAITING_AGENT'] },
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'WAIT',
-          status: 'RUNNING',
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'HTTP',
-          status: 'RUNNING',
-          riskClass: 'READ_ONLY',
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'HTTP',
-          status: 'RUNNING',
-          riskClass: { not: 'READ_ONLY' },
-        },
-        data: {
-          status: 'UNKNOWN',
-          completedAt: new Date(),
-          errorCode: 'TIMED_OUT_WITH_UNKNOWN_OUTCOME',
-          outputPreview:
-            'Execution timed out while HTTP write operation was in flight; outcome is unknown.',
-        },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          status: 'RUNNING',
-          type: {
-            notIn: ['HTTP', 'WAIT', 'LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'],
-          },
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      const active = await tx.runbookStepAttempt.count({
-        where: { executionStep: { executionId }, status: 'RUNNING' },
-      });
-      if (active === 0) {
-        const hasUnknown = await tx.runbookExecutionStep.count({
-          where: { executionId, status: 'UNKNOWN' },
-        });
-        if (hasUnknown > 0) {
-          const failed = await tx.runbookExecution.updateMany({
-            where: {
-              id: executionId,
-              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-            },
-            data: {
-              status: 'FAILED',
-              completedAt: new Date(),
-              failureCode: 'UNKNOWN_OUTCOME',
-              failureMessage:
-                'Execution timed out while one or more write steps had unverified outcomes.',
-            },
-          });
-          if (failed.count === 1) {
-            await addIncidentRunbookEvent(
-              tx,
-              execution.incidentId,
-              'RUNBOOK_FAILED',
-              'Runbook execution timed out with an unverified write outcome.'
-            );
-            await finalizeVerificationEvidence(tx, executionId);
-          }
-        } else {
-          const timedOut = await tx.runbookExecution.updateMany({
-            where: {
-              id: executionId,
-              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-            },
-            data: {
-              status: 'TIMED_OUT',
-              completedAt: new Date(),
-              failureCode: 'EXECUTION_TIMEOUT',
-            },
-          });
-          if (timedOut.count === 1) {
-            await addIncidentRunbookEvent(
-              tx,
-              execution.incidentId,
-              'RUNBOOK_FAILED',
-              'Runbook execution timed out.'
-            );
-            await finalizeVerificationEvidence(tx, executionId);
-          }
-        }
-      }
-    });
+    await prisma.$transaction(tx => finalizeExecutionDeadline(tx, executionId));
     return;
   }
   const failed = execution.steps.find(
@@ -1495,7 +1426,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_FAILED',
           `Runbook failed at step: ${failed.name}`
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1517,7 +1448,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_COMPLETED',
           'Runbook execution completed.'
         );
-        await finalizeVerificationEvidence(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1661,35 +1592,60 @@ export async function approveExecutionStep(input: {
   });
 }
 
-export async function cancelExecution(executionId: string, actorId: string, reason?: string) {
-  await prisma.$transaction(async tx => {
+export async function cancelExecution(
+  executionId: string,
+  actorId: string,
+  reason?: string,
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
+) {
+  const command = async (tx: Prisma.TransactionClient) => {
     const result = await tx.runbookExecution.updateMany({
       where: {
         id: executionId,
-        status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+        status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'PAUSED'] },
       },
       data: { status: 'CANCEL_REQUESTED', cancelRequestedAt: new Date(), failureMessage: reason },
     });
-    if (result.count !== 1)
+    if (result.count !== 1) {
+      const existing = await tx.runbookExecution.findUnique({
+        where: { id: executionId },
+        select: { status: true },
+      });
+      // Natural idempotence applies across different HTTP retry keys and UI/API callers.
+      if (existing?.status === 'CANCEL_REQUESTED') return;
       throw new RunbookExecutionInvalidTransitionError(executionId, 'TERMINAL', 'CANCEL_REQUESTED');
+    }
     await enqueueAdvance(tx, executionId);
     await logAudit(
       {
         action: 'runbook.execution.cancel.requested',
+        ...(auditContext ? { source: 'API' as const } : {}),
         entityType: 'RUNBOOK_EXECUTION',
         entityId: executionId,
         actorId,
-        details: { reason: reason ?? null },
+        details: {
+          reason: reason ?? null,
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
+        },
       },
       tx
     );
-  });
+  };
+  if (externalTx) return command(externalTx);
+  return prisma.$transaction(command);
 }
 
 export async function processRunbookJob(raw: unknown): Promise<void> {
   const payload = jobPayloadSchema.parse(raw);
   if (payload.kind === 'ADVANCE_EXECUTION' || payload.kind === 'RECONCILE_EXECUTION') {
     await advanceExecution(payload.executionId);
+    return;
+  }
+  if (payload.kind === 'FINALIZE_VERIFICATION') {
+    await prisma.$transaction(tx =>
+      finalizeVerificationEvidence(tx, payload.executionId, payload.revision)
+    );
     return;
   }
   const { evaluateIncidentTriggers } = await import('./triggers');

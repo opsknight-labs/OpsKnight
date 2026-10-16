@@ -4,18 +4,58 @@ import { flattenSteps, parseRunbookDefinition, resolveInputTemplates } from './d
 import { compareEvidence, runbookEvidenceSchema } from './evidence';
 import { requiresAgent } from './types';
 
-export async function finalizeVerificationEvidence(
+/** Enqueue inside the state transaction; evidence parsing runs only after it commits. */
+export async function enqueueVerificationEvidence(
   tx: Prisma.TransactionClient,
   executionId: string
 ) {
+  // Called only by a successful terminal-state CAS, in that same transaction. A new
+  // revision gets its own job; never mutate a previous worker's processing/completed row.
+  const execution = await tx.runbookExecution.update({
+    where: { id: executionId },
+    data: { verificationRevision: { increment: 1 } },
+    select: { verificationRevision: true },
+  });
+  const revision = execution.verificationRevision;
+  const id = `runbook-verification:${executionId}:${revision}`;
+  await tx.backgroundJob.create({
+    data: {
+      id,
+      type: 'RUNBOOK',
+      status: 'PENDING',
+      scheduledAt: new Date(),
+      maxAttempts: 8,
+      payload: { kind: 'FINALIZE_VERIFICATION', executionId, revision },
+    },
+  });
+}
+
+export async function finalizeVerificationEvidence(
+  tx: Prisma.TransactionClient,
+  executionId: string,
+  revision?: number
+) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-verification:${executionId}`}))`;
+  // Serialize the snapshot with late-result recovery before touching step evidence.
+  await tx.$executeRaw`SELECT id FROM "RunbookExecution" WHERE id = ${executionId} FOR UPDATE`;
   const execution = await tx.runbookExecution.findUniqueOrThrow({
     where: { id: executionId },
     include: {
-      runbookVersion: true,
       steps: { include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } } },
     },
   });
-  const definition = parseRunbookDefinition(execution.runbookVersion.definition);
+  if (revision !== undefined && execution.verificationRevision !== revision) return;
+  if (!['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(execution.status)) return;
+  const version = await tx.runbookVersion.findUnique({ where: { id: execution.runbookVersionId } });
+  // These errors are recorded/retried by the durable job worker. Do not include historical input
+  // in the error, and never couple a verification failure to authoritative terminal state.
+  if (!version) throw new Error('RUNBOOK_VERIFICATION_VERSION_MISSING');
+  let definition;
+  try {
+    definition = parseRunbookDefinition(version.definition);
+  } catch {
+    throw new Error('RUNBOOK_VERIFICATION_DEFINITION_INVALID');
+  }
   for (const action of flattenSteps(definition)) {
     if (!action.verification || action.riskClass === 'READ_ONLY') continue;
     const parent = execution.steps.find(step => step.stepKey === action.key);
@@ -96,7 +136,7 @@ export async function finalizeVerificationEvidence(
         verificationResult: {
           verified,
           checkKeys: checks.map(check => check.key),
-          capturedAt: new Date().toISOString(),
+          capturedAt: (execution.completedAt ?? execution.updatedAt).toISOString(),
           reason: verified
             ? 'Action, authored checks and post-state passed.'
             : 'Successful command alone does not prove recovery.',

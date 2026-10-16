@@ -1,6 +1,7 @@
-import React, { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { TONE_TEXT } from './ui/primitives';
 
 export type MetricItem = {
   label: string;
@@ -32,56 +33,67 @@ export function RunbookMetricStrip({ stats, className }: RunbookMetricStripProps
             : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5';
 
   return (
-    <div
-      className={cn(
-        'grid gap-2.5 sm:gap-3',
-        gridColsClass,
-        className
-      )}
-    >
+    <div className={cn('grid gap-3', gridColsClass, className)}>
       {stats.map((stat, idx) => {
-        const content = (
-          <div
-            key={stat.label || idx}
-            className={cn(
-              'group relative flex flex-col justify-between rounded-lg border bg-card/60 p-3 shadow-2xs transition-all hover:bg-card hover:border-primary/30',
-              stat.active && 'ring-1 ring-primary/40 border-primary/40 bg-primary/5',
-              stat.href && 'cursor-pointer'
-            )}
-          >
-            <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
-              <span className="font-medium truncate">{stat.label}</span>
-              {stat.icon && <span className="shrink-0 opacity-70 group-hover:opacity-100">{stat.icon}</span>}
-            </div>
-            <div className="mt-1.5 flex items-baseline gap-2">
-              <span
-                className={cn(
-                  'text-xl sm:text-2xl font-bold tracking-tight',
-                  stat.tone === 'success' && 'text-emerald-600 dark:text-emerald-400',
-                  stat.tone === 'warning' && 'text-amber-600 dark:text-amber-400',
-                  stat.tone === 'danger' && 'text-rose-600 dark:text-rose-400',
-                  stat.tone === 'info' && 'text-blue-600 dark:text-blue-400'
-                )}
-              >
-                {stat.value}
+        const toneClass =
+          stat.tone && stat.tone !== 'default' ? TONE_TEXT[stat.tone] : 'text-foreground';
+        const body = (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                {stat.label}
               </span>
-              {stat.subtext && (
-                <span className="text-[11px] text-muted-foreground truncate">{stat.subtext}</span>
+              {stat.icon ? (
+                <span className={cn('shrink-0', toneClass)}>{stat.icon}</span>
+              ) : (
+                stat.tone &&
+                stat.tone !== 'default' && (
+                  <span
+                    aria-hidden="true"
+                    className={cn('h-2 w-2 shrink-0 rounded-full', TONE_DOT[stat.tone])}
+                  />
+                )
               )}
             </div>
-          </div>
+            <div
+              className={cn('mt-2 text-2xl font-extrabold tracking-tight tabular-nums', toneClass)}
+            >
+              {stat.value}
+            </div>
+            {stat.subtext && (
+              <div className="mt-1 truncate text-xs text-muted-foreground">{stat.subtext}</div>
+            )}
+          </>
+        );
+        const classes = cn(
+          'block h-full min-w-0 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-all duration-200',
+          stat.href &&
+            'hover:border-primary/40 hover:bg-accent/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          stat.active && 'border-primary/50 bg-primary/10 ring-2 ring-primary/20 shadow-xs'
         );
 
-        if (stat.href) {
-          return (
-            <Link key={stat.label || idx} href={stat.href} className="block no-underline">
-              {content}
-            </Link>
-          );
-        }
-
-        return <div key={stat.label || idx}>{content}</div>;
+        return stat.href ? (
+          <Link
+            key={stat.label || idx}
+            href={stat.href}
+            aria-current={stat.active ? 'true' : undefined}
+            className={classes}
+          >
+            {body}
+          </Link>
+        ) : (
+          <div key={stat.label || idx} className={classes}>
+            {body}
+          </div>
+        );
       })}
     </div>
   );
 }
+
+const TONE_DOT = {
+  success: 'bg-emerald-500',
+  warning: 'bg-amber-500',
+  danger: 'bg-rose-500',
+  info: 'bg-sky-500',
+} as const;

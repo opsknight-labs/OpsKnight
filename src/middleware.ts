@@ -51,14 +51,14 @@ const PUBLIC_PATH_PREFIXES = [
 
 function isMobileUserAgent(userAgent: string | null): boolean {
   if (!userAgent) {
-    logger.info('Mobile detection: No user agent');
+    logger.debug('Mobile detection: No user agent');
     return false;
   }
   const isMobile =
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(
       userAgent
     );
-  logger.info('Mobile detection', { userAgent, isMobile });
+  logger.debug('Mobile detection', { userAgent, isMobile });
   return isMobile;
 }
 

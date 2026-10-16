@@ -3,7 +3,9 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { authenticateV2Request, type V2ApiKeyIdentity } from './auth';
 import { enforceV2RateLimit, type V2OperationClass } from './rate-limit';
-import { enforceV2Authorization } from './rbac';
+import { enforceV2Authorization, enforceV2ResourceAuthorization } from './rbac';
+import { readV2JsonBody } from './request-body';
+import { requireRevisionIfMatch } from './concurrency';
 import { apiV2Success, apiV2Created, apiV2NoContent, apiV2Error } from './response';
 import { runV2IdempotentMutation, idempotencyResponseHeaders } from './idempotency';
 import { parsePaginationParams } from './pagination';
@@ -38,12 +40,7 @@ export type V2RouteHandlerResult<TResult = any> =
     }
   | Response;
 
-export type V2RouteConfig<
-  TParams = any,
-  TQuery = any,
-  TBody = any,
-  TResult = any
-> = {
+export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = any> = {
   rateLimitTier?: V2OperationClass;
   resourceExtractor?: (
     ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders' | 'tx'>
@@ -51,12 +48,12 @@ export type V2RouteConfig<
   paramsSchema?: z.ZodType<TParams, any, any>;
   querySchema?: z.ZodType<TQuery, any, any>;
   bodySchema?: z.ZodType<TBody, any, any>;
+  preconditionRequired?: boolean;
   idempotent?: boolean;
   idempotencyRequired?: boolean;
   idempotencyScope?: string | ((ctx: { params: TParams; body: TBody }) => string);
-  handler: (
-    ctx: V2RouteContext<TParams, TQuery, TBody>
-  ) => Promise<V2RouteHandlerResult<TResult>>;
+  scopedFilter?: boolean;
+  handler: (ctx: V2RouteContext<TParams, TQuery, TBody>) => Promise<V2RouteHandlerResult<TResult>>;
 } & (
   | {
       action: AuthorizationAction;
@@ -78,96 +75,100 @@ export type NextRouteHandler = (
  * Centralizes Authentication, Rate-limiting, RBAC scope enforcement,
  * Zod validation, Transactional idempotency, and RFC 9457 error serialization.
  */
-export function defineV2Route<
-  TParams = any,
-  TQuery = any,
-  TBody = any,
-  TResult = any
->(config: V2RouteConfig<TParams, TQuery, TBody, TResult>): NextRouteHandler {
-  return withV2Observability(async (
-    req: NextRequest,
-    context?: { params?: Promise<Record<string, string>> | Record<string, string> }
-  ) => {
-    try {
-      // 1. Authenticate API Key or Service Account Token
-      const { apiKey, actor } = await authenticateV2Request(req);
+export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult = any>(
+  config: V2RouteConfig<TParams, TQuery, TBody, TResult>
+): NextRouteHandler {
+  return withV2Observability(
+    async (
+      req: NextRequest,
+      context?: { params?: Promise<Record<string, string>> | Record<string, string> }
+    ) => {
+      try {
+        // 1. Authenticate API Key or Service Account Token
+        const { apiKey, actor } = await authenticateV2Request(req);
 
-      // 2. Determine Rate Limit tier (default to READ for GET, WRITE for mutations)
-      const tier: V2OperationClass =
-        config.rateLimitTier ?? (req.method === 'GET' ? 'READ' : 'WRITE');
-      const rateLimitHeaders = await enforceV2RateLimit(apiKey.id, tier);
+        // 2. Determine Rate Limit tier (default to READ for GET, WRITE for mutations)
+        const tier: V2OperationClass =
+          config.rateLimitTier ?? (req.method === 'GET' ? 'READ' : 'WRITE');
+        const rateLimitHeaders = await enforceV2RateLimit(apiKey.id, tier);
 
-      // 3. Resolve and validate route params (if any)
-      const rawParams = context?.params ? await Promise.resolve(context.params) : {};
-      const params: TParams = config.paramsSchema
-        ? config.paramsSchema.parse(rawParams)
-        : (rawParams as TParams);
+        // Reject missing scopes/capabilities before parsing input or looking up resources.
+        if (config.action) enforceV2Authorization(actor, config.action);
 
-      // 4. Resolve query and pagination
-      const { searchParams } = new URL(req.url);
-      const pagination = parsePaginationParams(searchParams);
-      const queryParams = Object.fromEntries(searchParams.entries());
-      const query: TQuery = config.querySchema
-        ? config.querySchema.parse(queryParams)
-        : (queryParams as TQuery);
+        // 3. Resolve and validate route params (if any)
+        const rawParams = context?.params ? await Promise.resolve(context.params) : {};
+        const params: TParams = config.paramsSchema
+          ? config.paramsSchema.parse(rawParams)
+          : (rawParams as TParams);
 
-      // 5. Parse request body if schema is defined
-      let body: TBody = undefined as unknown as TBody;
-      if (config.bodySchema) {
-        const rawBody = await req.json().catch(() => {
+        // 4. Resolve query and pagination
+        const { searchParams } = new URL(req.url);
+        const pagination = parsePaginationParams(searchParams);
+        if ([...searchParams.keys()].some(key => searchParams.getAll(key).length > 1)) {
           throw new AppError({
-            code: 'INVALID_JSON',
-            userMessage: 'The request body contains invalid JSON.',
-          });
-        });
-        body = config.bodySchema.parse(rawBody);
-      }
-
-      // 6. Enforce RBAC Scope & Capability Check
-      if ('action' in config && config.action) {
-        let resource: AuthorizationResource | undefined = undefined;
-        if (config.resourceExtractor) {
-          resource = await config.resourceExtractor({
-            req,
-            params,
-            query,
-            body,
-            pagination,
-            actor,
-            apiKey,
+            code: 'VALIDATION_FAILED',
+            userMessage: 'Query parameters must not be repeated.',
           });
         }
-        enforceV2Authorization(actor, config.action, resource);
-      } else if (!('isPublic' in config && config.isPublic)) {
-        throw new AppError({
-          code: 'AUTHORIZATION_DENIED',
-          userMessage: 'Route configuration error: authorization action is required unless isPublic: true is explicitly declared.',
-        });
-      }
+        const queryParams = Object.fromEntries(searchParams.entries());
+        const query: TQuery = config.querySchema
+          ? config.querySchema.parse(queryParams)
+          : (queryParams as TQuery);
 
-      // 7. Execute Handler (Idempotent vs Non-Idempotent)
-      if (config.idempotent) {
-        if (config.idempotencyRequired) {
-          const idempotencyKey = req.headers.get('idempotency-key')?.trim();
-          if (!idempotencyKey) {
-            throw new AppError({
-              code: 'IDEMPOTENCY_KEY_REQUIRED',
-              userMessage: 'The Idempotency-Key header is required for this operation.',
+        // 5. Parse request body if schema is defined
+        let body: TBody = undefined as unknown as TBody;
+        if (config.bodySchema) {
+          const rawBody = await readV2JsonBody(req);
+          body = config.bodySchema.parse(rawBody);
+        }
+
+        // 6. Enforce RBAC Scope & Capability Check
+        if ('action' in config && config.action) {
+          let resource: AuthorizationResource | undefined = undefined;
+          if (config.resourceExtractor) {
+            resource = await config.resourceExtractor({
+              req,
+              params,
+              query,
+              body,
+              pagination,
+              actor,
+              apiKey,
             });
           }
+          if (config.scopedFilter) {
+            enforceV2Authorization(actor, config.action, resource);
+          } else {
+            enforceV2ResourceAuthorization(actor, config.action, resource);
+          }
+        } else if (!('isPublic' in config && config.isPublic)) {
+          throw new AppError({
+            code: 'AUTHORIZATION_DENIED',
+            userMessage:
+              'Route configuration error: authorization action is required unless isPublic: true is explicitly declared.',
+          });
         }
 
-        const scope =
-          typeof config.idempotencyScope === 'function'
-            ? config.idempotencyScope({ params, body })
-            : config.idempotencyScope ?? `${req.method}:${new URL(req.url).pathname}`;
+        if (config.preconditionRequired) requireRevisionIfMatch(req);
 
-        const execution = await runV2IdempotentMutation(
-          req,
-          apiKey.id,
-          scope,
-          body,
-          async tx => {
+        // 7. Execute Handler (Idempotent vs Non-Idempotent)
+        if (config.idempotent) {
+          if (config.idempotencyRequired) {
+            const idempotencyKey = req.headers.get('idempotency-key')?.trim();
+            if (!idempotencyKey) {
+              throw new AppError({
+                code: 'IDEMPOTENCY_KEY_REQUIRED',
+                userMessage: 'The Idempotency-Key header is required for this operation.',
+              });
+            }
+          }
+
+          const scope =
+            typeof config.idempotencyScope === 'function'
+              ? config.idempotencyScope({ params, body })
+              : (config.idempotencyScope ?? `${req.method}:${new URL(req.url).pathname}`);
+
+          const execution = await runV2IdempotentMutation(req, apiKey.id, scope, body, async tx => {
             return await config.handler({
               req,
               params,
@@ -179,17 +180,53 @@ export function defineV2Route<
               rateLimitHeaders,
               tx,
             });
-          }
-        );
+          });
 
-        const result = execution.value;
+          const result = execution.value;
+          if (result instanceof Response) {
+            return result;
+          }
+
+          const mergedHeaders = {
+            ...rateLimitHeaders,
+            ...idempotencyResponseHeaders(execution.replayed),
+            ...(result.headers ?? {}),
+          };
+
+          if (result.status === 201) {
+            return apiV2Created(result.data, {
+              pagination: result.pagination,
+              headers: mergedHeaders,
+            });
+          }
+          if (result.status === 204) {
+            return apiV2NoContent(mergedHeaders);
+          }
+          return apiV2Success(result.data, {
+            pagination: result.pagination,
+            headers: mergedHeaders,
+            status: result.status,
+          });
+        }
+
+        // Non-idempotent execution
+        const result = await config.handler({
+          req,
+          params,
+          query,
+          body,
+          pagination,
+          actor,
+          apiKey,
+          rateLimitHeaders,
+        });
+
         if (result instanceof Response) {
           return result;
         }
 
         const mergedHeaders = {
           ...rateLimitHeaders,
-          ...idempotencyResponseHeaders(execution.replayed),
           ...(result.headers ?? {}),
         };
 
@@ -207,45 +244,9 @@ export function defineV2Route<
           headers: mergedHeaders,
           status: result.status,
         });
+      } catch (error) {
+        return apiV2Error(error, req);
       }
-
-      // Non-idempotent execution
-      const result = await config.handler({
-        req,
-        params,
-        query,
-        body,
-        pagination,
-        actor,
-        apiKey,
-        rateLimitHeaders,
-      });
-
-      if (result instanceof Response) {
-        return result;
-      }
-
-      const mergedHeaders = {
-        ...rateLimitHeaders,
-        ...(result.headers ?? {}),
-      };
-
-      if (result.status === 201) {
-        return apiV2Created(result.data, {
-          pagination: result.pagination,
-          headers: mergedHeaders,
-        });
-      }
-      if (result.status === 204) {
-        return apiV2NoContent(mergedHeaders);
-      }
-      return apiV2Success(result.data, {
-        pagination: result.pagination,
-        headers: mergedHeaders,
-        status: result.status,
-      });
-    } catch (error) {
-      return apiV2Error(error, req);
     }
-  });
+  );
 }

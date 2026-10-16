@@ -1,3 +1,4 @@
+import { enterpriseOpenApiPaths, ENTERPRISE_SCHEMAS } from './enterprise-openapi';
 import { ENDPOINT_SAMPLES } from './endpoint-samples';
 import { V2_MUTATION_CONTRACT } from './mutation-contract';
 import { V2_OPERATIONS, type V2OperationDefinition } from './openapi-registry';
@@ -257,9 +258,14 @@ const successStatus = (operation: Json): string | undefined =>
 
 export function finalizeOpenApiSpec(base: Json): Json {
   const spec = convertNullable(base) as Json;
+  for (const [path, methods] of Object.entries(enterpriseOpenApiPaths())) {
+    // eslint-disable-next-line security/detect-object-injection -- path comes from the static enterprise operation catalog
+    spec.paths[path] = { ...spec.paths[path], ...methods };
+  }
 
   spec.components.schemas = {
     ...spec.components.schemas,
+    ...ENTERPRISE_SCHEMAS,
     ...(convertNullable(extraSchemas) as Json),
   };
   spec.components.responses = { ...spec.components.responses, ...extraResponses };
@@ -320,9 +326,10 @@ export function finalizeOpenApiSpec(base: Json): Json {
         addParam(operation, {
           name: 'If-Match',
           in: 'header',
-          required: false,
-          description:
-            'ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.',
+          required: contract.preconditionRequired ?? false,
+          description: contract.preconditionRequired
+            ? 'Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.'
+            : 'ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.',
           schema: { type: 'string' },
         });
       }
@@ -354,7 +361,16 @@ export function finalizeOpenApiSpec(base: Json): Json {
       };
     }
 
+    if (definition.operationId === 'executeRunbook') {
+      responses['412'] = { $ref: '#/components/responses/PreconditionFailed' };
+    }
     if (!responses['429']) responses['429'] = { $ref: '#/components/responses/RateLimited' };
+    if (contract?.preconditionRequired) {
+      responses['428'] = {
+        description: 'If-Match is required.',
+        ...spec.components.responses.ProblemError,
+      };
+    }
     if (contract?.concurrency === 'etag' && !responses['412']) {
       responses['412'] = { $ref: '#/components/responses/PreconditionFailed' };
     }

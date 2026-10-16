@@ -10,6 +10,7 @@ import { AppError } from '@/lib/errors';
 
 export const GET = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
+  scopedFilter: true,
   handler: async ({ actor, params }) => {
     const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
