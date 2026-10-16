@@ -53,7 +53,7 @@ export function renderScopeReference(): string {
 export function renderMutationReference(): string {
   const rows = Object.entries(V2_MUTATION_CONTRACT).map(
     ([key, c]) =>
-      `| \`${key.replace(/\[(\w+)\]/g, '{$1}')}\` | ${IDEMPOTENCY_LABEL[c.idempotency]} | ${c.concurrency === 'etag' ? 'ETag / If-Match' : '—'} | ${c.rationale} |`
+      `| \`${key.replace(/\[(\w+)\]/g, '{$1}')}\` | ${IDEMPOTENCY_LABEL[c.idempotency]} | ${c.concurrency === 'etag' ? (c.preconditionRequired ? 'Required If-Match (428 / 412)' : 'ETag / If-Match') : '—'} | ${c.rationale} |`
   );
   return ['| Operation | Idempotency | Concurrency | Why |', '|---|---|---|---|', ...rows].join(
     '\n'

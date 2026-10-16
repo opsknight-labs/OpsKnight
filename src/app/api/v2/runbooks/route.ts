@@ -1,3 +1,8 @@
+import { z } from 'zod';
+import { runbookReadWhere } from '@/lib/authorization-filters';
+import { defineV2Route } from '@/lib/api-v2/endpoint';
+import { CreateRunbookV2Schema, projectAuthoringVersion } from '@/lib/api-v2/runbook-authoring';
+import { createRunbook } from '@/lib/runbooks/versioning';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import {
@@ -25,6 +30,7 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
     const search = searchParams.get('search')?.trim();
 
     const filters: Prisma.RunbookWhereInput[] = [
+      runbookReadWhere(actor),
       { archivedAt: null },
       { publishedVersionId: { not: null } },
     ];
@@ -94,4 +100,27 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
   } catch (error) {
     return apiV2Error(error, req);
   }
+});
+
+export const POST = defineV2Route({
+  action: AUTHORIZATION_ACTIONS.RUNBOOK_MANAGE,
+  bodySchema: CreateRunbookV2Schema,
+  querySchema: z.object({}).strict(),
+  idempotent: true,
+  idempotencyRequired: true,
+  handler: async ({ body, actor, apiKey, tx }) => {
+    const runbook = await createRunbook(body, { id: actor.id, apiKeyId: apiKey.id }, tx);
+    return {
+      status: 201,
+      data: {
+        id: runbook.id,
+        name: runbook.name,
+        slug: runbook.slug,
+        description: runbook.description,
+        draftVersionId: runbook.draftVersionId,
+        draftVersion: projectAuthoringVersion(runbook.draftVersion),
+      },
+      headers: { Location: `/api/v2/runbooks/${runbook.id}/versions` },
+    };
+  },
 });

@@ -138,3 +138,41 @@ export function dashboardMetricsScope(
 ): Pick<IncidentMetricFilter, 'authorizationScope'> {
   return actorMetricReadScope(actor);
 }
+
+/** Runbook library visibility follows the services a scoped reader can operate. */
+export function runbookReadWhere(actor: AuthorizationActor): Prisma.RunbookWhereInput {
+  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.RUNBOOK_READ });
+  if (!decision.allowed)
+    throw new AuthorizationError(
+      'Forbidden. Runbook access denied.',
+      CAPABILITIES.RUNBOOK_READ_SCOPED
+    );
+  return decision.scope === 'global'
+    ? {}
+    : {
+        bindings: { some: { detachedAt: null, service: { teamId: { in: [...actor.teamIds] } } } },
+      };
+}
+
+export function runbookExecutionReadWhere(
+  actor: AuthorizationActor
+): Prisma.RunbookExecutionWhereInput {
+  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.RUNBOOK_READ });
+  if (!decision.allowed)
+    throw new AuthorizationError(
+      'Forbidden. Execution access denied.',
+      CAPABILITIES.RUNBOOK_READ_SCOPED
+    );
+  if (decision.scope === 'global') return {};
+  // Apply the incident's visibility rules using the same role, without demanding a second API scope.
+  const incidentVisibility = incidentReadWhere({ ...actor, apiKey: undefined });
+  return {
+    OR: [
+      { incident: incidentVisibility },
+      {
+        incidentId: null,
+        OR: [{ triggeredByUserId: actor.id }, { service: { teamId: { in: [...actor.teamIds] } } }],
+      },
+    ],
+  };
+}

@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 
@@ -27,7 +26,7 @@ export function etagHeaders(revision: number): Record<string, string> {
 }
 
 /** Parse If-Match into the expected revision, or null when absent or `*`. */
-export function parseIfMatch(req: NextRequest): number | null {
+export function parseIfMatch(req: Request): number | null {
   const raw = req.headers.get('if-match')?.trim();
   if (!raw || raw === '*') return null;
   if (raw.includes(',')) {
@@ -77,4 +76,12 @@ export async function withIfMatch<T>(expected: number | null, run: () => Promise
     }
     throw error;
   }
+}
+
+/** Sensitive writes require a precondition; `*` retains RFC existence semantics. */
+export function requireIfMatch(req: Request): number | null {
+  if (!req.headers.get('if-match')?.trim()) {
+    throw new AppError({ code: 'PRECONDITION_REQUIRED' });
+  }
+  return parseIfMatch(req);
 }

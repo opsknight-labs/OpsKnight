@@ -33,6 +33,7 @@ export type ConcurrencyMode = 'etag' | 'none';
 export interface MutationContract {
   idempotency: IdempotencyMode;
   concurrency: ConcurrencyMode;
+  preconditionRequired?: boolean;
   rationale: string;
 }
 
@@ -48,6 +49,95 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/incidents/[id]/watchers': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Shared watcher command, timeline and audit commit with replay record.',
+  },
+  'DELETE /api/v2/incidents/[id]/watchers/[watcherId]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Parent-scoped removal and timeline event commit atomically.',
+  },
+  'POST /api/v2/runbooks/[id]/executions/preview': natural(
+    'Preflight only; stores an expiring actor-bound preview authorization without creating jobs or execution.'
+  ),
+  'POST /api/v2/runbooks/executions/[id]/cancel': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Records a cancellation request and durable reconciliation, without claiming an external command has stopped.',
+  },
+  'POST /api/v2/schedules/[id]/layers/[layerId]/participants': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Shared participant command, audit and replay commit together.',
+  },
+  'PATCH /api/v2/schedules/[id]/layers/[layerId]/participants/[userId]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'A relative move must not be repeated on retry.',
+  },
+  'DELETE /api/v2/schedules/[id]/layers/[layerId]/participants/[userId]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Removal and position normalization are atomic.',
+  },
+  'POST /api/v2/incidents/[id]/reopen': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Canonical lifecycle command, audit, outbox and replay record share a transaction.',
+  },
+  'POST /api/v2/incidents/[id]/unacknowledge': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Canonical lifecycle command, audit, outbox and replay record share a transaction.',
+  },
+  'POST /api/v2/incidents/[id]/snooze': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Canonical lifecycle command, audit, outbox and replay record share a transaction.',
+  },
+  'POST /api/v2/incidents/[id]/unsnooze': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Canonical lifecycle command, audit, outbox and replay record share a transaction.',
+  },
+  'POST /api/v2/incidents/[id]/suppress': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Canonical lifecycle command, audit, outbox and replay record share a transaction.',
+  },
+  'POST /api/v2/incidents/[id]/unsuppress': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Canonical lifecycle command, audit, outbox and replay record share a transaction.',
+  },
+  'POST /api/v2/runbooks': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Shared versioning command and audit in the replay transaction.',
+  },
+  'POST /api/v2/runbooks/[id]/drafts': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Shared versioning command and audit in the replay transaction.',
+  },
+  'PATCH /api/v2/runbooks/[id]/drafts/[versionId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale: 'Shared versioning command and audit in the replay transaction.',
+  },
+  'POST /api/v2/runbooks/[id]/drafts/[versionId]/publish': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale: 'Shared versioning command and audit in the replay transaction.',
+  },
+  'POST /api/v2/runbooks/[id]/drafts/[versionId]/validate': natural(
+    'Validation only; does not publish, execute or enqueue work.'
+  ),
   'POST /api/v2/incidents': supported('Creation; a duplicate would page twice.'),
   'PATCH /api/v2/incidents/[id]': {
     idempotency: 'supported',

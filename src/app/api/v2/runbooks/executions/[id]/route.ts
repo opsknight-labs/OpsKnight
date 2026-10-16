@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { runbookExecutionReadWhere } from '@/lib/authorization-filters';
 import {
   apiV2Error,
   apiV2Success,
@@ -22,8 +23,8 @@ export const GET = withV2Observability(async function GET(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.RUNBOOK_READ);
 
     const { id } = await params;
-    const execution = await prisma.runbookExecution.findUnique({
-      where: { id },
+    const execution = await prisma.runbookExecution.findFirst({
+      where: { AND: [{ id }, runbookExecutionReadWhere(actor)] },
       include: {
         runbook: { select: { id: true, name: true, slug: true } },
         steps: {

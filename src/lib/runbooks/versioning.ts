@@ -2,7 +2,6 @@ import 'server-only';
 import { assertAuthoringDefinition } from './authoring-validation';
 
 import type { Prisma, RunbookInput, RunbookVersion } from '@prisma/client';
-import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import {
@@ -42,6 +41,37 @@ const EMPTY_DEFINITION: RunbookDefinition = {
 
 export type VersioningClient = Prisma.TransactionClient;
 
+export type VersioningActor = string | { id: string; apiKeyId: string };
+
+async function logVersioningAudit(
+  actor: VersioningActor,
+  event: Parameters<typeof logAudit>[0],
+  tx: VersioningClient
+) {
+  return logAudit(
+    {
+      ...event,
+      ...(typeof actor === 'string'
+        ? {}
+        : {
+            source: 'API' as const,
+            details: {
+              ...(event.details as Prisma.InputJsonObject | undefined),
+              apiClientId: actor.apiKeyId,
+            },
+          }),
+    },
+    tx
+  );
+}
+
+function inVersioningTransaction<T>(
+  tx: VersioningClient | undefined,
+  command: (client: VersioningClient) => Promise<T>
+): Promise<T> {
+  return tx ? command(tx) : runSerializableTransaction(command);
+}
+
 export function toInputCreateMany(inputs: RunbookInputInput[]) {
   return inputs.map((input, index) => ({
     key: input.key,
@@ -64,8 +94,10 @@ export async function createRunbook(
     definition?: unknown;
     inputs?: RunbookInputInput[];
   },
-  actorId: string
+  actor: VersioningActor,
+  client?: VersioningClient
 ) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
   assertAuthoringDefinition(input.definition ?? EMPTY_DEFINITION, input.inputs ?? []);
   const metadata = createRunbookSchema.parse(input);
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
@@ -73,7 +105,7 @@ export async function createRunbook(
   validateInputKeyUniqueness(inputs);
   const checksum = computeDefinitionChecksum(definition);
 
-  return prisma.$transaction(async tx => {
+  return inVersioningTransaction(client, async tx => {
     const runbook = await tx.runbook.create({
       data: { ...metadata, createdById: actorId },
     });
@@ -93,7 +125,8 @@ export async function createRunbook(
       where: { id: runbook.id },
       data: { draftVersionId: draft.id },
     });
-    await logAudit(
+    await logVersioningAudit(
+      actor,
       {
         action: 'runbook.created',
         entityType: 'RUNBOOK',
@@ -110,14 +143,17 @@ export async function createRunbook(
 export async function updateRunbookMetadata(
   runbookId: string,
   input: UpdateRunbookInput,
-  actorId: string
+  actor: VersioningActor,
+  client?: VersioningClient
 ) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
   const data = updateRunbookSchema.parse(input);
-  return prisma.$transaction(async tx => {
+  return inVersioningTransaction(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { action: 'update' });
     const current = await tx.runbook.findUniqueOrThrow({ where: { id: runbookId } });
     const updated = await tx.runbook.update({ where: { id: runbookId }, data });
-    await logAudit(
+    await logVersioningAudit(
+      actor,
       {
         action: 'runbook.updated',
         entityType: 'RUNBOOK',
@@ -148,14 +184,16 @@ export async function updateRunbookMetadata(
 export async function updateDraftVersion(
   versionId: string,
   input: { definition: unknown; inputs?: RunbookInputInput[]; expectedDraftRevision: number },
-  actorId: string
+  actor: VersioningActor,
+  client?: VersioningClient
 ) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
   assertAuthoringDefinition(input.definition, input.inputs ?? []);
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
   const definition = parseRunbookDefinition(input.definition, inputs);
   const checksum = computeDefinitionChecksum(definition);
 
-  return prisma.$transaction(async tx => {
+  return inVersioningTransaction(client, async tx => {
     const current = await tx.runbookVersion.findUnique({
       where: { id: versionId },
       include: { runbook: { select: { archivedAt: true } } },
@@ -193,7 +231,8 @@ export async function updateDraftVersion(
         data: toInputCreateMany(inputs).map(item => ({ ...item, runbookVersionId: versionId })),
       });
     }
-    await logAudit(
+    await logVersioningAudit(
+      actor,
       {
         action: 'runbook.version.edited',
         entityType: 'RUNBOOK_VERSION',
@@ -216,8 +255,13 @@ export async function updateDraftVersion(
  * version atomically. The checksum is recomputed from stored JSON to detect
  * out-of-band mutations before promotion.
  */
-export async function publishDraftVersion(versionId: string, actorId: string) {
-  return prisma.$transaction(async tx => {
+export async function publishDraftVersion(
+  versionId: string,
+  actor: VersioningActor,
+  client?: VersioningClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return inVersioningTransaction(client, async tx => {
     const draft = await tx.runbookVersion.findUnique({
       where: { id: versionId },
       include: { runbook: true, inputs: true },
@@ -256,14 +300,20 @@ export async function publishDraftVersion(versionId: string, actorId: string) {
     }
     const promoted = await tx.runbookVersion.updateMany({
       where: { id: versionId, state: 'DRAFT' },
-      data: { state: 'PUBLISHED', publishedAt: new Date(), publishedById: actorId },
+      data: {
+        state: 'PUBLISHED',
+        draftRevision: { increment: 1 },
+        publishedAt: new Date(),
+        publishedById: actorId,
+      },
     });
     if (promoted.count !== 1) throw new RunbookVersionImmutableError(versionId, 'PUBLISHED');
     await tx.runbook.update({
       where: { id: draft.runbookId },
       data: { publishedVersionId: versionId, draftVersionId: null },
     });
-    await logAudit(
+    await logVersioningAudit(
+      actor,
       {
         action: 'runbook.version.published',
         entityType: 'RUNBOOK_VERSION',
@@ -278,8 +328,13 @@ export async function publishDraftVersion(versionId: string, actorId: string) {
 }
 
 /** Clones any immutable version into the next numbered editable draft. */
-export async function cloneVersionToDraft(versionId: string, actorId: string) {
-  return runSerializableTransaction(async tx => {
+export async function cloneVersionToDraft(
+  versionId: string,
+  actor: VersioningActor,
+  client?: VersioningClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return inVersioningTransaction(client, async tx => {
     const source = await tx.runbookVersion.findUnique({
       where: { id: versionId },
       include: { inputs: { orderBy: { sequence: 'asc' } }, runbook: true },
@@ -327,7 +382,8 @@ export async function cloneVersionToDraft(versionId: string, actorId: string) {
       where: { id: source.runbookId },
       data: { draftVersionId: next.id },
     });
-    await logAudit(
+    await logVersioningAudit(
+      actor,
       {
         action: 'runbook.version.cloned',
         entityType: 'RUNBOOK_VERSION',
@@ -341,8 +397,13 @@ export async function cloneVersionToDraft(versionId: string, actorId: string) {
   });
 }
 
-export async function archiveRunbook(runbookId: string, actorId: string) {
-  return prisma.$transaction(async tx => {
+export async function archiveRunbook(
+  runbookId: string,
+  actor: VersioningActor,
+  client?: VersioningClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return inVersioningTransaction(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'archive' });
     const archivedAt = new Date();
     const runbook = await tx.runbook.update({
@@ -364,7 +425,8 @@ export async function archiveRunbook(runbookId: string, actorId: string) {
         dismissedAt: archivedAt,
       },
     });
-    await logAudit(
+    await logVersioningAudit(
+      actor,
       {
         action: 'runbook.archived',
         entityType: 'RUNBOOK',

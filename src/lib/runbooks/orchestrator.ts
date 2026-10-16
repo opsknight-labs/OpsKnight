@@ -1583,8 +1583,13 @@ export async function approveExecutionStep(input: {
   });
 }
 
-export async function cancelExecution(executionId: string, actorId: string, reason?: string) {
-  await prisma.$transaction(async tx => {
+export async function cancelExecution(
+  executionId: string,
+  actorId: string,
+  reason?: string,
+  externalTx?: Prisma.TransactionClient
+) {
+  const command = async (tx: Prisma.TransactionClient) => {
     const result = await tx.runbookExecution.updateMany({
       where: {
         id: executionId,
@@ -1605,7 +1610,9 @@ export async function cancelExecution(executionId: string, actorId: string, reas
       },
       tx
     );
-  });
+  };
+  if (externalTx) return command(externalTx);
+  return prisma.$transaction(command);
 }
 
 export async function processRunbookJob(raw: unknown): Promise<void> {

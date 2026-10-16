@@ -42,13 +42,13 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
         };
       }
       return {
-        apiKey: { id: 'key_admin', scopes: ['admin:manage'] },
+        apiKey: { id: 'key_admin', scopes: ['admin:manage', 'runbooks:execute'] },
         actor: {
           id: 'usr_admin',
           role: 'ADMIN',
           status: 'ACTIVE',
           teamIds: ['team_1'],
-          apiKey: { id: 'key_admin', scopes: ['admin:manage'] },
+          apiKey: { id: 'key_admin', scopes: ['admin:manage', 'runbooks:execute'] },
         },
       };
     }),
@@ -59,7 +59,6 @@ import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 
 describe('defineV2Route Endpoint Factory', () => {
-
   it('handles standard GET request with pagination and envelopes', async () => {
     const route = defineV2Route({
       action: AUTHORIZATION_ACTIONS.INCIDENT_READ,

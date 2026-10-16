@@ -216,6 +216,10 @@ export const StatusPageAnnouncementV2Schema = z.object({
 });
 
 export const RunbookExecuteV2Schema = z.object({
+  expectedPlanDigest: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   incidentId: z.string().trim().optional().nullable(),
   serviceId: z.string().trim().optional().nullable(),
   bindingId: z.string().trim().optional().nullable(),

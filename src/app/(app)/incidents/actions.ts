@@ -20,10 +20,8 @@ import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/inci
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { setIncidentWatcher, deleteIncidentWatcher } from '@/lib/incidents/watchers';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
-
-const LEGACY_NOT_FOUND_MESSAGE =
-  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 const allowedUrgencies = new Set<IncidentUrgency>(['LOW', 'MEDIUM', 'HIGH']);
 
@@ -246,32 +244,10 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
     }
   }
 
-  await prisma.$transaction(async tx => {
-    await tx.incidentWatcher.upsert({
-      where: {
-        incidentId_userId: {
-          incidentId,
-          userId,
-        },
-      },
-      update: {
-        role: watcherRole,
-      },
-      create: {
-        incidentId,
-        userId,
-        role: watcherRole,
-      },
-    });
-
-    await tx.incidentEvent.create({
-      data: {
-        incidentId,
-        type: 'LEGACY_OTHER',
-        message: `Watcher added (${watcherRole})`,
-      },
-    });
-  });
+  await setIncidentWatcher(
+    { incidentId, userId, role: watcherRole as 'FOLLOWER' | 'STAKEHOLDER' | 'EXEC' },
+    { id: currentUser.id, role: currentUser.role as AppRole }
+  );
 
   revalidatePath(`/incidents/${incidentId}`);
 }
@@ -281,48 +257,9 @@ export async function removeWatcher(incidentId: string, watcherId: string) {
   const canManage = hasCapability(currentUser.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
   if (!canManage) await assertCanViewIncident(incidentId);
 
-  await prisma.$transaction(async tx => {
-    const watcher = await tx.incidentWatcher.findFirst({
-      where: { id: watcherId, incidentId },
-      select: { userId: true },
-    });
-    if (!watcher) {
-      throw new AppError({
-        code: 'RESOURCE_NOT_FOUND',
-        userMessage: LEGACY_NOT_FOUND_MESSAGE,
-        details: { resource: 'incidentWatcher', incidentId, watcherId },
-      });
-    }
-    if (!canManage && watcher.userId !== currentUser.id) {
-      throw new AppError({
-        code: 'AUTHORIZATION_DENIED',
-        userMessage: 'You may only unsubscribe yourself.',
-        details: { incidentId, watcherId },
-      });
-    }
-
-    const removed = await tx.incidentWatcher.deleteMany({
-      where: {
-        id: watcherId,
-        incidentId,
-        ...(!canManage ? { userId: currentUser.id } : {}),
-      },
-    });
-    if (removed.count !== 1) {
-      throw new AppError({
-        code: 'RESOURCE_NOT_FOUND',
-        userMessage: LEGACY_NOT_FOUND_MESSAGE,
-        details: { resource: 'incidentWatcher', incidentId, watcherId },
-      });
-    }
-
-    await tx.incidentEvent.create({
-      data: {
-        incidentId,
-        type: 'LEGACY_OTHER',
-        message: 'Watcher removed',
-      },
-    });
+  await deleteIncidentWatcher(incidentId, watcherId, {
+    id: currentUser.id,
+    role: currentUser.role as AppRole,
   });
 
   revalidatePath(`/incidents/${incidentId}`);

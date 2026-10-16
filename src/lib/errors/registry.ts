@@ -235,6 +235,14 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  PRECONDITION_REQUIRED: {
+    status: 428,
+    category: 'conflict',
+    userMessage: 'This operation requires an If-Match precondition.',
+    action: 'Read the resource and send its ETag in the If-Match header.',
+    retryable: false,
+    exposure: 'public',
+  },
   PRECONDITION_FAILED: {
     status: 412,
     category: 'conflict',
@@ -351,7 +359,8 @@ export const ERROR_REGISTRY = {
   SERVICE_IN_USE: {
     status: 409,
     category: 'conflict',
-    userMessage: 'Cannot delete service because it is currently linked to an active escalation policy or status page.',
+    userMessage:
+      'Cannot delete service because it is currently linked to an active escalation policy or status page.',
     action: 'Remove all references to this service before deleting it.',
     retryable: false,
     exposure: 'public',
@@ -466,7 +475,8 @@ export const ERROR_REGISTRY = {
     status: 400,
     category: 'validation',
     userMessage: 'The token lifetime is not valid.',
-    action: 'Provide expiresInDays within the permitted range, or neverExpires: true where allowed.',
+    action:
+      'Provide expiresInDays within the permitted range, or neverExpires: true where allowed.',
     retryable: false,
     exposure: 'public',
   },
@@ -510,7 +520,8 @@ export const ERROR_REGISTRY = {
   STATUS_PAGE_DEFAULT_REPLACEMENT_REQUIRED: {
     status: 409,
     category: 'conflict',
-    userMessage: 'A replacement default status page is required before this one can be removed or deactivated.',
+    userMessage:
+      'A replacement default status page is required before this one can be removed or deactivated.',
     action: 'Designate another status page as default first.',
     retryable: false,
     exposure: 'public',
