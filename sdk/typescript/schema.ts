@@ -89,7 +89,7 @@ export interface OperationRequests {
   listPostmortems: { "query"?: { "limit"?: number; "cursor"?: string; "incidentId"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: "true" | "false"; "search"?: string } };
   createPostmortem: { "headers"?: { "Idempotency-Key"?: string }; "body": { "incidentId": string; "title"?: string; "summary": string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED"; "isPublic"?: boolean } & Record<string, unknown> };
   getMetricsReport: { "query"?: { "serviceId"?: string; "days"?: number } };
-  executeRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "incidentId"?: string | null; "serviceId"?: string | null; "bindingId"?: string | null; "expectedPlanDigest"?: string; "parameters"?: Record<string, unknown> } & Record<string, unknown> };
+  executeRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body"?: { "incidentId"?: string | null; "serviceId"?: string | null; "bindingId"?: string | null; "expectedPlanDigest"?: string; "parameters"?: Record<string, unknown> } & Record<string, unknown> };
   getRunbook: { "params": { "id": string } };
   getRunbookExecution: { "params": { "id": string } };
   listRunbooks: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string } };
@@ -639,7 +639,7 @@ export const OPERATIONS = {
     "requiredHeaders": [
       "Idempotency-Key"
     ],
-    "bodyRequired": true
+    "bodyRequired": false
   },
   "getRunbook": {
     "method": "GET",

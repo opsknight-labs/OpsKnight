@@ -1560,7 +1560,6 @@ function buildBaseSpec(): Record<string, unknown> {
             },
           ],
           requestBody: {
-            required: true,
             content: {
               'application/json': {
                 schema: {
