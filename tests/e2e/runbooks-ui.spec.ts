@@ -188,7 +188,9 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
     .getByLabel('Input 1 label', { exact: true })
     .fill('Service unit');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })).toBeVisible();
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
+  ).toBeVisible();
   await page.reload();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await expect(
@@ -345,7 +347,9 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   );
   await page.getByRole('button', { name: 'Apply JSON to builder' }).click();
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })).toBeVisible();
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Publish draft', exact: true }).click();
   await page
     .getByRole('alertdialog')
@@ -719,7 +723,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     });
     if (width < 1024 && (await closeNavigation.isVisible())) await closeNavigation.click();
     await page
-      .getByRole('heading', { name: 'Service Automations', exact: true })
+      .getByRole('heading', { name: /^Service [Aa]utomations$/i })
       .evaluate(element => element.scrollIntoView({ block: 'start' }));
     await noOverflow(page);
     await page.screenshot({

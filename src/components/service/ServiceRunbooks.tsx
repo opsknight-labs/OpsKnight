@@ -154,7 +154,10 @@ export default function ServiceRunbooks({
     },
     {
       label: `Executions${pageSuffix}`,
-      value: bindings.reduce((sum, b) => sum + (b._count?.executions ?? b.executions?.length ?? 0), 0),
+      value: bindings.reduce(
+        (sum, b) => sum + (b._count?.executions ?? b.executions?.length ?? 0),
+        0
+      ),
       icon: Clock,
       tone: 'text-amber-500',
     },
@@ -200,11 +203,16 @@ export default function ServiceRunbooks({
             {loadErrors.includes('pools') && <p>Pool inventory unavailable.</p>}
             {loadErrors.includes('library') && <p>Runbook library unavailable.</p>}
             <p className="text-muted-foreground">
-              Configuration changes are temporarily unavailable because their dependencies could
-              not be checked.
+              Configuration changes are temporarily unavailable because their dependencies could not
+              be checked.
             </p>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden />
             Retry loading
           </Button>
@@ -215,7 +223,7 @@ export default function ServiceRunbooks({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight text-foreground">
-              Service automations
+              Service Automations
             </h2>
             <Badge variant="outline" className="px-2 py-0.5 text-xs font-semibold">
               {bindings.length} {pagination ? 'on this page' : 'attached'}
@@ -258,7 +266,10 @@ export default function ServiceRunbooks({
         </dl>
       )}
 
-      <section aria-label="Rule filters" className="space-y-3 rounded-xl border bg-card/40 p-3 sm:p-4">
+      <section
+        aria-label="Rule filters"
+        className="space-y-3 rounded-xl border bg-card/40 p-3 sm:p-4"
+      >
         <form
           method="get"
           className="flex flex-wrap items-end gap-2"
