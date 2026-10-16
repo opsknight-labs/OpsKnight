@@ -52,6 +52,8 @@ export default function AuthenticationPolicyWorkspace() {
   } = useAuthenticationWorkspace();
 
   const selectedRevision = data.revisions.find(rev => rev.id === revisionId);
+  // Emergency recovery may only step SSO Required back to SSO Optional from this panel.
+  const recoverySession = data.actor.kind === 'emergency';
   const verification = selectedRevision?.verification;
 
   return (
@@ -142,7 +144,9 @@ export default function AuthenticationPolicyWorkspace() {
               }}
             >
               <option value="SSO_OPTIONAL" disabled={data.mode === 'SSO_REQUIRED'}>
-                SSO Optional
+                {data.mode === 'SSO_REQUIRED'
+                  ? 'SSO Optional — use “Change to Password Only or SSO Optional” below'
+                  : 'SSO Optional'}
               </option>
               <option value="SSO_REQUIRED">SSO Required</option>
             </select>
@@ -152,6 +156,33 @@ export default function AuthenticationPolicyWorkspace() {
                 : 'SSO Optional permits local password fallbacks and progressive onboarding.'}
             </span>
           </label>
+          {data.mode === 'SSO_REQUIRED' && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                SSO Required is active. Activation never relaxes it; moving back to SSO Optional is
+                a separate, deliberate policy change.
+              </span>
+              {data.actor.kind !== 'legacy' ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs font-semibold"
+                  onClick={() => {
+                    const panel = document.getElementById('auth-policy-mode-change');
+                    if (panel instanceof HTMLDetailsElement) panel.open = true;
+                    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                >
+                  Switch to SSO Optional
+                </Button>
+              ) : (
+                <span>
+                  Use an independent recovery identity or sign in as an administrator to change it.
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Enforcement Impact Preview */}
           <div className="space-y-3 pt-1">
@@ -289,7 +320,10 @@ export default function AuthenticationPolicyWorkspace() {
                 },
                 data.freshAuthenticationRequired && {
                   code: 'fresh',
-                  message: 'Sign in again or verify your recovery credential before activating.',
+                  message:
+                    data.actor.kind === 'admin'
+                      ? 'Your last sign-in was more than two hours ago. Sign out and sign in again to continue.'
+                      : 'Verify your recovery credential again before activating.',
                 },
                 data.originConflict && {
                   code: 'origin',
@@ -358,12 +392,18 @@ export default function AuthenticationPolicyWorkspace() {
       </div>
 
       {/* Emergency Rollback or Manual Policy Change Accordion */}
-      {data.actor.kind === 'admin' && (
-        <details className="group rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all open:ring-1 open:ring-border">
+      {(data.actor.kind === 'admin' ||
+        (data.actor.kind === 'emergency' && data.mode === 'SSO_REQUIRED')) && (
+        <details
+          id="auth-policy-mode-change"
+          className="group scroll-mt-24 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all open:ring-1 open:ring-border"
+        >
           <summary className="flex cursor-pointer items-center justify-between font-semibold text-sm text-foreground list-none select-none">
             <span className="flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-amber-500" />
-              Change to Password Only or SSO Optional
+              {recoverySession
+                ? 'Change to SSO Optional'
+                : 'Change to Password Only or SSO Optional'}
             </span>
             <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:rotate-90" />
           </summary>
@@ -374,8 +414,9 @@ export default function AuthenticationPolicyWorkspace() {
                 Administrative Policy Override
               </p>
               <p className="mt-1 leading-relaxed">
-                Reverting to Password Only or SSO Optional allows local password logins. Use this if
-                your external identity provider experiences an extended outage.
+                {recoverySession
+                  ? 'SSO Optional keeps SSO sign-in working and allows local password sign-in again. To switch the whole instance to Password Only, use password access recovery on the Emergency Recovery tab.'
+                  : 'Reverting to Password Only or SSO Optional allows local password logins. Use this if your external identity provider experiences an extended outage.'}
               </p>
             </div>
 
@@ -387,23 +428,25 @@ export default function AuthenticationPolicyWorkspace() {
                 onChange={event => setNormalMode(event.target.value as typeof normalMode)}
               >
                 <option value="SSO_OPTIONAL">SSO Optional</option>
-                <option value="PASSWORD_ONLY">Password Only</option>
+                {!recoverySession && <option value="PASSWORD_ONLY">Password Only</option>}
               </select>
             </label>
 
-            <label className="block space-y-1.5">
-              <span className="font-medium text-foreground">
-                Current password (required for Password Only)
-              </span>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={event => setPassword(event.target.value)}
-                className={inputClass}
-                placeholder="Enter your current administrator password"
-              />
-            </label>
+            {!recoverySession && (
+              <label className="block space-y-1.5">
+                <span className="font-medium text-foreground">
+                  Current password (required for Password Only)
+                </span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={event => setPassword(event.target.value)}
+                  className={inputClass}
+                  placeholder="Enter your current administrator password"
+                />
+              </label>
+            )}
 
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
@@ -431,7 +474,9 @@ export default function AuthenticationPolicyWorkspace() {
                   },
                 data.freshAuthenticationRequired && {
                   code: 'fresh',
-                  message: 'Sign in again before changing authentication policy.',
+                  message: recoverySession
+                    ? 'Verify your recovery credential again on the Emergency Recovery tab to change the policy.'
+                    : 'Your last sign-in was more than two hours ago. Sign out and sign in again to change the policy.',
                 },
               ])}
             >
@@ -442,7 +487,7 @@ export default function AuthenticationPolicyWorkspace() {
                   void perform(async () => {
                     await authenticationRequest({
                       action: 'mode',
-                      mode: normalMode,
+                      mode: recoverySession ? 'SSO_OPTIONAL' : normalMode,
                       expectedVersion: data.policyVersion,
                       currentPassword: password,
                       confirmation: 'CHANGE AUTHENTICATION POLICY',

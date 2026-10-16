@@ -18,7 +18,15 @@ export async function restorePasswordAccess(
   confirmation: string,
   scope: 'ADMIN_ONLY' | 'INSTANCE' = 'ADMIN_ONLY'
 ) {
-  if (actor.kind === 'admin') throw new Error('Use an independent emergency session for recovery.');
+  // A normally signed-in administrator may restore password access only for their own
+  // account (for example while their SSO session outlives an IdP outage). Restoring another
+  // administrator would let one admin take over another's identity, so that stays limited
+  // to independent emergency recovery. Freshness, session validity and current permissions
+  // are enforced by lockControlActor below.
+  if (actor.kind === 'admin' && actor.id !== adminUserId)
+    throw new Error(
+      'You can restore password access only for your own account. Use an emergency recovery session to restore another administrator.'
+    );
   if (
     confirmation !==
     (scope === 'INSTANCE' ? 'RESTORE INSTANCE PASSWORD ACCESS' : 'RESTORE PASSWORD ACCESS')
@@ -37,6 +45,13 @@ export async function restorePasswordAccess(
     const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     if (policy.version !== expectedVersion)
       throw new Error('Policy changed. Reload the recovery console.');
+    // Self-service exists to keep password access while SSO is enforced. Outside SSO Required
+    // the exclusive recovery override would sign out every password session and block other
+    // local sign-ins, so administrators change their password through their profile instead.
+    if (actor.kind === 'admin' && policy.mode !== 'SSO_REQUIRED')
+      throw new Error(
+        'Password access recovery is only needed while SSO Required is active. Change your password from your profile instead.'
+      );
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${adminUserId} FOR UPDATE`;
     const current = await tx.user.findUniqueOrThrow({ where: { id: adminUserId } });
     if (
@@ -84,10 +99,54 @@ export async function restorePasswordAccess(
       ordinaryPasswordLoginEnabled: true,
       recoveryScope: scope,
       otherLocalPasswordsEnabled: scope === 'INSTANCE',
+      initiatedBy: actor.kind === 'admin' ? 'administrator-self-service' : actor.kind,
     });
     return { mode: restored.mode, version: restored.version };
   });
   invalidateSessionSecurityProjection(adminUserId);
+  resetAuthOptionsCache();
+  return result;
+}
+
+/**
+ * Lets an independent emergency recovery identity step SSO Required back to SSO Optional,
+ * for example when administrators need password fallback while SSO keeps working. It never
+ * creates or changes a password and never goes further than SSO Optional; Password Only
+ * stays with restorePasswordAccess so an administrator password always exists afterwards.
+ */
+export async function relaxRequiredToOptional(actor: ControlActor, expectedVersion: number) {
+  if (actor.kind !== 'emergency')
+    throw new Error('Use an independent emergency recovery identity or a normal administrator.');
+  const result = await prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor);
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    if (policy.version !== expectedVersion)
+      throw new Error('Policy changed. Reload the recovery console.');
+    if (policy.mode !== 'SSO_REQUIRED')
+      throw new Error('SSO Optional can be selected here only while SSO Required is active.');
+    const oidc = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
+    if (!oidc?.enabled) throw new Error('Enable an OIDC provider before selecting SSO Optional.');
+    const updated = await tx.authenticationPolicy.update({
+      where: { id: 'default' },
+      data: {
+        mode: 'SSO_OPTIONAL',
+        version: { increment: 1 },
+        enforcedAt: null,
+        passwordRecoveryUserId: null,
+        passwordRecoveryExpiresAt: null,
+        oidcConfigVersion: oidc.configVersion,
+        updatedBy: null,
+      },
+    });
+    await securityEvent(tx, 'auth.policy.changed', actor.id, {
+      oldMode: policy.mode,
+      mode: updated.mode,
+      version: updated.version,
+      recoveryOnly: true,
+      initiatedBy: 'emergency-recovery',
+    });
+    return { mode: updated.mode, version: updated.version };
+  });
   resetAuthOptionsCache();
   return result;
 }

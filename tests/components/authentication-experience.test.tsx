@@ -403,6 +403,53 @@ describe('enterprise authentication experience', () => {
       screen.queryByLabelText('Maximum session lifetime custom value')
     ).not.toBeInTheDocument();
   });
+  it('explains how to leave SSO Required instead of only greying out SSO Optional', () => {
+    renderConsole('policy', { ...fixtureDashboard, mode: 'SSO_REQUIRED' });
+    expect(screen.getByRole('option', { name: /SSO Optional — use/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to SSO Optional' }));
+    const panel = document.getElementById('auth-policy-mode-change') as HTMLDetailsElement;
+    expect(panel.open).toBe(true);
+    expect(within(panel).getByRole('combobox', { name: /New authentication mode/ })).toHaveValue(
+      'SSO_OPTIONAL'
+    );
+  });
+  it('lets an emergency recovery session step SSO Required back to SSO Optional only', async () => {
+    const posted: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posted.push(JSON.parse(String(init.body)));
+          return Response.json({ data: { mode: 'SSO_OPTIONAL', version: 2 } });
+        }
+        return Response.json({
+          data: {
+            ...fixtureDashboard,
+            mode: 'SSO_REQUIRED',
+            actor: { kind: 'emergency', id: 'recovery-1' },
+            section: new URL(String(url), 'https://instance.example.test').searchParams.get(
+              'section'
+            ),
+          },
+        });
+      })
+    );
+    renderConsole('policy', {
+      ...fixtureDashboard,
+      mode: 'SSO_REQUIRED',
+      actor: { kind: 'emergency', id: 'recovery-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to SSO Optional' }));
+    const panel = document.getElementById('auth-policy-mode-change') as HTMLDetailsElement;
+    expect(panel.open).toBe(true);
+    const select = within(panel).getByRole('combobox', { name: /New authentication mode/ });
+    expect(within(select).queryByRole('option', { name: 'Password Only' })).toBeNull();
+    expect(within(panel).queryByPlaceholderText(/current administrator password/)).toBeNull();
+    fireEvent.click(within(panel).getByRole('checkbox', { name: /I confirm this deliberate/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Change authentication mode' }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toMatchObject({ action: 'mode', mode: 'SSO_OPTIONAL' });
+  });
   it('protects unstaged changes when leaving through an outer settings tab', () => {
     renderConsole();
     fireEvent.change(screen.getByLabelText('Client ID'), { target: { value: 'unsaved' } });
