@@ -1,3 +1,5 @@
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
+import { hasCapability, CAPABILITIES } from '@/lib/authorization';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
@@ -153,13 +155,23 @@ export default async function MobileIncidentsPage(props: {
         select: {
           id: true,
           title: true,
+          automationSourceRestricted: true,
+          automationTraces: { select: { incidentId: true }, take: 1 },
+          automationDecision: { select: { incidentId: true } },
           status: true,
           urgency: true,
           createdAt: true,
           service: { select: { name: true } },
         },
       });
-      incidents.push(...(tierIncidents as IncidentItem[]));
+      incidents.push(
+        ...tierIncidents.map(incident =>
+          visibleIncidentSource(
+            incident,
+            hasCapability(context.actor.role, CAPABILITIES.INCIDENT_SENSITIVE_READ)
+          )
+        )
+      );
       remainingTake -= tierIncidents.length;
       currentSkip = 0;
     }
@@ -167,20 +179,30 @@ export default async function MobileIncidentsPage(props: {
     const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
       sort === 'created_asc' ? [{ createdAt: 'asc' }] : [{ createdAt: 'desc' }];
 
-    incidents = (await prisma.incident.findMany({
-      where,
-      orderBy,
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        urgency: true,
-        createdAt: true,
-        service: { select: { name: true } },
-      },
-    })) as IncidentItem[];
+    incidents = (
+      await prisma.incident.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        select: {
+          id: true,
+          title: true,
+          automationSourceRestricted: true,
+          automationTraces: { select: { incidentId: true }, take: 1 },
+          automationDecision: { select: { incidentId: true } },
+          status: true,
+          urgency: true,
+          createdAt: true,
+          service: { select: { name: true } },
+        },
+      })
+    ).map(incident =>
+      visibleIncidentSource(
+        incident,
+        hasCapability(context.actor.role, CAPABILITIES.INCIDENT_SENSITIVE_READ)
+      )
+    ) as IncidentItem[];
   }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);

@@ -36,7 +36,12 @@ export function buildWidgetCacheKey(
     .filter(([, value]) => value !== undefined)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => [key, serializeFilterValue(value)]);
-  return JSON.stringify([scope, generation ?? 'initial', normalizedFilters]);
+  return JSON.stringify([
+    scope,
+    isAppRole(role) && hasCapability(role, CAPABILITIES.INCIDENT_SENSITIVE_READ),
+    generation ?? 'initial',
+    normalizedFilters,
+  ]);
 }
 
 function evict(now: number): void {
@@ -53,10 +58,14 @@ function evict(now: number): void {
 function refresh(
   key: string,
   entry: CacheEntry,
-  filters: SLAMetricsFilter
+  filters: SLAMetricsFilter,
+  role: string
 ): Promise<WidgetRealtimeProjection> {
   if (entry.inFlight) return entry.inFlight;
-  const request = getWidgetRealtimeProjection(filters)
+  const request = getWidgetRealtimeProjection(
+    filters,
+    isAppRole(role) && hasCapability(role, CAPABILITIES.INCIDENT_SENSITIVE_READ)
+  )
     .then(value => {
       // Start freshness after the expensive fetch completes.
       const completedAt = Date.now();
@@ -88,16 +97,16 @@ export async function getCachedWidgetData(
     entry.lastAccessAt = now;
     if (entry.value && entry.freshUntil > now) return entry.value;
     if (entry.value && entry.staleUntil > now) {
-      void refresh(key, entry, filters).catch(() => undefined);
+      void refresh(key, entry, filters, role).catch(() => undefined);
       return entry.value;
     }
-    return refresh(key, entry, filters);
+    return refresh(key, entry, filters, role);
   }
 
   evict(now);
   entry = { freshUntil: 0, staleUntil: 0, lastAccessAt: now };
   widgetCache.set(key, entry);
-  return refresh(key, entry, filters);
+  return refresh(key, entry, filters, role);
 }
 
 export function clearWidgetDataCache(): void {

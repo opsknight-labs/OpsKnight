@@ -1,3 +1,4 @@
+import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import { MAX_SELECT_OPTIONS } from '@/lib/runbooks/input-options';
 import {
   RUNBOOK_INPUT_TYPES,
@@ -20,6 +21,11 @@ const object = (properties: Record<string, Schema>, required: string[] = []): Sc
 const id = { type: 'string', minLength: 1 };
 const date = { type: 'string', format: 'date-time' };
 const integer = { type: 'integer', minimum: 0 };
+const array = (items: Schema, maxItems?: number): Schema => ({
+  type: 'array',
+  items,
+  ...(maxItems !== undefined ? { maxItems } : {}),
+});
 const note = { ...string(1000) };
 const lifecycle = object({
   note,
@@ -57,6 +63,70 @@ const authoringVersionSchema = object(
 );
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  ...AUTOMATION_SCHEMAS,
+  AutomationPublishedVersion: object(
+    { id, serviceId: id, versionNumber: { type: 'integer', minimum: 1 }, checksum: string() },
+    ['id', 'serviceId', 'versionNumber', 'checksum']
+  ),
+  AutomationCandidateVersion: object(
+    {
+      id,
+      serviceId: id,
+      versionNumber: { type: 'integer', minimum: 1 },
+      publishedAt: date,
+      publishedBy: id,
+      checksum: string(),
+      sourceVersionId: { type: ['string', 'null'] },
+      lintReport: array(object({ level: string(), message: string() }, ['level', 'message']), 100),
+      snapshot: { $ref: '#/components/schemas/AutomationSnapshot' },
+      shadowAggregates: object(
+        {
+          evaluated: integer,
+          same: integer,
+          routeDifferent: integer,
+          priorityDifferent: integer,
+          noEscalationDifferent: integer,
+          errors: integer,
+          fallbacks: integer,
+        },
+        [
+          'evaluated',
+          'same',
+          'routeDifferent',
+          'priorityDifferent',
+          'noEscalationDifferent',
+          'errors',
+          'fallbacks',
+        ]
+      ),
+    },
+    [
+      'id',
+      'serviceId',
+      'versionNumber',
+      'publishedAt',
+      'publishedBy',
+      'checksum',
+      'snapshot',
+      'shadowAggregates',
+    ]
+  ),
+  AutomationConfig: object(
+    {
+      serviceId: id,
+      activeVersionId: { type: ['string', 'null'] },
+      candidateVersionId: { type: ['string', 'null'] },
+    },
+    ['serviceId']
+  ),
+  AutomationSettings: object(
+    {
+      automationEnabled: { type: 'boolean' },
+      automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
+      automationSettingsRevision: integer,
+    },
+    ['automationEnabled', 'automationTraceRetentionDays', 'automationSettingsRevision']
+  ),
   IncidentWatcher: object({ id, incidentId: id, userId: id, role: string(), createdAt: date }, [
     'id',
     'incidentId',
@@ -239,14 +309,84 @@ const draftInput = object(
 );
 
 interface Operation {
-  method: 'get' | 'post' | 'patch' | 'delete';
+  method: 'get' | 'post' | 'patch' | 'put' | 'delete';
   path: string;
   summary: string;
+  description?: string;
   body?: Schema;
   status?: number;
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  {
+    method: 'post',
+    path: '/services/{id}/automation/publish',
+    summary: 'Publish a validated immutable service automation version',
+    description:
+      'Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE stages a candidate version evaluated in parallel shadow mode without interrupting current routing. Replayed requests return the original committed result, even with a different concrete If-Match value; use a new idempotency key for a new conditional write.',
+    body: object(
+      {
+        expectedActiveVersionId: { type: ['string', 'null'] },
+        expectedCandidateVersionId: { type: ['string', 'null'] },
+      },
+      ['expectedActiveVersionId']
+    ),
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/draft',
+    summary: 'Read a service automation draft',
+  },
+  {
+    method: 'put',
+    path: '/services/{id}/automation/draft',
+    summary: 'Save a revision-protected automation draft',
+    body: automationDraftBody,
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/candidate',
+    summary: 'Read a published candidate automation version and shadow metrics',
+    description:
+      'Reads the pending candidate version, compiled configuration and seven-day shadow evaluation metrics for a service in LIVE mode.',
+  },
+  {
+    method: 'delete',
+    path: '/services/{id}/automation/candidate',
+    summary: 'Discard a published candidate automation version',
+    description:
+      'Discards a pending candidate version without promoting it to production. Requires expectedCandidateVersionId.',
+    body: object({ expectedCandidateVersionId: id }, ['expectedCandidateVersionId']),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/automation/candidates/activate',
+    summary: 'Atomically activate a candidate automation version as LIVE',
+    description:
+      'Promotes the pending candidate version to active production routing with zero interruption. Validates shadow evidence and escalation policy safety before cutover.',
+    body: object(
+      {
+        expectedCandidateVersionId: id,
+        expectedActiveVersionId: { type: ['string', 'null'] },
+        acknowledgeNoShadow: { type: 'boolean' },
+        acknowledgeShadowErrors: { type: 'boolean' },
+      },
+      ['expectedCandidateVersionId']
+    ),
+  },
+  { method: 'get', path: '/settings/automation', summary: 'Read global automation settings' },
+  {
+    method: 'patch',
+    path: '/settings/automation',
+    summary: 'Update global automation settings',
+    body: object(
+      {
+        automationEnabled: { type: 'boolean' },
+        automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
+      },
+      ['automationEnabled', 'automationTraceRetentionDays']
+    ),
+  },
   {
     method: 'get',
     path: '/incidents/{id}/watchers',
@@ -404,13 +544,16 @@ export function enterpriseOpenApiPaths() {
     const pathItem = (paths[operation.path] ??= {});
     pathItem[operation.method] = {
       tags: [
-        operation.path.startsWith('/runbooks')
-          ? 'Runbooks'
-          : operation.path.startsWith('/schedules')
-            ? 'Schedules'
-            : 'Incidents',
+        operation.path.startsWith('/settings')
+          ? 'Settings'
+          : operation.path.startsWith('/runbooks')
+            ? 'Runbooks'
+            : operation.path.startsWith('/schedules')
+              ? 'Schedules'
+              : 'Incidents',
       ],
       summary: operation.summary,
+      ...(operation.description ? { description: operation.description } : {}),
       parameters: [...parameters, ...queryParameters],
       ...(operation.body
         ? {

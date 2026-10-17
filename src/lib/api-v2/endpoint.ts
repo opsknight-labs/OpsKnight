@@ -52,6 +52,17 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
   idempotent?: boolean;
   idempotencyRequired?: boolean;
   idempotencyScope?: string | ((ctx: { params: TParams; body: TBody }) => string);
+  /**
+   * Optional resource-level authorization re-check executed before a cached
+   * idempotency result is returned. Runs inside the serializable replay transaction
+   * with a current database snapshot so it reads the authoritative membership/ownership
+   * state. Throw an AppError to deny replay (e.g. after team membership is revoked).
+   * Without this guard, callers whose access was removed after the first successful
+   * write can receive the stored response indefinitely.
+   */
+  replayAuthGuard?: (
+    ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders'>
+  ) => Promise<void>;
   scopedFilter?: boolean;
   handler: (ctx: V2RouteContext<TParams, TQuery, TBody>) => Promise<V2RouteHandlerResult<TResult>>;
 } & (
@@ -168,19 +179,39 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
               ? config.idempotencyScope({ params, body })
               : (config.idempotencyScope ?? `${req.method}:${new URL(req.url).pathname}`);
 
-          const execution = await runV2IdempotentMutation(req, apiKey.id, scope, body, async tx => {
-            return await config.handler({
-              req,
-              params,
-              query,
-              body,
-              pagination,
-              actor,
-              apiKey,
-              rateLimitHeaders,
-              tx,
-            });
-          });
+          const execution = await runV2IdempotentMutation(
+            req,
+            apiKey.id,
+            scope,
+            body,
+            async tx => {
+              return await config.handler({
+                req,
+                params,
+                query,
+                body,
+                pagination,
+                actor,
+                apiKey,
+                rateLimitHeaders,
+                tx,
+              });
+            },
+            config.replayAuthGuard
+              ? async tx => {
+                  await config.replayAuthGuard!({
+                    req,
+                    params,
+                    query,
+                    body,
+                    pagination,
+                    actor,
+                    apiKey,
+                    tx,
+                  });
+                }
+              : undefined
+          );
 
           const result = execution.value;
           if (result instanceof Response) {

@@ -1,0 +1,40 @@
+{
+  "kind": "PostgreSQL transaction boundary spike; full ingest certification follows",
+  "results": [
+    {
+      "rules": -1,
+      "transactionP50": 2.080667000000176,
+      "transactionP95": 2.923957999999857,
+      "evaluatorP50": 0.00020799999992959783,
+      "evaluatorP99": 0.0010000000002037268
+    },
+    {
+      "rules": 0,
+      "transactionP50": 2.0337500000000546,
+      "transactionP95": 3.566624999999931,
+      "evaluatorP50": 0.012541000000055647,
+      "evaluatorP99": 0.14679200000000492
+    },
+    {
+      "rules": 25,
+      "transactionP50": 2.3492919999998776,
+      "transactionP95": 3.099250000000211,
+      "evaluatorP50": 0.09675000000015643,
+      "evaluatorP99": 0.31991599999992104
+    },
+    {
+      "rules": 50,
+      "transactionP50": 1.765957999999955,
+      "transactionP95": 2.186999999999898,
+      "evaluatorP50": 0.03991700000005949,
+      "evaluatorP99": 0.11733299999968949
+    },
+    {
+      "rules": 100,
+      "transactionP50": 1.7814999999995962,
+      "transactionP95": 2.5041250000003856,
+      "evaluatorP50": 0.049583999999867956,
+      "evaluatorP99": 0.10600000000022192
+    }
+  ]
+}

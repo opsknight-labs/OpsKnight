@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Existing dynamic scheduler mocks and parsed deployment fixtures use heterogeneous test-only shapes. */
 /**
  * Cron Scheduler Extended Tests
  *
@@ -29,6 +30,8 @@ vi.mock('@/lib/prisma', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    automationTrace: { findFirst: vi.fn().mockResolvedValue(null) },
+    automationContextObservation: { findFirst: vi.fn().mockResolvedValue(null) },
     incident: {
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),

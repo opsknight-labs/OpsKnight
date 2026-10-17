@@ -1,0 +1,66 @@
+{
+  "kind": "Local Next development-server browser certification; page heap covers the entire browser page, not only automation; WebKit heap API unavailable",
+  "generatedAt": "2026-10-08T03:59:04.104Z",
+  "fixture": {
+    "rules": 100,
+    "fields": 64,
+    "conditionsInSelectedRule": 20,
+    "actionsPerRule": 8
+  },
+  "testsPassed": 8,
+  "testsFailed": 0,
+  "projects": [
+    {
+      "project": "desktop",
+      "status": "passed",
+      "performance": {
+        "initialRulesMs": 3214,
+        "searchMs": 47,
+        "expandMs": 156,
+        "typingMs": 105,
+        "domNodes": 689,
+        "heapBytes": 157000000
+      },
+      "accessibilityViolations": []
+    },
+    {
+      "project": "mobile",
+      "status": "passed",
+      "performance": {
+        "initialRulesMs": 2355,
+        "searchMs": 43,
+        "expandMs": 151,
+        "typingMs": 59,
+        "domNodes": 688,
+        "heapBytes": 131000000
+      },
+      "accessibilityViolations": []
+    },
+    {
+      "project": "iphone",
+      "status": "passed",
+      "performance": {
+        "initialRulesMs": 1886,
+        "searchMs": 75,
+        "expandMs": 139,
+        "typingMs": 126,
+        "domNodes": 688,
+        "heapBytes": null
+      },
+      "accessibilityViolations": []
+    },
+    {
+      "project": "tablet",
+      "status": "passed",
+      "performance": {
+        "initialRulesMs": 1493,
+        "searchMs": 103,
+        "expandMs": 278,
+        "typingMs": 140,
+        "domNodes": 688,
+        "heapBytes": null
+      },
+      "accessibilityViolations": []
+    }
+  ]
+}

@@ -1,4 +1,81 @@
 {
+  "publishAutomationVersion": {
+    "method": "POST",
+    "path": "/services/{id}/automation/publish",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getAutomationDraft": {
+    "method": "GET",
+    "path": "/services/{id}/automation/draft",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "saveAutomationDraft": {
+    "method": "PUT",
+    "path": "/services/{id}/automation/draft",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getAutomationCandidate": {
+    "method": "GET",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "discardAutomationCandidate": {
+    "method": "DELETE",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "activateAutomationCandidate": {
+    "method": "POST",
+    "path": "/services/{id}/automation/candidates/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getAutomationSettings": {
+    "method": "GET",
+    "path": "/settings/automation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateAutomationSettings": {
+    "method": "PATCH",
+    "path": "/settings/automation",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listIncidentWatchers": {
     "method": "GET",
     "path": "/incidents/{id}/watchers",

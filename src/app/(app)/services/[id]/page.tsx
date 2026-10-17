@@ -6,6 +6,7 @@ import {
   type RunbookResource,
 } from '@/lib/runbooks/presentation/binding-contract';
 import prisma from '@/lib/prisma';
+import AutomationShell from '@/components/automation/AutomationShell';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
 type ClassificationPolicyWithRules = Prisma.IncidentClassificationPolicyGetPayload<{
@@ -318,6 +319,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     canManageService ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
     canManageService
       ? prisma.escalationPolicy.findMany({
+          where: { archivedAt: null },
           select: { id: true, name: true, description: true },
           orderBy: { name: 'asc' },
         })
@@ -1322,6 +1324,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         }
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
+        automationContent={
+          hasCapability(actor.role, CAPABILITIES.AUTOMATION_READ) ? (
+            <AutomationShell serviceId={service.id} />
+          ) : undefined
+        }
         escalationContent={escalationContent}
         runbooksContent={
           !canReadRunbooks ? (

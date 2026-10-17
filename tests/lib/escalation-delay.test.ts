@@ -72,6 +72,7 @@ describe('executeEscalation delay handling', () => {
           update: mocks.txIncidentUpdate,
           updateMany: mocks.txIncidentUpdateMany.mockResolvedValue({ count: 1 }),
         },
+        $queryRaw: vi.fn().mockResolvedValue([]),
         incidentEvent: { create: mocks.txIncidentEventCreate },
         backgroundJob: {
           findFirst: mocks.txBackgroundJobFindFirst.mockResolvedValue(null),

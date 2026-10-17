@@ -1,4 +1,10 @@
 'use server';
+import { z } from 'zod';
+import { transitionPolicyArchive } from '@/lib/escalation/policy-lifecycle';
+import {
+  assertResponderPolicySnapshotSafe,
+  lockResponderPolicy,
+} from '@/lib/escalation/automation-snapshot';
 
 import {
   ESCALATION_STEP_CHANNELS_SUBMITTED,
@@ -65,11 +71,15 @@ export async function createPolicyAction(
   }
 
   try {
-    const policy = await prisma.escalationPolicy.create({
-      data: {
-        name: normalizedName,
-        description,
-      },
+    const policy = await prisma.$transaction(async tx => {
+      const created = await tx.escalationPolicy.create({
+        data: {
+          name: normalizedName,
+          description,
+        },
+      });
+      await assertResponderPolicySnapshotSafe(tx, created.id);
+      return created;
     });
 
     await logAudit({
@@ -154,23 +164,27 @@ export async function createPolicy(formData: FormData) {
     throw error;
   }
 
-  const policy = await prisma.escalationPolicy.create({
-    data: {
-      name: normalizedName,
-      description: description || undefined,
-      steps: {
-        create: steps.map(({ conditions = [], ...step }) => ({
-          ...step,
-          conditions: conditions.length > 0 ? { create: conditions } : undefined,
-        })),
+  const policy = await prisma.$transaction(async tx => {
+    const created = await tx.escalationPolicy.create({
+      data: {
+        name: normalizedName,
+        description: description || undefined,
+        steps: {
+          create: steps.map(({ conditions = [], ...step }) => ({
+            ...step,
+            conditions: conditions.length > 0 ? { create: conditions } : undefined,
+          })),
+        },
       },
-    },
-    include: {
-      steps: {
-        include: { targetUser: true },
-        orderBy: { stepOrder: 'asc' },
+      include: {
+        steps: {
+          include: { targetUser: true },
+          orderBy: { stepOrder: 'asc' },
+        },
       },
-    },
+    });
+    await assertResponderPolicySnapshotSafe(tx, created.id);
+    return created;
   });
 
   await logAudit({
@@ -208,12 +222,16 @@ export async function updatePolicy(policyId: string, formData: FormData) {
     throw error;
   }
 
-  await prisma.escalationPolicy.update({
-    where: { id: policyId },
-    data: {
-      name: normalizedName,
-      description: description || undefined,
-    },
+  await prisma.$transaction(async tx => {
+    await lockResponderPolicy(tx, policyId);
+    await tx.escalationPolicy.update({
+      where: { id: policyId },
+      data: {
+        name: normalizedName,
+        description: description || undefined,
+      },
+    });
+    await assertResponderPolicySnapshotSafe(tx, policyId);
   });
 
   await logAudit({
@@ -237,6 +255,43 @@ export async function deletePolicy(policyId: string) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
+
+  const automationReferences = await prisma.automationVersionPolicyRef.findMany({
+    where: { escalationPolicyId: policyId },
+    select: {
+      version: {
+        select: {
+          versionNumber: true,
+          snapshot: true,
+          service: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+  const pinnedDecisions = await prisma.incidentAutomationDecision.count({
+    where: { escalationPolicyId: policyId },
+  });
+  if (automationReferences.length || pinnedDecisions)
+    return {
+      automationReferences: automationReferences.map(({ version }) => {
+        const snapshot = version.snapshot as unknown as {
+          rules?: Array<{ name?: string; actions?: Array<{ type: string; policyId?: string }> }>;
+        };
+        return {
+          serviceId: version.service.id,
+          serviceName: version.service.name,
+          versionNumber: version.versionNumber,
+          ruleNames: (snapshot.rules ?? [])
+            .filter(rule =>
+              rule.actions?.some(
+                action => action.type === 'USE_ESCALATION_POLICY' && action.policyId === policyId
+              )
+            )
+            .map(rule => rule.name ?? 'Unnamed rule'),
+        };
+      }),
+      error: `Cannot delete policy: published automation or ${pinnedDecisions} pinned incident(s) reference it. Historical incident routes must remain available for reopen. Publishing a replacement does not remove historical references. Keep this policy for existing incident routes; historical published versions cannot be edited.`,
+    };
 
   // Check if policy is used by any services
   const servicesUsingPolicy = await prisma.service.findMany({
@@ -304,6 +359,7 @@ export async function addPolicyStep(
 
   try {
     const nextStepOrder = await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, targetType, targetId))) {
         throw new Error(`The selected ${targetType.toLowerCase()} no longer exists.`);
@@ -321,6 +377,7 @@ export async function addPolicyStep(
         data: { policyId, stepOrder: order, ...stepData, conditions: { create: conditions } },
       });
 
+      await assertResponderPolicySnapshotSafe(tx, policyId);
       return order;
     });
 
@@ -391,6 +448,7 @@ export async function updatePolicyStep(
 
   try {
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, existing.policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, step.targetType, targetId))) {
         throw new Error(`The selected ${step.targetType.toLowerCase()} no longer exists.`);
@@ -404,6 +462,7 @@ export async function updatePolicyStep(
             data: conditions.map(condition => ({ ruleId: stepId, ...condition })),
           });
       }
+      await assertResponderPolicySnapshotSafe(tx, existing.policyId);
     });
 
     await logAudit({
@@ -444,6 +503,7 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
 
   try {
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       await tx.escalationRule.delete({
         where: { id: stepId },
       });
@@ -463,6 +523,7 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
           });
         }
       }
+      await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
     await logAudit({
@@ -532,6 +593,7 @@ export async function movePolicyStep(
   try {
     // Swap step orders and positional delays via temporary negative index to satisfy @@unique([policyId, stepOrder])
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       await tx.escalationRule.update({
         where: { id: stepId },
         data: { stepOrder: -1 },
@@ -546,6 +608,7 @@ export async function movePolicyStep(
         where: { id: stepId },
         data: { stepOrder: newOrder, delayMinutes: targetDelay },
       });
+      await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
     await logAudit({
@@ -587,6 +650,7 @@ export async function reorderPolicySteps(
 
   try {
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       // Verify all steps belong to the policy
       const steps = await tx.escalationRule.findMany({
         where: {
@@ -621,6 +685,7 @@ export async function reorderPolicySteps(
           },
         });
       }
+      await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
     await logAudit({
@@ -635,4 +700,29 @@ export async function reorderPolicySteps(
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to reorder escalation steps' };
   }
+}
+
+export async function setPolicyArchived(policyId: string, archived: boolean) {
+  const actor = await assertAdmin();
+  z.object({ policyId: z.string().min(1).max(100), archived: z.boolean() })
+    .strict()
+    .parse({ policyId, archived });
+  try {
+    await transitionPolicyArchive(policyId, actor.id, archived);
+  } catch (error) {
+    revalidatePath(`/policies/${policyId}`);
+    revalidatePath(`/m/policies/${policyId}`);
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Policy transition failed. Refresh dependencies and try again.',
+    };
+  }
+  revalidatePath(`/policies/${policyId}`);
+  revalidatePath('/policies');
+  revalidatePath(`/m/policies/${policyId}`);
+  revalidatePath('/m/policies');
+  return { ok: true as const };
 }

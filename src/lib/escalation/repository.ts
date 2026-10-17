@@ -1,8 +1,9 @@
+import { resolveIncidentResponderRouting } from './routing';
 /**
  * Durable persistence for the escalation engine.
  *
  * Everything that changes escalation state goes through this module, and the
- * outcome of a step lands in exactly one serializable transaction:
+ * outcome of a step lands in exactly one incident-locked transaction:
  *
  *   verify generation -> assignment -> timeline -> escalation state -> next job
  *
@@ -13,7 +14,8 @@
  */
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
-import { runSerializableTransaction } from '../db-utils';
+import { runReadCommittedTransaction, runSerializableTransaction } from '../db-utils';
+import { escalationJobLookupQuery } from './job-query';
 import { logger } from '../logger';
 import type { EscalationAssignment } from './assignee-selection';
 import type { EscalationPlan } from './planner';
@@ -57,16 +59,6 @@ type IncidentStateRow = {
   escalationGeneration: number | null;
 };
 
-const INCIDENT_STATE_SELECT = {
-  status: true,
-  assigneeId: true,
-  teamId: true,
-  escalationStatus: true,
-  escalationProcessingAt: true,
-  currentEscalationStep: true,
-  escalationGeneration: true,
-} as const;
-
 /**
  * Production selects always include `escalationProcessingAt`. `undefined` is
  * tolerated for partial adapters; a persisted NULL explicitly means a
@@ -100,14 +92,9 @@ async function createEscalationJob(
   input: { incidentId: string; generation: number; stepIndex: number; scheduledAt: Date }
 ): Promise<string> {
   const logicalKey = escalationJobKey(input.incidentId, input.generation, input.stepIndex);
-  const existing = await tx.backgroundJob.findFirst({
-    where: {
-      type: 'ESCALATION',
-      status: { in: ['PENDING', 'PROCESSING'] },
-      payload: { path: ['logicalKey'], equals: logicalKey },
-    },
-    select: { id: true },
-  });
+  const [existing] = await tx.$queryRaw<Array<{ id: string }>>(
+    escalationJobLookupQuery(logicalKey)
+  );
   if (existing) return existing.id;
 
   const job = await tx.backgroundJob.create({
@@ -309,11 +296,15 @@ export async function commitEscalationPlan(input: {
    */
   notifications?: EscalationNotificationPlan;
 }): Promise<EscalationCommitResult> {
-  return runSerializableTransaction<EscalationCommitResult>(async tx => {
-    const current = (await tx.incident.findUnique({
-      where: { id: input.incidentId },
-      select: INCIDENT_STATE_SELECT,
-    })) as IncidentStateRow | null;
+  return runReadCommittedTransaction<EscalationCommitResult>(async tx => {
+    // Serialize workers and lifecycle mutations on this incident before any
+    // writes. Waiting workers read the committed claim/generation/cursor after
+    // acquiring the lock; unrelated incidents do not share an SSI read fence.
+    const [current] = await tx.$queryRaw<IncidentStateRow[]>`
+      SELECT status::text AS status, "assigneeId", "teamId", "escalationStatus",
+             "escalationProcessingAt", "currentEscalationStep", "escalationGeneration"
+      FROM "Incident" WHERE id = ${input.incidentId} FOR UPDATE
+    `;
 
     if (
       !current ||
@@ -429,18 +420,9 @@ export async function initializeEscalationExecution(
   tx: Prisma.TransactionClient,
   input: { incidentId: string; serviceId: string; now?: Date; notBefore?: Date }
 ): Promise<{ initialized: boolean; dueAt: Date | null }> {
-  const service = await tx.service.findUnique({
-    where: { id: input.serviceId },
-    select: {
-      policy: {
-        select: {
-          steps: { orderBy: { stepOrder: 'asc' }, take: 1, select: { delayMinutes: true } },
-        },
-      },
-    },
-  });
-
-  const firstStep = service?.policy?.steps[0];
+  const routing = await resolveIncidentResponderRouting(input.incidentId, input.serviceId, tx);
+  if (routing.type === 'NO_ESCALATION') return { initialized: false, dueAt: null };
+  const firstStep = routing.policy?.steps[0];
   if (!firstStep) return { initialized: false, dueAt: null };
 
   const policyDueAt = escalationDueAt(input.now ?? new Date(), firstStep.delayMinutes);

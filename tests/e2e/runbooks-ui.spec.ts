@@ -191,7 +191,12 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
   ).toBeVisible();
+  // Wait for any in-flight router revalidation to settle before reloading.
+  // Firefox aborts the reload (NS_BINDING_ABORTED) when a concurrent fetch
+  // response arrives after the reload is initiated; networkidle prevents the race.
+  await page.waitForLoadState('networkidle');
   await page.reload();
+  await page.waitForLoadState('domcontentloaded');
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await expect(
     page.locator('[role="tabpanel"]:visible').getByLabel('Input 1 key', { exact: true })
@@ -266,6 +271,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await expect(secretRow.getByLabel('Secret value hidden')).toBeVisible();
   await secretRow.getByRole('link', { name: 'Manage grants / Rotate' }).click();
   await page.waitForURL(/\/runbooks\/agents\/secrets\?.*secret=/);
+  await expect(page.locator('#secret-detail-title')).toHaveText(secretName);
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
   await page.getByPlaceholder('Search grant to target…').fill(poolName);
   await page.getByRole('option', { name: `Pool · ${poolName}`, exact: true }).click();

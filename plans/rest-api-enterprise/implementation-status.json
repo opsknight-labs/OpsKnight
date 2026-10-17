@@ -8,7 +8,10 @@
     "capabilities": "src/lib/api-v2/capability-catalog.ts",
     "operations": "src/lib/api-v2/openapi-registry.ts",
     "mutationContracts": "src/lib/api-v2/mutation-contract.ts",
-    "openapi": "sdk/openapi-v2.json"
+    "openapi": "sdk/openapi-v2.json",
+    "coveragePlan": "plans/rest-api-enterprise/complete-feature-coverage-plan.md",
+    "workflowInventory": "plans/rest-api-enterprise/workflow-inventory.json",
+    "commandStandard": "plans/rest-api-enterprise/domain-command-standard.md"
   },
   "phases": [
     {
@@ -62,7 +65,7 @@
       "phase": 4,
       "status": "pending",
       "remaining": [
-        "Integrate and certify the separate service-automation evaluator before exposing management",
+        "Complete combined-branch automation certification and the remaining effective configuration, validation, simulation, mode, restore, history and diagnostics APIs",
         "Integration setup/configuration/rotation/test/delete commands",
         "Notification preference and provider diagnostics contracts"
       ]
@@ -135,5 +138,27 @@
     "The temporary memory-backed database proves transaction behavior, not crash durability.",
     "The admin:manage runbook scope change requires the documented credential migration.",
     "Live SDK tests used a local production build and isolated PostgreSQL, not a customer production deployment."
-  ]
+  ],
+  "followupDelivery": {
+    "id": "API-13 through API-24",
+    "branch": "feat/api-13-enterprise-contracts",
+    "worktree": "opsknight-api-contracts",
+    "status": "in_progress",
+    "delivered": [
+      "Capability-family source mapping and delivery ownership",
+      "Preserved complete feature coverage plan and eight pending release gates",
+      "Shared command and operation admission standard",
+      "Inventory, source-path and registered mutation contract drift checks",
+      "Integrated service-automation branch a4e8723f6 into the combined worktree while retaining newer authentication, agent and notification safeguards",
+      "Shared global automation settings command and explicit-scope GET/PATCH with strong revisions and durable replay",
+      "Automation versioning commands support caller-owned transactions and credential-attributed canonical audit",
+      "Service automation draft GET/PUT and publication POST with dedicated scopes, team membership checks, strong revisions, canonical audit and generated SDK schemas"
+    ],
+    "remaining": [
+      "Service automation validation, simulation, modes, restore, history and observations",
+      "Remaining runbook, integration, schedule, identity, notification, status and reporting endpoint families",
+      "Full integration regression verification and combined-system Docker/Kind, load, HA and upgrade certification"
+    ],
+    "deliveryPolicy": "One PR (#886) for the entire approved plan, as explicitly requested by the user."
+  }
 }

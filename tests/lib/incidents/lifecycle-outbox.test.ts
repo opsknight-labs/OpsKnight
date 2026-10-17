@@ -8,7 +8,11 @@ import {
 const DB_NOW = new Date('2026-08-30T13:00:00.000Z');
 function createTx() {
   return {
-    $queryRaw: vi.fn().mockResolvedValue([{ now: DB_NOW }]),
+    $queryRaw: vi
+      .fn()
+      .mockImplementation(async (query: { text?: string }) =>
+        query.text?.includes('FROM "BackgroundJob"') ? [] : [{ now: DB_NOW }]
+      ),
     incident: { findUnique: vi.fn() },
     backgroundJob: {
       createMany: vi.fn().mockResolvedValue({ count: 0 }),

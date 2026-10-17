@@ -12,6 +12,8 @@ import { authorizationDecisionError } from '@/lib/api-authorization-error';
 import { AppError } from '@/lib/errors';
 import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
 import { toIncidentApiDto, toIncidentApiDtos } from '@/lib/incidents/api-dto';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -88,12 +90,17 @@ async function getIncidents(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     take: limit,
     include: {
+      automationTraces: { select: { incidentId: true }, take: 1 },
+      automationDecision: { select: { incidentId: true } },
       service: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
     },
   });
 
-  return jsonOk({ incidents: toIncidentApiDtos(incidents) }, 200, {
+  const visible = incidents.map(incident =>
+    visibleIncidentSource(incident, hasCapability(actor.role, CAPABILITIES.INCIDENT_SENSITIVE_READ))
+  );
+  return jsonOk({ incidents: toIncidentApiDtos(visible) }, 200, {
     'Cache-Control': 'private, max-age=5, stale-while-revalidate=15',
   });
 }

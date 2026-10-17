@@ -369,7 +369,10 @@ export async function acquireProviderAdmission(
   const id = `${scope}:${providerKey}:${windowStart.getTime()}`.slice(0, 240);
   const requested = Math.min(
     capacity.quotaBlockSize,
-    bulk ? capacity.bulkRatePerSecond : capacity.effectiveRatePerSecond
+    bulk ? capacity.bulkRatePerSecond : capacity.effectiveRatePerSecond,
+    // Urgent lanes cannot strand a whole second's budget in an idle replica.
+    // Match their reservation burst to the worker concurrency cap; bulk keeps batching.
+    bulk ? capacity.quotaBlockSize : MAX_SLOTS_PER_WORKER
   );
   // DB quota window is best-effort. Per-file vi.mock('@/lib/prisma') often omits
   // $executeRaw/$queryRaw — degrade to in-memory allow rather than unhandled throw.
@@ -388,24 +391,25 @@ export async function acquireProviderAdmission(
     INSERT INTO "ProviderQuotaWindow"
       ("id", "providerKey", "channel", "windowStart", "globalUsed", "bulkUsed", "expiresAt", "updatedAt")
     VALUES (${id}, ${providerKey}, ${scope}, ${windowStart}, 0, 0, ${expiresAt}, NOW())
-    ON CONFLICT ("id") DO NOTHING
+    ON CONFLICT DO NOTHING
   `);
     const rows = (await safePrisma.$queryRaw(Prisma.sql`
-    WITH capacity AS (
-      SELECT LEAST(
+    WITH capacity AS MATERIALIZED (
+      SELECT "id", LEAST(
         ${requested},
         GREATEST(0, ${capacity.effectiveRatePerSecond} - "globalUsed"),
         ${bulk ? Prisma.sql`GREATEST(0, ${capacity.bulkRatePerSecond} - "bulkUsed")` : Prisma.sql`${requested}`}
       )::integer AS granted
       FROM "ProviderQuotaWindow"
-      WHERE "id" = ${id}
+      WHERE "providerKey" = ${providerKey} AND "channel" = ${scope} AND "windowStart" = ${windowStart}
+      FOR UPDATE
     )
     UPDATE "ProviderQuotaWindow" AS quota_window
     SET "globalUsed" = quota_window."globalUsed" + capacity.granted,
         "bulkUsed" = quota_window."bulkUsed" + ${bulk ? Prisma.sql`capacity.granted` : Prisma.sql`0`},
         "updatedAt" = NOW()
     FROM capacity
-    WHERE quota_window."id" = ${id} AND capacity.granted > 0
+    WHERE quota_window."id" = capacity."id" AND capacity.granted > 0
     RETURNING capacity.granted
   `)) as Array<{ granted: number }>;
     const granted = Number(rows[0]?.granted ?? 0);

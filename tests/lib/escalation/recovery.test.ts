@@ -79,7 +79,10 @@ describe('reconcileEscalations', () => {
     expect(where).toMatchObject({
       status: 'OPEN',
       escalationStatus: null,
-      service: { policy: { steps: { some: {} } } },
+      OR: [
+        { service: { policy: { steps: { some: {} } } }, automationDecision: { is: null } },
+        { automationDecision: { is: { mode: 'LIVE', routeType: { not: 'NO_ESCALATION' } } } },
+      ],
     });
   });
 

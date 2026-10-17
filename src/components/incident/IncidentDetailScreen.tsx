@@ -1,4 +1,6 @@
 import prisma from '@/lib/prisma';
+import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { CAPABILITIES } from '@/lib/authorization';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -61,9 +63,19 @@ export default async function IncidentDetailScreen({
 }: IncidentDetailScreenProps) {
   const user = await assertCanViewIncident(id);
   const appUrl = await getAppUrl();
-  const incident = await prisma.incident.findUnique({
+  const storedIncident = await prisma.incident.findUnique({
     where: { id },
     include: {
+      automationTraces: { select: { incidentId: true }, take: 1 },
+      automationDecision: {
+        select: {
+          incidentId: true,
+          mode: true,
+          routeType: true,
+          escalationPolicyId: true,
+          escalationPolicyNameSnapshot: true,
+        },
+      },
       service: {
         include: {
           policy: true,
@@ -103,11 +115,30 @@ export default async function IncidentDetailScreen({
     },
   });
 
-  if (!incident) notFound();
-
-  const incidentSla = projectIncidentSlaState(incident, { now: new Date() });
-
+  if (!storedIncident) notFound();
   const permissions = await getUserPermissions();
+  const sensitive = permissions.capabilities.includes(CAPABILITIES.INCIDENT_SENSITIVE_READ);
+  const sourceRestricted =
+    (storedIncident.automationSourceRestricted ||
+      !!storedIncident.automationDecision ||
+      storedIncident.automationTraces.length > 0) &&
+    !sensitive;
+  const decision = storedIncident.automationDecision;
+  const incidentPolicy =
+    decision?.mode === 'LIVE'
+      ? decision.escalationPolicyId
+        ? {
+            id: decision.escalationPolicyId,
+            name: decision.escalationPolicyNameSnapshot ?? 'Pinned policy',
+          }
+        : null
+      : storedIncident.service.policy;
+  const incident = {
+    ...visibleIncidentSource(storedIncident, sensitive),
+    incidentPolicy,
+    noEscalation: decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION',
+  };
+  const incidentSla = projectIncidentSlaState(incident, { now: new Date() });
   const canReadRunbooks =
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL) ||
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED);
@@ -284,6 +315,9 @@ export default async function IncidentDetailScreen({
   const quickLinksContent = (
     <IncidentQuickLinksCard
       incidentId={incident.id}
+      incidentPolicy={incidentPolicy}
+      pinnedPolicy={decision?.mode === 'LIVE'}
+      noEscalation={decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION'}
       service={{
         id: incident.service.id,
         name: incident.service.name,
@@ -428,6 +462,8 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
+      {presentation === 'mobile' && <IncidentAutomationCard incidentId={id} />}
+
       {presentation === 'mobile' && (
         <MobileOperationalContextCard
           service={{
@@ -522,12 +558,20 @@ export default async function IncidentDetailScreen({
         />
       )}
 
-      <IncidentDescriptionCard
-        incidentId={incident.id}
-        description={incident.description}
-        canManage={canManageIncident}
-        onUpdateDescription={handleUpdateDescription}
-      />
+      {presentation !== 'mobile' && <IncidentAutomationCard incidentId={id} />}
+      {sourceRestricted ? (
+        <section className="rounded-xl border p-4">
+          <h2 className="font-semibold">Incident Description</h2>
+          <p className="text-sm text-muted-foreground">Alert details are restricted.</p>
+        </section>
+      ) : (
+        <IncidentDescriptionCard
+          incidentId={incident.id}
+          description={incident.description}
+          canManage={canManageIncident}
+          onUpdateDescription={handleUpdateDescription}
+        />
+      )}
 
       {incident.status === 'RESOLVED' && (
         <IncidentResolutionSummary

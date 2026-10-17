@@ -40,6 +40,7 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: mocks.runSerializableTransaction,
+  runReadCommittedTransaction: mocks.runSerializableTransaction,
 }));
 
 // The engine's notification boundary. Escalation's contract is that a step's
@@ -121,6 +122,21 @@ function liveTransaction(escalationProcessingAt: Date | null) {
         }),
         update: mocks.txIncidentUpdate,
       },
+      $queryRaw: vi.fn(async (query: unknown) =>
+        Array.isArray(query)
+          ? [
+              {
+                status: 'OPEN',
+                assigneeId: null,
+                teamId: null,
+                escalationStatus: 'ESCALATING',
+                escalationProcessingAt,
+                escalationGeneration: 0,
+                currentEscalationStep: 0,
+              },
+            ]
+          : []
+      ),
       incidentEvent: { create: mocks.txIncidentEventCreate },
       backgroundJob: { create: mocks.txBackgroundJobCreate },
     });

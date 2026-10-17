@@ -4,6 +4,15 @@
  */
 
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
+  'POST /services/{id}/automation/publish': { expectedActiveVersionId: null },
+  'DELETE /services/{id}/automation/candidate': {
+    expectedCandidateVersionId: 'cm111111111111111111111111',
+  },
+  'POST /services/{id}/automation/candidates/activate': {
+    expectedCandidateVersionId: 'cm111111111111111111111111',
+  },
+  'PUT /services/{id}/automation/draft': { snapshot: { schemaVersion: 1, fields: [], rules: [] } },
+  'PATCH /settings/automation': { automationEnabled: false, automationTraceRetentionDays: 90 },
   'POST /incidents/{id}/watchers': { userId: 'usr_789012', role: 'FOLLOWER' },
   'POST /runbooks/{id}/executions/preview': { parameters: {} },
   'POST /runbooks/executions/{id}/cancel': {

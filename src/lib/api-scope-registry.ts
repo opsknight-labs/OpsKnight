@@ -59,6 +59,41 @@ function def(
 const S = API_SCOPES;
 
 export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
+  [S.AUTOMATION_PUBLISH]: def(
+    S.AUTOMATION_PUBLISH,
+    'Automation publish',
+    'Automation',
+    'Publish validated immutable service automation versions with explicit administrator privilege.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.AUTOMATION_READ]: def(
+    S.AUTOMATION_READ,
+    'Automation read',
+    'Automation',
+    'Read permitted service automation drafts.',
+    { issuableBy: NON_USER }
+  ),
+  [S.AUTOMATION_WRITE]: def(
+    S.AUTOMATION_WRITE,
+    'Automation drafts',
+    'Automation',
+    'Edit service automation drafts. Responders must belong to the service team.',
+    { write: true, issuableBy: OPERATORS }
+  ),
+  [S.AUTOMATION_SETTINGS_READ]: def(
+    S.AUTOMATION_SETTINGS_READ,
+    'Automation settings read',
+    'Automation',
+    'Read administrative automation settings with explicit administrator privilege.',
+    { issuableBy: ADMINS }
+  ),
+  [S.AUTOMATION_SETTINGS_WRITE]: def(
+    S.AUTOMATION_SETTINGS_WRITE,
+    'Automation settings manage',
+    'Automation',
+    'Change the global kill switch and trace retention with revision protection.',
+    { write: true, issuableBy: ADMINS }
+  ),
   [S.EVENTS_WRITE]: def(
     S.EVENTS_WRITE,
     'Events ingestion',

@@ -9,7 +9,7 @@ import {
   isJiraStatusDone,
 } from '@/lib/jira-validation';
 import { extractJiraWebhookStatus, extractJiraWebhookAssignee } from '@/lib/jira-sync';
-import { extractWebhookProvidedSecret } from '@/app/api/jira/webhook/route';
+import { extractWebhookProvidedSecret } from '@/app/api/jira/webhook/handler';
 
 describe('jira validation helpers', () => {
   // -------------------------------------------------------------------------

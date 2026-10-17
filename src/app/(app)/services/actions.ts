@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { updateServiceWithAutomationPolicyGuard } from '@/lib/automation/service-policy';
 import type { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -130,17 +131,14 @@ export async function updateService(serviceId: string, formData: FormData) {
   try {
     const normalizedName = await assertServiceNameAvailable(name, { excludeId: serviceId });
 
-    await prisma.service.update({
-      where: { id: serviceId },
-      data: {
-        name: normalizedName,
-        description,
-        region: region || null,
-        slaTier: slaTier || null,
-        teamId: teamId || null,
-        escalationPolicyId: escalationPolicyId || null,
-        ...(defaultIncidentVisibility ? { defaultIncidentVisibility } : {}),
-      },
+    await updateServiceWithAutomationPolicyGuard(serviceId, {
+      name: normalizedName,
+      description,
+      region: region || null,
+      slaTier: slaTier || null,
+      teamId: teamId || null,
+      escalationPolicyId: escalationPolicyId || null,
+      ...(defaultIncidentVisibility ? { defaultIncidentVisibility } : {}),
     });
 
     await logAudit({

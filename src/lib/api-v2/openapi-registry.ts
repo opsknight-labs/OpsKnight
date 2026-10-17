@@ -30,6 +30,70 @@ const op = (
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
+    'post',
+    '/services/{id}/automation/publish',
+    'publishAutomationVersion',
+    'automation:publish',
+    'item',
+    'AutomationPublishedVersion'
+  ),
+  op(
+    'get',
+    '/services/{id}/automation/draft',
+    'getAutomationDraft',
+    'automation:read',
+    'item',
+    'AutomationDraft'
+  ),
+  op(
+    'put',
+    '/services/{id}/automation/draft',
+    'saveAutomationDraft',
+    'automation:write',
+    'item',
+    'AutomationDraft'
+  ),
+  op(
+    'get',
+    '/services/{id}/automation/candidate',
+    'getAutomationCandidate',
+    'automation:read',
+    'item',
+    'AutomationCandidateVersion'
+  ),
+  op(
+    'delete',
+    '/services/{id}/automation/candidate',
+    'discardAutomationCandidate',
+    'automation:publish',
+    'item',
+    'AutomationConfig'
+  ),
+  op(
+    'post',
+    '/services/{id}/automation/candidates/activate',
+    'activateAutomationCandidate',
+    'automation:publish',
+    'item',
+    'AutomationConfig'
+  ),
+  op(
+    'get',
+    '/settings/automation',
+    'getAutomationSettings',
+    'automation-settings:read',
+    'item',
+    'AutomationSettings'
+  ),
+  op(
+    'patch',
+    '/settings/automation',
+    'updateAutomationSettings',
+    'automation-settings:write',
+    'item',
+    'AutomationSettings'
+  ),
+  op(
     'get',
     '/incidents/{id}/watchers',
     'listIncidentWatchers',

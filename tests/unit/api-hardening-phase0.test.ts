@@ -220,23 +220,28 @@ describe('legacy credential paths share the scrypt admission budget', () => {
   });
 
   it('reports a throttled legacy lookup distinctly so /api/v1 can answer 429', async () => {
-    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
-    const headers = { 'x-forwarded-for': '198.51.100.32' };
-    for (let i = 0; i < LEGACY_AUTH_ADMISSION_LIMIT; i++) {
-      await authenticateApiKeyDetailed(
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 9, 16, 12, 0, 10));
+    try {
+      vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+      const headers = { 'x-forwarded-for': '198.51.100.32' };
+      for (let i = 0; i < LEGACY_AUTH_ADMISSION_LIMIT; i++) {
+        await authenticateApiKeyDetailed(
+          get('/api/v1/response-policy/workspace', {
+            ...headers,
+            authorization: `Bearer ${legacyToken(`k${i}`)}`,
+          })
+        );
+      }
+      const result = await authenticateApiKeyDetailed(
         get('/api/v1/response-policy/workspace', {
           ...headers,
-          authorization: `Bearer ${legacyToken(`k${i}`)}`,
+          authorization: `Bearer ${legacyToken('last')}`,
         })
       );
+      expect(result.status).toBe('throttled');
+    } finally {
+      clock.mockRestore();
     }
-    const result = await authenticateApiKeyDetailed(
-      get('/api/v1/response-policy/workspace', {
-        ...headers,
-        authorization: `Bearer ${legacyToken('last')}`,
-      })
-    );
-    expect(result.status).toBe('throttled');
   });
 });
 
@@ -298,20 +303,25 @@ describe('review follow-ups', () => {
   });
 
   it('sends Retry-After when the response-policy API throttles authentication', async () => {
-    vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
-    const headers = { 'x-forwarded-for': '198.51.100.40' };
-    const token = (seed: string) => `ok_${seed.padEnd(43, 'a')}`;
-    let res: Response | undefined;
-    for (let i = 0; i <= LEGACY_AUTH_ADMISSION_LIMIT; i++) {
-      res = await getResponsePolicyWorkspace(
-        get('/api/v1/response-policy/workspace', {
-          ...headers,
-          authorization: `Bearer ${token(`rp${i}`)}`,
-        })
-      );
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 9, 16, 12, 0, 10));
+    try {
+      vi.mocked(prisma.apiKey.findFirst).mockResolvedValue(null);
+      const headers = { 'x-forwarded-for': '198.51.100.40' };
+      const token = (seed: string) => `ok_${seed.padEnd(43, 'a')}`;
+      let res: Response | undefined;
+      for (let i = 0; i <= LEGACY_AUTH_ADMISSION_LIMIT; i++) {
+        res = await getResponsePolicyWorkspace(
+          get('/api/v1/response-policy/workspace', {
+            ...headers,
+            authorization: `Bearer ${token(`rp${i}`)}`,
+          })
+        );
+      }
+      expect(res!.status).toBe(429);
+      expect(Number(res!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+    } finally {
+      clock.mockRestore();
     }
-    expect(res!.status).toBe(429);
-    expect(Number(res!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
   });
 
   it('keeps schedule overrides in start order and pages on (start, id)', async () => {

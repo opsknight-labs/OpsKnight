@@ -12,6 +12,9 @@ export const APP_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 export const CAPABILITIES = {
+  AUTOMATION_READ: 'automation.read',
+  AUTOMATION_EDIT: 'automation.edit',
+  AUTOMATION_PUBLISH: 'automation.publish',
   ADMIN_MANAGE: 'admin.manage',
   OPERATIONS_MANAGE: 'operations.manage',
   INCIDENT_CREATE_ALL: 'incident.create.all',
@@ -84,6 +87,11 @@ export const API_SCOPES = {
   NOTIFICATIONS_WRITE: 'notifications:write',
   STATUS_PAGES_READ: 'status-pages:read',
   STATUS_PAGES_WRITE: 'status-pages:write',
+  AUTOMATION_READ: 'automation:read',
+  AUTOMATION_WRITE: 'automation:write',
+  AUTOMATION_PUBLISH: 'automation:publish',
+  AUTOMATION_SETTINGS_READ: 'automation-settings:read',
+  AUTOMATION_SETTINGS_WRITE: 'automation-settings:write',
   RUNBOOKS_READ: 'runbooks:read',
   RUNBOOKS_EXECUTE: 'runbooks:execute',
   RUNBOOKS_WRITE: 'runbooks:write',
@@ -101,6 +109,11 @@ export const API_SCOPES = {
 
 /** Infrastructure permissions are never implied by a broad administrator credential. */
 export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
+  API_SCOPES.AUTOMATION_READ,
+  API_SCOPES.AUTOMATION_WRITE,
+  API_SCOPES.AUTOMATION_PUBLISH,
+  API_SCOPES.AUTOMATION_SETTINGS_READ,
+  API_SCOPES.AUTOMATION_SETTINGS_WRITE,
   API_SCOPES.RUNBOOKS_WRITE,
   API_SCOPES.RUNBOOKS_PUBLISH,
   API_SCOPES.RUNBOOKS_EXECUTE,
@@ -123,6 +136,8 @@ export function isWriteApiScope(scope: ApiScope): boolean {
 
 const ADMIN_CAPABILITIES = new Set<Capability>(Object.values(CAPABILITIES));
 const RESPONDER_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.AUTOMATION_READ,
+  CAPABILITIES.AUTOMATION_EDIT,
   CAPABILITIES.OPERATIONS_MANAGE,
   CAPABILITIES.INCIDENT_CREATE_ALL,
   CAPABILITIES.INCIDENT_READ_ALL,
@@ -142,6 +157,7 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_APPROVE,
 ]);
 const AUDITOR_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.AUTOMATION_READ,
   CAPABILITIES.INCIDENT_READ_ALL,
   CAPABILITIES.SERVICE_READ_ALL,
   CAPABILITIES.METRICS_READ_ALL,

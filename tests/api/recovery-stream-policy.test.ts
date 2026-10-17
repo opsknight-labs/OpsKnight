@@ -10,7 +10,10 @@ import { GET as sla } from '@/app/api/sla/stream/route';
 vi.mock('next-auth', () => ({ getServerSession: vi.fn() }));
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/lib/authentication-policy', () => ({ checkAuthenticationPolicy: vi.fn() }));
-vi.mock('@/lib/rbac', () => ({ assertCanReadServiceMetrics: vi.fn() }));
+vi.mock('@/lib/rbac', () => ({
+  assertCanReadServiceMetrics: vi.fn(),
+  getUserPermissions: vi.fn().mockResolvedValue({ capabilities: ['incident.sensitive.read'] }),
+}));
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
 }));

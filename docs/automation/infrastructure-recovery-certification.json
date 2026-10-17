@@ -1,0 +1,22 @@
+{
+  "status": "PASSED_COMPONENT_RESTART_DRILL",
+  "generatedAt": "2026-10-08T16:18:29.391947+00:00",
+  "scope": "Isolated PostgreSQL restart during service automation ingestion; not a promoted-primary failover or HTTP capacity certification.",
+  "runtime": "Local Vitest/Node 22; actual PostgreSQL 16 Docker process restarted with --time 0",
+  "postgresImageId": "sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685",
+  "test": "tests/integration/automation-certification.test.ts: recovers an isolated PostgreSQL restart during concurrent ingestion and replay",
+  "concurrentRequests": 8,
+  "checks": {
+    "incidents": 1,
+    "immutableDecisions": 1,
+    "pinnedPublishedVersion": true,
+    "route": "NO_ESCALATION",
+    "observationReceiptsAfterDoubleReplay": 1,
+    "fallbackReason": null,
+    "mode": "LIVE",
+    "finalPriority": "P1",
+    "traces": 1
+  },
+  "durationMs": 2490,
+  "readiness": "Replay waits for database readiness after actual process restart; transient requests may fail during outage."
+}
