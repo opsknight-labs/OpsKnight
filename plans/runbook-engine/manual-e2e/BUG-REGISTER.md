@@ -4,14 +4,14 @@ This register catalogs all functional, architectural, and user-experience defect
 
 ---
 
-### Bug #1: In-Cluster Kubernetes Agent ServiceAccount Authentication Timeout
+### Bug #1: Kubernetes Agent Capability Probe RBAC Scope
 
 - **Component**: `agent/src/capabilities.ts`
-- **Severity**: High (Blocking in-cluster Kubernetes agents)
-- **Symptom**: Agents running inside Kubernetes pods failed capability detection for `KUBERNETES`, reporting `Binary or runtime access unavailable` or timing out during startup.
-- **Root Cause**: The probe function `discoverKubernetes()` attempted to execute external `kubectl` binary CLI invocations with a short, blocking synchronous execution path that failed when `kubectl` was omitted from minimal container base images, and stalled in-cluster ServiceAccount token resolution.
-- **Resolution**: Updated `discoverKubernetes()` to inspect standard in-cluster environment variables (`KUBERNETES_SERVICE_HOST`, `/var/run/secrets/kubernetes.io/serviceaccount/token`), and verify namespace connectivity without invoking external shell wrappers.
-- **Regression Verification**: `test-cert-agent-ui` pod inside Kind cluster immediately reported `Kubernetes: Configured, Available` with 0 errors.
+- **Severity**: High (Namespace-restricted Kubernetes agents)
+- **Symptom**: In-cluster Kubernetes agents configured with standard namespace-scoped ServiceAccounts failed capability detection for `KUBERNETES`, reporting `Binary or runtime access unavailable` or permission denied during startup capability probes.
+- **Root Cause**: The capability probe initially executed cluster-level administrative queries (`kubectl cluster-info` or reading broad `kube-system` resources) which are denied by least-privilege namespace-scoped ServiceAccount RBAC policies.
+- **Resolution**: Updated the Kubernetes capability probe in `agent/src/capabilities.ts` to execute `kubectl get --raw=/version`. This unauthenticated API server endpoint validates cluster API reachability and valid ServiceAccount credentials without requiring cluster-wide administrative read permissions.
+- **Regression Verification**: Verified on `test-cert-agent-ui` pod running in Kind cluster (`opsknight-cert` namespace): probe executes `kubectl get --raw=/version`, verifies API server connectivity, and reports `Kubernetes: Configured, Available` with 0 errors.
 
 ---
 

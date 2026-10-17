@@ -200,8 +200,48 @@ export function AgentDetailDrawer({
               ? agent.capabilities.map(c => String(c).toUpperCase())
               : [];
 
+            // Fallback for older or third-party agents that report agent.capabilities but omit capabilityReport
+            const fallbackCapabilities: Array<{
+              name: string;
+              type: string;
+              configured: boolean;
+              available: boolean;
+              reason?: string | null;
+            }> =
+              report.length === 0 && agentCaps.length > 0
+                ? agentCaps.map(cap => {
+                    const rawType = cap.replace(/^RUNBOOK_/, '');
+                    const type = rawType === 'DOCKER_RUNTIME' ? 'DOCKER' : rawType;
+                    const name =
+                      rawType === 'LINUX_DIAGNOSTICS'
+                        ? 'Linux diagnostics'
+                        : rawType === 'DOCKER_RUNTIME'
+                          ? 'Docker'
+                          : rawType === 'KUBERNETES'
+                            ? 'Kubernetes'
+                            : rawType === 'SYSTEMD'
+                              ? 'Systemd'
+                              : rawType === 'PODMAN'
+                                ? 'Podman'
+                                : rawType === 'BASH'
+                                  ? 'Bash'
+                                  : rawType.charAt(0) + rawType.slice(1).toLowerCase();
+                    return {
+                      name,
+                      type,
+                      configured: true,
+                      available: true,
+                      reason: null,
+                    };
+                  })
+                : [];
+
+            const displayedActiveCapabilities =
+              activeCapabilities.length > 0 ? activeCapabilities : fallbackCapabilities;
+
             const isK8s =
               activeTypes.has('KUBERNETES') ||
+              fallbackCapabilities.some(c => c.type === 'KUBERNETES') ||
               labelsStr.includes('kubernetes') ||
               labelsStr.includes('"tier":"kubernetes"') ||
               labelsStr.includes('cluster') ||
@@ -213,16 +253,19 @@ export function AgentDetailDrawer({
             const isPodman =
               activeNames.has('Podman') ||
               activeTypes.has('PODMAN') ||
+              fallbackCapabilities.some(c => c.name === 'Podman') ||
               labelsStr.includes('podman') ||
               nameLower.includes('podman');
 
             const isDocker =
-              (activeTypes.has('DOCKER') && !isPodman) ||
+              ((activeTypes.has('DOCKER') || fallbackCapabilities.some(c => c.type === 'DOCKER')) &&
+                !isPodman) ||
               labelsStr.includes('docker') ||
               nameLower.includes('docker');
 
             const isSystemd =
               activeTypes.has('SYSTEMD') ||
+              fallbackCapabilities.some(c => c.type === 'SYSTEMD') ||
               labelsStr.includes('systemd') ||
               labelsStr.includes('db-replica') ||
               labelsStr.includes('database') ||
@@ -231,19 +274,19 @@ export function AgentDetailDrawer({
 
             const runtimeEnv = isK8s
               ? {
-                  title: 'Kubernetes Workload Cluster',
+                  title: 'Kubernetes Cluster Target',
                   badge: 'Kubernetes',
                   icon: <Boxes className="h-3.5 w-3.5 text-emerald-500" />,
                   badgeClassName:
                     'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
                   description:
-                    'Running as a containerized pod inside a Kubernetes cluster with direct API access and in-cluster ServiceAccount authentication.',
+                    'Configured with Kubernetes cluster management access (in-cluster ServiceAccount or configured kubeconfig).',
                   platformDetails: [
                     {
-                      label: 'Cluster Context',
+                      label: 'Cluster Access',
                       value: (agent.labels as Record<string, string> | undefined)?.cluster
                         ? `Cluster: ${(agent.labels as Record<string, string>).cluster}`
-                        : 'In-Cluster / Context',
+                        : 'Cluster Context / Kubeconfig',
                     },
                     { label: 'Workload Targets', value: 'Deployments, StatefulSets, Pods, Events' },
                     { label: 'Remediation', value: 'Rollout restart, scale, status validation' },
@@ -361,17 +404,19 @@ export function AgentDetailDrawer({
                   <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <span className="text-muted-foreground/70">Node/Host:</span>
-                      <span className="text-foreground">{agent.hostname || 'Unknown'}</span>
+                      <span className="text-foreground">{agent.hostname || 'Not reported'}</span>
                     </span>
                     <span>•</span>
                     <span className="inline-flex items-center gap-1">
                       <span className="text-muted-foreground/70">OS:</span>
-                      <span className="text-foreground">{agent.platform || 'Linux'}</span>
+                      <span className="text-foreground">{agent.platform || 'Not reported'}</span>
                     </span>
                     <span>•</span>
                     <span className="inline-flex items-center gap-1">
                       <span className="text-muted-foreground/70">Agent:</span>
-                      <span className="text-foreground">v{agent.version || '2.0.0'}</span>
+                      <span className="text-foreground">
+                        {agent.version ? `v${agent.version}` : 'Not reported'}
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -381,18 +426,20 @@ export function AgentDetailDrawer({
                   <div className="flex items-center justify-between">
                     <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       <Terminal className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                      <span>Active Capabilities ({activeCapabilities.length})</span>
+                      <span>Active Capabilities ({displayedActiveCapabilities.length})</span>
                     </h4>
                     <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                      {activeCapabilities.length > 0
-                        ? 'Policy & Runtime Verified'
+                      {displayedActiveCapabilities.length > 0
+                        ? activeCapabilities.length > 0
+                          ? 'Policy & Runtime Verified'
+                          : 'Effective Capabilities'
                         : 'No Active Capabilities'}
                     </span>
                   </div>
 
-                  {activeCapabilities.length > 0 ? (
+                  {displayedActiveCapabilities.length > 0 ? (
                     <div className="space-y-2">
-                      {activeCapabilities.map((e, index) => (
+                      {displayedActiveCapabilities.map((e, index) => (
                         <div
                           key={index}
                           className="rounded-xl border bg-card p-3 shadow-2xs space-y-1.5 hover:border-border transition-colors"
@@ -424,7 +471,7 @@ export function AgentDetailDrawer({
                       <p>
                         {agentCaps.length > 0
                           ? `Awaiting agent heartbeat check-in to verify ${agentCaps.length} registered ${agentCaps.length === 1 ? 'capability' : 'capabilities'}.`
-                          : 'No active capabilities verified on this agent.'}
+                          : 'No active capabilities reported or verified on this agent.'}
                       </p>
                       {agentCaps.length > 0 && (
                         <div className="flex flex-wrap justify-center gap-1.5 pt-1">
