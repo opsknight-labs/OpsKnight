@@ -1,10 +1,11 @@
 'use client';
 
-import { ThemeProvider, useTheme } from 'next-themes';
+import { ThemeProvider } from 'next-themes';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
+import { useEffectiveTheme } from '@/hooks/use-effective-theme';
 
 const MOBILE_THEME_COLORS = {
   light: '#f8fafc',
@@ -27,11 +28,10 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 }
 
 function ThemeAttributeBridge() {
-  const { resolvedTheme } = useTheme();
+  const effectiveTheme = useEffectiveTheme();
 
   useEffect(() => {
     const root = document.documentElement;
-    const effectiveTheme = resolvedTheme === 'dark' ? 'dark' : 'light';
     root.dataset.theme = effectiveTheme;
     root.style.colorScheme = effectiveTheme;
 
@@ -53,7 +53,7 @@ function ThemeAttributeBridge() {
       );
       if (fallbackThemeColor) fallbackThemeColor.content = nextThemeColor;
     }
-  }, [resolvedTheme]);
+  }, [effectiveTheme]);
 
   return null;
 }

@@ -1,0 +1,283 @@
+/* ========================================
+   Notification toasts (Sonner)
+
+   One source of truth for toast colour and motion. Tokens are keyed only off
+   the toaster's own data-sonner-theme, which <Toaster> sets from the theme the
+   page is actually painted in (useEffectiveTheme). Do not key toast colours off
+   prefers-color-scheme, .dark or data-theme: the OS preference and the app
+   theme disagree on the forced-light desktop, which is what made the close
+   button vanish in browser dark mode.
+   ======================================== */
+
+.ok-toaster[data-sonner-theme='light'] {
+  --toast-bg: #ffffff;
+  --toast-border: rgb(15 23 42 / 0.09);
+  --toast-fg: #0f172a;
+  --toast-muted: #475569;
+  --toast-shadow:
+    0 1px 2px rgb(15 23 42 / 0.05), 0 6px 16px -4px rgb(15 23 42 / 0.1),
+    0 20px 40px -12px rgb(15 23 42 / 0.16);
+  --toast-close-fg: #64748b;
+  --toast-close-hover-bg: #f1f5f9;
+  --toast-close-hover-fg: #0f172a;
+  --toast-focus: #2563eb;
+
+  --toast-success: #059669;
+  --toast-success-soft: #ecfdf5;
+  --toast-success-ring: #a7f3d0;
+  --toast-error: #e11d48;
+  --toast-error-soft: #fff1f2;
+  --toast-error-ring: #fecdd3;
+  --toast-warning: #d97706;
+  --toast-warning-soft: #fffbeb;
+  --toast-warning-ring: #fde68a;
+  --toast-info: #2563eb;
+  --toast-info-soft: #eff6ff;
+  --toast-info-ring: #bfdbfe;
+  --toast-loading: #475569;
+  --toast-loading-soft: #f1f5f9;
+  --toast-loading-ring: #e2e8f0;
+}
+
+.ok-toaster[data-sonner-theme='dark'] {
+  --toast-bg: #1e293b;
+  --toast-border: rgb(255 255 255 / 0.09);
+  --toast-fg: #f1f5f9;
+  --toast-muted: #cbd5e1;
+  --toast-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05), 0 8px 20px -6px rgb(0 0 0 / 0.55),
+    0 24px 48px -12px rgb(0 0 0 / 0.6);
+  --toast-close-fg: #94a3b8;
+  --toast-close-hover-bg: rgb(255 255 255 / 0.08);
+  --toast-close-hover-fg: #ffffff;
+  --toast-focus: #60a5fa;
+
+  --toast-success: #34d399;
+  --toast-success-soft: rgb(16 185 129 / 0.14);
+  --toast-success-ring: rgb(52 211 153 / 0.3);
+  --toast-error: #fb7185;
+  --toast-error-soft: rgb(244 63 94 / 0.14);
+  --toast-error-ring: rgb(251 113 133 / 0.32);
+  --toast-warning: #fbbf24;
+  --toast-warning-soft: rgb(245 158 11 / 0.14);
+  --toast-warning-ring: rgb(251 191 36 / 0.3);
+  --toast-info: #60a5fa;
+  --toast-info-soft: rgb(59 130 246 / 0.16);
+  --toast-info-ring: rgb(96 165 250 / 0.32);
+  --toast-loading: #cbd5e1;
+  --toast-loading-soft: rgb(148 163 184 / 0.14);
+  --toast-loading-ring: rgb(148 163 184 / 0.28);
+}
+
+.ok-toaster {
+  font-family: inherit;
+}
+
+/* ---- Shield from legacy element rules ----
+   Page-wide element rules (compact `button`/`li` padding in topbar.css, 44px
+   touch minimums in globals.css) used to crush the close icon to a sliver and
+   resize action labels. The compact rules now exclude [data-sonner-toaster];
+   this resets whatever plain element rules remain. Hit areas are handled
+   explicitly on the close button below. */
+.ok-toaster [data-sonner-toast] {
+  padding: 0;
+}
+
+.ok-toaster [data-sonner-toast] button {
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  font-size: inherit;
+}
+
+.ok-toaster [data-sonner-toast] .ok-toast__action {
+  font-size: 13px;
+}
+
+/* ---- Card surface: the <li> is the card so stacking/peeking stays intact ---- */
+
+.ok-toaster [data-sonner-toast] {
+  width: var(--width);
+  border-radius: 14px;
+  border: 1px solid var(--toast-border);
+  background: var(--toast-bg);
+  color: var(--toast-fg);
+  box-shadow: var(--toast-shadow);
+  /* Sonner's default is linear; ease-out-expo gives a soft settle on entry. */
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-duration: 450ms;
+}
+
+/* Sonner's phone layout spans the viewport minus the mobile offset. */
+@media (max-width: 600px) {
+  .ok-toaster [data-sonner-toast] {
+    width: calc(100% - var(--mobile-offset-left) * 2);
+  }
+}
+
+.ok-toaster [data-sonner-toast].ok-toast-item--error {
+  border-color: var(--toast-error-ring);
+}
+
+/* Collapsed stack: back cards show only their edge, never their text. Sonner
+   does this for its own styled toasts but not for custom ones. */
+.ok-toaster [data-sonner-toast][data-expanded='false'][data-front='false'] > * {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ok-toaster [data-sonner-toast]:focus-visible {
+  /* Replace the page-wide outline with a ring that follows the card radius. */
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--toast-bg),
+    0 0 0 4px var(--toast-focus),
+    var(--toast-shadow);
+}
+
+/* ---- Content ---- */
+
+.ok-toast {
+  --tone: var(--toast-info);
+  --tone-soft: var(--toast-info-soft);
+  --tone-ring: var(--toast-info-ring);
+}
+.ok-toast[data-tone='success'] {
+  --tone: var(--toast-success);
+  --tone-soft: var(--toast-success-soft);
+  --tone-ring: var(--toast-success-ring);
+}
+.ok-toast[data-tone='error'] {
+  --tone: var(--toast-error);
+  --tone-soft: var(--toast-error-soft);
+  --tone-ring: var(--toast-error-ring);
+}
+.ok-toast[data-tone='warning'] {
+  --tone: var(--toast-warning);
+  --tone-soft: var(--toast-warning-soft);
+  --tone-ring: var(--toast-warning-ring);
+}
+.ok-toast[data-tone='loading'] {
+  --tone: var(--toast-loading);
+  --tone-soft: var(--toast-loading-soft);
+  --tone-ring: var(--toast-loading-ring);
+}
+
+.ok-toast__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  color: var(--tone);
+  background: var(--tone-soft);
+  box-shadow: inset 0 0 0 1px var(--tone-ring);
+}
+
+.ok-toast__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.005em;
+  color: var(--toast-fg);
+}
+
+.ok-toast__description {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--toast-muted);
+}
+
+.ok-toast__action {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--toast-focus);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.ok-toast__action:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Always visible (not hover-revealed) so touch users and dark mode both get it. */
+.ok-toast__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--toast-close-fg);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+/* 40px hit area (44px on touch screens) without growing the visual button. */
+.ok-toast__close::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+@media (hover: none) and (pointer: coarse) {
+  .ok-toast__close::after {
+    inset: -8px;
+  }
+}
+.ok-toast__close:hover {
+  background: var(--toast-close-hover-bg);
+  color: var(--toast-close-hover-fg);
+}
+.ok-toast__close:active {
+  transform: scale(0.92);
+}
+
+.ok-toast__close:focus-visible,
+.ok-toast__action:focus-visible {
+  outline: 2px solid var(--toast-focus);
+  outline-offset: 2px;
+}
+
+/* ---- Motion: the icon settles in just after the card lands ---- */
+
+@keyframes ok-toast-icon-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* Declared only when motion is welcome, so reduced-motion users never see the
+   icon's hidden starting frame. Sonner already removes the card transitions. */
+@media (prefers-reduced-motion: no-preference) {
+  .ok-toaster [data-sonner-toast][data-mounted='true'] .ok-toast__icon {
+    animation: ok-toast-icon-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 90ms both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ok-toast__close {
+    transition: none;
+  }
+}

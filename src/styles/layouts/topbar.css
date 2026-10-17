@@ -1100,8 +1100,8 @@ textarea:not(.login-card textarea) {
   font-size: 0.875rem;
 }
 
-/* Compact buttons - exclude login */
-button:not(.login-btn):not(.login-btn-primary):not(.login-btn-sso):not(.login-password-toggle):not(.login-card button) {
+/* Compact buttons - exclude login and toasts */
+button:not(.login-btn):not(.login-btn-primary):not(.login-btn-sso):not(.login-password-toggle):not(.login-card button):not([data-sonner-toaster] *) {
   padding: 0.375rem 0.875rem;
   font-size: 0.875rem;
 }
@@ -1198,8 +1198,8 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
     font-size: 0.875rem !important;
   }
 
-  /* Compact buttons - exclude login */
-  button:not(.login-btn):not(.login-btn-primary):not(.login-btn-sso):not(.login-password-toggle):not(.login-card button) {
+  /* Compact buttons - exclude login and toasts */
+  button:not(.login-btn):not(.login-btn-primary):not(.login-btn-sso):not(.login-password-toggle):not(.login-card button):not([data-sonner-toaster] *) {
     padding: 0.375rem 0.875rem !important;
     font-size: 0.875rem !important;
   }
@@ -1236,8 +1236,8 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
     gap: 0.75rem !important;
   }
 
-  /* Compact list items */
-  li:not(.login-card li) {
+  /* Compact list items - exclude toasts (each toast is an <li>) */
+  li:not(.login-card li):not([data-sonner-toaster] *) {
     padding: 0.375rem 0 !important;
   }
 
