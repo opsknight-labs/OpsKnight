@@ -144,6 +144,18 @@ export async function publishVersion(input: {
     });
     if ((config?.activeVersionId ?? null) !== input.expectedActiveVersionId)
       throw new AutomationConflict();
+    if (config?.mode === 'LIVE') {
+      const currentCandidateId = config?.candidateVersionId ?? null;
+      if (
+        input.expectedCandidateVersionId !== undefined &&
+        currentCandidateId !== input.expectedCandidateVersionId
+      ) {
+        throw new AutomationConflict();
+      }
+      if (currentCandidateId !== null && input.expectedCandidateVersionId === undefined) {
+        throw new AutomationConflict();
+      }
+    }
     const draft = await tx.automationDraft.findUnique({ where: { serviceId: input.serviceId } });
     if ((draft?.revision ?? 0) !== input.expectedRevision) throw new AutomationConflict();
     const source = input.sourceVersionId

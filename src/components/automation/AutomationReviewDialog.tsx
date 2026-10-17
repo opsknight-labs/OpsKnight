@@ -91,7 +91,7 @@ export function AutomationReviewDialog({
   onCancel,
   onConfirm,
 }: {
-  action: 'publish' | 'restore' | 'LIVE' | null;
+  action: 'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null;
   snapshot: Snapshot;
   before?: Snapshot;
   mode?: string;
@@ -350,7 +350,11 @@ export function AutomationReviewDialog({
             aria-describedby={blockedReason ? blockedId : undefined}
             onClick={() => onConfirm(acknowledge, acknowledgeErrors)}
           >
-            {busy ? 'Saving…' : action === 'LIVE' ? 'Confirm LIVE' : 'Confirm publication'}
+            {busy
+              ? 'Saving…'
+              : action === 'LIVE' || action === 'activateCandidate'
+                ? 'Confirm LIVE'
+                : 'Confirm publication'}
           </Button>
         </div>
       </DialogContent>

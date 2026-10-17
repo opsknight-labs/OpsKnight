@@ -9,6 +9,8 @@ import {
   saveDraft,
   publishVersion,
   changeMode,
+  activateCandidate,
+  discardCandidate,
   AutomationConflict,
 } from '@/lib/automation/versioning';
 import { emptySnapshot, snapshotSchema } from '@/lib/automation/contract';
@@ -48,7 +50,25 @@ const actionSchema = z.discriminatedUnion('action', [
       serviceId: id,
       expectedRevision: z.number().int().nonnegative(),
       expectedActiveVersionId: id.nullable(),
+      expectedCandidateVersionId: id.nullable().optional(),
       sourceVersionId: id.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('activateCandidate'),
+      serviceId: id,
+      expectedCandidateVersionId: id,
+      expectedActiveVersionId: id.nullable().optional(),
+      acknowledgeNoShadow: z.boolean().optional(),
+      acknowledgeShadowErrors: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('discardCandidate'),
+      serviceId: id,
+      expectedCandidateVersionId: id,
     })
     .strict(),
   z
@@ -86,7 +106,7 @@ export async function automationAction(raw: unknown) {
     const capability =
       input.action === 'save'
         ? 'automation.edit'
-        : ['publish', 'mode'].includes(input.action)
+        : ['publish', 'mode', 'activateCandidate', 'discardCandidate'].includes(input.action)
           ? 'automation.publish'
           : 'automation.read';
     const user = await assertAutomationAccess(input.serviceId, capability);
@@ -94,6 +114,10 @@ export async function automationAction(raw: unknown) {
       return { ok: true as const, data: await saveDraft({ ...input, actorId: user.id }) };
     if (input.action === 'publish')
       return { ok: true as const, data: await publishVersion({ ...input, actorId: user.id }) };
+    if (input.action === 'activateCandidate')
+      return { ok: true as const, data: await activateCandidate({ ...input, actorId: user.id }) };
+    if (input.action === 'discardCandidate')
+      return { ok: true as const, data: await discardCandidate({ ...input, actorId: user.id }) };
     if (input.action === 'mode')
       return { ok: true as const, data: await changeMode({ ...input, actorId: user.id }) };
     if (input.action === 'lint')
@@ -230,7 +254,7 @@ export async function getAutomationArea(
   }
   const config = await prisma.serviceAutomationConfig.findUnique({
     where: { serviceId },
-    select: { mode: true, activeVersionId: true, updatedAt: true },
+    select: { mode: true, activeVersionId: true, candidateVersionId: true, updatedAt: true },
   });
   const draftRevision = await prisma.automationDraft.findUnique({
     where: { serviceId },
@@ -352,6 +376,31 @@ export async function getAutomationArea(
         },
       })
     : null;
+  const candidateVersion = config?.candidateVersionId
+    ? await prisma.automationVersion.findUnique({
+        where: { id: config.candidateVersionId },
+        select: {
+          id: true,
+          versionNumber: true,
+          publishedAt: true,
+          publishedBy: true,
+          checksum: true,
+          lintReport: true,
+          snapshot: true,
+        },
+      })
+    : null;
+  const candidateAggregates = config?.candidateVersionId
+    ? await prisma.automationShadowAggregate.findMany({
+        where: {
+          serviceId,
+          versionId: config.candidateVersionId,
+          bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
+        },
+        take: 100,
+        orderBy: { bucketDate: 'desc' },
+      })
+    : [];
   let unmappedCount = 0;
   if (area === 'overview' && activeVersion) {
     const parsed = snapshotSchema.safeParse(activeVersion.snapshot);
@@ -384,6 +433,7 @@ export async function getAutomationArea(
     enabled: await automationEnabled(),
     mode: config?.mode ?? 'DISABLED',
     activeVersionId: config?.activeVersionId ?? null,
+    candidateVersionId: config?.candidateVersionId ?? null,
     canEdit,
     canPublish: user.role === 'ADMIN',
     canReadSensitive,
@@ -397,6 +447,11 @@ export async function getAutomationArea(
       activeVersion && area === 'overview'
         ? { ...activeVersion, snapshot: undefined }
         : activeVersion,
+    candidateVersion:
+      candidateVersion && area === 'overview'
+        ? { ...candidateVersion, snapshot: undefined }
+        : candidateVersion,
+    candidateAggregates,
     versions: versions.map(version => ({
       ...version,
       publisherName:

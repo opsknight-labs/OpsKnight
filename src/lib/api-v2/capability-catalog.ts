@@ -87,6 +87,9 @@ const decisions: readonly ApiCapability[] = [
       'getAutomationDraft',
       'saveAutomationDraft',
       'publishAutomationVersion',
+      'getAutomationCandidate',
+      'discardAutomationCandidate',
+      'activateAutomationCandidate',
     ],
   },
   {

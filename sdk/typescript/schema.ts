@@ -22,6 +22,8 @@ export type Postmortem = { "id": string; "incidentId": string; "title"?: string 
 export type AutomationSnapshot = { "schemaVersion": 1; "fields": Array<{ "fieldId": string; "key": string; "label": string; "type": "STRING" | "ENUM" | "NUMBER" | "BOOLEAN"; "caseSensitive"?: boolean; "allowedValues"?: Array<string>; "aliases"?: Record<string, string>; "mappings"?: Array<{ "source": "PROVIDER" | "EVENT"; "integrationType"?: string; "path": string }> }>; "rules": Array<{ "id": string; "name": string; "phase": "ENRICH" | "ROUTE"; "enabled"?: boolean; "conditions": Array<{ "fieldKey": string; "operator": "EQ" | "NE" | "IN" | "NOT_IN" | "LT" | "LTE" | "GT" | "GTE" | "IS_SET" | "IS_MISSING" | "IS_UNMAPPED"; "value"?: string | number | boolean | Array<string | number | boolean> }>; "actions": Array<{ "type": "SET_PRIORITY"; "value": "P1" | "P2" | "P3" | "P4" | "P5" } | { "type": "SET_CONTEXT"; "fieldKey": string; "value": string | number | boolean } | { "type": "ADD_TAG"; "value": string } | { "type": "USE_SERVICE_DEFAULT" } | { "type": "USE_ESCALATION_POLICY"; "policyId": string } | { "type": "NO_ESCALATION" } | { "type": "NOTIFY_CHANNEL"; "provider": "SLACK" | "TEAMS"; "destinationId": string }> }> };
 export type AutomationDraft = { "serviceId": string; "revision": number; "snapshot": AutomationSnapshot };
 export type AutomationPublishedVersion = { "id": string; "serviceId": string; "versionNumber": number; "checksum": string };
+export type AutomationCandidateVersion = { "id": string; "serviceId": string; "versionNumber": number; "publishedAt": string; "publishedBy": string; "checksum": string; "sourceVersionId"?: string | null; "lintReport"?: Array<{ "level": string; "message": string }>; "snapshot": AutomationSnapshot; "shadowAggregates": { "evaluated": number; "same": number; "routeDifferent": number; "priorityDifferent": number; "noEscalationDifferent": number; "errors": number; "fallbacks": number } };
+export type AutomationConfig = { "serviceId": string; "activeVersionId"?: string | null; "candidateVersionId"?: string | null };
 export type AutomationSettings = { "automationEnabled": boolean; "automationTraceRetentionDays": number; "automationSettingsRevision": number };
 export type IncidentWatcher = { "id": string; "incidentId": string; "userId": string; "role": string; "createdAt": string };
 export type IncidentWatcherRemoved = { "id": string; "incidentId": string; "removed": true };
@@ -48,6 +50,9 @@ export interface OperationRequests {
   publishAutomationVersion: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "expectedActiveVersionId": string | null } };
   getAutomationDraft: { "params": { "id": string } };
   saveAutomationDraft: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "snapshot": AutomationSnapshot } };
+  getAutomationCandidate: { "params": { "id": string } };
+  discardAutomationCandidate: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedCandidateVersionId": string } };
+  activateAutomationCandidate: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedCandidateVersionId": string; "expectedActiveVersionId"?: string | null; "acknowledgeNoShadow"?: boolean; "acknowledgeShadowErrors"?: boolean } };
   getAutomationSettings: Record<string, never>;
   updateAutomationSettings: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "automationEnabled": boolean; "automationTraceRetentionDays": number } };
   listIncidentWatchers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
@@ -139,6 +144,9 @@ export interface OperationResponses {
   publishAutomationVersion: { "data": AutomationPublishedVersion; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getAutomationDraft: { "data": AutomationDraft; "requestId": string; "timestamp": string } & Record<string, unknown>;
   saveAutomationDraft: { "data": AutomationDraft; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getAutomationCandidate: { "data": AutomationCandidateVersion; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  discardAutomationCandidate: { "data": AutomationConfig; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  activateAutomationCandidate: { "data": AutomationConfig; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getAutomationSettings: { "data": AutomationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateAutomationSettings: { "data": AutomationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentWatchers: { "data": Array<IncidentWatcher>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -254,6 +262,34 @@ export const OPERATIONS = {
     "requiredHeaders": [
       "Idempotency-Key",
       "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getAutomationCandidate": {
+    "method": "GET",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "discardAutomationCandidate": {
+    "method": "DELETE",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "activateAutomationCandidate": {
+    "method": "POST",
+    "path": "/services/{id}/automation/candidates/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
     ],
     "bodyRequired": true
   },

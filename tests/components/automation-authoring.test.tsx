@@ -1229,12 +1229,14 @@ it('disambiguates persisted observations with identical field keys, paths, and v
   expect(providerOption).toHaveTextContent('Status — status (GITHUB)');
 });
 
-it('requires leaving LIVE before offering publication of another version', async () => {
+it('allows publishing a candidate version while LIVE without leaving LIVE', async () => {
   api.area.mockResolvedValue({ ...data, mode: 'LIVE' });
   render(<AutomationWorkspace serviceId="service" />);
-  expect(await screen.findByRole('button', { name: /^Publish$/ })).toBeDisabled();
+  const publishCandidateBtn = await screen.findByRole('button', { name: /^Publish candidate$/ });
+  expect(publishCandidateBtn).not.toBeDisabled();
   expect(
-    screen.getByText('Switch to SHADOW or DISABLED before publishing a new version.')
+    screen.getByText(
+      'Publishing while LIVE stages a candidate version for parallel shadow evaluation without interrupting routing.'
+    )
   ).toBeVisible();
-  expect(api.action).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'publish' }));
 });

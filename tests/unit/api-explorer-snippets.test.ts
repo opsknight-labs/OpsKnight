@@ -11,8 +11,8 @@ import {
 } from '@/components/settings/ApiExplorerPanel';
 
 describe('API Explorer Snippet Generator Verification', () => {
-  it('covers all 89 registered REST v2 operations', () => {
-    expect(V2_OPERATIONS).toHaveLength(89);
+  it('covers all 92 registered REST v2 operations', () => {
+    expect(V2_OPERATIONS).toHaveLength(92);
   });
 
   describe('Path Parameter Resolution', () => {

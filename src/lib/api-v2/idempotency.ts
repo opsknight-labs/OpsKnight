@@ -13,7 +13,8 @@ export async function runV2IdempotentMutation<T>(
   principalId: string,
   scope: string,
   payload: unknown,
-  execute: (tx: Prisma.TransactionClient) => Promise<T>
+  execute: (tx: Prisma.TransactionClient) => Promise<T>,
+  onReplay?: (tx: Prisma.TransactionClient) => Promise<void>
 ): Promise<IdempotentExecution<T>> {
   const idempotencyKey = req.headers.get('idempotency-key')?.trim();
 
@@ -33,6 +34,7 @@ export async function runV2IdempotentMutation<T>(
       },
       payload,
       execute: () => execute(tx),
+      onReplay,
     });
   });
 }

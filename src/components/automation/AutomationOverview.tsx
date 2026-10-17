@@ -79,12 +79,16 @@ export const AutomationOverview = memo(function AutomationOverview({
   traceFilter,
   setTraceFilter,
   setArea,
+  onActivateCandidate,
+  onDiscardCandidate,
 }: {
   data: Data;
   counts?: Counts;
   traceFilter: string;
   setTraceFilter: (value: string) => void;
   setArea: (area: Area) => void;
+  onActivateCandidate?: () => void;
+  onDiscardCandidate?: () => void;
 }) {
   const filterId = useId();
   const differences = useMemo(

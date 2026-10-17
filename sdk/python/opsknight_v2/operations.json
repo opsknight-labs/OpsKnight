@@ -29,6 +29,34 @@
     ],
     "bodyRequired": true
   },
+  "getAutomationCandidate": {
+    "method": "GET",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "discardAutomationCandidate": {
+    "method": "DELETE",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "activateAutomationCandidate": {
+    "method": "POST",
+    "path": "/services/{id}/automation/candidates/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
   "getAutomationSettings": {
     "method": "GET",
     "path": "/settings/automation",
