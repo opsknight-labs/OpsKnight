@@ -1,5 +1,8 @@
 # OpsKnight Runbook Engine — Feature & Environment Coverage Matrix
 
+> [!NOTE]
+> **Phase 1 Release Qualification (PR #889)**: Documents certified step types, input types, execution modes, and live targets validated in this release. Unattended automatic Systemd/Podman remediation, multi-agent pool failover, and destructive fault recovery are tracked for Phase 2 (`feat/runbook-final-enterprise-certification`).
+
 ## 1. Step Type Qualification Matrix
 
 OpsKnight supports ten first-class runbook step types. Below is the certified capability and qualification matrix validated during end-to-end testing against `https://opssentinal.com`.
