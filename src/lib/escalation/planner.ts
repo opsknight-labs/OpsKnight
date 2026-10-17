@@ -1,7 +1,7 @@
 /**
  * The single escalation step planner.
  *
- * Given the incident's execution state, the live policy step, the resolved
+ * Given the incident's execution state, the selected policy step, the resolved
  * audience, and the current time, it returns one `EscalationPlan` describing
  * everything the step should change. It reads nothing and writes nothing:
  * every branch — paged, uncovered, unusable target, final step, exhausted
@@ -43,7 +43,7 @@ export interface EscalationPlanInput {
   incidentId: string;
   generation: number;
   stepIndex: number;
-  /** Number of steps in the policy as loaded at execution time. */
+  /** Number of steps in the selected policy definition (frozen for Automation decisions). */
   stepCount: number;
   targetType: EscalationTargetType;
   /** Null when the step has no target ID configured for its target type. */

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformPagerDutyToEvent } from '@/lib/integrations/pagerduty';
 import { validatePayload, PagerDutyEventSchema } from '@/lib/integrations/schemas';
 import { checkRateLimit, createRateLimitHeaders } from '@/lib/integrations/rate-limiter';
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const rawBody = await readIntegrationBody(req);
-    let body: any;
+    let body: unknown;
     try {
       body = JSON.parse(rawBody);
     } catch {
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     }
 
     const event = transformPagerDutyToEvent(payload);
-    const result = await processEvent(event, integration.serviceId, integration.id);
+    await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'PAGERDUTY', providerPayload: payload, receivedAt: new Date() });
 
     recordWebhookReceived('PAGERDUTY', integration.id, true, performance.now() - startTime);
 

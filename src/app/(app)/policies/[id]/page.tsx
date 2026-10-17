@@ -1,3 +1,4 @@
+import PolicyDependencies from '@/components/policies/PolicyDependencies';
 import prisma from '@/lib/prisma';
 import { assertCanViewPolicy, getUserPermissions } from '@/lib/rbac';
 import { notFound, redirect } from 'next/navigation';
@@ -49,7 +50,7 @@ export default async function PolicyDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ error?: string; tab?: string }>;
+  searchParams?: Promise<{ error?: string; tab?: string; depPage?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
@@ -382,6 +383,14 @@ export default async function PolicyDetailPage({
         services={servicesContent}
         activity={activityContent}
         settings={settingsContent}
+        dependencies={
+          <PolicyDependencies
+            page={Number((await searchParams)?.depPage ?? 1)}
+            policyId={id}
+            archived={!!policy.archivedAt}
+            canManage={permissions.role === 'ADMIN'}
+          />
+        }
       />
     </div>
   );

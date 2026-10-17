@@ -1,7 +1,8 @@
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuthenticationPolicy } from '@/lib/authentication-policy';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { assertCanReadServiceMetrics } from '@/lib/rbac';
+import { assertCanReadServiceMetrics, getUserPermissions } from '@/lib/rbac';
 
 /**
  * SLA Streaming API - Server-Sent Events Endpoint
@@ -31,6 +32,9 @@ export async function GET(req: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const permissions = await getUserPermissions();
+  const sensitive = permissions.capabilities.includes('incident.sensitive.read');
 
   // Rate limiting
   const rateLimitKey = `sla-stream:${session.user.email}`;
@@ -121,6 +125,9 @@ export async function GET(req: NextRequest) {
             select: {
               id: true,
               title: true,
+              automationSourceRestricted: true,
+              automationDecision: { select: { incidentId: true } },
+              automationTraces: { select: { incidentId: true }, take: 1 },
               status: true,
               urgency: true,
               createdAt: true,
@@ -151,7 +158,7 @@ export async function GET(req: NextRequest) {
 
           // Normalize Prisma BigInt fields at the API boundary.
           const incidents = batch.map(incident => ({
-            ...incident,
+            ...visibleIncidentSource(incident, sensitive),
             slaPausedMs: Number(incident.slaPausedMs),
             slaAckElapsedMs:
               incident.slaAckElapsedMs === null ? null : Number(incident.slaAckElapsedMs),

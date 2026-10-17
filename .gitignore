@@ -67,9 +67,12 @@ artifacts/load-certification/**/*.json
 !artifacts/load-certification/certification-summary.json
 artifacts/load-certification/**/*.jsonl
 artifacts/load-certification/**/*.log
+artifacts/load-certification/**/*.cpuprofile
 artifacts/load-test-25m/
 artifacts/single-image-test-10m/
 artifacts/soak-test/
+artifacts/automation-ui/
+artifacts/automation-rolling/
 
 # debug API routes
 /src/app/api/debug/
@@ -114,3 +117,4 @@ __pycache__/
 # Runbook physical certification output (retain as CI artifacts, not source)
 /plans/runbook-engine/enterprise-physical-certification/screenshots/
 /plans/runbook-engine/enterprise-physical-certification/results/
+/.next-automation-build/

@@ -11,6 +11,8 @@ import { authorizationDecisionError } from '@/lib/api-authorization-error';
 import { AppError } from '@/lib/errors';
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
 import { toIncidentApiDto } from '@/lib/incidents/api-dto';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -75,6 +77,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const incident = await prisma.incident.findUnique({
     where: { id },
     include: {
+      automationTraces: { select: { incidentId: true }, take: 1 },
+      automationDecision: { select: { incidentId: true } },
       service: { select: { id: true, name: true, teamId: true } },
       watchers: { select: { userId: true } },
       assignee: {
@@ -122,7 +126,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     : visibleIncident;
 
-  return jsonOk({ incident: toIncidentApiDto(responseIncident) }, 200);
+  return jsonOk(
+    {
+      incident: toIncidentApiDto(
+        visibleIncidentSource(
+          responseIncident,
+          hasCapability(actor.role, CAPABILITIES.INCIDENT_SENSITIVE_READ)
+        )
+      ),
+    },
+    200
+  );
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

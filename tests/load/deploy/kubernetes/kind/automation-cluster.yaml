@@ -1,0 +1,19 @@
+# Isolated single-node certification cluster, 12 Docker CPUs required.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 3439
+        listenAddress: '127.0.0.1'
+        protocol: TCP
+    kubeadmConfigPatches:
+      - |
+        kind: KubeletConfiguration
+        cpuManagerPolicy: static
+        cpuManagerReconcilePeriod: "5s"
+        reservedSystemCPUs: "0"
+        kubeReserved:
+          cpu: "1"
+          memory: "256Mi"

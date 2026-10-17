@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { scheduleJob, claimPendingJobs, markJobFailed, processJob } from '@/lib/jobs/queue';
+import {
+  scheduleJob,
+  claimPendingJobs,
+  claimPendingOperationalJobs,
+  markJobFailed,
+  processJob,
+} from '@/lib/jobs/queue';
 import { testPrisma, resetDatabase } from '../helpers/test-db';
 
 const describeIfRealDB =
@@ -49,6 +55,103 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       });
       expect(processingCount).toBe(5);
     });
+  });
+
+  it('claims bounded observations past an older ordinary backlog without stealing unrelated tasks', async () => {
+    const older = new Date(Date.now() - 60000);
+    for (let i = 0; i < 12; i++) await scheduleJob('SCHEDULED_TASK', older, { task: 'ORDINARY' });
+    for (let i = 0; i < 6; i++)
+      await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), {
+        task: 'AUTOMATION_OBSERVE',
+      });
+    const [first, second] = await Promise.all([
+      claimPendingJobs(2, 'SCHEDULED_TASK', [], { automationObservationsOnly: true }),
+      claimPendingJobs(2, 'SCHEDULED_TASK', [], { automationObservationsOnly: true }),
+    ]);
+    const claimed = [...first, ...second];
+    expect(claimed).toHaveLength(4);
+    expect(new Set(claimed.map(job => job.id)).size).toBe(4);
+    expect(
+      claimed.every(job => (job.payload as { task: string }).task === 'AUTOMATION_OBSERVE')
+    ).toBe(true);
+    const batch = await claimPendingOperationalJobs(8, []);
+    expect(batch).toHaveLength(8);
+    expect(
+      batch.filter(job => (job.payload as { task: string }).task === 'AUTOMATION_OBSERVE')
+    ).toHaveLength(2);
+    expect(batch.filter(job => (job.payload as { task: string }).task === 'ORDINARY')).toHaveLength(
+      6
+    );
+  });
+
+  it('keeps ordinary work moving when observations arrive behind a full operational batch', async () => {
+    const older = new Date(Date.now() - 60000);
+    const newer = new Date(Date.now() - 1000);
+    await testPrisma.backgroundJob.createMany({
+      data: [
+        ...Array.from({ length: 100 }, () => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: older,
+          payload: { task: 'ORDINARY' },
+        })),
+        ...Array.from({ length: 32 }, () => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: newer,
+          payload: { task: 'AUTOMATION_OBSERVE' },
+        })),
+      ],
+    });
+    const batch = await claimPendingOperationalJobs(100, []);
+    expect(batch).toHaveLength(100);
+    expect(new Set(batch.map(job => job.id)).size).toBe(100);
+    expect(batch.filter(job => (job.payload as { task: string }).task === 'ORDINARY')).toHaveLength(
+      84
+    );
+    expect(
+      batch.filter(job => (job.payload as { task: string }).task === 'AUTOMATION_OBSERVE')
+    ).toHaveLength(16);
+    expect(await testPrisma.backgroundJob.count({ where: { status: 'PENDING' } })).toBe(32);
+  });
+
+  it('protects ordinary capacity from older observations across concurrent workers', async () => {
+    await testPrisma.backgroundJob.createMany({
+      data: [
+        ...Array.from({ length: 200 }, () => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: new Date(Date.now() - 60000),
+          payload: { task: 'AUTOMATION_OBSERVE' },
+        })),
+        ...Array.from({ length: 200 }, (_, index) => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: new Date(Date.now() - 1000),
+          payload: index % 2 ? { task: 'ORDINARY' } : {},
+        })),
+      ],
+    });
+    const batches = await Promise.all([
+      claimPendingOperationalJobs(100, []),
+      claimPendingOperationalJobs(100, []),
+    ]);
+    for (const batch of batches) {
+      expect(batch).toHaveLength(100);
+      const observations = batch.filter(
+        job => (job.payload as { task?: string }).task === 'AUTOMATION_OBSERVE'
+      );
+      expect(observations).toHaveLength(16);
+      expect(batch.length - observations.length).toBe(84);
+    }
+    expect(new Set(batches.flat().map(job => job.id)).size).toBe(200);
+    expect(await testPrisma.backgroundJob.count({ where: { status: 'PENDING' } })).toBe(200);
+  });
+
+  it('does not let observation-only backlogs exceed the reserved slice or consume tiny batches', async () => {
+    for (let i = 0; i < 24; i++)
+      await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), {
+        task: 'AUTOMATION_OBSERVE',
+      });
+    expect(await claimPendingOperationalJobs(100, [])).toHaveLength(16);
+    expect(await claimPendingOperationalJobs(3, [])).toHaveLength(0);
+    expect(await claimPendingOperationalJobs(100, ['SCHEDULED_TASK'])).toHaveLength(0);
   });
 
   describe('Retry Logic and Exponential Backoff', () => {
@@ -180,7 +283,9 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       // 1. Create due SCHEDULED_TASK jobs, independent of host/database clock skew.
       const scheduledIds: string[] = [];
       for (let i = 0; i < 5; i++) {
-        const id = await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), { task: `isolated-task-${i}` });
+        const id = await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), {
+          task: `isolated-task-${i}`,
+        });
         scheduledIds.push(id);
       }
 

@@ -199,6 +199,18 @@ async function enqueueSideEffects(
   warRoom?: EventSideEffectPayload['warRoom'],
   notBeforeByEffect?: ReadonlyMap<EventSideEffect, Date>
 ): Promise<void> {
+  const decision =
+    effects.includes('TRIGGER_ESCALATION_NOTIFICATIONS') && tx.incidentAutomationDecision
+      ? await tx.incidentAutomationDecision.findUnique({
+          where: { incidentId },
+          select: { routeType: true, mode: true },
+        })
+      : null;
+  if (decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION') {
+    // NO_ESCALATION suppresses automatic responder paging, not later human
+    // handoffs or lifecycle communication to explicitly assigned recipients.
+    effects = effects.filter(effect => effect !== 'TRIGGER_ESCALATION_NOTIFICATIONS');
+  }
   if (effects.length === 0) return;
   const [eventOrderAt, incidentSnapshot] = await Promise.all([
     databaseClock(tx),

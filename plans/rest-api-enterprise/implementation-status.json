@@ -140,7 +140,7 @@
     "Live SDK tests used a local production build and isolated PostgreSQL, not a customer production deployment."
   ],
   "followupDelivery": {
-    "id": "API-13",
+    "id": "API-13 through API-24",
     "branch": "feat/api-13-enterprise-contracts",
     "worktree": "opsknight-api-contracts",
     "status": "in_progress",
@@ -148,12 +148,17 @@
       "Capability-family source mapping and delivery ownership",
       "Preserved complete feature coverage plan and eight pending release gates",
       "Shared command and operation admission standard",
-      "Inventory, source-path and registered mutation contract drift checks"
+      "Inventory, source-path and registered mutation contract drift checks",
+      "Integrated service-automation branch a4e8723f6 into the combined worktree while retaining newer authentication, agent and notification safeguards",
+      "Shared global automation settings command and explicit-scope GET/PATCH with strong revisions and durable replay",
+      "Automation versioning commands support caller-owned transactions and credential-attributed canonical audit",
+      "Service automation draft GET/PUT and publication POST with dedicated scopes, team membership checks, strong revisions, canonical audit and generated SDK schemas"
     ],
     "remaining": [
-      "Per-operation UI/domain extraction and authorization review in each owning delivery",
-      "Integration and certification of the separate service-automation branch before API-14",
-      "All endpoint-family implementations and combined-system certification"
-    ]
+      "Service automation validation, simulation, modes, restore, history and observations",
+      "Remaining runbook, integration, schedule, identity, notification, status and reporting endpoint families",
+      "Full integration regression verification and combined-system Docker/Kind, load, HA and upgrade certification"
+    ],
+    "deliveryPolicy": "One PR (#886) for the entire approved plan, as explicitly requested by the user."
   }
 }

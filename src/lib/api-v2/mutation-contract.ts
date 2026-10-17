@@ -49,6 +49,27 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/services/[id]/automation/publish': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Publish checks the draft ETag and active version under the canonical service lock, validating dependencies and committing immutable version, audit and replay together.',
+  },
+  'PUT /api/v2/services/[id]/automation/draft': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Shared versioning command, team authorization, revision check, audit and replay share one transaction.',
+  },
+  'PATCH /api/v2/settings/automation': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Global kill switch, mode reset, audit and replay commit together under the settings lock.',
+  },
   'POST /api/v2/incidents/[id]/watchers': {
     idempotency: 'required',
     concurrency: 'none',

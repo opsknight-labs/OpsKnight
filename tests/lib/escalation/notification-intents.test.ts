@@ -67,6 +67,13 @@ describe('central escalation notification intents', () => {
     mocks.deliverCentralNotification.mockResolvedValue({ success: true, claimed: true });
   });
 
+  it('does not widen a voice-only step to an enabled email channel', async () => {
+    mocks.getUserNotificationChannels.mockResolvedValue(['EMAIL']);
+    const plan = await planEscalationNotificationIntents({ ...input, stepChannels: ['VOICE'] });
+    expect(plan.intents).toEqual([]);
+    expect(plan.inAppUserIds).toEqual(['user-1']);
+  });
+
   it('materializes every responder page in the central control plane', async () => {
     const plan = await planEscalationNotificationIntents(input);
     const result = await materializeEscalationNotificationIntents({} as never, plan);

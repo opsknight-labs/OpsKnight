@@ -1,0 +1,4710 @@
+{
+  "scope": "Local HTTP correctness/recovery smoke; initial release topologies plus final UI-settings image",
+  "rps": 2,
+  "durationPerProfile": "20s",
+  "topologies": [
+    {
+      "topology": "compose-split",
+      "generatedAt": "2026-10-07T11:12:49.896Z",
+      "results": [
+        {
+          "profile": "disabled",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 86.35131707317072,
+            "min": 31.62,
+            "med": 49.21,
+            "max": 474.535,
+            "p(90)": 140.328,
+            "p(95)": 358.816
+          },
+          "traceRuntimeP99Ms": null,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 3,
+            "idleConnections": 70,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 10016,
+            "xactRollback": 34,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 53
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 0,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 17
+            },
+            "oldestPendingCriticalNotificationAgeMs": 19722,
+            "statusPageSnapshotLagSeconds": 9
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.01%",
+              "memUsage": "48.57MiB / 7.748GiB",
+              "memPercent": "0.61%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-2",
+              "cpuPercent": "0.28%",
+              "memUsage": "155.9MiB / 7.748GiB",
+              "memPercent": "1.97%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-2",
+              "cpuPercent": "7.80%",
+              "memUsage": "136.8MiB / 7.748GiB",
+              "memPercent": "1.72%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-1",
+              "cpuPercent": "23.71%",
+              "memUsage": "152.1MiB / 7.748GiB",
+              "memPercent": "1.92%"
+            },
+            {
+              "name": "opsknight-automation-cert-scheduler-1",
+              "cpuPercent": "0.02%",
+              "memUsage": "151.9MiB / 7.748GiB",
+              "memPercent": "1.92%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.04%",
+              "memUsage": "116.5MiB / 7.748GiB",
+              "memPercent": "1.47%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "8.37%",
+              "memUsage": "114.5MiB / 7.748GiB",
+              "memPercent": "1.44%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-1",
+              "cpuPercent": "0.28%",
+              "memUsage": "133.7MiB / 7.748GiB",
+              "memPercent": "1.68%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "9.83%",
+              "memUsage": "363.7MiB / 7.748GiB",
+              "memPercent": "4.58%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "50.38%",
+              "memUsage": "1.253GiB / 7.748GiB",
+              "memPercent": "16.17%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "29.24%",
+              "memUsage": "129MiB / 7.748GiB",
+              "memPercent": "1.63%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2220,
+              "accepted2xx": 2220,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2220,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 687,
+              "accepted2xx": 687,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 687,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 462,
+              "accepted2xx": 462,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 462,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 25
+            }
+          }
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 40,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "p(95)": 75.22949999999997,
+            "avg": 52.194425,
+            "min": 35.725,
+            "med": 48.8895,
+            "max": 110.508,
+            "p(90)": 69.3154
+          },
+          "traceRuntimeP99Ms": 4.62275000000227,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 3,
+            "idleConnections": 75,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 16569,
+            "xactRollback": 54,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "WAR_ROOM_PROVIDER_EVENT": 2,
+              "ESCALATION": 93
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 119,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 48
+            },
+            "oldestPendingCriticalNotificationAgeMs": 42623,
+            "statusPageSnapshotLagSeconds": 32
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.02%",
+              "memUsage": "48.91MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-2",
+              "cpuPercent": "0.11%",
+              "memUsage": "161.3MiB / 7.748GiB",
+              "memPercent": "2.03%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-2",
+              "cpuPercent": "0.32%",
+              "memUsage": "153.8MiB / 7.748GiB",
+              "memPercent": "1.94%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-1",
+              "cpuPercent": "0.01%",
+              "memUsage": "154.9MiB / 7.748GiB",
+              "memPercent": "1.95%"
+            },
+            {
+              "name": "opsknight-automation-cert-scheduler-1",
+              "cpuPercent": "0.35%",
+              "memUsage": "112.6MiB / 7.748GiB",
+              "memPercent": "1.42%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.04%",
+              "memUsage": "127.7MiB / 7.748GiB",
+              "memPercent": "1.61%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "0.07%",
+              "memUsage": "126MiB / 7.748GiB",
+              "memPercent": "1.59%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-1",
+              "cpuPercent": "0.24%",
+              "memUsage": "152MiB / 7.748GiB",
+              "memPercent": "1.92%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "2.12%",
+              "memUsage": "448.9MiB / 7.748GiB",
+              "memPercent": "5.66%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "48.15%",
+              "memUsage": "1.403GiB / 7.748GiB",
+              "memPercent": "18.11%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.01%",
+              "memUsage": "121.1MiB / 7.748GiB",
+              "memPercent": "1.53%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2245,
+              "accepted2xx": 2245,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2245,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 708,
+              "accepted2xx": 708,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 708,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 486,
+              "accepted2xx": 486,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 486,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 25
+            }
+          }
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 64.96453658536586,
+            "min": 36.895,
+            "med": 50.695,
+            "max": 242.975,
+            "p(90)": 91.717,
+            "p(95)": 97.117
+          },
+          "traceRuntimeP99Ms": 17.62345800000003,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 6,
+            "idleConnections": 74,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 26549,
+            "xactRollback": 97,
+            "pendingJobsByType": {
+              "SCHEDULED_TASK": 6,
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 135
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 493,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 66
+            },
+            "oldestPendingCriticalNotificationAgeMs": 40244,
+            "statusPageSnapshotLagSeconds": 4
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.02%",
+              "memUsage": "49.22MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-2",
+              "cpuPercent": "25.40%",
+              "memUsage": "170.7MiB / 7.748GiB",
+              "memPercent": "2.15%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-2",
+              "cpuPercent": "0.28%",
+              "memUsage": "156.4MiB / 7.748GiB",
+              "memPercent": "1.97%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-1",
+              "cpuPercent": "65.60%",
+              "memUsage": "150.4MiB / 7.748GiB",
+              "memPercent": "1.90%"
+            },
+            {
+              "name": "opsknight-automation-cert-scheduler-1",
+              "cpuPercent": "0.00%",
+              "memUsage": "124.5MiB / 7.748GiB",
+              "memPercent": "1.57%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.04%",
+              "memUsage": "135.6MiB / 7.748GiB",
+              "memPercent": "1.71%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "0.07%",
+              "memUsage": "141.6MiB / 7.748GiB",
+              "memPercent": "1.79%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-1",
+              "cpuPercent": "0.14%",
+              "memUsage": "145MiB / 7.748GiB",
+              "memPercent": "1.83%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "17.45%",
+              "memUsage": "473.8MiB / 7.748GiB",
+              "memPercent": "5.97%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "161.43%",
+              "memUsage": "2.837GiB / 7.748GiB",
+              "memPercent": "36.61%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "121.1MiB / 7.748GiB",
+              "memPercent": "1.53%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2270,
+              "accepted2xx": 2270,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2270,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 745,
+              "accepted2xx": 745,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 745,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 547,
+              "accepted2xx": 547,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 547,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 24
+            }
+          }
+        },
+        {
+          "profile": "live-medium",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "med": 57.736,
+            "max": 172.46,
+            "p(90)": 82.321,
+            "p(95)": 98.185,
+            "avg": 63.56197560975609,
+            "min": 44.109
+          },
+          "traceRuntimeP99Ms": 6.403082999997423,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 6,
+            "idleConnections": 75,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 38120,
+            "xactRollback": 153,
+            "pendingJobsByType": {
+              "SCHEDULED_TASK": 6,
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 176
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 510,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 101
+            },
+            "oldestPendingCriticalNotificationAgeMs": 43318,
+            "statusPageSnapshotLagSeconds": 27
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.01%",
+              "memUsage": "41.06MiB / 7.748GiB",
+              "memPercent": "0.52%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-2",
+              "cpuPercent": "25.58%",
+              "memUsage": "185.3MiB / 7.748GiB",
+              "memPercent": "2.34%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-2",
+              "cpuPercent": "0.19%",
+              "memUsage": "156.8MiB / 7.748GiB",
+              "memPercent": "1.98%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-1",
+              "cpuPercent": "106.27%",
+              "memUsage": "162.7MiB / 7.748GiB",
+              "memPercent": "2.05%"
+            },
+            {
+              "name": "opsknight-automation-cert-scheduler-1",
+              "cpuPercent": "0.01%",
+              "memUsage": "138.8MiB / 7.748GiB",
+              "memPercent": "1.75%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.08%",
+              "memUsage": "123.2MiB / 7.748GiB",
+              "memPercent": "1.55%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "0.01%",
+              "memUsage": "145.5MiB / 7.748GiB",
+              "memPercent": "1.83%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-1",
+              "cpuPercent": "0.26%",
+              "memUsage": "155.3MiB / 7.748GiB",
+              "memPercent": "1.96%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "15.26%",
+              "memUsage": "548.9MiB / 7.748GiB",
+              "memPercent": "6.92%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "56.36%",
+              "memUsage": "2.184GiB / 7.748GiB",
+              "memPercent": "28.19%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.01%",
+              "memUsage": "82.07MiB / 7.748GiB",
+              "memPercent": "1.03%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2312,
+              "accepted2xx": 2312,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2312,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 788,
+              "accepted2xx": 788,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 788,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 591,
+              "accepted2xx": 591,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 591,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 24
+            }
+          }
+        },
+        {
+          "profile": "live-worst",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 74.86217073170732,
+            "min": 49.223,
+            "med": 68.269,
+            "max": 274.768,
+            "p(90)": 86.326,
+            "p(95)": 90.85
+          },
+          "traceRuntimeP99Ms": 42.05037499999889,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 4,
+            "idleConnections": 77,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 50726,
+            "xactRollback": 216,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 218
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 449,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 106
+            },
+            "oldestPendingCriticalNotificationAgeMs": 52454,
+            "statusPageSnapshotLagSeconds": 50
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.02%",
+              "memUsage": "41.06MiB / 7.748GiB",
+              "memPercent": "0.52%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-2",
+              "cpuPercent": "0.53%",
+              "memUsage": "171.9MiB / 7.748GiB",
+              "memPercent": "2.17%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-2",
+              "cpuPercent": "0.14%",
+              "memUsage": "160.9MiB / 7.748GiB",
+              "memPercent": "2.03%"
+            },
+            {
+              "name": "opsknight-automation-cert-critical-1",
+              "cpuPercent": "103.46%",
+              "memUsage": "163.7MiB / 7.748GiB",
+              "memPercent": "2.06%"
+            },
+            {
+              "name": "opsknight-automation-cert-scheduler-1",
+              "cpuPercent": "0.00%",
+              "memUsage": "138.4MiB / 7.748GiB",
+              "memPercent": "1.74%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.13%",
+              "memUsage": "140.3MiB / 7.748GiB",
+              "memPercent": "1.77%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "0.11%",
+              "memUsage": "148.4MiB / 7.748GiB",
+              "memPercent": "1.87%"
+            },
+            {
+              "name": "opsknight-automation-cert-general-1",
+              "cpuPercent": "0.29%",
+              "memUsage": "163.2MiB / 7.748GiB",
+              "memPercent": "2.06%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "8.69%",
+              "memUsage": "594.5MiB / 7.748GiB",
+              "memPercent": "7.49%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "72.78%",
+              "memUsage": "2.345GiB / 7.748GiB",
+              "memPercent": "30.26%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "82.08MiB / 7.748GiB",
+              "memPercent": "1.03%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2425,
+              "accepted2xx": 2425,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2425,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 841,
+              "accepted2xx": 840,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 1,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 840,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 620,
+              "accepted2xx": 620,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 620,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        }
+      ]
+    },
+    {
+      "topology": "compose-integrated",
+      "generatedAt": "2026-10-07T11:16:17.017Z",
+      "results": [
+        {
+          "profile": "disabled",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "p(99)": 143.6118,
+            "avg": 59.99302439024389,
+            "min": 32.274,
+            "med": 49.972,
+            "max": 153.931,
+            "p(50)": 49.972,
+            "p(95)": 122.54
+          },
+          "traceRuntimeP99Ms": null,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "postgres": {
+            "activeConnections": 3,
+            "idleConnections": 28,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 8870,
+            "xactRollback": 26,
+            "pendingJobsByType": {
+              "ESCALATION": 41,
+              "SCHEDULED_TASK": 5,
+              "COMPLIANCE_EVALUATION_SWEEP": 1
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 461,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 3
+            },
+            "oldestPendingCriticalNotificationAgeMs": 6732,
+            "statusPageSnapshotLagSeconds": 59
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.02%",
+              "memUsage": "49.27MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.31%",
+              "memUsage": "158.6MiB / 7.748GiB",
+              "memPercent": "2.00%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "172.44%",
+              "memUsage": "172.3MiB / 7.748GiB",
+              "memPercent": "2.17%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "23.37%",
+              "memUsage": "284.9MiB / 7.748GiB",
+              "memPercent": "3.59%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "63.74%",
+              "memUsage": "2.558GiB / 7.748GiB",
+              "memPercent": "33.02%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.11%",
+              "memUsage": "82.86MiB / 7.748GiB",
+              "memPercent": "1.04%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2756,
+              "accepted2xx": 2756,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2756,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 1040,
+              "accepted2xx": 1040,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 1040,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 867,
+              "accepted2xx": 867,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 7,
+              "uniqueDeliveriesSucceeded": 867,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 40,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "max": 120.866,
+            "p(50)": 49.516999999999996,
+            "p(95)": 73.97359999999999,
+            "p(99)": 104.46454999999999,
+            "avg": 54.16505000000001,
+            "min": 39.587,
+            "med": 49.516999999999996
+          },
+          "traceRuntimeP99Ms": 4.041291000001365,
+          "traceCount": 40,
+          "traceJsonBytes": 198160,
+          "postgres": {
+            "activeConnections": 3,
+            "idleConnections": 30,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 16347,
+            "xactRollback": 69,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 93
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 0,
+            "pendingNotificationsByTrafficClass": {},
+            "oldestPendingCriticalNotificationAgeMs": 0,
+            "statusPageSnapshotLagSeconds": 21
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.03%",
+              "memUsage": "49.55MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "1.61%",
+              "memUsage": "166.5MiB / 7.748GiB",
+              "memPercent": "2.10%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "1.92%",
+              "memUsage": "185.1MiB / 7.748GiB",
+              "memPercent": "2.33%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "1.41%",
+              "memUsage": "309.3MiB / 7.748GiB",
+              "memPercent": "3.90%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "51.82%",
+              "memUsage": "2.526GiB / 7.748GiB",
+              "memPercent": "32.60%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.20%",
+              "memUsage": "82.94MiB / 7.748GiB",
+              "memPercent": "1.05%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2903,
+              "accepted2xx": 2903,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2903,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 1100,
+              "accepted2xx": 1100,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 1100,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 908,
+              "accepted2xx": 908,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 7,
+              "uniqueDeliveriesSucceeded": 908,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "p(99)": 1987.3405999999998,
+            "avg": 197.14217073170735,
+            "min": 52.393,
+            "med": 73.528,
+            "max": 2388.581,
+            "p(50)": 73.528,
+            "p(95)": 392.312
+          },
+          "traceRuntimeP99Ms": 17.74933400000009,
+          "traceCount": 41,
+          "traceJsonBytes": 203114,
+          "postgres": {
+            "activeConnections": 1,
+            "idleConnections": 32,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 23787,
+            "xactRollback": 114,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 134
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 146,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 24
+            },
+            "oldestPendingCriticalNotificationAgeMs": 18443,
+            "statusPageSnapshotLagSeconds": 44
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.08%",
+              "memUsage": "49.55MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "30.04%",
+              "memUsage": "171.3MiB / 7.748GiB",
+              "memPercent": "2.16%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "11.15%",
+              "memUsage": "182.4MiB / 7.748GiB",
+              "memPercent": "2.30%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "16.72%",
+              "memUsage": "310.5MiB / 7.748GiB",
+              "memPercent": "3.91%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "85.94%",
+              "memUsage": "2.528GiB / 7.748GiB",
+              "memPercent": "32.63%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.01%",
+              "memUsage": "49.7MiB / 7.748GiB",
+              "memPercent": "0.63%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2987,
+              "accepted2xx": 2987,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 2987,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 1147,
+              "accepted2xx": 1147,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 1147,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 947,
+              "accepted2xx": 947,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 7,
+              "uniqueDeliveriesSucceeded": 947,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "live-medium",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 176.5896097560975,
+            "min": 64.486,
+            "med": 163.158,
+            "max": 415.888,
+            "p(50)": 163.158,
+            "p(95)": 394.429,
+            "p(99)": 412.3
+          },
+          "traceRuntimeP99Ms": 16.18129199999748,
+          "traceCount": 41,
+          "traceJsonBytes": 364039,
+          "postgres": {
+            "activeConnections": 5,
+            "idleConnections": 28,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 34612,
+            "xactRollback": 235,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 177
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 0,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 28
+            },
+            "oldestPendingCriticalNotificationAgeMs": 41663,
+            "statusPageSnapshotLagSeconds": 3
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.06%",
+              "memUsage": "49.55MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "112.56%",
+              "memUsage": "201MiB / 7.748GiB",
+              "memPercent": "2.53%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "12.91%",
+              "memUsage": "185.2MiB / 7.748GiB",
+              "memPercent": "2.33%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "86.86%",
+              "memUsage": "332.3MiB / 7.748GiB",
+              "memPercent": "4.19%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "216.07%",
+              "memUsage": "2.521GiB / 7.748GiB",
+              "memPercent": "32.54%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.02%",
+              "memUsage": "49.7MiB / 7.748GiB",
+              "memPercent": "0.63%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 3107,
+              "accepted2xx": 3107,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 3107,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 1209,
+              "accepted2xx": 1209,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 1209,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 987,
+              "accepted2xx": 987,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 7,
+              "uniqueDeliveriesSucceeded": 987,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "live-worst",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "max": 671.788,
+            "p(50)": 130.336,
+            "p(95)": 383.148,
+            "p(99)": 597.3012,
+            "avg": 185.3390243902439,
+            "min": 62.162,
+            "med": 130.336
+          },
+          "traceRuntimeP99Ms": 67.97229099999822,
+          "traceCount": 41,
+          "traceJsonBytes": 839721,
+          "postgres": {
+            "activeConnections": 3,
+            "idleConnections": 30,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 43964,
+            "xactRollback": 335,
+            "pendingJobsByType": {
+              "SCHEDULED_TASK": 6,
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "WAR_ROOM_PROVIDER_EVENT": 4,
+              "ESCALATION": 217
+            },
+            "processingJobsByType": {
+              "ESCALATION": 3
+            },
+            "oldestPendingJobAgeMs": 1076,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 13
+            },
+            "oldestPendingCriticalNotificationAgeMs": 67046,
+            "statusPageSnapshotLagSeconds": 29
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.05%",
+              "memUsage": "49.55MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "66.10%",
+              "memUsage": "230.9MiB / 7.748GiB",
+              "memPercent": "2.91%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "0.42%",
+              "memUsage": "186.5MiB / 7.748GiB",
+              "memPercent": "2.35%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "24.28%",
+              "memUsage": "346.6MiB / 7.748GiB",
+              "memPercent": "4.37%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "94.38%",
+              "memUsage": "2.531GiB / 7.748GiB",
+              "memPercent": "32.67%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.81%",
+              "memUsage": "50.15MiB / 7.748GiB",
+              "memPercent": "0.63%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 3201,
+              "accepted2xx": 3201,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 3201,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 1252,
+              "accepted2xx": 1252,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 1252,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 1029,
+              "accepted2xx": 1029,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 7,
+              "uniqueDeliveriesSucceeded": 1029,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        }
+      ]
+    },
+    {
+      "topology": "kind-helm-split",
+      "generatedAt": "2026-10-07T11:14:35.333Z",
+      "results": [
+        {
+          "profile": "disabled",
+          "acceptedEvents": 40,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 46.683724999999995,
+            "min": 32.3,
+            "med": 41.216499999999996,
+            "max": 130.011,
+            "p(90)": 61.89660000000001,
+            "p(95)": 65.2923
+          },
+          "traceRuntimeP99Ms": null,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 7,
+            "idleConnections": 46,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 10048,
+            "xactRollback": 136,
+            "pendingJobsByType": {
+              "ESCALATION": 40,
+              "WAR_ROOM_PROVIDER_EVENT": 2,
+              "COMPLIANCE_EVALUATION_SWEEP": 1
+            },
+            "processingJobsByType": {
+              "SCHEDULED_TASK": 1
+            },
+            "oldestPendingJobAgeMs": 50,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 41
+            },
+            "oldestPendingCriticalNotificationAgeMs": 19237,
+            "statusPageSnapshotLagSeconds": 34
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "64.45%",
+              "memUsage": "2.404GiB / 7.748GiB",
+              "memPercent": "31.03%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "82.21MiB / 7.748GiB",
+              "memPercent": "1.04%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2466,
+              "accepted2xx": 2466,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2466,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 868,
+              "accepted2xx": 868,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 868,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 652,
+              "accepted2xx": 652,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 652,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 53.770048780487805,
+            "min": 36.828,
+            "med": 44.84,
+            "max": 205.185,
+            "p(90)": 69.531,
+            "p(95)": 81.664
+          },
+          "traceRuntimeP99Ms": 4.251499999998487,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 4,
+            "idleConnections": 49,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 17093,
+            "xactRollback": 142,
+            "pendingJobsByType": {
+              "SCHEDULED_TASK": 6,
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 81
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 454,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 46
+            },
+            "oldestPendingCriticalNotificationAgeMs": 40031,
+            "statusPageSnapshotLagSeconds": 57
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "36.75%",
+              "memUsage": "65.19MiB / 7.748GiB",
+              "memPercent": "0.82%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "30.29%",
+              "memUsage": "2.462GiB / 7.748GiB",
+              "memPercent": "31.78%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "82.21MiB / 7.748GiB",
+              "memPercent": "1.04%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "100.87%",
+              "memUsage": "116.7MiB / 7.748GiB",
+              "memPercent": "1.47%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "102.03%",
+              "memUsage": "115.8MiB / 7.748GiB",
+              "memPercent": "1.46%"
+            },
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.00%",
+              "memUsage": "49.22MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2511,
+              "accepted2xx": 2511,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2511,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 891,
+              "accepted2xx": 891,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 891,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 684,
+              "accepted2xx": 684,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 684,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 50.961512195121955,
+            "min": 37.921,
+            "med": 46.944,
+            "max": 170.237,
+            "p(90)": 61.32,
+            "p(95)": 68.973
+          },
+          "traceRuntimeP99Ms": 1.810041999997338,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 5,
+            "idleConnections": 48,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 25597,
+            "xactRollback": 193,
+            "pendingJobsByType": {
+              "SCHEDULED_TASK": 6,
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 129
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 682,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 105
+            },
+            "oldestPendingCriticalNotificationAgeMs": 63896,
+            "statusPageSnapshotLagSeconds": 2
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.01%",
+              "memUsage": "49.28MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "11.26%",
+              "memUsage": "110.9MiB / 7.748GiB",
+              "memPercent": "1.40%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "173.59%",
+              "memUsage": "137.5MiB / 7.748GiB",
+              "memPercent": "1.73%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "33.41%",
+              "memUsage": "138.5MiB / 7.748GiB",
+              "memPercent": "1.75%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "89.69%",
+              "memUsage": "2.493GiB / 7.748GiB",
+              "memPercent": "32.18%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.01%",
+              "memUsage": "82.21MiB / 7.748GiB",
+              "memPercent": "1.04%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2533,
+              "accepted2xx": 2533,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2533,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 917,
+              "accepted2xx": 917,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 917,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 715,
+              "accepted2xx": 715,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 715,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "live-medium",
+          "acceptedEvents": 40,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "med": 48.061,
+            "max": 273.118,
+            "p(90)": 65.691,
+            "p(95)": 76.59889999999999,
+            "avg": 55.469375,
+            "min": 38.334
+          },
+          "traceRuntimeP99Ms": 2.419625000009546,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 3,
+            "idleConnections": 50,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 37775,
+            "xactRollback": 248,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 172
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 301,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 88
+            },
+            "oldestPendingCriticalNotificationAgeMs": 86769,
+            "statusPageSnapshotLagSeconds": 25
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.00%",
+              "memUsage": "49.28MiB / 7.748GiB",
+              "memPercent": "0.62%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.80%",
+              "memUsage": "109MiB / 7.748GiB",
+              "memPercent": "1.37%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "2.57%",
+              "memUsage": "132.2MiB / 7.748GiB",
+              "memPercent": "1.67%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "2.71%",
+              "memUsage": "144.3MiB / 7.748GiB",
+              "memPercent": "1.82%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "59.49%",
+              "memUsage": "2.57GiB / 7.748GiB",
+              "memPercent": "33.17%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "82.21MiB / 7.748GiB",
+              "memPercent": "1.04%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2635,
+              "accepted2xx": 2635,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2635,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 970,
+              "accepted2xx": 970,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 970,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 745,
+              "accepted2xx": 745,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 6,
+              "uniqueDeliveriesSucceeded": 745,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        },
+        {
+          "profile": "live-worst",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "avg": 70.02568292682926,
+            "min": 50.058,
+            "med": 63.228,
+            "max": 166.612,
+            "p(90)": 87.867,
+            "p(95)": 103.144
+          },
+          "traceRuntimeP99Ms": 18.13454200001433,
+          "traceCount": null,
+          "traceJsonBytes": null,
+          "postgres": {
+            "activeConnections": 7,
+            "idleConnections": 46,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 48928,
+            "xactRollback": 301,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 213
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 0,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 69
+            },
+            "oldestPendingCriticalNotificationAgeMs": 35952,
+            "statusPageSnapshotLagSeconds": 48
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.11%",
+              "memUsage": "49.83MiB / 7.748GiB",
+              "memPercent": "0.63%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "86.91%",
+              "memUsage": "155MiB / 7.748GiB",
+              "memPercent": "1.95%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "39.37%",
+              "memUsage": "162.5MiB / 7.748GiB",
+              "memPercent": "2.05%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "15.40%",
+              "memUsage": "254.6MiB / 7.748GiB",
+              "memPercent": "3.21%"
+            },
+            {
+              "name": "opsknight-automation-control-plane",
+              "cpuPercent": "95.27%",
+              "memUsage": "2.577GiB / 7.748GiB",
+              "memPercent": "33.26%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.90%",
+              "memUsage": "82.47MiB / 7.748GiB",
+              "memPercent": "1.04%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 2737,
+              "accepted2xx": 2737,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 2737,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 1018,
+              "accepted2xx": 1018,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 1018,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 835,
+              "accepted2xx": 835,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 7,
+              "uniqueDeliveriesSucceeded": 835,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 23
+            }
+          }
+        }
+      ]
+    },
+    {
+      "topology": "compose-integrated-ui-settings",
+      "settingsSource": "shared SystemSettings database row",
+      "imageId": "sha256:f48946cebfb15d9ed18221045c54dfd976f043e86f5a6fb42aed3593c4dd8479",
+      "generatedAt": "2026-10-07T11:34:07.437Z",
+      "results": [
+        {
+          "profile": "disabled",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "min": 34.638,
+            "med": 52.121,
+            "max": 172.418,
+            "p(50)": 52.121,
+            "p(95)": 85.47,
+            "p(99)": 144.7096,
+            "avg": 58.14721951219512
+          },
+          "traceRuntimeP99Ms": null,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "postgres": {
+            "activeConnections": 2,
+            "idleConnections": 29,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 10622,
+            "xactRollback": 58,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 53
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 0,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 9
+            },
+            "oldestPendingCriticalNotificationAgeMs": 12429,
+            "statusPageSnapshotLagSeconds": 17
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.01%",
+              "memUsage": "57.84MiB / 7.748GiB",
+              "memPercent": "0.73%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "1.31%",
+              "memUsage": "173.3MiB / 7.748GiB",
+              "memPercent": "2.18%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "1.00%",
+              "memUsage": "175.6MiB / 7.748GiB",
+              "memPercent": "2.21%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "1.89%",
+              "memUsage": "257.3MiB / 7.748GiB",
+              "memPercent": "3.24%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "39.56MiB / 7.748GiB",
+              "memPercent": "0.50%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 49,
+              "accepted2xx": 49,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 49,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 34,
+              "accepted2xx": 34,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 3,
+              "uniqueDeliveriesSucceeded": 34,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 21,
+              "p99LatencyMs": 22
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 40,
+              "accepted2xx": 40,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 4,
+              "uniqueDeliveriesSucceeded": 40,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            }
+          },
+          "automationMetrics": {}
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 40,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "min": 36.866,
+            "med": 53.446,
+            "max": 137.764,
+            "p(50)": 53.446,
+            "p(95)": 95.98019999999998,
+            "p(99)": 123.55201,
+            "avg": 57.267750000000014
+          },
+          "traceRuntimeP99Ms": 3.96191700000054,
+          "traceCount": 40,
+          "traceJsonBytes": 198160,
+          "postgres": {
+            "activeConnections": 2,
+            "idleConnections": 31,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 16691,
+            "xactRollback": 83,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 93,
+              "SCHEDULED_TASK": 6
+            },
+            "processingJobsByType": {},
+            "oldestPendingJobAgeMs": 899,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 5
+            },
+            "oldestPendingCriticalNotificationAgeMs": 1411,
+            "statusPageSnapshotLagSeconds": 40
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.56%",
+              "memUsage": "56.93MiB / 7.748GiB",
+              "memPercent": "0.72%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "12.35%",
+              "memUsage": "178.6MiB / 7.748GiB",
+              "memPercent": "2.25%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "1.40%",
+              "memUsage": "193.3MiB / 7.748GiB",
+              "memPercent": "2.44%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "3.29%",
+              "memUsage": "284.1MiB / 7.748GiB",
+              "memPercent": "3.58%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "39.41MiB / 7.748GiB",
+              "memPercent": "0.50%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 93,
+              "accepted2xx": 93,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 93,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 53,
+              "accepted2xx": 53,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 3,
+              "uniqueDeliveriesSucceeded": 53,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 79,
+              "accepted2xx": 79,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 4,
+              "uniqueDeliveriesSucceeded": 79,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            }
+          },
+          "automationMetrics": {
+            "opsknight_automation_evaluations_total{mode=\"SHADOW\",outcome=\"SERVICE_DEFAULT\"}": 19,
+            "opsknight_automation_shadow_difference_total{outcome=\"SERVICE_DEFAULT\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"0.1\"}": 0,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"0.5\"}": 15,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"1\"}": 15,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"3\"}": 18,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"8\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"15\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"30\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"+Inf\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_sum{mode=\"SHADOW\"}": 14.468878000014229,
+            "opsknight_automation_evaluation_duration_ms_count{mode=\"SHADOW\"}": 19,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.1\"}": 17,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.5\"}": 19,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"1\"}": 19,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"3\"}": 19,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"8\"}": 19,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"15\"}": 19,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"30\"}": 19,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"+Inf\"}": 19,
+            "opsknight_automation_extraction_duration_ms_sum": 1.0332909999924595,
+            "opsknight_automation_extraction_duration_ms_count": 19
+          }
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 40,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "p(95)": 229.19984999999966,
+            "p(99)": 1012.6702999999997,
+            "avg": 109.78942499999997,
+            "min": 46.592,
+            "med": 60.304,
+            "max": 1398.275,
+            "p(50)": 60.304
+          },
+          "traceRuntimeP99Ms": 17.459292,
+          "traceCount": 40,
+          "traceJsonBytes": 198160,
+          "postgres": {
+            "activeConnections": 9,
+            "idleConnections": 24,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 25524,
+            "xactRollback": 176,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "ESCALATION": 137
+            },
+            "processingJobsByType": {
+              "SCHEDULED_TASK": 2,
+              "WAR_ROOM_PROVIDER_EVENT": 2
+            },
+            "oldestPendingJobAgeMs": 0,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 48
+            },
+            "oldestPendingCriticalNotificationAgeMs": 19088,
+            "statusPageSnapshotLagSeconds": 16
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.04%",
+              "memUsage": "57.96MiB / 7.748GiB",
+              "memPercent": "0.73%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "1.44%",
+              "memUsage": "185.2MiB / 7.748GiB",
+              "memPercent": "2.33%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "0.30%",
+              "memUsage": "172.8MiB / 7.748GiB",
+              "memPercent": "2.18%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "5.02%",
+              "memUsage": "276.8MiB / 7.748GiB",
+              "memPercent": "3.49%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "39.02MiB / 7.748GiB",
+              "memPercent": "0.49%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 115,
+              "accepted2xx": 115,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 115,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 91,
+              "accepted2xx": 91,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 91,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 119,
+              "accepted2xx": 119,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 119,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            }
+          },
+          "automationMetrics": {
+            "opsknight_automation_evaluations_total{mode=\"LIVE\",outcome=\"SERVICE_DEFAULT\"}": 14,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"0.1\"}": 0,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"0.5\"}": 9,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"1\"}": 10,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"3\"}": 12,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"8\"}": 12,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"15\"}": 12,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"30\"}": 14,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"+Inf\"}": 14,
+            "opsknight_automation_evaluation_duration_ms_sum{mode=\"LIVE\"}": 40.70691599999873,
+            "opsknight_automation_evaluation_duration_ms_count{mode=\"LIVE\"}": 14,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.1\"}": 12,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.5\"}": 14,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"1\"}": 14,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"3\"}": 14,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"8\"}": 14,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"15\"}": 14,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"30\"}": 14,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"+Inf\"}": 14,
+            "opsknight_automation_extraction_duration_ms_sum": 0.684458999999606,
+            "opsknight_automation_extraction_duration_ms_count": 14
+          }
+        },
+        {
+          "profile": "live-medium",
+          "acceptedEvents": 41,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "p(95)": 178.491,
+            "p(99)": 228.5016,
+            "avg": 79.11153658536587,
+            "min": 40.536,
+            "med": 59.356,
+            "max": 241.442,
+            "p(50)": 59.356
+          },
+          "traceRuntimeP99Ms": 6.472750000000815,
+          "traceCount": 41,
+          "traceJsonBytes": 364039,
+          "postgres": {
+            "activeConnections": 1,
+            "idleConnections": 32,
+            "idleInTxConnections": 0,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 37170,
+            "xactRollback": 274,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "WAR_ROOM_PROVIDER_EVENT": 4,
+              "ESCALATION": 177
+            },
+            "processingJobsByType": {
+              "ESCALATION": 2,
+              "SCHEDULED_TASK": 10,
+              "WAR_ROOM_PROVIDER_EVENT": 2
+            },
+            "oldestPendingJobAgeMs": 97,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 72
+            },
+            "oldestPendingCriticalNotificationAgeMs": 36686,
+            "statusPageSnapshotLagSeconds": 39
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.03%",
+              "memUsage": "57.53MiB / 7.748GiB",
+              "memPercent": "0.73%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "43.78%",
+              "memUsage": "185.9MiB / 7.748GiB",
+              "memPercent": "2.34%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "22.87%",
+              "memUsage": "209.7MiB / 7.748GiB",
+              "memPercent": "2.64%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "8.76%",
+              "memUsage": "300.7MiB / 7.748GiB",
+              "memPercent": "3.79%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.01%",
+              "memUsage": "38.79MiB / 7.748GiB",
+              "memPercent": "0.49%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 172,
+              "accepted2xx": 171,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 1,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 171,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 133,
+              "accepted2xx": 133,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 133,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 159,
+              "accepted2xx": 159,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 159,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            }
+          },
+          "automationMetrics": {
+            "opsknight_automation_evaluations_total{mode=\"LIVE\",outcome=\"SERVICE_DEFAULT\"}": 34,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"0.1\"}": 0,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"0.5\"}": 23,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"1\"}": 26,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"3\"}": 31,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"8\"}": 32,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"15\"}": 32,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"30\"}": 34,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"+Inf\"}": 34,
+            "opsknight_automation_evaluation_duration_ms_sum{mode=\"LIVE\"}": 56.37200100000655,
+            "opsknight_automation_evaluation_duration_ms_count{mode=\"LIVE\"}": 34,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.1\"}": 32,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.5\"}": 34,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"1\"}": 34,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"3\"}": 34,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"8\"}": 34,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"15\"}": 34,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"30\"}": 34,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"+Inf\"}": 34,
+            "opsknight_automation_extraction_duration_ms_sum": 1.0290410000084194,
+            "opsknight_automation_extraction_duration_ms_count": 34
+          }
+        },
+        {
+          "profile": "live-worst",
+          "acceptedEvents": 40,
+          "duplicateGroups": 0,
+          "fallbackCount": 0,
+          "httpLatencyMs": {
+            "p(95)": 119.52004999999994,
+            "p(99)": 188.0655,
+            "avg": 79.48802500000001,
+            "min": 49.487,
+            "med": 71.89750000000001,
+            "max": 208.833,
+            "p(50)": 71.89750000000001
+          },
+          "traceRuntimeP99Ms": 18.02141600000323,
+          "traceCount": 40,
+          "traceJsonBytes": 819240,
+          "postgres": {
+            "activeConnections": 8,
+            "idleConnections": 24,
+            "idleInTxConnections": 1,
+            "waitingOnLockCount": 0,
+            "advisoryLockCount": 0,
+            "deadlocks": 0,
+            "xactCommit": 47984,
+            "xactRollback": 354,
+            "pendingJobsByType": {
+              "COMPLIANCE_EVALUATION_SWEEP": 1,
+              "WAR_ROOM_PROVIDER_EVENT": 4,
+              "ESCALATION": 214
+            },
+            "processingJobsByType": {
+              "ESCALATION": 1,
+              "SCHEDULED_TASK": 2,
+              "WAR_ROOM_PROVIDER_EVENT": 2
+            },
+            "oldestPendingJobAgeMs": 169,
+            "pendingNotificationsByTrafficClass": {
+              "CRITICAL": 81
+            },
+            "oldestPendingCriticalNotificationAgeMs": 48867,
+            "statusPageSnapshotLagSeconds": 61
+          },
+          "resources": [
+            {
+              "name": "opsknight-automation-cert-proxy-1",
+              "cpuPercent": "0.06%",
+              "memUsage": "57.1MiB / 7.748GiB",
+              "memPercent": "0.72%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-2",
+              "cpuPercent": "1.15%",
+              "memUsage": "188MiB / 7.748GiB",
+              "memPercent": "2.37%"
+            },
+            {
+              "name": "opsknight-automation-cert-web-1",
+              "cpuPercent": "24.11%",
+              "memUsage": "242.7MiB / 7.748GiB",
+              "memPercent": "3.06%"
+            },
+            {
+              "name": "opsknight-automation-cert-db-1",
+              "cpuPercent": "16.80%",
+              "memUsage": "319.4MiB / 7.748GiB",
+              "memPercent": "4.03%"
+            },
+            {
+              "name": "opsknight-automation-db",
+              "cpuPercent": "0.00%",
+              "memUsage": "39.4MiB / 7.748GiB",
+              "memPercent": "0.50%"
+            }
+          ],
+          "providers": {
+            "email": {
+              "provider": "email",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 245,
+              "accepted2xx": 245,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 245,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 21,
+              "p99LatencyMs": 22
+            },
+            "slack": {
+              "provider": "slack",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "sms": {
+              "provider": "sms",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "push": {
+              "provider": "push",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 174,
+              "accepted2xx": 174,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 174,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            },
+            "teams": {
+              "provider": "teams",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 0,
+              "accepted2xx": 0,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 0,
+              "uniqueDeliveriesSucceeded": 0,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 0,
+              "p95LatencyMs": 0,
+              "p99LatencyMs": 0
+            },
+            "webhook": {
+              "provider": "webhook",
+              "behavior": {
+                "mode": "normal",
+                "latencyMs": 20,
+                "failureRate": 0,
+                "rateLimitPerSec": 0,
+                "retryAfterSec": 5
+              },
+              "effectiveMode": "normal",
+              "totalRequests": 200,
+              "accepted2xx": 200,
+              "rateLimited429": 0,
+              "clientErrors4xx": 0,
+              "serverErrors5xx": 0,
+              "timeouts": 0,
+              "inFlight": 0,
+              "maxInFlight": 5,
+              "uniqueDeliveriesSucceeded": 200,
+              "duplicateDeliveries": 0,
+              "p50LatencyMs": 21,
+              "p95LatencyMs": 22,
+              "p99LatencyMs": 22
+            }
+          },
+          "automationMetrics": {
+            "opsknight_automation_evaluations_total{mode=\"SHADOW\",outcome=\"SERVICE_DEFAULT\"}": 19,
+            "opsknight_automation_evaluations_total{mode=\"LIVE\",outcome=\"SERVICE_DEFAULT\"}": 61,
+            "opsknight_automation_shadow_difference_total{outcome=\"SERVICE_DEFAULT\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"0.1\"}": 0,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"0.5\"}": 15,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"1\"}": 15,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"3\"}": 18,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"8\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"15\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"30\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"SHADOW\",le=\"+Inf\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_sum{mode=\"SHADOW\"}": 14.468878000014229,
+            "opsknight_automation_evaluation_duration_ms_count{mode=\"SHADOW\"}": 19,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"0.1\"}": 0,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"0.5\"}": 31,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"1\"}": 44,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"3\"}": 54,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"8\"}": 57,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"15\"}": 60,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"30\"}": 61,
+            "opsknight_automation_evaluation_duration_ms_bucket{mode=\"LIVE\",le=\"+Inf\"}": 61,
+            "opsknight_automation_evaluation_duration_ms_sum{mode=\"LIVE\"}": 109.0177939999412,
+            "opsknight_automation_evaluation_duration_ms_count{mode=\"LIVE\"}": 61,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.1\"}": 64,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"0.5\"}": 80,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"1\"}": 80,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"3\"}": 80,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"8\"}": 80,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"15\"}": 80,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"30\"}": 80,
+            "opsknight_automation_extraction_duration_ms_bucket{le=\"+Inf\"}": 80,
+            "opsknight_automation_extraction_duration_ms_sum": 4.3021699999662815,
+            "opsknight_automation_extraction_duration_ms_count": 80
+          }
+        }
+      ]
+    }
+  ]
+}

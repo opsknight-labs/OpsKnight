@@ -1,3 +1,5 @@
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
+import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 import prisma from '@/lib/prisma';
 import { calculateSLAMetrics, type SLAMetricsFilter } from '@/lib/sla-server';
 import type { SLAMetrics as SLAServerMetrics } from '@/lib/sla';
@@ -97,7 +99,8 @@ const DASHBOARD_RESOLVE_ATTENTION_WINDOW_MS = 30 * 60 * 1000;
  * the page/snapshot path; an SSE heartbeat must never recompute them.
  */
 export async function getWidgetRealtimeProjection(
-  filters: SLAMetricsFilter = {}
+  filters: SLAMetricsFilter = {},
+  sensitive = true
 ): Promise<WidgetRealtimeProjection> {
   const now = new Date();
   const where = compileIncidentMetricFilter({ ...filters, status: undefined }).prisma;
@@ -108,6 +111,9 @@ export async function getWidgetRealtimeProjection(
     select: {
       id: true,
       title: true,
+      automationSourceRestricted: true,
+      automationDecision: { select: { incidentId: true } },
+      automationTraces: { select: { incidentId: true }, take: 1 },
       status: true,
       urgency: true,
       createdAt: true,
@@ -133,7 +139,7 @@ export async function getWidgetRealtimeProjection(
     const sla = projectIncidentSlaState(incident, { now });
     return {
       id: incident.id,
-      title: incident.title,
+      title: visibleIncidentSource(incident, sensitive).title,
       status: incident.status,
       urgency: incident.urgency,
       createdAt: incident.createdAt,
@@ -211,7 +217,7 @@ function determineTrend(current: number | null, previous: number | null): 'up' |
  */
 export async function getWidgetData(
   userId: string,
-  _userRole: string,
+  userRole: string,
   filters: SLAMetricsFilter = {},
   providedSlaMetrics?: SLAServerMetrics
 ): Promise<WidgetDataContext> {
@@ -232,6 +238,24 @@ export async function getWidgetData(
   const slaMetricsRaw: SLAServerMetrics =
     providedSlaMetrics || (await calculateSLAMetrics(metricsFilters));
 
+  const sensitive =
+    isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.INCIDENT_SENSITIVE_READ);
+  const protectedIds = new Set<string>();
+  if (!sensitive) {
+    const protectedIncidents = await prisma.incident.findMany({
+      where: {
+        id: { in: (slaMetricsRaw.activeIncidentSummaries ?? []).map(incident => incident.id) },
+        OR: [
+          { automationSourceRestricted: true },
+          { automationDecision: { isNot: null } },
+          { automationTraces: { some: {} } },
+        ],
+      },
+      select: { id: true },
+    });
+    protectedIncidents.forEach(incident => protectedIds.add(incident.id));
+  }
+
   // Transform sla-server data to widget format
   // Active incidents from recentIncidents that aren't resolved
   const activeIncidentsData: ActiveIncidentData[] = (
@@ -242,7 +266,7 @@ export async function getWidgetData(
 
     return {
       id: inc.id,
-      title: inc.title,
+      title: protectedIds.has(inc.id) ? 'Restricted alert content' : inc.title,
       status: inc.status,
       urgency: inc.urgency as 'HIGH' | 'MEDIUM' | 'LOW',
       createdAt: new Date(inc.createdAt),
@@ -343,12 +367,20 @@ export async function getWidgetData(
       message: true,
       createdAt: true,
       incidentId: true,
+      incident: {
+        select: {
+          automationSourceRestricted: true,
+          automationDecision: { select: { incidentId: true } },
+          automationTraces: { select: { incidentId: true }, take: 1 },
+        },
+      },
     },
   });
 
   const recentActivity: ActivityEvent[] = recentIncidentEvents.map(event => ({
     id: event.id,
-    message: event.message,
+    message: visibleIncidentSource({ ...event.incident, events: [event] }, sensitive).events[0]
+      .message,
     timestamp: event.createdAt,
     incidentId: event.incidentId,
   }));

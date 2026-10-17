@@ -66,7 +66,8 @@ export function runResponderLifecycle() {
   // 1. Create Incident
   const createBody = JSON.stringify({
     title: `[Load Lifecycle] High Latency in ${serviceId} (${__VU}:${__ITER})`,
-    description: 'Comprehensive responder lifecycle torture drill verifying create -> ack -> note -> snooze -> resolve',
+    description:
+      'Comprehensive responder lifecycle torture drill verifying create -> ack -> note -> snooze -> resolve',
     serviceId,
     urgency: __ITER % 3 === 0 ? 'HIGH' : __ITER % 3 === 1 ? 'MEDIUM' : 'LOW',
     priority: __ITER % 2 === 0 ? 'P1' : 'P2',
@@ -88,9 +89,7 @@ export function runResponderLifecycle() {
   if (
     createRes.status === 429 ||
     createRes.status === 503 ||
-    (createRes.status === 500 &&
-      createRes.body &&
-      createRes.body.includes('"retryable":true'))
+    (createRes.status === 500 && createRes.body && createRes.body.includes('"retryable":true'))
   ) {
     opsknightMetrics.lifecycleSuccessRate.add(true);
     sleep(0.2);
@@ -148,21 +147,21 @@ export function runResponderLifecycle() {
     ackRes.status === 200 || ackRes.status === 409 || ackRes.status === 429
   );
 
-  // 4. Add Responder Note
+  // 4. Update responder urgency through the supported incident API
   if (__ITER % 2 === 0) {
-    const noteRes = http.post(
-      `${baseUrl}/api/incidents/${incidentId}/notes`,
-      JSON.stringify({ content: `[Auto-note] Responder investigation active by VU ${__VU}` }),
+    const urgencyRes = http.patch(
+      `${baseUrl}/api/incidents/${incidentId}`,
+      JSON.stringify({ urgency: __ITER % 3 === 0 ? 'HIGH' : 'MEDIUM' }),
       {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${pickApiKey(manifest, __VU + 2, __ITER)}`,
         },
-        tags: { endpoint: 'incidents_note' },
+        tags: { endpoint: 'incidents_urgency' },
       }
     );
     opsknightMetrics.lifecycleSuccessRate.add(
-      noteRes.status === 201 || noteRes.status === 200 || noteRes.status === 404 || noteRes.status === 429
+      urgencyRes.status === 200 || urgencyRes.status === 409 || urgencyRes.status === 429
     );
   }
 

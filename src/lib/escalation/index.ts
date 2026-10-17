@@ -1,3 +1,4 @@
+import { resolveIncidentResponderRouting } from './routing';
 import prisma from '../prisma';
 import { logger } from '../logger';
 import { ESCALATION_LOCK_TIMEOUT_MS } from '../config';
@@ -115,7 +116,19 @@ export async function executeEscalation(
     return { outcome: 'NO_INCIDENT', escalated: false, reason: 'Incident not found' };
   }
 
-  const policy = incident.service.policy;
+  const routing = await resolveIncidentResponderRouting(
+    incidentId,
+    incident.serviceId,
+    prisma,
+    incident.service.policy
+  );
+  if (routing.type === 'NO_ESCALATION')
+    return {
+      outcome: 'RESPONDER_ROUTE_NONE',
+      escalated: false,
+      reason: 'Automation intentionally disables responder paging',
+    };
+  const policy = routing.policy;
   const policySteps = (policy?.steps ?? []) as unknown as PolicyStepRow[];
   const generation = incident.escalationGeneration ?? 0;
   const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;
@@ -170,12 +183,14 @@ export async function executeEscalation(
 
   const now = new Date();
   const stepDelayMinutes = step.delayMinutes || 0;
-  const conditions: EscalationCondition[] = prisma.escalationRuleCondition
-    ? await prisma.escalationRuleCondition.findMany({
-        where: { ruleId: step.id },
-        select: { field: true, operator: true, values: true },
-      })
-    : [];
+  const conditions: EscalationCondition[] = routing.pinnedConditions
+    ? (routing.pinnedConditions.get(step.id) ?? [])
+    : prisma.escalationRuleCondition
+      ? await prisma.escalationRuleCondition.findMany({
+          where: { ruleId: step.id },
+          select: { field: true, operator: true, values: true },
+        })
+      : [];
   const supportHours = conditions.some(condition => condition.field === 'SUPPORT_HOURS_STATE')
     ? await prisma.$transaction(tx =>
         resolveSupportHours(tx, { serviceId: incident.serviceId, at: now })
@@ -430,7 +445,10 @@ export async function processPendingEscalations(
 
     const total = pendingIncidents.length;
     const settledResults: Array<
-      | { readonly incident: (typeof pendingIncidents)[number]; readonly result: Awaited<ReturnType<typeof executor>> }
+      | {
+          readonly incident: (typeof pendingIncidents)[number];
+          readonly result: Awaited<ReturnType<typeof executor>>;
+        }
       | { readonly incident: (typeof pendingIncidents)[number]; readonly error: unknown }
     > = [];
     const CHUNK_SIZE = 5;
