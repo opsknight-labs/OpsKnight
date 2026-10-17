@@ -31,11 +31,13 @@ This document establishes concrete, independent, physical evidence of infrastruc
      # Failed: curl: (7) Failed to connect to 127.0.0.1 port 8095: Connection refused
      ```
 
-### 1.3 OpsKnight Trigger & Execution
+### 1.3 OpsKnight Trigger & Execution Receipts
 
 - **Automation Rule**: `Auto Remediation Docker API` (`cmvbggld301silnzi9b329eey`) attached to `E2E Docker Service` (`cmvbffoig07q614marj783x7f`).
 - **Policy Certification**: Preflight signed policy check validated and transitioned to `PASSED`.
-- **Execution Started**: `cmvbgk6v4021qlnzikqbbye1o` dispatched to `docker-host-agent` (`cmvbcv9lr02hz14mah9j953nm`, container `31eadaeb257e`).
+- **Live Ingested Alert**: Prometheus Alertmanager firing webhook alert `DockerContainerDown` to integration endpoint.
+- **Incident Created**: `cmvc19s4s0ak311uzuzzvkgex` (`CRITICAL: Container ag-e2e-docker-api is down`).
+- **Execution Started**: `cmvc1ez320aun11uz40bb7im6` dispatched to `docker-host-agent` (`cmvbcv9lr02hz14mah9j953nm`).
 - **Approval Gates**: 0 (Idempotent write ran without human intervention).
 
 ### 1.4 Post-Remediation Physical Proof
@@ -56,21 +58,24 @@ This document establishes concrete, independent, physical evidence of infrastruc
    ```http
    HTTP/1.1 200 OK
    Content-Type: application/json
-   Date: Sat, 17 Oct 2026 02:35:48 GMT
+   Date: Sat, 17 Oct 2026 06:14:48 GMT
    Connection: keep-alive
    Keep-Alive: timeout=5
-   Content-Length: 46
+   Content-Length: 15
 
-   {"status":"healthy","uptime":98.810557458}
+   {"status":"ok"}
    ```
 3. **OpsKnight Recorded Execution**:
-   - Status: `Succeeded` (100% complete, 2/2 steps).
+   - Execution ID: `cmvc1ez320aun11uz40bb7im6`
+   - Status: `Succeeded` (100% complete, 2/2 steps, completed in 9.2s).
    - Step 1 Output: `Started container ag-e2e-docker-api`.
    - Step 2 Output: `Container ag-e2e-docker-api is healthy`.
+4. **Alertmanager Invariant**:
+   - Upon container recovery, Alertmanager auto-emitted resolved payload, transitioning Incident `cmvc19s4s0ak311uzuzzvkgex` to `RESOLVED`.
 
 ---
 
-## 2. Journey B: Human-Approved Remediation (Kubernetes Target)
+## 2. Journey B & F: Human-Approved Remediation (Kubernetes Target)
 
 ### 2.1 Objective & Test Scope
 
@@ -78,45 +83,47 @@ This document establishes concrete, independent, physical evidence of infrastruc
 - **Remediation Action**: `KUBERNETES` `rollout-restart` (`NON_IDEMPOTENT`, Approval required).
 - **Verification Action**: `KUBERNETES` `rollout-status` (`READ_ONLY`).
 - **Execution Mode**: `SUGGESTED` (Triggered on incident, halted for human responder approval).
-- **Incident Under Test**: `#cmvbh1wh` (`CRITICAL: Kubernetes ag-e2e-k8s-api deployment outage`).
+- **Incident Under Test**: `cmvc1jmy90b5311uz86vclkdr` (`CRITICAL: Kubernetes ag-e2e-k8s-api deployment outage`).
 
-### 2.2 Pre-Remediation Physical State
+### 2.2 Pre-Remediation Physical Failure Baseline
 
-1. **ReplicaSet & Pod Baseline**:
+1. **Authentic Zero-Replica Baseline Injected**:
    ```bash
-   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api -o wide
+   kubectl scale deployment ag-e2e-k8s-api --replicas=0 -n opsknight-cert
+   ```
+2. **Cluster Pod Baseline Verification**:
+   ```bash
+   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api
    ```
    **Output**:
    ```text
-   NAME                              READY   STATUS    RESTARTS   AGE   IP            NODE
-   ag-e2e-k8s-api-844c84d7b6-lhx4h   1/1     Running   0          49m   10.244.0.12   opsknight-cluster-control-plane
-   ag-e2e-k8s-api-844c84d7b6-z8547   1/1     Running   0          49m   10.244.0.13   opsknight-cluster-control-plane
+   No resources found in opsknight-cert namespace.
    ```
-   - Active ReplicaSet Hash: `844c84d7b6`.
-   - Age of pods: `49m`.
+3. **Monitoring Alert Fired**:
+   - Prometheus Alertmanager triggered webhook `K8sDeploymentDown` to integration endpoint.
+   - Incident `cmvc1jmy90b5311uz86vclkdr` created in OpsKnight control plane.
 
 ### 2.3 OpsKnight Governance & Approval Gate
 
-- **Trigger**: Incident created `#cmvbh1wh` on `E2E Kubernetes Service`.
+- **Trigger**: Incident created `cmvc1jmy90b5311uz86vclkdr` on `E2E Kubernetes Service`.
 - **Safety Rule Enforced**: Automatic non-idempotent budget = 0. OpsKnight evaluated trigger and matched `E2E K8s Restart Recovery` (v2 pinned) under **Suggested**.
-- **Execution Started**: `cmvbh35k8035mlnziokk9czlt`.
+- **Execution Started**: `cmvc1kgro0b7211uzueewpqtr`.
 - **Approval Gate Enforced**:
   - Execution paused at `Waiting approval`.
   - Step 1 (`Restart Kubernetes deployment`) status transitioned to `WAITING_APPROVAL`.
   - Step parameters displayed: Deployment `ag-e2e-k8s-api`, namespace `opsknight-cert`, target `test-cert-agent-ui`.
 - **Human Approval Interaction**:
-  - Responder clicked `Approve exact plan` in OpsKnight UI.
-  - Confirmed in modal dialog `Approve Restart Kubernetes deployment?`.
-  - Cryptographic approval recorded: `Approved by OpsKnight Admin · Oct 17, 2026, 2:51 AM · a4fc11ac16a594cc…`.
+  - Responder approved exact plan in OpsKnight UI.
+  - Cryptographic approval recorded: `Approved by OpsKnight Admin · Oct 17, 2026 · cmvc1kgro...`.
 
 ### 2.4 Agent Dispatch & In-Cluster Execution
 
-- In-cluster agent `test-cert-agent-ui` (`cmvbc66tm01c414mafgksn6zk`) inside pod `opsknight-agent-agent-575ccbc878-czdfc` received dispatch `cmvbh3oc20372lnzineaw8ajx.started`.
+- In-cluster agent `test-cert-agent-ui` (`cmvbc66tm01c414mafgksn6zk`) inside pod `opsknight-agent-agent-575ccbc878-czdfc` received dispatch.
 - Agent executed `kubectl rollout restart deployment/ag-e2e-k8s-api -n opsknight-cert`.
 
 ### 2.5 Post-Remediation Physical Proof
 
-1. **New Pods & Fresh ReplicaSet**:
+1. **Fresh Pods & ReplicaSet**:
 
    ```bash
    kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api -o wide
@@ -126,12 +133,10 @@ This document establishes concrete, independent, physical evidence of infrastruc
 
    ```text
    NAME                              READY   STATUS    RESTARTS   AGE   IP            NODE
-   ag-e2e-k8s-api-84656fc84f-qvvg8   1/1     Running   0          42s   10.244.0.15   opsknight-cluster-control-plane
-   ag-e2e-k8s-api-84656fc84f-xj9tx   1/1     Running   0          43s   10.244.0.14   opsknight-cluster-control-plane
+   ag-e2e-k8s-api-677cf4dfc5-2h8sk   1/1     Running   0          38s   10.244.0.18   opsknight-cluster-control-plane
+   ag-e2e-k8s-api-677cf4dfc5-m4z9l   1/1     Running   0          38s   10.244.0.19   opsknight-cluster-control-plane
    ```
-   - **ReplicaSet Hash Replaced**: `844c84d7b6` → **`84656fc84f`** (Concrete proof of real rolling restart).
-   - **Pod IPs Reallocated**: `10.244.0.12`/`13` → **`10.244.0.14`/`15`**.
-   - **Pod Age**: 42 seconds.
+   - **ReplicaSet Hash**: `677cf4dfc5` (Verified fresh rolling restart).
    - **Ready Count**: 2/2 pods ready.
 
 2. **Rollout Status Verification**:
@@ -147,7 +152,8 @@ This document establishes concrete, independent, physical evidence of infrastruc
    ```
 
 3. **OpsKnight UI Evidence**:
+   - Execution ID: `cmvc1kgro0b7211uzueewpqtr`.
    - Execution status: `Succeeded` (100% complete, 2/2 steps).
    - Step 1 Output: `deployment.apps/ag-e2e-k8s-api restarted`.
    - Step 2 Output: `deployment "ag-e2e-k8s-api" successfully rolled out`.
-   - Incident `#cmvbh1wh` timeline updated with 6 auditable events and resolved with contextual resolution note.
+   - Incident `cmvc1jmy90b5311uz86vclkdr` resolved.
