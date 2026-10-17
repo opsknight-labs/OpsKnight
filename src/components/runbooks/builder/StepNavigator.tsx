@@ -348,18 +348,24 @@ export function getStepSummary(step: RunbookStepDefinition): string {
       return `${method}${sanitizedUrl}`.trim();
     }
     case 'BASH': {
-      let cmd = String(config.command ?? '');
-      cmd = cmd.replace(/(token|key|secret|password|bearer|auth)[=:\s]+[^\s;]+/gi, '$1=***');
-      return cmd ? `$ ${cmd.slice(0, 35)}${cmd.length > 35 ? '…' : ''}` : 'Shell script';
+      const interpreter = config.interpreter ? String(config.interpreter) : 'bash';
+      return `Execute script (${interpreter})`;
     }
     case 'LINUX_DIAGNOSTICS': {
-      return String(config.command ?? 'Diagnostics check');
+      const diag = config.diagnostic ? String(config.diagnostic) : '';
+      return diag ? `diagnostic: ${diag}` : 'Linux diagnostics';
     }
     case 'WAIT': {
       return `Wait ${String(config.durationSeconds ?? 10)}s`;
     }
     case 'CONDITION': {
-      return `If ${String(config.condition ?? 'condition')}`;
+      const field = config.field ? String(config.field) : '';
+      const op = config.operator ? String(config.operator).toLowerCase().replace('_', ' ') : '';
+      const val = config.value !== undefined ? String(config.value) : '';
+      if (field && op) {
+        return `If ${field} ${op}${val ? ` ${val}` : ''}`.trim();
+      }
+      return 'If condition';
     }
     case 'MANUAL': {
       return 'Manual responder instructions';

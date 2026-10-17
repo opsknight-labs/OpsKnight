@@ -289,3 +289,51 @@ it('generates canonical Podman installation and upgrade commands matching rootle
   expect(upgradeCommands.podman).toContain("-e OPSKNIGHT_URL='https://ops.example.com'");
   expect(upgradeCommands.podman).not.toContain('enrollment-token');
 });
+
+it('enforces hardened container security isolation profile across Docker and Podman commands', async () => {
+  const { agentSetupCommands } = await import('@/lib/runbooks/agent-setup-commands');
+  const commands = agentSetupCommands({
+    agentId: 'cmv90000000000000000000001',
+    image: 'ghcr.io/opsknight-labs/opsknight-agent:v2.0.0',
+    url: 'https://ops.example.com',
+    policyPath: 'path with spaces/policy.json',
+    executionPublicKey: 'public-pin',
+  });
+
+  // Hardened security profile enforcement
+  for (const cmd of [commands.docker, commands.podman]) {
+    expect(cmd).toContain('--security-opt=no-new-privileges:true');
+    expect(cmd).toContain('--cap-drop=ALL');
+    expect(cmd).toContain('--read-only');
+    expect(cmd).toContain('--tmpfs /tmp:rw,noexec,nosuid,size=16m');
+  }
+
+  // Safe quoting for paths with spaces and shell characters
+  expect(commands.docker).toContain("'path with spaces/policy.json'");
+  expect(commands.podman).toContain("'path with spaces/policy.json'");
+  expect(commands.docker).toContain('"${docker_extra_args[@]+"${docker_extra_args[@]}"}"');
+  expect(commands.podman).toContain('"${podman_extra_args[@]+"${podman_extra_args[@]}"}"');
+});
+
+it('rejects policyPath containing dangerous control characters or null bytes', async () => {
+  const { agentSetupCommands } = await import('@/lib/runbooks/agent-setup-commands');
+  expect(() =>
+    agentSetupCommands({
+      agentId: 'cmv90000000000000000000001',
+      image: 'ghcr.io/opsknight-labs/opsknight-agent:v2.0.0',
+      url: 'https://ops.example.com',
+      policyPath: 'policy\0bad.json',
+      executionPublicKey: 'public-pin',
+    })
+  ).toThrow('Policy path must not contain newlines or null bytes.');
+
+  expect(() =>
+    agentSetupCommands({
+      agentId: 'cmv90000000000000000000001',
+      image: 'ghcr.io/opsknight-labs/opsknight-agent:v2.0.0',
+      url: 'https://ops.example.com',
+      policyPath: 'policy\nbad.json',
+      executionPublicKey: 'public-pin',
+    })
+  ).toThrow('Policy path must not contain newlines or null bytes.');
+});

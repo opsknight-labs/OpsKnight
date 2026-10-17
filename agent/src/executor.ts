@@ -249,7 +249,12 @@ export function commandFor(
 export async function executeAttempt(
   attempt: ClaimedAttempt,
   policy: AgentPolicy,
-  signal: AbortSignal
+  signal: AbortSignal,
+  runner: (
+    attempt: ClaimedAttempt,
+    policy: AgentPolicy,
+    signal: AbortSignal
+  ) => Promise<ExecutionResult> = executeCommand
 ): Promise<ExecutionResult> {
   assertPolicyAllows(attempt, policy);
   if (
@@ -257,7 +262,7 @@ export async function executeAttempt(
     ['LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES'].includes(attempt.step.type)
   ) {
     const preState = await captureEvidence(attempt, signal);
-    const result = await executeCommand(attempt, policy, signal);
+    const result = await runner(attempt, policy, signal);
     if (
       result.status === 'SUCCEEDED' &&
       attempt.step.type === 'DOCKER' &&
@@ -265,16 +270,32 @@ export async function executeAttempt(
     ) {
       const stepTimeout = attempt.step.timeoutSeconds ?? attempt.step.config.timeoutSeconds;
       const startCheckTime = Date.now();
-      const maxWaitMs = Math.min(Math.max(5000, Number(stepTimeout ?? 15) * 1000), 60000);
+      // Reconcile effective deadline: respect stepTimeout strictly without an artificial 5-second floor.
+      const effectiveTimeoutSeconds =
+        stepTimeout !== undefined ? Math.max(1, Number(stepTimeout)) : 15;
+      const maxWaitMs = Math.min(effectiveTimeoutSeconds * 1000, 60000);
       while (
         !containerHealthPassed(result.output) &&
         isContainerStarting(result.output) &&
         Date.now() - startCheckTime < maxWaitMs &&
         !signal.aborted
       ) {
-        await new Promise(r => setTimeout(r, 1000));
-        if (signal.aborted) break;
-        const retry = await executeCommand(attempt, policy, signal);
+        await new Promise(r => setTimeout(r, 100));
+        if (signal.aborted) {
+          const isShutdown = signal.reason === 'AGENT_SHUTDOWN';
+          const isLeaseLost = signal.reason === 'LEASE_LOST';
+          result.status = isLeaseLost ? 'UNKNOWN' : 'CANCELLED';
+          result.errorCode = isShutdown
+            ? 'AGENT_SHUTDOWN'
+            : isLeaseLost
+              ? 'LEASE_LOST'
+              : 'CANCELLED';
+          result.errorMessage = isLeaseLost
+            ? 'Local execution authority expired during healthcheck polling.'
+            : 'Healthcheck polling cancelled.';
+          break;
+        }
+        const retry = await runner(attempt, policy, signal);
         result.output = retry.output;
         result.exitCode = retry.exitCode;
         if (retry.status !== 'SUCCEEDED') {

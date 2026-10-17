@@ -103,3 +103,58 @@ This register catalogs all functional, architectural, and user-experience defect
 - **Root Cause**: Lack of automated interval polling on in-flight executions, absence of tab visibility awareness (`document.visibilityState`), and `BASH` being classified as idempotent.
 - **Resolution**: Added `IncidentRunbookRefreshButton` with 4-second auto-refresh polling while executions are active, paused polling when tab is hidden, added in-flight deduplication, and classified `BASH` steps strictly as `NON_IDEMPOTENT`.
 - **Regression Verification**: Verified live in browser and validated with unit test suite in `tests/components/incident-runbook-refresh-timeline.test.tsx`.
+
+---
+
+### Bug #10: Kubernetes Causal Inconsistency in Physical Recovery Documentation
+
+- **Component**: `plans/runbook-engine/manual-e2e/PHYSICAL-RECOVERY.md`
+- **Severity**: Medium (Audit Integrity & Operational Accuracy)
+- **Symptom**: Physical evidence narrative conflated zero-replica scale recovery (`.spec.replicas: 0 -> 2`) with rolling restarts (`rollout-restart`).
+- **Root Cause**: Rolling restart rotates degraded/stale pods on an active ReplicaSet (`844c84d7b6` -> `677cf4dfc5`) by updating the pod template, but does not alter `.spec.replicas: 0`. Scaling requires the distinct `scale` sub-command bounded by `kubernetesMaxReplicas`.
+- **Resolution**: Reconciled physical recovery receipts in `PHYSICAL-RECOVERY.md` to accurately delineate `rollout-restart` (pod replacement with 2/2 ready) from `scale` (replica count mutation), eliminating causal inconsistencies.
+- **Regression Verification**: Audited command sequences and verified exact Kubernetes controller semantics in `PHYSICAL-RECOVERY.md`.
+
+---
+
+### Bug #11: Agent Setup Shell Safety & Container Isolation Hardening (P1 Deployment)
+
+- **Component**: `src/lib/runbooks/agent-setup-commands.ts`
+- **Severity**: High (P1 Deployment Security & Shell Robustness)
+- **Symptom**: Policy file paths with null bytes or newlines could lead to shell injection; whitespace in paths caused word-splitting; missing policy files silently ran the agent with default permissions; container execution lacked defense-in-depth isolation flags.
+- **Root Cause**: Naive string concatenation in shell scripts and unvalidated policy paths.
+- **Resolution**: Added strict input validation rejecting `\0`, `\r`, and `\n` in `policyPath`. Implemented safe bash array expansion (`docker_extra_args`, `podman_extra_args`) with POSIX-compliant nounset guards. Added hard exit (`exit 1`) when policy file does not exist. Added container hardening flags: `--security-opt=no-new-privileges:true`, `--cap-drop=ALL`, `--read-only`, and `--tmpfs /tmp:rw,noexec,nosuid,size=16m`.
+- **Regression Verification**: Validated across unit tests in `tests/lib/runbooks/agent-deployment.test.ts` verifying whitespace handling, rejection of malicious paths, missing policy exit, and security flags.
+
+---
+
+### Bug #12: Bash Action Step Summary Credential Exposure (P1 Security)
+
+- **Component**: `src/components/runbooks/builder/StepNavigator.tsx`, `src/components/incident/IncidentRunbooks.tsx`
+- **Severity**: High (P1 Security & UI Masking)
+- **Symptom**: Script summaries rendered snippets of raw bash commands, risking token/password leakage via positional arguments, environment variables, or commands not caught by keyword regexes.
+- **Root Cause**: Client components attempted regex pattern matching against arbitrary shell scripts to display script excerpts.
+- **Resolution**: Removed raw command string rendering and fragile regex keyword matching entirely. Replaced with safe, deterministic descriptor `Execute script (${interpreter})` (e.g. `Execute script (bash)`).
+- **Regression Verification**: Adversarial unit tests in `tests/components/incident-runbook-refresh-timeline.test.tsx` asserting secret tokens never appear in rendered chip summaries.
+
+---
+
+### Bug #13: Executor Polling Effective Deadlines & Lease Loss Handling (P1 Runtime Engine)
+
+- **Component**: `agent/src/executor.ts`
+- **Severity**: High (P1 Runtime Engine)
+- **Symptom**: Healthcheck polling enforced an artificial 5-second floor on timeouts (`Math.max(5, ...)`), ignoring sub-5-second step timeouts; polling loops did not distinguish between authority lease loss (`LEASE_LOST`) and graceful agent shutdown (`AGENT_SHUTDOWN`).
+- **Root Cause**: Hardcoded minimum timeout of 5s and generic abort handling without reason inspection.
+- **Resolution**: Reduced minimum timeout floor to 1s (`Math.max(1, ...)`). Added explicit abort signal inspection: transitions to `UNKNOWN` with `errorCode: 'LEASE_LOST'` on lease loss, and transitions to `CANCELLED` on `AGENT_SHUTDOWN`. Added dependency injection for runner in unit testing.
+- **Regression Verification**: Unit tests in `tests/lib/runbooks/agent-executor.test.ts` validating effective timeout handling, `LEASE_LOST` transition to `UNKNOWN`, and shutdown handling.
+
+---
+
+### Bug #14: Open Incident Auto-Refresh Polling Prior to Execution Dispatch (P2 UI / Responsiveness)
+
+- **Component**: `src/components/incident/runbooks/IncidentRunbookRefreshButton.tsx`
+- **Severity**: Medium (P2 Operator Experience)
+- **Symptom**: When an incident was open but no runbook executions had started yet, the incident page did not auto-refresh, requiring operators to manually reload the page to see newly dispatched executions.
+- **Root Cause**: Auto-refresh polling condition strictly checked for `hasActiveExecutions` (running/pending executions), omitting `isIncidentOpen` with zero executions.
+- **Resolution**: Extended polling logic to check `isIncidentOpen` with a 6-second interval when no active executions exist yet, auto-fetching state until remediation executes.
+- **Regression Verification**: Unit tests in `tests/components/incident-runbook-refresh-timeline.test.tsx` verifying polling intervals for open incidents and active executions.

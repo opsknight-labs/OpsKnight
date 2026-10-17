@@ -8,18 +8,25 @@ import { cn } from '@/lib/utils';
 
 export default function IncidentRunbookRefreshButton({
   hasActiveExecutions = false,
+  isIncidentOpen = false,
   pollIntervalSeconds = 4,
 }: {
   hasActiveExecutions?: boolean;
+  isIncidentOpen?: boolean;
   pollIntervalSeconds?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [manualSpin, setManualSpin] = useState(false);
 
-  // Auto-refresh polling whenever there are in-flight executions
+  // Auto-refresh polling whenever there are in-flight executions or an incident is open awaiting automated action
   useEffect(() => {
-    if (!hasActiveExecutions) return;
+    const shouldPoll = hasActiveExecutions || isIncidentOpen;
+    if (!shouldPoll) return;
+
+    const effectiveIntervalMs = hasActiveExecutions
+      ? pollIntervalSeconds * 1000
+      : Math.max(6000, Math.round(pollIntervalSeconds * 1.5 * 1000));
 
     let inFlight = false;
     const interval = setInterval(() => {
@@ -33,10 +40,10 @@ export default function IncidentRunbookRefreshButton({
           inFlight = false;
         }
       });
-    }, pollIntervalSeconds * 1000);
+    }, effectiveIntervalMs);
 
     return () => clearInterval(interval);
-  }, [hasActiveExecutions, isPending, pollIntervalSeconds, router]);
+  }, [hasActiveExecutions, isIncidentOpen, isPending, pollIntervalSeconds, router]);
 
   const handleManualRefresh = () => {
     setManualSpin(true);

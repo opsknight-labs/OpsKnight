@@ -40,6 +40,10 @@ export function agentSetupCommands({
   operation?: 'install' | 'upgrade';
   deploymentName?: string;
 }) {
+  if (policyPath.includes('\0') || policyPath.includes('\n') || policyPath.includes('\r')) {
+    throw new Error('Policy path must not contain newlines or null bytes.');
+  }
+
   const deployment = agentDeploymentIdentity(agentId);
   if (operation === 'upgrade' && deploymentName) {
     if (!isAgentDeploymentName(deploymentName))
@@ -82,31 +86,38 @@ docker run --rm -i --entrypoint sh -v ${deployment.name}_data:/var/lib/opsknight
 rm -rf "$agent_credential_dir"
 trap - EXIT
 
-# Resolve local policy and engine socket parameters:
-agent_policy_arg=""
+# Resolve local policy and engine socket parameters safely:
+docker_extra_args=()
 if [ -n ${shellQuote(policyPath)} ]; then
-  resolved_policy=$(realpath ${shellQuote(policyPath)} 2>/dev/null || echo "$(pwd)/${policyPath}")
-  if [ -f "$resolved_policy" ]; then
-    agent_policy_arg="-v $resolved_policy:/etc/opsknight-agent/policy.json:ro"
+  policy_candidate=${shellQuote(policyPath)}
+  if [ -f "$policy_candidate" ]; then
+    resolved_policy=$(realpath "$policy_candidate" 2>/dev/null || echo "$policy_candidate")
+  elif [ -f "$(pwd)/$policy_candidate" ]; then
+    resolved_policy="$(pwd)/$policy_candidate"
   else
-    echo "Warning: policy file not found at $resolved_policy; proceeding with container default policy" >&2
+    echo "Error: Required policy file not found at '$policy_candidate'" >&2
+    exit 1
   fi
+  docker_extra_args+=("-v" "$resolved_policy:/etc/opsknight-agent/policy.json:ro")
 fi
 docker_sock="/var/run/docker.sock"
-docker_sock_arg=""
-docker_group_arg=""
 if [ -S "$docker_sock" ]; then
-  docker_sock_arg="-v $docker_sock:/var/run/docker.sock"
-  docker_group_arg=$(stat -c '--group-add %g' "$docker_sock" 2>/dev/null || stat -f '--group-add %g' "$docker_sock" 2>/dev/null || true)
+  docker_extra_args+=("-v" "$docker_sock:/var/run/docker.sock")
+  docker_gid=$(stat -c '%g' "$docker_sock" 2>/dev/null || stat -f '%g' "$docker_sock" 2>/dev/null || true)
+  if [ -n "$docker_gid" ]; then
+    docker_extra_args+=("--group-add" "$docker_gid")
+  fi
 fi
 
 docker run -d \\
   --name ${deployment.name} \\
   --restart unless-stopped \\
+  --security-opt=no-new-privileges:true \\
+  --cap-drop=ALL \\
+  --read-only \\
+  --tmpfs /tmp:rw,noexec,nosuid,size=16m \\
   -v ${deployment.name}_data:/var/lib/opsknight-agent \\
-  $docker_sock_arg \\
-  $docker_group_arg \\
-  $agent_policy_arg \\
+  "\${docker_extra_args[@]+"\${docker_extra_args[@]}"}" \\
   -e OPSKNIGHT_URL=${shellQuote(url)} \\
   -e OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE="/var/lib/opsknight-agent/enrollment-token" \\
   -e OPSKNIGHT_AGENT_POLICY_FILE="/etc/opsknight-agent/policy.json" \\
@@ -120,28 +131,35 @@ podman run --rm -i --entrypoint sh -v ${deployment.name}_data:/var/lib/opsknight
 rm -rf "$agent_credential_dir"
 trap - EXIT
 
-# Resolve local policy and Podman socket parameters:
-agent_policy_arg=""
+# Resolve local policy and Podman socket parameters safely:
+podman_extra_args=()
 if [ -n ${shellQuote(policyPath)} ]; then
-  resolved_policy=$(realpath ${shellQuote(policyPath)} 2>/dev/null || echo "$(pwd)/${policyPath}")
-  if [ -f "$resolved_policy" ]; then
-    agent_policy_arg="-v $resolved_policy:/etc/opsknight-agent/policy.json:ro,Z"
+  policy_candidate=${shellQuote(policyPath)}
+  if [ -f "$policy_candidate" ]; then
+    resolved_policy=$(realpath "$policy_candidate" 2>/dev/null || echo "$policy_candidate")
+  elif [ -f "$(pwd)/$policy_candidate" ]; then
+    resolved_policy="$(pwd)/$policy_candidate"
   else
-    echo "Warning: policy file not found at $resolved_policy; proceeding with container default policy" >&2
+    echo "Error: Required policy file not found at '$policy_candidate'" >&2
+    exit 1
   fi
+  podman_extra_args+=("-v" "$resolved_policy:/etc/opsknight-agent/policy.json:ro,Z")
 fi
 podman_sock="\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}/podman/podman.sock"
-podman_sock_arg=""
 if [ -S "$podman_sock" ]; then
-  podman_sock_arg="-v $podman_sock:/run/podman/podman.sock:Z -e CONTAINER_HOST=unix:///run/podman/podman.sock"
+  podman_extra_args+=("-v" "$podman_sock:/run/podman/podman.sock:Z" "-e" "CONTAINER_HOST=unix:///run/podman/podman.sock")
 fi
 
 podman run -d \\
   --name ${deployment.name} \\
   --restart unless-stopped \\
+  --security-opt=no-new-privileges:true \\
+  --cap-drop=ALL \\
+  --read-only \\
+  --tmpfs /tmp:rw,noexec,nosuid,size=16m \\
   -v ${deployment.name}_data:/var/lib/opsknight-agent:Z \\
-  $podman_sock_arg \\
-  $agent_policy_arg \\
+  "\${podman_extra_args[@]+"\${podman_extra_args[@]}"}" \\
+  -e CONTAINER_HOST=unix:///run/podman/podman.sock \\
   -e OPSKNIGHT_URL=${shellQuote(url)} \\
   -e OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE="/var/lib/opsknight-agent/enrollment-token" \\
   -e OPSKNIGHT_AGENT_POLICY_FILE="/etc/opsknight-agent/policy.json" \\
@@ -220,19 +238,26 @@ export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
 docker compose -p ${deployment.name} -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent`,
       docker: `# Update container while preserving identity volume.
 set -euo pipefail
-agent_policy_arg=""
+docker_extra_args=()
 if [ -n ${shellQuote(policyPath)} ]; then
-  resolved_policy=$(realpath ${shellQuote(policyPath)} 2>/dev/null || echo "$(pwd)/${policyPath}")
-  if [ -f "$resolved_policy" ]; then
-    agent_policy_arg="-v $resolved_policy:/etc/opsknight-agent/policy.json:ro"
+  policy_candidate=${shellQuote(policyPath)}
+  if [ -f "$policy_candidate" ]; then
+    resolved_policy=$(realpath "$policy_candidate" 2>/dev/null || echo "$policy_candidate")
+  elif [ -f "$(pwd)/$policy_candidate" ]; then
+    resolved_policy="$(pwd)/$policy_candidate"
+  else
+    echo "Error: Required policy file not found at '$policy_candidate'" >&2
+    exit 1
   fi
+  docker_extra_args+=("-v" "$resolved_policy:/etc/opsknight-agent/policy.json:ro")
 fi
 docker_sock="/var/run/docker.sock"
-docker_sock_arg=""
-docker_group_arg=""
 if [ -S "$docker_sock" ]; then
-  docker_sock_arg="-v $docker_sock:/var/run/docker.sock"
-  docker_group_arg=$(stat -c '--group-add %g' "$docker_sock" 2>/dev/null || true)
+  docker_extra_args+=("-v" "$docker_sock:/var/run/docker.sock")
+  docker_gid=$(stat -c '%g' "$docker_sock" 2>/dev/null || stat -f '%g' "$docker_sock" 2>/dev/null || true)
+  if [ -n "$docker_gid" ]; then
+    docker_extra_args+=("--group-add" "$docker_gid")
+  fi
 fi
 
 docker pull ${shellQuote(image)}
@@ -241,27 +266,34 @@ docker rm ${deployment.name} 2>/dev/null || true
 docker run -d \\
   --name ${deployment.name} \\
   --restart unless-stopped \\
+  --security-opt=no-new-privileges:true \\
+  --cap-drop=ALL \\
+  --read-only \\
+  --tmpfs /tmp:rw,noexec,nosuid,size=16m \\
   -v ${deployment.name}_data:/var/lib/opsknight-agent \\
-  $docker_sock_arg \\
-  $docker_group_arg \\
-  $agent_policy_arg \\
+  "\${docker_extra_args[@]+"\${docker_extra_args[@]}"}" \\
   -e OPSKNIGHT_URL=${shellQuote(url)} \\
   -e OPSKNIGHT_AGENT_POLICY_FILE="/etc/opsknight-agent/policy.json" \\
   -e OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)} \\
   ${shellQuote(image)}`,
       podman: `# Update container while preserving identity volume.
 set -euo pipefail
-agent_policy_arg=""
+podman_extra_args=()
 if [ -n ${shellQuote(policyPath)} ]; then
-  resolved_policy=$(realpath ${shellQuote(policyPath)} 2>/dev/null || echo "$(pwd)/${policyPath}")
-  if [ -f "$resolved_policy" ]; then
-    agent_policy_arg="-v $resolved_policy:/etc/opsknight-agent/policy.json:ro,Z"
+  policy_candidate=${shellQuote(policyPath)}
+  if [ -f "$policy_candidate" ]; then
+    resolved_policy=$(realpath "$policy_candidate" 2>/dev/null || echo "$policy_candidate")
+  elif [ -f "$(pwd)/$policy_candidate" ]; then
+    resolved_policy="$(pwd)/$policy_candidate"
+  else
+    echo "Error: Required policy file not found at '$policy_candidate'" >&2
+    exit 1
   fi
+  podman_extra_args+=("-v" "$resolved_policy:/etc/opsknight-agent/policy.json:ro,Z")
 fi
 podman_sock="\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}/podman/podman.sock"
-podman_sock_arg=""
 if [ -S "$podman_sock" ]; then
-  podman_sock_arg="-v $podman_sock:/run/podman/podman.sock:Z -e CONTAINER_HOST=unix:///run/podman/podman.sock"
+  podman_extra_args+=("-v" "$podman_sock:/run/podman/podman.sock:Z" "-e" "CONTAINER_HOST=unix:///run/podman/podman.sock")
 fi
 
 podman pull ${shellQuote(image)}
@@ -270,9 +302,13 @@ podman rm ${deployment.name} 2>/dev/null || true
 podman run -d \\
   --name ${deployment.name} \\
   --restart unless-stopped \\
+  --security-opt=no-new-privileges:true \\
+  --cap-drop=ALL \\
+  --read-only \\
+  --tmpfs /tmp:rw,noexec,nosuid,size=16m \\
   -v ${deployment.name}_data:/var/lib/opsknight-agent:Z \\
-  $podman_sock_arg \\
-  $agent_policy_arg \\
+  "\${podman_extra_args[@]+"\${podman_extra_args[@]}"}" \\
+  -e CONTAINER_HOST=unix:///run/podman/podman.sock \\
   -e OPSKNIGHT_URL=${shellQuote(url)} \\
   -e OPSKNIGHT_AGENT_POLICY_FILE="/etc/opsknight-agent/policy.json" \\
   -e OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)} \\

@@ -58,7 +58,7 @@ export default async function IncidentRunbooks({
   )
     return null;
   await assertCanViewIncident(incidentId);
-  const [bindings, executions, suggestions] = await Promise.all([
+  const [bindings, executions, suggestions, incidentRecord] = await Promise.all([
     prisma.serviceAutomationRule.findMany({
       where: { serviceId, enabled: true, detachedAt: null },
       include: { runbook: true, runbookVersion: true },
@@ -94,7 +94,12 @@ export default async function IncidentRunbooks({
       },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.incident.findUnique({
+      where: { id: incidentId },
+      select: { status: true },
+    }),
   ]);
+  const isIncidentOpen = incidentRecord ? incidentRecord.status !== 'RESOLVED' : true;
   const canExecute = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_EXECUTE);
   const [budget, usedWrites, usedExecutions, usedNonIdempotent] = await Promise.all([
     prisma.systemSettings.findUnique({
@@ -313,7 +318,10 @@ export default async function IncidentRunbooks({
           }
           actions={
             <div className="flex items-center gap-2">
-              <IncidentRunbookRefreshButton hasActiveExecutions={activeCount > 0} />
+              <IncidentRunbookRefreshButton
+                hasActiveExecutions={activeCount > 0}
+                isIncidentOpen={isIncidentOpen}
+              />
               <Pill tone={activeCount > 0 ? 'info' : 'neutral'}>{executions.length}</Pill>
             </div>
           }
@@ -764,9 +772,21 @@ function formatStepActionSummary(type: string, config: unknown): string {
       return `${method}${sanitizedUrl}`.trim();
     }
     case 'BASH': {
-      let cmd = String(c.command ?? '');
-      cmd = cmd.replace(/(token|key|secret|password|bearer|auth)[=:\s]+[^\s;]+/gi, '$1=***');
-      return cmd.length > 50 ? `${cmd.slice(0, 47)}…` : cmd;
+      const interpreter = c.interpreter ? String(c.interpreter) : 'bash';
+      return `Execute script (${interpreter})`;
+    }
+    case 'LINUX_DIAGNOSTICS': {
+      const diag = c.diagnostic ? String(c.diagnostic) : '';
+      return diag ? `diagnostic: ${diag}` : 'Linux diagnostics';
+    }
+    case 'CONDITION': {
+      const field = c.field ? String(c.field) : '';
+      const op = c.operator ? String(c.operator).toLowerCase().replace('_', ' ') : '';
+      const val = c.value !== undefined ? String(c.value) : '';
+      if (field && op) {
+        return `If ${field} ${op}${val ? ` ${val}` : ''}`.trim();
+      }
+      return 'If condition';
     }
     case 'WAIT': {
       return `wait ${String(c.durationSeconds ?? 0)}s`;

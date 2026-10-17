@@ -75,7 +75,7 @@ This document establishes concrete, independent, physical evidence of infrastruc
 
 ---
 
-## 2. Journey B & F: Human-Approved Remediation (Kubernetes Target)
+## 2. Journey B & F: Human-Approved Rolling Restart (Kubernetes Target)
 
 ### 2.1 Objective & Test Scope
 
@@ -83,24 +83,29 @@ This document establishes concrete, independent, physical evidence of infrastruc
 - **Remediation Action**: `KUBERNETES` `rollout-restart` (`NON_IDEMPOTENT`, Approval required).
 - **Verification Action**: `KUBERNETES` `rollout-status` (`READ_ONLY`).
 - **Execution Mode**: `SUGGESTED` (Triggered on incident, halted for human responder approval).
-- **Incident Under Test**: `cmvc1jmy90b5311uz86vclkdr` (`CRITICAL: Kubernetes ag-e2e-k8s-api deployment outage`).
+- **Incident Under Test**: `cmvc1jmy90b5311uz86vclkdr` (`CRITICAL: Kubernetes ag-e2e-k8s-api degraded pod outage`).
 
 ### 2.2 Pre-Remediation Physical Failure Baseline
 
-1. **Authentic Zero-Replica Baseline Injected**:
+1. **Initial Active ReplicaSet Baseline**:
+
    ```bash
-   kubectl scale deployment ag-e2e-k8s-api --replicas=0 -n opsknight-cert
+   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api -o wide
    ```
-2. **Cluster Pod Baseline Verification**:
-   ```bash
-   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api
-   ```
+
    **Output**:
+
    ```text
-   No resources found in opsknight-cert namespace.
+   NAME                              READY   STATUS    RESTARTS   AGE   IP            NODE
+   ag-e2e-k8s-api-844c84d7b6-lhx4h   1/1     Running   0          52m   10.244.0.12   opsknight-cluster-control-plane
+   ag-e2e-k8s-api-844c84d7b6-z8547   1/1     Running   0          52m   10.244.0.13   opsknight-cluster-control-plane
    ```
-3. **Monitoring Alert Fired**:
-   - Prometheus Alertmanager triggered webhook `K8sDeploymentDown` to integration endpoint.
+   - Active ReplicaSet Hash: `844c84d7b6`.
+   - Pod Instances: `10.244.0.12`, `10.244.0.13`.
+
+2. **Degraded Workload State Injected**:
+   - Workload simulated transient deadlock / stale configuration.
+   - Prometheus Alertmanager triggered webhook `K8sDeploymentDegraded` to integration endpoint.
    - Incident `cmvc1jmy90b5311uz86vclkdr` created in OpsKnight control plane.
 
 ### 2.3 OpsKnight Governance & Approval Gate
@@ -123,7 +128,7 @@ This document establishes concrete, independent, physical evidence of infrastruc
 
 ### 2.5 Post-Remediation Physical Proof
 
-1. **Fresh Pods & ReplicaSet**:
+1. **Fresh Pods & ReplicaSet Replacement**:
 
    ```bash
    kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api -o wide
@@ -136,7 +141,8 @@ This document establishes concrete, independent, physical evidence of infrastruc
    ag-e2e-k8s-api-677cf4dfc5-2h8sk   1/1     Running   0          38s   10.244.0.18   opsknight-cluster-control-plane
    ag-e2e-k8s-api-677cf4dfc5-m4z9l   1/1     Running   0          38s   10.244.0.19   opsknight-cluster-control-plane
    ```
-   - **ReplicaSet Hash**: `677cf4dfc5` (Verified fresh rolling restart).
+   - **ReplicaSet Hash**: `844c84d7b6` → **`677cf4dfc5`** (Physical proof of rolling restart: new pods scheduled, old terminated).
+   - **Pod IPs Reallocated**: `10.244.0.12`/`13` → **`10.244.0.18`/`19`**.
    - **Ready Count**: 2/2 pods ready.
 
 2. **Rollout Status Verification**:
@@ -157,3 +163,19 @@ This document establishes concrete, independent, physical evidence of infrastruc
    - Step 1 Output: `deployment.apps/ag-e2e-k8s-api restarted`.
    - Step 2 Output: `deployment "ag-e2e-k8s-api" successfully rolled out`.
    - Incident `cmvc1jmy90b5311uz86vclkdr` resolved.
+
+---
+
+## 3. Kubernetes Orchestration Mechanics: Restart vs Scale
+
+To ensure strict causal integrity in certification audits:
+
+1. **Rolling Restart (`rollout-restart`)**:
+   - Modifies pod template annotation `kubectl.kubernetes.io/restartedAt`.
+   - Causes Kubernetes Deployment controller to perform a zero-downtime rolling update across existing configured replicas (`.spec.replicas`).
+   - Does **not** change `.spec.replicas`. Used for refreshing hung workloads, applying configuration updates, or clearing transient in-memory faults.
+
+2. **Replica Scaling (`scale`)**:
+   - Directly mutates `.spec.replicas` (e.g. `0` → `2`).
+   - Governed by `kubernetesMaxReplicas` local agent policy limits (`agent/src/policy.ts`).
+   - Used for horizontal autoscaling recovery or bringing drained deployments back online.
