@@ -323,10 +323,14 @@ const operations: Operation[] = [
     path: '/services/{id}/automation/publish',
     summary: 'Publish a validated immutable service automation version',
     description:
-      'Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE returns 409: switch to SHADOW or DISABLED first and explicitly activate the new version after review. Replayed requests return the original committed result, even with a different concrete If-Match value; use a new idempotency key for a new conditional write.',
-    body: object({ expectedActiveVersionId: { type: ['string', 'null'] } }, [
-      'expectedActiveVersionId',
-    ]),
+      'Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE stages a candidate version evaluated in parallel shadow mode without interrupting current routing. Replayed requests return the original committed result, even with a different concrete If-Match value; use a new idempotency key for a new conditional write.',
+    body: object(
+      {
+        expectedActiveVersionId: { type: ['string', 'null'] },
+        expectedCandidateVersionId: { type: ['string', 'null'] },
+      },
+      ['expectedActiveVersionId']
+    ),
   },
   {
     method: 'get',

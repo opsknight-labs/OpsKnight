@@ -332,7 +332,7 @@ describe('service automation transaction certification', () => {
     expect((await changeMode({ ...input, acknowledgeShadowErrors: true })).mode).toBe('LIVE');
   });
   it('protects inactive published policy references even before any incident exists', async () => {
-    const policy = await db.escalationPolicy.create({ data: { name: 'Historical dependency' } });
+    const historicalPolicy = await db.escalationPolicy.create({ data: { name: 'Historical dependency' } });
     const { service, actor, version, draft } = await setup({
       ...emptySnapshot,
       rules: [
@@ -342,15 +342,61 @@ describe('service automation transaction certification', () => {
           phase: 'ROUTE',
           enabled: true,
           conditions: [],
-          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: historicalPolicy.id }],
         },
       ],
     });
+
+    // 1. Policy referenced by active version cannot be deleted
+    await expect(db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })).rejects.toThrow();
+
+    // Publish candidate referencing a candidate policy
+    const candidatePolicy = await db.escalationPolicy.create({ data: { name: 'Candidate dependency' } });
+    const candidateDraft = await saveDraft({
+      serviceId: service.id,
+      actorId: actor.id,
+      snapshot: {
+        ...emptySnapshot,
+        rules: [
+          {
+            id: 'candidate-route',
+            name: 'Candidate route',
+            phase: 'ROUTE',
+            enabled: true,
+            conditions: [],
+            actions: [{ type: 'USE_ESCALATION_POLICY', policyId: candidatePolicy.id }],
+          },
+        ],
+      },
+      expectedRevision: draft.revision,
+    });
+    const candidateVersion = await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: candidateDraft.revision,
+      expectedActiveVersionId: version.id,
+      expectedCandidateVersionId: null,
+    });
+
+    // 2. Policy referenced by candidate version cannot be deleted
+    await expect(db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })).rejects.toThrow();
+
+    // Discard candidate
+    await discardCandidate({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedCandidateVersionId: candidateVersion.id,
+    });
+
+    // 3. Policy referenced by discarded candidate version remains immutable history and cannot be deleted
+    await expect(db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })).rejects.toThrow();
+
+    // Deactivate version so historicalPolicy becomes purely historical
     const nextDraft = await saveDraft({
       serviceId: service.id,
       actorId: actor.id,
       snapshot: emptySnapshot,
-      expectedRevision: draft.revision,
+      expectedRevision: candidateDraft.revision,
     });
     await publishReviewedReplacement({
       serviceId: service.id,
@@ -358,8 +404,14 @@ describe('service automation transaction certification', () => {
       expectedRevision: nextDraft.revision,
       expectedActiveVersionId: version.id,
     });
-    await expect(db.escalationPolicy.delete({ where: { id: policy.id } })).rejects.toThrow();
+
+    // 4. Policy referenced by historical version cannot be deleted
+    await expect(db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })).rejects.toThrow();
     await expect(db.automationVersion.delete({ where: { id: version.id } })).rejects.toThrow();
+
+    // 5. Unreferenced policy can be deleted cleanly
+    const unreferencedPolicy = await db.escalationPolicy.create({ data: { name: 'Unreferenced policy' } });
+    await db.escalationPolicy.delete({ where: { id: unreferencedPolicy.id } });
     expect(await db.incidentAutomationDecision.count()).toBe(0);
   });
   it('rejects direct decision deletion but permits incident lifecycle cleanup', async () => {

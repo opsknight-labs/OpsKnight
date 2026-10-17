@@ -274,6 +274,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await expect(secretRow.getByLabel('Secret value hidden')).toBeVisible();
   await secretRow.getByRole('link', { name: 'Manage grants / Rotate' }).click();
   await page.waitForURL(/\/runbooks\/agents\/secrets\?.*secret=/);
+  await expect(page.locator('#secret-detail-title')).toHaveText(secretName);
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
   await page.getByPlaceholder('Search grant to target…').fill(poolName);
   await page.getByRole('option', { name: `Pool · ${poolName}`, exact: true }).click();

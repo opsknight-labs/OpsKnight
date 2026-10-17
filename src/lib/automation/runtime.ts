@@ -330,11 +330,21 @@ export async function prepareAutomation(
           source: envelope.event.payload.source,
         })
       );
+      const candEvalStart = performance.now();
+      const candGuard = (position?: EvaluationPosition) => {
+        const elapsed = performance.now() - candEvalStart;
+        if (elapsed > LIMITS.evaluationMs) {
+          throw new Error('EVALUATION_TIMEOUT');
+        }
+      };
+      candGuard();
       const candidateResult = evaluateAutomation({
         version: candidateVersion,
         initialContext: candidateContext,
         evaluationAt: evaluationAt.toISOString(),
+        guard: candGuard,
       });
+      candGuard();
       runtime.candidateResult = candidateResult;
 
       // Compare candidate outcome against the actual LIVE routing decision
@@ -363,8 +373,17 @@ export async function prepareAutomation(
         fallbacks: 0,
       };
     } catch (candErr) {
-      // Database failures or transient errors in candidate evaluation must never
-      // crash the transaction or disrupt LIVE incident production routing.
+      // Database errors must abort the ingestion transaction and use the transaction/replay path.
+      // They must never be swallowed, which would leave the PostgreSQL transaction in an aborted state.
+      if (
+        candErr instanceof Prisma.PrismaClientKnownRequestError ||
+        candErr instanceof Prisma.PrismaClientUnknownRequestError ||
+        candErr instanceof Prisma.PrismaClientInitializationError
+      )
+        throw candErr;
+
+      // Evaluator timeouts and domain invalidities become shadow error/fallback diagnostics
+      // without disrupting production LIVE incident routing.
       const reason = candErr instanceof Error ? candErr.message : 'VERSION_INVALID';
       runtime.candidateFallbackReason = [
         'VERSION_MISSING',
