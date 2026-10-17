@@ -39,6 +39,7 @@ it('reads ingestion configuration without caching the shared emergency switch', 
   expect(await getIngestionAutomationConfig(db, service.id)).toEqual({
     mode: 'DISABLED',
     activeVersionId: null,
+    candidateVersionId: null,
   });
   // Invalid legacy configurations must still reach the VERSION_MISSING fallback.
   await db.serviceAutomationConfig.update({
@@ -48,6 +49,7 @@ it('reads ingestion configuration without caching the shared emergency switch', 
   expect(await getIngestionAutomationConfig(db, service.id)).toEqual({
     mode: 'SHADOW',
     activeVersionId: null,
+    candidateVersionId: null,
   });
   await saveAutomationSettings({
     automationEnabled: false,

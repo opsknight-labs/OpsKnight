@@ -291,6 +291,8 @@ export async function activateCandidate(
 ) {
   const run = async (tx: Prisma.TransactionClient) => {
     await lock(tx, input.serviceId);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('automation-system-settings', 0))`;
+    await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR UPDATE`;
     const settings = await getAutomationSettings(tx);
     if (!settings.automationEnabled)
       throw new AutomationValidationError(

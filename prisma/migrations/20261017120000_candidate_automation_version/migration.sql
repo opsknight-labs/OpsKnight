@@ -28,12 +28,13 @@ BEGIN
   RETURN NEW;
 END $$;
 
--- Guard escalation policies referenced by candidate versions as well as active versions
+-- Preserve historical reference protection for published automation versions (active, candidate, or historical) and incident decisions
 CREATE OR REPLACE FUNCTION automation_policy_delete_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM "AutomationVersionPolicyRef" r JOIN "ServiceAutomationConfig" c ON (c."activeVersionId" = r."versionId" OR c."candidateVersionId" = r."versionId") WHERE r."escalationPolicyId" = OLD.id)
-  OR EXISTS (SELECT 1 FROM "IncidentAutomationDecision" d JOIN "Incident" i ON i.id = d."incidentId" WHERE d."escalationPolicyId" = OLD.id AND i.status <> 'RESOLVED') THEN
-    RAISE EXCEPTION 'Policy is referenced by active automation or an active incident';
+  IF EXISTS (SELECT 1 FROM "AutomationVersionPolicyRef" r WHERE r."escalationPolicyId" = OLD.id)
+  OR EXISTS (SELECT 1 FROM "IncidentAutomationDecision" d WHERE d."escalationPolicyId" = OLD.id) THEN
+    RAISE EXCEPTION 'Policy is referenced by published automation history or an incident decision';
   END IF;
   RETURN OLD;
 END $$;
+
