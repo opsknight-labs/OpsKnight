@@ -286,7 +286,15 @@ export async function prepareAutomation(
   // Parallel candidate evaluation in SHADOW mode during LIVE routing
   if (config.mode === 'LIVE' && config.candidateVersionId) {
     runtime.candidateVersionId = config.candidateVersionId;
+    const candBudgetStart = performance.now();
+    const candGuard = (_position?: EvaluationPosition) => {
+      const elapsed = performance.now() - candBudgetStart;
+      if (elapsed > LIMITS.evaluationMs) {
+        throw new Error('EVALUATION_TIMEOUT');
+      }
+    };
     try {
+      candGuard();
       const cachedCandidate = getCachedCompiledVersion(config.candidateVersionId);
       const storedCandidate = cachedCandidate
         ? null
@@ -294,8 +302,10 @@ export async function prepareAutomation(
             where: { id: config.candidateVersionId },
             select: { id: true, compiledSnapshot: true, checksum: true },
           });
+      candGuard();
       if (!cachedCandidate && !storedCandidate) throw new Error('VERSION_MISSING');
       const candidateVersion = cachedCandidate ?? loadCompiledVersion(storedCandidate!);
+      candGuard();
       const candidateExtracted = extractContextWithProvenance({
         fields: candidateVersion.fields,
         providerPayload: envelope.providerPayload,
@@ -312,13 +322,6 @@ export async function prepareAutomation(
           source: envelope.event.payload.source,
         })
       );
-      const candEvalStart = performance.now();
-      const candGuard = (position?: EvaluationPosition) => {
-        const elapsed = performance.now() - candEvalStart;
-        if (elapsed > LIMITS.evaluationMs) {
-          throw new Error('EVALUATION_TIMEOUT');
-        }
-      };
       candGuard();
       const candidateResult = evaluateAutomation({
         version: candidateVersion,
