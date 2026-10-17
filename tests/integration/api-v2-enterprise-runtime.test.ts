@@ -1141,28 +1141,30 @@ describe('automation draft REST transaction certification', () => {
       where: { serviceId: service.id },
       data: { mode: 'LIVE' },
     });
-    const unsafePublication = await call(
+    const candidatePublication = await call(
       publishAutomationVersion,
       admin.token,
       'POST',
       `/services/${service.id}/automation/publish`,
       params,
-      { expectedActiveVersionId: active.id },
+      { expectedActiveVersionId: active.id, expectedCandidateVersionId: null },
       randomUUID(),
       '"1"'
     );
-    expect(unsafePublication.status).toBe(409);
+    expect(candidatePublication.status).toBe(200);
+    const candidate = (await candidatePublication.json()).data;
+    expect(candidate.versionNumber).toBe(2);
     expect(
       await testPrisma.serviceAutomationConfig.findUnique({
         where: { serviceId: service.id },
       })
-    ).toMatchObject({ mode: 'LIVE', activeVersionId: active.id });
-    expect(await testPrisma.automationVersion.count({ where: { serviceId: service.id } })).toBe(1);
+    ).toMatchObject({ mode: 'LIVE', activeVersionId: active.id, candidateVersionId: candidate.id });
+    expect(await testPrisma.automationVersion.count({ where: { serviceId: service.id } })).toBe(2);
     const publishingAudits = await testPrisma.auditLog.findMany({
       where: { action: 'automation.version.published' },
     });
-    expect(publishingAudits).toHaveLength(1);
-    expect(publishingAudits[0].details).toMatchObject({
+    expect(publishingAudits).toHaveLength(2);
+    expect(publishingAudits[1].details).toMatchObject({
       source: 'API',
       metadata: { apiClientId: admin.key.id },
     });

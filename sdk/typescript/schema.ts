@@ -47,7 +47,7 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
-  publishAutomationVersion: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "expectedActiveVersionId": string | null } };
+  publishAutomationVersion: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "expectedActiveVersionId": string | null; "expectedCandidateVersionId"?: string | null } };
   getAutomationDraft: { "params": { "id": string } };
   saveAutomationDraft: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "snapshot": AutomationSnapshot } };
   getAutomationCandidate: { "params": { "id": string } };

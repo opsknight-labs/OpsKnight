@@ -23,6 +23,16 @@ import {
 } from '@/lib/automation/contract';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { Button } from '@/components/ui/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 
 import { Badge } from '@/components/ui/shadcn/badge';
 import type { testAutomation } from '@/lib/automation/testing';
@@ -67,6 +77,7 @@ export default function AutomationWorkspace({
   mobile?: boolean;
 }) {
   const [review, setReview] = useState<'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null>(null);
+  const [confirmDiscardCandidate, setConfirmDiscardCandidate] = useState(false);
   const [ruleSearch, setRuleSearch] = useState('');
   const [contextSearch, setContextSearch] = useState('');
   const [ruleStateFilter, setRuleStateFilter] = useState('all');
@@ -529,18 +540,40 @@ export default function AutomationWorkspace({
     }
   };
 
-  const discardPendingCandidate = async () => {
-    const candidateId = data?.candidateVersionId;
-    if (!candidateId) return;
-    if (!confirm('Discard this candidate version? Staged shadow evaluation will be terminated.')) return;
-    await command({
-      action: 'discardCandidate',
-      expectedCandidateVersionId: candidateId,
-    });
+  const discardPendingCandidate = () => {
+    if (!data?.candidateVersionId) return;
+    setConfirmDiscardCandidate(true);
   };
 
   return (
     <section aria-label="Service automation" className="space-y-5">
+      <AlertDialog open={confirmDiscardCandidate} onOpenChange={setConfirmDiscardCandidate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard candidate automation version?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Staged shadow evaluation will be terminated and this candidate version will be removed. Current LIVE incident routing will remain unaffected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Keep candidate</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={async () => {
+                const candidateId = data?.candidateVersionId;
+                if (!candidateId) return;
+                setConfirmDiscardCandidate(false);
+                await command({
+                  action: 'discardCandidate',
+                  expectedCandidateVersionId: candidateId,
+                });
+              }}
+            >
+              Discard candidate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AutomationReviewDialog
         key={`${review}:${review === 'LIVE' ? reviewData?.activeVersionId : review === 'activateCandidate' ? (reviewData?.candidateVersionId ?? data?.candidateVersionId) : (restoreVersion?.id ?? data?.activeVersionId)}`}
         action={review}

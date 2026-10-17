@@ -97,34 +97,41 @@ export function SearchableRunbookSelect({
     };
   }, [kind, search, selectedValue]);
 
+  const [selectedLabel, setSelectedLabel] = useState('');
+
   const fallbackLabel = label.toLowerCase();
   const selectedOption = options.find(o => o.value === selectedValue);
   const displayLabel = selectedOption
     ? selectedOption.label
-    : selectedValue
-      ? selectedValue
-      : (placeholder ??
-        (required
-          ? label
-            ? `Select ${fallbackLabel}…`
-            : 'Select…'
-          : label
-            ? `All ${fallbackLabel}`
-            : 'All'));
+    : selectedLabel && selectedValue
+      ? selectedLabel
+      : selectedValue
+        ? selectedValue
+        : (placeholder ??
+          (required
+            ? label
+              ? `Select ${fallbackLabel}…`
+              : 'Select…'
+            : label
+              ? `All ${fallbackLabel}`
+              : 'All'));
 
   // eslint-disable-next-line security/detect-object-injection -- kind is a closed union of known select types
   const KindIcon = KIND_ICONS[kind] ?? Server;
 
   const handleSelect = (val: string) => {
-    const nextVal = val === selectedValue ? '' : val;
-    setInternalValue(nextVal);
-    onChange?.(nextVal || 'all');
+    const opt = options.find(o => o.value === val);
+    setInternalValue(val);
+    if (opt) setSelectedLabel(opt.label);
+    else if (!val) setSelectedLabel('');
+    onChange?.(val || 'all');
     setOpen(false);
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     setInternalValue('');
+    setSelectedLabel('');
     onChange?.('all');
   };
 

@@ -813,14 +813,20 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     await page.getByRole('checkbox', { name: /I understand this version/ }).check();
     await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
     await expect(workspace.getByLabel('Automation mode')).toHaveValue('LIVE');
-    await expect(workspace.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
-    await expect(
-      client.call('publishAutomationVersion', {
-        params: { id: serviceId },
-        body: { expectedActiveVersionId: published.data.id },
-        headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
-      })
-    ).rejects.toMatchObject({ status: 409 });
+    await expect(workspace.getByRole('button', { name: 'Publish candidate', exact: true })).toBeEnabled();
+    const candidatePub = await client.call('publishAutomationVersion', {
+      params: { id: serviceId },
+      body: { expectedActiveVersionId: published.data.id, expectedCandidateVersionId: null },
+      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(candidatePub.data.versionNumber).toBe(2);
+    expect(
+      await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
+    ).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: published.data.id,
+      candidateVersionId: candidatePub.data.id,
+    });
     const dedupKey = randomUUID();
     const ingestion = await page.request.post('/api/events', {
       headers: { Authorization: `Token token=${integration.key}` },
