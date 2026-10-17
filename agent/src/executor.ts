@@ -38,6 +38,29 @@ export function containerHealthPassed(output: string): boolean {
   }
 }
 
+export function isContainerStarting(output: string): boolean {
+  try {
+    const trimmed = output.trim();
+    if (!trimmed) return false;
+    const parsed: unknown = JSON.parse(trimmed);
+    if (typeof parsed === 'string') return parsed.toLowerCase() === 'starting';
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const state = parsed as Record<string, unknown>;
+      const healthObj = (state.Health ?? state.Healthcheck ?? state.health ?? state.healthcheck) as
+        Record<string, unknown> | undefined;
+      if (healthObj && typeof healthObj === 'object') {
+        const status = String(healthObj.Status ?? healthObj.status ?? '');
+        return status.toLowerCase() === 'starting';
+      }
+      if (typeof state.Status === 'string') return state.Status.toLowerCase() === 'starting';
+      if (typeof state.status === 'string') return state.status.toLowerCase() === 'starting';
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export { sliceUtf8Safe } from './output-limits';
 
 function resourceToKind(res: string): string {
@@ -238,13 +261,30 @@ export async function executeAttempt(
     if (
       result.status === 'SUCCEEDED' &&
       attempt.step.type === 'DOCKER' &&
-      attempt.step.config.action === 'health' &&
-      !containerHealthPassed(result.output)
+      attempt.step.config.action === 'health'
     ) {
-      result.status = 'FAILED';
-      result.errorCode = 'CONTAINER_UNHEALTHY';
-      result.errorMessage =
-        'Container healthcheck is unhealthy, starting, unavailable or not configured.';
+      const startCheckTime = Date.now();
+      const maxWaitMs = Math.min(
+        Math.max(10000, Number(attempt.step.config.timeoutSeconds ?? 15) * 1000),
+        30000
+      );
+      while (
+        !containerHealthPassed(result.output) &&
+        isContainerStarting(result.output) &&
+        Date.now() - startCheckTime < maxWaitMs &&
+        !signal.aborted
+      ) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (signal.aborted) break;
+        const retry = await executeCommand(attempt, policy, signal);
+        result.output = retry.output;
+      }
+      if (!containerHealthPassed(result.output)) {
+        result.status = 'FAILED';
+        result.errorCode = 'CONTAINER_UNHEALTHY';
+        result.errorMessage =
+          'Container healthcheck is unhealthy, starting, unavailable or not configured.';
+      }
     }
     const postState = { ...(await captureEvidence(attempt, signal)), ...result.postState };
     const diagnostic = attempt.step.config.diagnostic;

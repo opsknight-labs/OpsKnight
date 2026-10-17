@@ -4,34 +4,34 @@
 
 OpsKnight supports ten first-class runbook step types. Below is the certified capability and qualification matrix validated during end-to-end testing against `https://opssentinal.com`.
 
-| Step Type           | Classification    | Approval Policy                                                   | Target Type      | Certification Method                   | Verification Evidence                                                        |
-| :------------------ | :---------------- | :---------------------------------------------------------------- | :--------------- | :------------------------------------- | :--------------------------------------------------------------------------- |
-| `HTTP`              | Read-Only         | Auto-approved                                                     | Control Plane    | Manual execution & preflight           | RFC-compliant HTTP GET probe with response body validation                   |
-| `BASH`              | Script / Command  | Configurable                                                      | Host Agent       | Agent execution (`docker-host-agent`)  | Command execution with bounded output capture and exit code 0                |
-| `DOCKER`            | Container Action  | Idempotent Write (`start`) / Non-Idempotent (`restart`)           | Docker Agent     | **Journey A (Unattended Recovery)**    | `ag-e2e-docker-api` started unattended, reached `healthy`, HTTP 200 verified |
-| `KUBERNETES`        | Orchestration     | Non-Idempotent (`rollout-restart`) / Read-Only (`rollout-status`) | In-Cluster Agent | **Journey B (Approved Remediation)**   | Real rollout restart on `ag-e2e-k8s-api`, replica replacement verified       |
-| `SYSTEMD`           | OS Daemon Action  | Idempotent (`start`) / Non-Idempotent (`restart`)                 | Linux Agent      | Schema & Policy Qualification          | Validated against Linux Systemd policy allowlist                             |
-| `LINUX_DIAGNOSTICS` | System Inspection | Read-Only                                                         | Linux Host Agent | Agent execution (`test-cert-agent-ui`) | `uptime`, `disk`, and `memory` metric collection                             |
-| `APPROVAL`          | Governance Gate   | Mandatory                                                         | User Responder   | UI Modal Dialogue                      | Cryptographically tied approval recorded with responder ID and timestamp     |
-| `MANUAL`            | Human Task        | Mandatory                                                         | User Responder   | UI Checklist / Confirmation            | Operator-verified step checklist and instruction rendering                   |
-| `WAIT`              | Flow Control      | Non-blocking                                                      | Control Plane    | Engine Scheduler                       | Non-blocking timer delay with guaranteed resumption                          |
-| `CONDITION`         | Logic / Branching | Read-Only                                                         | Control Plane    | Expression Evaluator                   | JSONPath and context comparison logic evaluation                             |
+| Step Type           | Classification    | Approval Policy                                                   | Target Type      | Certification Method                   | Verification Evidence                                                                       |
+| :------------------ | :---------------- | :---------------------------------------------------------------- | :--------------- | :------------------------------------- | :------------------------------------------------------------------------------------------ |
+| `HTTP`              | Read-Only         | Auto-approved                                                     | Control Plane    | Manual execution & preflight           | RFC-compliant HTTP GET probe with response body validation                                  |
+| `BASH`              | Script / Command  | Configurable                                                      | Host Agent       | Agent execution (`docker-host-agent`)  | Command execution with bounded output capture and exit code 0                               |
+| `DOCKER`            | Container Action  | Idempotent Write (`start`) / Non-Idempotent (`restart`)           | Docker Agent     | **Journey A (Unattended Recovery)**    | `ag-e2e-docker-api` started unattended, reached `healthy`, HTTP 200 verified                |
+| `KUBERNETES`        | Orchestration     | Non-Idempotent (`rollout-restart`) / Read-Only (`rollout-status`) | In-Cluster Agent | **Journey B (Approved Remediation)**   | Real rollout restart on `ag-e2e-k8s-api`, replica replacement verified                      |
+| `SYSTEMD`           | OS Daemon Action  | Idempotent (`start`) / Non-Idempotent (`restart`)                 | Linux Agent      | Schema & Policy Qualification          | Validated against Linux Systemd policy allowlist (Physical VM journey qualified in Phase 6) |
+| `LINUX_DIAGNOSTICS` | System Inspection | Read-Only                                                         | Linux Host Agent | Agent execution (`test-cert-agent-ui`) | `uptime`, `disk`, and `memory` metric collection                                            |
+| `APPROVAL`          | Governance Gate   | Mandatory                                                         | User Responder   | UI Modal Dialogue                      | Cryptographically tied approval recorded with responder ID and timestamp                    |
+| `MANUAL`            | Human Task        | Mandatory                                                         | User Responder   | UI Checklist / Confirmation            | Operator-verified step checklist and instruction rendering                                  |
+| `WAIT`              | Flow Control      | Non-blocking                                                      | Control Plane    | Engine Scheduler                       | Non-blocking timer delay with guaranteed resumption                                         |
+| `CONDITION`         | Logic / Branching | Read-Only                                                         | Control Plane    | Expression Evaluator                   | JSONPath and context comparison logic evaluation                                            |
 
 ---
 
 ## 2. Input Type Qualification Matrix
 
-OpsKnight provides typed, validated inputs that flow into step configurations and execution plans.
+OpsKnight provides 7 first-class typed, validated inputs (`RUNBOOK_INPUT_TYPES`) that flow into step configurations and execution plans.
 
-| Input Type            | Validation Rules                          | Default Value Support | Journey Tested                  | Status    |
-| :-------------------- | :---------------------------------------- | :-------------------- | :------------------------------ | :-------- |
-| `STRING`              | Length bounds, regex patterns             | Yes                   | Journey A & B                   | Certified |
-| `NUMBER`              | Min, max, integer enforcement             | Yes                   | Journey A                       | Certified |
-| `BOOLEAN`             | Strict boolean toggle                     | Yes                   | Journey B                       | Certified |
-| `ENUM`                | Whitelist of allowed choices              | Yes                   | Builder Tests                   | Certified |
-| `SECRET`              | Reference to Secret Vault; masked in logs | Yes                   | Fleet Verification              | Certified |
-| `DOCKER_CONTAINER`    | Container name validation                 | Yes                   | Journey A (`ag-e2e-docker-api`) | Certified |
-| `KUBERNETES_RESOURCE` | Namespace, kind, resource name            | Yes                   | Journey B (`ag-e2e-k8s-api`)    | Certified |
+| Input Type   | Validation Rules                          | Default Value Support | Journey / Test Tested     | Status    |
+| :----------- | :---------------------------------------- | :-------------------- | :------------------------ | :-------- |
+| `STRING`     | Length bounds (1-80 key, 2000 val), regex | Yes                   | Journey A & B             | Certified |
+| `NUMBER`     | Min, max, integer/float enforcement       | Yes                   | Journey A                 | Certified |
+| `BOOLEAN`    | Strict boolean toggle                     | Yes                   | Journey B                 | Certified |
+| `URL`        | Valid HTTP/HTTPS endpoint formatting      | Yes                   | Builder Tests             | Certified |
+| `DURATION`   | Bounded execution interval format         | Yes                   | Builder Tests             | Certified |
+| `SECRET_REF` | Reference to Secret Vault; masked in logs | Yes                   | Fleet Verification        | Certified |
+| `SELECT`     | Whitelist of allowed options              | Yes                   | Builder & Execution Tests | Certified |
 
 ---
 

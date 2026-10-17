@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { executeAttempt, sliceUtf8Safe } from '../../../agent/src/executor';
+import {
+  containerHealthPassed,
+  executeAttempt,
+  isContainerStarting,
+  sliceUtf8Safe,
+} from '../../../agent/src/executor';
 import type { AgentPolicy, ClaimedAttempt } from '../../../agent/src/types';
 
 const policy: AgentPolicy = {
@@ -180,5 +185,24 @@ describe('runbook Agent executor', () => {
 
     // Full string preserved when limit exceeds byte length
     expect(sliceUtf8Safe(unicodeString, totalBytes + 100)).toBe(unicodeString);
+  });
+
+  it('correctly distinguishes healthy, starting, and unhealthy container states', () => {
+    // Starting states
+    expect(isContainerStarting('{"Health":{"Status":"starting"}}')).toBe(true);
+    expect(isContainerStarting('{"Healthcheck":{"Status":"starting"}}')).toBe(true);
+    expect(isContainerStarting('"starting"')).toBe(true);
+    expect(isContainerStarting('{"status":"starting"}')).toBe(true);
+    expect(isContainerStarting('{"Health":{"Status":"healthy"}}')).toBe(false);
+
+    // Healthy states
+    expect(containerHealthPassed('{"Health":{"Status":"healthy"}}')).toBe(true);
+    expect(containerHealthPassed('{"Healthcheck":{"Status":"healthy"}}')).toBe(true);
+    expect(containerHealthPassed('"healthy"')).toBe(true);
+    expect(containerHealthPassed('{"status":"healthy"}')).toBe(true);
+    expect(containerHealthPassed('{"Health":{"Status":"starting"}}')).toBe(false);
+    expect(containerHealthPassed('{"Health":{"Status":"unhealthy"}}')).toBe(false);
+    expect(containerHealthPassed('')).toBe(false);
+    expect(containerHealthPassed('invalid-json')).toBe(false);
   });
 });

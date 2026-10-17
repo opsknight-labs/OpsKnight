@@ -299,7 +299,7 @@ export default function AgentSetupInstructions({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="agent-setup-policy" className="text-xs font-bold">
-                Compose policy path
+                Local policy path (Docker, Podman, Compose)
               </Label>
               <Input
                 id="agent-setup-policy"
@@ -307,6 +307,10 @@ export default function AgentSetupInstructions({
                 className="h-9 font-mono text-xs bg-background"
                 onChange={event => setPolicyPath(event.target.value)}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Container image default is diagnostics-only. To enable remediation, point to an
+                approved local policy allowlisting targeted containers.
+              </p>
             </div>
           </div>
 

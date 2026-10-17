@@ -202,3 +202,88 @@ ${commands.kustomize}
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+it('generates canonical Docker installation and upgrade commands matching agent runtime contracts', async () => {
+  const { agentSetupCommands } = await import('@/lib/runbooks/agent-setup-commands');
+  const commands = agentSetupCommands({
+    agentId: 'cmv90000000000000000000001',
+    image: 'ghcr.io/opsknight-labs/opsknight-agent:v2.0.0',
+    url: 'https://ops.example.com',
+    policyPath: 'agent/policy.container.json',
+    executionPublicKey: 'public-pin',
+  });
+
+  expect(commands.docker).toContain(
+    'docker volume create opsknight-agent-cmv90000000000000000000001_data'
+  );
+  expect(commands.docker).toContain('cat > /var/lib/opsknight-agent/enrollment-token');
+  expect(commands.docker).toContain("-e OPSKNIGHT_URL='https://ops.example.com'");
+  expect(commands.docker).toContain(
+    '-e OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE="/var/lib/opsknight-agent/enrollment-token"'
+  );
+  expect(commands.docker).toContain(
+    '-e OPSKNIGHT_AGENT_POLICY_FILE="/etc/opsknight-agent/policy.json"'
+  );
+  expect(commands.docker).toContain("-e OPSKNIGHT_EXECUTION_PUBLIC_KEY='public-pin'");
+  expect(commands.docker).not.toContain('OPSKNIGHT_AGENT_URL=');
+  expect(commands.docker).not.toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH=');
+
+  const upgradeCommands = agentSetupCommands({
+    agentId: 'cmv90000000000000000000001',
+    image: 'ghcr.io/opsknight-labs/opsknight-agent:v2.0.0',
+    url: 'https://ops.example.com',
+    policyPath: 'agent/policy.container.json',
+    executionPublicKey: 'public-pin',
+    operation: 'upgrade',
+  });
+
+  expect(upgradeCommands.docker).toContain(
+    '-v opsknight-agent-cmv90000000000000000000001_data:/var/lib/opsknight-agent'
+  );
+  expect(upgradeCommands.docker).toContain("-e OPSKNIGHT_URL='https://ops.example.com'");
+  expect(upgradeCommands.docker).toContain(
+    '-e OPSKNIGHT_AGENT_POLICY_FILE="/etc/opsknight-agent/policy.json"'
+  );
+  expect(upgradeCommands.docker).not.toContain('enrollment-token');
+});
+
+it('generates canonical Podman installation and upgrade commands matching rootless socket contracts', async () => {
+  const { agentSetupCommands } = await import('@/lib/runbooks/agent-setup-commands');
+  const commands = agentSetupCommands({
+    agentId: 'cmv90000000000000000000001',
+    image: 'ghcr.io/opsknight-labs/opsknight-agent:v2.0.0',
+    url: 'https://ops.example.com',
+    policyPath: 'agent/policy.container.json',
+    executionPublicKey: 'public-pin',
+  });
+
+  expect(commands.podman).toContain(
+    'podman volume create opsknight-agent-cmv90000000000000000000001_data'
+  );
+  expect(commands.podman).toContain('cat > /var/lib/opsknight-agent/enrollment-token');
+  expect(commands.podman).toContain('-e CONTAINER_HOST=unix:///run/podman/podman.sock');
+  expect(commands.podman).toContain("-e OPSKNIGHT_URL='https://ops.example.com'");
+  expect(commands.podman).toContain(
+    '-e OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE="/var/lib/opsknight-agent/enrollment-token"'
+  );
+  expect(commands.podman).toContain(
+    '-e OPSKNIGHT_AGENT_POLICY_FILE="/etc/opsknight-agent/policy.json"'
+  );
+  expect(commands.podman).toContain("-e OPSKNIGHT_EXECUTION_PUBLIC_KEY='public-pin'");
+
+  const upgradeCommands = agentSetupCommands({
+    agentId: 'cmv90000000000000000000001',
+    image: 'ghcr.io/opsknight-labs/opsknight-agent:v2.0.0',
+    url: 'https://ops.example.com',
+    policyPath: 'agent/policy.container.json',
+    executionPublicKey: 'public-pin',
+    operation: 'upgrade',
+  });
+
+  expect(upgradeCommands.podman).toContain(
+    '-v opsknight-agent-cmv90000000000000000000001_data:/var/lib/opsknight-agent:Z'
+  );
+  expect(upgradeCommands.podman).toContain('-e CONTAINER_HOST=unix:///run/podman/podman.sock');
+  expect(upgradeCommands.podman).toContain("-e OPSKNIGHT_URL='https://ops.example.com'");
+  expect(upgradeCommands.podman).not.toContain('enrollment-token');
+});

@@ -26,7 +26,7 @@
 ## Qualification Highlights
 
 1. **10/10 Step Types Verified**: HTTP, BASH, DOCKER, KUBERNETES, SYSTEMD, LINUX_DIAGNOSTICS, APPROVAL, MANUAL, WAIT, CONDITION.
-2. **7/7 Input Types Validated**: String, Number, Boolean, Choice (Enum), Secret, Docker Container, Kubernetes Resource.
+2. **7/7 Input Types Validated**: STRING, NUMBER, BOOLEAN, URL, DURATION, SECRET_REF, SELECT.
 3. **Enterprise Safety & Blast-Radius Invariants Certified**: Zero unauthorized non-idempotent writes; automatic risk budget exhaustion fallback to human-in-the-loop suggestion; cryptographically sealed execution envelopes.
 4. **Physical Targets Independently Verified**: Verified real OS/Docker/Kubernetes status independent of web UI telemetry.
 5. **Codebase Quality & Hardening**: Resolved 5 bugs across in-cluster agent auth, setup instructions, table badge logic, agent capability UI presentation, and advanced JSON editor synchronization.
@@ -35,11 +35,11 @@
 
 ## Certification Artifacts & Evidence
 
-- **Coverage Matrix**: [`COVERAGE-MATRIX.md`](file:///Users/dushyantrahangdale/Desktop/Projects/opsknight/plans/runbook-engine/manual-e2e/COVERAGE-MATRIX.md)
-- **Physical Recovery Evidence**: [`PHYSICAL-RECOVERY.md`](file:///Users/dushyantrahangdale/Desktop/Projects/opsknight/plans/runbook-engine/manual-e2e/PHYSICAL-RECOVERY.md)
-- **Defect Register**: [`BUG-REGISTER.md`](file:///Users/dushyantrahangdale/Desktop/Projects/opsknight/plans/runbook-engine/manual-e2e/BUG-REGISTER.md)
-- **Test Scenarios**: [`TEST-SCENARIOS.md`](file:///Users/dushyantrahangdale/Desktop/Projects/opsknight/plans/runbook-engine/manual-e2e/TEST-SCENARIOS.md)
-- **Execution Audit Log**: [`EXECUTION-LOG.md`](file:///Users/dushyantrahangdale/Desktop/Projects/opsknight/plans/runbook-engine/manual-e2e/EXECUTION-LOG.md)
-- **Security & Governance Evidence**: [`SECURITY-EVIDENCE.md`](file:///Users/dushyantrahangdale/Desktop/Projects/opsknight/plans/runbook-engine/manual-e2e/SECURITY-EVIDENCE.md)
-- **Architecture Observations**: [`ARCHITECTURE-OBSERVATIONS.md`](file:///Users/dushyantrahangdale/Desktop/Projects/opsknight/plans/runbook-engine/manual-e2e/ARCHITECTURE-OBSERVATIONS.md)
-- **Full Visual Evidence**: 67 high-resolution screenshots in brain artifact directory.
+- **Coverage Matrix**: [`COVERAGE-MATRIX.md`](plans/runbook-engine/manual-e2e/COVERAGE-MATRIX.md)
+- **Physical Recovery Evidence**: [`PHYSICAL-RECOVERY.md`](plans/runbook-engine/manual-e2e/PHYSICAL-RECOVERY.md)
+- **Defect Register**: [`BUG-REGISTER.md`](plans/runbook-engine/manual-e2e/BUG-REGISTER.md)
+- **Test Scenarios**: [`TEST-SCENARIOS.md`](plans/runbook-engine/manual-e2e/TEST-SCENARIOS.md)
+- **Execution Audit Log**: [`EXECUTION-LOG.md`](plans/runbook-engine/manual-e2e/EXECUTION-LOG.md)
+- **Security & Governance Evidence**: [`SECURITY-EVIDENCE.md`](plans/runbook-engine/manual-e2e/SECURITY-EVIDENCE.md)
+- **Architecture Observations**: [`ARCHITECTURE-OBSERVATIONS.md`](plans/runbook-engine/manual-e2e/ARCHITECTURE-OBSERVATIONS.md)
+- **Full Visual Evidence**: High-resolution screenshots preserved in brain artifact repository.
