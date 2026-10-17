@@ -162,3 +162,54 @@ describe('AsyncLocalStorage Request Context', () => {
     await expect(response.json()).resolves.toEqual({ requestId: 'external-123' });
   });
 });
+
+describe('Database Connection URI Sanitization', () => {
+  it('redacts credentials in PostgreSQL connection URIs with internal hostnames without domain suffixes', () => {
+    const raw =
+      'FATAL: connection pool exhausted at postgresql://opsknight_app:p4ssw0rd!@db:5432/opsknight';
+    expect(sanitizeString(raw)).toBe(
+      'FATAL: connection pool exhausted at postgresql://opsknight_app:[REDACTED]@db:5432/opsknight'
+    );
+  });
+
+  it('redacts credentials across postgres, mysql, redis, and mongodb URIs', () => {
+    expect(sanitizeString('postgres://user:s3cr3t@localhost:5432/mydb')).toBe(
+      'postgres://user:[REDACTED]@localhost:5432/mydb'
+    );
+    expect(sanitizeString('mysql://root:toor@internal-db.local:3306/db')).toBe(
+      'mysql://root:[REDACTED]@internal-db.local:3306/db'
+    );
+    expect(sanitizeString('redis://:super-secret-cache@cache-node:6379/0')).toBe(
+      'redis://:[REDACTED]@cache-node:6379/0'
+    );
+    expect(sanitizeString('mongodb://admin:pass123@mongo1:27017,mongo2:27017/db')).toBe(
+      'mongodb://admin:[REDACTED]@mongo1:27017,mongo2:27017/db'
+    );
+  });
+
+  it('redacts passwords in URI query parameters', () => {
+    expect(
+      sanitizeString('postgresql://db.internal:5432/opsknight?password=supersecret&sslmode=require')
+    ).toBe('[REDACTED]&sslmode=require');
+  });
+
+  it('verifies real logger output buffers sanitized database error without credentials', () => {
+    const errorWithCreds = new Error(
+      'Database connection failed at postgresql://service_user:hunter2@db-cluster:5432/production'
+    );
+    logger.error('Database connection dropped', {
+      error: errorWithCreds,
+      component: 'runbook-actions',
+    });
+
+    const entries = getLogBuffer(10);
+    const matched = entries.find(e => e.message === 'Database connection dropped');
+    expect(matched).toBeDefined();
+    expect(matched?.error?.message).toBe(
+      'Database connection failed at postgresql://service_user:[REDACTED]@db-cluster:5432/production'
+    );
+    const serialized = JSON.stringify(matched);
+    expect(serialized).not.toContain('hunter2');
+    expect(serialized).toContain('[REDACTED]');
+  });
+});
