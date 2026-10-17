@@ -7,7 +7,7 @@ services:
       PGBOUNCER_DB_HOST: db
       PGBOUNCER_DB_NAME: automation_cert
       PGBOUNCER_DB_USER: automation
-      PGBOUNCER_DB_PASSWORD: automation-cert-only
+      PGBOUNCER_DB_PASSWORD: ${AUTOMATION_CERT_DB_PASSWORD:?Set a URL-safe isolated certification database password}
       PGBOUNCER_SERVER_TLS_SSLMODE: disable
       PGBOUNCER_POOL_MODE: transaction
       PGBOUNCER_DEFAULT_POOL_SIZE: '24'

@@ -14,6 +14,8 @@ metadata:
 spec:
   automountServiceAccountToken: false
   restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/arch: arm64
   securityContext:
     runAsNonRoot: true
     runAsUser: 12345
@@ -25,9 +27,20 @@ spec:
     - name: k6
       # Imported from the official pinned Linux/arm64 v2.3.0 manifest:
       # sha256:06181d5d1aebfde4dce5b5ea970041fd3e7d4613a9ed895f65509525fb73dcb2
-      image: grafana/k6:automation-2.3.0-arm64
-      imagePullPolicy: Never
-      command: [sh, -c, 'sleep infinity']
+      image: grafana/k6@sha256:06181d5d1aebfde4dce5b5ea970041fd3e7d4613a9ed895f65509525fb73dcb2
+      imagePullPolicy: Always
+      command: [sh, -c, 'exec sleep infinity']
+      livenessProbe:
+        exec:
+          command: [sh, -c, 'kill -0 1']
+        initialDelaySeconds: 5
+        periodSeconds: 30
+        timeoutSeconds: 2
+      readinessProbe:
+        exec:
+          command: [sh, -c, 'command -v k6 >/dev/null && test -w /work']
+        periodSeconds: 10
+        timeoutSeconds: 2
       resources:
         requests:
           # Share the reserved/auxiliary CPUs without displacing application replicas.

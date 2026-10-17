@@ -88,7 +88,7 @@
       "sources": [
         {
           "path": "src/lib/automation/versioning.ts",
-          "branch": "feat/service-automation"
+          "branch": "baseline"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -98,7 +98,10 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": ["Integrate and certify feat/service-automation before exposing REST commands"]
+      "blockers": [
+        "Combined branch certification pending; settings, draft GET/PUT and publish POST are implemented",
+        "Effective configuration, validation, simulation, modes, restore, history and diagnostics REST operations remain unfinished"
+      ]
     },
     {
       "capabilityId": "service-settings",
