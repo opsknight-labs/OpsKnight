@@ -59,6 +59,18 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Publish checks the draft ETag and active version under the canonical service lock, validating dependencies and committing immutable version, audit and replay together.',
   },
+  'DELETE /api/v2/services/[id]/automation/candidate': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Candidate discard clears candidateVersionId under service lock, committing clear, audit and replay together.',
+  },
+  'POST /api/v2/services/[id]/automation/candidates/activate': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Candidate activation validates global switch, live mode, policy safety and shadow metrics under service lock, committing atomic cutover, audit and replay together.',
+  },
   'PUT /api/v2/services/[id]/automation/draft': {
     idempotency: 'required',
     concurrency: 'etag',

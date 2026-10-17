@@ -66,7 +66,7 @@ export default function AutomationWorkspace({
   serviceId: string;
   mobile?: boolean;
 }) {
-  const [review, setReview] = useState<'publish' | 'restore' | 'LIVE' | null>(null);
+  const [review, setReview] = useState<'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null>(null);
   const [ruleSearch, setRuleSearch] = useState('');
   const [contextSearch, setContextSearch] = useState('');
   const [ruleStateFilter, setRuleStateFilter] = useState('all');
@@ -278,7 +278,13 @@ export default function AutomationWorkspace({
         expectedActiveVersionId: review
           ? (reviewData?.activeVersionId ?? null)
           : (data?.activeVersionId ?? null),
-        ...(input.action === 'publish' ? { expectedRevision: revision.current } : {}),
+        ...(input.action === 'publish'
+          ? {
+              expectedRevision: revision.current,
+              expectedCandidateVersionId:
+                (review ? reviewData?.candidateVersionId : data?.candidateVersionId) ?? null,
+            }
+          : {}),
       });
       if (!response.ok) {
         setError(response.error);
@@ -498,10 +504,45 @@ export default function AutomationWorkspace({
       }),
       { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 }
     );
+  const candidateCounts = (reviewData ?? data)?.candidateAggregates?.reduce(
+    (sum, row) => ({
+      evaluated: sum.evaluated + row.evaluated,
+      same: sum.same + row.same,
+      routes: sum.routes + row.routeDifferent,
+      priorities: sum.priorities + row.priorityDifferent,
+      skips: sum.skips + row.noEscalationDifferent,
+      errors: sum.errors + row.errors + row.fallbacks,
+    }),
+    { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 }
+  ) ?? { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 };
+
+  const startActivateCandidate = async () => {
+    setBusy(true);
+    try {
+      const loaded = await load('overview');
+      if (loaded && loaded.candidateVersion) {
+        setReviewData(loaded);
+        setReview('activateCandidate');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const discardPendingCandidate = async () => {
+    const candidateId = data?.candidateVersionId;
+    if (!candidateId) return;
+    if (!confirm('Discard this candidate version? Staged shadow evaluation will be terminated.')) return;
+    await command({
+      action: 'discardCandidate',
+      expectedCandidateVersionId: candidateId,
+    });
+  };
+
   return (
     <section aria-label="Service automation" className="space-y-5">
       <AutomationReviewDialog
-        key={`${review}:${review === 'LIVE' ? reviewData?.activeVersionId : (restoreVersion?.id ?? data?.activeVersionId)}`}
+        key={`${review}:${review === 'LIVE' ? reviewData?.activeVersionId : review === 'activateCandidate' ? (reviewData?.candidateVersionId ?? data?.candidateVersionId) : (restoreVersion?.id ?? data?.activeVersionId)}`}
         action={review}
         policies={reviewData?.policies}
         destinations={reviewData?.destinations}
@@ -510,13 +551,19 @@ export default function AutomationWorkspace({
         snapshot={
           review === 'LIVE' && reviewData?.activeVersion
             ? snapshotSchema.parse(reviewData.activeVersion.snapshot)
-            : review === 'restore' && restoreVersion
-              ? snapshotSchema.parse(restoreVersion.snapshot)
-              : draft
+            : review === 'activateCandidate' && (reviewData?.candidateVersion ?? data?.candidateVersion)
+              ? snapshotSchema.parse((reviewData?.candidateVersion ?? data?.candidateVersion)!.snapshot)
+              : review === 'restore' && restoreVersion
+                ? snapshotSchema.parse(restoreVersion.snapshot)
+                : draft
         }
-        version={(review === 'LIVE' ? reviewData : data)?.activeVersion?.versionNumber ?? null}
+        version={
+          (review === 'activateCandidate'
+            ? (reviewData?.candidateVersion ?? data?.candidateVersion)?.versionNumber
+            : (review === 'LIVE' ? reviewData : data)?.activeVersion?.versionNumber) ?? null
+        }
         enabled={data?.enabled ?? false}
-        counts={counts}
+        counts={review === 'activateCandidate' ? candidateCounts : counts}
         busy={busy}
         error={error}
         onCancel={() => setReview(null)}
@@ -524,10 +571,17 @@ export default function AutomationWorkspace({
           void command(
             review === 'LIVE'
               ? { action: 'mode', mode: 'LIVE', acknowledgeNoShadow, acknowledgeShadowErrors }
-              : {
-                  action: 'publish',
-                  ...(review === 'restore' ? { sourceVersionId: restoreVersion?.id } : {}),
-                }
+              : review === 'activateCandidate'
+                ? {
+                    action: 'activateCandidate',
+                    expectedCandidateVersionId: (reviewData ?? data)?.candidateVersionId,
+                    acknowledgeNoShadow,
+                    acknowledgeShadowErrors,
+                  }
+                : {
+                    action: 'publish',
+                    ...(review === 'restore' ? { sourceVersionId: restoreVersion?.id } : {}),
+                  }
           ).then(success => {
             if (success) setReview(null);
           });
@@ -666,7 +720,7 @@ export default function AutomationWorkspace({
               <Button
                 size="sm"
                 disabled={
-                  busy || conflict || data?.mode === 'LIVE' || issues.some(i => i.level === 'ERROR')
+                  busy || conflict || issues.some(i => i.level === 'ERROR')
                 }
                 onClick={() => {
                   void (async () => {
@@ -683,11 +737,11 @@ export default function AutomationWorkspace({
                   })();
                 }}
               >
-                Publish
+                {data.mode === 'LIVE' ? 'Publish candidate' : 'Publish'}
               </Button>
               {data.mode === 'LIVE' && (
                 <p className="text-xs text-muted-foreground">
-                  Switch to SHADOW or DISABLED before publishing a new version.
+                  Publishing while LIVE stages a candidate version for parallel shadow evaluation without interrupting routing.
                 </p>
               )}
               <select
@@ -888,6 +942,8 @@ export default function AutomationWorkspace({
             traceFilter={traceFilter}
             setTraceFilter={setTraceFilter}
             setArea={setArea}
+            onActivateCandidate={startActivateCandidate}
+            onDiscardCandidate={discardPendingCandidate}
           />
         )}
         {data && area === 'context' && (

@@ -174,6 +174,7 @@ export async function executeIdempotentOperation<T>(
     context?: IdempotencyContext;
     payload: unknown;
     execute: () => Promise<T>;
+    onReplay?: (tx: Prisma.TransactionClient) => Promise<void>;
   }
 ): Promise<IdempotentExecution<T>> {
   if (!input.context) {
@@ -208,6 +209,10 @@ export async function executeIdempotentOperation<T>(
         userMessage: 'This Idempotency-Key was already used for a different request.',
         details: { scope: input.scope, requestId: context.key },
       });
+    }
+
+    if (input.onReplay) {
+      await input.onReplay(tx);
     }
 
     return { value: decodeJson(record.result) as T, replayed: true };

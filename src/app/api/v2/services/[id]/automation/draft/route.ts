@@ -67,8 +67,11 @@ export const PUT = defineV2Route({
    * whose team membership was revoked after the original write can still receive
    * the stored draft response with the same idempotency key indefinitely.
    */
-  replayAuthGuard: async ({ params, actor }) => {
-    await assertAutomationWriteAccess(prisma, params.id, actor);
+  replayAuthGuard: async ({ params, actor, tx }) => {
+    if (tx) {
+      await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
+    }
+    await assertAutomationWriteAccess((tx ?? prisma) as typeof prisma, params.id, actor);
   },
   handler: async ({ req, params, body, actor, apiKey, tx }) => {
     // Lock the service row so team reassignment cannot race draft authorization.

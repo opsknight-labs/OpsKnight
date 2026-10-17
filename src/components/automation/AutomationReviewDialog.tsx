@@ -26,7 +26,7 @@ export function AutomationReviewDialog({
   onCancel,
   onConfirm,
 }: {
-  action: 'publish' | 'restore' | 'LIVE' | null;
+  action: 'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null;
   snapshot: Snapshot;
   before?: Snapshot;
   mode?: string;
@@ -71,14 +71,16 @@ export function AutomationReviewDialog({
           <DialogTitle>
             {action === 'LIVE'
               ? 'Review impact before LIVE'
-              : action === 'restore'
-                ? 'Review version restore'
-                : 'Review automation publication'}
+              : action === 'activateCandidate'
+                ? 'Review candidate activation · Cutover to LIVE'
+                : action === 'restore'
+                  ? 'Review version restore'
+                  : 'Review automation publication'}
           </DialogTitle>
           <DialogDescription>
-            {action === 'LIVE'
-              ? 'New incidents will use the published routing and enrichment. Existing incident decisions stay pinned.'
-              : 'Publish an immutable version from the latest saved draft. Publication does not change the service mode.'}
+            {action === 'LIVE' || action === 'activateCandidate'
+              ? 'New incidents will use the promoted version routing and enrichment. Existing incident decisions stay pinned.'
+              : 'Publish an immutable version from the latest saved draft. When the service is LIVE, the version is staged as a candidate evaluated in shadow mode.'}
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -87,10 +89,9 @@ export function AutomationReviewDialog({
           </p>
         )}
         <div className="space-y-3 text-sm">
-          {action !== 'LIVE' && mode === 'LIVE' && (
-            <p role="alert" className="rounded-lg border border-amber-500 p-3">
-              Switch this service to SHADOW or DISABLED before publishing or restoring a version.
-              Activate LIVE explicitly after reviewing the new version.
+          {action === 'publish' && mode === 'LIVE' && (
+            <p role="status" className="rounded-lg border border-primary/40 bg-muted/30 p-3">
+              This service is currently LIVE. Publishing stages a candidate version evaluated alongside LIVE traffic in parallel shadow mode without interrupting current routing.
             </p>
           )}
           {action !== 'LIVE' && (
@@ -108,8 +109,8 @@ export function AutomationReviewDialog({
             </div>
           )}
           <p>
-            {action === 'LIVE'
-              ? `Published version ${version ?? 'unavailable'}`
+            {action === 'LIVE' || action === 'activateCandidate'
+              ? `Version ${version ?? 'unavailable'}`
               : `${snapshot.fields.length} context fields · ${snapshot.rules.length} rules`}
           </p>
           <details>
@@ -141,7 +142,7 @@ export function AutomationReviewDialog({
               {issue.level}: {issue.message}
             </p>
           ))}
-          {action === 'LIVE' && (
+          {(action === 'LIVE' || action === 'activateCandidate') && (
             <div className="rounded-lg border p-3 space-y-1">
               <h3 className="font-semibold">Shadow readiness · last 7 days</h3>
               <p>
@@ -195,7 +196,7 @@ export function AutomationReviewDialog({
             disabled={
               busy ||
               issues.some(issue => issue.level === 'ERROR') ||
-              (action === 'LIVE' &&
+              ((action === 'LIVE' || action === 'activateCandidate') &&
                 (!version ||
                   !enabled ||
                   (!counts?.evaluated && !acknowledge) ||
@@ -203,7 +204,11 @@ export function AutomationReviewDialog({
             }
             onClick={() => onConfirm(acknowledge, acknowledgeErrors)}
           >
-            {busy ? 'Saving…' : action === 'LIVE' ? 'Confirm LIVE' : 'Confirm publication'}
+            {busy
+              ? 'Saving…'
+              : action === 'LIVE' || action === 'activateCandidate'
+                ? 'Confirm LIVE'
+                : 'Confirm publication'}
           </Button>
         </div>
       </DialogContent>

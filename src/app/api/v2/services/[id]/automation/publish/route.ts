@@ -31,12 +31,20 @@ export const POST = defineV2Route({
   action: AUTHORIZATION_ACTIONS.AUTOMATION_PUBLISH,
   paramsSchema: z.object({ id: z.string().cuid() }).strict(),
   querySchema: z.object({}).strict(),
-  bodySchema: z.object({ expectedActiveVersionId: z.string().cuid().nullable() }).strict(),
+  bodySchema: z
+    .object({
+      expectedActiveVersionId: z.string().cuid().nullable(),
+      expectedCandidateVersionId: z.string().cuid().nullable().optional(),
+    })
+    .strict(),
   preconditionRequired: true,
   idempotent: true,
   idempotencyRequired: true,
-  replayAuthGuard: async ({ params, actor }) => {
-    await assertAutomationWriteAccess(prisma, params.id, actor);
+  replayAuthGuard: async ({ params, actor, tx }) => {
+    if (tx) {
+      await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
+    }
+    await assertAutomationWriteAccess((tx ?? prisma) as typeof prisma, params.id, actor);
   },
   handler: async ({ req, params, body, actor, apiKey, tx }) => {
     await tx!.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
@@ -48,6 +56,7 @@ export const POST = defineV2Route({
           actorId: actor.id,
           expectedRevision: requireRevisionIfMatch(req),
           expectedActiveVersionId: body.expectedActiveVersionId,
+          expectedCandidateVersionId: body.expectedCandidateVersionId,
         },
         tx,
         apiKey.id

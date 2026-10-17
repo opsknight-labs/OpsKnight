@@ -38,6 +38,7 @@ export type IntegrationEventEnvelope = {
 export type RuntimeEvaluation = {
   mode: 'SHADOW' | 'LIVE';
   versionId: string | null;
+  candidateVersionId?: string | null;
   evaluationAt: Date;
   durationMs: number;
   extractionMs: number;
@@ -51,6 +52,20 @@ export type RuntimeEvaluation = {
   result: Evaluation | null;
   fallbackReason: string | null;
   shadowDifferent: boolean;
+  candidateResult?: Evaluation | null;
+  candidateFallbackReason?: string | null;
+  candidateShadowDifferent?: boolean;
+  candidateShadow?: {
+    versionId: string;
+    bucketDate: string;
+    evaluated: number;
+    same: number;
+    priorityDifferent: number;
+    routeDifferent: number;
+    noEscalationDifferent: number;
+    errors: number;
+    fallbacks: number;
+  };
   basePriority: string | null;
   finalPriority: string | null;
   policyId: string | null;
@@ -268,6 +283,96 @@ export async function prepareAutomation(
       }
     }
   }
+  // Parallel candidate evaluation in SHADOW mode during LIVE routing
+  if (config.mode === 'LIVE' && config.candidateVersionId) {
+    runtime.candidateVersionId = config.candidateVersionId;
+    try {
+      const cachedCandidate = getCachedCompiledVersion(config.candidateVersionId);
+      const storedCandidate = cachedCandidate
+        ? null
+        : await tx.automationVersion.findUnique({
+            where: { id: config.candidateVersionId },
+            select: { id: true, compiledSnapshot: true, checksum: true },
+          });
+      if (!cachedCandidate && !storedCandidate) throw new Error('VERSION_MISSING');
+      const candidateVersion = cachedCandidate ?? loadCompiledVersion(storedCandidate!);
+      const candidateExtracted = extractContextWithProvenance({
+        fields: candidateVersion.fields,
+        providerPayload: envelope.providerPayload,
+        normalizedEvent: envelope.event,
+        integrationType: envelope.integrationType,
+      });
+      const candidateContext: Context = candidateExtracted.context;
+      Object.assign(
+        candidateContext,
+        builtinContext({
+          ...classification,
+          severity: envelope.event.payload.severity,
+          integrationType: envelope.integrationType,
+          source: envelope.event.payload.source,
+        })
+      );
+      const candidateResult = evaluateAutomation({
+        version: candidateVersion,
+        initialContext: candidateContext,
+        evaluationAt: evaluationAt.toISOString(),
+      });
+      runtime.candidateResult = candidateResult;
+
+      // Compare candidate outcome against the actual LIVE routing decision
+      const candPriority = candidateResult.enrichedContext.priority;
+      const priorityDifferent =
+        candPriority?.state === 'RECOGNIZED' && candPriority.value !== runtime.finalPriority;
+      const routeDifferent =
+        (candidateResult.outcome.type === 'NO_ESCALATION' &&
+          runtime.result?.outcome.type !== 'NO_ESCALATION') ||
+        (candidateResult.outcome.type === 'ESCALATION_POLICY' &&
+          candidateResult.outcome.policyId !== runtime.policyId) ||
+        (candidateResult.outcome.type === 'SERVICE_DEFAULT' &&
+          runtime.policyId !== service?.policy?.id);
+
+      runtime.candidateShadowDifferent = priorityDifferent || routeDifferent;
+      const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
+      runtime.candidateShadow = {
+        versionId: config.candidateVersionId,
+        bucketDate: bucketDate.toISOString(),
+        evaluated: 1,
+        same: Number(!priorityDifferent && !routeDifferent),
+        priorityDifferent: Number(priorityDifferent),
+        routeDifferent: Number(routeDifferent),
+        noEscalationDifferent: Number(candidateResult.outcome.type === 'NO_ESCALATION'),
+        errors: 0,
+        fallbacks: 0,
+      };
+    } catch (candErr) {
+      // Database failures or transient errors in candidate evaluation must never
+      // crash the transaction or disrupt LIVE incident production routing.
+      const reason = candErr instanceof Error ? candErr.message : 'VERSION_INVALID';
+      runtime.candidateFallbackReason = [
+        'VERSION_MISSING',
+        'VERSION_INVALID',
+        'EXTRACTION_LIMIT',
+        'CONTEXT_FIELD_LIMIT',
+        'EVALUATION_TIMEOUT',
+        'POLICY_MISSING',
+      ].includes(reason)
+        ? reason
+        : 'VERSION_INVALID';
+      runtime.candidateShadowDifferent = true;
+      const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
+      runtime.candidateShadow = {
+        versionId: config.candidateVersionId,
+        bucketDate: bucketDate.toISOString(),
+        evaluated: 1,
+        same: 0,
+        priorityDifferent: 0,
+        routeDifferent: 0,
+        noEscalationDifferent: 0,
+        errors: 1,
+        fallbacks: 1,
+      };
+    }
+  }
   runtime.durationMs = performance.now() - engineStartedAt;
   return runtime;
 }
@@ -320,6 +425,8 @@ export async function persistAutomation(
     runtime.shadowDifferent = priorityDifferent || routeDifferent || !!runtime.fallbackReason;
     const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
     shadow = { versionId: runtime.versionId, bucketDate: bucketDate.toISOString(), ...counts };
+  } else if (runtime.mode === 'LIVE' && runtime.candidateShadow) {
+    shadow = runtime.candidateShadow;
   }
   const fullDetail = () => ({
     result: result
@@ -339,6 +446,22 @@ export async function persistAutomation(
     normalization: runtime.normalization,
     policyName: runtime.policyName,
     destinationNames,
+    ...(runtime.candidateVersionId
+      ? {
+          candidate: {
+            versionId: runtime.candidateVersionId,
+            result: runtime.candidateResult
+              ? {
+                  outcome: runtime.candidateResult.outcome,
+                  matchedRule: runtime.candidateResult.matchedRule,
+                  priority: runtime.candidateResult.enrichedContext.priority,
+                }
+              : null,
+            fallbackReason: runtime.candidateFallbackReason,
+            shadowDifferent: runtime.candidateShadowDifferent,
+          },
+        }
+      : {}),
   });
   if (runtime.mode === 'LIVE') {
     const decisionPersistenceStarted = performance.now();
@@ -512,6 +635,10 @@ export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
   if (runtime.mode === 'SHADOW' && runtime.shadowDifferent)
     addOperationalMetric('opsknight_automation_shadow_difference_total', 1, {
       outcome: runtime.result?.outcome.type ?? 'FALLBACK',
+    });
+  if (runtime.candidateShadowDifferent)
+    addOperationalMetric('opsknight_automation_shadow_difference_total', 1, {
+      outcome: runtime.candidateResult?.outcome.type ?? 'FALLBACK',
     });
   if (runtime.fallbackReason)
     addOperationalMetric('opsknight_automation_fallback_total', 1, {
