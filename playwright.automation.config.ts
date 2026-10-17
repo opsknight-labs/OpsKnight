@@ -32,12 +32,12 @@ export default defineConfig({
   webServer:
     process.env.PLAYWRIGHT_EXTERNAL_SERVER === 'true'
       ? undefined
-      : {
+      : (process.env.PLAYWRIGHT_PRODUCTION_SERVER === 'true' ? [3193, 3194] : [3193]).map(port => ({
           command:
             process.env.PLAYWRIGHT_PRODUCTION_SERVER === 'true'
-              ? 'npm run start:dev -- --hostname 127.0.0.1 --port 3193'
+              ? `npm run start:dev -- --hostname 127.0.0.1 --port ${port}`
               : 'npm run dev -- --hostname 127.0.0.1 --port 3193',
-          url: 'http://127.0.0.1:3193/login',
+          url: `http://127.0.0.1:${port}/login`,
           reuseExistingServer: false,
           timeout: 120000,
           env: {
@@ -48,5 +48,5 @@ export default defineConfig({
             NEXTAUTH_COOKIE_SECURE: 'false',
             OPSKNIGHT_PROCESS_ROLE: 'web',
           },
-        },
+        })),
 });

@@ -96,3 +96,25 @@ containing commit, command, environment, results and limitations. Load evidence
 includes hardware/data/topology, predefined latency/error budgets, 1/2/4 replicas,
 PostgreSQL connection pressure, queue lag and recovery. No Redis dependency is
 introduced. Local unit tests do not establish production capacity or HA.
+
+## Conditional mutation and replay semantics
+
+Authentication, current actor capability/scope checks and required strong If-Match
+syntax checks run on every request, including replay. The replay fingerprint covers
+the validated body; If-Match is not part of that fingerprint. A matching credential,
+operation, idempotency key and body returns the original committed response with
+`Idempotency-Replayed: true`, even when the caller supplies a different concrete
+revision. That response confirms the original operation; it does not apply a new
+conditional write or re-evaluate the current resource revision. Use a new key for a
+new write, and read the resource again to obtain its current ETag. Resource-specific
+checks inside the mutation are not rerun on a cached response. Revoked credentials
+and revoked actor privileges cannot retrieve a replay through this contract.
+
+Automation publication accepts the draft resource's ETag. Its response contains
+immutable `id`, `versionNumber` and `checksum`, and deliberately returns no ETag:
+version numbers are not draft revisions. GET the draft again before another edit.
+Publication while LIVE returns 409 without creating a version or audit event.
+Switch to SHADOW or DISABLED first; subsequent LIVE activation runs the existing
+revision-specific reference validation and shadow acknowledgment checks. Publication
+and mode logs use staged-event names because caller-owned transactions can still
+abort; committed database audit remains authoritative.

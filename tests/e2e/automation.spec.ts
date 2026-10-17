@@ -719,3 +719,166 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
     contentType: 'image/png',
   });
 });
+
+test('SDK authoring, UI activation and HTTP ingestion share the published routing decision', async ({
+  page,
+}, testInfo) => {
+  const { Client } = await import('../../sdk/typescript/client');
+  const service = await db.service.create({ data: { name: `SDK journey ${randomUUID()}` } });
+  const serviceId = service.id;
+  const actor = await db.user.findUniqueOrThrow({ where: { email } });
+  const credential = generateApiKey();
+  const key = await db.apiKey.create({
+    data: {
+      name: 'Automation SDK browser journey',
+      userId: actor.id,
+      prefix: credential.prefix,
+      tokenHash: credential.tokenHash,
+      scopes: [
+        'automation:read',
+        'automation:write',
+        'automation:publish',
+        'automation-settings:read',
+        'automation-settings:write',
+      ],
+    },
+  });
+  const integration = await db.integration.create({
+    data: {
+      serviceId,
+      name: 'SDK browser ingestion',
+      key: randomUUID(),
+      type: 'EVENTS_API_V2',
+    },
+  });
+  const client = new Client({
+    baseUrl: 'http://127.0.0.1:3193/api/v2',
+    token: credential.token,
+    allowInsecureHttp: true,
+    maxRetries: 0,
+  });
+  const publisher = new Client({
+    baseUrl: `http://127.0.0.1:${process.env.PLAYWRIGHT_PRODUCTION_SERVER === 'true' && process.env.PLAYWRIGHT_EXTERNAL_SERVER !== 'true' ? 3194 : 3193}/api/v2`,
+    token: credential.token,
+    allowInsecureHttp: true,
+    maxRetries: 0,
+  });
+  try {
+    const settings = await client.call('getAutomationSettings', {});
+    await client.call('updateAutomationSettings', {
+      body: {
+        automationEnabled: true,
+        automationTraceRetentionDays: settings.data.automationTraceRetentionDays,
+      },
+      headers: {
+        'If-Match': `"${settings.data.automationSettingsRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    });
+    const draft = await client.call('getAutomationDraft', { params: { id: serviceId } });
+    const snapshot = {
+      schemaVersion: 1 as const,
+      fields: [],
+      rules: [
+        {
+          id: 'sdk-enrich',
+          name: 'SDK priority',
+          phase: 'ENRICH' as const,
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'SET_PRIORITY' as const, value: 'P1' as const }],
+        },
+        {
+          id: 'sdk-no-page',
+          name: 'SDK intentional suppression',
+          phase: 'ROUTE' as const,
+          enabled: true,
+          conditions: [
+            { fieldKey: 'source', operator: 'EQ' as const, value: 'sdk-browser-certification' },
+          ],
+          actions: [{ type: 'NO_ESCALATION' as const }],
+        },
+      ],
+    };
+    const saved = await client.call('saveAutomationDraft', {
+      params: { id: serviceId },
+      body: { snapshot },
+      headers: { 'If-Match': `"${draft.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    const published = await publisher.call('publishAutomationVersion', {
+      params: { id: serviceId },
+      body: { expectedActiveVersionId: null },
+      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    const csrf = await (await page.request.get('/api/auth/csrf')).json();
+    await page.request.post('/api/auth/callback/credentials', {
+      form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+    });
+    await page.goto(
+      testInfo.project.name === 'desktop'
+        ? `/services/${serviceId}?tab=automation`
+        : `/m/services/${serviceId}/automation`
+    );
+    const workspace = page.getByRole('region', { name: 'Service automation' });
+    await expect(workspace.getByText(/Version 1 ·/)).toBeVisible();
+    await workspace.getByLabel('Automation mode').selectOption('SHADOW');
+    await expect(workspace.getByLabel('Automation mode')).toHaveValue('SHADOW');
+    await workspace.getByLabel('Automation mode').selectOption('LIVE');
+    await page.getByRole('checkbox', { name: /I understand this version/ }).check();
+    await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
+    await expect(workspace.getByLabel('Automation mode')).toHaveValue('LIVE');
+    await expect(workspace.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
+    await expect(
+      client.call('publishAutomationVersion', {
+        params: { id: serviceId },
+        body: { expectedActiveVersionId: published.data.id },
+        headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+      })
+    ).rejects.toMatchObject({ status: 409 });
+    const dedupKey = randomUUID();
+    const ingestion = await page.request.post('/api/events', {
+      headers: { Authorization: `Token token=${integration.key}` },
+      data: {
+        event_action: 'trigger',
+        dedup_key: dedupKey,
+        payload: {
+          summary: 'SDK authored routing journey',
+          source: 'sdk-browser-certification',
+          severity: 'warning',
+        },
+      },
+    });
+    expect(ingestion.ok()).toBe(true);
+    const accepted = (await ingestion.json()) as {
+      data: { result: { action: string; incident: { id: string } } };
+    };
+    expect(accepted.data.result.action).toBe('triggered');
+    const incident = await db.incident.findUniqueOrThrow({
+      where: { id: accepted.data.result.incident.id },
+    });
+    expect(incident.serviceId).toBe(serviceId);
+    const decision = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident.id },
+    });
+    expect(decision).toMatchObject({
+      versionId: published.data.id,
+      mode: 'LIVE',
+      routeType: 'NO_ESCALATION',
+      finalPriority: 'P1',
+    });
+    expect(incident.priority).toBe('P1');
+    await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+    await expect(
+      page
+        .getByText('SDK authored routing journey', { exact: true })
+        .filter({ visible: true })
+        .first()
+    ).toBeVisible();
+    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+    await expect(
+      client.call('getAutomationDraft', { params: { id: serviceId } })
+    ).rejects.toMatchObject({ status: 401 });
+  } finally {
+    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+  }
+});

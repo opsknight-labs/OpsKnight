@@ -69,3 +69,41 @@ GET/PUT and publication POST bring the registry to 89 operations. Effective
 configuration, validation, simulation, modes, restore, history, diagnostics and
 the remaining enterprise endpoint families are still unfinished. The workflow
 inventory and implementation tracker retain those release blockers.
+
+## Follow-up review of 53e86ca
+
+Publication and restore now reject LIVE mode with 409 in the shared domain
+command. UI and API use that command. Operators must explicitly leave LIVE,
+publish, then qualify and acknowledge activation of the new revision. The service
+lock serializes this check with mode changes; failed publication leaves the
+previous version, mode and committed audit intact. Emergency disable remains
+available. The UI disables publication while LIVE and explains the transition.
+
+The capability catalog has a `partial` status and associates all five implemented
+automation operation IDs. Publication returns immutable version identity without
+an ETag. The OpenAPI description explains that the request uses the draft ETag
+and the next draft mutation requires a fresh draft read. Success-oriented logs
+inside caller-owned transactions are renamed to staged events.
+
+Replay semantics are documented in `domain-command-standard.md`. Direct REST
+tests cover a changed concrete revision header on replay, revoked credentials,
+insufficient publication scope, stale/weak/wildcard validators, competing
+publications, and publication while LIVE. The ingestion concurrency regression
+verifies that rejected LIVE publication keeps all new decisions on the qualified
+version. Fixture cutovers now explicitly disable, publish and reactivate.
+
+The completed prior CI suite is recorded with individual check URLs in
+`ci-53e86ca.json`: 50 successful, 10 skipped and one neutral. That certificate
+applies to 53e86ca, not subsequent source changes. Full feature parity, 1/2/4
+replica load/HA, rolling-version coexistence and the complete API-13–API-24
+release gates remain outstanding.
+
+Local follow-up verification: production build and TypeScript passed; changed-file
+ESLint passed with zero warnings. REST transaction certification passed 21 tests;
+automation lifecycle/dependency suites passed 51 with one opt-in scenario skipped.
+The four-device production browser matrix passed all 32 tests against two
+application replicas, including SDK settings/draft/publication, UI activation,
+HTTP event ingestion, pinned decision/incident verification, LIVE publication
+denial and credential revocation. This is functional cross-replica evidence,
+not a sustained load or failover certificate. Focused component, capability,
+workflow-inventory, OpenAPI, mutation-contract and SDK suites passed.
