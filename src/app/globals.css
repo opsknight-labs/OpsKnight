@@ -276,17 +276,6 @@
 
 /* Notification toast styles live in src/styles/components/toasts.css. */
 
-/* High contrast for alert and banner dismiss X buttons in the dark app theme. Keyed off the
-   app theme only: the OS preference does not change the forced-light desktop's surfaces. */
-.dark [role="alert"] button[aria-label*="Dismiss"],
-.dark [role="status"] button[aria-label*="Dismiss"],
-[data-theme="dark"] [role="alert"] button[aria-label*="Dismiss"],
-[data-theme="dark"] [role="status"] button[aria-label*="Dismiss"] {
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  color: #ffffff !important;
-  opacity: 0.95 !important;
-}
-
 .focus-border:focus,
 .focus-border:focus-visible {
   border-color: var(--border-focus);
