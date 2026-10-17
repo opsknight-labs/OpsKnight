@@ -71,7 +71,10 @@ export function ExecutionRow({
     executionDurationSeconds(execution.startedAt, execution.completedAt, now)
   );
   const startedValue = execution.startedAt ?? execution.createdAt;
-  const startedAbsolute = formatDateTime(startedValue, userTimeZone, { format: 'datetime' });
+  const startedAbsolute = formatDateTime(startedValue, userTimeZone, {
+    format: 'datetime',
+    includeTimeZone: true,
+  });
   const target = execution.resolvedTargetAgent
     ? `Agent · ${execution.resolvedTargetAgent.name}`
     : execution.resolvedTargetAgentPool

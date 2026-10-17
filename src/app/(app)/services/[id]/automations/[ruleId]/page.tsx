@@ -29,8 +29,10 @@ import {
   assertCanViewService,
   assertCanModifyService,
   assertCapability,
+  getCurrentUser,
   getUserPermissions,
 } from '@/lib/rbac';
+import { getUserTimeZone } from '@/lib/timezone';
 import { CAPABILITIES } from '@/lib/authorization';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import { describeBinding } from '@/lib/runbooks/presentation/binding-contract';
@@ -77,11 +79,11 @@ import { redactRunbookConfiguration } from '@/lib/runbooks/display-name';
 import { cn } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 
-function timestamp(date: Date) {
+function timestamp(date: Date, timeZone: string) {
   return {
     iso: date.toISOString(),
     relative: formatDistanceToNow(date, { addSuffix: true }),
-    absolute: formatAbsolute(date),
+    absolute: formatAbsolute(date, timeZone),
   };
 }
 
@@ -91,10 +93,12 @@ export default async function AutomationRulePage({
   params: Promise<{ id: string; ruleId: string }>;
 }) {
   const input = z.object({ id: z.string().cuid(), ruleId: z.string().cuid() }).parse(await params);
-  await Promise.all([
+  const [user] = await Promise.all([
+    getCurrentUser(),
     assertCanViewService(input.id),
     assertCapability(CAPABILITIES.RUNBOOK_READ_ALL),
   ]);
+  const userTimeZone = getUserTimeZone(user);
   const rule = await prisma.serviceAutomationRule.findFirst({
     where: { id: input.ruleId, serviceId: input.id },
     include: {
@@ -190,7 +194,7 @@ export default async function AutomationRulePage({
             {' · '}
             {selectedVersion ? `v${selectedVersion.version}` : 'No version'} ({strategy}){' · '}
             created by {rule.createdBy?.name ?? 'Unavailable user'}{' '}
-            <RuleTimestamp {...timestamp(rule.createdAt)} />
+            <RuleTimestamp {...timestamp(rule.createdAt, userTimeZone)} />
           </>
         }
         actions={
@@ -281,7 +285,7 @@ export default async function AutomationRulePage({
                 lastRun: lastRun
                   ? {
                       status: lastRun.status,
-                      ...timestamp(lastRun.startedAt ?? lastRun.createdAt),
+                      ...timestamp(lastRun.startedAt ?? lastRun.createdAt, userTimeZone),
                     }
                   : null,
                 successRate: successRate(rule.executions),
@@ -470,7 +474,8 @@ export default async function AutomationRulePage({
                   />
                   {readinessView.label}
                 </span>
-                · checked <RuleTimestamp {...timestamp(new Date(readiness.checkedAt))} />
+                · checked{' '}
+                <RuleTimestamp {...timestamp(new Date(readiness.checkedAt), userTimeZone)} />
               </span>
             }
           >
@@ -541,7 +546,7 @@ export default async function AutomationRulePage({
               executions={rule.executions.map(execution => ({
                 id: execution.id,
                 status: execution.status,
-                ...timestamp(execution.startedAt ?? execution.createdAt),
+                ...timestamp(execution.startedAt ?? execution.createdAt, userTimeZone),
                 duration: formatDuration(
                   execution.startedAt,
                   execution.completedAt,
@@ -564,8 +569,8 @@ export default async function AutomationRulePage({
                 id: check.id,
                 status: check.status,
                 agent: check.agent?.name ?? `Agent ${check.agentId}`,
-                checked: check.checkedAt ? timestamp(check.checkedAt) : null,
-                pendingUntil: formatAbsolute(check.expiresAt),
+                checked: check.checkedAt ? timestamp(check.checkedAt, userTimeZone) : null,
+                pendingUntil: formatAbsolute(check.expiresAt, userTimeZone),
                 policyHash: check.policyHash,
                 checksum: check.checksum,
               }))}

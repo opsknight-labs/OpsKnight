@@ -5,6 +5,8 @@ import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, XCircle } from 'l
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 import type { BindingReadiness } from '@/lib/runbooks/binding-readiness';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { formatDateTime } from '@/lib/timezone';
 
 const STATE_STYLE = {
   CONFIGURATION_VALID: 'border-emerald-500/30 bg-emerald-500/5',
@@ -25,6 +27,7 @@ export default function RuleConfigurationCheck({
 }: {
   action: () => Promise<BindingReadiness>;
 }) {
+  const { userTimeZone } = useTimezone();
   const [result, setResult] = useState<BindingReadiness>();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -70,10 +73,17 @@ export default function RuleConfigurationCheck({
             </span>
             <time
               dateTime={result.checkedAt}
-              title={result.checkedAt}
+              title={formatDateTime(result.checkedAt, userTimeZone, {
+                format: 'datetime',
+                includeTimeZone: true,
+              })}
               className="text-xs text-muted-foreground tabular-nums"
             >
-              Checked {new Date(result.checkedAt).toLocaleTimeString()}
+              Checked{' '}
+              {formatDateTime(result.checkedAt, userTimeZone, {
+                format: 'time',
+                includeTimeZone: true,
+              })}
             </time>
           </p>
           {result.checks.length > 0 && (

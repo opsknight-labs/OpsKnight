@@ -2,7 +2,19 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, KeyRound, Terminal } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Boxes,
+  CheckCircle2,
+  Cpu,
+  KeyRound,
+  Layers,
+  Server,
+  ShieldCheck,
+  Terminal,
+} from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -13,10 +25,47 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
-import { Pill } from '../ui/primitives';
 import { ActionForm, ConfirmAction, SubmitButton } from '../RunbookControls';
 import { formatDateTime } from '@/lib/timezone';
 import { revokeAgentAction, updateSchedulingLabelsAction } from '@/app/(app)/runbooks/actions';
+import { cn } from '@/lib/utils';
+
+function getCapabilityIcon(type?: string) {
+  switch (type) {
+    case 'KUBERNETES':
+      return <Boxes className="h-4 w-4 text-emerald-500" aria-hidden="true" />;
+    case 'DOCKER':
+    case 'PODMAN':
+      return <Layers className="h-4 w-4 text-blue-500" aria-hidden="true" />;
+    case 'SYSTEMD':
+      return <Cpu className="h-4 w-4 text-violet-500" aria-hidden="true" />;
+    case 'BASH':
+      return <Terminal className="h-4 w-4 text-amber-500" aria-hidden="true" />;
+    case 'LINUX_DIAGNOSTICS':
+      return <Activity className="h-4 w-4 text-teal-500" aria-hidden="true" />;
+    default:
+      return <Server className="h-4 w-4 text-primary" aria-hidden="true" />;
+  }
+}
+
+function getCapabilityDescription(type?: string, name?: string) {
+  switch (type) {
+    case 'KUBERNETES':
+      return 'Orchestrate in-cluster workloads, scale deployments, rollout status & pod telemetry.';
+    case 'DOCKER':
+      return 'Manage containers, inspect runtime health, read logs, and restart services.';
+    case 'PODMAN':
+      return 'Manage rootless containers and query container pod state.';
+    case 'SYSTEMD':
+      return 'Inspect service unit state, start, stop, and restart host services.';
+    case 'BASH':
+      return 'Execute shell commands constrained by local allowlist regex patterns.';
+    case 'LINUX_DIAGNOSTICS':
+      return 'Read-only host diagnostics for CPU, memory, disk, network, and journal logs.';
+    default:
+      return `Runtime executor capability for ${name || 'actions'}.`;
+  }
+}
 
 export type AgentItemData = {
   id: string;
@@ -90,7 +139,10 @@ export function AgentDetailDrawer({
               <span className="text-muted-foreground block text-[11px]">Heartbeat</span>
               <span className="font-semibold text-foreground">
                 {agent.lastHeartbeatAt
-                  ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' })
+                  ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, {
+                      format: 'datetime',
+                      includeTimeZone: true,
+                    })
                   : 'Never received'}
               </span>
             </div>
@@ -119,71 +171,401 @@ export function AgentDetailDrawer({
             </div>
           </div>
 
-          {/* Runtime Capability Report */}
-          <div className="space-y-3">
-            <h4 className="flex items-center gap-1.5 text-sm font-semibold">
-              <Terminal className="h-4 w-4 text-primary" aria-hidden="true" />
-              <span>Runtime capabilities & readiness</span>
-            </h4>
+          {/* Runtime Environment & Capabilities Section */}
+          {(() => {
+            const report = Array.isArray(agent.capabilityReport)
+              ? agent.capabilityReport.filter(
+                  (
+                    entry
+                  ): entry is {
+                    name: string;
+                    type: string;
+                    configured: boolean;
+                    available: boolean;
+                    reason?: string | null;
+                  } => Boolean(entry && typeof entry === 'object' && !Array.isArray(entry))
+                )
+              : [];
 
-            {/* Configured Capabilities Pills */}
-            <div className="flex flex-wrap gap-1.5" aria-label="Configured capabilities">
-              {Array.isArray(agent.capabilities) &&
-                agent.capabilities
-                  .filter((v): v is string => typeof v === 'string')
-                  .map(v => (
+            const activeCapabilities = report.filter(e => e.configured && e.available);
+            const unavailableCapabilities = report.filter(e => e.configured && !e.available);
+            const outOfScopeCapabilities = report.filter(e => !e.configured);
+
+            const activeTypes = new Set(activeCapabilities.map(e => e.type));
+            const activeNames = new Set(activeCapabilities.map(e => e.name));
+            const labelsStr = JSON.stringify(agent.labels || {}).toLowerCase();
+            const nameLower = (agent.name || '').toLowerCase();
+            const platformLower = (agent.platform || '').toLowerCase();
+            const agentCaps = Array.isArray(agent.capabilities)
+              ? agent.capabilities.map(c => String(c).toUpperCase())
+              : [];
+
+            // Fallback for older or third-party agents that report agent.capabilities but omit capabilityReport
+            const fallbackCapabilities: Array<{
+              name: string;
+              type: string;
+              configured: boolean;
+              available: boolean;
+              reason?: string | null;
+            }> =
+              report.length === 0 && agentCaps.length > 0
+                ? agentCaps.map(cap => {
+                    const rawType = cap.replace(/^RUNBOOK_/, '');
+                    const type = rawType === 'DOCKER_RUNTIME' ? 'DOCKER' : rawType;
+                    const name =
+                      rawType === 'LINUX_DIAGNOSTICS'
+                        ? 'Linux diagnostics'
+                        : rawType === 'DOCKER_RUNTIME'
+                          ? 'Docker'
+                          : rawType === 'KUBERNETES'
+                            ? 'Kubernetes'
+                            : rawType === 'SYSTEMD'
+                              ? 'Systemd'
+                              : rawType === 'PODMAN'
+                                ? 'Podman'
+                                : rawType === 'BASH'
+                                  ? 'Bash'
+                                  : rawType.charAt(0) + rawType.slice(1).toLowerCase();
+                    return {
+                      name,
+                      type,
+                      configured: true,
+                      available: true,
+                      reason: null,
+                    };
+                  })
+                : [];
+
+            const displayedActiveCapabilities =
+              activeCapabilities.length > 0 ? activeCapabilities : fallbackCapabilities;
+
+            const isK8s =
+              activeTypes.has('KUBERNETES') ||
+              fallbackCapabilities.some(c => c.type === 'KUBERNETES') ||
+              labelsStr.includes('kubernetes') ||
+              labelsStr.includes('"tier":"kubernetes"') ||
+              labelsStr.includes('cluster') ||
+              nameLower.includes('k8s') ||
+              nameLower.includes('kube') ||
+              platformLower.includes('k8s') ||
+              platformLower.includes('kube');
+
+            const isPodman =
+              activeNames.has('Podman') ||
+              activeTypes.has('PODMAN') ||
+              fallbackCapabilities.some(c => c.name === 'Podman') ||
+              labelsStr.includes('podman') ||
+              nameLower.includes('podman');
+
+            const isDocker =
+              ((activeTypes.has('DOCKER') || fallbackCapabilities.some(c => c.type === 'DOCKER')) &&
+                !isPodman) ||
+              labelsStr.includes('docker') ||
+              nameLower.includes('docker');
+
+            const isSystemd =
+              activeTypes.has('SYSTEMD') ||
+              fallbackCapabilities.some(c => c.type === 'SYSTEMD') ||
+              labelsStr.includes('systemd') ||
+              labelsStr.includes('db-replica') ||
+              labelsStr.includes('database') ||
+              nameLower.includes('db') ||
+              nameLower.includes('systemd');
+
+            const runtimeEnv = isK8s
+              ? {
+                  title: 'Kubernetes Cluster Target',
+                  badge: 'Kubernetes',
+                  icon: <Boxes className="h-3.5 w-3.5 text-emerald-500" />,
+                  badgeClassName:
+                    'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                  description:
+                    'Configured with Kubernetes cluster management access (in-cluster ServiceAccount or configured kubeconfig).',
+                  platformDetails: [
+                    {
+                      label: 'Cluster Access',
+                      value: (agent.labels as Record<string, string> | undefined)?.cluster
+                        ? `Cluster: ${(agent.labels as Record<string, string>).cluster}`
+                        : 'Cluster Context / Kubeconfig',
+                    },
+                    { label: 'Workload Targets', value: 'Deployments, StatefulSets, Pods, Events' },
+                    { label: 'Remediation', value: 'Rollout restart, scale, status validation' },
+                    { label: 'Safety Policy', value: 'Approval-gated non-idempotent writes' },
+                  ],
+                }
+              : isDocker
+                ? {
+                    title: 'Docker Container Host',
+                    badge: 'Docker Host',
+                    icon: <Layers className="h-3.5 w-3.5 text-blue-500" />,
+                    badgeClassName:
+                      'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                    description:
+                      'Connected to local Docker daemon socket (/var/run/docker.sock) for container lifecycle and health management.',
+                    platformDetails: [
+                      { label: 'Daemon Socket', value: '/var/run/docker.sock' },
+                      { label: 'Target Scope', value: 'Policy allowlisted containers' },
+                      { label: 'Remediation', value: 'Inspect, healthcheck, start, restart' },
+                      { label: 'Safety Policy', value: 'Approval-gated restarts' },
+                    ],
+                  }
+                : isPodman
+                  ? {
+                      title: 'Podman Container Host',
+                      badge: 'Podman Host',
+                      icon: <Layers className="h-3.5 w-3.5 text-purple-500" />,
+                      badgeClassName:
+                        'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                      description:
+                        'Running with Podman rootless container runtime and SELinux volume isolation.',
+                      platformDetails: [
+                        { label: 'Runtime Engine', value: 'Podman (Rootless / Rootful)' },
+                        { label: 'Isolation', value: 'SELinux volume labeling (:Z)' },
+                        { label: 'Remediation', value: 'Inspect, logs, start, restart' },
+                        { label: 'Safety Policy', value: 'Approval-gated restarts' },
+                      ],
+                    }
+                  : isSystemd
+                    ? {
+                        title: 'Native Linux Host (Systemd)',
+                        badge: 'Systemd Host',
+                        icon: <Cpu className="h-3.5 w-3.5 text-violet-500" />,
+                        badgeClassName:
+                          'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
+                        description:
+                          'Running directly on a Linux host with systemd service unit management capabilities.',
+                        platformDetails: [
+                          { label: 'Init System', value: 'systemd (systemctl / journalctl)' },
+                          { label: 'Target Units', value: 'Policy allowlisted service units' },
+                          { label: 'Remediation', value: 'Status check, start, restart' },
+                          { label: 'Safety Policy', value: 'Approval-gated service restarts' },
+                        ],
+                      }
+                    : {
+                        title: `${agent.platform || 'Linux'} Agent Host`,
+                        badge: 'Agent Host',
+                        icon: <Server className="h-3.5 w-3.5 text-primary" />,
+                        badgeClassName:
+                          'border-muted-foreground/30 bg-muted/40 text-muted-foreground',
+                        description: 'Standard runtime execution agent.',
+                        platformDetails: [],
+                      };
+
+            return (
+              <div className="space-y-4">
+                {/* Runtime Environment Identity Card */}
+                <div className="rounded-xl border bg-card/60 p-4 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Hosting Environment
+                    </span>
                     <Badge
-                      key={v}
                       variant="outline"
-                      className="rounded-full bg-muted/40 font-mono text-[10px] font-medium"
+                      className={cn(
+                        'font-mono text-[10px] font-semibold gap-1.5',
+                        runtimeEnv.badgeClassName
+                      )}
                     >
-                      {v.replace('RUNBOOK_', '').replaceAll('_', ' ')}
+                      {runtimeEnv.icon}
+                      <span>{runtimeEnv.badge}</span>
                     </Badge>
-                  ))}
-            </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      {runtimeEnv.title}
+                    </h4>
+                    <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                      {runtimeEnv.description}
+                    </p>
+                  </div>
 
-            {/* Detailed capability breakdown rows */}
-            {Array.isArray(agent.capabilityReport) && agent.capabilityReport.length > 0 ? (
-              <div className="divide-y rounded-xl border bg-card">
-                {agent.capabilityReport.map((entry, index) => {
-                  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
-                  const e = entry as {
-                    name?: string;
-                    type?: string;
-                    configured?: boolean;
-                    available?: boolean;
-                    reason?: string;
-                  };
-                  return (
-                    <div key={index} className="p-3 text-xs space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-foreground">
-                          {String(e.name || 'Runtime')}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <Pill tone="neutral">
-                            {e.configured ? 'Configured' : 'Not configured'}
-                          </Pill>
-                          <Pill tone={e.available ? 'success' : 'warning'}>
-                            {e.available ? 'Available' : 'Unavailable'}
-                          </Pill>
+                  {/* Platform-Specific Technical Specifications */}
+                  {runtimeEnv.platformDetails.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-border/50 text-xs">
+                      {runtimeEnv.platformDetails.map((detail, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg bg-muted/30 px-2.5 py-1.5 border border-border/40 space-y-0.5"
+                        >
+                          <span className="block text-[10px] uppercase font-mono text-muted-foreground font-semibold">
+                            {detail.label}
+                          </span>
+                          <span
+                            className="block text-[11px] font-medium text-foreground truncate"
+                            title={detail.value}
+                          >
+                            {detail.value}
+                          </span>
                         </div>
-                      </div>
-                      {e.reason && (
-                        <p className="text-muted-foreground text-[11px] font-mono break-words">
-                          {e.reason}
-                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-muted-foreground/70">Node/Host:</span>
+                      <span className="text-foreground">{agent.hostname || 'Not reported'}</span>
+                    </span>
+                    <span>•</span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-muted-foreground/70">OS:</span>
+                      <span className="text-foreground">{agent.platform || 'Not reported'}</span>
+                    </span>
+                    <span>•</span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-muted-foreground/70">Agent:</span>
+                      <span className="text-foreground">
+                        {agent.version ? `v${agent.version}` : 'Not reported'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Active Capabilities Header & Cards */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <Terminal className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                      <span>Active Capabilities ({displayedActiveCapabilities.length})</span>
+                    </h4>
+                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                      {displayedActiveCapabilities.length > 0
+                        ? activeCapabilities.length > 0
+                          ? 'Policy & Runtime Verified'
+                          : 'Effective Capabilities'
+                        : 'No Active Capabilities'}
+                    </span>
+                  </div>
+
+                  {displayedActiveCapabilities.length > 0 ? (
+                    <div className="space-y-2">
+                      {displayedActiveCapabilities.map((e, index) => (
+                        <div
+                          key={index}
+                          className="rounded-xl border bg-card p-3 shadow-2xs space-y-1.5 hover:border-border transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/60 text-foreground ring-1 ring-border/50">
+                                {getCapabilityIcon(e.type)}
+                              </div>
+                              <span className="font-semibold text-xs text-foreground">
+                                {String(e.name || 'Runtime')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>Available</span>
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-normal pl-9">
+                            {getCapabilityDescription(e.type, e.name)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground space-y-2">
+                      <p>
+                        {agentCaps.length > 0
+                          ? `Awaiting agent heartbeat check-in to verify ${agentCaps.length} registered ${agentCaps.length === 1 ? 'capability' : 'capabilities'}.`
+                          : 'No active capabilities reported or verified on this agent.'}
+                      </p>
+                      {agentCaps.length > 0 && (
+                        <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+                          {agentCaps.map(cap => (
+                            <Badge
+                              key={cap}
+                              variant="outline"
+                              className="font-mono text-[10px] bg-muted/40 text-muted-foreground border-border/60"
+                            >
+                              {cap.replace(/^RUNBOOK_/, '')}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+
+                {/* Configured but Unavailable Warning (if any) */}
+                {unavailableCapabilities.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Configuration Warnings ({unavailableCapabilities.length})</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {unavailableCapabilities.map((e, index) => (
+                        <div
+                          key={index}
+                          className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between font-semibold text-foreground">
+                            <div className="flex items-center gap-1.5">
+                              {getCapabilityIcon(e.type)}
+                              <span>{e.name}</span>
+                            </div>
+                            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300 font-medium">
+                              Binary Unavailable
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-amber-800 dark:text-amber-300 font-mono">
+                            {e.reason ||
+                              'Configured in policy, but binary or daemon access is unavailable.'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Out-of-Scope / Policy Disabled Capabilities (Collapsed Disclosure) */}
+                {outOfScopeCapabilities.length > 0 && (
+                  <details className="group rounded-xl border bg-muted/20 p-3 text-xs">
+                    <summary className="flex cursor-pointer items-center justify-between font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring select-none">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground/80" />
+                        <span>
+                          {outOfScopeCapabilities.length} unconfigured{' '}
+                          {outOfScopeCapabilities.length === 1 ? 'capability' : 'capabilities'} (
+                          {outOfScopeCapabilities.map(e => e.name).join(', ')})
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground/70 group-open:hidden">
+                        Show
+                      </span>
+                      <span className="text-[10px] font-mono text-muted-foreground/70 hidden group-open:inline">
+                        Hide
+                      </span>
+                    </summary>
+                    <div className="mt-2.5 divide-y divide-border/40 border-t border-border/40 pt-2 space-y-1">
+                      <p className="text-[10px] text-muted-foreground mb-1.5">
+                        These capabilities are intentionally disabled in this agent&apos;s local
+                        policy configuration:
+                      </p>
+                      {outOfScopeCapabilities.map((e, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between py-1.5 text-[11px]"
+                        >
+                          <div className="flex items-center gap-2 text-foreground font-mono">
+                            <span className="text-muted-foreground">•</span>
+                            <span>{e.name}</span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">
+                            Disabled by local policy
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No granular capability report registered by Agent.
-              </p>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Trusted Signing Identities */}
           <div className="space-y-2 rounded-xl border bg-muted/30 p-4 text-xs">

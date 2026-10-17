@@ -197,7 +197,10 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
               Enrolled {formatDateTime(agent.createdAt, userTimeZone, { format: 'date' })} •
               Hostname: {agent.hostname || 'Awaiting handshake'} • Last Heartbeat:{' '}
               {agent.lastHeartbeatAt
-                ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' })
+                ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, {
+                    format: 'datetime',
+                    includeTimeZone: true,
+                  })
                 : 'None recorded'}
             </p>
           </div>

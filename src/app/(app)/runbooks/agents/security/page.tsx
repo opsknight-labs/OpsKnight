@@ -165,7 +165,10 @@ export default async function RunbookFleetSecurityPage() {
                         {key.state === 'RETIRING' && key.retiredAt && (
                           <p className="text-muted-foreground">
                             Grace ends{' '}
-                            {formatDateTime(key.retiredAt, userTimeZone, { format: 'datetime' })}
+                            {formatDateTime(key.retiredAt, userTimeZone, {
+                              format: 'datetime',
+                              includeTimeZone: true,
+                            })}
                           </p>
                         )}
                       </div>

@@ -83,7 +83,10 @@ export function HealthDetailCards({
               label="Last successful cycle"
               value={
                 localWorker.lastSuccessAt
-                  ? formatDateTime(localWorker.lastSuccessAt, userTimeZone, { format: 'datetime' })
+                  ? formatDateTime(localWorker.lastSuccessAt, userTimeZone, {
+                      format: 'datetime',
+                      includeTimeZone: true,
+                    })
                   : 'Not observed'
               }
             />
@@ -165,6 +168,7 @@ export function HealthDetailCards({
                       {agent.lastHeartbeatAt
                         ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, {
                             format: 'datetime',
+                            includeTimeZone: true,
                           })
                         : 'never received'}{' '}
                       · {agent.spoolDepth} pending · {agent.deadLetterDepth} dead letter

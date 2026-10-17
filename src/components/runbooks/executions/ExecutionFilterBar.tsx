@@ -22,6 +22,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/shadcn/collapsible';
 import { Label } from '@/components/ui/shadcn/label';
+import { useTimezone } from '@/contexts/TimezoneContext';
 import { cn } from '@/lib/utils';
 
 export type ExecutionFilterBarProps = {
@@ -50,6 +51,7 @@ const TIME_RANGE_OPTIONS = [
 export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { userTimeZone } = useTimezone();
 
   const [searchTerm, setSearchTerm] = useState(query.q ?? '');
   const status = query.status ?? 'all';
@@ -189,6 +191,21 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               className="h-9 w-[9.5rem] rounded-xl text-xs"
               aria-label="To date"
             />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => applyFilters({ timeRange: 'custom', from: fromDate, to: toDate })}
+              className="h-9 rounded-xl px-3 text-xs font-semibold"
+            >
+              Apply
+            </Button>
+            <span
+              className="text-[11px] text-muted-foreground tabular-nums"
+              title={`Date bounds evaluated in your timezone: ${userTimeZone}`}
+            >
+              ({userTimeZone})
+            </span>
           </div>
         )}
 

@@ -345,7 +345,10 @@ export default async function IncidentRunbooks({
                       </Link>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         Version {execution.runbookVersion.version} · started{' '}
-                        {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}{' '}
+                        {formatDateTime(execution.createdAt, userTimeZone, {
+                          format: 'datetime',
+                          includeTimeZone: true,
+                        })}{' '}
                         · {execution.binding ? execution.binding.name : 'Ad-hoc run'}
                       </p>
                     </div>

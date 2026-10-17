@@ -103,6 +103,7 @@ export default function ServiceRunbooks({
   targetQuery = '',
   rulesState = 'active',
   rulesSearch = '',
+  userTimeZone,
 }: {
   pagination?: { after?: string; nextCursor?: string; hasNext: boolean };
   catalogQuery?: string;
@@ -117,6 +118,7 @@ export default function ServiceRunbooks({
   canManage: boolean;
   loadError?: boolean;
   loadErrors?: RunbookResource[];
+  userTimeZone?: string;
 }) {
   const ids = useId();
   const [searchQuery, setSearchQuery] = useState(rulesSearch);
@@ -431,6 +433,7 @@ export default function ServiceRunbooks({
                 canManage={canManage}
                 configurationAvailable={configurationAvailable}
                 loadErrors={loadErrors}
+                userTimeZone={userTimeZone}
               />
             )
           )}

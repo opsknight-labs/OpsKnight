@@ -407,6 +407,8 @@ export default function AgentSetupInstructions({
           <Tabs defaultValue="compose" className="space-y-4">
             <TabsList className="h-auto flex-wrap gap-1 rounded-xl bg-muted/60 p-1 border border-border/60">
               <TabsTrigger value="compose">Compose</TabsTrigger>
+              <TabsTrigger value="docker">Docker</TabsTrigger>
+              <TabsTrigger value="podman">Podman</TabsTrigger>
               <TabsTrigger value="swarm">Swarm</TabsTrigger>
               <TabsTrigger value="helm">Helm</TabsTrigger>
               <TabsTrigger value="kustomize">Kustomize</TabsTrigger>
@@ -414,6 +416,12 @@ export default function AgentSetupInstructions({
             </TabsList>
             <TabsContent value="compose">
               <SetupBlock disabled={copyBlocked} value={snippets.compose} />
+            </TabsContent>
+            <TabsContent value="docker">
+              <SetupBlock disabled={copyBlocked} value={snippets.docker} />
+            </TabsContent>
+            <TabsContent value="podman">
+              <SetupBlock disabled={copyBlocked} value={snippets.podman} />
             </TabsContent>
             <TabsContent value="swarm">
               <SetupBlock disabled={copyBlocked} value={snippets.swarm} />

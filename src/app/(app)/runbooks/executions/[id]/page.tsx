@@ -122,7 +122,9 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
   const navigation = await getRunbookNavigationSummary();
   const now = new Date();
   const fmt = (value: Date | null, fallback: string) =>
-    value ? formatDateTime(value, userTimeZone, { format: 'datetime' }) : fallback;
+    value
+      ? formatDateTime(value, userTimeZone, { format: 'datetime', includeTimeZone: true })
+      : fallback;
   const durationText = formatDurationSeconds(
     executionDurationSeconds(execution.startedAt, execution.completedAt, now)
   );
