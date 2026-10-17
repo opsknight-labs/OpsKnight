@@ -298,7 +298,7 @@ export function FormSelect({
         id={name}
         aria-label={label}
         className={cn(
-          'h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus-visible:ring-2 focus-visible:ring-primary/40 focus:ring-2 focus:ring-primary/40 transition-colors',
+          'h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus-visible:ring-2 focus-visible:ring-primary/40 focus:ring-2 focus:ring-primary/40 transition-colors disabled:opacity-90 disabled:text-foreground disabled:bg-muted/30',
           className
         )}
       >

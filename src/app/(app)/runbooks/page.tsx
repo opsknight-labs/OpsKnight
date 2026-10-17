@@ -16,6 +16,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
+import { ImportRunbookDialog } from '@/components/runbooks/detail/ImportRunbookDialog';
 import { LibraryFilterBar } from '@/components/runbooks/library/LibraryFilterBar';
 import {
   RunbookPagination,
@@ -170,7 +171,12 @@ export default async function RunbooksPage({
               <Clock className="h-3 w-3" aria-hidden="true" />
               {userTimeZone}
             </span>
-            {canManage && <CreateRunbookDialog teams={teams} />}
+            {canManage && (
+              <div className="flex items-center gap-2">
+                <ImportRunbookDialog />
+                <CreateRunbookDialog teams={teams} />
+              </div>
+            )}
           </div>
         }
         stats={[

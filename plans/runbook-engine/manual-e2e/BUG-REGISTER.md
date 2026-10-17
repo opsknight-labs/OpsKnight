@@ -47,7 +47,7 @@ This register catalogs all functional, architectural, and user-experience defect
   1. A prominent **Hosting Environment Banner** indicating the primary runtime platform (e.g. `Kubernetes In-Cluster Agent` or `Docker Container Host`).
   2. An **Active Capabilities Grid** showcasing platform-relevant, verified capabilities (`KUBERNETES`, `BASH`, `LINUX_DIAGNOSTICS`).
   3. A collapsed **Out-of-Scope Capabilities Disclosure** clearly separating out unconfigured runtimes without visual alarm.
-- **Regression Verification**: Validated in Chrome CDP session. Screenshots `41_test_cert_agent_drawer.png` and `12_agent_detail_drawer.png` confirm clean enterprise presentation.
+- **Regression Verification**: Validated in live browser session: out-of-scope capabilities render as clean neutral indicators while active platform capabilities display green availability pills without visual alarm.
 
 ---
 
@@ -58,4 +58,124 @@ This register catalogs all functional, architectural, and user-experience defect
 - **Symptom**: When pasting workflow step definitions into the Advanced JSON Editor programmatically or via high-speed automated inputs, the editor textarea displayed updated JSON text, but React state retained previous draft state, preventing `Apply JSON to builder` from syncing.
 - **Root Cause**: React caches the input value tracker on `HTMLTextAreaElement.prototype`. Direct DOM property updates do not trigger React's synthetic input listener.
 - **Resolution**: Updated input handling to leverage native property setter overrides (`Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set`) combined with dispatched synthetic `input` and `change` events.
-- **Regression Verification**: Validated bidirectional synchronization across 10 step types and 7 input types. Screenshots `25_advanced_json_editor_bidirectional_sync.png` and `48_k8s_draft_v2_steps.png` demonstrate flawless sync.
+- **Regression Verification**: Validated bidirectional synchronization across 10 step types and 7 input types. Advanced JSON round-trips correctly and reflects instantaneously in builder tabs.
+
+---
+
+### Bug #6: Exposed Integration Credentials and Plaintext Token Display (P0 Security)
+
+- **Component**: `src/components/incident/IncidentRunbooks.tsx`, `src/components/runbooks/builder/StepNavigator.tsx`
+- **Severity**: Critical (P0 Security)
+- **Symptom**: Integration webhooks with query parameters (e.g. `?integrationKey=...`) and HTTP action headers displayed sensitive tokens in step summary chips in plain text.
+- **Root Cause**: UI step summaries directly reflected raw URL targets and query strings without sanitization.
+- **Resolution**: Implemented credential sanitization and URL masking in `StepNavigator.tsx` and `IncidentRunbooks.tsx`. Rotated and revoked all disclosed Prometheus integration keys from the live control plane and replaced with fresh securely-scoped keys.
+- **Regression Verification**: Live incident pages and workflow steps now display masked URLs (`.../api/integrations/...`) and scrubbed token parameters.
+
+---
+
+### Bug #7: Agent Token Pre-Staging Execution Contract (P1 Agent Architecture)
+
+- **Component**: `src/lib/runbooks/agent-setup-commands.ts`
+- **Severity**: High (P1 Deployment Reliability)
+- **Symptom**: Generated Docker and Podman enrollment commands failed on fresh hosts because the container entrypoint tried to run the agent rather than executing shell token pre-staging commands. Additionally, `stat -c %g` failed on macOS/BSD hosts during socket permission checks.
+- **Root Cause**: `docker run` was called without `--entrypoint sh`, and `stat` used Linux-only `-c` flags.
+- **Resolution**: Added `--entrypoint sh` to all token pre-staging commands, implemented portable socket group detection (`stat -c %g ... || stat -f %g ...`), and added explicit warnings when local policy files are not found.
+- **Regression Verification**: Validated across Docker and Podman setup generation tests in `tests/lib/runbooks/agent-deployment.test.ts` (30/30 unit tests passing).
+
+---
+
+### Bug #8: Executor Healthcheck Polling Timeout & Error Propagation (P1 Runtime Engine)
+
+- **Component**: `agent/src/executor.ts`
+- **Severity**: High (P1 Execution Engine)
+- **Symptom**: Agent healthcheck polling loop defaulted to fallback timeouts rather than respecting step-configured `timeoutSeconds`. Retry loop failures did not propagate detailed exit codes and stderr.
+- **Root Cause**: Executor referenced `attempt.step.config.timeoutSeconds` instead of checking `attempt.step.timeoutSeconds` first, and final failure return object omitted error propagation fields.
+- **Resolution**: Updated polling to check `attempt.step.timeoutSeconds ?? attempt.step.config.timeoutSeconds` and propagated detailed error messages and status on retry exhaustion.
+- **Regression Verification**: Added unit tests in `tests/lib/runbooks/agent-executor.test.ts` verifying step-level timeout override and retry status capture.
+
+---
+
+### Bug #9: Incident Step Timeline Stagnation & Tab Visibility (P2 UI / Reliability)
+
+- **Component**: `src/components/incident/runbooks/IncidentRunbookRefreshButton.tsx`, `src/components/incident/IncidentRunbooks.tsx`
+- **Severity**: Medium (P2 Usability & Operator Trust)
+- **Symptom**: Active incident runbook executions required manual browser reloads to see step progress. Background polling wasted requests when browser tabs were hidden. `BASH` step classification allowed accidental automatic write execution.
+- **Root Cause**: Lack of automated interval polling on in-flight executions, absence of tab visibility awareness (`document.visibilityState`), and `BASH` being classified as idempotent.
+- **Resolution**: Added `IncidentRunbookRefreshButton` with 4-second auto-refresh polling while executions are active, paused polling when tab is hidden, added in-flight deduplication, and classified `BASH` steps strictly as `NON_IDEMPOTENT`.
+- **Regression Verification**: Verified live in browser and validated with unit test suite in `tests/components/incident-runbook-refresh-timeline.test.tsx`.
+
+---
+
+### Bug #10: Kubernetes Causal Inconsistency in Physical Recovery Documentation
+
+- **Component**: `plans/runbook-engine/manual-e2e/PHYSICAL-RECOVERY.md`
+- **Severity**: Medium (Audit Integrity & Operational Accuracy)
+- **Symptom**: Physical evidence narrative conflated zero-replica scale recovery (`.spec.replicas: 0 -> 2`) with rolling restarts (`rollout-restart`).
+- **Root Cause**: Rolling restart rotates degraded/stale pods on an active ReplicaSet (`844c84d7b6` -> `677cf4dfc5`) by updating the pod template, but does not alter `.spec.replicas: 0`. Scaling requires the distinct `scale` sub-command bounded by `kubernetesMaxReplicas`.
+- **Resolution**: Reconciled physical recovery receipts in `PHYSICAL-RECOVERY.md` to accurately delineate `rollout-restart` (pod replacement with 2/2 ready) from `scale` (replica count mutation), eliminating causal inconsistencies.
+- **Regression Verification**: Audited command sequences and verified exact Kubernetes controller semantics in `PHYSICAL-RECOVERY.md`.
+
+---
+
+### Bug #11: Agent Setup Shell Safety & Container Isolation Hardening (P1 Deployment)
+
+- **Component**: `src/lib/runbooks/agent-setup-commands.ts`
+- **Severity**: High (P1 Deployment Security & Shell Robustness)
+- **Symptom**: Policy file paths with null bytes or newlines could lead to shell injection; whitespace in paths caused word-splitting; missing policy files silently ran the agent with default permissions; container execution lacked defense-in-depth isolation flags.
+- **Root Cause**: Naive string concatenation in shell scripts and unvalidated policy paths.
+- **Resolution**: Added strict input validation rejecting `\0`, `\r`, and `\n` in `policyPath`. Implemented safe bash array expansion (`docker_extra_args`, `podman_extra_args`) with POSIX-compliant nounset guards. Added hard exit (`exit 1`) when policy file does not exist. Added container hardening flags: `--security-opt=no-new-privileges:true`, `--cap-drop=ALL`, `--read-only`, and `--tmpfs /tmp:rw,noexec,nosuid,size=16m`.
+- **Regression Verification**: Validated across unit tests in `tests/lib/runbooks/agent-deployment.test.ts` verifying whitespace handling, rejection of malicious paths, missing policy exit, and security flags.
+
+---
+
+### Bug #12: Bash Action Step Summary Credential Exposure (P1 Security)
+
+- **Component**: `src/components/runbooks/builder/StepNavigator.tsx`, `src/components/incident/IncidentRunbooks.tsx`
+- **Severity**: High (P1 Security & UI Masking)
+- **Symptom**: Script summaries rendered snippets of raw bash commands, risking token/password leakage via positional arguments, environment variables, or commands not caught by keyword regexes.
+- **Root Cause**: Client components attempted regex pattern matching against arbitrary shell scripts to display script excerpts.
+- **Resolution**: Removed raw command string rendering and fragile regex keyword matching entirely. Replaced with safe, deterministic descriptor `Execute script (${interpreter})` (e.g. `Execute script (bash)`).
+- **Regression Verification**: Adversarial unit tests in `tests/components/incident-runbook-refresh-timeline.test.tsx` asserting secret tokens never appear in rendered chip summaries.
+
+---
+
+### Bug #13: Executor Polling Effective Deadlines & Lease Loss Handling (P1 Runtime Engine)
+
+- **Component**: `agent/src/executor.ts`
+- **Severity**: High (P1 Runtime Engine)
+- **Symptom**: Healthcheck polling enforced an artificial 5-second floor on timeouts (`Math.max(5, ...)`), ignoring sub-5-second step timeouts; polling loops did not distinguish between authority lease loss (`LEASE_LOST`) and graceful agent shutdown (`AGENT_SHUTDOWN`).
+- **Root Cause**: Hardcoded minimum timeout of 5s and generic abort handling without reason inspection.
+- **Resolution**: Reduced minimum timeout floor to 1s (`Math.max(1, ...)`). Added explicit abort signal inspection: transitions to `UNKNOWN` with `errorCode: 'LEASE_LOST'` on lease loss, and transitions to `CANCELLED` on `AGENT_SHUTDOWN`. Added dependency injection for runner in unit testing.
+- **Regression Verification**: Unit tests in `tests/lib/runbooks/agent-executor.test.ts` validating effective timeout handling, `LEASE_LOST` transition to `UNKNOWN`, and shutdown handling.
+
+---
+
+### Bug #14: Open Incident Auto-Refresh Polling Prior to Execution Dispatch (P2 UI / Responsiveness)
+
+- **Component**: `src/components/incident/runbooks/IncidentRunbookRefreshButton.tsx`
+- **Severity**: Medium (P2 Operator Experience)
+- **Symptom**: When an incident was open but no runbook executions had started yet, the incident page did not auto-refresh, requiring operators to manually reload the page to see newly dispatched executions.
+- **Root Cause**: Auto-refresh polling condition strictly checked for `hasActiveExecutions` (running/pending executions), omitting `isIncidentOpen` with zero executions.
+- **Resolution**: Extended polling logic to check `isIncidentOpen` with a 6-second interval when no active executions exist yet, auto-fetching state until remediation executes.
+- **Regression Verification**: Unit tests in `tests/components/incident-runbook-refresh-timeline.test.tsx` verifying polling intervals for open incidents and active executions.
+
+---
+
+### Bug #15: Podman Inspect CLI Go Template Incompatibility in Agent Executor (P1 Compatibility / Failure in Rootless Runtime)
+
+- **Component**: `agent/src/executor.ts`
+- **Severity**: High (P1 Execution Failure)
+- **Symptom**: Step execution for `DOCKER` `inspect` actions failed with exit code 125 when targeted at an agent using the Podman runtime (`runtime: 'podman'`), displaying: `Error: template: inspect:1:18: executing "inspect" at <.Id>: can't evaluate field Id in type interface {}`.
+- **Root Cause**: The inspect format string used `{{json .Id}}`. Docker accepts both `.Id` and `.ID` with Go template `json`. In Podman (e.g. Podman 5.4.2), `.Id` is unexported or unmapped in the JSON inspection struct, causing template execution to fail with exit code 125. Podman strictly requires `.ID`.
+- **Regression Verification**: Verified on real Linux host (`opsknight-cluster-control-plane`) with Podman 5.4.2 during Runbook execution `cmvc7w4xt01n9r4wgcswc6x2l` (`E2E Native Systemd and Podman Suite` v1), where Step 5 (`inspect`) succeeded in 4s with exit code 0.
+
+---
+
+### Bug #16: Runbook Library Missing Import Dialog Trigger (Low / UX Completeness)
+
+- **Component**: `src/app/(app)/runbooks/page.tsx`, `src/components/runbooks/detail/ImportRunbookDialog.tsx`
+- **Severity**: Low (UX Completeness & Lifecycle Continuity)
+- **Symptom**: Operators could not initiate the Runbook Import dialog from the primary Runbooks library overview page, despite `ImportRunbookDialog` being implemented and tested as a standalone component.
+- **Root Cause**: `ImportRunbookDialog` was omitted from the hero actions layout in `src/app/(app)/runbooks/page.tsx`, only exposing `CreateRunbookDialog`.
+- **Resolution**: Integrated `<ImportRunbookDialog />` alongside `<CreateRunbookDialog />` in the library header actions with capability guard (`canManage`).
+- **Regression Verification**: Verified clean rendering, dialog modal launch, format validation for invalid files, and full JSON import.

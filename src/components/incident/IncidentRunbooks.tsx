@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { ActionForm, ConfirmAction, SubmitButton } from '@/components/runbooks/RunbookControls';
 import AdhocRunbookLauncher from './runbooks/AdhocRunbookLauncher';
 import AutomationSafetyMeter from './runbooks/AutomationSafetyMeter';
+import IncidentRunbookRefreshButton from './runbooks/IncidentRunbookRefreshButton';
 import {
   approveIncidentRunbookStepAction,
   cancelIncidentRunbookAction,
@@ -57,7 +58,7 @@ export default async function IncidentRunbooks({
   )
     return null;
   await assertCanViewIncident(incidentId);
-  const [bindings, executions, suggestions] = await Promise.all([
+  const [bindings, executions, suggestions, incidentRecord] = await Promise.all([
     prisma.serviceAutomationRule.findMany({
       where: { serviceId, enabled: true, detachedAt: null },
       include: { runbook: true, runbookVersion: true },
@@ -93,7 +94,12 @@ export default async function IncidentRunbooks({
       },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.incident.findUnique({
+      where: { id: incidentId },
+      select: { status: true },
+    }),
   ]);
+  const isIncidentOpen = incidentRecord ? incidentRecord.status !== 'RESOLVED' : true;
   const canExecute = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_EXECUTE);
   const [budget, usedWrites, usedExecutions, usedNonIdempotent] = await Promise.all([
     prisma.systemSettings.findUnique({
@@ -310,7 +316,15 @@ export default async function IncidentRunbooks({
               ? `${activeCount} in progress. Approve or cancel steps right here.`
               : 'Recent runbook executions for this incident.'
           }
-          actions={<Pill tone={activeCount > 0 ? 'info' : 'neutral'}>{executions.length}</Pill>}
+          actions={
+            <div className="flex items-center gap-2">
+              <IncidentRunbookRefreshButton
+                hasActiveExecutions={activeCount > 0}
+                isIncidentOpen={isIncidentOpen}
+              />
+              <Pill tone={activeCount > 0 ? 'info' : 'neutral'}>{executions.length}</Pill>
+            </div>
+          }
           bodyClassName="space-y-3 p-4"
         >
           {executions.length === 0 && (
@@ -458,58 +472,136 @@ export default async function IncidentRunbooks({
                           : execution.resolvedTargetAgentPool
                             ? `Pool: ${execution.resolvedTargetAgentPool.name}`
                             : 'OpsKnight control plane';
+                        const actionSummary = formatStepActionSummary(step.type, step.config);
                         return (
-                          <li key={step.id} className="relative pb-4 pl-9 last:pb-0">
-                            {!lastStep && (
+                          <li key={step.id} className="flex items-start gap-3.5 pb-5 last:pb-0">
+                            {/* Icon column: fixed width, vertically centered line */}
+                            <div className="relative flex flex-col items-center shrink-0">
                               <span
                                 aria-hidden="true"
                                 className={cn(
-                                  'absolute left-[11px] top-7 bottom-0 w-0.5 rounded-full',
-                                  tone === 'success' ? 'bg-emerald-500/40' : 'bg-border'
+                                  'flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-inset shadow-2xs z-10',
+                                  // eslint-disable-next-line security/detect-object-injection -- tone is a finite value from stepTone(), not a request key.
+                                  TONE_SURFACE[tone]
                                 )}
-                              />
-                            )}
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                'absolute left-0 top-0.5 flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-inset',
-                                // eslint-disable-next-line security/detect-object-injection -- tone is a finite value from stepTone(), not a request key.
-                                TONE_SURFACE[tone]
+                              >
+                                <StepStatusIcon status={step.status} className="h-3.5 w-3.5" />
+                              </span>
+                              {!lastStep && (
+                                <span
+                                  aria-hidden="true"
+                                  className={cn(
+                                    'w-0.5 grow min-h-[2.5rem] my-1 rounded-full',
+                                    tone === 'success' ? 'bg-emerald-500/40' : 'bg-border'
+                                  )}
+                                />
                               )}
-                            >
-                              <StepStatusIcon status={step.status} className="h-3.5 w-3.5" />
-                            </span>
-                            <div className="min-w-0">
+                            </div>
+
+                            {/* Content column */}
+                            <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-sm font-medium">{step.name}</span>
-                                {verified && <Pill tone="success">Verified recovery</Pill>}
+                                <span className="text-sm font-semibold text-foreground tracking-tight">
+                                  {step.name}
+                                </span>
+                                {verified && (
+                                  <Pill tone="success" icon={ShieldCheck}>
+                                    Verified recovery
+                                  </Pill>
+                                )}
                                 <Pill tone={RISK_TONE[step.riskClass] ?? 'neutral'}>
                                   {step.riskClass.replaceAll('_', ' ')}
                                 </Pill>
                               </div>
-                              <div className="mt-1 break-words text-xs text-muted-foreground">
-                                {step.status.replaceAll('_', ' ')}
-                                {step.outputPreview ? (
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                <span
+                                  className={cn(
+                                    'font-medium',
+                                    step.status === 'SUCCEEDED'
+                                      ? 'text-emerald-700 dark:text-emerald-300'
+                                      : step.status === 'FAILED'
+                                        ? 'text-rose-700 dark:text-rose-300'
+                                        : step.status === 'WAITING_APPROVAL'
+                                          ? 'text-amber-700 dark:text-amber-300'
+                                          : 'text-muted-foreground'
+                                  )}
+                                >
+                                  {step.status.replaceAll('_', ' ')}
+                                </span>
+                                {actionSummary && (
                                   <>
-                                    {' · '}
-                                    <span className="font-mono">
-                                      {step.outputPreview.slice(0, 160)}
+                                    <span className="text-muted-foreground/40">·</span>
+                                    <span className="font-mono text-[11px] bg-muted/60 text-muted-foreground px-1.5 py-0.5 rounded border border-border/50">
+                                      {actionSummary}
                                     </span>
                                   </>
-                                ) : null}
+                                )}
+                                {step.timeoutSeconds && (
+                                  <>
+                                    <span className="text-muted-foreground/40">·</span>
+                                    <span className="tabular-nums">
+                                      {step.timeoutSeconds}s timeout
+                                    </span>
+                                  </>
+                                )}
                               </div>
+                              {step.outputPreview ? (
+                                <div className="mt-1 rounded-md bg-muted/30 p-2 font-mono text-[11px] text-muted-foreground break-all border border-border/40">
+                                  {step.outputPreview.slice(0, 200)}
+                                </div>
+                              ) : null}
                               {step.attempts[0]?.preState && step.attempts[0]?.postState && (
-                                <details className="mt-2 rounded-lg border bg-card p-3 text-xs">
-                                  <summary className="cursor-pointer font-medium">
-                                    Recovery evidence · {verified ? 'verified' : 'not verified'}
+                                <details className="mt-2.5 rounded-xl border border-border/70 bg-card/60 dark:bg-card/40 backdrop-blur-xs text-xs overflow-hidden shadow-2xs group">
+                                  <summary className="flex cursor-pointer select-none items-center justify-between px-3.5 py-2 font-medium hover:bg-muted/30 transition-colors">
+                                    <span className="flex items-center gap-2">
+                                      <ChevronRight
+                                        className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90"
+                                        aria-hidden
+                                      />
+                                      <span>Recovery evidence</span>
+                                      <span className="text-[11px] font-normal text-muted-foreground">
+                                        ({differences.length}{' '}
+                                        {differences.length === 1 ? 'change' : 'changes'} captured)
+                                      </span>
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        'text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border',
+                                        verified
+                                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                          : 'bg-muted text-muted-foreground border-border/60'
+                                      )}
+                                    >
+                                      {verified ? '✓ Verified' : 'Not verified'}
+                                    </span>
                                   </summary>
-                                  <ul className="mt-2 space-y-1 font-mono">
-                                    {differences.map(change => (
-                                      <li className="break-words" key={change.field}>
-                                        {change.field}: {change.before} → {change.after}
-                                      </li>
-                                    ))}
-                                  </ul>
+                                  <div className="border-t border-border/60 bg-muted/15 p-3 space-y-2">
+                                    {differences.length > 0 ? (
+                                      <ul className="space-y-1.5 font-mono text-[11px]">
+                                        {differences.map(change => {
+                                          const formatted = formatEvidenceDifference(change);
+                                          return (
+                                            <li
+                                              key={change.field}
+                                              className="flex flex-col sm:flex-row sm:items-baseline gap-1 break-words rounded-md bg-background/80 px-2.5 py-1.5 border border-border/40"
+                                            >
+                                              <span className="font-semibold text-foreground/80 shrink-0">
+                                                {formatted.label}:
+                                              </span>
+                                              <span className="text-muted-foreground">
+                                                {formatted.display}
+                                              </span>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground italic">
+                                        No metric deviations between pre-state and post-state
+                                        snapshots.
+                                      </p>
+                                    )}
+                                  </div>
                                 </details>
                               )}
                               {step.outputArtifactId &&
@@ -525,14 +617,26 @@ export default async function IncidentRunbooks({
                                   </Link>
                                 )}
                               {step.status === 'WAITING_APPROVAL' && (
-                                <div className="mt-3 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-3.5">
-                                  <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200">
-                                    <ShieldAlert className="h-4 w-4" aria-hidden />
-                                    Needs your approval
-                                  </p>
-                                  <dl className="grid gap-x-4 gap-y-1.5 rounded-md border bg-background/80 p-3 text-xs sm:grid-cols-[8rem_1fr]">
-                                    <dt className="text-muted-foreground">Action</dt>
-                                    <dd>{step.type.replaceAll('_', ' ')}</dd>
+                                <div className="mt-3.5 space-y-3.5 rounded-xl border border-amber-500/50 bg-amber-500/[0.08] p-4 shadow-xs">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                      <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+                                      </span>
+                                      <ShieldAlert
+                                        className="h-4 w-4 text-amber-600 dark:text-amber-400"
+                                        aria-hidden
+                                      />
+                                      Action requires operator approval
+                                    </p>
+                                    <Pill tone="warning">Awaiting decision</Pill>
+                                  </div>
+                                  <dl className="grid gap-x-4 gap-y-1.5 rounded-lg border border-amber-500/20 bg-background/90 p-3 text-xs sm:grid-cols-[8rem_1fr]">
+                                    <dt className="text-muted-foreground font-medium">Action</dt>
+                                    <dd className="font-semibold text-foreground">
+                                      {step.type.replaceAll('_', ' ')}
+                                    </dd>
                                     {approvalPlan.map(([label, value]) => (
                                       <div key={label} className="contents">
                                         <dt className="text-muted-foreground">{label}</dt>
@@ -540,9 +644,11 @@ export default async function IncidentRunbooks({
                                       </div>
                                     ))}
                                     <dt className="text-muted-foreground">Execution target</dt>
-                                    <dd>{approvalTarget}</dd>
+                                    <dd className="font-medium text-foreground">
+                                      {approvalTarget}
+                                    </dd>
                                     <dt className="text-muted-foreground">Version</dt>
-                                    <dd>
+                                    <dd className="font-mono">
                                       v{execution.runbookVersion.version} ·{' '}
                                       <span className="font-mono">
                                         {execution.definitionChecksum.slice(0, 12)}…
@@ -552,19 +658,21 @@ export default async function IncidentRunbooks({
                                     <dd className="tabular-nums">{step.timeoutSeconds ?? 300}s</dd>
                                   </dl>
                                   {canApprove ? (
-                                    <ConfirmAction
-                                      action={approveIncidentRunbookStepAction.bind(
-                                        null,
-                                        incidentId,
-                                        execution.id,
-                                        step.id,
-                                        digest
-                                      )}
-                                      title={`Approve ${step.name}?`}
-                                      description={`Authorize the exact displayed plan for ${execution.resolvedTargetAgent?.name ?? execution.resolvedTargetAgentPool?.name ?? 'OpsKnight control plane'}. Risk: ${step.riskClass.replaceAll('_', ' ')}. The action may change the target; inspect its resolved parameters before approving.`}
-                                      label="Approve exact plan"
-                                      variant="default"
-                                    />
+                                    <div className="pt-1">
+                                      <ConfirmAction
+                                        action={approveIncidentRunbookStepAction.bind(
+                                          null,
+                                          incidentId,
+                                          execution.id,
+                                          step.id,
+                                          digest
+                                        )}
+                                        title={`Approve ${step.name}?`}
+                                        description={`Authorize the exact displayed plan for ${execution.resolvedTargetAgent?.name ?? execution.resolvedTargetAgentPool?.name ?? 'OpsKnight control plane'}. Risk: ${step.riskClass.replaceAll('_', ' ')}. The action may change the target; inspect its resolved parameters before approving.`}
+                                        label="Approve exact plan"
+                                        variant="default"
+                                      />
+                                    </div>
                                   ) : (
                                     <p className="text-xs text-muted-foreground">
                                       A user with runbook approval permission must approve this
@@ -627,4 +735,101 @@ function SectionHint({ children }: { children: ReactNode }) {
       {children}
     </p>
   );
+}
+
+function formatStepActionSummary(type: string, config: unknown): string {
+  if (!config || typeof config !== 'object') return type.replaceAll('_', ' ');
+  const c = config as Record<string, unknown>;
+  switch (type) {
+    case 'KUBERNETES': {
+      const act = String(c.action ?? '');
+      const res = String(c.resource ?? 'deployment');
+      const name = c.name ? `/${String(c.name)}` : '';
+      const ns = c.namespace ? ` (${String(c.namespace)})` : '';
+      return `${act} ${res}${name}${ns}`.trim();
+    }
+    case 'DOCKER': {
+      const act = String(c.action ?? '');
+      const container = c.container ? ` container ${String(c.container)}` : '';
+      return `${act}${container}`.trim();
+    }
+    case 'SYSTEMD': {
+      const act = String(c.action ?? '');
+      const unit = c.unit ? ` ${String(c.unit)}` : '';
+      return `${act}${unit}`.trim();
+    }
+    case 'HTTP': {
+      const method = String(c.method ?? 'GET');
+      let sanitizedUrl = '';
+      if (c.url) {
+        try {
+          const parsed = new URL(String(c.url));
+          sanitizedUrl = ` ${parsed.origin}${parsed.pathname}`;
+        } catch {
+          sanitizedUrl = ` ${String(c.url).split('?')[0]}`;
+        }
+      }
+      return `${method}${sanitizedUrl}`.trim();
+    }
+    case 'BASH': {
+      const interpreter = c.interpreter ? String(c.interpreter) : 'bash';
+      return `Execute script (${interpreter})`;
+    }
+    case 'LINUX_DIAGNOSTICS': {
+      const diag = c.diagnostic ? String(c.diagnostic) : '';
+      return diag ? `diagnostic: ${diag}` : 'Linux diagnostics';
+    }
+    case 'CONDITION': {
+      const field = c.field ? String(c.field) : '';
+      const op = c.operator ? String(c.operator).toLowerCase().replace('_', ' ') : '';
+      const val = c.value !== undefined ? String(c.value) : '';
+      if (field && op) {
+        return `If ${field} ${op}${val ? ` ${val}` : ''}`.trim();
+      }
+      return 'If condition';
+    }
+    case 'WAIT': {
+      return `wait ${String(c.durationSeconds ?? 0)}s`;
+    }
+    default:
+      return type.replaceAll('_', ' ');
+  }
+}
+
+function formatEvidenceDifference(change: { field: string; before: string; after: string }) {
+  try {
+    if (change.field === 'kubernetesState') {
+      const b = JSON.parse(change.before);
+      const a = JSON.parse(change.after);
+      return {
+        label: 'Kubernetes Pods',
+        display: `Ready replicas: ${b.ready ?? 0}/${b.desired ?? 0} → ${a.ready ?? 0}/${a.desired ?? 0} (gen ${b.observedGeneration ?? 0} → ${a.observedGeneration ?? 0})`,
+      };
+    }
+    if (change.field === 'memory') {
+      const b = JSON.parse(change.before);
+      const a = JSON.parse(change.after);
+      const bMB = Math.round(Number(b.usedBytes) / (1024 * 1024));
+      const aMB = Math.round(Number(a.usedBytes) / (1024 * 1024));
+      const totGB = (Number(a.totalBytes) / (1024 * 1024 * 1024)).toFixed(1);
+      return {
+        label: 'Memory usage',
+        display: `${bMB} MB → ${aMB} MB (of ${totGB} GB total)`,
+      };
+    }
+    if (change.field === 'cpu') {
+      const b = JSON.parse(change.before);
+      const a = JSON.parse(change.after);
+      return {
+        label: 'CPU load',
+        display: `1m load: ${b.load1 ?? '-'} → ${a.load1 ?? '-'} (${a.cores ?? 1} cores)`,
+      };
+    }
+  } catch {
+    // not JSON, fall through
+  }
+  return {
+    label: change.field.replace(/([A-Z])/g, ' $1').toLowerCase(),
+    display: `${change.before} → ${change.after}`,
+  };
 }

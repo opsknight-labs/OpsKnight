@@ -173,6 +173,11 @@ export default function StepNavigator({
                         <em className="font-normal text-muted-foreground">Untitled step</em>
                       )}
                     </h4>
+                    {getStepSummary(step) && (
+                      <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground/90">
+                        {getStepSummary(step)}
+                      </p>
+                    )}
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <TypeIcon className="h-3 w-3" aria-hidden="true" />
@@ -307,4 +312,68 @@ export default function StepNavigator({
       )}
     </nav>
   );
+}
+
+export function getStepSummary(step: RunbookStepDefinition): string {
+  const config = (step.config || {}) as Record<string, unknown>;
+  switch (step.type) {
+    case 'KUBERNETES': {
+      const act = String(config.action ?? 'get');
+      const res = String(config.resource ?? 'deployment');
+      const name = config.name ? `/${String(config.name)}` : '';
+      const ns = config.namespace ? ` (${String(config.namespace)})` : '';
+      return `${act} ${res}${name}${ns}`.trim();
+    }
+    case 'DOCKER': {
+      const act = String(config.action ?? 'start');
+      const container = config.container ? ` container ${String(config.container)}` : '';
+      return `${act}${container}`.trim();
+    }
+    case 'SYSTEMD': {
+      const act = String(config.action ?? 'status');
+      const unit = config.unit ? ` ${String(config.unit)}` : '';
+      return `${act}${unit}`.trim();
+    }
+    case 'HTTP': {
+      const method = String(config.method ?? 'GET');
+      let sanitizedUrl = '';
+      if (config.url) {
+        try {
+          const parsed = new URL(String(config.url));
+          sanitizedUrl = ` ${parsed.origin}${parsed.pathname}`;
+        } catch {
+          sanitizedUrl = ` ${String(config.url).split('?')[0]}`;
+        }
+      }
+      return `${method}${sanitizedUrl}`.trim();
+    }
+    case 'BASH': {
+      const interpreter = config.interpreter ? String(config.interpreter) : 'bash';
+      return `Execute script (${interpreter})`;
+    }
+    case 'LINUX_DIAGNOSTICS': {
+      const diag = config.diagnostic ? String(config.diagnostic) : '';
+      return diag ? `diagnostic: ${diag}` : 'Linux diagnostics';
+    }
+    case 'WAIT': {
+      return `Wait ${String(config.durationSeconds ?? 10)}s`;
+    }
+    case 'CONDITION': {
+      const field = config.field ? String(config.field) : '';
+      const op = config.operator ? String(config.operator).toLowerCase().replace('_', ' ') : '';
+      const val = config.value !== undefined ? String(config.value) : '';
+      if (field && op) {
+        return `If ${field} ${op}${val ? ` ${val}` : ''}`.trim();
+      }
+      return 'If condition';
+    }
+    case 'MANUAL': {
+      return 'Manual responder instructions';
+    }
+    case 'APPROVAL': {
+      return 'Approval gate';
+    }
+    default:
+      return '';
+  }
 }

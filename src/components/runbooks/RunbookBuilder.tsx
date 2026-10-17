@@ -54,7 +54,7 @@ import { cloneStepRecursively, newBuilderStep } from '@/lib/runbooks/builder';
 import { flattenSteps, referencedStepInputKeys } from '@/lib/runbooks/shared-definition';
 import { ActionForm, FormSelect, SubmitButton, type RunbookFormAction } from './RunbookControls';
 
-import StepNavigator from './builder/StepNavigator';
+import StepNavigator, { getStepSummary } from './builder/StepNavigator';
 import StepEditor from './builder/StepEditor';
 import ReadinessBar from './builder/ReadinessBar';
 import { validateRunbook } from './builder/validation';
@@ -432,7 +432,7 @@ export default function RunbookBuilder({
   const selectedRisk = selectedStep ? RISK_META[selectedStep.riskClass] : null;
 
   const builderView = (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-32">
       <ReadinessBar
         definition={definition}
         errorCount={errorCount}
@@ -443,14 +443,14 @@ export default function RunbookBuilder({
         onNavigateToInputs={handleNavigateToInputs}
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-12 md:gap-6">
         <div
           className={cn(
-            'min-w-0 lg:col-span-4 xl:col-span-3',
-            mobileEditorOpen ? 'hidden lg:block' : 'block'
+            'min-w-0 md:col-span-5 lg:col-span-4 xl:col-span-3',
+            mobileEditorOpen ? 'hidden md:block' : 'block'
           )}
         >
-          <div className="lg:sticky lg:top-4">
+          <div className="md:sticky md:top-4">
             <StepNavigator
               steps={definition.steps}
               stepIdentities={stepIdentities}
@@ -463,7 +463,7 @@ export default function RunbookBuilder({
               onRemoveStep={removeStep}
               onAddStep={addStep}
             />
-            <details className="group mt-3 hidden px-1 text-xs text-muted-foreground lg:block">
+            <details className="group mt-3 hidden px-1 text-xs text-muted-foreground md:block">
               <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <ChevronRight
                   className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
@@ -481,15 +481,15 @@ export default function RunbookBuilder({
 
         <div
           className={cn(
-            'min-w-0 lg:col-span-8 xl:col-span-9',
-            mobileEditorOpen ? 'block' : 'hidden lg:block'
+            'min-w-0 md:col-span-7 lg:col-span-8 xl:col-span-9',
+            mobileEditorOpen ? 'block' : 'hidden md:block'
           )}
         >
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="mb-3 min-h-11 gap-1.5 lg:hidden"
+            className="mb-3 min-h-11 gap-1.5 md:hidden"
             onClick={() => setMobileEditorOpen(false)}
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -510,12 +510,19 @@ export default function RunbookBuilder({
                     >
                       Step {selectedStepIndex + 1}: {selectedStep.name || 'Untitled step'}
                     </h2>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {selectedCatalog.label} ·{' '}
-                      <span className="font-mono">{selectedStep.key}</span> · step{' '}
-                      <span className="tabular-nums">{selectedStepIndex + 1}</span> of{' '}
-                      <span className="tabular-nums">{definition.steps.length}</span>
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {selectedCatalog.label} ·{' '}
+                        <span className="font-mono">{selectedStep.key}</span> · step{' '}
+                        <span className="tabular-nums">{selectedStepIndex + 1}</span> of{' '}
+                        <span className="tabular-nums">{definition.steps.length}</span>
+                      </p>
+                      {getStepSummary(selectedStep) && (
+                        <span className="rounded-md border border-border/70 bg-muted/60 px-2 py-0.5 font-mono text-[11px] text-foreground">
+                          {getStepSummary(selectedStep)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">

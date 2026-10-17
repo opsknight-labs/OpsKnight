@@ -5,7 +5,7 @@ import { authenticatedContactReady } from './contact-readiness';
 // Identity and policy paths come only from the local operator's environment, never API input.
 import { uptime } from 'node:os';
 import { sanitizeOutputText } from './output-safety';
-import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentApiError, AgentClient, enrollAgent } from './client';
@@ -26,10 +26,13 @@ import {
 } from './recovery';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 
-const baseUrl = process.env.OPSKNIGHT_URL?.trim();
+const baseUrl = (process.env.OPSKNIGHT_URL ?? process.env.OPSKNIGHT_AGENT_URL)?.trim();
 const dataDirectory = process.env.OPSKNIGHT_AGENT_DATA_DIR ?? '/var/lib/opsknight-agent';
 const identityPath = process.env.OPSKNIGHT_AGENT_IDENTITY_FILE ?? `${dataDirectory}/identity.json`;
-const policyPath = process.env.OPSKNIGHT_AGENT_POLICY_FILE ?? '/etc/opsknight-agent/policy.json';
+const policyPath =
+  process.env.OPSKNIGHT_AGENT_POLICY_FILE ??
+  process.env.OPSKNIGHT_AGENT_POLICY_PATH ??
+  '/etc/opsknight-agent/policy.json';
 const executionPublicKey = (() => {
   try {
     return parseTrustedSigningKeys(
@@ -116,7 +119,10 @@ async function loadIdentity(
     return JSON.parse(await readFile(targetPath, 'utf8')) as AgentIdentity;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    const tokenFile = process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE?.trim();
+    const tokenFile = (
+      process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE ??
+      process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH
+    )?.trim();
     const token = tokenFile
       ? (await readFile(tokenFile, 'utf8')).trim()
       : process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN?.trim();
@@ -125,6 +131,13 @@ async function loadIdentity(
     if (!effectiveUrl) throw new Error('OPSKNIGHT_URL is required to enroll agent.');
     const identity = await enrollAgent(effectiveUrl, token);
     await saveIdentity(identity, targetPath);
+    if (tokenFile) {
+      try {
+        await unlink(tokenFile);
+      } catch {
+        /* Token file may be read-only (e.g. mounted Secret) */
+      }
+    }
     return identity;
   }
 }
