@@ -256,6 +256,7 @@ interface Operation {
   method: 'get' | 'post' | 'patch' | 'put' | 'delete';
   path: string;
   summary: string;
+  description?: string;
   body?: Schema;
   status?: number;
   paginated?: boolean;
@@ -265,6 +266,8 @@ const operations: Operation[] = [
     method: 'post',
     path: '/services/{id}/automation/publish',
     summary: 'Publish a validated immutable service automation version',
+    description:
+      'Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE returns 409: switch to SHADOW or DISABLED first and explicitly activate the new version after review. Replayed requests return the original committed result, even with a different concrete If-Match value; use a new idempotency key for a new conditional write.',
     body: object({ expectedActiveVersionId: { type: ['string', 'null'] } }, [
       'expectedActiveVersionId',
     ]),
@@ -459,6 +462,7 @@ export function enterpriseOpenApiPaths() {
               : 'Incidents',
       ],
       summary: operation.summary,
+      ...(operation.description ? { description: operation.description } : {}),
       parameters: [...parameters, ...queryParameters],
       ...(operation.body
         ? {

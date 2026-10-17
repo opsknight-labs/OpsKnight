@@ -16,12 +16,13 @@ describe('truthful capability inventory', () => {
     );
     for (const capability of API_CAPABILITY_CATALOG) {
       expect(capability.explanation.length).toBeGreaterThan(30);
-      expect(capability.operationIds.length > 0).toBe(capability.status === 'available');
+      expect(capability.operationIds.length > 0).toBe(
+        ['available', 'partial'].includes(capability.status)
+      );
     }
   });
   it('retains explicit security and product decisions for unfinished plan areas', () => {
     for (const id of [
-      'service-automation',
       'identity-lifecycle',
       'runbook-agents',
       'runbook-secrets',
@@ -34,11 +35,28 @@ describe('truthful capability inventory', () => {
         'not-supported'
       );
     }
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'service-automation')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining(['getAutomationDraft', 'publishAutomationVersion']),
+    });
     for (const id of ['agent-protocol', 'scim', 'provider-oauth', 'sensitive-maintenance']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
         'restricted'
       );
     }
+  });
+  it('keeps publication identity separate from the draft validator', () => {
+    const spec = getOpenApiV2Spec() as {
+      paths: Record<
+        string,
+        Record<string, { responses: Record<string, { headers?: Record<string, unknown> }> }>
+      >;
+    };
+    expect(
+      spec.paths['/services/{id}/automation/publish'].post.responses['200'].headers?.ETag
+    ).toBeUndefined();
   });
   it('documents required preconditions and their error statuses', () => {
     const spec = getOpenApiV2Spec() as {

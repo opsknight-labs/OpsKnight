@@ -100,6 +100,24 @@ async function setup(policy: Snapshot = snapshot, mode: 'SHADOW' | 'LIVE' = 'LIV
   });
   return { service, actor, draft, version };
 }
+// Fixture cutovers follow the same explicit safety transitions required of operators.
+async function publishReviewedReplacement(input: Parameters<typeof publishVersion>[0]) {
+  await changeMode({
+    serviceId: input.serviceId,
+    actorId: input.actorId,
+    mode: 'DISABLED',
+    expectedActiveVersionId: input.expectedActiveVersionId,
+  });
+  const version = await publishVersion(input);
+  await changeMode({
+    serviceId: input.serviceId,
+    actorId: input.actorId,
+    mode: 'LIVE',
+    expectedActiveVersionId: version.id,
+    acknowledgeNoShadow: true,
+  });
+  return version;
+}
 async function ingest(serviceId: string, incoming: EventPayload = event) {
   return processIntegrationEvent({
     serviceId,
@@ -311,7 +329,7 @@ describe('service automation transaction certification', () => {
       snapshot: emptySnapshot,
       expectedRevision: draft.revision,
     });
-    await publishVersion({
+    await publishReviewedReplacement({
       serviceId: service.id,
       actorId: actor.id,
       expectedRevision: nextDraft.revision,
@@ -751,7 +769,7 @@ describe('service automation transaction certification', () => {
       snapshot: emptySnapshot,
       expectedRevision: draft.revision,
     });
-    await publishVersion({
+    await publishReviewedReplacement({
       serviceId: service.id,
       actorId: actor.id,
       expectedRevision: next.revision,
@@ -842,6 +860,21 @@ describe('service automation transaction certification', () => {
         data: { routeType: 'SERVICE_DEFAULT' },
       })
     ).rejects.toThrow();
+    await expect(
+      publishVersion({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedRevision: draft.revision,
+        expectedActiveVersionId: version.id,
+        sourceVersionId: version.id,
+      })
+    ).rejects.toThrow('Switch automation to SHADOW or DISABLED');
+    await changeMode({
+      serviceId: service.id,
+      actorId: actor.id,
+      mode: 'SHADOW',
+      expectedActiveVersionId: version.id,
+    });
     const restored = await publishVersion({
       serviceId: service.id,
       actorId: actor.id,
@@ -957,7 +990,7 @@ describe('service automation transaction certification', () => {
     expect(await db.incident.count()).toBe(1);
     expect(await db.incidentAutomationDecision.count()).toBe(1);
   });
-  it('publishes while alerts arrive without mixing versions inside a decision', async () => {
+  it('rejects LIVE publication during ingestion and preserves the qualified routing version', async () => {
     const { service, actor, draft, version } = await setup();
     const updated = {
       ...snapshot,
@@ -973,24 +1006,26 @@ describe('service automation transaction certification', () => {
       snapshot: updated,
       expectedRevision: draft.revision,
     });
-    const publish = publishVersion({
-      serviceId: service.id,
-      actorId: actor.id,
-      expectedRevision: saved.revision,
-      expectedActiveVersionId: version.id,
-    });
+    const publish = expect(
+      publishVersion({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedRevision: saved.revision,
+        expectedActiveVersionId: version.id,
+      })
+    ).rejects.toThrow('Switch automation to SHADOW or DISABLED');
     await Promise.all([
       publish,
       ...Array.from({ length: 30 }, (_, i) =>
         ingest(service.id, { ...event, dedup_key: `publish-race-${i}` })
       ),
     ]);
-    const next = await publish;
+    await publish;
     const decisions = await db.incidentAutomationDecision.findMany();
     expect(decisions).toHaveLength(30);
     for (const decision of decisions) {
-      expect([version.id, next.id]).toContain(decision.versionId);
-      expect(decision.finalPriority).toBe(decision.versionId === version.id ? 'P1' : 'P3');
+      expect(decision.versionId).toBe(version.id);
+      expect(decision.finalPriority).toBe('P1');
       expect(decision.routeType).toBe('NO_ESCALATION');
     }
   });
@@ -1123,7 +1158,7 @@ describe('service automation transaction certification', () => {
       snapshot: updated,
       expectedRevision: draft.revision,
     });
-    await publishVersion({
+    await publishReviewedReplacement({
       serviceId: service.id,
       actorId: actor.id,
       expectedRevision: saved.revision,
@@ -1206,7 +1241,7 @@ describe('service automation transaction certification', () => {
           ),
         },
       });
-      await publishVersion({
+      await publishReviewedReplacement({
         serviceId: service.id,
         actorId: actor.id,
         expectedRevision: saved.revision,

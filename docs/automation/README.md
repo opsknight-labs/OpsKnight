@@ -545,3 +545,17 @@ policy and requires registry access during pod startup. Its probes check the idl
 runner process and writable work volume; the certification harness separately
 checks actual k6 exit status and measured results. `RuntimeDefault` seccomp remains
 enabled. Image identity verification in the certification harness still applies.
+
+### Version cutover safety
+
+Publishing or restoring a version while the service is LIVE returns a conflict.
+Switch to SHADOW or DISABLED first, publish the version, then explicitly activate
+LIVE after reviewing that version's validation and shadow evidence (or recording
+the existing explicit acknowledgments). Publication keeps the selected non-LIVE
+mode. Emergency disable remains available. Restoring an older version creates a
+new immutable version through the same guarded publication command.
+
+The publication API accepts the draft ETag and returns immutable version identity
+without an ETag. Read the draft again for its next mutation validator. Replays
+return the original committed result; a different concrete If-Match header does
+not turn the same key and body into a new write.

@@ -34,6 +34,8 @@ export interface MutationContract {
   idempotency: IdempotencyMode;
   concurrency: ConcurrencyMode;
   preconditionRequired?: boolean;
+  /** False when a conditional command returns a different resource than its input validator. */
+  responseEtag?: boolean;
   rationale: string;
 }
 
@@ -52,6 +54,7 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'POST /api/v2/services/[id]/automation/publish': {
     idempotency: 'required',
     concurrency: 'etag',
+    responseEtag: false,
     preconditionRequired: true,
     rationale:
       'Publish checks the draft ETag and active version under the canonical service lock, validating dependencies and committing immutable version, audit and replay together.',
