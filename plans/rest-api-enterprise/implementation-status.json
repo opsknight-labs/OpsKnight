@@ -65,7 +65,7 @@
       "phase": 4,
       "status": "pending",
       "remaining": [
-        "Integrate and certify the separate service-automation evaluator before exposing management",
+        "Complete combined-branch automation certification and the remaining effective configuration, validation, simulation, mode, restore, history and diagnostics APIs",
         "Integration setup/configuration/rotation/test/delete commands",
         "Notification preference and provider diagnostics contracts"
       ]
