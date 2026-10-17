@@ -155,7 +155,9 @@ export function commandFor(
             ? [
                 'inspect',
                 '--format',
-                '{{json .Id}} {{json .Name}} {{json .State.Status}} {{json .State.Running}} {{json .State.ExitCode}}',
+                config.runtime === 'podman'
+                  ? '{{json .ID}} {{json .Name}} {{json .State.Status}} {{json .State.Running}} {{json .State.ExitCode}}'
+                  : '{{json .Id}} {{json .Name}} {{json .State.Status}} {{json .State.Running}} {{json .State.ExitCode}}',
                 String(config.container),
               ]
             : action === 'health'

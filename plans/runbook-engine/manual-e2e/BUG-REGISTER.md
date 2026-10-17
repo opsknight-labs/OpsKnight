@@ -158,3 +158,14 @@ This register catalogs all functional, architectural, and user-experience defect
 - **Root Cause**: Auto-refresh polling condition strictly checked for `hasActiveExecutions` (running/pending executions), omitting `isIncidentOpen` with zero executions.
 - **Resolution**: Extended polling logic to check `isIncidentOpen` with a 6-second interval when no active executions exist yet, auto-fetching state until remediation executes.
 - **Regression Verification**: Unit tests in `tests/components/incident-runbook-refresh-timeline.test.tsx` verifying polling intervals for open incidents and active executions.
+
+---
+
+### Bug #15: Podman Inspect CLI Go Template Incompatibility in Agent Executor (P1 Compatibility / Failure in Rootless Runtime)
+
+- **Component**: `agent/src/executor.ts`
+- **Severity**: High (P1 Execution Failure)
+- **Symptom**: Step execution for `DOCKER` `inspect` actions failed with exit code 125 when targeted at an agent using the Podman runtime (`runtime: 'podman'`), displaying: `Error: template: inspect:1:18: executing "inspect" at <.Id>: can't evaluate field Id in type interface {}`.
+- **Root Cause**: The inspect format string used `{{json .Id}}`. Docker accepts both `.Id` and `.ID` with Go template `json`. In Podman (e.g. Podman 5.4.2), `.Id` is unexported or unmapped in the JSON inspection struct, causing template execution to fail with exit code 125. Podman strictly requires `.ID`.
+- **Resolution**: Updated `agent/src/executor.ts` to inspect with `{{json .ID}} ...` when `config.runtime === 'podman'` and `{{json .Id}} ...` otherwise.
+- **Regression Verification**: Verified on real Linux host (`opsknight-cluster-control-plane`) with Podman 5.4.2 during Runbook execution `cmvc7w4xt01n9r4wgcswc6x2l` (`E2E Native Systemd and Podman Suite` v1), where Step 5 (`inspect`) succeeded in 4s with exit code 0.
