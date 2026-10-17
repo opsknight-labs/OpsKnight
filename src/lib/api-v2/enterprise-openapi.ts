@@ -1,3 +1,4 @@
+import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import { MAX_SELECT_OPTIONS } from '@/lib/runbooks/input-options';
 import {
   RUNBOOK_INPUT_TYPES,
@@ -57,6 +58,19 @@ const authoringVersionSchema = object(
 );
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  ...AUTOMATION_SCHEMAS,
+  AutomationPublishedVersion: object(
+    { id, serviceId: id, versionNumber: { type: 'integer', minimum: 1 }, checksum: string() },
+    ['id', 'serviceId', 'versionNumber', 'checksum']
+  ),
+  AutomationSettings: object(
+    {
+      automationEnabled: { type: 'boolean' },
+      automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
+      automationSettingsRevision: integer,
+    },
+    ['automationEnabled', 'automationTraceRetentionDays', 'automationSettingsRevision']
+  ),
   IncidentWatcher: object({ id, incidentId: id, userId: id, role: string(), createdAt: date }, [
     'id',
     'incidentId',
@@ -239,7 +253,7 @@ const draftInput = object(
 );
 
 interface Operation {
-  method: 'get' | 'post' | 'patch' | 'delete';
+  method: 'get' | 'post' | 'patch' | 'put' | 'delete';
   path: string;
   summary: string;
   body?: Schema;
@@ -247,6 +261,38 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  {
+    method: 'post',
+    path: '/services/{id}/automation/publish',
+    summary: 'Publish a validated immutable service automation version',
+    body: object({ expectedActiveVersionId: { type: ['string', 'null'] } }, [
+      'expectedActiveVersionId',
+    ]),
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/draft',
+    summary: 'Read a service automation draft',
+  },
+  {
+    method: 'put',
+    path: '/services/{id}/automation/draft',
+    summary: 'Save a revision-protected automation draft',
+    body: automationDraftBody,
+  },
+  { method: 'get', path: '/settings/automation', summary: 'Read global automation settings' },
+  {
+    method: 'patch',
+    path: '/settings/automation',
+    summary: 'Update global automation settings',
+    body: object(
+      {
+        automationEnabled: { type: 'boolean' },
+        automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
+      },
+      ['automationEnabled', 'automationTraceRetentionDays']
+    ),
+  },
   {
     method: 'get',
     path: '/incidents/{id}/watchers',
@@ -404,11 +450,13 @@ export function enterpriseOpenApiPaths() {
     const pathItem = (paths[operation.path] ??= {});
     pathItem[operation.method] = {
       tags: [
-        operation.path.startsWith('/runbooks')
-          ? 'Runbooks'
-          : operation.path.startsWith('/schedules')
-            ? 'Schedules'
-            : 'Incidents',
+        operation.path.startsWith('/settings')
+          ? 'Settings'
+          : operation.path.startsWith('/runbooks')
+            ? 'Runbooks'
+            : operation.path.startsWith('/schedules')
+              ? 'Schedules'
+              : 'Incidents',
       ],
       summary: operation.summary,
       parameters: [...parameters, ...queryParameters],

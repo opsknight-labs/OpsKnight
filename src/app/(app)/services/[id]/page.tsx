@@ -6,6 +6,7 @@ import {
   type RunbookResource,
 } from '@/lib/runbooks/presentation/binding-contract';
 import prisma from '@/lib/prisma';
+import AutomationShell from '@/components/automation/AutomationShell';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
 type ClassificationPolicyWithRules = Prisma.IncidentClassificationPolicyGetPayload<{

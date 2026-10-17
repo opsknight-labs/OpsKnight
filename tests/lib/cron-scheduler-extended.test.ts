@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Existing dynamic scheduler mocks and parsed deployment fixtures use heterogeneous test-only shapes. */
 /**
  * Cron Scheduler Extended Tests
  *

@@ -87,6 +87,11 @@ export const API_SCOPES = {
   NOTIFICATIONS_WRITE: 'notifications:write',
   STATUS_PAGES_READ: 'status-pages:read',
   STATUS_PAGES_WRITE: 'status-pages:write',
+  AUTOMATION_READ: 'automation:read',
+  AUTOMATION_WRITE: 'automation:write',
+  AUTOMATION_PUBLISH: 'automation:publish',
+  AUTOMATION_SETTINGS_READ: 'automation-settings:read',
+  AUTOMATION_SETTINGS_WRITE: 'automation-settings:write',
   RUNBOOKS_READ: 'runbooks:read',
   RUNBOOKS_EXECUTE: 'runbooks:execute',
   RUNBOOKS_WRITE: 'runbooks:write',
@@ -104,6 +109,11 @@ export const API_SCOPES = {
 
 /** Infrastructure permissions are never implied by a broad administrator credential. */
 export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
+  API_SCOPES.AUTOMATION_READ,
+  API_SCOPES.AUTOMATION_WRITE,
+  API_SCOPES.AUTOMATION_PUBLISH,
+  API_SCOPES.AUTOMATION_SETTINGS_READ,
+  API_SCOPES.AUTOMATION_SETTINGS_WRITE,
   API_SCOPES.RUNBOOKS_WRITE,
   API_SCOPES.RUNBOOKS_PUBLISH,
   API_SCOPES.RUNBOOKS_EXECUTE,

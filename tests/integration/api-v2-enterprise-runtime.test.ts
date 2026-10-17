@@ -1,3 +1,12 @@
+import { POST as publishAutomationVersion } from '@/app/api/v2/services/[id]/automation/publish/route';
+import {
+  GET as getAutomationDraft,
+  PUT as saveAutomationDraft,
+} from '@/app/api/v2/services/[id]/automation/draft/route';
+import {
+  GET as readAutomationSettings,
+  PATCH as writeAutomationSettings,
+} from '@/app/api/v2/settings/automation/route';
 import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -927,5 +936,217 @@ describe('enterprise REST commands against PostgreSQL', () => {
         )
       ).status
     ).toBe(201);
+  });
+});
+
+describe('automation settings REST transaction certification', () => {
+  beforeEach(async () => {
+    if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
+      throw new Error('Dedicated test database required');
+    await resetDatabase();
+  }, 120_000);
+
+  it('requires explicit privilege and revision, with durable replay and canonical attribution', async () => {
+    const admin = await credential(['admin:manage']);
+    expect(
+      (
+        await call(
+          readAutomationSettings,
+          admin.token,
+          'GET',
+          '/settings/automation',
+          {},
+          undefined
+        )
+      ).status
+    ).toBe(403);
+    const authorized = await credential(['automation-settings:read', 'automation-settings:write']);
+    const read = await call(
+      readAutomationSettings,
+      authorized.token,
+      'GET',
+      '/settings/automation',
+      {},
+      undefined
+    );
+    expect(read.status).toBe(200);
+    expect(read.headers.get('cache-control')).toBe('no-store');
+    expect(read.headers.get('etag')).toBe('"0"');
+    const body = { automationEnabled: false, automationTraceRetentionDays: 90 };
+    expect(
+      (
+        await call(
+          writeAutomationSettings,
+          authorized.token,
+          'PATCH',
+          '/settings/automation',
+          {},
+          body
+        )
+      ).status
+    ).toBe(428);
+    expect(
+      (
+        await call(
+          writeAutomationSettings,
+          authorized.token,
+          'PATCH',
+          '/settings/automation',
+          {},
+          body,
+          randomUUID(),
+          '*'
+        )
+      ).status
+    ).toBe(400);
+    const key = randomUUID();
+    const first = await call(
+      writeAutomationSettings,
+      authorized.token,
+      'PATCH',
+      '/settings/automation',
+      {},
+      body,
+      key,
+      '"0"'
+    );
+    expect(first.status).toBe(200);
+    const replay = await call(
+      writeAutomationSettings,
+      authorized.token,
+      'PATCH',
+      '/settings/automation',
+      {},
+      body,
+      key,
+      '"0"'
+    );
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    const audits = await testPrisma.auditLog.findMany({
+      where: { action: 'automation.settings.updated' },
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      actorId: authorized.user.id,
+      details: { source: 'API', metadata: { apiClientId: authorized.key.id } },
+    });
+    expect(JSON.stringify(audits[0])).toContain(authorized.key.id);
+  });
+
+  it('allows only one distinct-key writer for the same revision', async () => {
+    const admin = await credential(['automation-settings:write']);
+    const results = await Promise.all(
+      [30, 60].map(days =>
+        call(
+          writeAutomationSettings,
+          admin.token,
+          'PATCH',
+          '/settings/automation',
+          {},
+          { automationEnabled: false, automationTraceRetentionDays: days },
+          randomUUID(),
+          '"0"'
+        )
+      )
+    );
+    expect(results.map(result => result.status).sort()).toEqual([200, 412]);
+    expect(
+      await testPrisma.auditLog.count({ where: { action: 'automation.settings.updated' } })
+    ).toBe(1);
+  });
+});
+
+describe('automation draft REST transaction certification', () => {
+  beforeEach(async () => {
+    if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
+      throw new Error('Dedicated test database required');
+    await resetDatabase();
+  }, 120_000);
+  it('fences draft revisions and keeps canonical audit and durable replay atomic', async () => {
+    const admin = await credential(['automation:read', 'automation:write', 'automation:publish']);
+    const service = await createTestService('REST draft');
+    const path = `/services/${service.id}/automation/draft`;
+    const params = { id: service.id };
+    const read = await call(getAutomationDraft, admin.token, 'GET', path, params, undefined);
+    expect(read.status).toBe(200);
+    expect(read.headers.get('etag')).toBe('"0"');
+    const body = { snapshot: { schemaVersion: 1, fields: [], rules: [] } };
+    const key = randomUUID();
+    const saved = await call(
+      saveAutomationDraft,
+      admin.token,
+      'PUT',
+      path,
+      params,
+      body,
+      key,
+      '"0"'
+    );
+    expect(saved.status).toBe(200);
+    expect(saved.headers.get('etag')).toBe('"1"');
+    const replay = await call(
+      saveAutomationDraft,
+      admin.token,
+      'PUT',
+      path,
+      params,
+      body,
+      key,
+      '"0"'
+    );
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect(
+      (await call(saveAutomationDraft, admin.token, 'PUT', path, params, body, randomUUID(), '"0"'))
+        .status
+    ).toBe(412);
+    const audits = await testPrisma.auditLog.findMany({
+      where: { action: 'automation.draft.updated' },
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0].details).toMatchObject({
+      source: 'API',
+      metadata: { apiClientId: admin.key.id },
+    });
+    const published = await call(
+      publishAutomationVersion,
+      admin.token,
+      'POST',
+      `/services/${service.id}/automation/publish`,
+      params,
+      { expectedActiveVersionId: null },
+      randomUUID(),
+      '"1"'
+    );
+    expect(published.status).toBe(200);
+    expect(await testPrisma.automationVersion.count({ where: { serviceId: service.id } })).toBe(1);
+    const publishingAudits = await testPrisma.auditLog.findMany({
+      where: { action: 'automation.version.published' },
+    });
+    expect(publishingAudits).toHaveLength(1);
+    expect(publishingAudits[0].details).toMatchObject({
+      source: 'API',
+      metadata: { apiClientId: admin.key.id },
+    });
+  });
+  it('denies a responder outside the owning service team despite an explicit write scope', async () => {
+    const responder = await credential(['automation:write'], 'RESPONDER');
+    const service = await createTestService('Unrelated draft');
+    const response = await call(
+      saveAutomationDraft,
+      responder.token,
+      'PUT',
+      `/services/${service.id}/automation/draft`,
+      { id: service.id },
+      { snapshot: { schemaVersion: 1, fields: [], rules: [] } },
+      randomUUID(),
+      '"0"'
+    );
+    expect(response.status).toBe(403);
+    expect(await testPrisma.automationDraft.count()).toBe(0);
+    expect(await testPrisma.auditLog.count({ where: { action: 'automation.draft.updated' } })).toBe(
+      0
+    );
   });
 });
