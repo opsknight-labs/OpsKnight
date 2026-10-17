@@ -7,30 +7,60 @@ import {
   IncidentAlertToast,
   type IncidentAlertItem,
 } from '@/components/incident/IncidentAlertToast';
+import {
+  NotificationToast,
+  type NotificationAction,
+  type NotificationTone,
+} from '@/components/ui/NotificationToast';
 
 export type { IncidentAlertItem };
 
-type NotifyOptions = Omit<ExternalToast, 'description'> & {
+export type NotifyOptions = {
+  id?: string | number;
   description?: string;
+  duration?: number;
+  action?: NotificationAction;
+  onDismiss?: ExternalToast['onDismiss'];
+  onAutoClose?: ExternalToast['onAutoClose'];
 };
+
+const DEFAULT_DURATION = new Map<NotificationTone, number>([
+  ['success', 4000],
+  ['info', 6000],
+  ['warning', 7000],
+  ['error', 8000],
+  // Loading toasts stay until they are replaced (same id) or dismissed.
+  ['loading', Infinity],
+]);
 
 function stableId(type: string, title: string) {
   return `${type}:${title.toLowerCase().replace(/\s+/g, '-').slice(0, 80)}`;
 }
 
-function optionsFor(type: string, title: string, options?: NotifyOptions): ExternalToast {
-  return {
-    id: options?.id ?? stableId(type, title),
-    ...options,
-  };
+function show(tone: NotificationTone, title: string, options?: NotifyOptions) {
+  const { id, description, duration, action, onDismiss, onAutoClose } = options ?? {};
+  return sonnerToast.custom(
+    toastId =>
+      React.createElement(NotificationToast, {
+        tone,
+        title,
+        description,
+        action,
+        onClose: () => sonnerToast.dismiss(toastId),
+      }),
+    {
+      id: id ?? stableId(tone, title),
+      duration: duration ?? DEFAULT_DURATION.get(tone),
+      className: `ok-toast-item ok-toast-item--${tone}`,
+      onDismiss,
+      onAutoClose,
+    }
+  );
 }
 
 export const notify = {
   success(title: string, options?: NotifyOptions) {
-    return sonnerToast.success(title, {
-      duration: 4000,
-      ...optionsFor('success', title, options),
-    });
+    return show('success', title, options);
   },
 
   error(error: unknown, options?: NotifyOptions) {
@@ -38,9 +68,8 @@ export const notify = {
     const friendlyDescription = options?.description
       ? toUserFacingError(options.description)
       : undefined;
-    return sonnerToast.error(friendly.title, {
-      duration: 8000,
-      ...optionsFor('error', friendly.title, options),
+    return show('error', friendly.title, {
+      ...options,
       description: friendlyDescription
         ? friendlyDescription.description || friendlyDescription.title
         : friendly.description,
@@ -48,21 +77,15 @@ export const notify = {
   },
 
   warning(title: string, options?: NotifyOptions) {
-    return sonnerToast.warning(title, {
-      duration: 7000,
-      ...optionsFor('warning', title, options),
-    });
+    return show('warning', title, options);
   },
 
   info(title: string, options?: NotifyOptions) {
-    return sonnerToast.info(title, {
-      duration: 6000,
-      ...optionsFor('info', title, options),
-    });
+    return show('info', title, options);
   },
 
   loading(title: string, options?: NotifyOptions) {
-    return sonnerToast.loading(title, optionsFor('loading', title, options));
+    return show('loading', title, options);
   },
 
   incident(
@@ -90,7 +113,7 @@ export const notify = {
       {
         id: toastId,
         duration: options?.duration ?? 8000,
-        position: 'top-right',
+        className: 'ok-toast-item ok-toast-item--incident',
       }
     );
   },
