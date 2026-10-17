@@ -324,3 +324,106 @@ All Scoped Secret operations were driven 100% through the real UI at `https://op
    - Revocation clicked for `docker-host-agent`.
    - Confirmation alertdialog approved.
    - Grant removed cleanly; remaining grant count: 1.
+
+---
+
+## 8. Journey I: Approval Gate Rejection & Execution Cancellation Lifecycle
+
+### 8.1 Objective & Test Scope
+
+- **Target**: `linux-native-host-agent` (`cmvc6jewu00cs16noj7104weo`) on `opsknight-cluster-control-plane`.
+- **Target Service**: `cert-sample.service` (Systemd unit running PID `184782`).
+- **Remediation Action**: `SYSTEMD` `restart` (`NON_IDEMPOTENT`, Approval required).
+- **Execution Mode**: `SUGGESTED` / Ad-hoc run with human governance.
+- **Objective**: Prove physical non-mutation when an operator cancels an execution at an approval gate.
+
+### 8.2 Execution & Cancellation Receipts
+
+1. **Pre-Execution Baseline**:
+   - `cert-sample.service` running PID `184782`.
+2. **Execution Dispatched**:
+   - Execution reached Step 3 (`Restart cert-sample.service`).
+   - State transitioned to `Waiting approval`.
+   - Mutating action was safely paused pending human authorization.
+3. **UI Operator Action**:
+   - Responder clicked **Cancel execution** in UI.
+   - Confirmed cancellation in `[role="alertdialog"]`.
+   - Execution status transitioned to `Cancelled`.
+4. **Post-Cancellation Physical Proof**:
+   ```bash
+   docker exec opsknight-cluster-control-plane systemctl status cert-sample.service
+   ```
+   - **Main PID**: Remained strictly **`184782`** (active for 34+ minutes).
+   - **Conclusion**: Rejection / cancellation halts execution immediately; zero mutating commands were dispatched or executed against the host.
+
+---
+
+## 9. Journey J: Blast-Radius Precheck Failure Guard (Safe Failure & PID Invariance)
+
+### 9.1 Objective & Test Scope
+
+- **Workload Target**: `cert-sample.service` on `opsknight-cluster-control-plane`.
+- **Runbook**: `E2E Blast Radius Guard 3026` v4 (`cmvc8rni10415r4wgqbw2zjsh`).
+- **Target Host Agent**: `linux-native-host-agent` (`cmvc6jewu00cs16noj7104weo`).
+- **Safety Mechanism**: Nested Precheck step preceding a mutating restart step.
+  - Step 1 (Precheck): `precheck_non_existent_service` (`SYSTEMD`, `READ_ONLY`, unit: `this-service-definitely-does-not-exist.service`, action: `status`).
+  - Step 2 (Mutation): `guarded_systemd_restart` (`SYSTEMD`, `NON_IDEMPOTENT`, unit: `cert-sample.service`, action: `restart`).
+- **Objective**: Prove that a precheck failure immediately aborts the runbook, completely preventing execution of the mutating step and leaving production workloads untouched.
+
+### 9.2 Initial State & UI Launch
+
+1. **Initial PID**:
+   ```bash
+   docker exec opsknight-cluster-control-plane systemctl status cert-sample.service
+   # Main PID: 184782
+   ```
+2. **UI Launch**:
+   - Navigated to Incident `cmvc7o4jj00yor4wg9y2evtzl` in Chrome.
+   - Switched to Runbooks tab; opened **Run another runbook**.
+   - Selected `E2E Blast Radius Guard 3026` v4 and target `linux-native-host-agent`.
+   - Previewed plan, checked write authorization confirmation checkbox, and clicked **Execute this plan**.
+
+### 9.3 Execution Outcome & Physical Proof
+
+1. **Execution Outcome (`cmvc9ghp805sxr4wg5onxjl4c`)**:
+   - Status: `Failed` (0 of 3 complete, duration 7s).
+   - Failure Reason: `LOCAL_POLICY_DENIED: systemd unit this-service-definitely-does-not-exist.service is not allowlisted.`
+   - Step 1 (`precheck_non_existent_service`): `Failed`.
+   - Step 2 (`guarded_systemd_restart`): **NEVER RUN / HALTED**.
+2. **Physical Receipt**:
+   ```bash
+   docker exec opsknight-cluster-control-plane systemctl status cert-sample.service
+   ```
+   **Output**:
+   ```text
+   ● cert-sample.service - OpsKnight Certification Sample Service
+        Active: active (running) since Sat 2026-10-17 09:52:27 UTC
+      Main PID: 184782 (sleep)
+   ```
+   - **Initial PID**: `184782`
+   - **Final PID**: `184782`
+   - **Result**: Blast-radius protection certified. Precheck failure prevented mutating action; service experienced zero downtime.
+
+---
+
+## 10. Enterprise Versioning, Visual Diffing (Compare UI), & Health Surveillance
+
+### 10.1 Version Comparison Receipts
+
+- **URL**: `https://opssentinal.com/runbooks/cmvc8rni10415r4wgqbw2zjsh/compare?base=cmvc8rni60417r4wghmqt4clr&next=cmvc921ao04t7r4wguawqbfmm`
+- **Scope**: Static step-by-step diff between v1 and v4 of `E2E Blast Radius Guard 3026`.
+- **Evidence**:
+  - Diffs displayed: `3 added, 1 removed, 0 changed`.
+  - Removed step: `first_step` (Manual, READ_ONLY).
+  - Added steps: `precheck_non_existent_service` and `guarded_systemd_restart` with nested verification.
+  - Interactive version selectors allowing comparison across any historical revision.
+
+### 10.2 Automation Health Surveillance Receipts
+
+- **URL**: `https://opssentinal.com/runbooks/health`
+- **Scope**: Continuous surveillance across execution plane, worker runners, queue latency, and agent fleet.
+- **Evidence**:
+  - Execution plane: Local worker active on lane `all`.
+  - Fleet state: 4 healthy agents, 2 offline agents, 1 enrolling agent.
+  - Queue latency: 0 pending step attempts, 0s oldest pending attempt.
+  - Circuit breakers: 0 dead-letter results, 0 services at circuit threshold.

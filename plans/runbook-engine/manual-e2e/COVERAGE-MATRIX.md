@@ -42,6 +42,8 @@ OpsKnight provides 7 first-class typed, validated inputs (`RUNBOOK_INPUT_TYPES`)
 | `AUTOMATIC` | `INCIDENT_CREATED` event                  | Pinned version required, signed policy checks passed, non-idempotent budget = 0 | **Journey A**: Unattended recovery of `ag-e2e-docker-api` via `docker start`             |
 | `SUGGESTED` | Incident created matching rule conditions | Offered to incident responders; runs on demand; stops at approval gates         | **Journey B**: Offered on `#cmvbh1wh`; plan preview authorized; rollout restart approved |
 | `MANUAL`    | Explicit responder execution from UI      | Preview generation required; writes require explicit authorization checkbox     | Runbook Library & Execution details testing                                              |
+| `CANCELLED` | Operator cancels execution at gate        | Immediately revokes authority; halts pipeline before mutating commands dispatch | **Journey I**: Approval cancelled in UI; `cert-sample.service` PID unchanged (`184782`)  |
+| `FAILED`    | Precheck validation failure               | Enforces blast-radius containment; aborts downstream mutation steps             | **Journey J**: Precheck failed on non-existent unit; Step 2 mutation safely blocked      |
 
 ---
 

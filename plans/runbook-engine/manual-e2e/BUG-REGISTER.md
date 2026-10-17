@@ -167,5 +167,15 @@ This register catalogs all functional, architectural, and user-experience defect
 - **Severity**: High (P1 Execution Failure)
 - **Symptom**: Step execution for `DOCKER` `inspect` actions failed with exit code 125 when targeted at an agent using the Podman runtime (`runtime: 'podman'`), displaying: `Error: template: inspect:1:18: executing "inspect" at <.Id>: can't evaluate field Id in type interface {}`.
 - **Root Cause**: The inspect format string used `{{json .Id}}`. Docker accepts both `.Id` and `.ID` with Go template `json`. In Podman (e.g. Podman 5.4.2), `.Id` is unexported or unmapped in the JSON inspection struct, causing template execution to fail with exit code 125. Podman strictly requires `.ID`.
-- **Resolution**: Updated `agent/src/executor.ts` to inspect with `{{json .ID}} ...` when `config.runtime === 'podman'` and `{{json .Id}} ...` otherwise.
 - **Regression Verification**: Verified on real Linux host (`opsknight-cluster-control-plane`) with Podman 5.4.2 during Runbook execution `cmvc7w4xt01n9r4wgcswc6x2l` (`E2E Native Systemd and Podman Suite` v1), where Step 5 (`inspect`) succeeded in 4s with exit code 0.
+
+---
+
+### Bug #16: Runbook Library Missing Import Dialog Trigger (Low / UX Completeness)
+
+- **Component**: `src/app/(app)/runbooks/page.tsx`, `src/components/runbooks/detail/ImportRunbookDialog.tsx`
+- **Severity**: Low (UX Completeness & Lifecycle Continuity)
+- **Symptom**: Operators could not initiate the Runbook Import dialog from the primary Runbooks library overview page, despite `ImportRunbookDialog` being implemented and tested as a standalone component.
+- **Root Cause**: `ImportRunbookDialog` was omitted from the hero actions layout in `src/app/(app)/runbooks/page.tsx`, only exposing `CreateRunbookDialog`.
+- **Resolution**: Integrated `<ImportRunbookDialog />` alongside `<CreateRunbookDialog />` in the library header actions with capability guard (`canManage`).
+- **Regression Verification**: Verified clean rendering, dialog modal launch, format validation for invalid files, and full JSON import.
