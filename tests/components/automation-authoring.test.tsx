@@ -260,3 +260,13 @@ it('reviews actual routing and priority changes using names rather than opaque p
   );
   expect(changes).toEqual(['Production: Before: Service default → After: Production Primary']);
 });
+
+it('requires leaving LIVE before offering publication of another version', async () => {
+  api.area.mockResolvedValue({ ...data, mode: 'LIVE' });
+  render(<AutomationWorkspace serviceId="service" />);
+  expect(await screen.findByRole('button', { name: /^Publish$/ })).toBeDisabled();
+  expect(
+    screen.getByText('Switch to SHADOW or DISABLED before publishing a new version.')
+  ).toBeVisible();
+  expect(api.action).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'publish' }));
+});

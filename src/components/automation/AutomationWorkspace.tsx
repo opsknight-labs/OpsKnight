@@ -665,7 +665,9 @@ export default function AutomationWorkspace({
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                disabled={busy || conflict || issues.some(i => i.level === 'ERROR')}
+                disabled={
+                  busy || conflict || data?.mode === 'LIVE' || issues.some(i => i.level === 'ERROR')
+                }
                 onClick={() => {
                   void (async () => {
                     setBusy(true);
@@ -683,6 +685,11 @@ export default function AutomationWorkspace({
               >
                 Publish
               </Button>
+              {data.mode === 'LIVE' && (
+                <p className="text-xs text-muted-foreground">
+                  Switch to SHADOW or DISABLED before publishing a new version.
+                </p>
+              )}
               <select
                 aria-label="Automation mode"
                 className={controlClass}

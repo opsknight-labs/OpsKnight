@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
-import { etagHeaders, requireRevisionIfMatch, preconditionFailed } from '@/lib/api-v2/concurrency';
+import { requireRevisionIfMatch, preconditionFailed } from '@/lib/api-v2/concurrency';
 import { publishVersion, AutomationConflict } from '@/lib/automation/versioning';
 
 export const POST = defineV2Route({
@@ -37,7 +37,9 @@ export const POST = defineV2Route({
           versionNumber: version.versionNumber,
           checksum: version.checksum,
         },
-        headers: { ...etagHeaders(version.versionNumber), 'Cache-Control': 'no-store' },
+        // Publication returns immutable version identity, not a draft validator.
+        // Read the draft resource again for its next conditional-write ETag.
+        headers: { 'Cache-Control': 'no-store' },
       };
     } catch (error) {
       if (error instanceof AutomationConflict) throw preconditionFailed();

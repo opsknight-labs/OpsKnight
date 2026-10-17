@@ -1097,6 +1097,19 @@ describe('automation draft REST transaction certification', () => {
     );
     expect(replay.status).toBe(200);
     expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    const changedValidatorReplay = await call(
+      saveAutomationDraft,
+      admin.token,
+      'PUT',
+      path,
+      params,
+      body,
+      key,
+      '"999"'
+    );
+    expect(changedValidatorReplay.status).toBe(200);
+    expect(changedValidatorReplay.headers.get('idempotency-replayed')).toBe('true');
+
     expect(
       (await call(saveAutomationDraft, admin.token, 'PUT', path, params, body, randomUUID(), '"0"'))
         .status
@@ -1120,6 +1133,30 @@ describe('automation draft REST transaction certification', () => {
       '"1"'
     );
     expect(published.status).toBe(200);
+    expect(published.headers.get('etag')).toBeNull();
+    const active = await testPrisma.automationVersion.findFirstOrThrow({
+      where: { serviceId: service.id },
+    });
+    await testPrisma.serviceAutomationConfig.update({
+      where: { serviceId: service.id },
+      data: { mode: 'LIVE' },
+    });
+    const unsafePublication = await call(
+      publishAutomationVersion,
+      admin.token,
+      'POST',
+      `/services/${service.id}/automation/publish`,
+      params,
+      { expectedActiveVersionId: active.id },
+      randomUUID(),
+      '"1"'
+    );
+    expect(unsafePublication.status).toBe(409);
+    expect(
+      await testPrisma.serviceAutomationConfig.findUnique({
+        where: { serviceId: service.id },
+      })
+    ).toMatchObject({ mode: 'LIVE', activeVersionId: active.id });
     expect(await testPrisma.automationVersion.count({ where: { serviceId: service.id } })).toBe(1);
     const publishingAudits = await testPrisma.auditLog.findMany({
       where: { action: 'automation.version.published' },
@@ -1129,6 +1166,85 @@ describe('automation draft REST transaction certification', () => {
       source: 'API',
       metadata: { apiClientId: admin.key.id },
     });
+    await testPrisma.apiKey.update({
+      where: { id: admin.key.id },
+      data: { revokedAt: new Date() },
+    });
+    expect(
+      (await call(saveAutomationDraft, admin.token, 'PUT', path, params, body, key, '"1"')).status
+    ).toBe(401);
+  });
+  it('serializes competing publications and rejects weak/wildcard validators and missing scopes', async () => {
+    const admin = await credential(['automation:read', 'automation:write', 'automation:publish']);
+    const reader = await credential(['automation:read']);
+    const service = await createTestService('Competing publications');
+    const params = { id: service.id };
+    const draftPath = `/services/${service.id}/automation/draft`;
+    const publishPath = `/services/${service.id}/automation/publish`;
+    expect(
+      (
+        await call(
+          saveAutomationDraft,
+          admin.token,
+          'PUT',
+          draftPath,
+          params,
+          { snapshot: { schemaVersion: 1, fields: [], rules: [] } },
+          randomUUID(),
+          '"0"'
+        )
+      ).status
+    ).toBe(200);
+    const body = { expectedActiveVersionId: null };
+    expect(
+      (
+        await call(
+          publishAutomationVersion,
+          reader.token,
+          'POST',
+          publishPath,
+          params,
+          body,
+          randomUUID(),
+          '"1"'
+        )
+      ).status
+    ).toBe(403);
+    for (const validator of ['*', 'W/"1"', '"0"']) {
+      expect(
+        (
+          await call(
+            publishAutomationVersion,
+            admin.token,
+            'POST',
+            publishPath,
+            params,
+            body,
+            randomUUID(),
+            validator
+          )
+        ).status
+      ).toBe(validator === '*' ? 400 : 412);
+    }
+    const results = await Promise.all(
+      [1, 2].map(() =>
+        call(
+          publishAutomationVersion,
+          admin.token,
+          'POST',
+          publishPath,
+          params,
+          body,
+          randomUUID(),
+          '"1"'
+        )
+      )
+    );
+    expect(results.map(result => result.status).sort()).toEqual([200, 412]);
+    expect(await testPrisma.automationVersion.count({ where: { serviceId: service.id } })).toBe(1);
+    expect(
+      await testPrisma.auditLog.count({ where: { action: 'automation.version.published' } })
+    ).toBe(1);
   });
   it('denies a responder outside the owning service team despite an explicit write scope', async () => {
     const responder = await credential(['automation:write'], 'RESPONDER');

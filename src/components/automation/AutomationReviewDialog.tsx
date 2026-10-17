@@ -89,8 +89,8 @@ export function AutomationReviewDialog({
         <div className="space-y-3 text-sm">
           {action !== 'LIVE' && mode === 'LIVE' && (
             <p role="alert" className="rounded-lg border border-amber-500 p-3">
-              This service is LIVE. Publishing immediately changes automation behavior for new
-              incidents. Existing incidents remain pinned to their previous routing decision.
+              Switch this service to SHADOW or DISABLED before publishing or restoring a version.
+              Activate LIVE explicitly after reviewing the new version.
             </p>
           )}
           {action !== 'LIVE' && (

@@ -4,7 +4,7 @@ export interface ApiCapability {
   id: string;
   area: string;
   title: string;
-  status: 'available' | 'restricted' | 'not-supported';
+  status: 'available' | 'partial' | 'restricted' | 'not-supported';
   explanation: string;
   operationIds: readonly string[];
 }
@@ -78,10 +78,16 @@ const decisions: readonly ApiCapability[] = [
     id: 'service-automation',
     area: 'Services',
     title: 'Alert normalization and routing rules',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
       'Global settings, draft read/write and immutable publication are available. Simulation, modes, restore, history and diagnostic APIs remain unfinished; full automation parity is not yet certified. Runbook service rules are a different domain.',
-    operationIds: [],
+    operationIds: [
+      'getAutomationSettings',
+      'updateAutomationSettings',
+      'getAutomationDraft',
+      'saveAutomationDraft',
+      'publishAutomationVersion',
+    ],
   },
   {
     id: 'service-settings',

@@ -624,9 +624,11 @@ export default function ApiExplorerPanel({
                 <Badge variant="outline">
                   {capability.status === 'available'
                     ? 'Available'
-                    : capability.status === 'restricted'
-                      ? 'Restricted'
-                      : 'Not supported'}
+                    : capability.status === 'partial'
+                      ? 'Partial'
+                      : capability.status === 'restricted'
+                        ? 'Restricted'
+                        : 'Not supported'}
                 </Badge>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{capability.explanation}</p>

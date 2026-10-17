@@ -25,12 +25,31 @@
     "restoredCheckpoint": "137 focused regression tests passed on rebased foundation",
     "automationAndRestDatabase": "69 passed, 1 skipped across 3 PostgreSQL suites",
     "typecheck": "passed",
-    "lint": "changed source files passed with zero warnings"
+    "lint": "changed source files passed with zero warnings",
+    "combinedCi": {
+      "sourceCommit": "53e86ca490489ca5ffe2fbd6a76fb3dbc962ec4b",
+      "successful": 50,
+      "skipped": 10,
+      "neutral": 1,
+      "failed": 0,
+      "pending": 0,
+      "manifest": "ci-53e86ca.json"
+    }
   },
   "limitations": [
-    "Combined production build and browser certification pending",
+    "Combined build, browser and upgrade CI passed at 53e86ca; subsequent changes require new certification",
     "Remaining endpoint families not implemented",
     "No combined load, HA, recovery or real-agent certification claimed",
     "Historical automation evidence imported from its branch is not certification of this combined tree"
-  ]
+  ],
+  "reviewFollowup": {
+    "sourceParent": "53e86ca490489ca5ffe2fbd6a76fb3dbc962ec4b",
+    "status": "local_checks_passed_latest_ci_pending",
+    "restTests": 21,
+    "automationTests": 51,
+    "automationSkipped": 1,
+    "productionBrowserTests": 32,
+    "applicationReplicas": 2,
+    "coverage": "Functional SDK/UI/ingestion parity and publication safety; not load/HA or full enterprise coverage"
+  }
 }

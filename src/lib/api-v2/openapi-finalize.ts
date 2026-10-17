@@ -357,7 +357,9 @@ export function finalizeOpenApiSpec(base: Json): Json {
         ...(definition.method === 'get' && contractIsEtagResource(definition)
           ? { ETag: etagHeader }
           : {}),
-        ...(contract?.concurrency === 'etag' ? { ETag: etagHeader } : {}),
+        ...(contract?.concurrency === 'etag' && contract.responseEtag !== false
+          ? { ETag: etagHeader }
+          : {}),
       };
     }
 

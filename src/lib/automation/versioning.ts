@@ -164,6 +164,12 @@ export async function publishVersion(
     });
     if ((config?.activeVersionId ?? null) !== input.expectedActiveVersionId)
       throw new AutomationConflict();
+    if (config?.mode === 'LIVE')
+      throw new AppError({
+        code: 'RESOURCE_CONFLICT',
+        userMessage:
+          'Switch automation to SHADOW or DISABLED before publishing. Each new version requires explicit LIVE activation.',
+      });
     const draft = await tx.automationDraft.findUnique({ where: { serviceId: input.serviceId } });
     if ((draft?.revision ?? 0) !== input.expectedRevision) throw new AutomationConflict();
     const source = input.sourceVersionId
@@ -236,7 +242,7 @@ export async function publishVersion(
       { versionId: version.id, lint: issues },
       apiClientId
     );
-    logger.info('automation.version.published', {
+    logger.info('automation.version.publication.staged', {
       serviceId: input.serviceId,
       versionId: version.id,
       versionNumber: version.versionNumber,
@@ -274,7 +280,8 @@ export async function changeMode(
         throw new AutomationValidationError(
           'Enable global automation before selecting SHADOW or LIVE. Drafts and publication remain available.'
         );
-      if (!config?.activeVersion) throw new AutomationValidationError('Publish a version before enabling automation');
+      if (!config?.activeVersion)
+        throw new AutomationValidationError('Publish a version before enabling automation');
       loadCompiledVersion(config.activeVersion);
       const { compiled, issues } = compileAutomation(config.activeVersion.snapshot);
       if (issues.some(i => i.level === 'ERROR'))
@@ -345,7 +352,7 @@ export async function changeMode(
         },
         apiClientId
       );
-    logger.info('automation.mode.changed', {
+    logger.info('automation.mode.change.staged', {
       serviceId: input.serviceId,
       mode: input.mode,
       versionId: updated.activeVersionId,
