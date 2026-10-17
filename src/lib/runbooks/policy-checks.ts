@@ -15,6 +15,7 @@ import {
 import { requiresAgent } from './types';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { signExecutionEnvelope } from './execution-signing';
+import { RunbookDefinitionError } from './errors';
 export function policyCheckSteps(
   steps: ReturnType<typeof flattenSteps>,
   values: Record<string, unknown>
@@ -45,11 +46,11 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
         runbookVersion: { include: { inputs: true } },
       },
     });
-    if (!rule) throw new Error('Service automation rule not found.');
+    if (!rule) throw new RunbookDefinitionError('Service automation rule not found.');
     const version =
       rule.versionStrategy === 'PINNED' ? rule.runbookVersion : rule.runbook.publishedVersion;
     if (!version || !['PUBLISHED', 'RETIRED'].includes(version.state) || rule.runbook.archivedAt)
-      throw new Error('A published immutable version is required.');
+      throw new RunbookDefinitionError('A published immutable version is required.');
     const values = applyRunbookInputDefaults(
       version.inputs,
       rule.inputValues as Record<string, unknown>
@@ -57,22 +58,24 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
     validateBindingInputValues(version.inputs, values);
     const definition = parseRunbookDefinition(version.definition, version.inputs);
     const steps = policyCheckSteps(flattenSteps(definition), values);
-    if (steps.length > 200) throw new Error('Policy checks support at most 200 flattened actions.');
-    if (!steps.length) throw new Error('This workflow has no Agent actions to check.');
+    if (steps.length > 200)
+      throw new RunbookDefinitionError('Policy checks support at most 200 flattened actions.');
+    if (!steps.length)
+      throw new RunbookDefinitionError('This workflow has no Agent actions to check.');
     const selector = Object.entries(rule.agentSelector as Record<string, string>).map(
       ([key, value]) => {
         if (value.includes('incident.labels.'))
-          throw new Error(
+          throw new RunbookDefinitionError(
             'This selector requires an incident context. Preview from that incident to check the resolved target.'
           );
         const resolved = resolveInputTemplates(value, values);
         if (typeof resolved !== 'string' || !resolved)
-          throw new Error('A selector input is unavailable.');
+          throw new RunbookDefinitionError('A selector input is unavailable.');
         return [key, resolved] as const;
       }
     );
     if (!rule.defaultAgentId && !rule.defaultAgentPoolId && !selector.length)
-      throw new Error('Choose an explicit Agent, pool or selector.');
+      throw new RunbookDefinitionError('Choose an explicit Agent, pool or selector.');
     const now = new Date();
     const agents = await tx.runbookAgent.findMany({
       where: {
@@ -91,14 +94,14 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
       take: MAX_AUTOMATIC_POLICY_TARGETS + 1,
     });
     if (!agents.length || agents.length > MAX_AUTOMATIC_POLICY_TARGETS)
-      throw new Error(
+      throw new RunbookDefinitionError(
         `A policy check requires 1–${MAX_AUTOMATIC_POLICY_TARGETS} online targets. Narrow the selector.`
       );
     const pending = await tx.runbookPolicyCheck.count({
       where: { ruleId, status: 'PENDING', expiresAt: { gt: now } },
     });
     if (pending)
-      throw new Error(
+      throw new RunbookDefinitionError(
         'A policy check is already pending. Wait for the Agent response or expiration.'
       );
     // Each durable row freezes the selected version and redacted configuration.
