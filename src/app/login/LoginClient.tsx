@@ -229,8 +229,9 @@ export default function LoginClient({
             </div>
             <button
               type="button"
+              data-icon-button
               onClick={() => setShowPasswordSet(false)}
-              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full border border-slate-300/70 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 dark:border-white/25 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-slate-300/70 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 dark:border-white/25 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Dismiss message"
               title="Dismiss"
             >
@@ -260,8 +261,9 @@ export default function LoginClient({
             </div>
             <button
               type="button"
+              data-icon-button
               onClick={() => setError('')}
-              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full border border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
               aria-label="Dismiss error"
               title="Dismiss"
             >
