@@ -1,0 +1,32 @@
+{
+  "scope": "Production image browser validation, not performance capacity or physical-device certification",
+  "runtimeSourceRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+  "harnessRevision": "9c811a6218f938dbea5b7c94ad44fdde11682a36",
+  "imageDigest": "sha256:fc3df5d1796fabe19a35d14d31aa9f9f06b74a4a7b76b95dbf76f0cc467ff4bc",
+  "imageConfigDigest": "sha256:50c76ad0141572db0e834e8f9de0df06f6a09eff3673d299715eb5dadf86d8fd",
+  "browserStats": {
+    "startTime": "2026-10-12T11:44:05.825Z",
+    "duration": 80949.977,
+    "expected": 20,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "projects": [
+    "desktop",
+    "mobile Pixel 5",
+    "iPhone 13",
+    "iPad Pro 11"
+  ],
+  "journeys": [
+    "P3 LIVE Events API context, supplemental Slack intent and no personal paging",
+    "Auditor source-description and context redaction including server HTML",
+    "P1 Events API routing and immutable evidence after policy edits and archive",
+    "Missing context service-default fallback",
+    "Policy archive and restore",
+    "Author, test, publish, modes and version restore",
+    "Maximum rule count editor, keyboard and accessibility"
+  ],
+  "rawReport": "artifacts/automation-ui/results.json",
+  "capacityCertification": "NOT_CERTIFIED"
+}

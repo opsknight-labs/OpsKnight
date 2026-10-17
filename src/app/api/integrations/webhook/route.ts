@@ -1,4 +1,4 @@
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformWebhookToEvent, WebhookPayload } from '@/lib/integrations/webhook';
 import { createIntegrationHandler } from '@/lib/integrations/handler';
 
@@ -22,7 +22,7 @@ export const POST = createIntegrationHandler<WebhookPayload>(
     const event = transformWebhookToEvent(payload, {});
 
     // Process the event
-    const result = await processEvent(event, integration.serviceId, integration.id);
+    const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'WEBHOOK', providerPayload: payload, receivedAt: new Date() });
 
     return { action: result.action, incident: result.incident };
   }

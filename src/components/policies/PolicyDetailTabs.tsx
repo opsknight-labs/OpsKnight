@@ -4,7 +4,7 @@ import { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import { Layers, Server, Activity, Settings } from 'lucide-react';
 
-export type PolicyDetailTab = 'steps' | 'services' | 'activity' | 'settings';
+export type PolicyDetailTab = 'steps' | 'services' | 'activity' | 'settings' | 'dependencies';
 
 type PolicyDetailTabsProps = {
   defaultTab?: string;
@@ -15,6 +15,7 @@ type PolicyDetailTabsProps = {
   services: ReactNode;
   activity: ReactNode;
   settings: ReactNode;
+  dependencies?: ReactNode;
 };
 
 export default function PolicyDetailTabs({
@@ -26,6 +27,7 @@ export default function PolicyDetailTabs({
   services,
   activity,
   settings,
+  dependencies,
 }: PolicyDetailTabsProps) {
   const tabItems = [
     {
@@ -40,6 +42,9 @@ export default function PolicyDetailTabs({
       icon: <Server className="h-4 w-4" />,
       count: serviceCount,
     },
+    ...(dependencies
+      ? [{ id: 'dependencies', label: 'Dependencies', icon: <Layers className="h-4 w-4" /> }]
+      : []),
     {
       id: 'activity',
       label: 'Activity History',
@@ -55,6 +60,9 @@ export default function PolicyDetailTabs({
 
   return (
     <DetailTabs tabs={tabItems} defaultTab={defaultTab}>
+      <DetailTabContent value="dependencies" className="mt-0 space-y-6">
+        {dependencies}
+      </DetailTabContent>
       <DetailTabContent value="steps" className="mt-0 space-y-6">
         {steps}
       </DetailTabContent>

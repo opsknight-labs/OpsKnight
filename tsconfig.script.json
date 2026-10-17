@@ -1,8 +1,12 @@
 {
-    "extends": "./tsconfig.json",
-    "compilerOptions": {
-        "module": "commonjs",
-        "moduleResolution": "node",
-        "noEmit": true
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "server-only": ["./scripts/perf/shims/server-only.js"]
     }
+  }
 }

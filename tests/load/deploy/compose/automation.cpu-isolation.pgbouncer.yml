@@ -1,0 +1,4 @@
+# Pair with the PgBouncer overlay and the 12-CPU isolation profile.
+services:
+  pgbouncer:
+    cpuset: '10-11'

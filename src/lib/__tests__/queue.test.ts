@@ -88,7 +88,13 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
     expect(result).toBe(false);
     expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith({
       where: { id: 'job-early' },
-      data: { status: 'PENDING', attempts: 0, scheduledAt: snoozedUntil, startedAt: null },
+      data: {
+        status: 'PENDING',
+        attempts: 0,
+        scheduledAt: snoozedUntil,
+        startedAt: null,
+        claimToken: null,
+      },
     });
   });
 
@@ -482,8 +488,12 @@ describe('queue bulk backpressure crash semantics', () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync('src/lib/jobs/queue.ts', 'utf8');
     const block = src.slice(
-      src.indexOf('isBulkNotificationJob(job.type'),
-      src.indexOf('isBulkNotificationJob(job.type') + 600
+      src.indexOf(
+        'if (isBulkNotificationJob(job.type as JobType) && isBulkQueueBackpressureError(error))'
+      ),
+      src.indexOf(
+        'if (isBulkNotificationJob(job.type as JobType) && isBulkQueueBackpressureError(error))'
+      ) + 600
     );
     expect(block).toContain('rescheduleBulkBackpressuredJob');
   });

@@ -1,5 +1,7 @@
 import AuthenticationSettingsLoader from '@/components/settings/AuthenticationSettingsLoader';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
+import AutomationSettings from '@/components/settings/AutomationSettings';
+import { getAutomationSettings } from '@/lib/automation/settings';
 import { getUserPermissions } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
@@ -194,7 +196,8 @@ export default async function SystemSettingsPage() {
     </SettingsSection>
   );
 
-  const retentionTab = <RetentionPolicySettings />;
+    const retentionTab = <RetentionPolicySettings />;
+    const automationTab = <AutomationSettings initialSettings={await getAutomationSettings()} />;
 
   const envRows = [
     {
@@ -515,7 +518,8 @@ export default async function SystemSettingsPage() {
       )}
 
       <SystemSettingsTabs
-        appUrlTab={appUrlTab}
+        automationTab={automationTab}
+          appUrlTab={appUrlTab}
         ssoTab={ssoTab}
         scimTab={scimTab}
         retentionTab={retentionTab}

@@ -1301,6 +1301,460 @@
           "updatedAt"
         ]
       },
+      "AutomationSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "fieldId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "STRING",
+                    "ENUM",
+                    "NUMBER",
+                    "BOOLEAN"
+                  ]
+                },
+                "caseSensitive": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "allowedValues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "description": "Maximum 256 UTF-8 bytes."
+                  },
+                  "maxItems": 200
+                },
+                "aliases": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 256,
+                    "description": "Maximum 256 UTF-8 bytes."
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 256,
+                    "description": "Maximum 256 UTF-8 bytes."
+                  },
+                  "default": {}
+                },
+                "mappings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "PROVIDER",
+                          "EVENT"
+                        ]
+                      },
+                      "integrationType": {
+                        "type": "string",
+                        "minLength": 0,
+                        "maxLength": 64
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "path"
+                    ]
+                  },
+                  "maxItems": 32,
+                  "default": []
+                }
+              },
+              "required": [
+                "fieldId",
+                "key",
+                "label",
+                "type"
+              ]
+            },
+            "maxItems": 64
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "phase": {
+                  "type": "string",
+                  "enum": [
+                    "ENRICH",
+                    "ROUTE"
+                  ]
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "fieldKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "operator": {
+                        "type": "string",
+                        "enum": [
+                          "EQ",
+                          "NE",
+                          "IN",
+                          "NOT_IN",
+                          "LT",
+                          "LTE",
+                          "GT",
+                          "GTE",
+                          "IS_SET",
+                          "IS_MISSING",
+                          "IS_UNMAPPED"
+                        ]
+                      },
+                      "value": {
+                        "oneOf": [
+                          {
+                            "oneOf": [
+                              {
+                                "type": "string",
+                                "minLength": 0,
+                                "maxLength": 2048,
+                                "description": "Maximum 2048 UTF-8 bytes."
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 0,
+                                  "maxLength": 2048,
+                                  "description": "Maximum 2048 UTF-8 bytes."
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
+                            },
+                            "maxItems": 200
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "fieldKey",
+                      "operator"
+                    ]
+                  },
+                  "maxItems": 20
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "const": "SET_PRIORITY"
+                          },
+                          "value": {
+                            "type": "string",
+                            "enum": [
+                              "P1",
+                              "P2",
+                              "P3",
+                              "P4",
+                              "P5"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "const": "SET_CONTEXT"
+                          },
+                          "fieldKey": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "value": {
+                            "oneOf": [
+                              {
+                                "type": "string",
+                                "minLength": 0,
+                                "maxLength": 2048,
+                                "description": "Maximum 2048 UTF-8 bytes."
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "fieldKey",
+                          "value"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "const": "ADD_TAG"
+                          },
+                          "value": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "const": "USE_SERVICE_DEFAULT"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "const": "USE_ESCALATION_POLICY"
+                          },
+                          "policyId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "policyId"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "const": "NO_ESCALATION"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "const": "NOTIFY_CHANNEL"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "SLACK",
+                              "TEAMS"
+                            ]
+                          },
+                          "destinationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "provider",
+                          "destinationId"
+                        ]
+                      }
+                    ]
+                  },
+                  "maxItems": 8,
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "phase",
+                "conditions",
+                "actions"
+              ]
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "fields",
+          "rules"
+        ]
+      },
+      "AutomationDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "serviceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/AutomationSnapshot"
+          }
+        },
+        "required": [
+          "serviceId",
+          "revision",
+          "snapshot"
+        ]
+      },
+      "AutomationPublishedVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "versionNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "checksum": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "serviceId",
+          "versionNumber",
+          "checksum"
+        ]
+      },
+      "AutomationSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "automationEnabled": {
+            "type": "boolean"
+          },
+          "automationTraceRetentionDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          },
+          "automationSettingsRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "automationEnabled",
+          "automationTraceRetentionDays",
+          "automationSettingsRevision"
+        ]
+      },
       "IncidentWatcher": {
         "type": "object",
         "additionalProperties": false,
@@ -9567,6 +10021,655 @@
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
         "x-idempotency": "natural",
         "x-concurrency": "none"
+      }
+    },
+    "/services/{id}/automation/publish": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Publish a validated immutable service automation version",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedActiveVersionId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "expectedActiveVersionId"
+                ]
+              },
+              "example": {
+                "expectedActiveVersionId": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationPublishedVersion"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "publishAutomationVersion",
+        "x-required-scope": "automation:publish",
+        "description": "Requires API scope `automation:publish` (Automation publish).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/services/{id}/automation/draft": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read a service automation draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationDraft"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getAutomationDraft",
+        "x-required-scope": "automation:read",
+        "description": "Requires API scope `automation:read` (Automation read)."
+      },
+      "put": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Save a revision-protected automation draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "snapshot": {
+                    "$ref": "#/components/schemas/AutomationSnapshot"
+                  }
+                },
+                "required": [
+                  "snapshot"
+                ]
+              },
+              "example": {
+                "snapshot": {
+                  "schemaVersion": 1,
+                  "fields": [],
+                  "rules": []
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationDraft"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "saveAutomationDraft",
+        "x-required-scope": "automation:write",
+        "description": "Requires API scope `automation:write` (Automation drafts).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/settings/automation": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Read global automation settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationSettings"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getAutomationSettings",
+        "x-required-scope": "automation-settings:read",
+        "description": "Requires API scope `automation-settings:read` (Automation settings read)."
+      },
+      "patch": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update global automation settings",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "automationEnabled": {
+                    "type": "boolean"
+                  },
+                  "automationTraceRetentionDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  }
+                },
+                "required": [
+                  "automationEnabled",
+                  "automationTraceRetentionDays"
+                ]
+              },
+              "example": {
+                "automationEnabled": false,
+                "automationTraceRetentionDays": 90
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationSettings"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateAutomationSettings",
+        "x-required-scope": "automation-settings:write",
+        "description": "Requires API scope `automation-settings:write` (Automation settings manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
       }
     },
     "/incidents/{id}/watchers": {

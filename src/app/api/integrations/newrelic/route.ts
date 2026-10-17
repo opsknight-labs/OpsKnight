@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformNewRelicToEvent, NewRelicEvent } from '@/lib/integrations/newrelic';
 
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       }
 
       const event = transformNewRelicToEvent(validation.data as NewRelicEvent);
-      const result = await processEvent(event, integration.serviceId, integration.id);
+      const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'NEWRELIC', providerPayload: validation.data, receivedAt: new Date() });
 
       logger.info('api.integration.newrelic_success', {
         integrationId,

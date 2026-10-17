@@ -594,6 +594,9 @@ async function runOnce() {
     const privacyExportArtifactsExpired = await expireDuePrivacyExportArtifacts();
     let jobsCleaned = false;
     if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
+      const { default: automationStore } = await import('./prisma');
+      const { scheduleAutomationRetention } = await import('./automation/jobs');
+      await scheduleAutomationRetention(automationStore);
       await cleanupOldJobs(7);
       lastJobCleanup = Date.now();
       jobsCleaned = true;

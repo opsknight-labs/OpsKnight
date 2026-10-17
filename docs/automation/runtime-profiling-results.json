@@ -1,0 +1,106 @@
+{
+  "status": "DIAGNOSTIC_ONLY",
+  "certified": false,
+  "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+  "nodeVersion": "20.20.2",
+  "scope": "One of two Web replicas, private CPU inspector enabled; not a performance certification",
+  "workload": {
+    "rps": 20,
+    "duration": "120s",
+    "automationEnabled": true,
+    "serviceAutomationConfigs": 0,
+    "classification": "enabled but unconfigured; no rule evaluation"
+  },
+  "acceptedEvents": 2401,
+  "droppedIterations": 0,
+  "latencyMs": {
+    "p(95)": 97,
+    "p(99)": 163,
+    "avg": 52.22823823406914,
+    "min": 28,
+    "med": 44,
+    "max": 247,
+    "p(50)": 44
+  },
+  "profileSampledMs": 130113.779,
+  "topSelfTime": [
+    {
+      "function": "(idle)",
+      "file": "",
+      "line": -1,
+      "ms": 96431.065
+    },
+    {
+      "function": "(garbage collector)",
+      "file": "",
+      "line": -1,
+      "ms": 6682.936
+    },
+    {
+      "function": "custom_gc",
+      "file": "",
+      "line": -1,
+      "ms": 3474.657
+    },
+    {
+      "function": "(program)",
+      "file": "",
+      "line": -1,
+      "ms": 1710.197
+    },
+    {
+      "function": "",
+      "file": "27889.js",
+      "line": 30,
+      "ms": 1627.742
+    },
+    {
+      "function": "parseEngineResponse",
+      "file": "27889.js",
+      "line": 111,
+      "ms": 1296.171
+    },
+    {
+      "function": "_propagate",
+      "file": "node:async_hooks",
+      "line": 318,
+      "ms": 705.634
+    },
+    {
+      "function": "request",
+      "file": "27889.js",
+      "line": 111,
+      "ms": 597.402
+    },
+    {
+      "function": "nestArgument",
+      "file": "27889.js",
+      "line": 28,
+      "ms": 350.784
+    },
+    {
+      "function": "request",
+      "file": "27889.js",
+      "line": 120,
+      "ms": 309.04
+    },
+    {
+      "function": "runMicrotasks",
+      "file": "",
+      "line": -1,
+      "ms": 282.891
+    },
+    {
+      "function": "parse",
+      "file": "",
+      "line": -1,
+      "ms": 252.278
+    }
+  ],
+  "artifacts": "artifacts/load-certification/automation/runtime-profiling-20261013-enabled-unconfigured",
+  "limitations": [
+    "One replica is not an application-wide CPU profile",
+    "CPU sampling does not identify the cause of database waits or prove an evaluator bottleneck",
+    "Inspector overhead excludes this diagnostic run from certification"
+  ]
+}

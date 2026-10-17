@@ -1,3 +1,4 @@
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
@@ -157,13 +158,17 @@ export default async function IncidentsPage({
   const currentPage = pagination.page;
   const totalPages = pagination.totalPages;
 
-  const incidents = await prisma.incident.findMany({
+  const storedIncidents = await prisma.incident.findMany({
     where: effectiveWhere,
     select: incidentListSelect,
     orderBy,
     skip: pagination.skip,
     take: pagination.take,
   });
+
+  const incidents = storedIncidents.map(incident =>
+    visibleIncidentSource(incident, permissions.capabilities.includes('incident.sensitive.read'))
+  );
 
   const users = canCreateIncident
     ? await prisma.user.findMany({

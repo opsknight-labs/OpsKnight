@@ -80,7 +80,7 @@ const decisions: readonly ApiCapability[] = [
     title: 'Alert normalization and routing rules',
     status: 'not-supported',
     explanation:
-      'The separate service-automation branch must be integrated and its evaluator contract certified before exposing rule management. Existing runbook service rules are a different domain.',
+      'Global settings, draft read/write and immutable publication are available. Simulation, modes, restore, history and diagnostic APIs remain unfinished; full automation parity is not yet certified. Runbook service rules are a different domain.',
     operationIds: [],
   },
   {

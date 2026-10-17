@@ -1,4 +1,7 @@
 {{- if .Values.pgbouncer.enabled }}
+{{- if and (not .Values.pgbouncer.prismaCompatibilityMode) (le (int .Values.pgbouncer.maxPreparedStatements) 0) }}
+{{- fail "pgbouncer.prismaCompatibilityMode=false requires maxPreparedStatements>0 and PgBouncer>=1.21" }}
+{{- end }}
 {{- if ne .Values.runtime.mode "split" }}
 {{- fail "pgbouncer.enabled requires runtime.mode=split so scheduler/worker traffic can stay on direct PostgreSQL connections" }}
 {{- end }}

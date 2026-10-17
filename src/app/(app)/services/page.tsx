@@ -1,3 +1,5 @@
+import { runSerializableTransaction } from '@/lib/db-utils';
+import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
@@ -42,15 +44,18 @@ async function createService(formData: FormData) {
   try {
     const normalizedName = await assertServiceNameAvailable(name);
 
-    const service = await prisma.service.create({
-      data: {
-        name: normalizedName,
-        description,
-        region: region || null,
-        slaTier: slaTier || null,
-        teamId: teamId || undefined,
-        escalationPolicyId: escalationPolicyId || undefined,
-      },
+    const service = await runSerializableTransaction(async tx => {
+      if (escalationPolicyId) await assertPolicyActive(tx, escalationPolicyId);
+      return tx.service.create({
+        data: {
+          name: normalizedName,
+          description,
+          region: region || null,
+          slaTier: slaTier || null,
+          teamId: teamId || undefined,
+          escalationPolicyId: escalationPolicyId || undefined,
+        },
+      });
     });
 
     await logAudit({
@@ -108,6 +113,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     prisma.team.findMany({ where: teamReadWhere(actor), orderBy: { name: 'asc' } }),
     canCreateService
       ? prisma.escalationPolicy.findMany({
+          where: { archivedAt: null },
           select: { id: true, name: true },
           orderBy: { name: 'asc' },
         })
@@ -217,11 +223,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       const activeIncidentGroups = await prisma.incident.groupBy({
         by: ['serviceId'],
         where: {
-          AND: [
-            incidentAccess,
-            { status: { in: activeIncidentStatuses() } },
-            { service: where },
-          ],
+          AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }, { service: where }],
         },
         _count: { serviceId: true },
         orderBy: [{ _count: { serviceId: 'desc' } }, { serviceId: 'asc' }],
@@ -283,11 +285,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         const activeIncidentGroups = await prisma.incident.groupBy({
           by: ['serviceId'],
           where: {
-            AND: [
-              incidentAccess,
-              { status: { in: activeIncidentStatuses() } },
-              { service: where },
-            ],
+            AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }, { service: where }],
           },
           _count: { serviceId: true },
           orderBy: [{ _count: { serviceId: 'asc' } }, { serviceId: 'asc' }],
@@ -312,11 +310,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       const activeIncidentGroups = await prisma.incident.groupBy({
         by: ['serviceId'],
         where: {
-          AND: [
-            incidentAccess,
-            { status: { in: activeIncidentStatuses() } },
-            { service: where },
-          ],
+          AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }, { service: where }],
         },
         _count: { serviceId: true },
         orderBy: [{ _count: { serviceId: 'asc' } }, { serviceId: 'asc' }],

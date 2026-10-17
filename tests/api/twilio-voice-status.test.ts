@@ -113,6 +113,19 @@ describe('Twilio voice status callback', () => {
     });
   });
 
+  it('allows a signed completion receipt to settle an unfinished UNKNOWN attempt', async () => {
+    await POST(signedRequest('CallSid=CA123&CallStatus=completed'));
+    expect(mocks.updateAttemptMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          finishedAt: null,
+          outcome: { in: expect.arrayContaining(['UNKNOWN']) },
+        }),
+        data: expect.objectContaining({ outcome: 'COMPLETED', finishedAt: expect.any(Date) }),
+      })
+    );
+  });
+
   it('records no-answer as a terminal paging outcome without degrading endpoint health', async () => {
     const response = await POST(signedRequest('CallSid=CA123&CallStatus=no-answer'));
     expect(response.status).toBe(204);

@@ -1,0 +1,36 @@
+{
+  "status": "in_progress",
+  "pr": 886,
+  "automationSourceCommit": "a4e8723f6",
+  "scope": "Single PR for the complete approved coverage plan",
+  "implementedOperations": [
+    "getAutomationSettings",
+    "updateAutomationSettings",
+    "getAutomationDraft",
+    "saveAutomationDraft",
+    "publishAutomationVersion"
+  ],
+  "checks": {
+    "schemaMigration": "All combined migrations applied to an isolated PostgreSQL 16 test database",
+    "automationDatabase": "49 passed, 1 skipped",
+    "restDatabase": "18 passed",
+    "apiContractsAndExplorer": "736 passed",
+    "initialUnitRun": "7452 passed, 6 failed, 4 skipped across 885 files; fixes for the four failed files verified separately",
+    "correctedFiles": [
+      "tests/components/incident/IncidentQuickLinksCard.test.tsx",
+      "tests/api/recovery-stream-policy.test.ts",
+      "tests/api/sla-stream.test.ts",
+      "tests/unit/api-v2-authorization-matrix.test.ts"
+    ],
+    "restoredCheckpoint": "137 focused regression tests passed on rebased foundation",
+    "automationAndRestDatabase": "69 passed, 1 skipped across 3 PostgreSQL suites",
+    "typecheck": "passed",
+    "lint": "changed source files passed with zero warnings"
+  },
+  "limitations": [
+    "Combined production build and browser certification pending",
+    "Remaining endpoint families not implemented",
+    "No combined load, HA, recovery or real-agent certification claimed",
+    "Historical automation evidence imported from its branch is not certification of this combined tree"
+  ]
+}

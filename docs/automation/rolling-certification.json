@@ -1,0 +1,19 @@
+{
+  "serviceId": "cmuz0lkgp00007ihfi5lr71z0",
+  "globalOffUnsupportedTasks": 0,
+  "retentionScheduled": false,
+  "oldWorkerProcessed": 14,
+  "oldWorkerFailuresBeforeProbe": 0,
+  "oldWorkerUnsupportedTask": {
+    "status": "FAILED",
+    "error": "Unknown scheduled task: AUTOMATION_OBSERVE"
+  },
+  "newWorkerTaskStatus": "COMPLETED",
+  "incidents": 2,
+  "decisions": 0,
+  "traces": 0,
+  "kind": "Actual main/new ingestion and queue handlers against additive PostgreSQL schema; separate local Node processes, not a full mixed-image deployment",
+  "oldSource": "64b967d14",
+  "newSource": "d4241560c",
+  "runtime": "Node 22 host; current generated Prisma client; Next server-only marker mapped to its server-runtime empty module for CLI execution"
+}

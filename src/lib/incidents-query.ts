@@ -170,9 +170,12 @@ export function buildIncidentOrderBy(
 }
 
 export const incidentListSelect = {
+  automationTraces: { select: { incidentId: true }, take: 1 },
+  automationDecision: { select: { incidentId: true } },
   ...incidentSlaSelect,
   id: true,
   title: true,
+  automationSourceRestricted: true,
   status: true,
   escalationStatus: true,
   currentEscalationStep: true,

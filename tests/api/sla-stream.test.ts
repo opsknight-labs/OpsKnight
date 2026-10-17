@@ -13,6 +13,11 @@ vi.mock('next-auth', () => ({
   getServerSession: vi.fn(),
 }));
 
+// Authentication expiry and recovery policies are covered in recovery-stream-policy.test.ts.
+vi.mock('@/lib/authentication-policy', () => ({
+  checkAuthenticationPolicy: vi.fn().mockResolvedValue({ allowed: true }),
+}));
+
 // Mock auth
 vi.mock('@/lib/auth', () => ({
   getAuthOptions: vi.fn().mockResolvedValue({}),
@@ -20,6 +25,7 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/rbac', () => ({
   assertCanReadServiceMetrics: vi.fn(),
+  getUserPermissions: vi.fn(async () => ({ capabilities: [] })),
 }));
 
 // Mock prisma
@@ -156,5 +162,29 @@ describe('SLA Streaming API', () => {
     expect(response.status).toBe(403);
     const { default: prisma } = await import('@/lib/prisma');
     expect(prisma.incident.count).not.toHaveBeenCalled();
+  });
+  it('redacts protected incident titles in an authorized SSE batch', async () => {
+    const { getServerSession } = await import('next-auth');
+    vi.mocked(getServerSession).mockResolvedValue(session);
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.mocked(prisma.incident.count).mockResolvedValue(1);
+    vi.mocked(prisma.incident.findMany)
+      .mockResolvedValueOnce([
+        {
+          id: 'private',
+          title: 'Customer ABC123 payment failure',
+          status: 'OPEN',
+          createdAt: new Date(),
+          automationDecision: { incidentId: 'private' },
+          automationTraces: [],
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>)
+      .mockResolvedValueOnce([]);
+    const response = await GET(new NextRequest('http://localhost:3000/api/sla/stream'));
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain('Restricted alert content');
+    expect(body).not.toContain('ABC123');
+    expect(body).not.toContain('automationDecision');
   });
 });

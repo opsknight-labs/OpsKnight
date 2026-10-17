@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   txIncidentUpdate: vi.fn(),
   txIncidentUpdateMany: vi.fn(),
   txIncidentEventCreate: vi.fn(),
-  txBackgroundJobFindFirst: vi.fn(),
+  txEscalationJobLookup: vi.fn(),
   txBackgroundJobCreate: vi.fn(),
 }));
 
@@ -20,6 +20,7 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: mocks.runSerializableTransaction,
+  runReadCommittedTransaction: mocks.runSerializableTransaction,
 }));
 
 import prisma from '@/lib/prisma';
@@ -77,6 +78,13 @@ function transactionDouble(failOn?: 'incident' | 'event' | 'job') {
   const writes: string[] = [];
   mocks.runSerializableTransaction.mockImplementation(async callback =>
     callback({
+      $queryRaw: async (...args: unknown[]) => {
+        if (Array.isArray(args[0])) {
+          const row = await mocks.txIncidentFindUnique();
+          return row ? [row] : [];
+        }
+        return mocks.txEscalationJobLookup(...args);
+      },
       incident: {
         findUnique: mocks.txIncidentFindUnique,
         updateMany: mocks.txIncidentUpdateMany,
@@ -94,7 +102,6 @@ function transactionDouble(failOn?: 'incident' | 'event' | 'job') {
         }),
       },
       backgroundJob: {
-        findFirst: mocks.txBackgroundJobFindFirst,
         create: mocks.txBackgroundJobCreate.mockImplementation(async () => {
           if (failOn === 'job') throw new Error('job insert failed');
           writes.push('job');
@@ -110,7 +117,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.txIncidentFindUnique.mockResolvedValue(incidentRow());
   mocks.txIncidentUpdateMany.mockResolvedValue({ count: 1 });
-  mocks.txBackgroundJobFindFirst.mockResolvedValue(null);
+  mocks.txEscalationJobLookup.mockResolvedValue([]);
 });
 
 describe('generation-fenced state transitions', () => {
@@ -475,6 +482,7 @@ describe('commitEscalationPlan', () => {
 describe('initializeEscalationExecution', () => {
   function txWithPolicy(firstStepDelayMinutes: number | null) {
     return {
+      $queryRaw: mocks.txEscalationJobLookup.mockResolvedValue([]),
       service: {
         findUnique: vi
           .fn()
@@ -489,7 +497,6 @@ describe('initializeEscalationExecution', () => {
         findUnique: mocks.txIncidentFindUnique.mockResolvedValue({ escalationGeneration: 2 }),
       },
       backgroundJob: {
-        findFirst: mocks.txBackgroundJobFindFirst.mockResolvedValue(null),
         create: mocks.txBackgroundJobCreate.mockResolvedValue({ id: 'job-first' }),
       },
     };
@@ -564,7 +571,7 @@ describe('initializeEscalationExecution', () => {
 
   it('reuses an active job with the same logical escalation identity', async () => {
     const tx = txWithPolicy(5);
-    mocks.txBackgroundJobFindFirst.mockResolvedValue({ id: 'job-existing' });
+    mocks.txEscalationJobLookup.mockResolvedValue([{ id: 'job-existing' }]);
 
     const result = await initializeEscalationExecution(tx as never, {
       incidentId: 'inc-1',
@@ -573,14 +580,8 @@ describe('initializeEscalationExecution', () => {
     });
 
     expect(result.initialized).toBe(true);
-    expect(mocks.txBackgroundJobFindFirst).toHaveBeenCalledWith({
-      where: {
-        type: 'ESCALATION',
-        status: { in: ['PENDING', 'PROCESSING'] },
-        payload: { path: ['logicalKey'], equals: 'ESCALATION:inc-1:2:0' },
-      },
-      select: { id: true },
-    });
+    expect(mocks.txEscalationJobLookup).toHaveBeenCalledTimes(1);
+    expect(mocks.txEscalationJobLookup.mock.calls[0][0].values).toEqual(['"ESCALATION:inc-1:2:0"']);
     expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
   });
 
