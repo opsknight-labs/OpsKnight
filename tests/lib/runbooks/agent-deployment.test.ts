@@ -216,6 +216,7 @@ it('generates canonical Docker installation and upgrade commands matching agent 
   expect(commands.docker).toContain(
     'docker volume create opsknight-agent-cmv90000000000000000000001_data'
   );
+  expect(commands.docker).toContain('--entrypoint sh');
   expect(commands.docker).toContain('cat > /var/lib/opsknight-agent/enrollment-token');
   expect(commands.docker).toContain("-e OPSKNIGHT_URL='https://ops.example.com'");
   expect(commands.docker).toContain(
@@ -260,6 +261,7 @@ it('generates canonical Podman installation and upgrade commands matching rootle
   expect(commands.podman).toContain(
     'podman volume create opsknight-agent-cmv90000000000000000000001_data'
   );
+  expect(commands.podman).toContain('--entrypoint sh');
   expect(commands.podman).toContain('cat > /var/lib/opsknight-agent/enrollment-token');
   expect(commands.podman).toContain('-e CONTAINER_HOST=unix:///run/podman/podman.sock');
   expect(commands.podman).toContain("-e OPSKNIGHT_URL='https://ops.example.com'");

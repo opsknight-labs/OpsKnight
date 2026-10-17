@@ -263,11 +263,9 @@ export async function executeAttempt(
       attempt.step.type === 'DOCKER' &&
       attempt.step.config.action === 'health'
     ) {
+      const stepTimeout = attempt.step.timeoutSeconds ?? attempt.step.config.timeoutSeconds;
       const startCheckTime = Date.now();
-      const maxWaitMs = Math.min(
-        Math.max(10000, Number(attempt.step.config.timeoutSeconds ?? 15) * 1000),
-        30000
-      );
+      const maxWaitMs = Math.min(Math.max(5000, Number(stepTimeout ?? 15) * 1000), 60000);
       while (
         !containerHealthPassed(result.output) &&
         isContainerStarting(result.output) &&
@@ -278,8 +276,15 @@ export async function executeAttempt(
         if (signal.aborted) break;
         const retry = await executeCommand(attempt, policy, signal);
         result.output = retry.output;
+        result.exitCode = retry.exitCode;
+        if (retry.status !== 'SUCCEEDED') {
+          result.status = retry.status;
+          result.errorCode = retry.errorCode;
+          result.errorMessage = retry.errorMessage;
+          break;
+        }
       }
-      if (!containerHealthPassed(result.output)) {
+      if (!containerHealthPassed(result.output) && result.status === 'SUCCEEDED') {
         result.status = 'FAILED';
         result.errorCode = 'CONTAINER_UNHEALTHY';
         result.errorMessage =

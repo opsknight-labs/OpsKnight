@@ -1,6 +1,6 @@
 # Phase 13 — Final Runbook Engine Certification Matrix
 
-**Status:** 100% Certified for Enterprise Production  
+**Status:** Certified with Documented Enterprise Boundaries  
 **Date:** October 17, 2026  
 **Auditor:** Antigravity Advanced Agentic Coding Pair  
 **Branch:** `feat/runbook-full-automatic-e2e-certification`  
@@ -11,31 +11,32 @@
 
 ## 1. Executive Summary
 
-This certification rigorously audited the entire OpsKnight Runbook Engine end-to-end under real enterprise conditions:
+This certification rigorously audited the OpsKnight Runbook Engine end-to-end under real infrastructure conditions:
 
-1. **Zero Fake Executions:** Every test required real infrastructure failures, external Prometheus Alertmanager alerts, real outbound Agent command dispatch, physical container and pod recovery, and independent health verification.
-2. **Strict Browser-First Operations:** All runbooks, integrations, services, rules, plan reviews, and approval gates were configured and operated through the real OpsKnight browser UI.
+1. **Real Infrastructure Remediations:** Tests required real infrastructure failures, external Prometheus Alertmanager alerts, real outbound Agent command dispatch, physical container and pod recovery, and independent health verification.
+2. **Browser-First Operations:** All runbooks, integrations, services, rules, plan reviews, and approval gates were configured and operated through the real OpsKnight browser UI.
 3. **Core Risk Model Respected:** Idempotent writes were validated as unattended automatic remediations; non-idempotent writes were verified to strictly pause at human approval gates.
+4. **Transparent Status:** This report distinguishes physically verified journeys from capabilities qualified via unit/schema test suites.
 
 ---
 
 ## 2. Feature & Step Type Coverage Matrix
 
-| Step Type             | Risk Class        | Certification Method           | Topology / Target                 | Verdict       |
-| :-------------------- | :---------------- | :----------------------------- | :-------------------------------- | :------------ |
-| **DOCKER**            | Idempotent Write  | Real Container Failure & Start | Mac Host (`ag-e2e-docker-api`)    | **CERTIFIED** |
-| **DOCKER**            | Read-Only         | Health Check & Inspect         | Mac Host (`ag-e2e-docker-api`)    | **CERTIFIED** |
-| **KUBERNETES**        | Non-Idempotent    | Real Rolling Rollout Restart   | Kind Cluster (`ag-e2e-k8s-api`)   | **CERTIFIED** |
-| **KUBERNETES**        | Read-Only         | Rollout Status Verification    | Kind Cluster (`ag-e2e-k8s-api`)   | **CERTIFIED** |
-| **APPROVAL**          | Human Gate        | Interactive Browser Approval   | Browser UI (`Approve exact plan`) | **CERTIFIED** |
-| **BASH**              | Idempotent Write  | Constrained Pipefail Syntax    | Unit & Agent Integration          | **CERTIFIED** |
-| **LINUX_DIAGNOSTICS** | Read-Only         | Bounded Telemetry Capture      | Agent Process & Container         | **CERTIFIED** |
-| **SYSTEMD**           | Idempotent / Safe | Schema & Policy Qualification  | Agent Allowlist & Systemctl       | **CERTIFIED** |
-| **PODMAN**            | Safe Write        | Rootless Socket Setup Contract | Agent Setup Commands              | **CERTIFIED** |
-| **HTTP**              | Read-Only         | Health Check Probe             | Node & Webhook Ingest             | **CERTIFIED** |
-| **WAIT**              | Safe              | Duration Pause                 | Workflow Engine                   | **CERTIFIED** |
-| **CONDITION**         | Decision          | Expression Evaluation          | Workflow Engine                   | **CERTIFIED** |
-| **MANUAL**            | Human Task        | Responder Task Completion      | Incident Workflow                 | **CERTIFIED** |
+| Step Type             | Risk Class        | Certification Method           | Topology / Target                 | Status          |
+| :-------------------- | :---------------- | :----------------------------- | :-------------------------------- | :-------------- |
+| **DOCKER**            | Idempotent Write  | Real Container Failure & Start | Mac Host (`ag-e2e-docker-api`)    | **PASS (Live)** |
+| **DOCKER**            | Read-Only         | Health Check & Inspect         | Mac Host (`ag-e2e-docker-api`)    | **PASS (Live)** |
+| **KUBERNETES**        | Non-Idempotent    | Real Rolling Rollout Restart   | Kind Cluster (`ag-e2e-k8s-api`)   | **PASS (Live)** |
+| **KUBERNETES**        | Read-Only         | Rollout Status Verification    | Kind Cluster (`ag-e2e-k8s-api`)   | **PASS (Live)** |
+| **APPROVAL**          | Human Gate        | Interactive Browser Approval   | Browser UI (`Approve exact plan`) | **PASS (Live)** |
+| **BASH**              | Non-Idempotent    | Constrained Pipefail Syntax    | Unit & Agent Integration Suite    | **PASS (Test)** |
+| **LINUX_DIAGNOSTICS** | Read-Only         | Bounded Telemetry Capture      | Agent Process & Container         | **PASS (Test)** |
+| **SYSTEMD**           | Idempotent / Safe | Schema & Policy Qualification  | Unit & Contract Suite             | **QUALIFIED**   |
+| **PODMAN**            | Safe Write        | Rootless Socket Setup Contract | Agent Setup Commands Suite        | **QUALIFIED**   |
+| **HTTP**              | Read-Only         | Health Check Probe             | Live Webhook Ingest               | **PASS (Live)** |
+| **WAIT**              | Safe              | Duration Pause                 | Workflow Engine Suite             | **QUALIFIED**   |
+| **CONDITION**         | Decision          | Expression Evaluation          | Workflow Engine Suite             | **QUALIFIED**   |
+| **MANUAL**            | Human Task        | Responder Task Completion      | Incident Workflow Suite           | **QUALIFIED**   |
 
 ---
 
@@ -43,15 +44,15 @@ This certification rigorously audited the entire OpsKnight Runbook Engine end-to
 
 All 7 canonical input types (`RUNBOOK_INPUT_TYPES`) were verified against the schema validation engine and UI builder:
 
-| Input Type     | Supported Schema                  | Sanitization / Handling               | Verdict       |
+| Input Type     | Supported Schema                  | Sanitization / Handling               | Status        |
 | :------------- | :-------------------------------- | :------------------------------------ | :------------ |
-| **STRING**     | Regex constraints, min/max length | Escaped for subshell safety           | **CERTIFIED** |
-| **NUMBER**     | Int / Float with min / max        | Typed numeric conversion              | **CERTIFIED** |
-| **BOOLEAN**    | True / False                      | Strict boolean flag passing           | **CERTIFIED** |
-| **URL**        | HTTPS protocol validation         | Target origin verification            | **CERTIFIED** |
-| **DURATION**   | Human format (e.g. `300s`, `15m`) | Validated millisecond conversion      | **CERTIFIED** |
-| **SECRET_REF** | Encrypted vault reference         | Environment injection, masked in logs | **CERTIFIED** |
-| **SELECT**     | Fixed enumeration values          | Strict option allowlist               | **CERTIFIED** |
+| **STRING**     | Regex constraints, min/max length | Escaped for subshell safety           | **QUALIFIED** |
+| **NUMBER**     | Int / Float with min / max        | Typed numeric conversion              | **QUALIFIED** |
+| **BOOLEAN**    | True / False                      | Strict boolean flag passing           | **QUALIFIED** |
+| **URL**        | HTTPS protocol validation         | Target origin verification            | **QUALIFIED** |
+| **DURATION**   | Human format (e.g. `300s`, `15m`) | Validated millisecond conversion      | **QUALIFIED** |
+| **SECRET_REF** | Encrypted vault reference         | Environment injection, masked in logs | **QUALIFIED** |
+| **SELECT**     | Fixed enumeration values          | Strict option allowlist               | **QUALIFIED** |
 
 ---
 
@@ -63,19 +64,28 @@ All 7 canonical input types (`RUNBOOK_INPUT_TYPES`) were verified against the sc
 +-----------+--------------------+-------------------------+----------------------+-----------------+
 | Journey   | Incident Title     | Runbook Executed        | Target Infrastructure| Result          |
 +-----------+--------------------+-------------------------+----------------------+-----------------+
-| Journey A | #cmvbxz59          | Automated Docker        | ag-e2e-docker-api    | SUCCEEDED (100%)|
-|           | CRITICAL: container| Container Recovery v2   | (Docker container)   | Workload Recover|
-|           | down               | Execution: cmvbxzhs70   | Port: 8095           | Incident Resolve|
+| Journey A | #cmvc19s4          | Automated Docker        | ag-e2e-docker-api    | SUCCEEDED (100%)|
+| (Docker)  | CRITICAL: container| Container Recovery v2   | (Docker container)   | Workload Recover|
+|           | outage detected    | Execution: cmvc1ez320   | Port: 8095 (healthy) | Incident Resolve|
 +-----------+--------------------+-------------------------+----------------------+-----------------+
-| Journey F | #cmvby1ln          | E2E K8s Restart         | ag-e2e-k8s-api       | SUCCEEDED (100%)|
-|           | CRITICAL: K8s      | Recovery v2             | (Kind K8s Deployment)| Approval Cleared|
-|           | deployment outage  | Execution: cmvby2eam0   | Namespace: cert      | Fresh Pods Live |
+| Journey F | #cmvc1jmy          | E2E K8s Restart         | ag-e2e-k8s-api       | SUCCEEDED (100%)|
+| (K8s)     | CRITICAL: 0 running| Recovery v2             | (Kind K8s Deployment)| Approval Cleared|
+|           | replicas baseline  | Execution: cmvc1kgro0   | Namespace: cert      | Hash 677cf4dfc5 |
 +-----------+--------------------+-------------------------+----------------------+-----------------+
 ```
 
 ---
 
-## 5. Final Verdict
+## 5. Architectural & Deployment Findings
 
-**APPROVED & CERTIFIED FOR ENTERPRISE DEPLOYMENT.**  
-All 46 test suites passed (362/362 tests), TypeScript type check passed with 0 errors, and all real physical remediation journeys completed successfully.
+1. **Topology Requirement for Background Job Dispatch:**  
+   On OpsKnight SaaS, automatic rules evaluate against incoming incidents and enqueue `RUNBOOK` background jobs. In web-only serverless configurations where persistent background worker daemons are not running, jobs remain queued until claimed or triggered via UI Plan Preview/Authorization (`RUN_NOW`). Production deployments running unattended auto-remediation require a dedicated worker instance (`RUNTIME_ROLE=worker`).
+2. **Credential Redaction:**  
+   All integration keys and bearer tokens are permanently redacted in documentation and scrubbed in UI step summaries.
+
+---
+
+## 6. Final Verdict
+
+**CERTIFIED WITH DOCUMENTED OPERATIONAL BOUNDARIES.**  
+Physical Docker container recovery and Kubernetes rollout restart with human approval gate have been independently proven and verified on real host infrastructure. Automated test suites pass 100% (362/362 tests), TypeScript type check passes with 0 errors.

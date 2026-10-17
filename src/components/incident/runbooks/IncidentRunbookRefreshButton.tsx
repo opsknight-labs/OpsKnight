@@ -21,14 +21,22 @@ export default function IncidentRunbookRefreshButton({
   useEffect(() => {
     if (!hasActiveExecutions) return;
 
+    let inFlight = false;
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (inFlight || isPending) return;
+      inFlight = true;
       startTransition(() => {
-        router.refresh();
+        try {
+          router.refresh();
+        } finally {
+          inFlight = false;
+        }
       });
     }, pollIntervalSeconds * 1000);
 
     return () => clearInterval(interval);
-  }, [hasActiveExecutions, pollIntervalSeconds, router]);
+  }, [hasActiveExecutions, isPending, pollIntervalSeconds, router]);
 
   const handleManualRefresh = () => {
     setManualSpin(true);

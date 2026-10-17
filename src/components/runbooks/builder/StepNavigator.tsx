@@ -336,11 +336,20 @@ export function getStepSummary(step: RunbookStepDefinition): string {
     }
     case 'HTTP': {
       const method = String(config.method ?? 'GET');
-      const url = config.url ? ` ${String(config.url)}` : '';
-      return `${method}${url}`.trim();
+      let sanitizedUrl = '';
+      if (config.url) {
+        try {
+          const parsed = new URL(String(config.url));
+          sanitizedUrl = ` ${parsed.origin}${parsed.pathname}`;
+        } catch {
+          sanitizedUrl = ` ${String(config.url).split('?')[0]}`;
+        }
+      }
+      return `${method}${sanitizedUrl}`.trim();
     }
     case 'BASH': {
-      const cmd = String(config.command ?? '');
+      let cmd = String(config.command ?? '');
+      cmd = cmd.replace(/(token|key|secret|password|bearer|auth)[=:\s]+[^\s;]+/gi, '$1=***');
       return cmd ? `$ ${cmd.slice(0, 35)}${cmd.length > 35 ? '…' : ''}` : 'Shell script';
     }
     case 'LINUX_DIAGNOSTICS': {

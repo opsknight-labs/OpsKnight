@@ -78,7 +78,7 @@ docker compose -p ${deployment.name} -f deploy/compose/docker-compose.agent.yml 
   const docker = `${captureToken}
 trap 'rm -rf "$agent_credential_dir"' EXIT
 docker volume create ${deployment.name}_data
-docker run --rm -i -v ${deployment.name}_data:/var/lib/opsknight-agent ${shellQuote(image)} sh -c 'cat > /var/lib/opsknight-agent/enrollment-token && chmod 0600 /var/lib/opsknight-agent/enrollment-token' < "$agent_credential_dir/enrollment-token"
+docker run --rm -i --entrypoint sh -v ${deployment.name}_data:/var/lib/opsknight-agent ${shellQuote(image)} -c 'cat > /var/lib/opsknight-agent/enrollment-token && chmod 0600 /var/lib/opsknight-agent/enrollment-token' < "$agent_credential_dir/enrollment-token"
 rm -rf "$agent_credential_dir"
 trap - EXIT
 
@@ -88,6 +88,8 @@ if [ -n ${shellQuote(policyPath)} ]; then
   resolved_policy=$(realpath ${shellQuote(policyPath)} 2>/dev/null || echo "$(pwd)/${policyPath}")
   if [ -f "$resolved_policy" ]; then
     agent_policy_arg="-v $resolved_policy:/etc/opsknight-agent/policy.json:ro"
+  else
+    echo "Warning: policy file not found at $resolved_policy; proceeding with container default policy" >&2
   fi
 fi
 docker_sock="/var/run/docker.sock"
@@ -95,7 +97,7 @@ docker_sock_arg=""
 docker_group_arg=""
 if [ -S "$docker_sock" ]; then
   docker_sock_arg="-v $docker_sock:/var/run/docker.sock"
-  docker_group_arg=$(stat -c '--group-add %g' "$docker_sock" 2>/dev/null || true)
+  docker_group_arg=$(stat -c '--group-add %g' "$docker_sock" 2>/dev/null || stat -f '--group-add %g' "$docker_sock" 2>/dev/null || true)
 fi
 
 docker run -d \\
@@ -114,7 +116,7 @@ docker run -d \\
   const podman = `${captureToken}
 trap 'rm -rf "$agent_credential_dir"' EXIT
 podman volume create ${deployment.name}_data
-podman run --rm -i -v ${deployment.name}_data:/var/lib/opsknight-agent:Z ${shellQuote(image)} sh -c 'cat > /var/lib/opsknight-agent/enrollment-token && chmod 0600 /var/lib/opsknight-agent/enrollment-token' < "$agent_credential_dir/enrollment-token"
+podman run --rm -i --entrypoint sh -v ${deployment.name}_data:/var/lib/opsknight-agent:Z ${shellQuote(image)} -c 'cat > /var/lib/opsknight-agent/enrollment-token && chmod 0600 /var/lib/opsknight-agent/enrollment-token' < "$agent_credential_dir/enrollment-token"
 rm -rf "$agent_credential_dir"
 trap - EXIT
 
@@ -124,6 +126,8 @@ if [ -n ${shellQuote(policyPath)} ]; then
   resolved_policy=$(realpath ${shellQuote(policyPath)} 2>/dev/null || echo "$(pwd)/${policyPath}")
   if [ -f "$resolved_policy" ]; then
     agent_policy_arg="-v $resolved_policy:/etc/opsknight-agent/policy.json:ro,Z"
+  else
+    echo "Warning: policy file not found at $resolved_policy; proceeding with container default policy" >&2
   fi
 fi
 podman_sock="\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}/podman/podman.sock"

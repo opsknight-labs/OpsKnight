@@ -752,11 +752,20 @@ function formatStepActionSummary(type: string, config: unknown): string {
     }
     case 'HTTP': {
       const method = String(c.method ?? 'GET');
-      const url = c.url ? ` ${String(c.url)}` : '';
-      return `${method}${url}`.trim();
+      let sanitizedUrl = '';
+      if (c.url) {
+        try {
+          const parsed = new URL(String(c.url));
+          sanitizedUrl = ` ${parsed.origin}${parsed.pathname}`;
+        } catch {
+          sanitizedUrl = ` ${String(c.url).split('?')[0]}`;
+        }
+      }
+      return `${method}${sanitizedUrl}`.trim();
     }
     case 'BASH': {
-      const cmd = String(c.command ?? '');
+      let cmd = String(c.command ?? '');
+      cmd = cmd.replace(/(token|key|secret|password|bearer|auth)[=:\s]+[^\s;]+/gi, '$1=***');
       return cmd.length > 50 ? `${cmd.slice(0, 47)}…` : cmd;
     }
     case 'WAIT': {

@@ -48,6 +48,23 @@ describe('IncidentRunbookRefreshButton', () => {
     fireEvent.click(button);
     expect(refreshMock).toHaveBeenCalledTimes(1);
   });
+
+  it('pauses polling when document tab is hidden in background', () => {
+    const visibilitySpy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    render(<IncidentRunbookRefreshButton hasActiveExecutions={true} pollIntervalSeconds={2} />);
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(refreshMock).not.toHaveBeenCalled();
+
+    visibilitySpy.mockReturnValue('visible');
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    visibilitySpy.mockRestore();
+  });
 });
 
 describe('getStepSummary', () => {
@@ -95,7 +112,7 @@ describe('getStepSummary', () => {
     expect(getStepSummary(step)).toBe('status nginx.service');
   });
 
-  it('formats HTTP step summary correctly', () => {
+  it('formats HTTP step summary correctly and strips sensitive query parameters', () => {
     const step: RunbookStepDefinition = {
       key: 'http_ping',
       name: 'Health check',
@@ -103,23 +120,23 @@ describe('getStepSummary', () => {
       riskClass: 'READ_ONLY',
       config: {
         method: 'POST',
-        url: 'https://example.com/api/ping',
+        url: 'https://example.com/api/ping?token=supersecret123&apiKey=xyz456',
       },
     };
     expect(getStepSummary(step)).toBe('POST https://example.com/api/ping');
   });
 
-  it('formats BASH step summary with truncated command', () => {
+  it('formats BASH step summary with truncated command and masks sensitive inline tokens', () => {
     const step: RunbookStepDefinition = {
       key: 'bash_clean',
       name: 'Clean logs',
       type: 'BASH',
       riskClass: 'READ_ONLY',
       config: {
-        command: 'find /var/log -type f -name "*.log" -mtime +7 -delete',
+        command: 'curl -H "Authorization: Bearer mysecrettoken123" https://api.internal',
       },
     };
-    expect(getStepSummary(step)).toBe('$ find /var/log -type f -name "*.log"…');
+    expect(getStepSummary(step)).toBe('$ curl -H "Authorization: Bearer=*** …');
   });
 
   it('formats WAIT and APPROVAL step summaries', () => {

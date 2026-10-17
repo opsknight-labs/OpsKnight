@@ -43,6 +43,7 @@ The OpsKnight Runbook Engine specifies 10 distinct step types. Every step type w
 ### Step 2: BASH
 
 - **Test ID:** `STEP-02-BASH`
+- **Risk Classification:** Non-Idempotent (`NON_IDEMPOTENT`). Per `minimumRiskForStep()`, arbitrary shell execution is strictly classified as non-idempotent to enforce human operator gates and prevent automatic runaway mutations.
 - **Actions Tested:** Allowlisted shell commands, pipefail syntax, denied command rejection, output bounds truncation (4 KiB limit), and approval enforcement.
 - **Success Case:** Command `df -h /var/log` executed on agent host. Returned filesystem capacity table within 4 KiB limit.
 - **Negative Case A (Denied Command):** Command `rm -rf /` or `nc -e /bin/sh` submitted. Rejected at agent policy check with `POLICY_VIOLATION: Command not present in allowedBashCommands`.

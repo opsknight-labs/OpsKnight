@@ -205,4 +205,40 @@ describe('runbook Agent executor', () => {
     expect(containerHealthPassed('')).toBe(false);
     expect(containerHealthPassed('invalid-json')).toBe(false);
   });
+
+  it('respects step.timeoutSeconds and abort signals during execution', async () => {
+    const customAttempt: ClaimedAttempt = {
+      attemptId: 'att-timeout',
+      leaseToken: 'lease-tok',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-timeout',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'docker_health_check',
+        name: 'Health check',
+        type: 'DOCKER',
+        riskClass: 'READ_ONLY',
+        config: {
+          action: 'health',
+          container: 'api',
+        },
+        timeoutSeconds: 2,
+      },
+    };
+
+    const dockerPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['DOCKER'],
+      dockerContainers: ['api'],
+    };
+
+    const controller = new AbortController();
+    controller.abort('AGENT_SHUTDOWN');
+    const result = await executeAttempt(customAttempt, dockerPolicy, controller.signal);
+    expect(result.status).toBe('CANCELLED');
+    expect(result.errorCode).toBe('AGENT_INTERRUPTED_BY_SHUTDOWN');
+  });
 });
