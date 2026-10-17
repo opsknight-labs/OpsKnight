@@ -137,6 +137,9 @@ const SENSITIVE_KEYS = [
   /ssn/i,
   /credit_?card|cvv|cvc/i,
   /webhook_?url/i,
+  /database_?url/i,
+  /connection_?string/i,
+  /\bdsn\b/i,
 ];
 
 const SECRET_PATTERNS = [
@@ -146,14 +149,22 @@ const SECRET_PATTERNS = [
   /\bok_[A-Za-z0-9_-]{20,}\b/g, // OpsKnight API Keys
   /xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*/g, // Slack tokens
   /AKIA[0-9A-Z]{16}/g, // AWS Access Keys
-  /(?:https?:\/\/[^\s?#]+\?[^\s#]*(?:token|secret|key|sig|signature|api_key)=)[^&\s]+/gi, // URL query tokens (bounded by ? and #)
+  /(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s?#]+\?[^\s#]*(?:token|secret|key|sig|signature|api_key|password|pwd)=)[^&\s]+/gi, // URL query tokens (bounded by ? and #)
 ];
+
+// Connection URI credential patterns (e.g. postgresql://user:secret@host:port/db)
+// Supports internal hostnames without domain suffixes (e.g. db, localhost, pg-internal)
+const URI_USER_PASSWORD_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^:\s/@]+):([^@\s/]+)@/g;
+const URI_PASSWORD_ONLY_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/):([^@\s/]+)@/g;
 
 export function sanitizeString(val: string): string {
   if (typeof val !== 'string' || val.length === 0) return val;
   // Bound string length to prevent ReDoS on huge uncontrolled inputs
   const input = val.length > 50000 ? val.slice(0, 50000) : val;
   let result = input;
+  // Redact credentials in connection URIs
+  result = result.replace(URI_USER_PASSWORD_PATTERN, '$1$2:[REDACTED]@');
+  result = result.replace(URI_PASSWORD_ONLY_PATTERN, '$1:[REDACTED]@');
   for (const pattern of SECRET_PATTERNS) {
     result = result.replace(pattern, '[REDACTED]');
   }
