@@ -173,6 +173,11 @@ export default function StepNavigator({
                         <em className="font-normal text-muted-foreground">Untitled step</em>
                       )}
                     </h4>
+                    {getStepSummary(step) && (
+                      <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground/90">
+                        {getStepSummary(step)}
+                      </p>
+                    )}
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <TypeIcon className="h-3 w-3" aria-hidden="true" />
@@ -307,4 +312,53 @@ export default function StepNavigator({
       )}
     </nav>
   );
+}
+
+export function getStepSummary(step: RunbookStepDefinition): string {
+  const config = (step.config || {}) as Record<string, unknown>;
+  switch (step.type) {
+    case 'KUBERNETES': {
+      const act = String(config.action ?? 'get');
+      const res = String(config.resource ?? 'deployment');
+      const name = config.name ? `/${String(config.name)}` : '';
+      const ns = config.namespace ? ` (${String(config.namespace)})` : '';
+      return `${act} ${res}${name}${ns}`.trim();
+    }
+    case 'DOCKER': {
+      const act = String(config.action ?? 'start');
+      const container = config.container ? ` container ${String(config.container)}` : '';
+      return `${act}${container}`.trim();
+    }
+    case 'SYSTEMD': {
+      const act = String(config.action ?? 'status');
+      const unit = config.unit ? ` ${String(config.unit)}` : '';
+      return `${act}${unit}`.trim();
+    }
+    case 'HTTP': {
+      const method = String(config.method ?? 'GET');
+      const url = config.url ? ` ${String(config.url)}` : '';
+      return `${method}${url}`.trim();
+    }
+    case 'BASH': {
+      const cmd = String(config.command ?? '');
+      return cmd ? `$ ${cmd.slice(0, 35)}${cmd.length > 35 ? '…' : ''}` : 'Shell script';
+    }
+    case 'LINUX_DIAGNOSTICS': {
+      return String(config.command ?? 'Diagnostics check');
+    }
+    case 'WAIT': {
+      return `Wait ${String(config.durationSeconds ?? 10)}s`;
+    }
+    case 'CONDITION': {
+      return `If ${String(config.condition ?? 'condition')}`;
+    }
+    case 'MANUAL': {
+      return 'Manual responder instructions';
+    }
+    case 'APPROVAL': {
+      return 'Approval gate';
+    }
+    default:
+      return '';
+  }
 }

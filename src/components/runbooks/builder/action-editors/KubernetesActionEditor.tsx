@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { FormSelect } from '../../RunbookControls';
+import { cn } from '@/lib/utils';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 
 interface KubernetesActionEditorProps {
@@ -188,7 +189,10 @@ export default function KubernetesActionEditor({
               value={namespace}
               disabled={readOnly}
               onChange={e => onChange({ ...config, namespace: e.target.value })}
-              className={errors.namespace ? 'border-destructive' : ''}
+              className={cn(
+                errors.namespace ? 'border-destructive' : '',
+                'disabled:opacity-90 disabled:text-foreground disabled:bg-muted/40 font-medium'
+              )}
             />
           </div>
           {errors.namespace && <p className="mt-1 text-xs text-destructive">{errors.namespace}</p>}
@@ -229,7 +233,10 @@ export default function KubernetesActionEditor({
               value={name}
               disabled={readOnly}
               onChange={e => onChange({ ...config, name: e.target.value })}
-              className={resourceNameError ? 'border-destructive' : ''}
+              className={cn(
+                resourceNameError ? 'border-destructive' : '',
+                'disabled:opacity-90 disabled:text-foreground disabled:bg-muted/40 font-medium'
+              )}
             />
           </div>
           {resourceNameError ? (
