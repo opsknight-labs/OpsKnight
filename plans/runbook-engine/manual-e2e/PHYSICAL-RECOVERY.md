@@ -427,3 +427,99 @@ All Scoped Secret operations were driven 100% through the real UI at `https://op
   - Fleet state: 4 healthy agents, 2 offline agents, 1 enrolling agent.
   - Queue latency: 0 pending step attempts, 0s oldest pending attempt.
   - Circuit breakers: 0 dead-letter results, 0 services at circuit threshold.
+
+---
+
+## 11. Runbook Library Lifecycle: Duplication, Archival, Search Filtering, & Restoration
+
+### 11.1 Objective & Test Scope
+
+- **Target View**: Runbook Library at `https://opssentinal.com/runbooks` and Detail view at `/runbooks/[id]`.
+- **Scope**: Validate the complete operational lifecycle of a runbook from the UI:
+  1. Card Action Menu Duplication.
+  2. Archival and state transition out of active library.
+  3. Status tab filtering (`All active`, `Published`, `Draft`, `Archived`).
+  4. Search query filtering (`?q=...`) and empty state rendering.
+  5. Restoration from archived state back into editable draft.
+  6. Dialog-driven Runbook Creation and publishing v1.
+
+### 11.2 Execution & UI Receipts
+
+1. **Card Action Duplication**:
+   - On `https://opssentinal.com/runbooks/cmvc8rni10415r4wgqbw2zjsh`, opened "More runbook actions" menu and selected `Duplicate…`.
+   - Confirmed duplicate in `[role="alertdialog"]`: _"Creates a new draft copy based on the published version (v4)."_
+   - Redirected to new runbook `https://opssentinal.com/runbooks/cmvcadj1h08chr4wg5tm4f5i3` titled `E2E Blast Radius Guard 3026 (Copy)`.
+2. **Archival Lifecycle**:
+   - On `cmvcadj1h08chr4wg5tm4f5i3`, clicked **Archive Runbook**.
+   - Confirmed in modal: _"This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."_
+   - Redirected to `/runbooks`. Runbook count under `All active` shifted from 16 to 15.
+3. **Filter Tab & Restoration Receipts**:
+   - Clicked `Archived` tab: displayed 3 archived runbooks including `E2E Blast Radius Guard 3026 (Copy)`.
+   - Clicked on `cmvcadj1h08chr4wg5tm4f5i3`; clicked **Restore Runbook** and confirmed in modal.
+   - Status badge immediately returned to active `Draft`.
+   - Clicked `Draft` tab on library: displayed `Draft runbooks (1): [ 'E2E Blast Radius Guard 3026 (Copy)' ]`.
+   - Clicked `Published` tab on library: displayed `Published runbooks count: 14`.
+4. **Search Query & Empty State Receipts**:
+   - Query `?q=Docker`: filtered library to 5 matching runbooks (`Automated Docker Container Recovery`, `E2E Docker Start Recovery`, etc.).
+   - Query `?q=Systemd`: filtered library to 1 matching runbook (`E2E Native Systemd and Podman Suite`).
+   - Query `?q=NonExistentQuery999`: 0 article cards rendered; clean empty state message displayed.
+5. **Create Runbook Dialog & Publishing v1**:
+   - Clicked **New Runbook** in library header; verified form validation on empty submit.
+   - Entered Name: `Cert Suite UI Created 9056` (auto-derived slug: `cert-suite-ui-created-9056`).
+   - Submitted form; redirected to `https://opssentinal.com/runbooks/cmvcahida08mmr4wg3vt9o2i1`.
+   - Switched to Workflow tab; used JSON editor to configure HTTP endpoint health check; saved draft and published v1.
+
+---
+
+## 12. Docker Swarm Cluster Fleet Deployment Receipts
+
+### 12.1 Objective & Test Scope
+
+- **Target Swarm Node**: `docker-desktop` (Manager Leader, node ID `idg8c9tvq85axrp1avm3q7gbn`, Swarm engine 29.7.2).
+- **Scope**: Validate end-to-end Swarm agent enrollment command generation and security contracts:
+  1. Enrollment token staging via standard input.
+  2. Overlay network binding (`SWARM_NETWORK_NAME`).
+  3. Interactive Swarm node ID prompt preservation.
+  4. Stack deployment contract via `deploy/swarm/docker-stack.agent.yml`.
+
+### 12.2 Physical UI Receipts
+
+1. **Enrollment Sheet Interaction**:
+   - Navigated to `https://opssentinal.com/runbooks/agents`.
+   - Clicked **Enroll agent** to open enrollment sheet.
+   - Created enrollment token for agent `swarm-cert-agent-0316`.
+   - Switched to the **Swarm** runtime tab.
+2. **Generated Setup Script Receipt**:
+   ```bash
+   # Run in Bash. Paste the one-time token at the hidden prompt.
+   set +x
+   set -euo pipefail
+   umask 077
+   agent_credential_dir=$(mktemp -d)
+   IFS= read -r -s -p 'Enrollment token: ' agent_enrollment_token
+   printf '\n'
+   printf '%s' "$agent_enrollment_token" > "$agent_credential_dir/enrollment-token"
+   unset agent_enrollment_token
+   chmod 0644 "$agent_credential_dir/enrollment-token"
+   curl --fail --silent --show-error --max-time 10 'https://opssentinal.com/api/runbook-agent/v1/time'
+   trap 'rm -rf "$agent_credential_dir"' EXIT
+   docker secret create opsknight-agent-enrollment-cmvcakr2j08vur4wgx7tas20z - < "$agent_credential_dir/enrollment-token"
+   export OPSKNIGHT_AGENT_IMAGE='ghcr.io/opsknight-labs/opsknight-agent:latest'
+   export OPSKNIGHT_AGENT_ENROLLMENT_SECRET='opsknight-agent-enrollment-cmvcakr2j08vur4wgx7tas20z'
+   export OPSKNIGHT_AGENT_URL='https://opssentinal.com'
+   export OPSKNIGHT_EXECUTION_PUBLIC_KEY='MCowBQYDK2VwAyEA4rh6gfeViqX14caPZnYHySvy7kxxXk1Y+HDMsacwNOk='
+
+   # Use an existing overlay network reachable from this Agent.
+   export SWARM_NETWORK_NAME="${SWARM_NETWORK_NAME:-opsknight}"
+   IFS= read -r -p 'Swarm node ID for this Agent identity: ' OPSKNIGHT_AGENT_NODE_ID
+   export OPSKNIGHT_AGENT_NODE_ID
+   docker stack deploy --with-registry-auth \
+     -c deploy/swarm/docker-stack.agent.yml opsknight-agent-cmvcakr2j08vur4wgx7tas20z
+   rm -rf "$agent_credential_dir"
+   trap - EXIT
+   ```
+3. **Verification**:
+   - `hasSwarmNetwork`: **Verified** (`export SWARM_NETWORK_NAME="${SWARM_NETWORK_NAME:-opsknight}"`).
+   - `hasNodePrompt`: **Verified** (`IFS= read -r -p 'Swarm node ID for this Agent identity: ' OPSKNIGHT_AGENT_NODE_ID`).
+   - `hasStackDeploy`: **Verified** (`docker stack deploy -c deploy/swarm/docker-stack.agent.yml`).
+   - `hasSecretDelivery`: **Verified** (`docker secret create ... - < ...`).

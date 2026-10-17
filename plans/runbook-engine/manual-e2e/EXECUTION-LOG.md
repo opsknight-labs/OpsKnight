@@ -46,3 +46,9 @@
 | `2026-10-17 10:35:17` | Execution      | `cmvc9ghp805sxr4wg5onxjl4c`    | Execution Halted Safely        | System Engine              | `FAILED` (Journey J: Step 2 mutation halted; PID remained 184782) |
 | `2026-10-17 10:37:30` | Runbook        | `cmvc8rni10415r4wgqbw2zjsh`    | Version Comparison UI          | `admin@opsknight.com`      | Verified at `/compare`: 3 added, 1 removed, static diffing passed |
 | `2026-10-17 10:38:00` | Health         | Platform Health                | Health Surveillance Dashboard  | System Surveillance        | Verified at `/runbooks/health`: 4 online, worker active, 0 queue  |
+| `2026-10-17 11:01:25` | Runbook        | `cmvcadj1h08chr4wg5tm4f5i3`    | UI Card Duplication            | `admin@opsknight.com`      | Duplicated from v4; created `E2E Blast Radius Guard 3026 (Copy)`  |
+| `2026-10-17 11:01:40` | Runbook        | `cmvcadj1h08chr4wg5tm4f5i3`    | Runbook Archival               | `admin@opsknight.com`      | Archived via UI dialog; removed from Active (16→15), moved to Arc |
+| `2026-10-17 11:02:10` | Runbook        | `cmvcadj1h08chr4wg5tm4f5i3`    | Runbook Restoration            | `admin@opsknight.com`      | Restored from Archived tab; status badge returned to Draft        |
+| `2026-10-17 11:03:30` | Runbook        | Library Search & Filters       | Query Filtering & Empty State  | `admin@opsknight.com`      | Verified `?q=Docker` (5 matches), `?q=Systemd` (1), empty state   |
+| `2026-10-17 11:04:30` | Runbook        | `cmvcahida08mmr4wg3vt9o2i1`    | UI Runbook Creation & Publish  | `admin@opsknight.com`      | Created via modal form; JSON step applied, draft saved, v1 pub    |
+| `2026-10-17 11:07:00` | Agent          | `cmvcakr2j08vur4wgx7tas20z`    | Swarm Stack Agent Enrollment   | `admin@opsknight.com`      | Verified Swarm stdin token, node prompt & stack deploy snippets   |
