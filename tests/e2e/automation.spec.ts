@@ -828,10 +828,42 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
     await expect(workspace.getByLabel('Automation mode')).toHaveValue('LIVE');
     await expect(workspace.getByRole('button', { name: 'Publish candidate', exact: true })).toBeEnabled();
+
+    // Author and publish candidate Version 2 with distinct enrichment (P2 priority)
+    const candidateDraft = await client.call('getAutomationDraft', { params: { id: serviceId } });
+    const candidateSnapshot = {
+      schemaVersion: 1 as const,
+      fields: [],
+      rules: [
+        {
+          id: 'sdk-enrich-v2',
+          name: 'Candidate V2 priority',
+          phase: 'ENRICH' as const,
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'SET_PRIORITY' as const, value: 'P2' as const }],
+        },
+        {
+          id: 'sdk-no-page',
+          name: 'SDK intentional suppression',
+          phase: 'ROUTE' as const,
+          enabled: true,
+          conditions: [
+            { fieldKey: 'source', operator: 'EQ' as const, value: 'sdk-browser-certification' },
+          ],
+          actions: [{ type: 'NO_ESCALATION' as const }],
+        },
+      ],
+    };
+    const savedV2 = await client.call('saveAutomationDraft', {
+      params: { id: serviceId },
+      body: { snapshot: candidateSnapshot },
+      headers: { 'If-Match': `"${candidateDraft.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
     const candidatePub = await client.call('publishAutomationVersion', {
       params: { id: serviceId },
       body: { expectedActiveVersionId: published.data.id, expectedCandidateVersionId: null },
-      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+      headers: { 'If-Match': `"${savedV2.data.revision}"`, 'Idempotency-Key': randomUUID() },
     });
     expect(candidatePub.data.versionNumber).toBe(2);
     expect(
@@ -841,45 +873,131 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
       activeVersionId: published.data.id,
       candidateVersionId: candidatePub.data.id,
     });
-    const dedupKey = randomUUID();
-    const ingestion = await page.request.post('/api/events', {
+
+    // Ingest pre-cutover alert 1: must use Version 1 LIVE decision while candidate shadows safely
+    const dedupKey1 = randomUUID();
+    const ingestion1 = await page.request.post('/api/events', {
       headers: { Authorization: `Token token=${integration.key}` },
       data: {
         event_action: 'trigger',
-        dedup_key: dedupKey,
+        dedup_key: dedupKey1,
         payload: {
-          summary: 'SDK authored routing journey',
+          summary: 'Pre-cutover routing journey',
           source: 'sdk-browser-certification',
           severity: 'warning',
         },
       },
     });
-    expect(ingestion.ok()).toBe(true);
-    const accepted = (await ingestion.json()) as {
+    expect(ingestion1.ok()).toBe(true);
+    const accepted1 = (await ingestion1.json()) as {
       data: { result: { action: string; incident: { id: string } } };
     };
-    expect(accepted.data.result.action).toBe('triggered');
-    const incident = await db.incident.findUniqueOrThrow({
-      where: { id: accepted.data.result.incident.id },
+    expect(accepted1.data.result.action).toBe('triggered');
+    const incident1 = await db.incident.findUniqueOrThrow({
+      where: { id: accepted1.data.result.incident.id },
     });
-    expect(incident.serviceId).toBe(serviceId);
-    const decision = await db.incidentAutomationDecision.findUniqueOrThrow({
-      where: { incidentId: incident.id },
+    expect(incident1.serviceId).toBe(serviceId);
+    const decision1 = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident1.id },
     });
-    expect(decision).toMatchObject({
+    expect(decision1).toMatchObject({
       versionId: published.data.id,
       mode: 'LIVE',
       routeType: 'NO_ESCALATION',
       finalPriority: 'P1',
     });
-    expect(incident.priority).toBe('P1');
-    await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
-    await expect(
-      page
-        .getByText('SDK authored routing journey', { exact: true })
-        .filter({ visible: true })
-        .first()
-    ).toBeVisible();
+    expect(incident1.priority).toBe('P1');
+
+    // Confirm candidate shadow evaluation accumulated evidence without applying candidate side effects
+    const candidateAgg = await db.automationShadowAggregate.findFirst({
+      where: { versionId: candidatePub.data.id },
+    });
+    expect(candidateAgg?.evaluated).toBe(1);
+    expect(candidateAgg?.priorityDifferent).toBe(1);
+
+    // Operator browser journey: inspect candidate shadow evidence and activate candidate into LIVE
+    await page.goto(
+      testInfo.project.name === 'desktop'
+        ? `/services/${serviceId}?tab=automation`
+        : `/m/services/${serviceId}/automation`
+    );
+    await expect(page.getByText('Pending candidate · Version 2')).toBeVisible();
+    await page.getByRole('button', { name: 'Activate candidate (LIVE cutover)' }).click();
+    await expect(page.getByText('Review candidate activation · Cutover to LIVE')).toBeVisible();
+    await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
+    await expect(workspace.getByText(/Version 2 ·/)).toBeVisible();
+    expect(
+      await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
+    ).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: candidatePub.data.id,
+      candidateVersionId: null,
+    });
+
+    // Ingest post-cutover alert 2: must route with newly activated Version 2 decisions
+    const dedupKey2 = randomUUID();
+    const ingestion2 = await page.request.post('/api/events', {
+      headers: { Authorization: `Token token=${integration.key}` },
+      data: {
+        event_action: 'trigger',
+        dedup_key: dedupKey2,
+        payload: {
+          summary: 'Post-cutover routing journey',
+          source: 'sdk-browser-certification',
+          severity: 'warning',
+        },
+      },
+    });
+    expect(ingestion2.ok()).toBe(true);
+    const accepted2 = (await ingestion2.json()) as {
+      data: { result: { action: string; incident: { id: string } } };
+    };
+    expect(accepted2.data.result.action).toBe('triggered');
+    const incident2 = await db.incident.findUniqueOrThrow({
+      where: { id: accepted2.data.result.incident.id },
+    });
+    expect(incident2.serviceId).toBe(serviceId);
+    const decision2 = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident2.id },
+    });
+    expect(decision2).toMatchObject({
+      versionId: candidatePub.data.id,
+      mode: 'LIVE',
+      routeType: 'NO_ESCALATION',
+      finalPriority: 'P2',
+    });
+    expect(incident2.priority).toBe('P2');
+
+    // Incident 1 remains permanently pinned to Version 1
+    const pinnedIncident1 = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident1.id },
+    });
+    expect(pinnedIncident1.versionId).toBe(published.data.id);
+    expect(pinnedIncident1.finalPriority).toBe('P1');
+
+    // Discard journey: Stage Version 3 candidate and discard through accessible confirmation dialog
+    const draftV3 = await client.call('getAutomationDraft', { params: { id: serviceId } });
+    const candidatePub3 = await client.call('publishAutomationVersion', {
+      params: { id: serviceId },
+      body: { expectedActiveVersionId: candidatePub.data.id, expectedCandidateVersionId: null },
+      headers: { 'If-Match': `"${draftV3.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(candidatePub3.data.versionNumber).toBe(3);
+    await page.reload();
+    await expect(page.getByText('Pending candidate · Version 3')).toBeVisible();
+    await page.getByRole('button', { name: 'Discard candidate' }).click();
+    await expect(page.getByText('Discard candidate automation version?')).toBeVisible();
+    await page.getByRole('button', { name: 'Discard candidate', exact: true }).click();
+    await expect(page.getByText('Pending candidate · Version 3')).not.toBeVisible();
+    expect(
+      await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
+    ).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: candidatePub.data.id,
+      candidateVersionId: null,
+    });
+
+    // Cleanup: revoke credentials
     await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
     await expect(
       client.call('getAutomationDraft', { params: { id: serviceId } })
