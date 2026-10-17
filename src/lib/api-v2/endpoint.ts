@@ -52,6 +52,17 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
   idempotent?: boolean;
   idempotencyRequired?: boolean;
   idempotencyScope?: string | ((ctx: { params: TParams; body: TBody }) => string);
+  /**
+   * Optional resource-level authorization re-check executed before a cached
+   * idempotency result is returned. Runs outside the serializable transaction so
+   * it reads the current membership/ownership state rather than the snapshot from
+   * the original request. Throw an AppError to deny replay (e.g. after team
+   * membership is revoked). Without this guard, callers whose access was removed
+   * after the first successful write can receive the stored response indefinitely.
+   */
+  replayAuthGuard?: (
+    ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders' | 'tx'>
+  ) => Promise<void>;
   scopedFilter?: boolean;
   handler: (ctx: V2RouteContext<TParams, TQuery, TBody>) => Promise<V2RouteHandlerResult<TResult>>;
 } & (
@@ -181,6 +192,13 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
               tx,
             });
           });
+
+          // Re-check resource access on replay: the mutation handler is skipped for
+          // cached results, so resource-level authorization (e.g. team membership)
+          // must be verified again to prevent stale access after revocation.
+          if (execution.replayed && config.replayAuthGuard) {
+            await config.replayAuthGuard({ req, params, query, body, pagination, actor, apiKey });
+          }
 
           const result = execution.value;
           if (result instanceof Response) {
