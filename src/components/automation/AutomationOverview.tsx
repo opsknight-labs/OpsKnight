@@ -14,15 +14,77 @@ export function AutomationOverview({
   traceFilter,
   setTraceFilter,
   setArea,
+  onActivateCandidate,
+  onDiscardCandidate,
 }: {
   data: Data;
   counts?: Counts;
   traceFilter: string;
   setTraceFilter: (value: string) => void;
   setArea: (area: Area) => void;
+  onActivateCandidate?: () => void;
+  onDiscardCandidate?: () => void;
 }) {
+  const candidateCounts = (data.candidateAggregates ?? []).reduce(
+    (acc, cur) => ({
+      evaluated: acc.evaluated + cur.evaluated,
+      same: acc.same + cur.same,
+      routes: acc.routes + cur.routeDifferent,
+      priorities: acc.priorities + cur.priorityDifferent,
+      skips: acc.skips + cur.noEscalationDifferent,
+      errors: acc.errors + cur.errors + cur.fallbacks,
+    }),
+    { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 }
+  );
+
   return (
     <>
+      {data.candidateVersion && (
+        <div className="rounded-xl border border-primary/40 bg-muted/20 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-primary">
+                Pending candidate · Version {data.candidateVersion.versionNumber}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Published {new Date(data.candidateVersion.publishedAt).toLocaleString()} · Checksum{' '}
+                {data.candidateVersion.checksum.slice(0, 8)}
+              </p>
+            </div>
+            {data.canPublish && (
+              <div className="flex gap-2">
+                <Button size="sm" onClick={onActivateCandidate}>
+                  Activate candidate (LIVE cutover)
+                </Button>
+                <Button size="sm" variant="outline" onClick={onDiscardCandidate}>
+                  Discard candidate
+                </Button>
+              </div>
+            )}
+          </div>
+          <p className="text-sm">
+            This candidate is evaluating live incident traffic in parallel shadow mode without applying side effects.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3 text-sm">
+            <div className="rounded border bg-background p-2">
+              <span className="text-muted-foreground block text-xs">Evaluations</span>
+              <span className="text-lg font-bold">{candidateCounts.evaluated}</span>
+            </div>
+            <div className="rounded border bg-background p-2">
+              <span className="text-muted-foreground block text-xs">Agreement</span>
+              <span className="text-lg font-bold">
+                {candidateCounts.evaluated
+                  ? `${((candidateCounts.same / candidateCounts.evaluated) * 100).toFixed(1)}%`
+                  : '—'}
+              </span>
+            </div>
+            <div className="rounded border bg-background p-2">
+              <span className="text-muted-foreground block text-xs">Errors / Fallbacks</span>
+              <span className="text-lg font-bold">{candidateCounts.errors}</span>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border p-4 space-y-2">
         <h3 className="font-semibold">LIVE readiness · active version</h3>
         <p>{data.enabled ? '✓ Global automation enabled' : '⚠ Global automation OFF'}</p>

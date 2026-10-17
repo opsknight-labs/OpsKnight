@@ -7,7 +7,7 @@ import {
   createTestNotificationProvider,
 } from '../helpers/test-db';
 import { processEvent, processIntegrationEvent, type EventPayload } from '@/lib/events';
-import { saveDraft, publishVersion, changeMode, activateCandidate } from '@/lib/automation/versioning';
+import { saveDraft, publishVersion, changeMode, activateCandidate, discardCandidate } from '@/lib/automation/versioning';
 import { resolveIncidentResponderRouting } from '@/lib/escalation/routing';
 import { executeEscalation } from '@/lib/escalation';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
@@ -1488,5 +1488,138 @@ describe('service automation transaction certification', () => {
     const trace = await db.automationTrace.findFirstOrThrow();
     expect(JSON.stringify(trace.detail)).not.toContain('never-persist-me');
     expect(JSON.stringify(decision.summary)).not.toContain('never-persist-me');
+  });
+
+  it('protects candidate lifecycle against silent replacement, competing administrators, and unverified state', async () => {
+    const { service, actor, version: version1 } = await setup(snapshot, 'LIVE');
+
+    // Admin 1 publishes a candidate version while LIVE
+    const candidateDraft1 = await saveDraft({
+      serviceId: service.id,
+      actorId: actor.id,
+      snapshot: {
+        ...snapshot,
+        rules: [
+          ...snapshot.rules,
+          {
+            id: 'extra-rule',
+            name: 'Extra rule',
+            phase: 'ENRICH',
+            enabled: true,
+            conditions: [],
+            actions: [{ type: 'ADD_TAG', value: 'candidate-tag' }],
+          },
+        ],
+      },
+      expectedRevision: 1,
+    });
+
+    const candidate1 = await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: candidateDraft1.revision,
+      expectedActiveVersionId: version1.id,
+      expectedCandidateVersionId: null,
+    });
+
+    let config = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(config.activeVersionId).toBe(version1.id);
+    expect(config.candidateVersionId).toBe(candidate1.id);
+
+    // Competing Admin 2 attempts to publish without knowing candidate 1 exists (stale expectedCandidateVersionId: null)
+    await expect(
+      publishVersion({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedRevision: candidateDraft1.revision,
+        expectedActiveVersionId: version1.id,
+        expectedCandidateVersionId: null,
+      })
+    ).rejects.toThrow();
+
+    // Verify candidate was NOT silently replaced
+    config = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(config.candidateVersionId).toBe(candidate1.id);
+
+    // Ingest incident while candidate is staged: verify LIVE routes, and candidate shadow evaluated
+    await ingest(service.id, {
+      ...event,
+      payload: { ...event.payload, summary: 'Candidate parallel evaluation check' },
+    });
+
+    // Discarding candidate with wrong expected ID fails
+    await expect(
+      discardCandidate({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedCandidateVersionId: 'wrong-candidate-id',
+      })
+    ).rejects.toThrow();
+
+    // Explicit candidate discard clears candidateVersionId under service lock
+    await discardCandidate({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedCandidateVersionId: candidate1.id,
+    });
+
+    config = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(config.candidateVersionId).toBeNull();
+    expect(config.activeVersionId).toBe(version1.id);
+
+    // Re-publish candidate 2
+    const candidate2 = await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: candidateDraft1.revision,
+      expectedActiveVersionId: version1.id,
+      expectedCandidateVersionId: null,
+    });
+
+    // Activating candidate requires service to be LIVE; if mode is changed to DISABLED, activation is rejected
+    await changeMode({
+      serviceId: service.id,
+      actorId: actor.id,
+      mode: 'DISABLED',
+      expectedActiveVersionId: version1.id,
+    });
+
+    await expect(
+      activateCandidate({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedCandidateVersionId: candidate2.id,
+        expectedActiveVersionId: version1.id,
+        acknowledgeNoShadow: true,
+      })
+    ).rejects.toThrow();
+
+    // Restore to LIVE
+    await changeMode({
+      serviceId: service.id,
+      actorId: actor.id,
+      mode: 'LIVE',
+      expectedActiveVersionId: version1.id,
+      acknowledgeNoShadow: true,
+    });
+
+    // Activating candidate cutover atomically updates activeVersionId and clears candidateVersionId
+    const promoted = await activateCandidate({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedCandidateVersionId: candidate2.id,
+      expectedActiveVersionId: version1.id,
+      acknowledgeNoShadow: true,
+    });
+
+    expect(promoted.activeVersionId).toBe(candidate2.id);
+    expect(promoted.candidateVersionId).toBeNull();
+    expect(promoted.mode).toBe('LIVE');
   });
 });

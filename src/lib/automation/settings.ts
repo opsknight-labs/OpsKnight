@@ -7,9 +7,13 @@ export async function getIngestionAutomationConfig(
   serviceId: string
 ) {
   const rows = await client.$queryRaw<
-    Array<{ mode: AutomationMode; activeVersionId: string | null }>
+    Array<{
+      mode: AutomationMode;
+      activeVersionId: string | null;
+      candidateVersionId: string | null;
+    }>
   >`
-    SELECT config."mode"::text AS mode, config."activeVersionId"
+    SELECT config."mode"::text AS mode, config."activeVersionId", config."candidateVersionId"
     FROM "SystemSettings" AS settings
     JOIN "ServiceAutomationConfig" AS config ON config."serviceId" = ${serviceId}
     WHERE settings.id = 'default' AND settings."automationEnabled" = true

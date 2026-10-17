@@ -55,6 +55,30 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/services/{id}/automation/candidate',
+    'getAutomationCandidate',
+    'automation:read',
+    'item',
+    'AutomationCandidateVersion'
+  ),
+  op(
+    'delete',
+    '/services/{id}/automation/candidate',
+    'discardAutomationCandidate',
+    'automation:publish',
+    'item',
+    'AutomationConfig'
+  ),
+  op(
+    'post',
+    '/services/{id}/automation/candidates/activate',
+    'activateAutomationCandidate',
+    'automation:publish',
+    'item',
+    'AutomationConfig'
+  ),
+  op(
+    'get',
     '/settings/automation',
     'getAutomationSettings',
     'automation-settings:read',

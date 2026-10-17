@@ -145,7 +145,12 @@ export function getCurlSnippet(
     snippet += ` ${String.fromCharCode(92)}
   -H 'If-Match: "3"'`;
   }
-  if (ep.method === 'POST' || ep.method === 'PATCH' || ep.method === 'PUT') {
+  if (
+    ep.method === 'POST' ||
+    ep.method === 'PATCH' ||
+    ep.method === 'PUT' ||
+    (ep.method === 'DELETE' && ep.requestBody?.sample)
+  ) {
     snippet += ` \\\n  -H "Content-Type: application/json"`;
     if (ep.requestBody?.sample) {
       snippet += ` \\\n  -d '${typeof ep.requestBody.sample === 'string' ? ep.requestBody.sample : JSON.stringify(ep.requestBody.sample, null, 2)}'`;
@@ -161,7 +166,11 @@ export function getJsSnippet(
 ): string {
   const samplePath = getSamplePath(ep.path, ep.method);
   const fullUrl = `${baseUrl}/api/v2${samplePath}`;
-  const hasBody = ep.method === 'POST' || ep.method === 'PATCH' || ep.method === 'PUT';
+  const hasBody =
+    ep.method === 'POST' ||
+    ep.method === 'PATCH' ||
+    ep.method === 'PUT' ||
+    (ep.method === 'DELETE' && !!ep.requestBody?.sample);
   const hasRequiredIdempotency =
     ep.parameters?.some(p => p.name.toLowerCase() === 'idempotency-key' && p.required) ||
     ep.path === '/runbooks/{id}/execute';
@@ -208,7 +217,11 @@ export function getPythonSnippet(
   const samplePath = getSamplePath(ep.path, ep.method);
   const fullUrl = `${baseUrl}/api/v2${samplePath}`;
   const methodLower = ep.method.toLowerCase();
-  const hasBody = ep.method === 'POST' || ep.method === 'PATCH' || ep.method === 'PUT';
+  const hasBody =
+    ep.method === 'POST' ||
+    ep.method === 'PATCH' ||
+    ep.method === 'PUT' ||
+    (ep.method === 'DELETE' && !!ep.requestBody?.sample);
   const hasRequiredIdempotency =
     ep.parameters?.some(p => p.name.toLowerCase() === 'idempotency-key' && p.required) ||
     ep.path === '/runbooks/{id}/execute';

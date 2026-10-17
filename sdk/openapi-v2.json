@@ -1732,6 +1732,142 @@
           "checksum"
         ]
       },
+      "AutomationCandidateVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "versionNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedBy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "sourceVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lintReport": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "level": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "level",
+                "message"
+              ]
+            },
+            "maxItems": 100
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/AutomationSnapshot"
+          },
+          "shadowAggregates": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "evaluated": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "same": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "routeDifferent": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "priorityDifferent": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "noEscalationDifferent": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "errors": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "fallbacks": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "evaluated",
+              "same",
+              "routeDifferent",
+              "priorityDifferent",
+              "noEscalationDifferent",
+              "errors",
+              "fallbacks"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "serviceId",
+          "versionNumber",
+          "publishedAt",
+          "publishedBy",
+          "checksum",
+          "snapshot",
+          "shadowAggregates"
+        ]
+      },
+      "AutomationConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "activeVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "candidateVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "serviceId"
+        ]
+      },
       "AutomationSettings": {
         "type": "object",
         "additionalProperties": false,
@@ -10428,6 +10564,370 @@
         "description": "Requires API scope `automation:write` (Automation drafts).",
         "x-idempotency": "required",
         "x-concurrency": "etag"
+      }
+    },
+    "/services/{id}/automation/candidate": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read a published candidate automation version and shadow metrics",
+        "description": "Reads the pending candidate version, compiled configuration and seven-day shadow evaluation metrics for a service in LIVE mode.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationCandidateVersion"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getAutomationCandidate",
+        "x-required-scope": "automation:read"
+      },
+      "delete": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Discard a published candidate automation version",
+        "description": "Discards a pending candidate version without promoting it to production. Requires expectedCandidateVersionId.\n\nRequires API scope `automation:publish` (Automation publish).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedCandidateVersionId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "expectedCandidateVersionId"
+                ]
+              },
+              "example": {
+                "expectedCandidateVersionId": "cm111111111111111111111111"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationConfig"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "discardAutomationCandidate",
+        "x-required-scope": "automation:publish",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/services/{id}/automation/candidates/activate": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Atomically activate a candidate automation version as LIVE",
+        "description": "Promotes the pending candidate version to active production routing with zero interruption. Validates shadow evidence and escalation policy safety before cutover.\n\nRequires API scope `automation:publish` (Automation publish).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedCandidateVersionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectedActiveVersionId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "acknowledgeNoShadow": {
+                    "type": "boolean"
+                  },
+                  "acknowledgeShadowErrors": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "expectedCandidateVersionId"
+                ]
+              },
+              "example": {
+                "expectedCandidateVersionId": "cm111111111111111111111111"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationConfig"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "activateAutomationCandidate",
+        "x-required-scope": "automation:publish",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
       }
     },
     "/settings/automation": {

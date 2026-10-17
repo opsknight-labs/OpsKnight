@@ -21,6 +21,11 @@ const object = (properties: Record<string, Schema>, required: string[] = []): Sc
 const id = { type: 'string', minLength: 1 };
 const date = { type: 'string', format: 'date-time' };
 const integer = { type: 'integer', minimum: 0 };
+const array = (items: Schema, maxItems?: number): Schema => ({
+  type: 'array',
+  items,
+  ...(maxItems !== undefined ? { maxItems } : {}),
+});
 const note = { ...string(1000) };
 const lifecycle = object({
   note,
@@ -62,6 +67,57 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   AutomationPublishedVersion: object(
     { id, serviceId: id, versionNumber: { type: 'integer', minimum: 1 }, checksum: string() },
     ['id', 'serviceId', 'versionNumber', 'checksum']
+  ),
+  AutomationCandidateVersion: object(
+    {
+      id,
+      serviceId: id,
+      versionNumber: { type: 'integer', minimum: 1 },
+      publishedAt: date,
+      publishedBy: id,
+      checksum: string(),
+      sourceVersionId: { type: ['string', 'null'] },
+      lintReport: array(object({ level: string(), message: string() }, ['level', 'message']), 100),
+      snapshot: { $ref: '#/components/schemas/AutomationSnapshot' },
+      shadowAggregates: object(
+        {
+          evaluated: integer,
+          same: integer,
+          routeDifferent: integer,
+          priorityDifferent: integer,
+          noEscalationDifferent: integer,
+          errors: integer,
+          fallbacks: integer,
+        },
+        [
+          'evaluated',
+          'same',
+          'routeDifferent',
+          'priorityDifferent',
+          'noEscalationDifferent',
+          'errors',
+          'fallbacks',
+        ]
+      ),
+    },
+    [
+      'id',
+      'serviceId',
+      'versionNumber',
+      'publishedAt',
+      'publishedBy',
+      'checksum',
+      'snapshot',
+      'shadowAggregates',
+    ]
+  ),
+  AutomationConfig: object(
+    {
+      serviceId: id,
+      activeVersionId: { type: ['string', 'null'] },
+      candidateVersionId: { type: ['string', 'null'] },
+    },
+    ['serviceId']
   ),
   AutomationSettings: object(
     {
@@ -282,6 +338,37 @@ const operations: Operation[] = [
     path: '/services/{id}/automation/draft',
     summary: 'Save a revision-protected automation draft',
     body: automationDraftBody,
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/candidate',
+    summary: 'Read a published candidate automation version and shadow metrics',
+    description:
+      'Reads the pending candidate version, compiled configuration and seven-day shadow evaluation metrics for a service in LIVE mode.',
+  },
+  {
+    method: 'delete',
+    path: '/services/{id}/automation/candidate',
+    summary: 'Discard a published candidate automation version',
+    description:
+      'Discards a pending candidate version without promoting it to production. Requires expectedCandidateVersionId.',
+    body: object({ expectedCandidateVersionId: id }, ['expectedCandidateVersionId']),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/automation/candidates/activate',
+    summary: 'Atomically activate a candidate automation version as LIVE',
+    description:
+      'Promotes the pending candidate version to active production routing with zero interruption. Validates shadow evidence and escalation policy safety before cutover.',
+    body: object(
+      {
+        expectedCandidateVersionId: id,
+        expectedActiveVersionId: { type: ['string', 'null'] },
+        acknowledgeNoShadow: { type: 'boolean' },
+        acknowledgeShadowErrors: { type: 'boolean' },
+      },
+      ['expectedCandidateVersionId']
+    ),
   },
   { method: 'get', path: '/settings/automation', summary: 'Read global automation settings' },
   {

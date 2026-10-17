@@ -152,6 +152,7 @@ export async function publishVersion(
     actorId: string;
     expectedRevision: number;
     expectedActiveVersionId: string | null;
+    expectedCandidateVersionId?: string | null;
     sourceVersionId?: string;
   },
   externalTx?: Prisma.TransactionClient,
@@ -164,6 +165,18 @@ export async function publishVersion(
     });
     if ((config?.activeVersionId ?? null) !== input.expectedActiveVersionId)
       throw new AutomationConflict();
+    if (config?.mode === 'LIVE') {
+      const currentCandidateId = config?.candidateVersionId ?? null;
+      if (
+        input.expectedCandidateVersionId !== undefined &&
+        currentCandidateId !== input.expectedCandidateVersionId
+      ) {
+        throw new AutomationConflict();
+      }
+      if (currentCandidateId !== null && input.expectedCandidateVersionId === undefined) {
+        throw new AutomationConflict();
+      }
+    }
     const draft = await tx.automationDraft.findUnique({ where: { serviceId: input.serviceId } });
     if ((draft?.revision ?? 0) !== input.expectedRevision) throw new AutomationConflict();
     const source = input.sourceVersionId
@@ -239,7 +252,7 @@ export async function publishVersion(
       input.serviceId,
       input.actorId,
       source ? 'automation.rollback.published' : 'automation.version.published',
-      { versionId: config?.activeVersionId ?? null },
+      { versionId: config?.activeVersionId ?? null, candidateVersionId: config?.candidateVersionId ?? null },
       {
         versionId: version.id,
         lint: issues,
@@ -269,6 +282,7 @@ export async function activateCandidate(
     serviceId: string;
     actorId: string;
     expectedCandidateVersionId: string;
+    expectedActiveVersionId?: string | null;
     acknowledgeNoShadow?: boolean;
     acknowledgeShadowErrors?: boolean;
   },
@@ -277,16 +291,30 @@ export async function activateCandidate(
 ) {
   const run = async (tx: Prisma.TransactionClient) => {
     await lock(tx, input.serviceId);
+    const settings = await getAutomationSettings(tx);
+    if (!settings.automationEnabled)
+      throw new AutomationValidationError(
+        'System automation is globally disabled. Enable global automation before activating a candidate version.'
+      );
     const config = await tx.serviceAutomationConfig.findUnique({
       where: { serviceId: input.serviceId },
       include: { candidateVersion: true },
     });
+    if (config?.mode !== 'LIVE')
+      throw new AutomationValidationError(
+        'Candidate version promotion requires the service to be in LIVE mode.'
+      );
     if (!config?.candidateVersionId)
       throw new AppError({
         code: 'RESOURCE_NOT_FOUND',
         userMessage: 'No published candidate version is waiting for activation.',
       });
     if (config.candidateVersionId !== input.expectedCandidateVersionId)
+      throw new AutomationConflict();
+    if (
+      input.expectedActiveVersionId !== undefined &&
+      (config.activeVersionId ?? null) !== input.expectedActiveVersionId
+    )
       throw new AutomationConflict();
     if (!config.candidateVersion)
       throw new AppError({ code: 'INTERNAL_ERROR', details: { reason: 'candidate version missing' } });
@@ -358,6 +386,58 @@ export async function activateCandidate(
       serviceId: input.serviceId,
       previousActiveVersionId: config.activeVersionId,
       newActiveVersionId: updated.activeVersionId,
+    });
+    return updated;
+  };
+  return externalTx ? run(externalTx) : runSerializableTransaction(run);
+}
+
+/**
+ * Discard a pending candidate version without promoting it.
+ * Clears candidateVersionId and logs an audit record.
+ */
+export async function discardCandidate(
+  input: {
+    serviceId: string;
+    actorId: string;
+    expectedCandidateVersionId: string;
+  },
+  externalTx?: Prisma.TransactionClient,
+  apiClientId?: string
+) {
+  const run = async (tx: Prisma.TransactionClient) => {
+    await lock(tx, input.serviceId);
+    const config = await tx.serviceAutomationConfig.findUnique({
+      where: { serviceId: input.serviceId },
+    });
+    if (!config?.candidateVersionId) {
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: 'No published candidate version exists to discard.',
+      });
+    }
+    if (config.candidateVersionId !== input.expectedCandidateVersionId) {
+      throw new AutomationConflict();
+    }
+    const updated = await tx.serviceAutomationConfig.update({
+      where: { serviceId: input.serviceId },
+      data: {
+        candidateVersionId: null,
+        updatedBy: input.actorId,
+      },
+    });
+    await audit(
+      tx,
+      input.serviceId,
+      input.actorId,
+      'automation.candidate.discarded',
+      { candidateVersionId: config.candidateVersionId },
+      { candidateVersionId: null },
+      apiClientId
+    );
+    logger.info('automation.candidate.discarded', {
+      serviceId: input.serviceId,
+      discardedCandidateVersionId: config.candidateVersionId,
     });
     return updated;
   };
