@@ -3,7 +3,6 @@
 // Isolated fixture only. Refuses an already-upgraded database; never resets data.
 const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { PrismaClient } = require('@prisma/client');
@@ -19,8 +18,8 @@ async function main() {
   const baseline = process.env.SSO_UPGRADE_BASELINE || '097f4916a38ddcc6d1512f71b72bde36abbeb171';
   if (!/^[a-f0-9]{40}$/.test(baseline)) throw new Error('Use a full baseline commit hash.');
   const root = process.cwd();
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'opsknight-upgrade-'));
-  const db = new PrismaClient();
+  const temp = fs.mkdtempSync(path.join(root, '.sso-upgrade-'));
+  let db = new PrismaClient();
   try {
     const tables =
       await db.$queryRaw`SELECT to_regclass('public."AuthenticationPolicy"')::text AS name`;
@@ -43,19 +42,42 @@ async function main() {
       fs.writeFileSync(target, execFileSync('git', ['show', `${baseline}:${file}`]));
     }
     const run = args => {
-      const result = spawnSync('npx', args, { cwd: root, env: process.env, stdio: 'inherit' });
+      const result = spawnSync('npx', args, {
+        cwd: root,
+        env: { ...process.env, PRISMA_GENERATE_SKIP_AUTOINSTALL: 'true' },
+        stdio: 'inherit',
+      });
       if (result.status !== 0) throw new Error('Upgrade certification command failed.');
     };
     run(['prisma', 'migrate', 'deploy', '--schema', path.join(temp, 'prisma/schema.prisma')]);
+    // Seed through the published schema's client: selecting id alone does not prevent
+    // a newer client from inserting defaults for columns absent from the old database.
+    const baselineSchema = path.join(temp, 'prisma/schema.prisma');
+    const baselineClient = path.join(temp, 'baseline-client');
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- Fixed schema path inside this process's private temporary directory.
+    const schema = fs.readFileSync(baselineSchema, 'utf8');
+    const generator = /generator client\s*\{[^}]*\}/;
+    if (!generator.test(schema)) throw new Error('Published schema has no client generator.');
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- Same private baseline schema; never modifies the working schema.
+    fs.writeFileSync(
+      baselineSchema,
+      schema.replace(
+        generator,
+        `generator client {\n  provider = "prisma-client-js"\n  output = ${JSON.stringify(baselineClient)}\n}`
+      )
+    );
+    run(['prisma', 'generate', '--schema', baselineSchema]);
+    await db.$disconnect();
+    // eslint-disable-next-line security/detect-non-literal-require -- Client generated above from the validated published schema in our private directory.
+    const { PrismaClient: BaselinePrismaClient } = require(baselineClient);
+    db = new BaselinePrismaClient();
     const encryptionKey = crypto.randomBytes(32);
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', encryptionKey, iv);
     const encrypted = `${iv.toString('hex')}:${Buffer.concat([cipher.update('legacy-upgrade-client-secret'), cipher.final()]).toString('hex')}`;
     process.env.ENCRYPTION_KEY = encryptionKey.toString('hex');
     process.env.NEXTAUTH_SECRET = crypto.randomBytes(48).toString('base64url');
-    // This client is newer than the published v2.0.0 schema being seeded, so columns added since
-    // then (for example a resource `revision`) do not exist in the database yet. Prisma's native
-    // upsert returns every column, so seed with find + create/update and select only the id.
+    // Keep fixture seeding idempotent without reading unrelated columns.
     const seed = async (model, input) => {
       const where = { id: input.data.id };
       const existing = await model.findUnique({ where, select: { id: true } });

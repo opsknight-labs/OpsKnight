@@ -530,3 +530,18 @@ Policy dependencies use bounded pages (20 rows per category), separate counts an
 Local follow-up evidence: 192 unit/component/API tests passed; 43 PostgreSQL tests passed with one opt-in restart test skipped. These changes require a new release image and browser verification. Earlier browser and capacity artifacts remain evidence for their declared source revisions only. Sustained capacity, recovery under load and public-edge latency remain **NOT CERTIFIED**.
 
 The two upstream main commits `4eeaea218` and `a278116a0` were integrated without rewriting branch history in `d6a3786d1`. Their Service Detail/Agent changes passed 56 targeted regression tests, TypeScript and lint. This is code reconciliation; the cherry-pick preserves this feature branch's ancestry.
+
+### Isolated Compose certification credentials
+
+Before using `tests/load/deploy/compose/automation.yml` (including its PgBouncer
+overlay), set `AUTOMATION_CERT_DB_PASSWORD` to an independently generated URL-safe
+password, for example with `export AUTOMATION_CERT_DB_PASSWORD="$(openssl rand -hex 24)"`.
+All database clients and PostgreSQL use this same required variable. There is no
+checked-in fallback. Keep it available for subsequent Compose operations; changing
+it does not rotate the password of an already initialized database.
+
+The Kind k6 runner uses the pinned upstream arm64 manifest with `Always` pull
+policy and requires registry access during pod startup. Its probes check the idle
+runner process and writable work volume; the certification harness separately
+checks actual k6 exit status and measured results. `RuntimeDefault` seccomp remains
+enabled. Image identity verification in the certification harness still applies.

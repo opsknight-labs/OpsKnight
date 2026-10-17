@@ -1,4 +1,4 @@
-import { hashTokenV2 } from '@/lib/api-keys';
+import { generateApiKey } from '@/lib/api-keys';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { PrismaClient } from '@prisma/client';
@@ -240,12 +240,12 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
     expect(restrictedHtml).not.toContain('x'.repeat(1200));
     expect(restrictedHtml).not.toContain('ABC123');
     const auditor = await db.user.findUniqueOrThrow({ where: { email: auditorEmail } });
-    const apiToken = randomUUID();
+    const { token: apiToken, prefix, tokenHash } = generateApiKey();
     await db.apiKey.create({
       data: {
         name: 'Auditor privacy journey',
-        prefix: apiToken.slice(0, 8),
-        tokenHash: hashTokenV2(apiToken),
+        prefix,
+        tokenHash,
         scopes: ['incidents:read'],
         userId: auditor.id,
       },
