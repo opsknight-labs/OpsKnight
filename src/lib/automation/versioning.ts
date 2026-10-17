@@ -164,12 +164,6 @@ export async function publishVersion(
     });
     if ((config?.activeVersionId ?? null) !== input.expectedActiveVersionId)
       throw new AutomationConflict();
-    if (config?.mode === 'LIVE')
-      throw new AppError({
-        code: 'RESOURCE_CONFLICT',
-        userMessage:
-          'Switch automation to SHADOW or DISABLED before publishing. Each new version requires explicit LIVE activation.',
-      });
     const draft = await tx.automationDraft.findUnique({ where: { serviceId: input.serviceId } });
     if ((draft?.revision ?? 0) !== input.expectedRevision) throw new AutomationConflict();
     const source = input.sourceVersionId
@@ -228,10 +222,17 @@ export async function publishVersion(
         },
       },
     });
+    // When the service is currently LIVE, publish the new version as a candidate so the
+    // existing LIVE version keeps routing production incidents. When SHADOW or DISABLED,
+    // the new version immediately becomes the sole active version (no routing risk).
+    const updatePayload =
+      config?.mode === 'LIVE'
+        ? { candidateVersionId: version.id, updatedBy: input.actorId }
+        : { activeVersionId: version.id, candidateVersionId: null, updatedBy: input.actorId };
     await tx.serviceAutomationConfig.upsert({
       where: { serviceId: input.serviceId },
       create: { serviceId: input.serviceId, activeVersionId: version.id, updatedBy: input.actorId },
-      update: { activeVersionId: version.id, updatedBy: input.actorId },
+      update: updatePayload,
     });
     await audit(
       tx,
@@ -239,15 +240,126 @@ export async function publishVersion(
       input.actorId,
       source ? 'automation.rollback.published' : 'automation.version.published',
       { versionId: config?.activeVersionId ?? null },
-      { versionId: version.id, lint: issues },
+      {
+        versionId: version.id,
+        lint: issues,
+        staged: config?.mode === 'LIVE' ? 'candidate' : 'active',
+      },
       apiClientId
     );
     logger.info('automation.version.publication.staged', {
       serviceId: input.serviceId,
       versionId: version.id,
       versionNumber: version.versionNumber,
+      staged: config?.mode === 'LIVE' ? 'candidate' : 'active',
     });
     return version;
+  };
+  return externalTx ? run(externalTx) : runSerializableTransaction(run);
+}
+
+/**
+ * Atomically promote the current candidateVersionId to become activeVersionId.
+ * Validates shadow evidence and escalation policy safety before the swap, then
+ * clears candidateVersionId in the same transaction. This is the zero-interruption
+ * LIVE upgrade path: the previous LIVE version keeps routing until this point.
+ */
+export async function activateCandidate(
+  input: {
+    serviceId: string;
+    actorId: string;
+    expectedCandidateVersionId: string;
+    acknowledgeNoShadow?: boolean;
+    acknowledgeShadowErrors?: boolean;
+  },
+  externalTx?: Prisma.TransactionClient,
+  apiClientId?: string
+) {
+  const run = async (tx: Prisma.TransactionClient) => {
+    await lock(tx, input.serviceId);
+    const config = await tx.serviceAutomationConfig.findUnique({
+      where: { serviceId: input.serviceId },
+      include: { candidateVersion: true },
+    });
+    if (!config?.candidateVersionId)
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: 'No published candidate version is waiting for activation.',
+      });
+    if (config.candidateVersionId !== input.expectedCandidateVersionId)
+      throw new AutomationConflict();
+    if (!config.candidateVersion)
+      throw new AppError({ code: 'INTERNAL_ERROR', details: { reason: 'candidate version missing' } });
+
+    // Re-validate the candidate before cutover.
+    loadCompiledVersion(config.candidateVersion);
+    const { compiled, issues } = compileAutomation(config.candidateVersion.snapshot);
+    if (issues.some(i => i.level === 'ERROR'))
+      throw new AutomationValidationError('Candidate version has blocking lint errors');
+    await validateReferences(tx, input.serviceId, compiled);
+
+    // Escalation policy safety — same gate as changeMode → LIVE.
+    const service = await tx.service.findUnique({
+      where: { id: input.serviceId },
+      select: { escalationPolicyId: true },
+    });
+    if (service?.escalationPolicyId) {
+      try {
+        await assertResponderPolicySnapshotSafe(tx, service.escalationPolicyId);
+      } catch (error) {
+        throw new AutomationValidationError(
+          `Service default escalation policy is unsafe for LIVE automation: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    // Shadow evidence gate — same acknowledgement flags as changeMode → LIVE.
+    const evidence = await tx.automationShadowAggregate.aggregate({
+      where: {
+        serviceId: input.serviceId,
+        versionId: config.candidateVersion.id,
+        bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
+      },
+      _sum: { evaluated: true, errors: true, fallbacks: true },
+    });
+    if (!evidence._sum.evaluated && !input.acknowledgeNoShadow)
+      throw new AutomationValidationError(
+        'Acknowledge activation without Shadow traffic for this candidate version.'
+      );
+    if ((evidence._sum.errors || evidence._sum.fallbacks) && !input.acknowledgeShadowErrors)
+      throw new AutomationValidationError(
+        'Explicitly acknowledge Shadow errors and fallbacks before activating the candidate.'
+      );
+
+    // Atomic cutover: swap candidate → active, clear candidate.
+    const updated = await tx.serviceAutomationConfig.update({
+      where: { serviceId: input.serviceId },
+      data: {
+        activeVersionId: config.candidateVersionId,
+        candidateVersionId: null,
+        updatedBy: input.actorId,
+      },
+    });
+    await audit(
+      tx,
+      input.serviceId,
+      input.actorId,
+      'automation.candidate.activated',
+      { activeVersionId: config.activeVersionId, candidateVersionId: config.candidateVersionId },
+      {
+        activeVersionId: updated.activeVersionId,
+        candidateVersionId: null,
+        acknowledgeNoShadow: input.acknowledgeNoShadow === true,
+        acknowledgeShadowErrors: input.acknowledgeShadowErrors === true,
+      },
+      apiClientId
+    );
+    logger.info('automation.candidate.activated', {
+      serviceId: input.serviceId,
+      previousActiveVersionId: config.activeVersionId,
+      newActiveVersionId: updated.activeVersionId,
+    });
+    return updated;
   };
   return externalTx ? run(externalTx) : runSerializableTransaction(run);
 }

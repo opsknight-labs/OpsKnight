@@ -3,7 +3,29 @@ import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { requireRevisionIfMatch, preconditionFailed } from '@/lib/api-v2/concurrency';
+import prisma from '@/lib/prisma';
 import { publishVersion, AutomationConflict } from '@/lib/automation/versioning';
+
+async function assertAutomationWriteAccess(
+  client: typeof prisma | Parameters<typeof prisma.$transaction>[0],
+  serviceId: string,
+  actor: { role: string; id: string }
+) {
+  const service = await (client as typeof prisma).service.findUnique({
+    where: { id: serviceId },
+    select: { teamId: true },
+  });
+  if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
+  if (actor.role !== 'ADMIN') {
+    const membership = service.teamId
+      ? await (client as typeof prisma).teamMember.findFirst({
+          where: { teamId: service.teamId, userId: actor.id },
+          select: { id: true },
+        })
+      : null;
+    if (!membership) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+  }
+}
 
 export const POST = defineV2Route({
   action: AUTHORIZATION_ACTIONS.AUTOMATION_PUBLISH,
@@ -13,12 +35,12 @@ export const POST = defineV2Route({
   preconditionRequired: true,
   idempotent: true,
   idempotencyRequired: true,
+  replayAuthGuard: async ({ params, actor }) => {
+    await assertAutomationWriteAccess(prisma, params.id, actor);
+  },
   handler: async ({ req, params, body, actor, apiKey, tx }) => {
-    const service = await tx!.service.findUnique({
-      where: { id: params.id },
-      select: { id: true },
-    });
-    if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
+    await tx!.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
+    await assertAutomationWriteAccess(tx! as unknown as typeof prisma, params.id, actor);
     try {
       const version = await publishVersion(
         {

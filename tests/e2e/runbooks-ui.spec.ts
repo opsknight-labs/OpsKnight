@@ -191,7 +191,12 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
   ).toBeVisible();
+  // Wait for any in-flight router revalidation to settle before reloading.
+  // Firefox aborts the reload (NS_BINDING_ABORTED) when a concurrent fetch
+  // response arrives after the reload is initiated; networkidle prevents the race.
+  await page.waitForLoadState('networkidle');
   await page.reload();
+  await page.waitForLoadState('domcontentloaded');
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await expect(
     page.locator('[role="tabpanel"]:visible').getByLabel('Input 1 key', { exact: true })
