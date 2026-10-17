@@ -4402,15 +4402,20 @@ enum AutomationRouteType {
 }
 
 model ServiceAutomationConfig {
-  serviceId       String             @id
-  mode            AutomationMode     @default(DISABLED)
-  activeVersionId String?            @unique
-  draftId         String?            @unique
-  updatedBy       String?
-  updatedAt       DateTime           @updatedAt
-  service         Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  activeVersion   AutomationVersion? @relation("ActiveAutomationVersion", fields: [activeVersionId], references: [id], onDelete: Restrict)
-  draft           AutomationDraft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  serviceId          String             @id
+  mode               AutomationMode     @default(DISABLED)
+  activeVersionId    String?            @unique
+  /// Published candidate awaiting explicit LIVE activation. Shadow evaluation runs
+  /// against this version while activeVersionId continues production routing.
+  /// Cleared atomically when the candidate is promoted or discarded.
+  candidateVersionId String?            @unique
+  draftId            String?            @unique
+  updatedBy          String?
+  updatedAt          DateTime           @updatedAt
+  service            Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  activeVersion      AutomationVersion? @relation("ActiveAutomationVersion", fields: [activeVersionId], references: [id], onDelete: Restrict)
+  candidateVersion   AutomationVersion? @relation("CandidateAutomationVersion", fields: [candidateVersionId], references: [id], onDelete: Restrict)
+  draft              AutomationDraft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
 }
 
 model AutomationDraft {
@@ -4439,6 +4444,7 @@ model AutomationVersion {
   lintReport       Json
   service          Service                      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   activeConfig     ServiceAutomationConfig?     @relation("ActiveAutomationVersion")
+  candidateConfig  ServiceAutomationConfig?     @relation("CandidateAutomationVersion")
   policyRefs       AutomationVersionPolicyRef[]
   decisions        IncidentAutomationDecision[]
   traces           AutomationTrace[]

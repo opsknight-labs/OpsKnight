@@ -1265,4 +1265,66 @@ describe('automation draft REST transaction certification', () => {
       0
     );
   });
+  it('blocks idempotent replay after team membership revocation or service reassignment', async () => {
+    const teamA = await createTestTeam('Team Alpha');
+    const teamB = await createTestTeam('Team Beta');
+    const responder = await credential(['automation:write'], 'RESPONDER');
+    const membership = await testPrisma.teamMember.create({
+      data: { teamId: teamA.id, userId: responder.user.id },
+    });
+    const service = await createTestService('Owning team draft', teamA.id);
+    const idempotencyKey = randomUUID();
+    const draftPayload = { snapshot: { schemaVersion: 1, fields: [], rules: [] } };
+
+    // 1. Initial write succeeds while responder is a member of Team A
+    const initialResponse = await call(
+      saveAutomationDraft,
+      responder.token,
+      'PUT',
+      `/services/${service.id}/automation/draft`,
+      { id: service.id },
+      draftPayload,
+      idempotencyKey,
+      '"0"'
+    );
+    expect(initialResponse.status).toBe(200);
+
+    // 2. Revoke responder's team membership
+    await testPrisma.teamMember.delete({ where: { id: membership.id } });
+
+    // 3. Replay with identical idempotency key must be rejected (403), not return cached draft
+    const replayAfterRevocation = await call(
+      saveAutomationDraft,
+      responder.token,
+      'PUT',
+      `/services/${service.id}/automation/draft`,
+      { id: service.id },
+      draftPayload,
+      idempotencyKey,
+      '"0"'
+    );
+    expect(replayAfterRevocation.status).toBe(403);
+
+    // 4. Re-add responder to Team A, but reassign service to Team B
+    await testPrisma.teamMember.create({
+      data: { teamId: teamA.id, userId: responder.user.id },
+    });
+    await testPrisma.service.update({
+      where: { id: service.id },
+      data: { teamId: teamB.id },
+    });
+
+    // 5. Replay with identical idempotency key after service reassignment must also be rejected (403)
+    const replayAfterReassignment = await call(
+      saveAutomationDraft,
+      responder.token,
+      'PUT',
+      `/services/${service.id}/automation/draft`,
+      { id: service.id },
+      draftPayload,
+      idempotencyKey,
+      '"0"'
+    );
+    expect(replayAfterReassignment.status).toBe(403);
+  });
 });

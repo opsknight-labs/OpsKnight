@@ -144,12 +144,6 @@ export async function publishVersion(input: {
     });
     if ((config?.activeVersionId ?? null) !== input.expectedActiveVersionId)
       throw new AutomationConflict();
-    if (config?.mode === 'LIVE')
-      throw new AppError({
-        code: 'RESOURCE_CONFLICT',
-        userMessage:
-          'Switch automation to SHADOW or DISABLED before publishing. Each new version requires explicit LIVE activation.',
-      });
     const draft = await tx.automationDraft.findUnique({ where: { serviceId: input.serviceId } });
     if ((draft?.revision ?? 0) !== input.expectedRevision) throw new AutomationConflict();
     const source = input.sourceVersionId
@@ -208,10 +202,17 @@ export async function publishVersion(input: {
         },
       },
     });
+    // When the service is currently LIVE, publish the new version as a candidate so the
+    // existing LIVE version keeps routing production incidents. When SHADOW or DISABLED,
+    // the new version immediately becomes the sole active version (no routing risk).
+    const updatePayload =
+      config?.mode === 'LIVE'
+        ? { candidateVersionId: version.id, updatedBy: input.actorId }
+        : { activeVersionId: version.id, candidateVersionId: null, updatedBy: input.actorId };
     await tx.serviceAutomationConfig.upsert({
       where: { serviceId: input.serviceId },
       create: { serviceId: input.serviceId, activeVersionId: version.id, updatedBy: input.actorId },
-      update: { activeVersionId: version.id, updatedBy: input.actorId },
+      update: updatePayload,
     });
     await audit(
       tx,
@@ -225,6 +226,7 @@ export async function publishVersion(input: {
       serviceId: input.serviceId,
       versionId: version.id,
       versionNumber: version.versionNumber,
+      staged: config?.mode === 'LIVE' ? 'candidate' : 'active',
     });
     return version;
   });
