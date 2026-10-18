@@ -333,6 +333,11 @@ suite('isolated HTTPS Compose deployment against the real control plane', () => 
         where: { id: rule.id },
         data: { mode: 'AUTOMATIC' },
       });
+      // Configuration changes pause Automatic rules; explicitly activate the reviewed fixture.
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: rule.id },
+        data: { enabled: true },
+      });
       const ignoredIncident = await testPrisma.incident.create({
         data: { serviceId: service.id, title: 'Nonmatching diagnostic', urgency: 'LOW' },
       });

@@ -1087,7 +1087,7 @@ const operations: Operation[] = [
     path: '/services/{id}/runbook-rules/{ruleId}/triggers',
     summary: 'Replace the reviewed incident trigger and pause Automatic execution',
     description:
-      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. Replaces the effective event configuration: at most one enabled trigger per rule/event is enforced by PostgreSQL. Disabled historical trigger identities are preserved; configuration replacement pauses Automatic rules. ',
     status: 200,
     body: ruleTriggerInput,
   },

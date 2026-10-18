@@ -1357,7 +1357,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           ].includes(String(payloadValue(job.payload, 'task')))
         ) {
           const { processAutomationJob } = await import('../automation/jobs');
-          await processAutomationJob(job.payload);
+          await processAutomationJob(job.payload, job.id);
           await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }

@@ -447,8 +447,9 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
     .poll(async () => prisma.runbookTrigger.count({ where: { bindingId: binding.id } }))
     .toBe(1);
   // A refreshed revision proves the server tree was applied; feedback must survive it.
+  expect(binding.configurationRevision).toBeGreaterThan(triggerRevision);
   await expect(triggerForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
-    String(triggerRevision + 1)
+    String(binding.configurationRevision)
   );
   expect(
     (
@@ -469,8 +470,18 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
     await configurationForm.locator('[name="expectedConfigurationRevision"]').inputValue()
   );
   await configurationForm.getByRole('button', { name: 'Save binding', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } })).name
+    )
+    .toBe('Browser verified rule');
+  const configuredRule = await prisma.serviceAutomationRule.findUniqueOrThrow({
+    where: { id: binding.id },
+  });
+  expect(configuredRule.configurationRevision).toBeGreaterThan(configurationRevision);
   await expect(configurationForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
-    String(configurationRevision + 1)
+    String(configuredRule.configurationRevision)
   );
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' }).first()
@@ -536,6 +547,8 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
       prisma.runbookExecution.count({ where: { incidentId: incident.id, runbookId: id } })
     )
     .toBe(1);
+  // Wait for the action's preview reset/refresh before starting a new navigation.
+  await expect(page.getByRole('region', { name: 'Execution preview' })).toHaveCount(0);
   const execution = await prisma.runbookExecution.findFirstOrThrow({
     where: { incidentId: incident.id, runbookId: id },
   });

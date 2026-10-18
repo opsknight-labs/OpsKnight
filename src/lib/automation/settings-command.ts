@@ -61,12 +61,14 @@ export async function updateAutomationSettings(
       previous.automationStoreObservationPreviews === true && !storePreviews;
     if (!parsed.automationEnabled && previous.automationEnabled && !storePreviews) {
       // Emergency OFF must not depend on diagnostic-table cleanup succeeding.
+      const cleanupId = randomUUID();
       await tx.backgroundJob.create({
         data: {
-          id: `AUTOMATION_PRIVACY_CLEANUP:${randomUUID()}`,
+          id: `AUTOMATION_PRIVACY_CLEANUP:${cleanupId}:0`,
           type: 'SCHEDULED_TASK',
           scheduledAt: new Date(),
-          payload: { task: 'AUTOMATION_PRIVACY_CLEANUP' },
+          payload: { task: 'AUTOMATION_PRIVACY_CLEANUP', cleanupId, batch: 0 },
+          maxAttempts: 10,
         },
       });
     } else if (disablingPreviews) {

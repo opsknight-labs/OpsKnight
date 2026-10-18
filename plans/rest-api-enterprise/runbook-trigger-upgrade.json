@@ -1,0 +1,20 @@
+{
+  "measuredAt": "2026-10-18T13:20:24.598Z",
+  "baseline": "4b6b0fe97",
+  "database": "Isolated populated PostgreSQL 16 upgrade fixture",
+  "before": {
+    "enabled": true,
+    "revision": 6,
+    "activeTriggers": 2
+  },
+  "after": {
+    "enabled": false,
+    "revision": 9,
+    "preservedTriggers": 2,
+    "preservedConditions": 2,
+    "activeTriggers": 0,
+    "systemAuditPresent": true
+  },
+  "duplicateEnableRejected": true,
+  "scope": "Preserves historical identities and conditions, pauses ambiguous groups without choosing a winner, and enforces one enabled event trigger. Not rolling-upgrade certification."
+}

@@ -1,0 +1,108 @@
+{
+  "sourceParent": "4b6b0fe9753b3a86cd6c8bd7196b8f5d66d5feac",
+  "measuredAt": "2026-10-18T15:36:49.990274+00:00",
+  "reviewedCommits": [
+    "048a33fd8",
+    "4b6b0fe97"
+  ],
+  "status": "local_remediation_verified_latest_ci_pending",
+  "registeredOperationCount": 121,
+  "triggerContract": "One enabled trigger per binding/event; historical disabled records and references retained. Ambiguous legacy groups are paused in full with a system audit.",
+  "upgradeEvidence": "plans/rest-api-enterprise/runbook-trigger-upgrade.json",
+  "cleanup": {
+    "observationBatchLimit": 200,
+    "queuedPayloadBatchLimit": 200,
+    "transactionTimeoutMs": 10000,
+    "receipt": "Durable completed batch with deterministic next job; committed atomically with clearing.",
+    "failureTest": "Three failures after first successful batch, rollback, audited retry, completion and post-commit redelivery.",
+    "visibility": "Administrator-only pending/complete/failed/superseded state, batches and audited retry; no raw diagnostics or errors."
+  },
+  "postgres": {
+    "rulePrivacyContract": {
+      "passed": 31,
+      "files": 3,
+      "checkpoint": "Before audited manual retry and opt-in supersession follow-up"
+    },
+    "finalPrivacyCases": 10,
+    "broaderRegression": {
+      "passed": 146,
+      "files": 5
+    }
+  },
+  "unit": {
+    "passed": 393,
+    "files": 50,
+    "additionalCleanupActionAuthorization": 5
+  },
+  "contractDocs": {
+    "passed": 137,
+    "files": 3
+  },
+  "productionBuild": "passed",
+  "typecheck": "passed",
+  "changedSourceLint": "passed zero warnings",
+  "generatedClientsDrift": "passed",
+  "automationBrowser": {
+    "passed": 8,
+    "skipped": 0,
+    "flaky": 0,
+    "projects": [
+      "desktop",
+      "mobile",
+      "iphone",
+      "tablet"
+    ],
+    "scope": "Preview opt-in/out and failed cleanup/audited retry/worker completion"
+  },
+  "runbookBrowser": {
+    "initialPassed": 5,
+    "initialFailed": 1,
+    "projects": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "failure": "Firefox reload overlapped execute-action refresh; wait for preview reset added.",
+    "correctedFirefoxCase": "passed",
+    "scope": "Enrollment, pools, secret grants/rotation and trigger/approval/cancellation"
+  },
+  "realHttpsAgent": {
+    "passed": 1,
+    "image": "opsknight-agent:pr886-review",
+    "scope": "Compose enrollment, signed diagnostics/artifacts, policy checks, Automatic trigger and identity restart. Fleet/Kind smoke not enabled locally."
+  },
+  "remainingCiBlockers": [
+    "Repository-wide lint failures in unchanged main files and unchanged lint configuration; no checks relaxed.",
+    "New push must complete CI."
+  ],
+  "limits": [
+    "Not full endpoint parity; section 3C and other families remain open.",
+    "Explicit preview opt-out remains synchronous; bounded continuation applies to emergency-OFF deferred cleanup.",
+    "No production load/HA or mixed-version rolling-upgrade claim.",
+    "Candidate evaluation isolation and deployment SLO acceptance remain open."
+  ],
+  "sha256": {
+    "plans/rest-api-enterprise/pr-886-review-dispositions.md": "aa7a0ecea5a228275c7bb6e2a2e79f9a0c3a5ad830d26e0507a9fc3909a0d850",
+    "plans/rest-api-enterprise/runbook-trigger-upgrade.json": "551ce36c2bd53e520cace03a356dae84ee4bfeab2648e6b5bdd999984112d1ff",
+    "plans/rest-api-enterprise/workflow-inventory.json": "6c29724742c45ab8044e7a98ef4d7889636a25f4b474e679b53deb7192f813f4",
+    "prisma/migrations/20261018140000_runbook_active_trigger_invariant/migration.sql": "acf8281aea02e6a0f6424705914dbdf25b9583deaee5def50c407d0f81768653",
+    "prisma/migrations/20261018141000_automation_preview_cleanup_indexes/migration.sql": "c412c9c4096ed3ffb9c7da088cb4dc3c6350940b5db9c60fb8ea4010cf05099f",
+    "prisma/schema.prisma": "0740994e1e1c7d1ad5877219d3a5a1545785fc2389ff2668676deb8ade197cac",
+    "sdk/openapi-v2.json": "6c461a26b97a7cceec336f40a37a0d6ad256ee7f9ef6ea09198fd6a486f32a87",
+    "src/app/(app)/settings/system/automation-actions.ts": "6bed7810cf42d1bf7f1c3ef81578ff39374e44e65e66be93b05a1dd889854651",
+    "src/app/(app)/settings/system/page.tsx": "1d890323fc8abd374884cf33a3361d74752cdc5ff098b4b7b59fd7c845b1cbe8",
+    "src/components/settings/AutomationSettings.tsx": "c65a7f190c38256102a4e68514b6ad09e79ba20f82de40535053ebeab0910cee",
+    "src/lib/api-v2/enterprise-openapi.ts": "ccbd49bded4c376823d120ec2362be0e8902af62d7fedef7338901586a876917",
+    "src/lib/automation/jobs.ts": "9b50ea03a39391ac50ce8dcb53067ca008a18b1443a5681809d1beb6c61c946f",
+    "src/lib/automation/privacy-cleanup.ts": "17bf087c4e56ecd42a2791cad8ac324193fc03cd6659351792c7b128215ff56c",
+    "src/lib/automation/settings-command.ts": "bcc97de02e3ef221bd4cc549bcf65311aca43cb78aa7fc45f464408044550d5d",
+    "src/lib/jobs/queue.ts": "f5ecd37e09c05aac882d111bceaa77ef24aca64c183c61c29b9e574ca7d0c590",
+    "src/lib/runbooks/bindings.ts": "43b8076eba93cf28ae0af85e3311b87bcf212594975df001d8f654124dd5f24c",
+    "tests/e2e/automation.spec.ts": "63c851e4740cdf4741b61b3f6b44684e8a2aa6452ce739e7df2b33d725d963d9",
+    "tests/e2e/runbooks-ui.spec.ts": "ffea67f3c668fb918359e3c695233ba6a38865e46113f6db0d900d30b4898360",
+    "tests/integration/automation-observation-privacy.test.ts": "5ed8c0a8ab7416b5a9926c307f59af31e4ed10cfc350b1ed2efce86cecae8785",
+    "tests/integration/runbook-live-compose.test.ts": "221dc24e6287f0433ff0c1c1ec49f368ca845b78852156b5c3ba97e7c0bc7753",
+    "tests/integration/runbook-rule-command-transactions.test.ts": "cecb0a1855937920970768c1093735f87bb23dc46d8afd79e6fe91413c0770a8",
+    "tests/unit/automation-cleanup-actions.test.ts": "32d949b3fa67d392a455863b9680420ff7720d38b17716b61944c77d8fdf9dd5"
+  }
+}

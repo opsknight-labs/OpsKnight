@@ -192,3 +192,53 @@ it('rejects a stale metadata revision in the shared UI command', async () => {
     'First editor'
   );
 });
+
+it('replaces one effective event configuration without deleting disabled historical triggers', async () => {
+  const { service, runbook, version, actor } = await fixture();
+  const rule = await createServiceBinding(
+    service.id,
+    {
+      runbookId: runbook.id,
+      runbookVersionId: version.id,
+      versionStrategy: 'PINNED',
+      mode: 'AUTOMATIC',
+      enabled: false,
+    },
+    actor
+  );
+  const historical = await db.runbookTrigger.create({
+    data: { bindingId: rule.id, event: 'INCIDENT_CREATED', enabled: false },
+  });
+  const active = await db.runbookTrigger.create({
+    data: { bindingId: rule.id, event: 'INCIDENT_CREATED', enabled: true },
+  });
+  await expect(
+    db.runbookTrigger.create({
+      data: { bindingId: rule.id, event: 'INCIDENT_CREATED', enabled: true },
+    })
+  ).rejects.toMatchObject({ code: 'P2002' });
+  const current = await db.serviceAutomationRule.update({
+    where: { id: rule.id },
+    data: { enabled: true },
+  });
+  const replaced = await replaceBindingTrigger(
+    service.id,
+    rule.id,
+    {
+      event: 'INCIDENT_CREATED',
+      enabled: true,
+      conditionLogic: 'AND',
+      conditions: [{ field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH', sequence: 0 }],
+    },
+    actor,
+    current.configurationRevision
+  );
+  expect(replaced.id).toBe(active.id);
+  expect(await db.runbookTrigger.count({ where: { bindingId: rule.id, enabled: true } })).toBe(1);
+  expect(
+    (await db.runbookTrigger.findUniqueOrThrow({ where: { id: historical.id } })).enabled
+  ).toBe(false);
+  expect(
+    (await db.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } })).enabled
+  ).toBe(false);
+});

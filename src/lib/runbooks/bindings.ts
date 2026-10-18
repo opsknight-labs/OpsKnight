@@ -403,8 +403,28 @@ export async function replaceBindingTrigger(
     });
     const previous = await tx.runbookTrigger.findFirst({
       where: { bindingId, event: input.event },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ enabled: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
       include: { conditions: { orderBy: { sequence: 'asc' } } },
+    });
+    // PUT replaces the effective event configuration. Preserve historical trigger IDs,
+    // but never leave a second enabled condition set behind.
+    const retired = await tx.runbookTrigger.findMany({
+      where: {
+        bindingId,
+        event: input.event,
+        enabled: true,
+        ...(previous ? { id: { not: previous.id } } : {}),
+      },
+      select: { id: true, enabled: true, revision: true },
+    });
+    await tx.runbookTrigger.updateMany({
+      where: {
+        bindingId,
+        event: input.event,
+        enabled: true,
+        ...(previous ? { id: { not: previous.id } } : {}),
+      },
+      data: { enabled: false },
     });
     const conditions = input.conditions.map(condition => ({
       field: condition.field,
@@ -451,6 +471,7 @@ export async function replaceBindingTrigger(
           serviceId: binding.serviceId,
           event: trigger.event,
           triggerId: trigger.id,
+          retiredTriggers: retired,
           revision: trigger.revision,
           before: previous
             ? {

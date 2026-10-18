@@ -1,4 +1,4 @@
-import { clearObservationJobPreviews } from './observation-payload-privacy';
+import { processPrivacyCleanup } from './privacy-cleanup';
 import { getAutomationSettings } from './settings';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
@@ -22,7 +22,18 @@ const observationSchema = z
   })
   .strict();
 const jobSchema = z.discriminatedUnion('task', [
-  z.object({ task: z.literal('AUTOMATION_PRIVACY_CLEANUP') }).strict(),
+  z
+    .object({
+      task: z.literal('AUTOMATION_PRIVACY_CLEANUP'),
+      cleanupId: z.string().min(1).max(200).optional(),
+      batch: z.number().int().nonnegative().optional(),
+      completed: z.boolean().optional(),
+      observationsCleared: z.number().int().nonnegative().optional(),
+      jobsCleared: z.number().int().nonnegative().optional(),
+      more: z.boolean().optional(),
+      superseded: z.boolean().optional(),
+    })
+    .strict(),
   z
     .object({
       task: z.literal('AUTOMATION_NOTIFY'),
@@ -65,19 +76,10 @@ const jobSchema = z.discriminatedUnion('task', [
     .strict(),
 ]);
 export type ObservationJob = Extract<z.infer<typeof jobSchema>, { task: 'AUTOMATION_OBSERVE' }>;
-export async function processAutomationJob(payload: unknown) {
+export async function processAutomationJob(payload: unknown, workerJobId?: string) {
   const job = jobSchema.parse(payload);
   if (job.task === 'AUTOMATION_PRIVACY_CLEANUP') {
-    await prisma.$transaction(async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('automation-system-settings', 0))`;
-      await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR UPDATE`;
-      if ((await getAutomationSettings(tx)).automationStoreObservationPreviews) return;
-      await tx.automationContextObservation.updateMany({
-        where: { rawValuePreview: { not: '' } },
-        data: { rawValuePreview: '' },
-      });
-      await clearObservationJobPreviews(tx);
-    });
+    await processPrivacyCleanup(job, workerJobId);
     return;
   }
   if (job.task === 'AUTOMATION_RETENTION') {

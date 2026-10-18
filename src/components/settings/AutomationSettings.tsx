@@ -4,7 +4,11 @@ import {
   type AutomationReadinessPolicy,
 } from '@/lib/automation/readiness-policy';
 import { useState } from 'react';
-import { saveAutomationSettings } from '@/app/(app)/settings/system/automation-actions';
+import {
+  readAutomationPrivacyCleanupStatus,
+  retryAutomationPrivacyCleanupAction,
+  saveAutomationSettings,
+} from '@/app/(app)/settings/system/automation-actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -17,7 +21,15 @@ type Settings = {
   automationTraceRetentionDays: number;
   automationSettingsRevision: number;
 };
-export default function AutomationSettings({ initialSettings }: { initialSettings: Settings }) {
+type CleanupStatus = Awaited<ReturnType<typeof readAutomationPrivacyCleanupStatus>>;
+export default function AutomationSettings({
+  initialSettings,
+  initialCleanup = null,
+}: {
+  initialSettings: Settings;
+  initialCleanup?: CleanupStatus;
+}) {
+  const [cleanup, setCleanup] = useState<CleanupStatus>(initialCleanup);
   const [settings, setSettings] = useState({
     ...initialSettings,
     automationReadinessPolicy:
@@ -81,6 +93,45 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
         previews for alias authoring; recognizable contact details and credentials are excluded.
         Disabling clears stored previews. Observation retention also applies to previews.
       </p>
+      <div aria-label="Diagnostic privacy cleanup" className="space-y-2 text-sm">
+        <p aria-live="polite">
+          Diagnostic cleanup: {cleanup?.status ?? 'No deferred cleanup requested'}
+          {cleanup ? `; ${cleanup.batchesCompleted} batches completed` : ''}.
+        </p>
+        {cleanup?.status === 'FAILED' && (
+          <p>Cleanup needs attention. Stored previews remain hidden. Retry cleanup below.</p>
+        )}
+        {cleanup?.status === 'FAILED' && (
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                setCleanup(await retryAutomationPrivacyCleanupAction());
+              } catch {
+                setMessage('Could not retry diagnostic cleanup.');
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Retry diagnostic cleanup
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={async () => {
+            try {
+              setCleanup(await readAutomationPrivacyCleanupStatus());
+            } catch {
+              setMessage('Could not refresh diagnostic cleanup status.');
+            }
+          }}
+        >
+          Refresh cleanup status
+        </Button>
+      </div>
       <fieldset className="space-y-3 rounded-lg border p-3" disabled={busy}>
         <legend>Candidate activation readiness policy</legend>
         <p className="text-sm text-muted-foreground">
@@ -140,7 +191,12 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
                 expectedRevision: settings.automationSettingsRevision,
               })
             );
-            setMessage('Automation settings saved.');
+            try {
+              setCleanup(await readAutomationPrivacyCleanupStatus());
+              setMessage('Automation settings saved.');
+            } catch {
+              setMessage('Automation settings saved; cleanup status could not be refreshed.');
+            }
           } catch (error) {
             setMessage(
               error instanceof Error ? error.message : 'Could not save automation settings.'

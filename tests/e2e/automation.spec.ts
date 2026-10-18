@@ -1423,3 +1423,70 @@ test('administrator explicitly opts into discovery previews and disables storage
     });
   }
 });
+
+test('administrator sees failed diagnostic cleanup and retries it to completion', async ({
+  page,
+}, testInfo) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  const cleanupId = randomUUID();
+  await db.systemSettings.upsert({
+    where: { id: 'default' },
+    create: { automationStoreObservationPreviews: false },
+    update: { automationStoreObservationPreviews: false },
+  });
+  const observation = await db.automationContextObservation.create({
+    data: {
+      serviceId,
+      integrationId: `cleanup-ui-${cleanupId}`,
+      integrationType: 'EVENTS_API',
+      fieldKey: 'environment',
+      sourcePath: 'payload.environment',
+      fieldType: 'STRING',
+      normalizedRawValueHash: 'a'.repeat(64),
+      rawValuePreview: 'cleanup-ui-fixture',
+    },
+  });
+  await db.backgroundJob.create({
+    data: {
+      id: `AUTOMATION_PRIVACY_CLEANUP:${cleanupId}:0`,
+      type: 'SCHEDULED_TASK',
+      status: 'FAILED',
+      attempts: 10,
+      maxAttempts: 10,
+      scheduledAt: new Date(),
+      payload: { task: 'AUTOMATION_PRIVACY_CLEANUP', cleanupId, batch: 0 },
+    },
+  });
+  await page.goto('/settings/system');
+  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  const settings = page.getByRole('region', { name: 'Global automation settings' });
+  await expect(settings.getByText(/Diagnostic cleanup: FAILED/)).toBeVisible();
+  await settings.getByRole('button', { name: 'Retry diagnostic cleanup', exact: true }).click();
+  await expect
+    .poll(async () => {
+      await settings.getByRole('button', { name: 'Refresh cleanup status', exact: true }).click();
+      return settings.getByText(/Diagnostic cleanup:/).textContent();
+    })
+    .toContain('COMPLETE');
+  expect(
+    (await db.automationContextObservation.findUniqueOrThrow({ where: { id: observation.id } }))
+      .rawValuePreview
+  ).toBe('');
+  expect(
+    await db.auditLog.count({
+      where: { action: 'automation.privacy.cleanup.retried', actor: { email } },
+    })
+  ).toBe(1);
+  await testInfo.attach('diagnostic-cleanup-recovery', {
+    body: JSON.stringify({
+      project: testInfo.project.name,
+      failedStateVisible: true,
+      retryAudited: true,
+      workerCompletionVisible: true,
+    }),
+    contentType: 'application/json',
+  });
+});

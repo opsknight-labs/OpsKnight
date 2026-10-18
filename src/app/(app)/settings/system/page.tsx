@@ -1,3 +1,4 @@
+import { getAutomationPrivacyCleanupStatus } from '@/lib/automation/privacy-cleanup';
 import AuthenticationSettingsLoader from '@/components/settings/AuthenticationSettingsLoader';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import AutomationSettings from '@/components/settings/AutomationSettings';
@@ -196,8 +197,13 @@ export default async function SystemSettingsPage() {
     </SettingsSection>
   );
 
-    const retentionTab = <RetentionPolicySettings />;
-    const automationTab = <AutomationSettings initialSettings={await getAutomationSettings()} />;
+  const retentionTab = <RetentionPolicySettings />;
+  const automationTab = (
+    <AutomationSettings
+      initialSettings={await getAutomationSettings()}
+      initialCleanup={await getAutomationPrivacyCleanupStatus()}
+    />
+  );
 
   const envRows = [
     {
@@ -519,7 +525,7 @@ export default async function SystemSettingsPage() {
 
       <SystemSettingsTabs
         automationTab={automationTab}
-          appUrlTab={appUrlTab}
+        appUrlTab={appUrlTab}
         ssoTab={ssoTab}
         scimTab={scimTab}
         retentionTab={retentionTab}
