@@ -51,6 +51,27 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/services/[id]/automation/validate': natural(
+    'Read-only compilation and reference validation; creates no state or replay record.'
+  ),
+  'POST /api/v2/services/[id]/automation/simulate': natural(
+    'Read-only evaluation; never creates incidents, notifications, observations or replay records.'
+  ),
+  'POST /api/v2/services/[id]/automation/restore': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Restores an immutable service-owned version to an editable draft under the service lock; draft revision, origin, audit and replay commit atomically.',
+  },
+
+  'PATCH /api/v2/services/[id]/automation/mode': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Uses the effective configuration ETag, not the draft revision. The canonical mode command fences global OFF, validates references and LIVE readiness, and commits state, audit and replay atomically.',
+  },
   'POST /api/v2/services/[id]/automation/publish': {
     idempotency: 'required',
     concurrency: 'etag',

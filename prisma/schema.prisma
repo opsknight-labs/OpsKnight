@@ -4403,6 +4403,7 @@ enum AutomationRouteType {
 
 model ServiceAutomationConfig {
   serviceId          String             @id
+  revision           Int                @default(1)
   mode               AutomationMode     @default(DISABLED)
   activeVersionId    String?            @unique
   /// Published candidate awaiting explicit LIVE activation. Shadow evaluation runs
@@ -4423,6 +4424,7 @@ model AutomationDraft {
   serviceId     String                   @unique
   schemaVersion Int                      @default(1)
   snapshot      Json
+  restoredFromVersionId String?
   revision      Int                      @default(1)
   updatedBy     String?
   updatedAt     DateTime                 @updatedAt
@@ -4545,4 +4547,5 @@ model AutomationContextObservation {
 
   @@unique([serviceId, integrationId, fieldKey, normalizedRawValueHash])
   @@index([serviceId, lastSeenAt])
+  @@index([serviceId, firstSeenAt, id])
 }

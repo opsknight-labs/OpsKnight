@@ -13,11 +13,11 @@ it('rejects oversized UTF-8 action input before schema parsing or service access
     serviceId: 'service-a',
     sample: '😀'.repeat(70000),
   });
-  expect(response).toMatchObject({ ok: false, error: 'Sample or draft is too large' });
+  expect(response).toMatchObject({ ok: false, error: 'The request payload is too large.' });
   expect(db.access).not.toHaveBeenCalled();
   expect(await automationAction({ action: 'invalid', sample: 'é'.repeat(140000) })).toMatchObject({
     ok: false,
-    error: 'Sample or draft is too large',
+    error: 'The request payload is too large.',
   });
 });
 it('discovers bounded service-owned recent fields as event mappings without credential exposure', async () => {

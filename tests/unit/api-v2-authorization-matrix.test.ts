@@ -84,7 +84,9 @@ describe('REST v2 authorization matrix', () => {
     }
   });
 
-  it('records the full decision matrix so any policy change is reviewed', async () => {
+  it('records primary authorization actions so policy changes are reviewed', async () => {
+    // Composite requirements (for example automation decisions also require
+    // incidents:read) are exercised against the actual routes in PostgreSQL tests.
     const matrix: Record<string, Record<string, string>> = {};
     for (const op of operations) {
       const row: Record<string, string> = {};

@@ -80,8 +80,17 @@ const decisions: readonly ApiCapability[] = [
     title: 'Alert normalization and routing rules',
     status: 'partial',
     explanation:
-      'Global settings, draft read/write and immutable publication are available. Simulation, modes, restore, history and diagnostic APIs remain unfinished; full automation parity is not yet certified. Runbook service rules are a different domain.',
+      'Global settings, drafts, validation, safe simulation, mode changes, version history, restoration and redacted diagnostics are implemented. Full API-only lifecycle and production certification are pending. Decision history additionally requires incident read permission. Runbook service rules are a different domain.',
     operationIds: [
+      'validateAutomation',
+      'simulateAutomation',
+      'restoreAutomationDraft',
+      'listAutomationDecisions',
+      'listAutomationObservations',
+      'listAutomationVersions',
+      'getAutomationVersion',
+      'getServiceAutomation',
+      'updateServiceAutomationMode',
       'getAutomationSettings',
       'updateAutomationSettings',
       'getAutomationDraft',

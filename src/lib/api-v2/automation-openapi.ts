@@ -124,6 +124,7 @@ export const AUTOMATION_SCHEMAS = {
     {
       serviceId: identifier,
       revision: { type: 'integer', minimum: 0 },
+      restoredFromVersionId: { type: ['string', 'null'] },
       snapshot: { $ref: '#/components/schemas/AutomationSnapshot' },
     },
     ['serviceId', 'revision', 'snapshot']

@@ -17,12 +17,18 @@ export const GET = defineV2Route({
   handler: async ({ params }) => {
     const service = await prisma.service.findUnique({
       where: { id: params.id },
-      select: { id: true, automationDraft: { select: { revision: true, snapshot: true } } },
+      select: {
+        id: true,
+        automationDraft: {
+          select: { revision: true, snapshot: true, restoredFromVersionId: true },
+        },
+      },
     });
     if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
     const data = {
       serviceId: service.id,
       revision: service.automationDraft?.revision ?? 0,
+      restoredFromVersionId: service.automationDraft?.restoredFromVersionId ?? null,
       snapshot: snapshotSchema.parse(service.automationDraft?.snapshot ?? emptySnapshot),
     };
     return { data, headers: { ...etagHeaders(data.revision), 'Cache-Control': 'no-store' } };
@@ -92,6 +98,7 @@ export const PUT = defineV2Route({
         data: {
           serviceId: params.id,
           revision: draft.revision,
+          restoredFromVersionId: draft.restoredFromVersionId,
           snapshot: snapshotSchema.parse(draft.snapshot),
         },
         headers: { ...etagHeaders(draft.revision), 'Cache-Control': 'no-store' },

@@ -1,4 +1,82 @@
 {
+  "validateAutomation": {
+    "method": "POST",
+    "path": "/services/{id}/automation/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "simulateAutomation": {
+    "method": "POST",
+    "path": "/services/{id}/automation/simulate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "restoreAutomationDraft": {
+    "method": "POST",
+    "path": "/services/{id}/automation/restore",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listAutomationDecisions": {
+    "method": "GET",
+    "path": "/services/{id}/automation/decisions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listAutomationObservations": {
+    "method": "GET",
+    "path": "/services/{id}/automation/observations",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listAutomationVersions": {
+    "method": "GET",
+    "path": "/services/{id}/automation/versions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getAutomationVersion": {
+    "method": "GET",
+    "path": "/services/{id}/automation/versions/{versionId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getServiceAutomation": {
+    "method": "GET",
+    "path": "/services/{id}/automation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceAutomationMode": {
+    "method": "PATCH",
+    "path": "/services/{id}/automation/mode",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "publishAutomationVersion": {
     "method": "POST",
     "path": "/services/{id}/automation/publish",

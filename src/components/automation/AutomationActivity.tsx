@@ -56,6 +56,7 @@ export const AutomationActivity = memo(function AutomationActivity({
   setVersionView,
   busy,
   onRestore,
+  onRestoreDraft,
 }: {
   data: Data;
   serviceId: string;
@@ -65,6 +66,7 @@ export const AutomationActivity = memo(function AutomationActivity({
   setVersionView: (value: string | null) => void;
   busy: boolean;
   onRestore: (version: Data['versions'][number] & { snapshot: Snapshot }) => void;
+  onRestoreDraft?: (versionId: string) => void;
 }) {
   const [snapshots, setSnapshots] = useState<Map<string, Snapshot>>(() => new Map());
   const [error, setError] = useState('');

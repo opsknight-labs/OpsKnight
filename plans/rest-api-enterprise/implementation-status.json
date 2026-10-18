@@ -2,8 +2,8 @@
   "specificationVersion": 1,
   "objective": "Complete the eight-phase OpsKnight REST API v2 enterprise plan without duplicating domain logic or overstating certification.",
   "releaseStatus": "not_certified",
-  "worktree": "opsknight-rest-enterprise",
-  "branch": "feat/rest-api-enterprise-completion",
+  "worktree": "opsknight-api-contracts",
+  "branch": "feat/api-13-enterprise-contracts",
   "sources": {
     "capabilities": "src/lib/api-v2/capability-catalog.ts",
     "operations": "src/lib/api-v2/openapi-registry.ts",
@@ -65,7 +65,7 @@
       "phase": 4,
       "status": "pending",
       "remaining": [
-        "Complete combined-branch automation certification and the remaining effective configuration, validation, simulation, mode, restore, history and diagnostics APIs",
+        "Complete combined-branch certification of the 17 implemented automation operations, including the deployed API-only lifecycle and upgrade evidence",
         "Integration setup/configuration/rotation/test/delete commands",
         "Notification preference and provider diagnostics contracts"
       ]
@@ -152,15 +152,25 @@
       "Integrated service-automation branch a4e8723f6 into the combined worktree while retaining newer authentication, agent and notification safeguards",
       "Shared global automation settings command and explicit-scope GET/PATCH with strong revisions and durable replay",
       "Automation versioning commands support caller-owned transactions and credential-attributed canonical audit",
-      "Service automation draft GET/PUT and publication POST with dedicated scopes, team membership checks, strong revisions, canonical audit and generated SDK schemas"
+      "Service automation draft GET/PUT and publication POST with dedicated scopes, team membership checks, strong revisions, canonical audit and generated SDK schemas",
+      "Nine automation configuration, validation, safe simulation, mode, history, editable restoration and redacted diagnostic operations; shared UI commands, fenced configuration revisions and typed SDK contracts"
     ],
     "remaining": [
-      "Service automation validation, simulation, modes, restore, history and observations",
+      "Latest-commit CI and production qualification for the locally verified automation control plane",
       "Remaining runbook, integration, schedule, identity, notification, status and reporting endpoint families",
       "Full integration regression verification and combined-system Docker/Kind, load, HA and upgrade certification"
     ],
     "deliveryPolicy": "One PR (#886) for the entire approved plan, as explicitly requested by the user.",
     "implementedAutomationOperations": [
+      "validateAutomation",
+      "simulateAutomation",
+      "restoreAutomationDraft",
+      "listAutomationDecisions",
+      "listAutomationObservations",
+      "listAutomationVersions",
+      "getAutomationVersion",
+      "getServiceAutomation",
+      "updateServiceAutomationMode",
       "publishAutomationVersion",
       "getAutomationDraft",
       "saveAutomationDraft",
@@ -170,6 +180,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 92
+    "registeredOperationCount": 101,
+    "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   }
 }

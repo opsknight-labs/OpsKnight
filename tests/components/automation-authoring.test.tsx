@@ -1316,3 +1316,40 @@ it('sends only the candidate precondition when discarding through the UI', async
     })
   );
 });
+it('restores history into an editable draft without publication or a mode change', async () => {
+  const version = {
+    id: 'historical-version',
+    versionNumber: 1,
+    publishedAt: new Date().toISOString(),
+    publishedBy: 'publisher',
+    publisherName: 'Publisher',
+    checksum: 'checksum',
+    sourceVersionId: null,
+  };
+  let restored = false;
+  api.area.mockImplementation(async () => ({
+    ...data,
+    mode: 'LIVE',
+    activeVersionId: 'current-version',
+    draft: { snapshot: emptySnapshot, revision: restored ? 8 : 7 },
+    versions: [version],
+    versionTotal: 1,
+  }));
+  api.action.mockImplementation(async (input: { action: string }) => {
+    if (input.action === 'restoreDraft') restored = true;
+    return { ok: true, data: { revision: 8 } };
+  });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Activity' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Restore as draft' }));
+  await waitFor(() =>
+    expect(api.action).toHaveBeenCalledWith({
+      serviceId: 'service',
+      action: 'restoreDraft',
+      sourceVersionId: version.id,
+      expectedRevision: 7,
+    })
+  );
+  await waitFor(() => expect(api.area).toHaveBeenLastCalledWith('service', 'rules', 1));
+  expect(api.action.mock.calls.map(([input]) => input.action)).toEqual(['restoreDraft']);
+});

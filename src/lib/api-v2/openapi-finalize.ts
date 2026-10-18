@@ -328,7 +328,7 @@ export function finalizeOpenApiSpec(base: Json): Json {
           in: 'header',
           required: contract.preconditionRequired ?? false,
           description: contract.preconditionRequired
-            ? 'Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.'
+            ? 'Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.'
             : 'ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.',
           schema: { type: 'string' },
         });
@@ -397,6 +397,7 @@ const etagHeader = {
 };
 
 const ETAG_RESOURCES = new Set([
+  '/services/{id}/automation',
   '/teams/{id}',
   '/services/{id}',
   '/schedules/{id}',

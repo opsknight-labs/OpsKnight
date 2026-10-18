@@ -49,12 +49,32 @@ export async function saveDraft(input: {
   const snapshot = snapshotSchema.parse(input.snapshot);
   return runSerializableTransaction(async tx => {
     await lock(tx, input.serviceId);
+    if (
+      input.restoredFromVersionId &&
+      !(await tx.automationVersion.findFirst({
+        where: { id: input.restoredFromVersionId, serviceId: input.serviceId },
+        select: { id: true },
+      }))
+    )
+      throw new AutomationValidationError('Source version does not belong to this service');
     const previous = await tx.automationDraft.findUnique({ where: { serviceId: input.serviceId } });
     if ((previous?.revision ?? 0) !== input.expectedRevision) throw new AutomationConflict();
     const draft = await tx.automationDraft.upsert({
       where: { serviceId: input.serviceId },
-      create: { serviceId: input.serviceId, snapshot: asJson(snapshot), updatedBy: input.actorId },
-      update: { snapshot: asJson(snapshot), revision: { increment: 1 }, updatedBy: input.actorId },
+      create: {
+        serviceId: input.serviceId,
+        snapshot: asJson(snapshot),
+        updatedBy: input.actorId,
+        restoredFromVersionId: input.restoredFromVersionId,
+      },
+      update: {
+        snapshot: asJson(snapshot),
+        revision: { increment: 1 },
+        updatedBy: input.actorId,
+        ...(input.restoredFromVersionId
+          ? { restoredFromVersionId: input.restoredFromVersionId }
+          : {}),
+      },
     });
     await tx.serviceAutomationConfig.upsert({
       where: { serviceId: input.serviceId },
@@ -65,7 +85,7 @@ export async function saveDraft(input: {
       tx,
       input.serviceId,
       input.actorId,
-      'automation.draft.updated',
+      input.restoredFromVersionId ? 'automation.draft.restored' : 'automation.draft.updated',
       { revision: previous?.revision ?? 0 },
       { revision: draft.revision }
     );
@@ -194,7 +214,7 @@ export async function publishVersion(input: {
         snapshot: asJson(snapshot),
         compiledSnapshot: asJson(compiled),
         checksum: checksum(compiled),
-        sourceVersionId: source?.id,
+        sourceVersionId: source?.id ?? draft?.restoredFromVersionId ?? null,
         publishedBy: input.actorId,
         lintReport: asJson(issues),
         policyRefs: {
@@ -257,6 +277,11 @@ export async function changeMode(input: {
       where: { serviceId: input.serviceId },
       include: { activeVersion: true },
     });
+    if (
+      input.expectedConfigRevision !== undefined &&
+      (config?.revision ?? 0) !== input.expectedConfigRevision
+    )
+      throw new AutomationConflict();
     if ((config?.activeVersionId ?? null) !== input.expectedActiveVersionId)
       throw new AutomationConflict();
     if (input.mode !== 'DISABLED') {

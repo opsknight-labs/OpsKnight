@@ -20,7 +20,18 @@ export type AuditLog = { "id": string; "action": string; "entityType": string; "
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type AutomationSnapshot = { "schemaVersion": 1; "fields": Array<{ "fieldId": string; "key": string; "label": string; "type": "STRING" | "ENUM" | "NUMBER" | "BOOLEAN"; "caseSensitive"?: boolean; "allowedValues"?: Array<string>; "aliases"?: Record<string, string>; "mappings"?: Array<{ "source": "PROVIDER" | "EVENT"; "integrationType"?: string; "path": string }> }>; "rules": Array<{ "id": string; "name": string; "phase": "ENRICH" | "ROUTE"; "enabled"?: boolean; "conditions": Array<{ "fieldKey": string; "operator": "EQ" | "NE" | "IN" | "NOT_IN" | "LT" | "LTE" | "GT" | "GTE" | "IS_SET" | "IS_MISSING" | "IS_UNMAPPED"; "value"?: string | number | boolean | Array<string | number | boolean> }>; "actions": Array<{ "type": "SET_PRIORITY"; "value": "P1" | "P2" | "P3" | "P4" | "P5" } | { "type": "SET_CONTEXT"; "fieldKey": string; "value": string | number | boolean } | { "type": "ADD_TAG"; "value": string } | { "type": "USE_SERVICE_DEFAULT" } | { "type": "USE_ESCALATION_POLICY"; "policyId": string } | { "type": "NO_ESCALATION" } | { "type": "NOTIFY_CHANNEL"; "provider": "SLACK" | "TEAMS"; "destinationId": string }> }> };
-export type AutomationDraft = { "serviceId": string; "revision": number; "snapshot": AutomationSnapshot };
+export type AutomationDraft = { "serviceId": string; "revision": number; "restoredFromVersionId"?: string | null; "snapshot": AutomationSnapshot };
+export type AutomationValidation = { "valid": boolean; "requiresActivationReview": true; "issues": Array<AutomationLintIssue> };
+export type AutomationLintIssue = { "level": "ERROR" | "WARNING"; "code": string; "message": string; "ruleId"?: string; "fieldKey"?: string };
+export type AutomationSimulation = { "valid": boolean; "durationMs": number; "issues": Array<AutomationLintIssue>; "result": AutomationSimulationResult | null };
+export type AutomationSimulationResult = { "evaluationAt": string; "outcome": { "type": "SERVICE_DEFAULT" | "ESCALATION_POLICY" | "NO_ESCALATION"; "policyId"?: string }; "matchedRuleId": string | null; "priority": string | null; "tags": Array<string>; "contextStates": Record<string, string>; "rules": Array<{ "phase": "ENRICH" | "ROUTE"; "ruleId": string; "result": string; "conditions": Array<{ "fieldKey": string; "operator": string; "result": string }> }> };
+export type AutomationDecision = { "incidentId": string; "serviceId": string; "versionId": string | null; "mode": "DISABLED" | "SHADOW" | "LIVE"; "routeType": string; "escalationPolicyId": string | null; "matchedRouteRuleId": string | null; "basePriority": string | null; "finalPriority": string | null; "evaluationAt": string; "createdAt": string };
+export type AutomationObservation = { "id": string; "serviceId": string; "integrationId": string; "integrationType": string; "fieldKey": string; "sourcePath": string; "fieldType": string; "unmapped": boolean; "count": number; "firstSeenAt": string; "lastSeenAt": string };
+export type AutomationVersionHealth = { "versionId": string; "evaluated": number; "same": number; "routeDifferent": number; "priorityDifferent": number; "noEscalationDifferent": number; "errors": number; "fallbacks": number; "latestEvidenceBucketDate": string | null };
+export type AutomationEvidenceFreshness = { "latestEvidenceBucketDate": string | null; "pendingObservations": number; "pendingObservationsTruncated": boolean; "oldestSampledPendingAgeMs": number | null };
+export type AutomationConfiguration = { "serviceId": string; "revision": number; "health": { "windowDays": 7; "active": AutomationVersionHealth | null; "candidate": AutomationVersionHealth | null; "candidateEvidenceFreshness": AutomationEvidenceFreshness | null }; "globalEnabled": boolean; "mode": "DISABLED" | "SHADOW" | "LIVE"; "effectiveMode": "DISABLED" | "SHADOW" | "LIVE"; "activeVersionId": string | null; "candidateVersionId": string | null; "draftRevision": number; "activeVersion": { "id": string; "versionNumber": number; "checksum": string; "publishedAt": string } | null; "candidateVersion": { "id": string; "versionNumber": number; "checksum": string; "publishedAt": string } | null };
+export type AutomationVersionSummary = { "id": string; "serviceId": string; "versionNumber": number; "checksum": string; "sourceVersionId": string | null; "publishedAt": string; "publishedBy": string };
+export type AutomationVersionDetail = { "id": string; "serviceId": string; "versionNumber": number; "checksum": string; "sourceVersionId": string | null; "publishedAt": string; "publishedBy": string; "snapshot": AutomationSnapshot; "lintReport": Array<Record<string, unknown>> };
 export type AutomationPublishedVersion = { "id": string; "serviceId": string; "versionNumber": number; "checksum": string };
 export type AutomationCandidateVersion = { "id": string; "serviceId": string; "versionNumber": number; "publishedAt": string; "publishedBy": string; "checksum": string; "sourceVersionId"?: string | null; "lintReport"?: Array<{ "level": string; "message": string }>; "snapshot": AutomationSnapshot; "evidenceFreshness": { "latestEvidenceBucketDate": string | null; "pendingObservations": number; "pendingObservationsTruncated": boolean; "oldestSampledPendingAgeMs": number | null }; "shadowAggregates": { "evaluated": number; "same": number; "routeDifferent": number; "priorityDifferent": number; "noEscalationDifferent": number; "errors": number; "fallbacks": number } };
 export type AutomationConfig = { "serviceId": string; "activeVersionId"?: string | null; "candidateVersionId"?: string | null };
@@ -47,6 +58,15 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  validateAutomation: { "params": { "id": string }; "body": { "snapshot": AutomationSnapshot } };
+  simulateAutomation: { "params": { "id": string }; "body": { "snapshot": AutomationSnapshot; "integrationType": string; "integrationId"?: string; "evaluationAt"?: string; "providerPayload"?: unknown; "event": { "event_action": "trigger" | "resolve" | "acknowledge"; "dedup_key": string; "payload": { "summary": string; "source": string; "severity": "critical" | "error" | "warning" | "info"; "custom_details"?: unknown } } } };
+  restoreAutomationDraft: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "sourceVersionId": string } };
+  listAutomationDecisions: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listAutomationObservations: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string; "unmapped"?: "true" | "false" } };
+  listAutomationVersions: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getAutomationVersion: { "params": { "id": string; "versionId": string } };
+  getServiceAutomation: { "params": { "id": string } };
+  updateServiceAutomationMode: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "mode": "DISABLED" | "SHADOW" | "LIVE"; "expectedActiveVersionId": string | null; "acknowledgeNoShadow"?: boolean; "acknowledgeShadowErrors"?: boolean } };
   publishAutomationVersion: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "expectedActiveVersionId": string | null; "expectedCandidateVersionId"?: string | null } };
   getAutomationDraft: { "params": { "id": string } };
   saveAutomationDraft: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "snapshot": AutomationSnapshot } };
@@ -141,6 +161,15 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  validateAutomation: { "data": AutomationValidation; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  simulateAutomation: { "data": AutomationSimulation; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  restoreAutomationDraft: { "data": AutomationDraft; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listAutomationDecisions: { "data": Array<AutomationDecision>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listAutomationObservations: { "data": Array<AutomationObservation>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listAutomationVersions: { "data": Array<AutomationVersionSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getAutomationVersion: { "data": AutomationVersionDetail; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceAutomation: { "data": AutomationConfiguration; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateServiceAutomationMode: { "data": AutomationConfiguration; "requestId": string; "timestamp": string } & Record<string, unknown>;
   publishAutomationVersion: { "data": AutomationPublishedVersion; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getAutomationDraft: { "data": AutomationDraft; "requestId": string; "timestamp": string } & Record<string, unknown>;
   saveAutomationDraft: { "data": AutomationDraft; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -235,6 +264,84 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "validateAutomation": {
+    "method": "POST",
+    "path": "/services/{id}/automation/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "simulateAutomation": {
+    "method": "POST",
+    "path": "/services/{id}/automation/simulate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "restoreAutomationDraft": {
+    "method": "POST",
+    "path": "/services/{id}/automation/restore",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listAutomationDecisions": {
+    "method": "GET",
+    "path": "/services/{id}/automation/decisions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listAutomationObservations": {
+    "method": "GET",
+    "path": "/services/{id}/automation/observations",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listAutomationVersions": {
+    "method": "GET",
+    "path": "/services/{id}/automation/versions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getAutomationVersion": {
+    "method": "GET",
+    "path": "/services/{id}/automation/versions/{versionId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getServiceAutomation": {
+    "method": "GET",
+    "path": "/services/{id}/automation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceAutomationMode": {
+    "method": "PATCH",
+    "path": "/services/{id}/automation/mode",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "publishAutomationVersion": {
     "method": "POST",
     "path": "/services/{id}/automation/publish",

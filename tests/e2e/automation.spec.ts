@@ -182,7 +182,9 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       page.getByText('production', { exact: true }).filter({ visible: true }).first()
     ).toBeVisible();
     await expect(
-      page.getByText('Personal paging intentionally skipped', { exact: false })
+      page
+        .getByText('Personal paging intentionally skipped', { exact: false })
+        .filter({ visible: true })
     ).toBeVisible();
     expect(
       await db.notification.count({
@@ -1136,6 +1138,195 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
         'DROP FUNCTION IF EXISTS automation_browser_fail_observation_once()'
       );
     }
+    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+  }
+});
+
+test('API-only automation authoring, diagnostics and historical restoration use the deployed SDK', async ({
+  page,
+}, testInfo) => {
+  const { Client } = await import('../../sdk/typescript/client');
+  const actor = await db.user.findUniqueOrThrow({ where: { email } });
+  const service = await db.service.create({ data: { name: `API lifecycle ${randomUUID()}` } });
+  const integration = await db.integration.create({
+    data: {
+      name: 'API lifecycle ingestion',
+      serviceId: service.id,
+      key: randomUUID(),
+      type: 'EVENTS_API_V2',
+    },
+  });
+  const issued = generateApiKey();
+  const key = await db.apiKey.create({
+    data: {
+      name: 'API lifecycle certification',
+      userId: actor.id,
+      prefix: issued.prefix,
+      tokenHash: issued.tokenHash,
+      scopes: [
+        'automation:read',
+        'automation:write',
+        'automation:publish',
+        'automation-settings:read',
+        'automation-settings:write',
+        'incidents:read',
+      ],
+    },
+  });
+  const client = new Client({
+    baseUrl: 'http://127.0.0.1:3193/api/v2',
+    token: issued.token,
+    allowInsecureHttp: true,
+    maxRetries: 0,
+  });
+  const params = { id: service.id };
+  const snapshot = {
+    schemaVersion: 1 as const,
+    fields: [
+      {
+        fieldId: 'environment',
+        key: 'environment',
+        label: 'Environment',
+        type: 'STRING' as const,
+        caseSensitive: false,
+        aliases: {},
+        mappings: [{ source: 'EVENT' as const, path: 'payload.custom_details.environment' }],
+      },
+    ],
+    rules: [
+      {
+        id: 'suppress',
+        name: 'Certification suppression',
+        phase: 'ROUTE' as const,
+        enabled: true,
+        conditions: [
+          {
+            fieldKey: 'environment',
+            operator: 'EQ' as const,
+            value: 'private-certification-value',
+          },
+        ],
+        actions: [{ type: 'NO_ESCALATION' as const }],
+      },
+    ],
+  };
+  const event = {
+    event_action: 'trigger' as const,
+    dedup_key: randomUUID(),
+    payload: {
+      summary: 'API lifecycle certification',
+      source: 'private-certification-source',
+      severity: 'info' as const,
+      custom_details: { environment: 'private-certification-value' },
+    },
+  };
+  try {
+    const settings = await client.call('getAutomationSettings', {});
+    await client.call('updateAutomationSettings', {
+      body: {
+        automationEnabled: true,
+        automationTraceRetentionDays: settings.data.automationTraceRetentionDays,
+      },
+      headers: {
+        'If-Match': `"${settings.data.automationSettingsRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    });
+    const initial = await client.call('getAutomationDraft', { params });
+    const saved = await client.call('saveAutomationDraft', {
+      params,
+      body: { snapshot },
+      headers: { 'If-Match': `"${initial.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(
+      (await client.call('validateAutomation', { params, body: { snapshot } })).data.valid
+    ).toBe(true);
+    const simulation = await client.call('simulateAutomation', {
+      params,
+      body: { snapshot, event, integrationType: integration.type, integrationId: integration.id },
+    });
+    expect(simulation.data.result?.outcome.type).toBe('NO_ESCALATION');
+    expect(JSON.stringify(simulation)).not.toContain('private-certification-value');
+    expect(await db.incident.count({ where: { serviceId: service.id } })).toBe(0);
+    const published = await client.call('publishAutomationVersion', {
+      params,
+      body: { expectedActiveVersionId: null },
+      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    const configuration = await client.call('getServiceAutomation', { params });
+    expect(configuration.data.mode).toBe('DISABLED');
+    const live = await client.call('updateServiceAutomationMode', {
+      params,
+      body: { mode: 'LIVE', expectedActiveVersionId: published.data.id, acknowledgeNoShadow: true },
+      headers: { 'If-Match': `"${configuration.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(live.data.effectiveMode).toBe('LIVE');
+    const history = await client.call('listAutomationVersions', { params, query: { limit: 1 } });
+    expect(history.data[0].id).toBe(published.data.id);
+    const inspected = await client.call('getAutomationVersion', {
+      params: { ...params, versionId: published.data.id },
+    });
+    expect(inspected.data.snapshot).toEqual(snapshot);
+    const ingested = await page.request.post('/api/events', {
+      headers: { Authorization: `Token token=${integration.key}` },
+      data: event,
+    });
+    expect(ingested.ok()).toBe(true);
+    const incident = await db.incident.findFirstOrThrow({ where: { serviceId: service.id } });
+    await expect
+      .poll(
+        async () =>
+          (
+            await db.backgroundJob.findUnique({
+              where: { id: `AUTOMATION_OBSERVE:${incident.id}` },
+            })
+          )?.status,
+        { timeout: 120000 }
+      )
+      .toBe('COMPLETED');
+    const decisions = await client.call('listAutomationDecisions', { params });
+    expect(decisions.data[0]).toMatchObject({
+      incidentId: incident.id,
+      versionId: published.data.id,
+      routeType: 'NO_ESCALATION',
+    });
+    const observations = await client.call('listAutomationObservations', {
+      params,
+      query: { limit: 10 },
+    });
+    expect(observations.data.some(observation => observation.fieldKey === 'environment')).toBe(
+      true
+    );
+    expect(JSON.stringify(observations)).not.toContain('private-certification-value');
+    const restored = await client.call('restoreAutomationDraft', {
+      params,
+      body: { sourceVersionId: published.data.id },
+      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(restored.data.restoredFromVersionId).toBe(published.data.id);
+    const afterRestore = await client.call('getServiceAutomation', { params });
+    expect(afterRestore.data).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: published.data.id,
+      candidateVersionId: null,
+    });
+    const disabled = await client.call('updateServiceAutomationMode', {
+      params,
+      body: { mode: 'DISABLED', expectedActiveVersionId: published.data.id },
+      headers: { 'If-Match': `"${afterRestore.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(disabled.data.effectiveMode).toBe('DISABLED');
+    await testInfo.attach('api-only-automation-lifecycle', {
+      body: JSON.stringify({
+        versionId: published.data.id,
+        restoredRevision: restored.data.revision,
+        decisions: decisions.data.length,
+        observations: observations.data.length,
+        finalMode: disabled.data.effectiveMode,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
     await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
   }
 });

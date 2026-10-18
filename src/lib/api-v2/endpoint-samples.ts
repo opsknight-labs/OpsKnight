@@ -4,6 +4,20 @@
  */
 
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
+  'POST /services/{id}/automation/validate': {
+    snapshot: { schemaVersion: 1, fields: [], rules: [] },
+  },
+  'POST /services/{id}/automation/simulate': {
+    snapshot: { schemaVersion: 1, fields: [], rules: [] },
+    integrationType: 'events',
+    event: {
+      event_action: 'trigger',
+      dedup_key: 'simulation',
+      payload: { summary: 'Example', source: 'api', severity: 'info' },
+    },
+  },
+  'POST /services/{id}/automation/restore': { sourceVersionId: 'cm123456789012345678901234' },
+  'PATCH /services/{id}/automation/mode': { mode: 'DISABLED', expectedActiveVersionId: null },
   'POST /services/{id}/automation/publish': { expectedActiveVersionId: null },
   'DELETE /services/{id}/automation/candidate': {
     expectedCandidateVersionId: 'cm111111111111111111111111',

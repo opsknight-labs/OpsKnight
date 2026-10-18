@@ -69,6 +69,12 @@ try {
         'runbooks:write',
         'runbooks:publish',
         'runbooks:execute',
+        'automation:read',
+        'automation:write',
+        'automation:publish',
+        'automation-settings:read',
+        'automation-settings:write',
+        'incidents:read',
       ],
       expiresAt: new Date(Date.now() + 10 * 60_000),
     },
@@ -115,6 +121,9 @@ try {
   console.log(
     'TypeScript live replay/publication/preview/execution/cancellation workflows passed.'
   );
+  const automationService = await prisma.service.create({
+    data: { name: `Python automation ${randomUUID()}` },
+  });
   const python = spawnSync(
     process.env.DOCKER_BIN ?? 'docker',
     [
@@ -135,6 +144,7 @@ try {
         baseUrl: `http://host.docker.internal:${port}/api/v2`,
         token,
         typescriptRunbookId: created.data.id,
+        automationServiceId: automationService.id,
       }),
       encoding: 'utf8',
       timeout: 90_000,

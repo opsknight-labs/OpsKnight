@@ -4,6 +4,15 @@
   "automationSourceCommit": "a4e8723f6",
   "scope": "Single PR for the complete approved coverage plan",
   "implementedOperations": [
+    "validateAutomation",
+    "simulateAutomation",
+    "restoreAutomationDraft",
+    "listAutomationDecisions",
+    "listAutomationObservations",
+    "listAutomationVersions",
+    "getAutomationVersion",
+    "getServiceAutomation",
+    "updateServiceAutomationMode",
     "publishAutomationVersion",
     "getAutomationDraft",
     "saveAutomationDraft",
@@ -37,6 +46,20 @@
       "failed": 0,
       "pending": 0,
       "manifest": "ci-53e86ca.json"
+    },
+    "automationControlPlane": {
+      "status": "local_checks_passed_latest_ci_pending",
+      "manifest": "automation-m1-certification.json",
+      "automationOperations": 17,
+      "browserPassed": 36,
+      "postgresPassed": 124,
+      "postgresSkipped": 1,
+      "unitPassed": 521,
+      "upgradePassed": 12,
+      "liveSdks": [
+        "TypeScript",
+        "Python"
+      ]
     }
   },
   "limitations": [
@@ -55,7 +78,7 @@
     "applicationReplicas": 2,
     "coverage": "Functional SDK/UI/ingestion parity and publication safety; not load/HA or full enterprise coverage"
   },
-  "registeredOperationCount": 92,
+  "registeredOperationCount": 101,
   "currentReview": {
     "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
     "milestone": "M0",
