@@ -62,13 +62,11 @@ vi.mock('@/lib/prisma', () => ({
           findUnique: vi.fn(),
           update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
           delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
-          create: vi
-            .fn()
-            .mockResolvedValue({
-              id: 'rb_dup_1',
-              name: 'Original Workflow (Copy)',
-              slug: 'orig-workflow-copy',
-            }),
+          create: vi.fn().mockResolvedValue({
+            id: 'rb_dup_1',
+            name: 'Original Workflow (Copy)',
+            slug: 'orig-workflow-copy',
+          }),
         },
         runbookVersion: {
           deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -502,14 +500,20 @@ describe('Runbook Lifecycle Unit Tests', () => {
       const tx = {
         runbook: {
           findUnique: read,
-          create: vi
+          create: vi.fn().mockResolvedValue({
+            id: 'rb_dup_1',
+            name: 'Original Workflow (Copy)',
+            slug: 'orig-workflow-copy',
+          }),
+          update: vi
             .fn()
             .mockResolvedValue({
               id: 'rb_dup_1',
               name: 'Original Workflow (Copy)',
               slug: 'orig-workflow-copy',
+              draftVersionId: 'ver_dup_1',
+              revision: 2,
             }),
-          update: vi.fn(),
         },
         runbookVersion: { create: vi.fn().mockResolvedValue({ id: 'ver_dup_1', version: 1 }) },
       };
@@ -519,6 +523,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
 
       const duplicated = await duplicateRunbook('rb_orig', 'user_1');
       expect(duplicated.id).toBe('rb_dup_1');
+      expect(duplicated.revision).toBe(2);
     });
 
     it('throws RunbookDefinitionError if source runbook has no versions', async () => {
