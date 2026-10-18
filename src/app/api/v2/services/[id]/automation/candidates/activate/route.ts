@@ -1,31 +1,10 @@
+import { requireAutomationService } from '@/lib/api-v2/automation-access';
 import { z } from 'zod';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
-import { AppError } from '@/lib/errors';
 import prisma from '@/lib/prisma';
 import { activateCandidate, AutomationConflict } from '@/lib/automation/versioning';
 import { preconditionFailed } from '@/lib/api-v2/concurrency';
-
-async function assertAutomationWriteAccess(
-  client: typeof prisma | Parameters<typeof prisma.$transaction>[0],
-  serviceId: string,
-  actor: { role: string; id: string }
-) {
-  const service = await (client as typeof prisma).service.findUnique({
-    where: { id: serviceId },
-    select: { teamId: true },
-  });
-  if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
-  if (actor.role !== 'ADMIN') {
-    const membership = service.teamId
-      ? await (client as typeof prisma).teamMember.findFirst({
-          where: { teamId: service.teamId, userId: actor.id },
-          select: { id: true },
-        })
-      : null;
-    if (!membership) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
-  }
-}
 
 export const POST = defineV2Route({
   action: AUTHORIZATION_ACTIONS.AUTOMATION_PUBLISH,
@@ -43,14 +22,10 @@ export const POST = defineV2Route({
   idempotent: true,
   idempotencyRequired: true,
   replayAuthGuard: async ({ params, actor, tx }) => {
-    if (tx) {
-      await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
-    }
-    await assertAutomationWriteAccess((tx ?? prisma) as typeof prisma, params.id, actor);
+    await requireAutomationService(tx ?? prisma, params.id, actor, true);
   },
   handler: async ({ params, body, actor, apiKey, tx }) => {
-    await tx!.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
-    await assertAutomationWriteAccess(tx! as unknown as typeof prisma, params.id, actor);
+    await requireAutomationService(tx!, params.id, actor, true);
     try {
       const updated = await activateCandidate(
         {

@@ -210,3 +210,17 @@ active pointers and shadow aggregates are preserved. A populated upgrade from
 `automation-privacy-upgrade.json`. The classifier is deliberately bounded and is
 not a general personal-data guarantee. Broader retention/export/deletion and
 production privacy acceptance remain part of the overall release gates.
+
+### Deep audit — shared automation mutation authorization
+
+Draft writes, publication, candidate discard and candidate activation now use the
+same `requireAutomationService` boundary as the newer mode/restoration operations.
+It acquires the canonical service advisory lock, fences service reassignment with
+a shared service-row lock, and holds the responder's team-membership row through
+the transaction. Replay guards join the same transaction and repeat this check.
+
+Thirteen PostgreSQL lifecycle cases passed, including successful draft replay,
+revoked membership and reassigned service ownership denying the same cached result.
+The 122 focused authorization/OpenAPI/mutation-contract tests, typecheck and changed
+route lint passed. Applicable read permissions remain organization-wide under the
+existing role policy; no new read restriction was invented by this refactor.

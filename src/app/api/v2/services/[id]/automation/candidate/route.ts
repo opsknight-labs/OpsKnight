@@ -1,3 +1,4 @@
+import { requireAutomationService } from '@/lib/api-v2/automation-access';
 import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { z } from 'zod';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
@@ -7,36 +8,12 @@ import prisma from '@/lib/prisma';
 import { discardCandidate, AutomationConflict } from '@/lib/automation/versioning';
 import { preconditionFailed } from '@/lib/api-v2/concurrency';
 
-async function assertAutomationAccess(
-  client: typeof prisma | Parameters<typeof prisma.$transaction>[0],
-  serviceId: string,
-  actor: { role: string; id: string },
-  requireWrite: boolean = false
-) {
-  const service = await (client as typeof prisma).service.findUnique({
-    where: { id: serviceId },
-    select: { teamId: true },
-  });
-  if (!service) throw new AppError({ code: 'SERVICE_NOT_FOUND' });
-  if (actor.role !== 'ADMIN') {
-    if (requireWrite) {
-      const membership = service.teamId
-        ? await (client as typeof prisma).teamMember.findFirst({
-            where: { teamId: service.teamId, userId: actor.id },
-            select: { id: true },
-          })
-        : null;
-      if (!membership) throw new AppError({ code: 'AUTHORIZATION_DENIED' });
-    }
-  }
-}
-
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.AUTOMATION_READ,
   paramsSchema: z.object({ id: z.string().cuid() }).strict(),
   querySchema: z.object({}).strict(),
   handler: async ({ params, actor }) => {
-    await assertAutomationAccess(prisma, params.id, actor, false);
+    await requireAutomationService(prisma, params.id, actor);
     const config = await prisma.serviceAutomationConfig.findUnique({
       where: { serviceId: params.id },
       include: {
@@ -118,14 +95,10 @@ export const DELETE = defineV2Route({
   idempotent: true,
   idempotencyRequired: true,
   replayAuthGuard: async ({ params, actor, tx }) => {
-    if (tx) {
-      await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
-    }
-    await assertAutomationAccess((tx ?? prisma) as typeof prisma, params.id, actor, true);
+    await requireAutomationService(tx ?? prisma, params.id, actor, true);
   },
   handler: async ({ params, body, actor, apiKey, tx }) => {
-    await tx!.$queryRaw`SELECT id FROM "Service" WHERE id = ${params.id} FOR SHARE`;
-    await assertAutomationAccess(tx! as unknown as typeof prisma, params.id, actor, true);
+    await requireAutomationService(tx!, params.id, actor, true);
     try {
       const updated = await discardCandidate(
         {

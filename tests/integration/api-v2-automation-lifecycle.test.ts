@@ -1,3 +1,4 @@
+import { PUT as saveDraftRoute } from '@/app/api/v2/services/[id]/automation/draft/route';
 import Ajv2020 from 'ajv/dist/2020';
 import addFormats from 'ajv-formats';
 import { getOpenApiV2Spec } from '@/lib/api-v2/openapi';
@@ -592,4 +593,36 @@ it('creates an initially disabled configuration from revision zero and rejects n
   expect(results.map(result => result.status).sort()).toEqual([200, 412]);
   const final = await invokeV2(getConfiguration, admin.token, 'GET', path, params);
   expect(final.headers.get('etag')).toBe('"1"');
+});
+
+it('rechecks draft membership and service ownership before replay through the shared access boundary', async () => {
+  const f = await fixture();
+  const team = await db.team.create({ data: { name: `Draft editors ${randomUUID()}` } });
+  await db.service.update({ where: { id: f.service.id }, data: { teamId: team.id } });
+  const editor = await createV2Credential(['automation:read', 'automation:write'], 'RESPONDER');
+  const membership = await db.teamMember.create({
+    data: { teamId: team.id, userId: editor.user.id },
+  });
+  const key = randomUUID();
+  const save = () =>
+    invokeV2(
+      saveDraftRoute,
+      editor.token,
+      'PUT',
+      `${f.path}/draft`,
+      f.params,
+      { snapshot: emptySnapshot },
+      { 'If-Match': '"1"', 'Idempotency-Key': key }
+    );
+  expect((await save()).status).toBe(200);
+  expect((await save()).headers.get('idempotency-replayed')).toBe('true');
+  await db.teamMember.delete({ where: { id: membership.id } });
+  expect((await save()).status).toBe(403);
+  await db.teamMember.create({ data: { teamId: team.id, userId: editor.user.id } });
+  const otherTeam = await db.team.create({ data: { name: `Reassigned ${randomUUID()}` } });
+  await db.service.update({ where: { id: f.service.id }, data: { teamId: otherTeam.id } });
+  expect((await save()).status).toBe(403);
+  expect(
+    (await db.automationDraft.findUniqueOrThrow({ where: { serviceId: f.service.id } })).revision
+  ).toBe(2);
 });
