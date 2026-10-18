@@ -115,7 +115,7 @@ describe('persistObservationBatch', () => {
     // If sibling 1 was already completed by another thread/transaction
     const { createHash } = await import('crypto');
     const sibling1Receipt = `AUTOMATION_OBSERVATION_RECEIPT:${createHash('sha256')
-      .update(JSON.stringify(siblingJob1))
+      .update(JSON.stringify([siblingJob1.serviceId, siblingJob1.logicalKey]))
       .digest('hex')}`;
 
     const pendingRows = [
