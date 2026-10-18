@@ -346,3 +346,28 @@ UI journeys. The populated upgrade preserves existing pinned configuration and
 only fences subsequent writes. See runbook-rules-certification.json; this does
 not certify mixed-version rollout, the remaining runbook control plane, or the
 complete enterprise plan. Release gates remain open.
+
+### Execution approval command preparation (section 3C)
+
+The existing UI approval command can now join a caller-owned transaction and
+attribute its canonical business audit to an API credential. Plan digest checks,
+step compare-and-set, parent execution transition, advance job and audit remain
+one atomic operation. The existing UI call signature and approval policy are
+unchanged. PostgreSQL tests exercise outer rollback, one canonical attributed
+event, repeated decisions and stale digests; the existing execution safety suite
+checks cancellation/approval races. This is shared-domain preparation, not a
+claim that the seven approval/intervention REST endpoints are implemented.
+
+The rule revision fence also requires older execution fixtures to explicitly
+activate their completed configuration and read the resulting database-owned
+revision. Runtime safety and preview authorization assertions remain intact;
+negative preview cases now refresh unrelated revision state so each rejection
+exercises its intended boundary. Coverage: 176 passing cases in the other 14
+PostgreSQL suites plus all 37 passing preview authorization cases, and 31 UI
+action unit cases. Evidence is in runbook-approval-transaction-preparation.json.
+
+GitHub CI initially tested a cleanly merged tree with duplicate imports because
+main and this branch added the same domain error import in different places.
+Matching main's import placement removes that duplicate without changing either
+branch's business behavior. A disposable merged worktree passes strict typecheck and production build;
+latest remote CI must still rerun successfully before readiness.

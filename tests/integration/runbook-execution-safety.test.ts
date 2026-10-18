@@ -69,10 +69,20 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
   if (binding) {
     const trigger = input.triggerId
       ? { id: input.triggerId }
-      : await testPrisma.runbookTrigger.upsert({
+      : ((await testPrisma.runbookTrigger.findUnique({ where: { id: binding.id } })) ??
+        (await testPrisma.runbookTrigger.create({
+          data: { id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' },
+        })));
+    // This helper provisions legitimate active Automatic fixtures before exercising runtime safety.
+    // Trigger/configuration writes now pause rules and advance their database-owned revisions.
+    const currentBinding = await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+      where: { id: binding.id },
+    });
+    const configuredBinding = currentBinding.enabled
+      ? currentBinding
+      : await testPrisma.serviceAutomationRule.update({
           where: { id: binding.id },
-          update: {},
-          create: { id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' },
+          data: { enabled: true },
         });
     // The fixture's approval covers the rule as it stands once its trigger exists.
     if (binding.unattendedWritesAuthorizedAt)
@@ -93,7 +103,7 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
       runbookVersionId,
       sourceEventId,
       triggerId: trigger.id,
-      expectedRuleRevision: binding.configurationRevision,
+      expectedRuleRevision: configuredBinding.configurationRevision,
       triggerFingerprint: computeTriggerFingerprint({
         sourceEventId,
         bindingId: binding.id,
@@ -236,6 +246,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       const trigger = await testPrisma.runbookTrigger.create({
         data: { bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
       });
+      const activeRule = await testPrisma.serviceAutomationRule.update({
+        where: { id: target.binding.id },
+        data: { enabled: true },
+      });
       const sourceEventId = crypto.randomUUID();
       const request = {
         runbookId: target.runbook.id,
@@ -244,7 +258,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         bindingId: target.binding.id,
         incidentId: incident.id,
         triggerId: trigger.id,
-        expectedRuleRevision: target.binding.configurationRevision,
+        expectedRuleRevision: activeRule.configurationRevision,
         sourceEventId,
         triggerFingerprint: computeTriggerFingerprint({
           sourceEventId,
@@ -390,6 +404,13 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { bindingId: target.binding.id },
       data: { revision: 3 },
     });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
+    const reviewedTrigger = await testPrisma.runbookTrigger.findFirstOrThrow({
+      where: { bindingId: target.binding.id },
+    });
     expect(await evaluateIncidentTriggers(incident.id, 'budget-event')).toMatchObject({
       matched: 1,
       started: 0,
@@ -403,7 +424,9 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         where: { incidentId: incident.id, type: 'RUNBOOK_SUGGESTED' },
       })
     ).toBe(1);
-    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(
+      reviewedTrigger.revision
+    );
     expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).planSnapshot).toMatchObject({
       agentSelector: { env: 'prod' },
       definitionChecksum: target.version.checksum,
@@ -421,7 +444,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     });
     expect(await testPrisma.runbookSuggestion.count()).toBe(1);
     const execution = await testPrisma.runbookExecution.findFirstOrThrow();
-    expect(execution.triggerRevision).toBe(3);
+    expect(execution.triggerRevision).toBe(reviewedTrigger.revision);
     await testPrisma.runbookTrigger.updateMany({
       where: { bindingId: target.binding.id },
       data: { revision: 4 },
@@ -429,8 +452,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(
       (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } }))
         .triggerRevision
-    ).toBe(3);
-    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
+    ).toBe(reviewedTrigger.revision);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(
+      reviewedTrigger.revision
+    );
   });
 
   it('resolves incident label targeting and fences removal of the pinned source-pool member', async () => {
@@ -459,6 +484,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: '${{ incident.labels.host }}' } },
+    });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
     });
     const execution = await startRunbookExecution({
       runbookId: target.runbook.id,
@@ -574,6 +603,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       triggeredByUserId: target.actor.id,
       inputValues,
     };
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     const preview = await previewRunbookExecution(request);
     expect(preview.steps[0]?.name).toBe('Inspect [REDACTED] for Payments');
     const execution = await startAuthorizedExecution({
@@ -640,6 +673,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       serviceId: target.service.id,
       incidentId: incident.id,
     };
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     const results = await Promise.allSettled([
       startRunbookExecution(input),
       startRunbookExecution(input),
@@ -735,6 +772,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       serviceId: target.service.id,
       triggeredByUserId: target.actor.id,
     };
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     expect(await startRunbookExecution(input)).toMatchObject({
       resolvedTargetAgentId: target.agent.id,
     });
@@ -944,6 +985,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         'Invalid trigger must not start',
         target.service.id
       );
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: target.binding.id },
+        data: { enabled: true },
+      });
       const result = await evaluateIncidentTriggers(incident.id, `typo-${operator}`);
       expect(result).toMatchObject({ matched: 0, started: 0, suppressed: 1 });
       expect(await testPrisma.runbookExecution.count()).toBe(0);
@@ -1322,6 +1367,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         },
       });
     }
+    await testPrisma.serviceAutomationRule.updateMany({
+      where: { serviceId: service.id },
+      data: { enabled: true },
+    });
     expect(await evaluateIncidentTriggers(incident.id, 'isolation-event')).toMatchObject({
       matched: 2,
       started: 1,
@@ -1429,6 +1478,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { versionStrategy: 'LATEST_PUBLISHED', runbookVersionId: null },
+    });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
     });
     await expect(
       startRunbookExecution({
@@ -1820,6 +1873,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       }),
     ]);
 
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     const execution = await startRunbookExecution({
       runbookId: target.runbook.id,
       runbookVersionId: suggestion.runbookVersionId,
