@@ -183,5 +183,11 @@
     ],
     "registeredOperationCount": 101,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
+  },
+  "candidateReadinessFollowUp": {
+    "status": "implemented_locally_verified_latest_ci_pending",
+    "evidence": "plans/rest-api-enterprise/automation-readiness-certification.json",
+    "operationCountUnchanged": 101,
+    "remaining": "Candidate isolation, remaining enterprise domains, final-commit CI and production release gates"
   }
 }

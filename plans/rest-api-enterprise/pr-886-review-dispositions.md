@@ -224,3 +224,35 @@ revoked membership and reassigned service ownership denying the same cached resu
 The 122 focused authorization/OpenAPI/mutation-contract tests, typecheck and changed
 route lint passed. Applicable read permissions remain organization-wide under the
 existing role policy; no new read restriction was invented by this refactor.
+
+### Candidate readiness policy (follow-up to the 654b0ed32 audit)
+
+Candidate activation now reads a database-managed policy shared by REST and the
+Automation Workspace. Defaults require 100 evaluations within the seven-day
+window, a latest daily evidence bucket no older than 48 hours, no pending or
+processing observations for that service/candidate, and zero errors. Daily
+buckets provide coarse freshness, not an event-time guarantee. These defaults
+are a review floor, not proof that traffic represents a production workload.
+
+Administrators can change the four bounded policy fields in system settings.
+A database trigger advances the settings revision for direct policy writes as
+well as application writes. The UI submits the reviewed settings revision; REST
+clients can submit `expectedReadinessPolicyRevision` to reject stale reviews with
+412. This field remains optional for existing client compatibility. Activation
+rechecks the current policy under its transaction locks in either case.
+
+An invalid stored policy or excess candidate backlog blocks activation. Existing
+`acknowledgeNoShadow` explicitly accepts insufficient sample volume or stale
+evidence; `acknowledgeShadowErrors` accepts an error-rate exception. Material
+routing changes still require their separate acknowledgment. The canonical
+activation audit records the exact policy, settings revision, evidence, pending
+count and exception flags transactionally with the activation and API replay.
+The error rate uses the maximum of overlapping error/fallback counters, avoiding
+double-counting the same failed evaluation.
+
+Upgrading installs the policy defaults without replacing published versions or
+changing LIVE routing. Candidates with a single historical observation now need
+an explicit insufficient-evidence exception. This policy governs candidate
+activation; the separate mode-change command retains its existing contract.
+Candidate isolation, deployment-specific load/HA acceptance and the remaining
+enterprise domain APIs remain open.

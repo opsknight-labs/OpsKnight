@@ -2544,6 +2544,7 @@ model SystemSettings {
   runbookArtifactRetentionDays Int?
   automationEnabled                    Boolean  @default(false)
   automationStoreObservationPreviews Boolean @default(false)
+  automationReadinessPolicy Json @default("{\"minimumEvaluations\":100,\"maximumEvidenceAgeHours\":48,\"maximumPendingObservations\":0,\"maximumErrorRate\":0}")
   automationTraceRetentionDays         Int      @default(90)
   automationSettingsRevision           Int      @default(0)
   id                                   String   @id @default("default")

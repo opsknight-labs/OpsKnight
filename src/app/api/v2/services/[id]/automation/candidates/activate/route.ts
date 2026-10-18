@@ -14,6 +14,7 @@ export const POST = defineV2Route({
     .object({
       expectedCandidateVersionId: z.string().cuid(),
       expectedActiveVersionId: z.string().cuid().nullable().optional(),
+      expectedReadinessPolicyRevision: z.number().int().nonnegative().optional(),
       acknowledgeNoShadow: z.boolean().optional(),
       acknowledgeShadowErrors: z.boolean().optional(),
       acknowledgeMaterialDifferences: z.boolean().optional(),
@@ -33,6 +34,7 @@ export const POST = defineV2Route({
           actorId: actor.id,
           expectedCandidateVersionId: body.expectedCandidateVersionId,
           expectedActiveVersionId: body.expectedActiveVersionId,
+          expectedReadinessPolicyRevision: body.expectedReadinessPolicyRevision,
           acknowledgeNoShadow: body.acknowledgeNoShadow,
           acknowledgeShadowErrors: body.acknowledgeShadowErrors,
           acknowledgeMaterialDifferences: body.acknowledgeMaterialDifferences,

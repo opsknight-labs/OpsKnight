@@ -1,0 +1,19 @@
+{
+  "measuredAt": "2026-10-18T10:11:50.107727+00:00",
+  "baseline": "200b38aa0c187cf1554852855f341d88ab5b54be",
+  "database": "isolated PostgreSQL 16 populated fixture",
+  "result": {
+    "policy": {
+      "maximumErrorRate": 0,
+      "minimumEvaluations": 100,
+      "maximumEvidenceAgeHours": 48,
+      "maximumPendingObservations": 0
+    },
+    "revision": 0,
+    "activeVersionId": "privacy-upgrade-version",
+    "mode": "LIVE",
+    "aggregateEvaluated": 7
+  },
+  "directWriterRevisionAdvanced": true,
+  "scope": "Upgrade preserves LIVE version and evidence, installs review defaults and fences direct policy writes. Not mixed-version rollout certification."
+}

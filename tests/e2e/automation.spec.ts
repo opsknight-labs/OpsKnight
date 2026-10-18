@@ -1,3 +1,4 @@
+import { automationReadinessPolicySchema } from '../../src/lib/automation/readiness-policy';
 import { generateApiKey } from '@/lib/api-keys';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -1026,6 +1027,7 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
         body: {
           expectedCandidateVersionId: candidatePub.data.id,
           expectedActiveVersionId: published.data.id,
+          acknowledgeNoShadow: true,
         },
         headers: { 'Idempotency-Key': randomUUID() },
       })
@@ -1041,6 +1043,11 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     await page.getByRole('button', { name: 'Activate candidate (LIVE cutover)' }).click();
     await expect(page.getByText('Review candidate activation · Cutover to LIVE')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Confirm LIVE', exact: true })).toBeDisabled();
+    const evidenceException = page.getByRole('checkbox', {
+      name: /I understand this version has insufficient recent Shadow evidence/,
+    });
+    await evidenceException.focus();
+    await page.keyboard.press('Space');
     const differenceApproval = page.getByRole('checkbox', {
       name: 'I approve the observed routing, priority and suppression differences.',
     });
@@ -1048,6 +1055,7 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     await page.keyboard.press('Space');
     const confirmCutover = page.getByRole('button', { name: 'Confirm LIVE', exact: true });
     if (testInfo.project.name === 'desktop' || testInfo.project.name === 'mobile') {
+      await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
       await expect(confirmCutover).toBeFocused();
@@ -1350,7 +1358,14 @@ test('administrator explicitly opts into discovery previews and disables storage
     name: 'Store diagnostic field-value previews',
   });
   await expect(previews).not.toBeChecked();
+  const originalPolicy = automationReadinessPolicySchema.parse(
+    (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+      .automationReadinessPolicy
+  );
   try {
+    const minimum = settings.getByLabel('Minimum candidate evaluations');
+    const originalMinimum = await minimum.inputValue();
+    await minimum.fill('101');
     await previews.check();
     await settings.getByRole('button', { name: 'Save automation settings', exact: true }).click();
     await expect(settings.getByRole('status')).toHaveText('Automation settings saved.');
@@ -1358,6 +1373,10 @@ test('administrator explicitly opts into discovery previews and disables storage
       (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
         .automationStoreObservationPreviews
     ).toBe(true);
+    expect(
+      (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+        .automationReadinessPolicy
+    ).toMatchObject({ minimumEvaluations: 101 });
     const sample = await db.automationContextObservation.create({
       data: {
         serviceId,
@@ -1370,6 +1389,7 @@ test('administrator explicitly opts into discovery previews and disables storage
         rawValuePreview: 'opt-in-ui-fixture',
       },
     });
+    await minimum.fill(originalMinimum);
     await previews.uncheck();
     await settings.getByRole('button', { name: 'Save automation settings', exact: true }).click();
     await expect
@@ -1388,6 +1408,7 @@ test('administrator explicitly opts into discovery previews and disables storage
         project: testInfo.project.name,
         optInPersisted: true,
         previewClearedOnOptOut: true,
+        readinessPolicyReviewedAndRestored: true,
       }),
       contentType: 'application/json',
     });
@@ -1395,7 +1416,10 @@ test('administrator explicitly opts into discovery previews and disables storage
     // Test cleanup leaves subsequent profiles on the product's privacy-preserving default.
     await db.systemSettings.update({
       where: { id: 'default' },
-      data: { automationStoreObservationPreviews: false },
+      data: {
+        automationStoreObservationPreviews: false,
+        automationReadinessPolicy: originalPolicy,
+      },
     });
   }
 });

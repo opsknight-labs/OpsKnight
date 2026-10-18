@@ -610,6 +610,7 @@ export default function AutomationWorkspace({
             : (review === 'LIVE' ? reviewData : data)?.activeVersion?.versionNumber) ?? null
         }
         enabled={data?.enabled ?? false}
+        readiness={review === 'activateCandidate' ? (reviewData ?? data)?.candidateReadiness : null}
         counts={review === 'activateCandidate' ? candidateCounts : counts}
         busy={busy}
         error={error}
@@ -625,6 +626,8 @@ export default function AutomationWorkspace({
               : review === 'activateCandidate'
                 ? {
                     action: 'activateCandidate',
+                    expectedReadinessPolicyRevision: (reviewData ?? data)?.candidateReadiness
+                      ?.settingsRevision,
                     acknowledgeMaterialDifferences,
                     expectedCandidateVersionId: (reviewData ?? data)?.candidateVersionId,
                     acknowledgeNoShadow,

@@ -1,3 +1,4 @@
+import { readAutomationReadiness } from './readiness';
 import { AppError } from '@/lib/errors';
 import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import 'server-only';
@@ -312,6 +313,7 @@ export async function activateCandidate(
     actorId: string;
     expectedCandidateVersionId: string;
     expectedActiveVersionId?: string | null;
+    expectedReadinessPolicyRevision?: number;
     acknowledgeNoShadow?: boolean;
     acknowledgeShadowErrors?: boolean;
     acknowledgeMaterialDifferences?: boolean;
@@ -377,28 +379,32 @@ export async function activateCandidate(
     }
 
     // Shadow evidence gate — same acknowledgement flags as changeMode → LIVE.
-    const evidence = await tx.automationShadowAggregate.aggregate({
-      where: {
-        serviceId: input.serviceId,
-        versionId: config.candidateVersion.id,
-        bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
-      },
-      _sum: {
-        evaluated: true,
-        errors: true,
-        fallbacks: true,
-        routeDifferent: true,
-        priorityDifferent: true,
-        noEscalationDifferent: true,
-      },
-    });
-    if (!evidence._sum.evaluated && !input.acknowledgeNoShadow)
+    const readiness = await readAutomationReadiness(
+      tx,
+      input.serviceId,
+      config.candidateVersion.id
+    );
+    if (
+      input.expectedReadinessPolicyRevision !== undefined &&
+      input.expectedReadinessPolicyRevision !== readiness.settingsRevision
+    )
+      throw new AutomationConflict();
+    const evidence = { _sum: readiness.counts };
+    if (!readiness.policyValid)
       throw new AutomationValidationError(
-        'Acknowledge activation without Shadow traffic for this candidate version.'
+        'Repair the invalid global activation readiness policy before activating a candidate.'
       );
-    if ((evidence._sum.errors || evidence._sum.fallbacks) && !input.acknowledgeShadowErrors)
+    if (!readiness.backlogWithinPolicy)
       throw new AutomationValidationError(
-        'Explicitly acknowledge Shadow errors and fallbacks before activating the candidate.'
+        'Candidate observation backlog exceeds the configured readiness policy. Wait for the worker to finish or review the global policy.'
+      );
+    if (!readiness.sufficientRecentEvidence && !input.acknowledgeNoShadow)
+      throw new AutomationValidationError(
+        'Explicitly acknowledge insufficient recent Shadow evidence under the configured readiness policy before activation.'
+      );
+    if (!readiness.errorsWithinPolicy && !input.acknowledgeShadowErrors)
+      throw new AutomationValidationError(
+        'Explicitly acknowledge Shadow errors and fallbacks above the configured readiness policy before activation.'
       );
 
     const materialDifferences = Boolean(
@@ -432,7 +438,7 @@ export async function activateCandidate(
         acknowledgeNoShadow: input.acknowledgeNoShadow === true,
         acknowledgeShadowErrors: input.acknowledgeShadowErrors === true,
         acknowledgeMaterialDifferences: input.acknowledgeMaterialDifferences === true,
-        reviewedEvidence: { windowDays: 7, minimumEvaluations: 1, ...evidence._sum },
+        reviewedEvidence: readiness,
       },
       apiClientId
     );

@@ -1700,6 +1700,7 @@ describe('service automation transaction certification', () => {
         actorId: actor.id,
         expectedCandidateVersionId: candidate2.id,
         expectedActiveVersionId: version1.id,
+        acknowledgeNoShadow: true,
       })
     ).rejects.toThrow('Explicitly acknowledge candidate routing');
     // Activating candidate cutover atomically updates activeVersionId and clears candidateVersionId

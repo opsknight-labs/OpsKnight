@@ -130,6 +130,22 @@ it.each([
       routeDifferent: differences,
       noEscalationDifferent: differences,
     });
+    await db.backgroundJob.update({
+      where: { id: job.id },
+      data: { status: 'COMPLETED', completedAt: new Date() },
+    });
+    // This regression isolates comparison semantics; representative-volume policy is tested separately.
+    await db.systemSettings.update({
+      where: { id: 'default' },
+      data: {
+        automationReadinessPolicy: {
+          minimumEvaluations: 1,
+          maximumEvidenceAgeHours: 48,
+          maximumPendingObservations: 0,
+          maximumErrorRate: 0,
+        },
+      },
+    });
     const activate = () =>
       activateCandidate({
         serviceId: service.id,

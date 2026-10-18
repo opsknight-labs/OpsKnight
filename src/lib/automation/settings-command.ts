@@ -1,3 +1,4 @@
+import { automationReadinessPolicySchema } from './readiness-policy';
 import { clearObservationJobPreviews } from './observation-payload-privacy';
 import 'server-only';
 import { z } from 'zod';
@@ -12,6 +13,7 @@ export const automationSettingsSchema = z
     automationEnabled: z.boolean(),
     automationTraceRetentionDays: z.number().int().min(1).max(3650),
     automationStoreObservationPreviews: z.boolean().optional(),
+    automationReadinessPolicy: automationReadinessPolicySchema.optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();
@@ -59,24 +61,28 @@ export async function updateAutomationSettings(
       });
       await clearObservationJobPreviews(tx);
     }
+    const readinessPolicy = parsed.automationReadinessPolicy ?? previous.automationReadinessPolicy;
     const next = await tx.systemSettings.upsert({
       where: { id: 'default' },
       create: {
         automationEnabled: parsed.automationEnabled,
         automationTraceRetentionDays: parsed.automationTraceRetentionDays,
         automationStoreObservationPreviews: storePreviews,
+        automationReadinessPolicy: readinessPolicy,
         automationSettingsRevision: 1,
       },
       update: {
         automationEnabled: parsed.automationEnabled,
         automationTraceRetentionDays: parsed.automationTraceRetentionDays,
         automationStoreObservationPreviews: storePreviews,
+        automationReadinessPolicy: readinessPolicy,
         automationSettingsRevision: { increment: 1 },
       },
       select: {
         automationEnabled: true,
         automationTraceRetentionDays: true,
         automationStoreObservationPreviews: true,
+        automationReadinessPolicy: true,
         automationSettingsRevision: true,
       },
     });
@@ -93,7 +99,11 @@ export async function updateAutomationSettings(
       },
       tx
     );
-    return next;
+    return {
+      ...next,
+      automationReadinessPolicy: readinessPolicy,
+      automationReadinessPolicyValid: true,
+    };
   };
   return externalTx ? run(externalTx) : prisma.$transaction(run);
 }

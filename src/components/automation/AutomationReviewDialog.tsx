@@ -1,4 +1,5 @@
 'use client';
+import type { readAutomationReadiness } from '@/lib/automation/readiness';
 import { useMemo, useState } from 'react';
 import { semanticSnapshotChanges } from '@/lib/automation/diff';
 import {
@@ -21,6 +22,7 @@ export function AutomationReviewDialog({
   version,
   enabled,
   counts,
+  readiness,
   busy,
   error,
   onCancel,
@@ -42,6 +44,7 @@ export function AutomationReviewDialog({
     errors: number;
     fallbacks?: number;
   };
+  readiness?: Awaited<ReturnType<typeof readAutomationReadiness>> | null;
   busy: boolean;
   error?: string;
   onCancel: () => void;
@@ -57,6 +60,19 @@ export function AutomationReviewDialog({
   const materialDifferences =
     action === 'activateCandidate' &&
     Boolean(counts?.routes || counts?.priorities || counts?.skips);
+
+  const needsEvidenceAcknowledgment =
+    action === 'activateCandidate' && readiness
+      ? !readiness.sufficientRecentEvidence
+      : !counts?.evaluated;
+  const needsErrorAcknowledgment =
+    action === 'activateCandidate' && readiness
+      ? !readiness.errorsWithinPolicy
+      : !!(counts?.errors || counts?.fallbacks);
+  const readinessBlocked =
+    action === 'activateCandidate' && readiness
+      ? !readiness.policyValid || !readiness.backlogWithinPolicy
+      : false;
 
   const changes = useMemo(
     () => (before ? semanticSnapshotChanges(before, snapshot, { policies, destinations }) : []),
@@ -167,12 +183,34 @@ export function AutomationReviewDialog({
               </p>
               <p>
                 {counts?.routes ?? 0} routing differences · {counts?.priorities ?? 0} priority
-                differences · {counts?.skips ?? 0} would skip escalation
+                differences · {counts?.skips ?? 0} suppression differences
               </p>
               <p className="text-muted-foreground">
                 Review context mapping and deployment queue/latency metrics before enabling. These
                 metrics are not measured by this dialog.
               </p>
+              {action === 'activateCandidate' && readiness && (
+                <div className="rounded border p-2 space-y-1">
+                  <p>
+                    Policy: at least {readiness.policy.minimumEvaluations} evaluations · evidence no
+                    older than {readiness.policy.maximumEvidenceAgeHours} hours · at most{' '}
+                    {readiness.policy.maximumPendingObservations} pending · maximum error rate{' '}
+                    {Math.round(readiness.policy.maximumErrorRate * 100)}%
+                  </p>
+                  <p>
+                    Latest daily evidence: {readiness.latestEvidenceBucketDate ?? 'Not available'} ·{' '}
+                    {readiness.pendingObservationsTruncated ? 'At least ' : ''}
+                    {readiness.pendingObservations} pending observations · error rate{' '}
+                    {(readiness.errorRate * 100).toFixed(2)}%
+                  </p>
+                  {readinessBlocked && (
+                    <p role="alert">
+                      Activation is blocked. Wait for pending observations to finish or
+                      repair/review the global readiness policy.
+                    </p>
+                  )}
+                </div>
+              )}
               {materialDifferences && (
                 <label className="block text-amber-700 dark:text-amber-300">
                   <input
@@ -183,20 +221,21 @@ export function AutomationReviewDialog({
                   I approve the observed routing, priority and suppression differences.
                 </label>
               )}
-              {!counts?.evaluated && (
+              {needsEvidenceAcknowledgment && (
                 <p className="text-amber-700 dark:text-amber-300">
-                  No Shadow evidence is available yet.
+                  Recent Shadow evidence does not meet the configured review floor.
                   <label className="block mt-2">
                     <input
                       type="checkbox"
                       checked={acknowledge}
                       onChange={event => setAcknowledge(event.target.checked)}
                     />{' '}
-                    I understand this version has not been observed against real Shadow traffic.
+                    I understand this version has insufficient recent Shadow evidence and explicitly
+                    accept the exception.
                   </label>
                 </p>
               )}
-              {!!(counts?.errors || counts?.fallbacks) && (
+              {needsErrorAcknowledgment && (
                 <label className="block text-amber-700 dark:text-amber-300">
                   <input
                     type="checkbox"
@@ -222,13 +261,14 @@ export function AutomationReviewDialog({
           <Button
             disabled={
               busy ||
+              readinessBlocked ||
               (materialDifferences && !acknowledgeDifferences) ||
               issues.some(issue => issue.level === 'ERROR') ||
               ((action === 'LIVE' || action === 'activateCandidate') &&
                 (!version ||
                   !enabled ||
-                  (!counts?.evaluated && !acknowledge) ||
-                  (!!(counts?.errors || counts?.fallbacks) && !acknowledgeErrors)))
+                  (needsEvidenceAcknowledgment && !acknowledge) ||
+                  (needsErrorAcknowledgment && !acknowledgeErrors)))
             }
             onClick={() => onConfirm(acknowledge, acknowledgeErrors, acknowledgeDifferences)}
           >

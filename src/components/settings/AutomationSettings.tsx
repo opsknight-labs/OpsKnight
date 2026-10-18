@@ -1,4 +1,8 @@
 'use client';
+import {
+  DEFAULT_AUTOMATION_READINESS_POLICY,
+  type AutomationReadinessPolicy,
+} from '@/lib/automation/readiness-policy';
 import { useState } from 'react';
 import { saveAutomationSettings } from '@/app/(app)/settings/system/automation-actions';
 import { Button } from '@/components/ui/shadcn/button';
@@ -7,12 +11,18 @@ import { Label } from '@/components/ui/shadcn/label';
 
 type Settings = {
   automationEnabled: boolean;
+  automationReadinessPolicy?: AutomationReadinessPolicy;
+  automationReadinessPolicyValid?: boolean;
   automationStoreObservationPreviews?: boolean;
   automationTraceRetentionDays: number;
   automationSettingsRevision: number;
 };
 export default function AutomationSettings({ initialSettings }: { initialSettings: Settings }) {
-  const [settings, setSettings] = useState(initialSettings);
+  const [settings, setSettings] = useState({
+    ...initialSettings,
+    automationReadinessPolicy:
+      initialSettings.automationReadinessPolicy ?? DEFAULT_AUTOMATION_READINESS_POLICY,
+  });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   return (
@@ -71,6 +81,49 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
         previews for alias authoring; recognizable contact details and credentials are excluded.
         Disabling clears stored previews. Observation retention also applies to previews.
       </p>
+      <fieldset className="space-y-3 rounded-lg border p-3" disabled={busy}>
+        <legend>Candidate activation readiness policy</legend>
+        <p className="text-sm text-muted-foreground">
+          Review floors do not prove workload representativeness. Evidence uses daily aggregates;
+          pending work must be within policy before activation.
+        </p>
+        {settings.automationReadinessPolicyValid === false && (
+          <p role="alert">
+            The stored policy is invalid. Save a reviewed policy before activation.
+          </p>
+        )}
+        {(
+          [
+            ['minimumEvaluations', 'Minimum candidate evaluations', 1, 1000000, 1],
+            ['maximumEvidenceAgeHours', 'Maximum evidence age (hours)', 24, 168, 1],
+            ['maximumPendingObservations', 'Maximum pending candidate observations', 0, 1000, 1],
+            ['maximumErrorRate', 'Maximum candidate error rate (0–1)', 0, 1, 0.01],
+          ] as const
+        ).map(([key, label, min, max, step]) => (
+          <label key={key} className="block space-y-1">
+            <span>{label}</span>
+            <Input
+              type="number"
+              min={min}
+              max={max}
+              step={step}
+              // Keys come exclusively from the literal policy field list above.
+              // eslint-disable-next-line security/detect-object-injection
+              value={settings.automationReadinessPolicy[key]}
+              className="max-w-xs"
+              onChange={event =>
+                setSettings({
+                  ...settings,
+                  automationReadinessPolicy: {
+                    ...settings.automationReadinessPolicy,
+                    [key]: Number(event.target.value),
+                  },
+                })
+              }
+            />
+          </label>
+        ))}
+      </fieldset>
       <Button
         disabled={busy}
         onClick={async () => {
@@ -81,6 +134,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
               await saveAutomationSettings({
                 automationEnabled: settings.automationEnabled,
                 automationTraceRetentionDays: settings.automationTraceRetentionDays,
+                automationReadinessPolicy: settings.automationReadinessPolicy,
                 automationStoreObservationPreviews:
                   settings.automationStoreObservationPreviews === true,
                 expectedRevision: settings.automationSettingsRevision,

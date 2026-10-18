@@ -220,6 +220,75 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       'oldestSampledPendingAgeMs',
     ]
   ),
+  AutomationReadinessPolicy: object(
+    {
+      minimumEvaluations: { type: 'integer', minimum: 1, maximum: 1000000 },
+      maximumEvidenceAgeHours: { type: 'integer', minimum: 24, maximum: 168 },
+      maximumPendingObservations: { type: 'integer', minimum: 0, maximum: 1000 },
+      maximumErrorRate: { type: 'number', minimum: 0, maximum: 1 },
+    },
+    [
+      'minimumEvaluations',
+      'maximumEvidenceAgeHours',
+      'maximumPendingObservations',
+      'maximumErrorRate',
+    ]
+  ),
+  AutomationReadiness: object(
+    {
+      settingsRevision: integer,
+      policy: ref('AutomationReadinessPolicy'),
+      policyValid: { type: 'boolean' },
+      windowDays: { type: 'integer', const: 7 },
+      evaluated: integer,
+      errorRate: { type: 'number', minimum: 0 },
+      latestEvidenceBucketDate: { type: ['string', 'null'], format: 'date-time' },
+      evidenceAgeHours: { type: ['number', 'null'], minimum: 0 },
+      sufficientRecentEvidence: { type: 'boolean' },
+      pendingObservations: integer,
+      pendingObservationsTruncated: { type: 'boolean' },
+      backlogWithinPolicy: { type: 'boolean' },
+      errorsWithinPolicy: { type: 'boolean' },
+      counts: object(
+        Object.fromEntries(
+          [
+            'evaluated',
+            'same',
+            'routeDifferent',
+            'priorityDifferent',
+            'noEscalationDifferent',
+            'errors',
+            'fallbacks',
+          ].map(key => [key, { type: ['integer', 'null'], minimum: 0 }])
+        ),
+        [
+          'evaluated',
+          'same',
+          'routeDifferent',
+          'priorityDifferent',
+          'noEscalationDifferent',
+          'errors',
+          'fallbacks',
+        ]
+      ),
+    },
+    [
+      'settingsRevision',
+      'policy',
+      'policyValid',
+      'windowDays',
+      'evaluated',
+      'errorRate',
+      'latestEvidenceBucketDate',
+      'evidenceAgeHours',
+      'sufficientRecentEvidence',
+      'pendingObservations',
+      'pendingObservationsTruncated',
+      'backlogWithinPolicy',
+      'errorsWithinPolicy',
+      'counts',
+    ]
+  ),
   AutomationConfiguration: object(
     {
       serviceId: id,
@@ -337,6 +406,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       sourceVersionId: { type: ['string', 'null'] },
       lintReport: array(object({ level: string(), message: string() }, ['level', 'message']), 100),
       snapshot: { $ref: '#/components/schemas/AutomationSnapshot' },
+      readiness: ref('AutomationReadiness'),
       evidenceFreshness: object(
         {
           latestEvidenceBucketDate: { type: ['string', 'null'], format: 'date-time' },
@@ -382,6 +452,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       'snapshot',
       'shadowAggregates',
       'evidenceFreshness',
+      'readiness',
     ]
   ),
   AutomationConfig: object(
@@ -395,7 +466,9 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   AutomationSettings: object(
     {
       automationEnabled: { type: 'boolean' },
+      automationReadinessPolicyValid: { type: 'boolean' },
       automationStoreObservationPreviews: { type: 'boolean' },
+      automationReadinessPolicy: ref('AutomationReadinessPolicy'),
       automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
       automationSettingsRevision: integer,
     },
@@ -722,7 +795,7 @@ const operations: Operation[] = [
     path: '/services/{id}/automation/candidate',
     summary: 'Read a published candidate automation version and shadow metrics',
     description:
-      'Reads the pending candidate version, compiled configuration and seven-day shadow evaluation metrics for a service in LIVE mode.',
+      'Reads the immutable candidate snapshot without its internal compiled representation, seven-day metrics, the reviewed qualification policy and bounded pending-observation state.',
   },
   {
     method: 'delete',
@@ -737,7 +810,7 @@ const operations: Operation[] = [
     path: '/services/{id}/automation/candidates/activate',
     summary: 'Atomically activate a candidate automation version as LIVE',
     description:
-      'Promotes the pending candidate version to active production routing with zero interruption. Validates shadow evidence and escalation policy safety before cutover.',
+      'Atomically promotes the pending candidate after dependency and configured readiness checks. Pending observations above policy block activation. acknowledgeNoShadow explicitly accepts insufficient or stale daily evidence; acknowledgeShadowErrors accepts an excessive error rate. Supply expectedReadinessPolicyRevision from the candidate read to reject a stale policy review with 412. The canonical audit records current policy, evidence and exceptions.',
     body: object(
       {
         expectedCandidateVersionId: id,
@@ -745,6 +818,7 @@ const operations: Operation[] = [
         acknowledgeNoShadow: { type: 'boolean' },
         acknowledgeShadowErrors: { type: 'boolean' },
         acknowledgeMaterialDifferences: { type: 'boolean' },
+        expectedReadinessPolicyRevision: integer,
       },
       ['expectedCandidateVersionId']
     ),
@@ -758,6 +832,7 @@ const operations: Operation[] = [
       {
         automationEnabled: { type: 'boolean' },
         automationStoreObservationPreviews: { type: 'boolean' },
+        automationReadinessPolicy: ref('AutomationReadinessPolicy'),
         automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
       },
       ['automationEnabled', 'automationTraceRetentionDays']
