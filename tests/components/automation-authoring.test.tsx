@@ -16,6 +16,7 @@ vi.mock('@/app/(app)/services/[id]/automation/actions', () => ({
   getAutomationArea: api.area,
 }));
 const data = {
+  recoveryOwnerId: 'actor',
   enabled: true,
   mode: 'SHADOW' as const,
   canPublish: true,
@@ -75,7 +76,7 @@ it('publication awaits an autosave in flight and clears recovery only after pers
   await waitFor(() =>
     expect(api.action).toHaveBeenCalledWith(expect.objectContaining({ action: 'save' }))
   );
-  expect(localStorage.getItem('automation-draft:service')).not.toBeNull();
+  expect(localStorage.getItem('automation-draft:actor:service')).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm publication' }));
   expect(api.action.mock.calls.some(([input]) => input.action === 'publish')).toBe(false);
@@ -85,7 +86,7 @@ it('publication awaits an autosave in flight and clears recovery only after pers
       expect.objectContaining({ action: 'publish', expectedRevision: 1 })
     )
   );
-  expect(localStorage.getItem('automation-draft:service')).toBeNull();
+  expect(localStorage.getItem('automation-draft:actor:service')).toBeNull();
 });
 it('loads Shadow readiness before LIVE and keeps the mode unchanged when review is cancelled', async () => {
   api.area.mockResolvedValue({
@@ -1352,4 +1353,14 @@ it('restores history into an editable draft without publication or a mode change
   );
   await waitFor(() => expect(api.area).toHaveBeenLastCalledWith('service', 'rules', 1));
   expect(api.action.mock.calls.map(([input]) => input.action)).toEqual(['restoreDraft']);
+});
+
+it('does not offer recovery drafts belonging to a different actor or the legacy service-only key', async () => {
+  localStorage.setItem('automation-draft:other-actor:service', JSON.stringify(emptySnapshot));
+  localStorage.setItem('automation-draft:service', JSON.stringify(emptySnapshot));
+  render(<AutomationWorkspace serviceId="service" />);
+  await screen.findByRole('button', { name: 'Edit automation' });
+  expect(screen.queryByText('A local recovery copy is available.')).not.toBeInTheDocument();
+  expect(localStorage.getItem('automation-draft:service')).toBeNull();
+  expect(localStorage.getItem('automation-draft:other-actor:service')).not.toBeNull();
 });

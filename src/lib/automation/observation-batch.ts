@@ -7,7 +7,9 @@ import { createHash, randomUUID } from 'crypto';
 import type { ObservationJob } from './jobs';
 
 const receipt = (job: ObservationJob) =>
-  `AUTOMATION_OBSERVATION_RECEIPT:${createHash('sha256').update(JSON.stringify(job)).digest('hex')}`;
+  `AUTOMATION_OBSERVATION_RECEIPT:${createHash('sha256')
+    .update(JSON.stringify([job.serviceId, job.logicalKey]))
+    .digest('hex')}`;
 
 export type ObservationBatchResult = {
   recorded: boolean;

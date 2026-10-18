@@ -1,4 +1,5 @@
 'use server';
+import { getAutomationSettings } from '@/lib/automation/settings';
 import { readAutomationReadiness } from '@/lib/automation/readiness';
 import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { decodeExplanation } from '@/lib/automation/explanation';
@@ -292,6 +293,20 @@ export async function getAutomationArea(
     area === 'context'
       ? await prisma.automationContextObservation.findMany({
           where: { serviceId },
+          select: {
+            id: true,
+            serviceId: true,
+            integrationId: true,
+            integrationType: true,
+            fieldKey: true,
+            sourcePath: true,
+            fieldType: true,
+            rawValuePreview: true,
+            count: true,
+            unmapped: true,
+            firstSeenAt: true,
+            lastSeenAt: true,
+          },
           orderBy: { lastSeenAt: 'desc' },
           take: 200,
         })
@@ -444,6 +459,7 @@ export async function getAutomationArea(
     mode: config?.mode ?? 'DISABLED',
     activeVersionId: config?.activeVersionId ?? null,
     candidateVersionId: config?.candidateVersionId ?? null,
+    recoveryOwnerId: user.id,
     canEdit,
     canPublish: user.role === 'ADMIN',
     canReadSensitive,
@@ -481,12 +497,13 @@ export async function getAutomationArea(
         'Former administrator',
     })),
     versionTotal,
-    observations: canReadSensitive
-      ? observations
-      : observations.map(observation => ({
-          ...observation,
-          rawValuePreview: '[redacted]',
-        })),
+    observations:
+      canReadSensitive && (await getAutomationSettings()).automationStoreObservationPreviews
+        ? observations
+        : observations.map(observation => ({
+            ...observation,
+            rawValuePreview: '[redacted]',
+          })),
     unmappedCount,
     aggregates,
     traces: canReadSensitive

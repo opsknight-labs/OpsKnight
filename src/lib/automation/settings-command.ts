@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { automationReadinessPolicySchema } from './readiness-policy';
 import { clearObservationJobPreviews } from './observation-payload-privacy';
 import 'server-only';
@@ -40,9 +41,11 @@ export async function updateAutomationSettings(
       !previous.automationEnabled &&
       (await tx.serviceAutomationConfig.count({ where: { mode: { not: 'DISABLED' } } }))
     )
-      throw new Error(
-        'Services are already configured SHADOW or LIVE. Save global OFF to reset their modes before enabling; then activate services individually.'
-      );
+      throw new AppError({
+        code: 'RESOURCE_CONFLICT',
+        userMessage:
+          'Services are already configured SHADOW or LIVE. Save global OFF to reset their modes before enabling; then activate services individually.',
+      });
     // OFF is an emergency stop and resets operational modes. Enabling again
     // cannot surprise-activate previously LIVE services behind the switch.
     if (!parsed.automationEnabled)
@@ -54,7 +57,19 @@ export async function updateAutomationSettings(
       parsed.automationStoreObservationPreviews ??
       previous.automationStoreObservationPreviews ??
       false;
-    if (!storePreviews) {
+    const disablingPreviews =
+      previous.automationStoreObservationPreviews === true && !storePreviews;
+    if (!parsed.automationEnabled && previous.automationEnabled && !storePreviews) {
+      // Emergency OFF must not depend on diagnostic-table cleanup succeeding.
+      await tx.backgroundJob.create({
+        data: {
+          id: `AUTOMATION_PRIVACY_CLEANUP:${randomUUID()}`,
+          type: 'SCHEDULED_TASK',
+          scheduledAt: new Date(),
+          payload: { task: 'AUTOMATION_PRIVACY_CLEANUP' },
+        },
+      });
+    } else if (disablingPreviews) {
       await tx.automationContextObservation.updateMany({
         where: { rawValuePreview: { not: '' } },
         data: { rawValuePreview: '' },

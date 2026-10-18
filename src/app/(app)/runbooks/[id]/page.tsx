@@ -642,6 +642,7 @@ export default async function RunbookDetailPage({
             {canManage && (
               <RunbookDetailsSheet
                 runbook={{
+                  revision: runbook.revision,
                   name: runbook.name,
                   slug: runbook.slug,
                   description: runbook.description,

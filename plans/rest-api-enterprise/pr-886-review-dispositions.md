@@ -291,3 +291,32 @@ This delivers the metadata/lifecycle endpoint set in section 3A of the plan;
 service rules, approvals/reruns, agent and secret administration, and combined
 runbook certification remain unfinished. The capability catalog and workflow
 inventory retain that distinction and leave enterprise release gates open.
+
+### Follow-up to the review of c8dfb154 (observation replay and emergency OFF)
+
+Observation receipts now derive from service ID plus the immutable logical job
+key, rather than mutable JSON. A PostgreSQL crash-window regression processes a
+preview-enabled job, commits receipts/aggregates and payload scrubbing while the
+source remains PROCESSING, reclaims it, and verifies both observed counts and
+candidate aggregate totals remain one. This prevents new duplicate processing;
+it cannot repair evidence already double-counted by older workers. Complete all
+worker upgrades before relying on the corrected receipt contract.
+
+Emergency OFF commits the switch, mode resets, canonical settings audit and a
+durable AUTOMATION_PRIVACY_CLEANUP job without rewriting diagnostic tables. The
+existing queue tracks pending/failed/completed cleanup and retries. Cleanup
+failure cannot undo the OFF transaction. UI reads redact previews while storage
+is disabled, and enqueue/worker writes retain their privacy fences. An unrelated
+retention save while previews are already OFF skips historical cleanup. Explicit
+preview opt-out while automation remains enabled keeps its existing atomic
+cleanup contract. Invalid global enablement is a structured RESOURCE_CONFLICT.
+
+Runbook creation returns the final updated row after draft attachment. The shared
+metadata command accepts an expected revision; the UI form submits it and REST
+retains its locked ETag check. Tests compare creation with immediate PostgreSQL
+reads and reject stale UI/domain edits. UI discovery selects an explicit DTO
+without internal HMACs. Recovery copies use actor-plus-service keys; legacy
+service-only copies are discarded instead of offered to a different account.
+
+These fixes do not certify mixed-version rollout, repair historical evidence,
+prove production candidate isolation, or finish remaining enterprise API domains.

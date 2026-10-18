@@ -1,3 +1,4 @@
+import { AppError } from '@/lib/errors';
 import 'server-only';
 import { assertAuthoringDefinition } from './authoring-validation';
 
@@ -97,7 +98,7 @@ export async function createRunbook(
       },
       include: { inputs: { orderBy: { sequence: 'asc' } } },
     });
-    await tx.runbook.update({
+    const updatedRunbook = await tx.runbook.update({
       where: { id: runbook.id },
       data: { draftVersionId: draft.id },
     });
@@ -112,7 +113,7 @@ export async function createRunbook(
       },
       tx
     );
-    return { ...runbook, draftVersionId: draft.id, draftVersion: draft };
+    return { ...updatedRunbook, draftVersion: draft };
   });
 }
 
@@ -120,13 +121,16 @@ export async function updateRunbookMetadata(
   runbookId: string,
   input: UpdateRunbookInput,
   actor: VersioningActor,
-  client?: VersioningClient
+  client?: VersioningClient,
+  expectedRevision?: number
 ) {
   const actorId = typeof actor === 'string' ? actor : actor.id;
   const data = updateRunbookSchema.parse(input);
   return inVersioningTransaction(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { action: 'update' });
     const current = await tx.runbook.findUniqueOrThrow({ where: { id: runbookId } });
+    if (expectedRevision !== undefined && current.revision !== expectedRevision)
+      throw new AppError({ code: 'PRECONDITION_FAILED' });
     const updated = await tx.runbook.update({ where: { id: runbookId }, data });
     await logVersioningAudit(
       actor,

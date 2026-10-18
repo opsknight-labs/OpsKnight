@@ -19,6 +19,7 @@ const previous = {
 };
 function transaction() {
   return {
+    backgroundJob: { create: vi.fn() },
     $executeRaw: vi.fn(),
     $queryRaw: vi.fn(),
     automationContextObservation: { updateMany: vi.fn() },

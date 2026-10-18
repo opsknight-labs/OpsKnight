@@ -1,3 +1,4 @@
+import { clearObservationJobPreviews } from './observation-payload-privacy';
 import { getAutomationSettings } from './settings';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
@@ -22,6 +23,7 @@ const observationSchema = z
   })
   .strict();
 export const jobSchema = z.discriminatedUnion('task', [
+  z.object({ task: z.literal('AUTOMATION_PRIVACY_CLEANUP') }).strict(),
   z
     .object({
       task: z.literal('AUTOMATION_NOTIFY'),
@@ -66,6 +68,19 @@ export const jobSchema = z.discriminatedUnion('task', [
 export type ObservationJob = Extract<z.infer<typeof jobSchema>, { task: 'AUTOMATION_OBSERVE' }>;
 export async function processAutomationJob(payload: unknown) {
   const job = jobSchema.parse(payload);
+  if (job.task === 'AUTOMATION_PRIVACY_CLEANUP') {
+    await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('automation-system-settings', 0))`;
+      await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR UPDATE`;
+      if ((await getAutomationSettings(tx)).automationStoreObservationPreviews) return;
+      await tx.automationContextObservation.updateMany({
+        where: { rawValuePreview: { not: '' } },
+        data: { rawValuePreview: '' },
+      });
+      await clearObservationJobPreviews(tx);
+    });
+    return;
+  }
   if (job.task === 'AUTOMATION_RETENTION') {
     const requested = (await getAutomationSettings()).automationTraceRetentionDays;
     const days = Number.isFinite(requested) ? Math.max(1, Math.min(3650, requested)) : 90;

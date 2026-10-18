@@ -21,6 +21,7 @@ export function RunbookDetailsSheet({
   archiveAction,
 }: {
   runbook: {
+    revision: number;
     name: string;
     slug: string;
     description: string;
@@ -47,6 +48,7 @@ export function RunbookDetailsSheet({
       }
     >
       <ActionForm action={action} className="space-y-4" successMessage="Details saved">
+        <input type="hidden" name="expectedRevision" value={runbook.revision} />
         <div className="space-y-2">
           <Label htmlFor="metadata-name">Name</Label>
           <Input

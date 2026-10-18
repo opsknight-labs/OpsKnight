@@ -1,5 +1,9 @@
 import { beforeEach, expect, it } from 'vitest';
-import { createRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
+import {
+  createRunbook,
+  publishDraftVersion,
+  updateRunbookMetadata,
+} from '@/lib/runbooks/versioning';
 import {
   createServiceBinding,
   updateServiceBinding,
@@ -156,4 +160,35 @@ it('rolls back durable policy checks and canonical audit with the caller transac
   ).rejects.toThrow('Policy transaction fixture rollback');
   expect(await db.runbookPolicyCheck.count()).toBe(0);
   expect(await db.auditLog.count()).toBe(auditsBefore);
+});
+
+it('returns the committed runbook creation revision after attaching its draft', async () => {
+  const { runbook } = await fixture();
+  // fixture publishes after creation; certify a separate creation with no later mutation.
+  const actor = await createTestUser({ role: 'ADMIN' });
+  const created = await createRunbook(
+    { name: 'Creation revision', slug: `create-revision-${runbook.id}`, description: '' },
+    actor.id
+  );
+  const stored = await db.runbook.findUniqueOrThrow({ where: { id: created.id } });
+  expect(created.revision).toBe(stored.revision);
+  expect(created.draftVersionId).toBe(stored.draftVersionId);
+});
+
+it('rejects a stale metadata revision in the shared UI command', async () => {
+  const { runbook, actor } = await fixture();
+  const current = await db.runbook.findUniqueOrThrow({ where: { id: runbook.id } });
+  await updateRunbookMetadata(
+    runbook.id,
+    { name: 'First editor' },
+    actor,
+    undefined,
+    current.revision
+  );
+  await expect(
+    updateRunbookMetadata(runbook.id, { name: 'Stale editor' }, actor, undefined, current.revision)
+  ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+  expect((await db.runbook.findUniqueOrThrow({ where: { id: runbook.id } })).name).toBe(
+    'First editor'
+  );
 });
