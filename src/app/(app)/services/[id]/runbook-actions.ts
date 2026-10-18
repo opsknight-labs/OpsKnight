@@ -244,9 +244,23 @@ export async function configureRunbookTriggerAction(
 export async function checkRulePolicyAction(serviceId: string, ruleId: string) {
   const actor = await bindingActor(idSchema.parse(serviceId));
   const { requestRulePolicyChecks } = await import('@/lib/runbooks/policy-checks');
-  const result = await requestRulePolicyChecks(serviceId, idSchema.parse(ruleId), actor.id);
-  revalidatePath(`/services/${serviceId}`);
-  return result;
+  try {
+    const result = await requestRulePolicyChecks(serviceId, idSchema.parse(ruleId), actor.id);
+    revalidatePath(`/services/${serviceId}`);
+    return result;
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    const { logger } = await import('@/lib/logger');
+    logger.error('Failed to check rule policy', {
+      error,
+      serviceId,
+      ruleId,
+      component: 'runbook-actions',
+    });
+    return {
+      error: 'Could not complete policy check. Please check configuration and try again.',
+    };
+  }
 }
 
 export async function pauseRuleAction(serviceId: string, ruleId: string) {
