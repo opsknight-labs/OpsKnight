@@ -87,7 +87,7 @@
     "applicationReplicas": 2,
     "coverage": "Functional SDK/UI/ingestion parity and publication safety; not load/HA or full enterprise coverage"
   },
-  "registeredOperationCount": 137,
+  "registeredOperationCount": 140,
   "currentReview": {
     "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
     "milestone": "M0",
@@ -152,14 +152,21 @@
   "statusPageSubscribers": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 5,
-    "remaining": "Domains, validated branding assets, publication retry and combined status-page certification; other enterprise families.",
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
     "evidence": "plans/rest-api-enterprise/status-page-subscriber-certification.json"
   },
   "statusPageConfiguration": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 11,
-    "remaining": "Domains/validated branding assets, publication retry and combined certification.",
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
+  },
+  "statusPagePublication": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 3,
+    "remaining": "Domain ownership, validated assets, preview, and remaining enterprise families and combined certification.",
+    "mutationContract": "Required concrete If-Match and Idempotency-Key; accepted queue job, request audit and replay commit together. Worker canonical outcome audit and receipt commit together. Completion does not imply LIVE publication.",
+    "evidence": "plans/rest-api-enterprise/status-page-publication-certification.json"
   }
 }

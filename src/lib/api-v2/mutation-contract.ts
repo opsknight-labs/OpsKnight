@@ -51,6 +51,14 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/status-pages/[id]/publication/retry': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Concrete configuration revision at acceptance. Queue job, request audit and replay record commit atomically. Publication executes after commit in the general worker; canonical business audit and completion receipt commit together. Replays return the accepted job; inspect job and publication state for eventual outcome.',
+  },
   'PUT /api/v2/status-pages/[id]/services': {
     idempotency: 'required',
     concurrency: 'etag',

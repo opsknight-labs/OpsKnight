@@ -1348,6 +1348,13 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         return true;
       }
       case 'SCHEDULED_TASK': {
+        if (payloadValue(job.payload, 'task') === 'STATUS_PAGE_PUBLICATION_RETRY') {
+          const { processStatusPagePublicationRetry } =
+            await import('../status-pages/publication-jobs');
+          await processStatusPagePublicationRetry(job.id, job.claimToken);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
+          return true;
+        }
         if (
           [
             'AUTOMATION_NOTIFY',

@@ -395,6 +395,25 @@ try {
   if (components.data[0].displayName !== 'SDK reviewed component')
     throw new Error('Status service presentation did not persist.');
   console.log('TypeScript live status-page configuration, privacy and service components passed.');
+  const publication = await client.call('getStatusPagePublication', {
+    params: { id: statusPage.id },
+  });
+  const publicationRetry = await client.call('retryStatusPagePublication', {
+    params: { id: statusPage.id },
+    body: {},
+    headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${publication.data.revision}"` },
+  });
+  if (publicationRetry.data.status !== 'PENDING')
+    throw new Error('Publication retry was not durably accepted.');
+  const publicationJob = await client.call('getStatusPagePublicationJob', {
+    params: { id: statusPage.id, jobId: publicationRetry.data.id },
+  });
+  if (publicationJob.data.id !== publicationRetry.data.id || publicationJob.data.result !== null)
+    throw new Error('Publication job inspection failed.');
+  console.log(
+    'TypeScript live status-page publication inspection and durable retry acceptance passed.'
+  );
+
   const tsSubscriber = await prisma.statusPageSubscription.create({
     data: {
       statusPageId: statusPage.id,

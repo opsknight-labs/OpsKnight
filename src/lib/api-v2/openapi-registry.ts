@@ -31,6 +31,30 @@ const op = (
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
     'get',
+    '/status-pages/{id}/publication',
+    'getStatusPagePublication',
+    'status-pages:read',
+    'item',
+    'StatusPagePublication'
+  ),
+  op(
+    'post',
+    '/status-pages/{id}/publication/retry',
+    'retryStatusPagePublication',
+    'status-pages:write',
+    'item',
+    'StatusPagePublicationJob'
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/publication/jobs/{jobId}',
+    'getStatusPagePublicationJob',
+    'status-pages:read',
+    'item',
+    'StatusPagePublicationJob'
+  ),
+  op(
+    'get',
     '/status-pages/{id}/services',
     'listStatusPageServices',
     'status-pages:read',
