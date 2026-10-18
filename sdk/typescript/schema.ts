@@ -47,6 +47,11 @@ export type IncidentLifecycleResult = { "incidentId": string; "command": string 
 export type RunbookDefinitionInput = { "steps": Array<RunbookStepInput>; "description"?: string; "defaultTimeoutSeconds"?: number; "defaultMaxRetries"?: number };
 export type RunbookStepInput = { "key": string; "name": string; "type": "MANUAL" | "APPROVAL" | "CONDITION" | "WAIT" | "HTTP" | "LINUX_DIAGNOSTICS" | "SYSTEMD" | "DOCKER" | "KUBERNETES" | "BASH"; "riskClass"?: "READ_ONLY" | "IDEMPOTENT_WRITE" | "NON_IDEMPOTENT"; "description"?: string; "config"?: Record<string, unknown>; "verification"?: { "steps": Array<RunbookStepInput>; "delaySeconds"?: number }; "precheck"?: { "steps": Array<RunbookStepInput> }; "timeoutSeconds"?: number; "maxRetries"?: number; "requiresApproval"?: boolean };
 export type RunbookInputDefinition = { "key": string; "label": string; "type"?: "STRING" | "NUMBER" | "BOOLEAN" | "URL" | "DURATION" | "SECRET_REF" | "SELECT"; "required"?: boolean; "defaultValue"?: string; "description"?: string; "sequence"?: number; "options"?: Array<string> };
+export type ServiceRunbookRuleSummary = { "id": string; "serviceId": string; "runbookId": string; "name": string; "configurationRevision": number; "enabled": boolean; "mode": "MANUAL" | "SUGGESTED" | "AUTOMATIC"; "versionStrategy": "PINNED" | "LATEST_PUBLISHED"; "runbookVersionId": string | null; "createdAt": string; "updatedAt": string };
+export type ServiceRunbookRule = { "runbookId": string; "name": string; "runbookVersionId": string | null; "enabled": boolean; "mode": "MANUAL" | "SUGGESTED" | "AUTOMATIC"; "versionStrategy": "PINNED" | "LATEST_PUBLISHED"; "defaultAgentId": string | null; "defaultAgentPoolId": string | null; "agentSelector": Record<string, string>; "inputValues": Record<string, unknown>; "id": string; "serviceId": string; "resolvedVersionId": string | null; "configurationRevision": number; "createdAt": string; "updatedAt": string; "triggers": Array<{ "id": string; "revision": number; "event": string; "conditionLogic": string; "enabled": boolean; "conditions": Array<{ "field": string; "operator": string; "value": unknown; "sequence": number }> }> };
+export type RunbookRuleReadiness = { "ruleId": string; "configurationRevision": number; "readiness": { "state": "PAUSED" | "BLOCKED" | "CHECKS_REQUIRED" | "CONFIGURATION_VALID" | "UNKNOWN"; "checkedAt": string; "eligibleAgents": number | null; "armed": boolean; "checks": Array<{ "code": string; "state": "passed" | "blocked" | "deferred"; "message": string }> } };
+export type RunbookRulePolicyCheck = { "id": string; "ruleId": string; "agentId": string; "versionId": string; "checksum": string; "status": string; "expiresAt": string; "checkedAt": string | null; "createdAt": string };
+export type RunbookRulePolicyRequest = { "saved": true; "checkedTargets": number; "checkIds": Array<string>; "status": "PENDING" };
 export type RunbookVersionDiff = { "base": { "version": number; "checksum": string }; "next": { "version": number; "checksum": string }; "steps": Array<{ "key": string; "change": "ADDED" | "REMOVED" | "CHANGED" | "UNCHANGED"; "risk": string | null; "before": RunbookDiffStep | null; "after": RunbookDiffStep | null }>; "inputKeys": { "added": Array<string>; "removed": Array<string> }; "rules": Array<{ "id": string; "name": string; "serviceId": string; "enabled": boolean; "mode": string; "versionStrategy": string; "runbookVersionId": string | null; "impact": string }>; "rulesTruncated": boolean; "warning": string };
 export type RunbookDiffStep = { "key": string; "name": string; "type": string; "riskClass": string; "requiresApproval": boolean };
 export type RunbookMetadata = { "id": string; "name": string; "slug": string; "description": string; "ownerTeamId": string | null; "tags": Array<string>; "archivedAt": string | null; "publishedVersionId": string | null; "draftVersionId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
@@ -64,6 +69,18 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listServiceRunbookRules: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  createServiceRunbookRule: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "configuration": { "runbookId": string; "name"?: string; "runbookVersionId"?: string; "enabled"?: boolean; "mode"?: "MANUAL" | "SUGGESTED" | "AUTOMATIC"; "versionStrategy"?: "PINNED" | "LATEST_PUBLISHED"; "defaultAgentId"?: string; "defaultAgentPoolId"?: string; "agentSelector"?: Record<string, string>; "inputValues"?: Record<string, unknown> }; "trigger"?: { "event": "INCIDENT_CREATED"; "conditionLogic"?: "AND" | "OR"; "enabled"?: boolean; "conditions"?: Array<{ "field": string; "operator": "EQUALS" | "NOT_EQUALS" | "CONTAINS" | "STARTS_WITH" | "IN" | "NOT_IN" | "EXISTS" | "NOT_EXISTS"; "value": unknown; "sequence"?: number }> }; "expectedVersionId": string } };
+  getServiceRunbookRule: { "params": { "id": string; "ruleId": string } };
+  updateServiceRunbookRule: { "params": { "id": string; "ruleId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "configuration": { "name"?: string; "runbookVersionId"?: string | null; "enabled"?: boolean; "mode"?: "MANUAL" | "SUGGESTED" | "AUTOMATIC"; "versionStrategy"?: "PINNED" | "LATEST_PUBLISHED"; "defaultAgentId"?: string | null; "defaultAgentPoolId"?: string | null; "agentSelector"?: Record<string, string>; "inputValues"?: Record<string, unknown> }; "expectedVersionId": string } };
+  detachServiceRunbookRule: { "params": { "id": string; "ruleId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  validateServiceRunbookRule: { "params": { "id": string; "ruleId": string }; "body": Record<string, never> };
+  listRunbookRulePolicyChecks: { "params": { "id": string; "ruleId": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  requestRunbookRulePolicyChecks: { "params": { "id": string; "ruleId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  activateServiceRunbookRule: { "params": { "id": string; "ruleId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "confirmMatchAll"?: boolean } };
+  pauseServiceRunbookRule: { "params": { "id": string; "ruleId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  duplicateServiceRunbookRule: { "params": { "id": string; "ruleId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  replaceRunbookRuleTriggers: { "params": { "id": string; "ruleId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "event": "INCIDENT_CREATED"; "conditionLogic"?: "AND" | "OR"; "enabled"?: boolean; "conditions"?: Array<{ "field": string; "operator": "EQUALS" | "NOT_EQUALS" | "CONTAINS" | "STARTS_WITH" | "IN" | "NOT_IN" | "EXISTS" | "NOT_EXISTS"; "value": unknown; "sequence"?: number }> } };
   compareRunbookVersions: { "params": { "id": string; "versionId": string }; "query": { "baseVersionId": string } };
   getRunbookMetadata: { "params": { "id": string } };
   updateRunbookMetadata: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "slug"?: string; "description"?: string; "ownerTeamId"?: string | null; "tags"?: Array<string> } };
@@ -175,6 +192,18 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listServiceRunbookRules: { "data": Array<ServiceRunbookRuleSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  detachServiceRunbookRule: null;
+  validateServiceRunbookRule: { "data": RunbookRuleReadiness; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookRulePolicyChecks: { "data": Array<RunbookRulePolicyCheck>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  requestRunbookRulePolicyChecks: { "data": RunbookRulePolicyRequest; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  activateServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  pauseServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  duplicateServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  replaceRunbookRuleTriggers: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
   compareRunbookVersions: { "data": RunbookVersionDiff; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getRunbookMetadata: { "data": RunbookMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateRunbookMetadata: { "data": RunbookMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -286,6 +315,125 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listServiceRunbookRules": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceRunbookRule": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceRunbookRule": {
+    "method": "PATCH",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "detachServiceRunbookRule": {
+    "method": "DELETE",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listRunbookRulePolicyChecks": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules/{ruleId}/policy-checks",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "requestRunbookRulePolicyChecks": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/policy-checks",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "activateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "pauseServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/pause",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "duplicateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "replaceRunbookRuleTriggers": {
+    "method": "PUT",
+    "path": "/services/{id}/runbook-rules/{ruleId}/triggers",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "compareRunbookVersions": {
     "method": "GET",
     "path": "/runbooks/{id}/versions/{versionId}/diff",

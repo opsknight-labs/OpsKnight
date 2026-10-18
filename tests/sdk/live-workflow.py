@@ -44,6 +44,33 @@ assert client.call("checkRunbookDeletion", {"params": {"id": copy["id"]}})["data
 client.call("deleteRunbook", {"params": {"id": copy["id"]}, "body": {"confirmationText": copy["name"]}, "headers": lifecycle_headers(copy["revision"])})
 print("Python live metadata/archive/restore/duplicate/comparison/deletion workflows passed.")
 
+rule_service_id = configuration["runbookRuleServiceId"]
+rule_body = {"configuration": {"runbookId": created["id"], "runbookVersionId": published["data"]["id"], "mode": "AUTOMATIC", "versionStrategy": "PINNED"}, "expectedVersionId": published["data"]["id"], "trigger": {"event": "INCIDENT_CREATED", "conditions": []}}
+rule = client.call("createServiceRunbookRule", {"params": {"id": rule_service_id}, "body": rule_body, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
+rule_params = {"id": rule_service_id, "ruleId": rule["id"]}
+rule = client.call("getServiceRunbookRule", {"params": rule_params})["data"]
+assert client.call("validateServiceRunbookRule", {"params": rule_params, "body": {}})["data"]["configurationRevision"] == rule["configurationRevision"]
+rule = client.call("replaceRunbookRuleTriggers", {"params": rule_params, "body": {"event": "INCIDENT_CREATED", "conditions": [{"field": "incident.urgency", "operator": "EQUALS", "value": "HIGH"}]}, "headers": lifecycle_headers(rule["configurationRevision"])})["data"]
+rule = client.call("activateServiceRunbookRule", {"params": rule_params, "body": {"confirmMatchAll": False}, "headers": lifecycle_headers(rule["configurationRevision"])})["data"]
+assert rule["enabled"]
+rule = client.call("updateServiceRunbookRule", {"params": rule_params, "body": {"configuration": {"name": "Python reviewed rule"}, "expectedVersionId": published["data"]["id"]}, "headers": lifecycle_headers(rule["configurationRevision"])})["data"]
+assert not rule["enabled"]
+rule = client.call("pauseServiceRunbookRule", {"params": rule_params, "body": {}, "headers": lifecycle_headers(rule["configurationRevision"])})["data"]
+rule_copy = client.call("duplicateServiceRunbookRule", {"params": rule_params, "body": {}, "headers": lifecycle_headers(rule["configurationRevision"])})["data"]
+assert rule_copy["id"] != rule["id"] and not rule_copy["enabled"]
+rule_list = client.call("listServiceRunbookRules", {"params": {"id": rule_service_id}, "query": {"limit": 1}})["data"]
+assert len(rule_list) == 1 and "inputValues" not in rule_list[0]
+client.call("detachServiceRunbookRule", {"params": {"id": rule_service_id, "ruleId": rule_copy["id"]}, "body": {}, "headers": lifecycle_headers(rule_copy["configurationRevision"])})
+policy_book = client.call("createRunbook", {"body": {"name": "Python policy workflow", "slug": "python-policy-" + suffix, "definition": {"steps": [{"key": "check", "name": "Check", "type": "LINUX_DIAGNOSTICS", "riskClass": "READ_ONLY", "config": {"action": "summary"}}]}}, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
+policy_version = client.call("publishRunbookDraft", {"params": {"id": policy_book["id"], "versionId": policy_book["draftVersionId"]}, "body": {}, "headers": {"If-Match": '\"0\"', "Idempotency-Key": uuid.uuid4().hex}})["data"]
+policy_rule = client.call("createServiceRunbookRule", {"params": {"id": rule_service_id}, "body": {"configuration": {"runbookId": policy_book["id"], "runbookVersionId": policy_version["id"], "versionStrategy": "PINNED", "mode": "MANUAL", "enabled": False, "defaultAgentId": configuration["runbookRuleAgentId"]}, "expectedVersionId": policy_version["id"]}, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
+policy_params = {"id": rule_service_id, "ruleId": policy_rule["id"]}
+policy_request = client.call("requestRunbookRulePolicyChecks", {"params": policy_params, "body": {}, "headers": lifecycle_headers(policy_rule["configurationRevision"])})["data"]
+assert policy_request["checkedTargets"] == 1 and policy_request["status"] == "PENDING" and len(policy_request["checkIds"]) == 1
+policy_checks = client.call("listRunbookRulePolicyChecks", {"params": policy_params})["data"]
+assert len(policy_checks) == 1 and "steps" not in policy_checks[0] and "results" not in policy_checks[0]
+print("Python live service-rule authoring/revision/readiness/activation/policy-check workflows passed.")
+
 # Each automation endpoint is exercised through the generated operation manifest
 # against HTTP, independently of the TypeScript/browser journey.
 params = {"id": configuration["automationServiceId"]}

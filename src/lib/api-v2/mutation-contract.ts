@@ -51,6 +51,70 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/services/[id]/runbook-rules': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+  'PATCH /api/v2/services/[id]/runbook-rules/[ruleId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+  'DELETE /api/v2/services/[id]/runbook-rules/[ruleId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+  'POST /api/v2/services/[id]/runbook-rules/[ruleId]/validate': {
+    idempotency: 'natural',
+    concurrency: 'none',
+    rationale:
+      'Read-only current domain readiness; does not execute, enqueue, audit or reserve a replay key.',
+  },
+  'POST /api/v2/services/[id]/runbook-rules/[ruleId]/policy-checks': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+  'POST /api/v2/services/[id]/runbook-rules/[ruleId]/activate': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+  'POST /api/v2/services/[id]/runbook-rules/[ruleId]/pause': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+  'POST /api/v2/services/[id]/runbook-rules/[ruleId]/duplicate': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+  'PUT /api/v2/services/[id]/runbook-rules/[ruleId]/triggers': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Explicit rule administration scope. Nested parent, current revision and lifecycle references are checked under the shared Runbook-then-rule locks; canonical audit, durable work and replay commit together. Configuration edits pause Automatic rules; activation recomputes current target and local-policy evidence.',
+  },
+
   'PATCH /api/v2/runbooks/[id]': {
     idempotency: 'required',
     concurrency: 'etag',

@@ -397,6 +397,7 @@ const etagHeader = {
 };
 
 const ETAG_RESOURCES = new Set([
+  '/services/{id}/runbook-rules/{ruleId}',
   '/runbooks/{id}',
   '/runbooks/{id}/metadata',
   '/services/{id}/automation',

@@ -1,3 +1,4 @@
+import { RunbookDefinitionError } from './errors';
 import 'server-only';
 import { MAX_AUTOMATIC_POLICY_TARGETS, POLICY_CERTIFICATION_BATCH_SIZE } from './agent-deployment';
 import { hasUnverifiablePolicyInput } from '../../../agent/src/policy-inputs';
@@ -118,18 +119,19 @@ export async function requestRulePolicyChecks(
       );
     // Each durable row freezes the selected version and redacted configuration.
     // Insert bounded batches atomically: activation cannot observe a partial request.
-    for (let offset = 0; offset < agents.length; offset += POLICY_CERTIFICATION_BATCH_SIZE) {
+    const checks = agents.map(agent => ({
+      id: crypto.randomUUID(),
+      ruleId,
+      agentId: agent.id,
+      versionId: version.id,
+      checksum: version.checksum,
+      steps: steps as unknown as Prisma.InputJsonValue,
+      expiresAt: new Date(now.getTime() + 5 * 60_000),
+      createdById: actorId,
+    }));
+    for (let offset = 0; offset < checks.length; offset += POLICY_CERTIFICATION_BATCH_SIZE) {
       await tx.runbookPolicyCheck.createMany({
-        data: agents.slice(offset, offset + POLICY_CERTIFICATION_BATCH_SIZE).map(agent => ({
-          id: crypto.randomUUID(),
-          ruleId,
-          agentId: agent.id,
-          versionId: version.id,
-          checksum: version.checksum,
-          steps: steps as unknown as Prisma.InputJsonValue,
-          expiresAt: new Date(now.getTime() + 5 * 60_000),
-          createdById: actorId,
-        })),
+        data: checks.slice(offset, offset + POLICY_CERTIFICATION_BATCH_SIZE),
       });
     }
     await logRunbookCommandAudit(
@@ -143,7 +145,12 @@ export async function requestRulePolicyChecks(
       },
       tx
     );
-    return { saved: true, checkedTargets: agents.length };
+    return {
+      saved: true,
+      checkedTargets: agents.length,
+      checkIds: checks.map(check => check.id),
+      status: 'PENDING' as const,
+    };
   });
 }
 export async function pendingAgentPolicyChecks(agentId: string) {

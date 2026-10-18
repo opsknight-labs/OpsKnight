@@ -1598,3 +1598,120 @@ test('REST lifecycle changes appear in the administrator UI and retain independe
     await prisma.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
   }
 });
+
+test('REST service rules share UI readiness, automatic activation and paused configuration edits', async ({
+  page,
+}, testInfo) => {
+  await login(page);
+  const actor = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL } });
+  const issued = generateApiKey();
+  const credential = await prisma.apiKey.create({
+    data: {
+      name: 'REST rule UI certification',
+      userId: actor.id,
+      prefix: issued.prefix,
+      tokenHash: issued.tokenHash,
+      scopes: [
+        'runbooks:write',
+        'runbooks:publish',
+        'runbook-rules:read',
+        'runbook-rules:write',
+        'runbook-rules:activate',
+      ],
+    },
+  });
+  const client = new Client({
+    baseUrl: `${new URL(page.url()).origin}/api/v2`,
+    token: issued.token,
+    allowInsecureHttp: true,
+  });
+  try {
+    const book = await client.call('createRunbook', {
+      body: {
+        name: `REST rule UI ${testInfo.project.name}`,
+        slug: `rule-ui-${crypto.randomUUID()}`,
+      },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const version = await client.call('publishRunbookDraft', {
+      params: { id: book.data.id, versionId: book.data.draftVersionId },
+      body: {},
+      headers: { 'If-Match': '"0"', 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const result = await client.call('createServiceRunbookRule', {
+      params: { id: serviceId },
+      body: {
+        configuration: {
+          runbookId: book.data.id,
+          runbookVersionId: version.data.id,
+          name: `Reviewed rule ${testInfo.project.name}`,
+          mode: 'AUTOMATIC',
+          versionStrategy: 'PINNED',
+        },
+        expectedVersionId: version.data.id,
+        trigger: { event: 'INCIDENT_CREATED', conditions: [] },
+      },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const params = { id: serviceId, ruleId: result.data.id };
+    let current = result.data;
+    await page.goto(`/services/${serviceId}/automations/${current.id}`);
+    await expect(page.getByRole('heading', { name: current.name, exact: true })).toBeVisible();
+    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    const review = await client.call('validateServiceRunbookRule', { params, body: {} });
+    expect(review.data.configurationRevision).toBe(current.configurationRevision);
+    current = (
+      await client.call('activateServiceRunbookRule', {
+        params,
+        body: { confirmMatchAll: true },
+        headers: {
+          'If-Match': `"${current.configurationRevision}"`,
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+      })
+    ).data;
+    expect(current.enabled).toBe(true);
+    await page.reload();
+    await expect(page.getByText('Automatic', { exact: true }).first()).toBeVisible();
+    const staleRevision = current.configurationRevision;
+    current = (
+      await client.call('replaceRunbookRuleTriggers', {
+        params,
+        body: {
+          event: 'INCIDENT_CREATED',
+          conditions: [{ field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH' }],
+        },
+        headers: {
+          'If-Match': `"${current.configurationRevision}"`,
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+      })
+    ).data;
+    expect(current.enabled).toBe(false);
+    await page.reload();
+    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    await expect(
+      client.call('activateServiceRunbookRule', {
+        params,
+        body: { confirmMatchAll: true },
+        headers: { 'If-Match': `"${staleRevision}"`, 'Idempotency-Key': crypto.randomUUID() },
+      })
+    ).rejects.toMatchObject({ status: 412 });
+    for (const width of [375, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await noOverflow(page);
+    }
+    await testInfo.attach('rest-runbook-rule-ui-parity', {
+      body: JSON.stringify({
+        project: testInfo.project.name,
+        pausedCreation: true,
+        reviewedActivation: true,
+        editsPauseAutomatically: true,
+        staleActivationRejected: true,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
+    await prisma.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
+  }
+});

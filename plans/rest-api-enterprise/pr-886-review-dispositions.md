@@ -320,3 +320,29 @@ service-only copies are discarded instead of offered to a different account.
 
 These fixes do not certify mixed-version rollout, repair historical evidence,
 prove production candidate isolation, or finish remaining enterprise API domains.
+
+### Service runbook rules (coverage plan section 3B)
+
+Twelve REST operations now expose shared binding, trigger, policy-check and
+activation commands. Rule read, configuration and activation scopes are explicit
+and ADMIN-only, matching existing UI authority; broad admin scope is insufficient.
+Collection responses omit inputs and triggers; privileged details are bounded,
+no-store representations and never resolve secret references. Policy-check lists
+exclude frozen inputs, step definitions and raw Agent results. Requests return
+durable pending check IDs. The authenticated private Agent protocol is unchanged.
+
+Existing-resource mutations require concrete revision ETags and durable replay.
+Configuration and nested trigger/condition writes advance database revisions and
+pause Automatic rules. Activation rechecks immutable version, target authority and
+current policy evidence under shared command locks. Detach retains evidence;
+duplicates are independent paused configurations. Already-paused calls do not
+repeat audit or revision side effects. Canonical audit and replay share the domain
+transaction, including rollback when audit insertion fails.
+
+Local evidence covers negative permissions, revocation/demotion on replay,
+concurrent stale writes, nested legacy writes, current/stale Agent policy hashes,
+rollback, schema/privacy bounds, both live SDKs and six Chromium/Firefox/WebKit
+UI journeys. The populated upgrade preserves existing pinned configuration and
+only fences subsequent writes. See runbook-rules-certification.json; this does
+not certify mixed-version rollout, the remaining runbook control plane, or the
+complete enterprise plan. Release gates remain open.

@@ -11,7 +11,11 @@ import { parseInputDefault } from './input-values';
 import { MAX_SELECT_OPTIONS, selectOptionsIssue } from './input-options';
 import { runbookEvidenceSchema } from './evidence';
 import { schedulingLabelsSchema } from './labels';
-import { conditionContextFieldSchema } from './conditions';
+import {
+  conditionContextFieldSchema,
+  conditionValueType,
+  validateConditionComparison,
+} from './conditions';
 import {
   RUNBOOK_BINDING_MODES,
   RUNBOOK_CONDITION_LOGICS,
@@ -361,7 +365,11 @@ export const runbookTriggerConditionSchema = z
     value: z.unknown(),
     sequence: z.number().int().min(0).default(0),
   })
-  .strict();
+  .strict()
+  .superRefine((condition, context) => {
+    const error = validateConditionComparison(condition, conditionValueType(condition.field, []));
+    if (error) context.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: error });
+  });
 
 export type RunbookTriggerConditionInput = z.infer<typeof runbookTriggerConditionSchema>;
 

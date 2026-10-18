@@ -239,7 +239,7 @@ export async function createServiceBinding(
       },
       tx
     );
-    return binding;
+    return tx.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } });
   });
 }
 
@@ -413,7 +413,7 @@ export async function replaceBindingTrigger(
       sequence: condition.sequence,
     }));
     // Keep suggestion/execution foreign keys intact. Old condition sets remain in the audit.
-    const trigger = previous
+    const savedTrigger = previous
       ? await tx.runbookTrigger.update({
           where: { id: previous.id },
           data: {
@@ -435,6 +435,10 @@ export async function replaceBindingTrigger(
           },
           include: { conditions: { orderBy: { sequence: 'asc' } } },
         });
+    const trigger = await tx.runbookTrigger.findUniqueOrThrow({
+      where: { id: savedTrigger.id },
+      include: { conditions: { orderBy: { sequence: 'asc' } } },
+    });
     await logRunbookCommandAudit(
       actor,
       {
@@ -494,6 +498,7 @@ export async function pauseServiceRule(
       where: { id: ruleId, serviceId, detachedAt: null },
     });
     if (!rule) throw new RunbookDefinitionError('Service automation rule not found.');
+    if (!rule.enabled) return;
     await tx.serviceAutomationRule.update({
       where: { id: ruleId },
       data: { enabled: false, configurationRevision: { increment: 1 } },
@@ -571,7 +576,7 @@ export async function duplicateServiceRule(
       },
       tx
     );
-    return duplicate;
+    return tx.serviceAutomationRule.findUniqueOrThrow({ where: { id: duplicate.id } });
   });
 }
 
