@@ -1,3 +1,4 @@
+import { RunbookVersionNotFoundError } from './errors';
 import 'server-only';
 import prisma from '@/lib/prisma';
 import { flattenSteps, parseRunbookDefinition, sortJsonValue } from './definition';
@@ -13,7 +14,8 @@ export async function getVersionImpact(
   });
   const base = versions.find(version => version.id === baseVersionId);
   const next = versions.find(version => version.id === nextVersionId);
-  if (!base || !next) throw new Error('Both versions must belong to this runbook.');
+  if (!base) throw new RunbookVersionNotFoundError(baseVersionId);
+  if (!next) throw new RunbookVersionNotFoundError(nextVersionId);
   const before = new Map(
     flattenSteps(parseRunbookDefinition(base.definition, base.inputs)).map(step => [step.key, step])
   );

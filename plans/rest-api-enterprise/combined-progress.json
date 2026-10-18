@@ -87,7 +87,7 @@
     "applicationReplicas": 2,
     "coverage": "Functional SDK/UI/ingestion parity and publication safety; not load/HA or full enterprise coverage"
   },
-  "registeredOperationCount": 101,
+  "registeredOperationCount": 109,
   "currentReview": {
     "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
     "milestone": "M0",
@@ -114,5 +114,20 @@
     "evidence": "plans/rest-api-enterprise/automation-readiness-certification.json",
     "operationCountUnchanged": 101,
     "remaining": "Candidate isolation, remaining enterprise domains, final-commit CI and production release gates"
+  },
+  "runbookLifecycleFollowUp": {
+    "status": "implemented_locally_verified_latest_ci_pending",
+    "operationIds": [
+      "getRunbookMetadata",
+      "updateRunbookMetadata",
+      "archiveRunbook",
+      "restoreRunbook",
+      "checkRunbookDeletion",
+      "deleteRunbook",
+      "duplicateRunbook",
+      "compareRunbookVersions"
+    ],
+    "remaining": "Rules, agents, secrets, approvals, reruns, complete certification",
+    "evidence": "plans/rest-api-enterprise/runbook-lifecycle-certification.json"
   }
 }

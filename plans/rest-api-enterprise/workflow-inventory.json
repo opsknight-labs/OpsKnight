@@ -6,6 +6,39 @@
   "plan": "plans/rest-api-enterprise/complete-feature-coverage-plan.md",
   "workflows": [
     {
+      "capabilityId": "runbook-lifecycle",
+      "delivery": "API-15",
+      "workflow": "Revision-protected metadata, archive, restore, deletion, duplication and redacted version comparison",
+      "sources": [
+        {
+          "path": "src/lib/runbooks/versioning.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/runbooks/lifecycle.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/runbooks/version-impact.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/api-v2/runbook-lifecycle.ts",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": [
+        "Full combined runbook certification and the remaining control plane are pending."
+      ]
+    },
+    {
       "capabilityId": "runbook-authoring",
       "delivery": "API-15",
       "workflow": "Draft creation, editing, validation and immutable publication",

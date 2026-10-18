@@ -610,6 +610,114 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     },
     ['key', 'label']
   ),
+  RunbookVersionDiff: object(
+    {
+      base: object({ version: integer, checksum: string() }, ['version', 'checksum']),
+      next: object({ version: integer, checksum: string() }, ['version', 'checksum']),
+      steps: array(
+        object(
+          {
+            key: string(),
+            change: { type: 'string', enum: ['ADDED', 'REMOVED', 'CHANGED', 'UNCHANGED'] },
+            risk: { type: ['string', 'null'] },
+            before: { anyOf: [ref('RunbookDiffStep'), { type: 'null' }] },
+            after: { anyOf: [ref('RunbookDiffStep'), { type: 'null' }] },
+          },
+          ['key', 'change', 'risk', 'before', 'after']
+        )
+      ),
+      inputKeys: object({ added: array(string()), removed: array(string()) }, ['added', 'removed']),
+      rules: array(
+        object(
+          {
+            id,
+            name: string(),
+            serviceId: id,
+            enabled: { type: 'boolean' },
+            mode: string(),
+            versionStrategy: string(),
+            runbookVersionId: { type: ['string', 'null'] },
+            impact: string(),
+          },
+          [
+            'id',
+            'name',
+            'serviceId',
+            'enabled',
+            'mode',
+            'versionStrategy',
+            'runbookVersionId',
+            'impact',
+          ]
+        ),
+        500
+      ),
+      rulesTruncated: { type: 'boolean' },
+      warning: string(),
+    },
+    ['base', 'next', 'steps', 'inputKeys', 'rules', 'rulesTruncated', 'warning']
+  ),
+  RunbookDiffStep: object(
+    {
+      key: string(),
+      name: string(),
+      type: string(),
+      riskClass: string(),
+      requiresApproval: { type: 'boolean' },
+    },
+    ['key', 'name', 'type', 'riskClass', 'requiresApproval']
+  ),
+  RunbookMetadata: object(
+    {
+      id,
+      name: string(200),
+      slug: string(120),
+      description: string(5000),
+      ownerTeamId: { type: ['string', 'null'] },
+      tags: array(string(40), 20),
+      archivedAt: { type: ['string', 'null'], format: 'date-time' },
+      publishedVersionId: { type: ['string', 'null'] },
+      draftVersionId: { type: ['string', 'null'] },
+      revision: { type: 'integer', minimum: 1 },
+      createdAt: date,
+      updatedAt: date,
+    },
+    [
+      'id',
+      'name',
+      'slug',
+      'description',
+      'ownerTeamId',
+      'tags',
+      'archivedAt',
+      'publishedVersionId',
+      'draftVersionId',
+      'revision',
+      'createdAt',
+      'updatedAt',
+    ]
+  ),
+  RunbookDeleteEligibility: object(
+    {
+      canDelete: { type: 'boolean' },
+      reason: string(),
+      hasExecutions: { type: 'boolean' },
+      hasBindings: { type: 'boolean' },
+      hasPublishedVersions: { type: 'boolean' },
+      executionCount: integer,
+      bindingCount: integer,
+      publishedVersionCount: integer,
+    },
+    [
+      'canDelete',
+      'hasExecutions',
+      'hasBindings',
+      'hasPublishedVersions',
+      'executionCount',
+      'bindingCount',
+      'publishedVersionCount',
+    ]
+  ),
   RunbookAuthoringVersion: authoringVersionSchema,
   RunbookDraftRead: object(
     {
@@ -665,6 +773,71 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/runbooks/{id}/versions/{versionId}/diff',
+    summary: 'Compare two versions with redacted step summaries and bounded service-rule impact',
+    description:
+      'Requires baseVersionId from the same runbook. Reuses UI comparison logic; executable configuration, input defaults and secret references are excluded.',
+  },
+
+  {
+    method: 'get',
+    path: '/runbooks/{id}/metadata',
+    summary: 'Read privileged metadata and revision, including unpublished or archived runbooks',
+    description:
+      'Requires administrative runbook management and runbooks:write. Never returns version configuration or secret values.',
+  },
+  {
+    method: 'patch',
+    path: '/runbooks/{id}',
+    summary: 'Update runbook metadata under its concrete revision',
+    body: {
+      ...object({
+        name: string(200),
+        slug: { ...string(120), pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
+        description: string(5000),
+        ownerTeamId: { type: ['string', 'null'] },
+        tags: array(string(40), 20),
+      }),
+      minProperties: 1,
+    },
+  },
+  {
+    method: 'get',
+    path: '/runbooks/{id}/delete-check',
+    summary: 'Inspect references preventing permanent deletion',
+    description: 'Advisory snapshot only; deletion rechecks under the parent lock.',
+  },
+  {
+    method: 'post',
+    path: '/runbooks/{id}/archive',
+    summary: 'Archive a runbook, disable bindings and dismiss outstanding suggestions',
+    body: object({}),
+  },
+  {
+    method: 'post',
+    path: '/runbooks/{id}/restore',
+    summary: 'Restore an archived runbook while retaining disabled bindings',
+    body: object({}),
+  },
+  {
+    method: 'post',
+    path: '/runbooks/{id}/duplicate',
+    summary: 'Duplicate the reviewed runbook into an independent editable draft',
+    status: 201,
+    body: object({}),
+    description:
+      'If-Match identifies the source metadata revision. The result and ETag identify the new copy. Published source versions remain immutable.',
+  },
+  {
+    method: 'delete',
+    path: '/runbooks/{id}',
+    summary: 'Delete a never-published draft without executions or bindings',
+    status: 204,
+    body: object({ confirmationText: { ...string(200), minLength: 1 } }, ['confirmationText']),
+  },
+
   {
     method: 'post',
     path: '/services/{id}/automation/validate',
@@ -1010,6 +1183,9 @@ export function enterpriseOpenApiPaths() {
       parameters: [
         ...parameters,
         ...queryParameters,
+        ...(operation.path === '/runbooks/{id}/versions/{versionId}/diff'
+          ? [{ name: 'baseVersionId', in: 'query', required: true, schema: id }]
+          : []),
         ...(operation.path.endsWith('/automation/observations')
           ? [
               {

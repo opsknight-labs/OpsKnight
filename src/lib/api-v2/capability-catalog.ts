@@ -12,6 +12,24 @@ export interface ApiCapability {
 /** Product decisions are explicit. An unsupported capability never creates a fake operation. */
 const decisions: readonly ApiCapability[] = [
   {
+    id: 'runbook-lifecycle',
+    area: 'Runbooks',
+    title: 'Metadata, archive, restoration, deletion checks and duplication',
+    status: 'partial',
+    explanation:
+      'Administrator-only lifecycle commands use concrete metadata revisions and durable replay. Privileged metadata includes unpublished and archived runbooks without executable configuration. Restoration keeps service rules disabled. Version comparisons return only structural summaries. The remaining control plane is pending.',
+    operationIds: [
+      'compareRunbookVersions',
+      'getRunbookMetadata',
+      'updateRunbookMetadata',
+      'archiveRunbook',
+      'restoreRunbook',
+      'checkRunbookDeletion',
+      'deleteRunbook',
+      'duplicateRunbook',
+    ],
+  },
+  {
     id: 'runbook-authoring',
     area: 'Runbooks',
     title: 'Create, draft, validate and publish',

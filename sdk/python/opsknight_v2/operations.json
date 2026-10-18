@@ -1,4 +1,83 @@
 {
+  "compareRunbookVersions": {
+    "method": "GET",
+    "path": "/runbooks/{id}/versions/{versionId}/diff",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookMetadata": {
+    "method": "GET",
+    "path": "/runbooks/{id}/metadata",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookMetadata": {
+    "method": "PATCH",
+    "path": "/runbooks/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "archiveRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/archive",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "restoreRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/restore",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "checkRunbookDeletion": {
+    "method": "GET",
+    "path": "/runbooks/{id}/delete-check",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteRunbook": {
+    "method": "DELETE",
+    "path": "/runbooks/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "duplicateRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "validateAutomation": {
     "method": "POST",
     "path": "/services/{id}/automation/validate",

@@ -74,11 +74,11 @@ describe('REST v2 mutation contract', () => {
     for (const { key, source } of operations) {
       if (V2_MUTATION_CONTRACT[key].concurrency === 'etag') {
         expect(source, `${key} declares etag concurrency`).toMatch(
-          /parseIfMatch|requireDraft|requireRevisionIfMatch/
+          /parseIfMatch|requireDraft|requireRevisionIfMatch|requireRunbookRevision/
         );
         if (V2_MUTATION_CONTRACT[key].responseEtag !== false)
           expect(source, `${key} must emit ETag on its response`).toMatch(
-            /etagHeaders|authoringVersionResult/
+            /etagHeaders|authoringVersionResult|runbookMetadataResult/
           );
       }
     }

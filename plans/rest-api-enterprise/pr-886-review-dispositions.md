@@ -256,3 +256,38 @@ an explicit insufficient-evidence exception. This policy governs candidate
 activation; the separate mode-change command retains its existing contract.
 Candidate isolation, deployment-specific load/HA acceptance and the remaining
 enterprise domain APIs remain open.
+
+### Runbook metadata and lifecycle endpoint delivery
+
+Eight operations now wrap the shared UI lifecycle and comparison commands:
+privileged metadata reads (including archived and unpublished runbooks), metadata
+updates, archive, restore, deletion eligibility, permanent deletion, duplication
+and redacted version comparison. These administrative operations require both
+`runbooks:write` and the administrator runbook-management capability. The normal
+published-library read contract remains available with `runbooks:read`.
+
+Every lifecycle mutation requires an idempotency key and a concrete source
+metadata ETag, checked under the same parent lock used by UI authoring and
+execution. The existing database trigger advances that revision for all writers.
+A duplicate's response ETag identifies the new copy, while its request If-Match
+identifies the source. A successful delete can be replayed after the row is gone;
+revoked credentials and demoted actors cannot retrieve the cached response.
+
+Archive disables service bindings and dismisses outstanding suggestions. Natural
+archive/restore repeats do not repeat audits or timestamp changes. Restore leaves
+bindings disabled. Deletion eligibility is advisory: the command rechecks under
+lock and permanently deletes only a never-published draft without bindings or
+execution history, after typed confirmation. Published and retired evidence is
+retained. Duplication creates a separate editable version and preserves canonical
+input definitions, ownership and tags through the existing domain command.
+
+Version comparison reuses the UI impact engine, validates both versions belong
+to the parent, and returns only structural step summaries and input-key changes.
+It omits executable configuration, input defaults and secret references. Service
+rule impact is bounded to 500 records, with explicit truncation. Version diffs
+are static review information, not execution approval or activation evidence.
+
+This delivers the metadata/lifecycle endpoint set in section 3A of the plan;
+service rules, approvals/reruns, agent and secret administration, and combined
+runbook certification remain unfinished. The capability catalog and workflow
+inventory retain that distinction and leave enterprise release gates open.

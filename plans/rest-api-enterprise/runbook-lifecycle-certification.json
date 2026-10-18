@@ -1,0 +1,68 @@
+{
+  "sourceParent": "54aa270267bc77fcf7849d49b7cbd5aa41f7f767",
+  "measuredAt": "2026-10-18T10:33:01.159425+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Eight operations in coverage-plan section 3A; incomplete runbook control plane and enterprise certification.",
+  "registeredOperationCount": 109,
+  "addedOperationCount": 8,
+  "productionBuild": "passed",
+  "typecheck": "passed",
+  "changedSourceLint": "passed with zero warnings",
+  "generatedClientsCheck": "passed",
+  "unit": {
+    "passed": 1145,
+    "files": 31
+  },
+  "postgresRegression": {
+    "passed": 54,
+    "files": 3
+  },
+  "newLifecyclePostgresCases": 13,
+  "strictErrorStatusSubset": {
+    "passed": 2,
+    "otherCasesNotSelected": 11
+  },
+  "browser": {
+    "startTime": "2026-10-18T10:31:09.096Z",
+    "duration": 54452.409999999996,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "browserScope": "Existing library/builder/publication journey plus new REST lifecycle UI parity, each Chromium/Firefox/WebKit; not the entire runbook browser matrix.",
+  "liveSdk": "Both TypeScript and Python exercised all eight new operations against the production build and PostgreSQL.",
+  "limitations": [
+    "Service rules, policy checks, approvals/reruns, agents/pools/enrollment and secrets/grants remain unfinished.",
+    "No new migration in this delivery; existing runbook revision trigger was previously applied.",
+    "Version comparison is static review information; it does not authorize execution or activation.",
+    "No complete enterprise, external provider or production HA/load certification is claimed."
+  ],
+  "sourceSha256": {
+    "sdk/openapi-v2.json": "7e88ac631a053b67caaa763d3f5a412bd27b9b0e3dcce2581ce3ff1afc4bad6d",
+    "sdk/python/opsknight_v2/client.pyi": "ece1e0448a3f27e5376fd0eb9cb5f5d2b0041003ce1408573140d6ebf098d92d",
+    "sdk/python/opsknight_v2/models.py": "6a0127b99fae8f9f08d02f65fec75a89df537d570b787e084eaad58e6d7db9e7",
+    "sdk/python/opsknight_v2/operations.json": "846e3a7cfadec05de3a28f0cd4370a1d8fd0b052adf5cef7a558bb99098fc919",
+    "sdk/typescript/schema.ts": "d742cede7c6b663f1f605c92ceb91e7e36f55cb52dc435ac66bdae0a72b6c632",
+    "src/app/api/v2/runbooks/[id]/route.ts": "b8a67b60d701ac2470064d82251568e1a1ee2997474414db0aaf9a1b4d8c13e5",
+    "src/lib/api-v2/capability-catalog.ts": "42e2de86aa28a7bfec1c768b95ebf7cb2dc56040abe676e1d73e6dcdbcf51360",
+    "src/lib/api-v2/enterprise-openapi.ts": "8f877db4bf682f0e2337d5659c8e84be2ede4a9ce3a66b39ff8ac2c8e904f153",
+    "src/lib/api-v2/mutation-contract.ts": "6ffc7b37ecc3c051c67c02d441903d6471e88126248c8a0aa03c0406ab6e82b8",
+    "src/lib/api-v2/openapi-finalize.ts": "35cbaad9e06b8314cfc28cc85f670884d8404ebb38ae3101aa1c5575ee2b014d",
+    "src/lib/api-v2/openapi-registry.ts": "07bf957d4150fc8366eb88ec333d433692252480b314a59776acdcf4810f9a46",
+    "src/lib/runbooks/version-impact.ts": "97dfa1ba7047d22619cbd3aefd29814a0da7d68b63c5807f76be1ddb56395973",
+    "src/lib/runbooks/versioning.ts": "763169a006d5354beda8b8d1107dc7eb382dd78c6bb0aa0c61bd0acabe26c28d",
+    "tests/e2e/runbooks-ui.spec.ts": "3afc50561815f8133d84f0a6ba61a2237ecec8ba342d424bdeaa9cad98ed0ebe",
+    "tests/sdk/live-workflow.py": "a8e6f940d3e2fce35131130c3bc910c79b21dcc2a550f430d8b6f89d3a135665",
+    "tests/sdk/live-workflows.mjs": "bc30a6791f9a3aa6a040ea23467b0483a32513abb1a07163852a5fecfa92fce0",
+    "tests/unit/api-v2-mutation-contract.test.ts": "87d3ced02bfe76609db823e4b175f1be23064cda4c434232ca361aa9f4f50b4a",
+    "src/app/api/v2/runbooks/[id]/archive/route.ts": "69ef3c0c238ff19471cbd6fee2c564524c972567b0abd8ad3ffb7bc7d11d8d90",
+    "src/app/api/v2/runbooks/[id]/delete-check/route.ts": "d51ff64c2feb1c2349ab29a3cab08046d68e6145fa9ef3feb5052e62798f6747",
+    "src/app/api/v2/runbooks/[id]/duplicate/route.ts": "ea549aaa7df52d0728ad237d17c7e6f4c1748f1117fbafbdc65a0f00e59ca9f9",
+    "src/app/api/v2/runbooks/[id]/metadata/route.ts": "642332c65ef62f78cc5afb41ebc58d24999ff1e5f3b66e324b92c28e6a7ae3dd",
+    "src/app/api/v2/runbooks/[id]/restore/route.ts": "8a8cf4c358715fdab79ef21bc1d5742d63939120a263a03271b7b102ff1c3d14",
+    "src/app/api/v2/runbooks/[id]/versions/[versionId]/diff/route.ts": "3e7b0d9de8f3ede6535c8947bbb4915dd6d8445cad3dacf97aa4f38385047e9a",
+    "src/lib/api-v2/runbook-lifecycle.ts": "cbe9911d4e00678b49398fa646f19c2d5d8ca17b7773688960af344fd079552e",
+    "tests/integration/api-v2-runbook-lifecycle.test.ts": "dc1f237e829d63cd864a476f48f566cf0156c6997ab65ff10f8ef7d462e04786"
+  }
+}
