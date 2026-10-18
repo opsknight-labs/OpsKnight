@@ -19,6 +19,12 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type StatusPageService = { "id": string; "statusPageId": string; "serviceId": string; "displayName": string | null; "order": number; "showOnPage": boolean; "createdAt": string };
+export type StatusPageAppearance = { "id": string; "revision": number; "updatedAt": string; "values": { "branding"?: Record<string, unknown> | null } };
+export type StatusPagePrivacy = { "id": string; "revision": number; "updatedAt": string; "values": { "privacyMode"?: string | null; "requireAuth"?: boolean; "authProvider"?: string | null; "showIncidentDetails"?: boolean; "showIncidentTitles"?: boolean; "showIncidentDescriptions"?: boolean; "showAffectedServices"?: boolean; "showIncidentTimestamps"?: boolean; "showServiceMetrics"?: boolean; "showServiceDescriptions"?: boolean; "showServiceRegions"?: boolean; "showTeamInformation"?: boolean; "showCustomFields"?: boolean; "showIncidentAssignees"?: boolean; "showIncidentUrgency"?: boolean; "showUptimeHistory"?: boolean; "showRecentIncidents"?: boolean; "showIncidentHistoryDetails"?: boolean; "incidentHistoryDetailDays"?: number | null; "maxIncidentsToShow"?: number | null; "incidentHistoryDays"?: number | null; "allowedCustomFields"?: Array<string> | null; "dataRetentionDays"?: number | null } };
+export type StatusPageContent = { "id": string; "revision": number; "updatedAt": string; "values": { "showServices"?: boolean; "showIncidents"?: boolean; "showMetrics"?: boolean; "showSubscribe"?: boolean; "footerText"?: string | null; "contactEmail"?: string | null; "contactUrl"?: string | null; "showChangelog"?: boolean; "showRegionHeatmap"?: boolean; "showPostIncidentReview"?: boolean; "uptimeExcellentThreshold"?: number; "uptimeGoodThreshold"?: number; "branding"?: Record<string, unknown> | null; "showRecentIncidents"?: boolean; "showServiceMetrics"?: boolean } };
+export type StatusPageSettings = { "id": string; "revision": number; "updatedAt": string; "values": { "name"?: string; "slug"?: string | null; "organizationName"?: string | null; "enabled"?: boolean; "requireAuth"?: boolean; "contactEmail"?: string | null; "contactUrl"?: string | null } };
+export type StatusPageConfigurationResult = { "updatedAt": string; "revision": number; "replayed"?: boolean; "classification": Record<string, unknown>; "publication": { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "stale"?: boolean; "lastError"?: string | null } };
 export type StatusPageSubscriber = { "id": string; "statusPageId": string; "email": string; "subscribedAt": string; "unsubscribedAt": string | null; "verified": boolean; "state": "PENDING" | "ACTIVE" | "UNSUBSCRIBED" | "BOUNCED" | "COMPLAINED" | "SUPPRESSED"; "timezone": string | null };
 export type StatusPageSubscriberStats = { "statusPageId": string; "total": number; "states": Array<{ "state": string; "count": number }> };
 export type StatusPageSubscriptionSettings = { "statusPageId": string; "enabled": boolean; "showSubscribe": boolean; "verificationRequired": true; "publicRegistrationSeparate": true };
@@ -72,6 +78,17 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listStatusPageServices: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  setStatusPageServices: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "serviceIds": Array<string>; "serviceConfigs"?: Record<string, { "displayName"?: string | null; "order"?: number; "showOnPage"?: boolean }> } };
+  updateStatusPageService: { "params": { "id": string; "serviceId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "displayName"?: string | null; "order"?: number; "showOnPage"?: boolean } };
+  getStatusPageAppearance: { "params": { "id": string } };
+  updateStatusPageAppearance: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "branding"?: Record<string, unknown> | null } };
+  getStatusPagePrivacy: { "params": { "id": string } };
+  updateStatusPagePrivacy: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "privacyMode"?: string | null; "requireAuth"?: boolean; "authProvider"?: string | null; "showIncidentDetails"?: boolean; "showIncidentTitles"?: boolean; "showIncidentDescriptions"?: boolean; "showAffectedServices"?: boolean; "showIncidentTimestamps"?: boolean; "showServiceMetrics"?: boolean; "showServiceDescriptions"?: boolean; "showServiceRegions"?: boolean; "showTeamInformation"?: boolean; "showCustomFields"?: boolean; "showIncidentAssignees"?: boolean; "showIncidentUrgency"?: boolean; "showUptimeHistory"?: boolean; "showRecentIncidents"?: boolean; "showIncidentHistoryDetails"?: boolean; "incidentHistoryDetailDays"?: number | null; "maxIncidentsToShow"?: number | null; "incidentHistoryDays"?: number | null; "allowedCustomFields"?: Array<string> | null; "dataRetentionDays"?: number | null } };
+  getStatusPageContent: { "params": { "id": string } };
+  updateStatusPageContent: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "showServices"?: boolean; "showIncidents"?: boolean; "showMetrics"?: boolean; "showSubscribe"?: boolean; "footerText"?: string | null; "contactEmail"?: string | null; "contactUrl"?: string | null; "showChangelog"?: boolean; "showRegionHeatmap"?: boolean; "showPostIncidentReview"?: boolean; "uptimeExcellentThreshold"?: number; "uptimeGoodThreshold"?: number; "branding"?: Record<string, unknown> | null; "showRecentIncidents"?: boolean; "showServiceMetrics"?: boolean } };
+  getStatusPageSettings: { "params": { "id": string } };
+  updateStatusPageSettings: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "slug"?: string | null; "organizationName"?: string | null; "enabled"?: boolean; "requireAuth"?: boolean; "contactEmail"?: string | null; "contactUrl"?: string | null } };
   listStatusPageSubscribers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   getStatusPageSubscriber: { "params": { "id": string; "subscriberId": string } };
   removeStatusPageSubscriber: { "params": { "id": string; "subscriberId": string }; "headers": { "Idempotency-Key": string } };
@@ -200,6 +217,17 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listStatusPageServices: { "data": Array<StatusPageService>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  setStatusPageServices: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateStatusPageService: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getStatusPageAppearance: { "data": StatusPageAppearance; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateStatusPageAppearance: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getStatusPagePrivacy: { "data": StatusPagePrivacy; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateStatusPagePrivacy: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getStatusPageContent: { "data": StatusPageContent; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateStatusPageContent: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getStatusPageSettings: { "data": StatusPageSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateStatusPageSettings: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listStatusPageSubscribers: { "data": Array<StatusPageSubscriber>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPageSubscriber: { "data": StatusPageSubscriber; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeStatusPageSubscriber: null;
@@ -328,6 +356,112 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listStatusPageServices": {
+    "method": "GET",
+    "path": "/status-pages/{id}/services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setStatusPageServices": {
+    "method": "PUT",
+    "path": "/status-pages/{id}/services",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "updateStatusPageService": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/services/{serviceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageAppearance": {
+    "method": "GET",
+    "path": "/status-pages/{id}/appearance",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageAppearance": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/appearance",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPagePrivacy": {
+    "method": "GET",
+    "path": "/status-pages/{id}/privacy",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPagePrivacy": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/privacy",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageContent": {
+    "method": "GET",
+    "path": "/status-pages/{id}/content",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageContent": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/content",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageSettings": {
+    "method": "GET",
+    "path": "/status-pages/{id}/settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageSettings": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/settings",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listStatusPageSubscribers": {
     "method": "GET",
     "path": "/status-pages/{id}/subscribers",

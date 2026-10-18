@@ -125,3 +125,18 @@ assert client.call("getStatusPageSubscriptionSettings", {"params": {"id": config
 client.call("removeStatusPageSubscriber", {"params": subscriber_params, "headers": {"Idempotency-Key": uuid.uuid4().hex}})
 assert client.call("getStatusPageSubscriber", {"params": subscriber_params})["data"]["state"] == "UNSUBSCRIBED"
 print("Python live status-page subscriber administration passed.")
+
+for read_operation, write_operation, changes in [
+    ("getStatusPageContent", "updateStatusPageContent", {"footerText": "Python footer " + suffix}),
+    ("getStatusPageSettings", "updateStatusPageSettings", {"organizationName": "Python organization " + suffix}),
+    ("getStatusPageAppearance", "updateStatusPageAppearance", {"branding": {"primaryColor": "#654321"}}),
+    ("getStatusPagePrivacy", "updateStatusPagePrivacy", {"showIncidentTitles": False}),
+]:
+    before = client.call(read_operation, {"params": {"id": configuration["statusPageId"]}})["data"]
+    after = client.call(write_operation, {"params": {"id": configuration["statusPageId"]}, "body": changes, "headers": {"Idempotency-Key": uuid.uuid4().hex, "If-Match": '\"%s\"' % before["revision"]}})["data"]
+    assert after["revision"] >= before["revision"] and "status" in after["publication"]
+status_configuration = client.call("getStatusPageSettings", {"params": {"id": configuration["statusPageId"]}})["data"]
+components = client.call("setStatusPageServices", {"params": {"id": configuration["statusPageId"]}, "body": {"serviceIds": [configuration["runbookRuleServiceId"]]}, "headers": {"Idempotency-Key": uuid.uuid4().hex, "If-Match": '\"%s\"' % status_configuration["revision"]}})["data"]
+client.call("updateStatusPageService", {"params": {"id": configuration["statusPageId"], "serviceId": configuration["runbookRuleServiceId"]}, "body": {"displayName": "Python reviewed component"}, "headers": {"Idempotency-Key": uuid.uuid4().hex, "If-Match": '\"%s\"' % components["revision"]}})
+assert client.call("listStatusPageServices", {"params": {"id": configuration["statusPageId"]}, "query": {"limit": 1}})["data"][0]["displayName"] == "Python reviewed component"
+print("Python live status-page configuration, privacy and service components passed.")

@@ -659,6 +659,42 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /status-pages/{id}/appearance [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /status-pages/{id}/appearance [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/content [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /status-pages/{id}/content [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/privacy [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /status-pages/{id}/privacy [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /status-pages/{id} [status-pages:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -666,6 +702,36 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "PATCH /status-pages/{id} [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /status-pages/{id}/services/{serviceId} [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/services [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /status-pages/{id}/services [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/settings [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /status-pages/{id}/settings [status-pages:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",

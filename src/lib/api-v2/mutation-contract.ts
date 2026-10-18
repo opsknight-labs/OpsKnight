@@ -51,6 +51,48 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PUT /api/v2/status-pages/[id]/services': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Absolute reviewed service membership replacement uses shared publication command and concrete all-writer revision. A new retry key with a stale revision returns 412; matching keys replay committed metadata. canonical audit commits with configuration/serving-state change.',
+  },
+  'PATCH /api/v2/status-pages/[id]/services/[serviceId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Page-wide revision fences the read-modify-write of supported service presentation. Nested ownership, bounded membership and publication privacy safeguards are enforced.',
+  },
+  'PATCH /api/v2/status-pages/[id]/appearance': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Absolute settings replacement uses the shared publication command. New keys with stale configuration revisions return 412; matching keys replay committed metadata. Canonical API-attributed audit commits with configuration and serving-state changes; persistence and public publication status are reported separately. The mandatory Idempotency-Key record commits in the same shared transaction as configuration and canonical audit. Publication is read after commit; replays do not repeat configuration changes.',
+  },
+  'PATCH /api/v2/status-pages/[id]/privacy': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Absolute settings replacement uses the shared publication command. New keys with stale configuration revisions return 412; matching keys replay committed metadata. Canonical API-attributed audit commits with configuration and serving-state changes; persistence and public publication status are reported separately. The mandatory Idempotency-Key record commits in the same shared transaction as configuration and canonical audit. Publication is read after commit; replays do not repeat configuration changes.',
+  },
+  'PATCH /api/v2/status-pages/[id]/content': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Absolute settings replacement uses the shared publication command. New keys with stale configuration revisions return 412; matching keys replay committed metadata. Canonical API-attributed audit commits with configuration and serving-state changes; persistence and public publication status are reported separately. The mandatory Idempotency-Key record commits in the same shared transaction as configuration and canonical audit. Publication is read after commit; replays do not repeat configuration changes.',
+  },
+  'PATCH /api/v2/status-pages/[id]/settings': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Absolute settings replacement uses the shared publication command. New keys with stale configuration revisions return 412; matching keys replay committed metadata. Canonical API-attributed audit commits with configuration and serving-state changes; persistence and public publication status are reported separately. The mandatory Idempotency-Key record commits in the same shared transaction as configuration and canonical audit. Publication is read after commit; replays do not repeat configuration changes.',
+  },
   'DELETE /api/v2/status-pages/[id]/subscribers/[subscriberId]': {
     idempotency: 'required',
     concurrency: 'none',

@@ -1301,6 +1301,432 @@
           "updatedAt"
         ]
       },
+      "StatusPageService": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statusPageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "showOnPage": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "statusPageId",
+          "serviceId",
+          "displayName",
+          "order",
+          "showOnPage",
+          "createdAt"
+        ]
+      },
+      "StatusPageAppearance": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "branding": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": []
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "updatedAt",
+          "values"
+        ]
+      },
+      "StatusPagePrivacy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "privacyMode": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requireAuth": {
+                "type": "boolean"
+              },
+              "authProvider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "showIncidentDetails": {
+                "type": "boolean"
+              },
+              "showIncidentTitles": {
+                "type": "boolean"
+              },
+              "showIncidentDescriptions": {
+                "type": "boolean"
+              },
+              "showAffectedServices": {
+                "type": "boolean"
+              },
+              "showIncidentTimestamps": {
+                "type": "boolean"
+              },
+              "showServiceMetrics": {
+                "type": "boolean"
+              },
+              "showServiceDescriptions": {
+                "type": "boolean"
+              },
+              "showServiceRegions": {
+                "type": "boolean"
+              },
+              "showTeamInformation": {
+                "type": "boolean"
+              },
+              "showCustomFields": {
+                "type": "boolean"
+              },
+              "showIncidentAssignees": {
+                "type": "boolean"
+              },
+              "showIncidentUrgency": {
+                "type": "boolean"
+              },
+              "showUptimeHistory": {
+                "type": "boolean"
+              },
+              "showRecentIncidents": {
+                "type": "boolean"
+              },
+              "showIncidentHistoryDetails": {
+                "type": "boolean"
+              },
+              "incidentHistoryDetailDays": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              },
+              "maxIncidentsToShow": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              },
+              "incidentHistoryDays": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              },
+              "allowedCustomFields": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "dataRetentionDays": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              }
+            },
+            "required": []
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "updatedAt",
+          "values"
+        ]
+      },
+      "StatusPageContent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "showServices": {
+                "type": "boolean"
+              },
+              "showIncidents": {
+                "type": "boolean"
+              },
+              "showMetrics": {
+                "type": "boolean"
+              },
+              "showSubscribe": {
+                "type": "boolean"
+              },
+              "footerText": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contactEmail": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contactUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "showChangelog": {
+                "type": "boolean"
+              },
+              "showRegionHeatmap": {
+                "type": "boolean"
+              },
+              "showPostIncidentReview": {
+                "type": "boolean"
+              },
+              "uptimeExcellentThreshold": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "uptimeGoodThreshold": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "branding": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": true
+              },
+              "showRecentIncidents": {
+                "type": "boolean"
+              },
+              "showServiceMetrics": {
+                "type": "boolean"
+              }
+            },
+            "required": []
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "updatedAt",
+          "values"
+        ]
+      },
+      "StatusPageSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "slug": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organizationName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "requireAuth": {
+                "type": "boolean"
+              },
+              "contactEmail": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contactUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": []
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "updatedAt",
+          "values"
+        ]
+      },
+      "StatusPageConfigurationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "classification": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "publication": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "LIVE",
+                  "PUBLISHING",
+                  "FAILED",
+                  "DISABLED"
+                ]
+              },
+              "revision": {
+                "type": "string"
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "lastError": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "revision"
+            ]
+          }
+        },
+        "required": [
+          "updatedAt",
+          "revision",
+          "classification",
+          "publication"
+        ]
+      },
       "StatusPageSubscriber": {
         "type": "object",
         "additionalProperties": false,
@@ -12233,6 +12659,1671 @@
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
         "x-idempotency": "natural",
         "x-concurrency": "none"
+      }
+    },
+    "/status-pages/{id}/services": {
+      "get": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "List configured service components with cursor pagination and a page configuration ETag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StatusPageService"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listStatusPageServices",
+        "x-required-scope": "status-pages:read",
+        "description": "Requires API scope `status-pages:read` (Status pages read)."
+      },
+      "put": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Replace reviewed service component membership and presentation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "serviceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 10000,
+                    "uniqueItems": true
+                  },
+                  "serviceConfigs": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "displayName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 200
+                        },
+                        "order": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100000
+                        },
+                        "showOnPage": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": []
+                    }
+                  }
+                },
+                "required": [
+                  "serviceIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageConfigurationResult"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "setStatusPageServices",
+        "x-required-scope": "status-pages:write",
+        "description": "Requires API scope `status-pages:write` (Status pages manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/status-pages/{id}/services/{serviceId}": {
+      "patch": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Update a selected service component without changing other memberships",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "displayName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 200
+                  },
+                  "order": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "showOnPage": {
+                    "type": "boolean"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageConfigurationResult"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateStatusPageService",
+        "x-required-scope": "status-pages:write",
+        "description": "Requires API scope `status-pages:write` (Status pages manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/status-pages/{id}/appearance": {
+      "get": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Read status-page appearance with a strong configuration revision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageAppearance"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getStatusPageAppearance",
+        "x-required-scope": "status-pages:read",
+        "description": "Requires API scope `status-pages:read` (Status pages read)."
+      },
+      "patch": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Update reviewed status-page appearance through the canonical publication command",
+        "description": "Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.\n\nRequires API scope `status-pages:write` (Status pages manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "branding": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageConfigurationResult"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateStatusPageAppearance",
+        "x-required-scope": "status-pages:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/status-pages/{id}/privacy": {
+      "get": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Read status-page privacy with a strong configuration revision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPagePrivacy"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getStatusPagePrivacy",
+        "x-required-scope": "status-pages:read",
+        "description": "Requires API scope `status-pages:read` (Status pages read)."
+      },
+      "patch": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Update reviewed status-page privacy through the canonical publication command",
+        "description": "Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.\n\nRequires API scope `status-pages:write` (Status pages manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "privacyMode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "requireAuth": {
+                    "type": "boolean"
+                  },
+                  "authProvider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "showIncidentDetails": {
+                    "type": "boolean"
+                  },
+                  "showIncidentTitles": {
+                    "type": "boolean"
+                  },
+                  "showIncidentDescriptions": {
+                    "type": "boolean"
+                  },
+                  "showAffectedServices": {
+                    "type": "boolean"
+                  },
+                  "showIncidentTimestamps": {
+                    "type": "boolean"
+                  },
+                  "showServiceMetrics": {
+                    "type": "boolean"
+                  },
+                  "showServiceDescriptions": {
+                    "type": "boolean"
+                  },
+                  "showServiceRegions": {
+                    "type": "boolean"
+                  },
+                  "showTeamInformation": {
+                    "type": "boolean"
+                  },
+                  "showCustomFields": {
+                    "type": "boolean"
+                  },
+                  "showIncidentAssignees": {
+                    "type": "boolean"
+                  },
+                  "showIncidentUrgency": {
+                    "type": "boolean"
+                  },
+                  "showUptimeHistory": {
+                    "type": "boolean"
+                  },
+                  "showRecentIncidents": {
+                    "type": "boolean"
+                  },
+                  "showIncidentHistoryDetails": {
+                    "type": "boolean"
+                  },
+                  "incidentHistoryDetailDays": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1
+                  },
+                  "maxIncidentsToShow": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1
+                  },
+                  "incidentHistoryDays": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1
+                  },
+                  "allowedCustomFields": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "dataRetentionDays": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageConfigurationResult"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateStatusPagePrivacy",
+        "x-required-scope": "status-pages:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/status-pages/{id}/content": {
+      "get": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Read status-page content with a strong configuration revision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageContent"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getStatusPageContent",
+        "x-required-scope": "status-pages:read",
+        "description": "Requires API scope `status-pages:read` (Status pages read)."
+      },
+      "patch": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Update reviewed status-page content through the canonical publication command",
+        "description": "Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.\n\nRequires API scope `status-pages:write` (Status pages manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "showServices": {
+                    "type": "boolean"
+                  },
+                  "showIncidents": {
+                    "type": "boolean"
+                  },
+                  "showMetrics": {
+                    "type": "boolean"
+                  },
+                  "showSubscribe": {
+                    "type": "boolean"
+                  },
+                  "footerText": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "contactEmail": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "contactUrl": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "showChangelog": {
+                    "type": "boolean"
+                  },
+                  "showRegionHeatmap": {
+                    "type": "boolean"
+                  },
+                  "showPostIncidentReview": {
+                    "type": "boolean"
+                  },
+                  "uptimeExcellentThreshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "uptimeGoodThreshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "branding": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": true
+                  },
+                  "showRecentIncidents": {
+                    "type": "boolean"
+                  },
+                  "showServiceMetrics": {
+                    "type": "boolean"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageConfigurationResult"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateStatusPageContent",
+        "x-required-scope": "status-pages:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/status-pages/{id}/settings": {
+      "get": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Read status-page settings with a strong configuration revision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageSettings"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getStatusPageSettings",
+        "x-required-scope": "status-pages:read",
+        "description": "Requires API scope `status-pages:read` (Status pages read)."
+      },
+      "patch": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Update reviewed status-page settings through the canonical publication command",
+        "description": "Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.\n\nRequires API scope `status-pages:write` (Status pages manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "slug": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "organizationName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "requireAuth": {
+                    "type": "boolean"
+                  },
+                  "contactEmail": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "contactUrl": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageConfigurationResult"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateStatusPageSettings",
+        "x-required-scope": "status-pages:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
       }
     },
     "/status-pages/{id}/subscribers": {

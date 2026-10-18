@@ -50,7 +50,7 @@ describe('REST v2 mutation contract', () => {
     for (const { key, source } of operations) {
       const contract = V2_MUTATION_CONTRACT[key];
       const honoursKey =
-        /runV2IdempotentMutation|runV2IdempotentAuditedMutation|executeIdempotent|transitionIncidentToStatusIdempotent|idempotency:\s|idempotent:\s*true|idempotency-key/i.test(
+        /runV2IdempotentMutation|runV2IdempotentAuditedMutation|requireStatusPageIdempotency|executeIdempotent|transitionIncidentToStatusIdempotent|idempotency:\s|idempotent:\s*true|idempotency-key/i.test(
           source
         );
       if (contract.idempotency === 'required' || contract.idempotency === 'supported') {

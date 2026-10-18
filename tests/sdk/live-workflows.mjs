@@ -68,6 +68,7 @@ try {
         'status-page-subscribers:read',
         'status-page-subscribers:write',
         'status-pages:read',
+        'status-pages:write',
         'runbook-rules:read',
         'runbook-rules:write',
         'runbook-rules:activate',
@@ -342,6 +343,58 @@ try {
     (await prisma.statusPage.create({
       data: { name: `SDK status ${randomUUID()}`, slug: `sdk-${randomUUID()}` },
     }));
+  for (const [readOperation, writeOperation, changes] of [
+    [
+      'getStatusPageContent',
+      'updateStatusPageContent',
+      { footerText: `SDK footer ${randomUUID()}` },
+    ],
+    [
+      'getStatusPageSettings',
+      'updateStatusPageSettings',
+      { organizationName: `SDK organization ${randomUUID()}` },
+    ],
+    [
+      'getStatusPageAppearance',
+      'updateStatusPageAppearance',
+      { branding: { primaryColor: '#123456' } },
+    ],
+    ['getStatusPagePrivacy', 'updateStatusPagePrivacy', { showIncidentTitles: false }],
+  ]) {
+    const detail = await client.call(readOperation, { params: { id: statusPage.id } });
+    const changed = await client.call(writeOperation, {
+      params: { id: statusPage.id },
+      body: changes,
+      headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${detail.data.revision}"` },
+    });
+    if (changed.data.revision < detail.data.revision || !changed.data.publication.status)
+      throw new Error('Status configuration revision/publication missing.');
+  }
+  const statusConfig = (
+    await client.call('getStatusPageSettings', { params: { id: statusPage.id } })
+  ).data;
+  const selectedServices = await client.call('setStatusPageServices', {
+    params: { id: statusPage.id },
+    body: {
+      serviceIds: [ruleService.id],
+      serviceConfigs: {
+        [ruleService.id]: { displayName: 'SDK component', showOnPage: true, order: 0 },
+      },
+    },
+    headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${statusConfig.revision}"` },
+  });
+  await client.call('updateStatusPageService', {
+    params: { id: statusPage.id, serviceId: ruleService.id },
+    body: { displayName: 'SDK reviewed component' },
+    headers: { 'Idempotency-Key': randomUUID(), 'If-Match': `"${selectedServices.data.revision}"` },
+  });
+  const components = await client.call('listStatusPageServices', {
+    params: { id: statusPage.id },
+    query: { limit: 1 },
+  });
+  if (components.data[0].displayName !== 'SDK reviewed component')
+    throw new Error('Status service presentation did not persist.');
+  console.log('TypeScript live status-page configuration, privacy and service components passed.');
   const tsSubscriber = await prisma.statusPageSubscription.create({
     data: {
       statusPageId: statusPage.id,

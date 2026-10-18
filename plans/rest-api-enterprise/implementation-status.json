@@ -181,7 +181,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 126,
+    "registeredOperationCount": 137,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -227,7 +227,14 @@
   "statusPageSubscribers": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 5,
-    "remaining": "Status-page configuration, domains/branding assets and publication parity; other enterprise families and combined certification.",
+    "remaining": "Domains, validated branding assets, publication retry and combined status-page certification; other enterprise families.",
     "evidence": "plans/rest-api-enterprise/status-page-subscriber-certification.json"
+  },
+  "statusPageConfiguration": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 11,
+    "remaining": "Domains/validated branding assets, publication retry and combined certification.",
+    "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
+    "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   }
 }
