@@ -1,3 +1,4 @@
+import { isSensitiveObservation, protectObservationValues } from './observation-privacy';
 import { compareAutomationOutcomes } from './comparison';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import type { EvaluationPosition } from './evaluator/guard';
@@ -246,16 +247,13 @@ export async function prepareAutomation(
         unmapped: n.canonical.state === 'UNMAPPED',
         source: n.source ?? (envelope.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER'),
       }));
-    const observedKeys = new Set(
-      configuredObservations.map(field => `${field.source ?? 'PROVIDER'}:${field.path}`)
-    );
+    const observedKeys = new Set(configuredObservations.map(field => `${field.source ?? 'PROVIDER'}:${field.path}`));
     const discoveredProviderObservations = discoverFields(envelope.providerPayload)
       .map(field => ({ ...field, source: 'PROVIDER' as const }))
       .filter(field => !observedKeys.has(`PROVIDER:${field.path}`));
-    runtime.observations = [...configuredObservations, ...discoveredProviderObservations].slice(
-      0,
-      LIMITS.fields
-    );
+    runtime.observations = [...configuredObservations, ...discoveredProviderObservations]
+      .filter(observation => !isSensitiveObservation(observation))
+      .slice(0, LIMITS.fields);
   } catch (error) {
     // Database failures must abort ingestion and use the transaction/replay path,
     // never silently commit a different responder route as an engine fallback.
@@ -625,8 +623,16 @@ export async function persistAutomation(
   runtime.tracePersistenceMs = performance.now() - tracePersistenceStarted;
   if (encodedDetail.diagnosticLevel === 'FULL')
     runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(encodedDetail), 'utf8');
-  // Store bounded scalar discovery candidates, never provider payloads or headers.
-  if (runtime.observations.length || shadow)
+  // Default-off previews are removed before durable enqueueing, not just at response time.
+  if (runtime.observations.length) await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR SHARE`;
+  const observationSettings = runtime.observations.length ? await getAutomationSettings(tx) : null;
+  const protectedObservations = protectObservationValues(
+    envelope.serviceId,
+    runtime.observations,
+    observationSettings?.automationStoreObservationPreviews === true
+  );
+  // Store bounded discovery metadata, never provider payloads or headers.
+  if (protectedObservations.length || shadow)
     await tx.backgroundJob.create({
       select: { id: true },
       data: {
@@ -639,14 +645,7 @@ export async function persistAutomation(
           serviceId: envelope.serviceId,
           integrationId: envelope.integrationId,
           integrationType: envelope.integrationType,
-          observations: runtime.observations.map(o => ({
-            key: o.key,
-            path: o.path,
-            value: o.value,
-            type: o.type,
-            unmapped: o.unmapped,
-            ...(o.source ? { source: o.source } : {}),
-          })),
+          observations: protectedObservations,
           ...(shadow ? { shadow } : {}),
         }),
         maxAttempts: 3,

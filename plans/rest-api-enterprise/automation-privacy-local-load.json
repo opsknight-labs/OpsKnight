@@ -1,0 +1,71 @@
+{
+  "kind": "Local PostgreSQL full transaction ingestion; 8 concurrent clients; not HTTP capacity certification",
+  "generatedAt": "2026-10-18T09:45:48.282Z",
+  "results": [
+    {
+      "profile": "global-off",
+      "events": 96,
+      "concurrency": 8,
+      "elapsedMs": 784.7790829999999,
+      "p50Ms": 42.47541700000011,
+      "p95Ms": 166.6718330000001,
+      "p99Ms": 168.88570800000002
+    },
+    {
+      "profile": "service-disabled",
+      "events": 96,
+      "concurrency": 8,
+      "elapsedMs": 594.229709,
+      "p50Ms": 45.832042,
+      "p95Ms": 51.786749999999984,
+      "p99Ms": 53.239750000000186
+    },
+    {
+      "profile": "shadow-small",
+      "events": 96,
+      "concurrency": 8,
+      "elapsedMs": 724.910292,
+      "p50Ms": 56.12804099999994,
+      "p95Ms": 64.59029200000032,
+      "p99Ms": 65.87437499999987
+    },
+    {
+      "profile": "live-small",
+      "events": 96,
+      "concurrency": 8,
+      "elapsedMs": 727.523083,
+      "p50Ms": 55.193209000000024,
+      "p95Ms": 68.13858299999993,
+      "p99Ms": 68.69362499999988
+    },
+    {
+      "profile": "live-medium",
+      "events": 96,
+      "concurrency": 8,
+      "elapsedMs": 733.3917920000004,
+      "p50Ms": 55.07116599999972,
+      "p95Ms": 70.58158300000014,
+      "p99Ms": 74.26458300000013
+    },
+    {
+      "profile": "live-worst",
+      "events": 96,
+      "concurrency": 8,
+      "elapsedMs": 1085.698875,
+      "p50Ms": 77.97320800000034,
+      "p95Ms": 121.41862500000025,
+      "p99Ms": 124.09562499999993
+    }
+  ],
+  "postgres": [
+    {
+      "numbackends": 9,
+      "xact_commit": "194365",
+      "xact_rollback": "1035",
+      "deadlocks": "10",
+      "temp_bytes": "0"
+    }
+  ],
+  "deadlocksDelta": 0,
+  "scope": "Local automation privacy regression; no production acceptance threshold or HA certification claimed."
+}

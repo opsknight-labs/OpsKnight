@@ -10,21 +10,22 @@ vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 
 const previous = {
   automationEnabled: true,
+  automationStoreObservationPreviews: false,
   automationTraceRetentionDays: 90,
   automationSettingsRevision: 2,
 };
 function transaction() {
   return {
     $executeRaw: vi.fn(),
+    $queryRaw: vi.fn(),
+    automationContextObservation: { updateMany: vi.fn() },
     serviceAutomationConfig: { count: vi.fn().mockResolvedValue(0), updateMany: vi.fn() },
     systemSettings: {
-      upsert: vi
-        .fn()
-        .mockResolvedValue({
-          ...previous,
-          automationEnabled: false,
-          automationSettingsRevision: 3,
-        }),
+      upsert: vi.fn().mockResolvedValue({
+        ...previous,
+        automationEnabled: false,
+        automationSettingsRevision: 3,
+      }),
     },
   };
 }

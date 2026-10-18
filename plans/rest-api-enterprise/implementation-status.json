@@ -153,7 +153,8 @@
       "Shared global automation settings command and explicit-scope GET/PATCH with strong revisions and durable replay",
       "Automation versioning commands support caller-owned transactions and credential-attributed canonical audit",
       "Service automation draft GET/PUT and publication POST with dedicated scopes, team membership checks, strong revisions, canonical audit and generated SDK schemas",
-      "Nine automation configuration, validation, safe simulation, mode, history, editable restoration and redacted diagnostic operations; shared UI commands, fenced configuration revisions and typed SDK contracts"
+      "Nine automation configuration, validation, safe simulation, mode, history, editable restoration and redacted diagnostic operations; shared UI commands, fenced configuration revisions and typed SDK contracts",
+      "Discovery preview storage defaults off with administrator opt-in, pre-enqueue minimization, service-scoped keyed identities, bounded sensitive-field filtering, transactional opt-out cleanup and populated legacy upgrade evidence"
     ],
     "remaining": [
       "Latest-commit CI and production qualification for the locally verified automation control plane",

@@ -2618,6 +2618,9 @@
           "automationEnabled": {
             "type": "boolean"
           },
+          "automationStoreObservationPreviews": {
+            "type": "boolean"
+          },
           "automationTraceRetentionDays": {
             "type": "integer",
             "minimum": 1,
@@ -13020,6 +13023,9 @@
                 "additionalProperties": false,
                 "properties": {
                   "automationEnabled": {
+                    "type": "boolean"
+                  },
+                  "automationStoreObservationPreviews": {
                     "type": "boolean"
                   },
                   "automationTraceRetentionDays": {

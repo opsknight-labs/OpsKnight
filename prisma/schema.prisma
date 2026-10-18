@@ -2559,6 +2559,7 @@ model SystemSettings {
   automationSettingsRevision           Int      @default(0)
   runbookArtifactRetentionDays Int?
   automationEnabled                    Boolean  @default(false)
+  automationStoreObservationPreviews Boolean @default(false)
   automationTraceRetentionDays         Int      @default(90)
   automationSettingsRevision           Int      @default(0)
   id                                   String   @id @default("default")

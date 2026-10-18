@@ -12,6 +12,10 @@ const observationSchema = z
     key: z.string().max(64),
     path: z.string().max(512),
     value: z.string().max(256),
+    valueHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     type: z.string().max(16),
     unmapped: z.boolean(),
     source: z.enum(['PROVIDER', 'EVENT']).optional(),

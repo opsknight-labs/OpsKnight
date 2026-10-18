@@ -35,7 +35,7 @@ export type AutomationVersionDetail = { "id": string; "serviceId": string; "vers
 export type AutomationPublishedVersion = { "id": string; "serviceId": string; "versionNumber": number; "checksum": string };
 export type AutomationCandidateVersion = { "id": string; "serviceId": string; "versionNumber": number; "publishedAt": string; "publishedBy": string; "checksum": string; "sourceVersionId"?: string | null; "lintReport"?: Array<{ "level": string; "message": string }>; "snapshot": AutomationSnapshot; "evidenceFreshness": { "latestEvidenceBucketDate": string | null; "pendingObservations": number; "pendingObservationsTruncated": boolean; "oldestSampledPendingAgeMs": number | null }; "shadowAggregates": { "evaluated": number; "same": number; "routeDifferent": number; "priorityDifferent": number; "noEscalationDifferent": number; "errors": number; "fallbacks": number } };
 export type AutomationConfig = { "serviceId": string; "activeVersionId"?: string | null; "candidateVersionId"?: string | null };
-export type AutomationSettings = { "automationEnabled": boolean; "automationTraceRetentionDays": number; "automationSettingsRevision": number };
+export type AutomationSettings = { "automationEnabled": boolean; "automationStoreObservationPreviews"?: boolean; "automationTraceRetentionDays": number; "automationSettingsRevision": number };
 export type IncidentWatcher = { "id": string; "incidentId": string; "userId": string; "role": string; "createdAt": string };
 export type IncidentWatcherRemoved = { "id": string; "incidentId": string; "removed": true };
 export type RunbookCancellationRequested = { "executionId": string; "status": "CANCEL_REQUESTED"; "message": string };
@@ -74,7 +74,7 @@ export interface OperationRequests {
   discardAutomationCandidate: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedCandidateVersionId": string } };
   activateAutomationCandidate: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedCandidateVersionId": string; "expectedActiveVersionId"?: string | null; "acknowledgeNoShadow"?: boolean; "acknowledgeShadowErrors"?: boolean; "acknowledgeMaterialDifferences"?: boolean } };
   getAutomationSettings: Record<string, never>;
-  updateAutomationSettings: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "automationEnabled": boolean; "automationTraceRetentionDays": number } };
+  updateAutomationSettings: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "automationEnabled": boolean; "automationStoreObservationPreviews"?: boolean; "automationTraceRetentionDays": number } };
   listIncidentWatchers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   setIncidentWatcher: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "userId": string; "role"?: "FOLLOWER" | "STAKEHOLDER" | "EXEC" } };
   removeIncidentWatcher: { "params": { "id": string; "watcherId": string }; "headers": { "Idempotency-Key": string } };

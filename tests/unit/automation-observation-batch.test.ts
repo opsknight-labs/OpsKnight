@@ -55,6 +55,9 @@ describe('persistObservationBatch', () => {
     const { receiptExists = false, pendingRows = [], existingReceipts = [] } = options ?? {};
 
     return {
+      systemSettings: {
+        findUnique: vi.fn().mockResolvedValue({ automationStoreObservationPreviews: false }),
+      },
       $executeRaw: vi.fn().mockResolvedValue(0),
       $queryRaw: vi.fn().mockResolvedValue(pendingRows),
       backgroundJob: {

@@ -1331,3 +1331,67 @@ test('API-only automation authoring, diagnostics and historical restoration use 
     await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
   }
 });
+
+test('administrator explicitly opts into discovery previews and disables storage through the UI', async ({
+  page,
+}, testInfo) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  await page.goto('/settings/system');
+  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  const settings = page.getByRole('region', { name: 'Global automation settings' });
+  const previews = settings.getByRole('checkbox', {
+    name: 'Store diagnostic field-value previews',
+  });
+  await expect(previews).not.toBeChecked();
+  try {
+    await previews.check();
+    await settings.getByRole('button', { name: 'Save automation settings', exact: true }).click();
+    await expect(settings.getByRole('status')).toHaveText('Automation settings saved.');
+    expect(
+      (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+        .automationStoreObservationPreviews
+    ).toBe(true);
+    const sample = await db.automationContextObservation.create({
+      data: {
+        serviceId,
+        integrationId: 'privacy-ui-fixture',
+        integrationType: 'EVENTS_API',
+        fieldKey: 'environment',
+        sourcePath: 'payload.environment',
+        fieldType: 'STRING',
+        normalizedRawValueHash: randomUUID(),
+        rawValuePreview: 'opt-in-ui-fixture',
+      },
+    });
+    await previews.uncheck();
+    await settings.getByRole('button', { name: 'Save automation settings', exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+            .automationStoreObservationPreviews
+      )
+      .toBe(false);
+    expect(
+      (await db.automationContextObservation.findUniqueOrThrow({ where: { id: sample.id } }))
+        .rawValuePreview
+    ).toBe('');
+    await testInfo.attach('discovery-preview-opt-out', {
+      body: JSON.stringify({
+        project: testInfo.project.name,
+        optInPersisted: true,
+        previewClearedOnOptOut: true,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
+    // Test cleanup leaves subsequent profiles on the product's privacy-preserving default.
+    await db.systemSettings.update({
+      where: { id: 'default' },
+      data: { automationStoreObservationPreviews: false },
+    });
+  }
+});

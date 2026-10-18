@@ -1,3 +1,4 @@
+import { observationValueHash } from '@/lib/automation/observation-privacy';
 /* eslint-disable security/detect-object-injection -- Field names are a fixed typed test list. */
 import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import {
@@ -1691,7 +1692,10 @@ describe('service automation transaction certification', () => {
     expect(
       (
         await db.automationContextObservation.findFirstOrThrow({
-          where: { rawValuePreview: 'unknown-0' },
+          where: {
+            serviceId: service.id,
+            normalizedRawValueHash: observationValueHash(service.id, 'unknown-0')!,
+          },
         })
       ).count
     ).toBe(2);

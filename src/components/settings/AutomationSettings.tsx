@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 
 type Settings = {
   automationEnabled: boolean;
+  automationStoreObservationPreviews?: boolean;
   automationTraceRetentionDays: number;
   automationSettingsRevision: number;
 };

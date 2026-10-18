@@ -60,6 +60,15 @@
         "TypeScript",
         "Python"
       ]
+    },
+    "automationPrivacy": {
+      "manifest": "automation-privacy-certification.json",
+      "status": "local_checks_passed_latest_ci_pending",
+      "postgresPassed": 131,
+      "postgresSkipped": 1,
+      "browserMatrixPassed": 36,
+      "settingsBrowserPassed": 4,
+      "unitPassed": 1239
     }
   },
   "limitations": [

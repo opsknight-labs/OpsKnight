@@ -414,13 +414,17 @@ export async function getAutomationArea(
     const observedValues = await prisma.automationContextObservation.findMany({
       where: { serviceId },
       take: 5000,
-      select: { fieldKey: true, rawValuePreview: true },
+      select: { fieldKey: true, rawValuePreview: true, unmapped: true },
     });
     for (const observation of observedValues) {
       const field = fields.find(candidate => candidate.key === observation.fieldKey);
       if (!field) continue;
       try {
-        if (normalizeValue(observation.rawValuePreview, field).state === 'UNMAPPED')
+        if (
+          observation.rawValuePreview
+            ? normalizeValue(observation.rawValuePreview, field).state === 'UNMAPPED'
+            : observation.unmapped
+        )
           unmappedCount++;
       } catch {
         unmappedCount++;

@@ -1,3 +1,4 @@
+import { clearObservationJobPreviews } from './observation-payload-privacy';
 import 'server-only';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
@@ -10,6 +11,7 @@ export const automationSettingsSchema = z
   .object({
     automationEnabled: z.boolean(),
     automationTraceRetentionDays: z.number().int().min(1).max(3650),
+    automationStoreObservationPreviews: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();
@@ -27,6 +29,7 @@ export async function updateAutomationSettings(
   const parsed = automationSettingsSchema.parse(input);
   const run = async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('automation-system-settings', 0))`;
+    await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR UPDATE`;
     const previous = await getAutomationSettings(tx);
     if (previous.automationSettingsRevision !== parsed.expectedRevision)
       throw new AppError({ code: 'PRECONDITION_FAILED' });
@@ -45,21 +48,35 @@ export async function updateAutomationSettings(
         where: { mode: { not: 'DISABLED' } },
         data: { mode: 'DISABLED', updatedBy: context.actorId },
       });
+    const storePreviews =
+      parsed.automationStoreObservationPreviews ??
+      previous.automationStoreObservationPreviews ??
+      false;
+    if (!storePreviews) {
+      await tx.automationContextObservation.updateMany({
+        where: { rawValuePreview: { not: '' } },
+        data: { rawValuePreview: '' },
+      });
+      await clearObservationJobPreviews(tx);
+    }
     const next = await tx.systemSettings.upsert({
       where: { id: 'default' },
       create: {
         automationEnabled: parsed.automationEnabled,
         automationTraceRetentionDays: parsed.automationTraceRetentionDays,
+        automationStoreObservationPreviews: storePreviews,
         automationSettingsRevision: 1,
       },
       update: {
         automationEnabled: parsed.automationEnabled,
         automationTraceRetentionDays: parsed.automationTraceRetentionDays,
+        automationStoreObservationPreviews: storePreviews,
         automationSettingsRevision: { increment: 1 },
       },
       select: {
         automationEnabled: true,
         automationTraceRetentionDays: true,
+        automationStoreObservationPreviews: true,
         automationSettingsRevision: true,
       },
     });
