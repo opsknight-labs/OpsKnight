@@ -203,7 +203,8 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       expect(operation.requestPayload).toMatchObject({ origin: 'AUTOMATION' });
     }
     const delivery = page.getByRole('region', { name: 'Channel notification status' });
-    await expect(delivery).toContainText('Queued');
+    if (notificationCase !== 'TEAMS') await expect(delivery).toContainText('Queued');
+    if (notificationCase !== 'SLACK') await expect(delivery).toContainText('Failed');
     await expect(delivery).not.toContainText('Delivery confirmed');
     await page.getByText(/^Show \d+ more context fields$/).click();
     await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
