@@ -99,8 +99,19 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Combined branch certification pending; settings, draft GET/PUT and publish POST are implemented",
-        "Effective configuration, validation, simulation, modes, restore, history and diagnostics REST operations remain unfinished"
+        "Local worker-backed four-device journey passed; latest CI and broader fault/authorization acceptance cases pending",
+        "Effective configuration, validation, simulation, modes, immutable history, draft restore, decisions and discovery REST operations remain unfinished",
+        "Production latency acceptance, load/HA and rolling-version coexistence not certified"
+      ],
+      "implementedOperations": [
+        "publishAutomationVersion",
+        "getAutomationDraft",
+        "saveAutomationDraft",
+        "getAutomationCandidate",
+        "discardAutomationCandidate",
+        "activateAutomationCandidate",
+        "getAutomationSettings",
+        "updateAutomationSettings"
       ]
     },
     {

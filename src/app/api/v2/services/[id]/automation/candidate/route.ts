@@ -1,3 +1,4 @@
+import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { z } from 'zod';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -93,6 +94,12 @@ export const GET = defineV2Route({
         lintReport: candidate.lintReport,
         snapshot: candidate.snapshot,
         shadowAggregates: aggregates,
+        evidenceFreshness: await candidateEvidenceFreshness(
+          prisma,
+          params.id,
+          candidate.id,
+          shadowEvidence[0]?.bucketDate ?? null
+        ),
       },
       headers: { 'Cache-Control': 'no-store' },
     };

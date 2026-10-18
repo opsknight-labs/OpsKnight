@@ -107,3 +107,34 @@ HTTP event ingestion, pinned decision/incident verification, LIVE publication
 denial and credential revocation. This is functional cross-replica evidence,
 not a sustained load or failover certificate. Focused component, capability,
 workflow-inventory, OpenAPI, mutation-contract and SDK suites passed.
+
+## Worker-backed review of 6ebbeb75
+
+The failing browser job expected shadow evidence from web-only processes. The
+production topology now includes two web replicas and a real general worker.
+The browser waits for its incident-specific observation job to complete. A
+fixture-owned trigger rejects the desktop observation's first aggregate write;
+the test verifies queued backoff and absent evidence, then completion on attempt
+two with one aggregate. Evidence is never inserted by the browser fixture.
+
+Following the real chain exposed two UI defects: activation loaded an overview
+representation without snapshots, and discard sent a precondition rejected by
+its strict schema. Review now loads full snapshots, and discard sends only its
+candidate precondition. Both have regression tests.
+
+Activation requires an explicit material-difference approval and records current
+seven-day counters and acknowledgments transactionally. Errors and fallbacks are
+shown separately. Candidate REST/UI views expose daily evidence freshness and a
+bounded pending observation sample. Activation/discard application logs are
+staged events; the database audit remains authoritative.
+
+All 32 production browser cases passed against two web replicas and a general
+worker with no skips or flaky cases. The PostgreSQL checks passed 64 tests with
+one opt-in skip; Python SDK checks passed nine tests. Local worst-count candidate
+latency measurements and their limitations are committed separately. The source
+input digests and observation job timing/attempt evidence are in
+`candidate-worker-certification.json`. The trackers now report eight automation
+operations and 92 total operations, with a drift check against the registry.
+
+This does not close all M0 acceptance scenarios, M1–M5 endpoint work, production
+latency approval or load/HA certification. The current source needs a new CI run.

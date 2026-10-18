@@ -79,6 +79,20 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       sourceVersionId: { type: ['string', 'null'] },
       lintReport: array(object({ level: string(), message: string() }, ['level', 'message']), 100),
       snapshot: { $ref: '#/components/schemas/AutomationSnapshot' },
+      evidenceFreshness: object(
+        {
+          latestEvidenceBucketDate: { type: ['string', 'null'], format: 'date-time' },
+          pendingObservations: { type: 'integer', minimum: 0, maximum: 100 },
+          pendingObservationsTruncated: { type: 'boolean' },
+          oldestSampledPendingAgeMs: { type: ['number', 'null'], minimum: 0 },
+        },
+        [
+          'latestEvidenceBucketDate',
+          'pendingObservations',
+          'pendingObservationsTruncated',
+          'oldestSampledPendingAgeMs',
+        ]
+      ),
       shadowAggregates: object(
         {
           evaluated: integer,
@@ -109,6 +123,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       'checksum',
       'snapshot',
       'shadowAggregates',
+      'evidenceFreshness',
     ]
   ),
   AutomationConfig: object(
@@ -370,6 +385,7 @@ const operations: Operation[] = [
         expectedActiveVersionId: { type: ['string', 'null'] },
         acknowledgeNoShadow: { type: 'boolean' },
         acknowledgeShadowErrors: { type: 'boolean' },
+        acknowledgeMaterialDifferences: { type: 'boolean' },
       },
       ['expectedCandidateVersionId']
     ),

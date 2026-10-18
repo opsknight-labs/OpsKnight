@@ -159,6 +159,17 @@
       "Remaining runbook, integration, schedule, identity, notification, status and reporting endpoint families",
       "Full integration regression verification and combined-system Docker/Kind, load, HA and upgrade certification"
     ],
-    "deliveryPolicy": "One PR (#886) for the entire approved plan, as explicitly requested by the user."
+    "deliveryPolicy": "One PR (#886) for the entire approved plan, as explicitly requested by the user.",
+    "implementedAutomationOperations": [
+      "publishAutomationVersion",
+      "getAutomationDraft",
+      "saveAutomationDraft",
+      "getAutomationCandidate",
+      "discardAutomationCandidate",
+      "activateAutomationCandidate",
+      "getAutomationSettings",
+      "updateAutomationSettings"
+    ],
+    "registeredOperationCount": 92
   }
 }

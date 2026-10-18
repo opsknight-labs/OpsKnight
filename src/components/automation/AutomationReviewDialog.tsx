@@ -99,11 +99,22 @@ export function AutomationReviewDialog({
   destinations?: Array<{ id: string; channelName?: string | null; provider: string }>;
   version: number | null;
   enabled: boolean;
-  counts?: { evaluated: number; routes: number; priorities: number; skips: number; errors: number };
+  counts?: {
+    evaluated: number;
+    routes: number;
+    priorities: number;
+    skips: number;
+    errors: number;
+    fallbacks?: number;
+  };
   busy: boolean;
   error?: string;
   onCancel: () => void;
-  onConfirm: (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean) => void;
+  onConfirm: (
+    acknowledgeNoShadow: boolean,
+    acknowledgeShadowErrors: boolean,
+    acknowledgeMaterialDifferences: boolean
+  ) => void;
 }) {
   const blockedId = useId();
   const [acknowledge, setAcknowledge] = useState(false);
@@ -268,7 +279,8 @@ export function AutomationReviewDialog({
                 Shadow readiness · last 7 days
               </h3>
               <p>
-                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors/fallbacks
+                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors ·{' '}
+                {counts?.fallbacks ?? 0} fallbacks
               </p>
               <p>
                 {counts?.routes ?? 0} routing differences · {counts?.priorities ?? 0} priority
