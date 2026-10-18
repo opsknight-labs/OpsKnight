@@ -23,8 +23,6 @@ No delivery date is committed. Items will be scoped and scheduled before they be
 - [ ] Runbook improvements — draft authoring and publication workflows, version comparison, archive/restore, duplication, dependency-safe deletion, and service-bound rule administration
 - [ ] Streamlined OIDC setup — guided provider configuration, claim-to-role mapping preview, and diagnostic test-login flow
 - [ ] Emergency access — break-glass admin recovery path, bootstrap-code regeneration, and session-override controls for lockout scenarios
-- [ ] In-product webhook payload simulation and delivery verification
-- [ ] Additional status-page isolation and custom-domain options
 
 ## OpsKnight 2.2 — planned milestone
 
