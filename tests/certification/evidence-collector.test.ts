@@ -107,7 +107,7 @@ describe('Evidence Collector Schema & Persistence', () => {
       'HA-011',
       'HA-012',
     ];
-    const expectedCandidateCommit = 'e1ef56ea18f08b2d17d5f26996f95359d05e0005';
+    const expectedCandidateCommit = 'd1a2b3814339e6e90f3f51f640f48273172562ab';
 
     it('strictly loads and validates all 20 certified evidence records without skipping or warnings', () => {
       const records = loadAllTestEvidence(undefined, true);
@@ -131,7 +131,10 @@ describe('Evidence Collector Schema & Persistence', () => {
         expect(validation.errors).toHaveLength(0);
         expect(record.candidate_commit).toBe(expectedCandidateCommit);
 
-        if (record.test_id.startsWith('AUTO-') || record.test_id === 'HA-001') {
+        if (record.test_id === 'AUTO-005') {
+          expect(record.result).toBe('FAILED_PRECHECK_DIAGNOSTIC');
+          expect(record.execution_id).toBe('cmvdpp7jv2ue94qmq9sxnqlrc');
+        } else if (record.test_id.startsWith('AUTO-') || record.test_id === 'HA-001') {
           expect(record.result).toBe('PASS');
           expect(record.execution_id).not.toBe('UNEXECUTED');
         } else {
@@ -180,7 +183,7 @@ describe('Evidence Collector Schema & Persistence', () => {
       const uniqueExecutionIds = new Set(executionIds);
 
       expect(uniqueExecutionIds.size).toBe(passRecords.length);
-      expect(passRecords.length).toBe(9); // AUTO-001..AUTO-008 + HA-001
+      expect(passRecords.length).toBe(8); // AUTO-001..AUTO-004, AUTO-006..AUTO-008 + HA-001
     });
   });
 });

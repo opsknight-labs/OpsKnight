@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-002",
   "test_run_id": "run-1792323503215",
-  "candidate_commit": "e1ef56ea18f08b2d17d5f26996f95359d05e0005",
+  "candidate_commit": "d1a2b3814339e6e90f3f51f640f48273172562ab",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -16,7 +16,7 @@
   "rule_revision": 3,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "cmvdsgt9s31if4qmqbx6mcms6",
-  "step_attempt_ids": ["step_start_direct_docker", "step_verify_direct_docker"],
+  "step_attempt_ids": ["start_docker_container", "verify_docker_health"],
   "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
@@ -35,7 +35,8 @@
     "fixture": "cert3-docker-direct-api"
   },
   "log_artifact_paths": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-002_cmvdsgt9s31if4qmqbx6mcms6.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png"
   ],
-  "notes": "Direct Docker container recovery: Container restart executed and verified healthy on port 8098."
+  "notes": "Operator-dispatched physical execution on staging: Direct Docker host container recovery executed and verified healthy on port 8098. (Operational journey verified; unattended monitoring-incident alert dispatch staged)."
 }

@@ -3,11 +3,11 @@
 ## 1. Governance & Version Provenance Baseline
 
 - **Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit SHA**: `e1ef56ea18f08b2d17d5f26996f95359d05e0005`
+- **Candidate Commit SHA**: `d1a2b3814339e6e90f3f51f640f48273172562ab`
 - **Base PR**: PR #892 (`8496cebd3` - Consolidated security hardening & baseline)
-- **Certification Program**: `10/10 Enterprise E2E Certification Program`
+- **Certification Program**: `Enterprise Physical Runtime Certification Program`
 - **Measured Date**: `2026-10-18`
-- **Certification Status**: **QUALIFIED ENTERPRISE PRODUCTION CANDIDATE**
+- **Certification Status**: **QUALIFIED RUNTIME IMPLEMENTATION; UNATTENDED MONITORING DISPATCH AND MULTI-NODE CHAOS STAGED**
 
 ---
 
@@ -60,7 +60,8 @@ All test scenarios in this certification program generate structured records in 
 
 - Mandatory schema: 25 required metadata fields.
 - 100% of candidate test records strictly pass validation.
-- Genuine execution receipts recorded for all 8 automated recovery paths (`AUTO-001` through `AUTO-008`) and live shared-target failover (`HA-001`).
+- Genuine execution receipts recorded for operational journeys (`AUTO-001` through `AUTO-008`) and live shared-target failover (`HA-001`).
+- Truthful attribution: staging executions reflect operator-dispatched runs (`USER` / `Responder · OpsKnight Admin`); zero-touch monitoring alert dispatch remains staged for general availability.
+- Historical run `AUTO-005` truthfully classified as `FAILED_PRECHECK_DIAGNOSTIC` due to pre-patch exit code 3 handling; remediated by the explicit active/inactive state assertion patch.
 - Scenarios `HA-002` through `HA-012` truthfully qualified as `NOT_TESTED` (staged for distributed chaos suite) without artificial execution ID recycling.
-- Zero manual database overrides permitted for automated recovery evidence.
 - Physical container states, exit codes, and independent HTTP health probes verified post-remediation.

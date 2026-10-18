@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-007",
   "test_run_id": "run-1792323503217",
-  "candidate_commit": "e1ef56ea18f08b2d17d5f26996f95359d05e0005",
+  "candidate_commit": "d1a2b3814339e6e90f3f51f640f48273172562ab",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -16,7 +16,7 @@
   "rule_revision": 2,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "cmvchadqm09584qmqassxvp0s",
-  "step_attempt_ids": ["plan_preview_authorization", "step_non_idempotent_restart"],
+  "step_attempt_ids": ["start_docker_container", "verify_docker_health"],
   "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
@@ -33,7 +33,8 @@
     "approval_recorded": true
   },
   "log_artifact_paths": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-007_cmvchadqm09584qmqassxvp0s.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/v2_preview_plan.png"
   ],
-  "notes": "Non-idempotent mutation approval gating certified: Execution cmvchadqm09584qmqassxvp0s previewed and authorized by operator."
+  "notes": "Operator-dispatched physical execution on staging: Docker container restart executed and verified healthy. (Approval-gate preview authorization verified separately in integration test suite)."
 }

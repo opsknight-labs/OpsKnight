@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   containerHealthPassed,
   executeAttempt,
+  hasContradictorySystemdConfig,
   isContainerStarting,
   isSystemdActiveRequired,
   resolveCommandResult,
@@ -685,5 +686,62 @@ describe('runbook Agent executor', () => {
     expect(result.status).toBe('UNKNOWN');
     expect(result.exitCode).toBe(5);
     expect(result.errorCode).toBe('COMMAND_FAILED');
+  });
+
+  it('detects contradictory Systemd configurations', () => {
+    expect(hasContradictorySystemdConfig({ expectedState: 'inactive', requireActive: true })).toBe(
+      true
+    );
+    expect(
+      hasContradictorySystemdConfig({ expectedState: 'inactive', expectedStatus: 'active' })
+    ).toBe(true);
+    expect(hasContradictorySystemdConfig({ expectedState: 'active', requireActive: false })).toBe(
+      true
+    );
+    expect(
+      hasContradictorySystemdConfig({ expectedState: 'active', expectedStatus: 'inactive' })
+    ).toBe(true);
+    expect(hasContradictorySystemdConfig({ expectedState: 'active', requireActive: true })).toBe(
+      false
+    );
+    expect(hasContradictorySystemdConfig({ expectedState: 'inactive', requireActive: false })).toBe(
+      false
+    );
+    expect(hasContradictorySystemdConfig({ expectedState: 'any' })).toBe(false);
+  });
+
+  it('rejects contradictory Systemd configurations in resolveCommandResult', () => {
+    const contradictoryAttempt: ClaimedAttempt = {
+      attemptId: 'att-systemd-contradictory',
+      leaseToken: 'tok-sys-contra',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-contra',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'check_status',
+        name: 'Check status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: {
+          action: 'status',
+          unit: 'cert-sample.service',
+          expectedState: 'inactive',
+          requireActive: true,
+        },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const res = resolveCommandResult(contradictoryAttempt, 0, 'Active: active', false);
+    expect(res.status).toBe('FAILED');
+    expect(res.errorCode).toBe('INVALID_CONFIG');
+    expect(res.errorMessage).toContain('Contradictory Systemd configuration');
+
+    expect(() => isSystemdActiveRequired(contradictoryAttempt.step)).toThrow(
+      /INVALID_STEP_CONFIG.*Contradictory Systemd configuration/
+    );
   });
 });

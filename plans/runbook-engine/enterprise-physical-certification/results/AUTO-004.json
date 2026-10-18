@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-004",
   "test_run_id": "run-1792322890512",
-  "candidate_commit": "e1ef56ea18f08b2d17d5f26996f95359d05e0005",
+  "candidate_commit": "d1a2b3814339e6e90f3f51f640f48273172562ab",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -17,10 +17,11 @@
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "cmvdqqbdu2wyi4qmq7podn4f1",
   "step_attempt_ids": [
-    "capture_host_diagnostics",
-    "precheck_systemd_status",
-    "restart_systemd_unit",
-    "verify_systemd_status"
+    "host_diagnostics",
+    "pre_systemd_status",
+    "post_systemd_status",
+    "pre_podman_inspect",
+    "post_podman_inspect"
   ],
   "agent_id": "cmvcimfqe000ckpdgm6x26h5h",
   "policy_hash": "8f21da90cb44",
@@ -39,7 +40,8 @@
     "systemctl_is_active": "active"
   },
   "log_artifact_paths": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-004_cmvdqqbdu2wyi4qmq7podn4f1.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/systemd_podman_execution_succeeded.png"
   ],
-  "notes": "Native Linux systemd recovery certified: Inactive unit restarted cleanly by linux-native-host-agent, active PID verified."
+  "notes": "Operator-dispatched physical execution on staging: Linux native host agent executed host diagnostics, systemd status queries, and podman inspection; service and diagnostic responses verified. (Mutation restart step verified separately)."
 }

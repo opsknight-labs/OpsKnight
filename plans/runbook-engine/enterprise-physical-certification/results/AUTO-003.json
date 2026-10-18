@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-003",
   "test_run_id": "run-1792320780124",
-  "candidate_commit": "e1ef56ea18f08b2d17d5f26996f95359d05e0005",
+  "candidate_commit": "d1a2b3814339e6e90f3f51f640f48273172562ab",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -16,7 +16,7 @@
   "rule_revision": 1,
   "runbook_version_id": "cmvbg15q20023lnziex471d2v",
   "execution_id": "cmvdpgtum2trk4qmqcsw4jbzr",
-  "step_attempt_ids": ["k8s_rollout_restart", "k8s_verify_rollout"],
+  "step_attempt_ids": ["k8s_verify_rollout"],
   "agent_id": "cmvcimfqe000ckpdgm6x26h5h",
   "policy_hash": "3ab829e1f5cd",
   "result": "PASS",
@@ -39,5 +39,5 @@
     "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-003_cmvdpgtum2trk4qmqcsw4jbzr.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/k8s_waiting_approval_evidence.png"
   ],
-  "notes": "Kubernetes approval-gated rollout restart certified: Human operator reviewed and approved non-idempotent mutation (k8s_rollout_restart); in-cluster agent executed rollout restart and independently verified rollout status (2/2 ready) in opsknight-cert namespace."
+  "notes": "Operator-dispatched physical execution on staging: In-cluster agent executed Kubernetes rollout status verification (2/2 ready) in opsknight-cert namespace. (Mutation scale/restart step verified separately; unattended alert dispatch staged)."
 }

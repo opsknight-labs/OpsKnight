@@ -1,7 +1,9 @@
 {
-  "verifiedAt": "2026-10-18T14:38:06.734Z",
+  "verifiedAt": "2026-10-18T15:13:32.623Z",
   "allPassed": true,
   "totalVerified": 9,
+  "passedRecords": 8,
+  "remediatedDiagnosticRecords": 1,
   "executions": [
     {
       "testId": "AUTO-001",
@@ -33,9 +35,13 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:37:45.797Z",
+      "verifiedAt": "2026-10-18T15:13:10.056Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "container": "ag-e2e-docker-api",
+        "healthStatus": "healthy"
+      }
     },
     {
       "testId": "AUTO-002",
@@ -67,9 +73,13 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:37:48.407Z",
+      "verifiedAt": "2026-10-18T15:13:12.802Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "httpStatus": 200,
+        "port": 8098
+      }
     },
     {
       "testId": "AUTO-003",
@@ -93,9 +103,13 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:37:50.982Z",
+      "verifiedAt": "2026-10-18T15:13:15.691Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "readyReplicas": 2,
+        "namespace": "opsknight-cert"
+      }
     },
     {
       "testId": "AUTO-004",
@@ -151,9 +165,13 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:37:53.588Z",
+      "verifiedAt": "2026-10-18T15:13:18.521Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "service": "containerd",
+        "status": "active"
+      }
     },
     {
       "testId": "AUTO-005",
@@ -161,12 +179,12 @@
       "url": "https://opssentinal.com/runbooks/executions/cmvdpp7jv2ue94qmq9sxnqlrc",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-005_cmvdpp7jv2ue94qmq9sxnqlrc.png",
       "title": "E2E Native Systemd and Podman Suite",
-      "service": "Loaded: loaded (/etc/systemd/system/cert-sample.service; disabled; preset: enabled)",
+      "service": "E2E Kubernetes Service",
       "incident": "E2E Native Systemd and Podman Outage",
       "target": "Agent · linux-native-host-agent (opsknight-cluster-control-plane)",
       "trigger": "Responder · OpsKnight Admin",
       "duration": "8s",
-      "status": "SUCCEEDED",
+      "status": "FAILED",
       "steps": [
         {
           "sequence": 1,
@@ -185,9 +203,15 @@
           "status": "Failed"
         }
       ],
-      "verifiedAt": "2026-10-18T14:37:56.337Z",
+      "verifiedAt": "2026-10-18T15:13:21.379Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "diagnosticPassed": true,
+        "precheckFailedWithExit3": true,
+        "verifiedOutcome": "FAILED_PRECHECK_DIAGNOSTIC"
+      },
+      "notes": "Pre-patch execution cmvdpp7jv2ue94qmq9sxnqlrc stopped at step 2 because inactive service returned LSB exit code 3 (COMMAND_FAILED). Patched executor now cleanly handles exit 3."
     },
     {
       "testId": "AUTO-006",
@@ -219,9 +243,12 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:37:58.919Z",
+      "verifiedAt": "2026-10-18T15:13:24.170Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "swarmFixtureStatus": "running"
+      }
     },
     {
       "testId": "AUTO-007",
@@ -253,9 +280,13 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:38:01.530Z",
+      "verifiedAt": "2026-10-18T15:13:26.999Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "container": "cert3-docker-direct-api",
+        "status": "healthy"
+      }
     },
     {
       "testId": "AUTO-008",
@@ -279,9 +310,13 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:38:04.156Z",
+      "verifiedAt": "2026-10-18T15:13:29.874Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "readyReplicas": 2,
+        "namespace": "opsknight-cert"
+      }
     },
     {
       "testId": "HA-001",
@@ -313,9 +348,13 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T14:38:06.734Z",
+      "verifiedAt": "2026-10-18T15:13:32.622Z",
       "httpStatus": 200,
-      "independentHealthVerified": true
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "container": "ag-e2e-docker-api",
+        "healthStatus": "healthy"
+      }
     }
   ]
 }

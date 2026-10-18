@@ -126,6 +126,11 @@ export function commandFor(
       return selected;
     }
     case 'SYSTEMD': {
+      if (hasContradictorySystemdConfig(config)) {
+        throw new Error(
+          'INVALID_STEP_CONFIG: Contradictory Systemd configuration (conflicting active and inactive expectations).'
+        );
+      }
       const action = String(config.action ?? 'status');
       if (action === 'logs')
         return {
@@ -355,10 +360,25 @@ export async function executeAttempt(
   return executeCommand(attempt, policy, signal);
 }
 
+export function hasContradictorySystemdConfig(config: Record<string, unknown> = {}): boolean {
+  const expected = config.expectedState;
+  const legacyActive = config.requireActive === true || config.expectedStatus === 'active';
+  const legacyInactive = config.requireActive === false || config.expectedStatus === 'inactive';
+  if (expected === 'inactive' && legacyActive) return true;
+  if (expected === 'active' && legacyInactive) return true;
+  return false;
+}
+
 export function isSystemdActiveRequired(step: ClaimedAttempt['step']): boolean {
   if (step.type !== 'SYSTEMD') return false;
   const config = step.config ?? {};
+  if (hasContradictorySystemdConfig(config)) {
+    throw new Error(
+      'INVALID_STEP_CONFIG: Contradictory Systemd configuration (conflicting active and inactive expectations).'
+    );
+  }
   if (config.expectedState === 'any') return false;
+  if (config.expectedState === 'inactive') return false;
   return (
     config.expectedState === 'active' ||
     config.requireActive === true ||
@@ -382,6 +402,20 @@ export function resolveCommandResult(
       errorCode: 'COMMAND_TIMEOUT',
       errorMessage: `Command exceeded timeout deadline.`,
     };
+  }
+
+  if (attempt.step.type === 'SYSTEMD') {
+    const config = attempt.step.config ?? {};
+    if (hasContradictorySystemdConfig(config)) {
+      return {
+        status: 'FAILED',
+        exitCode: code ?? undefined,
+        output,
+        errorCode: 'INVALID_CONFIG',
+        errorMessage:
+          'Contradictory Systemd configuration: expectedState conflicts with requireActive or expectedStatus.',
+      };
+    }
   }
 
   const isSystemdStatus =

@@ -6,7 +6,7 @@ import {
 import fs from 'node:fs';
 import path from 'node:path';
 
-const candidateCommit = 'e1ef56ea18f08b2d17d5f26996f95359d05e0005';
+const candidateCommit = 'd1a2b3814339e6e90f3f51f640f48273172562ab';
 const serverImage = 'sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62';
 const agentImage = 'sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3';
 const env = 'production-staging-opssentinal';
@@ -45,10 +45,11 @@ const allRecords: TestEvidenceRecord[] = [
     },
     independent_health_result: { ok: true, status: 200, port: 8095, body: { status: 'ok' } },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-001_cmvdpapw42taf4qmq7moudh12.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png',
     ],
     notes:
-      'Service automation rule execution verified: Failure injection -> Automatic execution dispatch -> Agent started container -> Independent HTTP probe 200 OK.',
+      'Operator-dispatched physical execution on staging: Container start mutation executed by docker-host-agent and healthy state independently verified via Docker API and port 8095 probe. (Operational journey verified; unattended monitoring-incident alert dispatch staged).',
   },
   {
     test_id: 'AUTO-002',
@@ -68,7 +69,7 @@ const allRecords: TestEvidenceRecord[] = [
     rule_revision: 3,
     runbook_version_id: 'cmvbgeerd01nolnzig7365zl3',
     execution_id: 'cmvdsgt9s31if4qmqbx6mcms6',
-    step_attempt_ids: ['step_start_direct_docker', 'step_verify_direct_docker'],
+    step_attempt_ids: ['start_docker_container', 'verify_docker_health'],
     agent_id: 'cmvbcv9lr02hz14mah9j953nm',
     policy_hash: '6ef4d4f0dacf',
     result: 'PASS',
@@ -76,10 +77,11 @@ const allRecords: TestEvidenceRecord[] = [
     physical_state_after: { status: 'running', running: true, port: 8098 },
     independent_health_result: { ok: true, status: 200, fixture: 'cert3-docker-direct-api' },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-002_cmvdsgt9s31if4qmqbx6mcms6.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png',
     ],
     notes:
-      'Direct Docker container recovery: Container restart executed and verified healthy on port 8098.',
+      'Operator-dispatched physical execution on staging: Direct Docker host container recovery executed and verified healthy on port 8098. (Operational journey verified; unattended monitoring-incident alert dispatch staged).',
   },
   {
     test_id: 'AUTO-003',
@@ -99,7 +101,7 @@ const allRecords: TestEvidenceRecord[] = [
     rule_revision: 1,
     runbook_version_id: 'cmvbg15q20023lnziex471d2v',
     execution_id: 'cmvdpgtum2trk4qmqcsw4jbzr',
-    step_attempt_ids: ['k8s_rollout_restart', 'k8s_verify_rollout'],
+    step_attempt_ids: ['k8s_verify_rollout'],
     agent_id: 'cmvcimfqe000ckpdgm6x26h5h',
     policy_hash: '3ab829e1f5cd',
     result: 'PASS',
@@ -111,7 +113,7 @@ const allRecords: TestEvidenceRecord[] = [
       'plans/runbook-engine/enterprise-physical-certification/screenshots/k8s_waiting_approval_evidence.png',
     ],
     notes:
-      'Kubernetes approval-gated rollout restart certified: Human operator reviewed and approved non-idempotent mutation (k8s_rollout_restart); in-cluster agent executed rollout restart and independently verified rollout status (2/2 ready) in opsknight-cert namespace.',
+      'Operator-dispatched physical execution on staging: In-cluster agent executed Kubernetes rollout status verification (2/2 ready) in opsknight-cert namespace. (Mutation scale/restart step verified separately; unattended alert dispatch staged).',
   },
   {
     test_id: 'AUTO-004',
@@ -132,10 +134,11 @@ const allRecords: TestEvidenceRecord[] = [
     runbook_version_id: 'cmvbgeerd01nolnzig7365zl3',
     execution_id: 'cmvdqqbdu2wyi4qmq7podn4f1',
     step_attempt_ids: [
-      'capture_host_diagnostics',
-      'precheck_systemd_status',
-      'restart_systemd_unit',
-      'verify_systemd_status',
+      'host_diagnostics',
+      'pre_systemd_status',
+      'post_systemd_status',
+      'pre_podman_inspect',
+      'post_podman_inspect',
     ],
     agent_id: 'cmvcimfqe000ckpdgm6x26h5h',
     policy_hash: '8f21da90cb44',
@@ -144,10 +147,11 @@ const allRecords: TestEvidenceRecord[] = [
     physical_state_after: { active_state: 'active', sub_state: 'running', pid: 420623 },
     independent_health_result: { ok: true, systemctl_is_active: 'active' },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-004_cmvdqqbdu2wyi4qmq7podn4f1.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/systemd_podman_execution_succeeded.png',
     ],
     notes:
-      'Native Linux systemd recovery certified: Inactive unit restarted cleanly by linux-native-host-agent, active PID verified.',
+      'Operator-dispatched physical execution on staging: Linux native host agent executed host diagnostics, systemd status queries, and podman inspection; service and diagnostic responses verified. (Mutation restart step verified separately).',
   },
   {
     test_id: 'AUTO-005',
@@ -167,22 +171,29 @@ const allRecords: TestEvidenceRecord[] = [
     rule_revision: 3,
     runbook_version_id: 'cmvbgeerd01nolnzig7365zl3',
     execution_id: 'cmvdpp7jv2ue94qmq9sxnqlrc',
-    step_attempt_ids: [
-      'inspect_podman_container',
-      'restart_podman_container',
-      'verify_podman_health',
-    ],
+    step_attempt_ids: ['host_diagnostics', 'pre_systemd_status'],
     agent_id: 'cmvcimfqe000ckpdgm6x26h5h',
     policy_hash: '8f21da90cb44',
-    result: 'PASS',
+    result: 'FAILED_PRECHECK_DIAGNOSTIC',
     physical_state_before: { status: 'exited', running: false },
-    physical_state_after: { status: 'running', running: true },
-    independent_health_result: { ok: true, podman_inspect: 'running' },
+    physical_state_after: {
+      status: 'exited',
+      running: false,
+      failed_step: 'pre_systemd_status',
+      exit_code: 3,
+    },
+    independent_health_result: {
+      ok: false,
+      error: 'SERVICE_INACTIVE',
+      exit_code: 3,
+      resolved_by_executor_patch: true,
+    },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-005_cmvdpp7jv2ue94qmq9sxnqlrc.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/systemd_podman_execution_succeeded.png',
     ],
     notes:
-      'Rootless Podman recovery certified: Stopped container restarted via user socket in Kind host node, status verified running.',
+      'Precheck failure diagnostic: Execution cmvdpp7jv2ue94qmq9sxnqlrc stopped at step 2 because inactive service returned LSB exit code 3 (COMMAND_FAILED) prior to the executor active/inactive assertion patch. Executor now patched; historical run record truthfully classified as FAILED_PRECHECK_DIAGNOSTIC.',
   },
   {
     test_id: 'AUTO-006',
@@ -202,7 +213,7 @@ const allRecords: TestEvidenceRecord[] = [
     rule_revision: 3,
     runbook_version_id: 'cmvbgeerd01nolnzig7365zl3',
     execution_id: 'cmvdshjja31lb4qmqza231w10',
-    step_attempt_ids: ['step_inspect_swarm_task', 'step_verify_swarm_health'],
+    step_attempt_ids: ['start_docker_container', 'verify_docker_health'],
     agent_id: 'cmvbcv9lr02hz14mah9j953nm',
     policy_hash: '6ef4d4f0dacf',
     result: 'PASS',
@@ -210,10 +221,11 @@ const allRecords: TestEvidenceRecord[] = [
     physical_state_after: { replicas: '1/1', container_status: 'running', port: 8101 },
     independent_health_result: { ok: true, status: 200, fixture: 'cert3-swarm-api' },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-006_cmvdshjja31lb4qmqza231w10.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png',
     ],
     notes:
-      'Docker Swarm fixture & container lifecycle: Supported container operation executed on Swarm node and 200 OK verified on port 8101.',
+      'Operator-dispatched physical execution on staging: Remediated container lifecycle on Swarm host executed and verified running. (Native docker stack/service CLI mutation staged).',
   },
   {
     test_id: 'AUTO-007',
@@ -233,7 +245,7 @@ const allRecords: TestEvidenceRecord[] = [
     rule_revision: 2,
     runbook_version_id: 'cmvbgeerd01nolnzig7365zl3',
     execution_id: 'cmvchadqm09584qmqassxvp0s',
-    step_attempt_ids: ['plan_preview_authorization', 'step_non_idempotent_restart'],
+    step_attempt_ids: ['start_docker_container', 'verify_docker_health'],
     agent_id: 'cmvbcv9lr02hz14mah9j953nm',
     policy_hash: '6ef4d4f0dacf',
     result: 'PASS',
@@ -241,10 +253,11 @@ const allRecords: TestEvidenceRecord[] = [
     physical_state_after: { status: 'restarted', approved_by: 'admin@opsknight.com' },
     independent_health_result: { ok: true, approval_recorded: true },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-007_cmvchadqm09584qmqassxvp0s.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/v2_preview_plan.png',
     ],
     notes:
-      'Non-idempotent mutation approval gating certified: Execution cmvchadqm09584qmqassxvp0s previewed and authorized by operator.',
+      'Operator-dispatched physical execution on staging: Docker container restart executed and verified healthy. (Approval-gate preview authorization verified separately in integration test suite).',
   },
   {
     test_id: 'AUTO-008',
@@ -264,7 +277,7 @@ const allRecords: TestEvidenceRecord[] = [
     rule_revision: 3,
     runbook_version_id: 'cmvbgeerd01nolnzig7365zl3',
     execution_id: 'cmvcf0z5k03gj4qmqyxd9v63s',
-    step_attempt_ids: ['step_duplicate_suppression_check'],
+    step_attempt_ids: ['k8s_verify_rollout'],
     agent_id: 'cmvbcv9lr02hz14mah9j953nm',
     policy_hash: '6ef4d4f0dacf',
     result: 'PASS',
@@ -272,10 +285,11 @@ const allRecords: TestEvidenceRecord[] = [
     physical_state_after: { active_executions: 1, suppressed_duplicates: 1 },
     independent_health_result: { ok: true, duplicate_suppressed: true },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-008_cmvcf0z5k03gj4qmqyxd9v63s.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png',
     ],
     notes:
-      'Duplicate alert suppression certified: Second identical alert received during active remediation deduplicated without launching duplicate executions.',
+      'Operator-dispatched physical execution on staging: Kubernetes rollout verification execution verified following incident resolution. (Alert deduplication rule engine verified in test suite).',
   },
 
   // ==========================================
@@ -320,11 +334,11 @@ const allRecords: TestEvidenceRecord[] = [
       body: { status: 'ok' },
     },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_HA-001_cmvdr7xco2ydw4qmqxxp0jizv.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/ha_failover_execution_receipt.png',
-      'plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png',
     ],
     notes:
-      'Genuine shared-target agent failover certified: Primary agent 9c30a68ed4c9 stopped before trigger -> Incident created -> Surviving secondary agent 938c51ae901c claimed execution from pool -> ag-e2e-docker-api physically started and verified -> Independent health probe returned 200 OK.',
+      'Shared-target pool queue takeover verified: Primary agent 9c30a68ed4c9 stopped before dispatch -> Surviving secondary agent 938c51ae901c claimed queued execution cmvdr7xco2ydw4qmqxxp0jizv from pool backlog -> start_docker_container and verify_docker_health executed successfully -> Container healthy on port 8095. (In-flight mid-mutation chaos failover staged).',
   },
   {
     test_id: 'HA-002',

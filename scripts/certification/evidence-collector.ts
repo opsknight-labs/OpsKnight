@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type TestResultOutcome = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_TESTED' | 'NOT_SUPPORTED';
+export type TestResultOutcome =
+  'PASS' | 'FAIL' | 'FAILED_PRECHECK_DIAGNOSTIC' | 'BLOCKED' | 'NOT_TESTED' | 'NOT_SUPPORTED';
 
 export interface TestEvidenceRecord {
   test_id: string;
@@ -63,6 +64,7 @@ const REQUIRED_FIELDS: (keyof TestEvidenceRecord)[] = [
 const VALID_OUTCOMES: TestResultOutcome[] = [
   'PASS',
   'FAIL',
+  'FAILED_PRECHECK_DIAGNOSTIC',
   'BLOCKED',
   'NOT_TESTED',
   'NOT_SUPPORTED',
