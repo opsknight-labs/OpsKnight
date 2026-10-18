@@ -4,7 +4,6 @@ import { assertAuthoringDefinition } from './authoring-validation';
 import type { Prisma, RunbookInput, RunbookVersion } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
-import { runSerializableTransaction } from '@/lib/db-utils';
 import {
   computeDefinitionChecksum,
   parseRunbookDefinition,
@@ -40,38 +39,14 @@ const EMPTY_DEFINITION: RunbookDefinition = {
   ],
 };
 
-export type VersioningClient = Prisma.TransactionClient;
-
-export type VersioningActor = string | { id: string; apiKeyId: string };
-
-async function logVersioningAudit(
-  actor: VersioningActor,
-  event: Parameters<typeof logAudit>[0],
-  tx: VersioningClient
-) {
-  return logAudit(
-    {
-      ...event,
-      ...(typeof actor === 'string'
-        ? {}
-        : {
-            source: 'API' as const,
-            details: {
-              ...(event.details as Prisma.InputJsonObject | undefined),
-              apiClientId: actor.apiKeyId,
-            },
-          }),
-    },
-    tx
-  );
-}
-
-function inVersioningTransaction<T>(
-  tx: VersioningClient | undefined,
-  command: (client: VersioningClient) => Promise<T>
-): Promise<T> {
-  return tx ? command(tx) : runSerializableTransaction(command);
-}
+import {
+  runRunbookCommand as inVersioningTransaction,
+  logRunbookCommandAudit as logVersioningAudit,
+  type RunbookCommandClient,
+  type RunbookCommandActor,
+} from './command-context';
+export type VersioningClient = RunbookCommandClient;
+export type VersioningActor = RunbookCommandActor;
 
 export function toInputCreateMany(inputs: RunbookInputInput[]) {
   return inputs.map((input, index) => ({

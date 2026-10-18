@@ -62,7 +62,13 @@ vi.mock('@/lib/prisma', () => ({
           findUnique: vi.fn(),
           update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
           delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
-          create: vi.fn().mockResolvedValue({ id: 'rb_dup_1', name: 'Original Workflow (Copy)', slug: 'orig-workflow-copy' }),
+          create: vi
+            .fn()
+            .mockResolvedValue({
+              id: 'rb_dup_1',
+              name: 'Original Workflow (Copy)',
+              slug: 'orig-workflow-copy',
+            }),
         },
         runbookVersion: {
           deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -83,6 +89,7 @@ vi.mock('@/lib/audit', () => ({
 describe('Runbook Lifecycle Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.runbook.findUnique).mockReset();
   });
 
   describe('buildRunbookLibraryWhere (Query builder)', () => {
@@ -256,33 +263,31 @@ describe('Runbook Lifecycle Unit Tests', () => {
 
   describe('deleteRunbook', () => {
     it('requires non-empty confirmation text', async () => {
-      await expect(deleteRunbook('rb_1', 'user_1', '')).rejects.toThrow(
-        RunbookCannotDeleteError
-      );
+      await expect(deleteRunbook('rb_1', 'user_1', '')).rejects.toThrow(RunbookCannotDeleteError);
     });
 
     it('throws RunbookCannotDeleteError if runbook is not eligible', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_1',
-                name: 'Diagnostics',
-                slug: 'diagnostics',
-                publishedVersionId: null,
-                _count: { executions: 1, bindings: 0 },
-                versions: [],
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: { deleteMany: vi.fn() },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_1',
+              name: 'Diagnostics',
+              slug: 'diagnostics',
+              publishedVersionId: null,
+              _count: { executions: 1, bindings: 0 },
+              versions: [],
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: { deleteMany: vi.fn() },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
       await expect(deleteRunbook('rb_1', 'user_1', 'diagnostics')).rejects.toThrow(
         RunbookCannotDeleteError
@@ -290,27 +295,27 @@ describe('Runbook Lifecycle Unit Tests', () => {
     });
 
     it('rejects generic confirmation text like "delete"', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_1',
-                name: 'Draft Diagnostics',
-                slug: 'draft-diagnostics',
-                publishedVersionId: null,
-                _count: { executions: 0, bindings: 0 },
-                versions: [],
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: { deleteMany: vi.fn() },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_1',
+              name: 'Draft Diagnostics',
+              slug: 'draft-diagnostics',
+              publishedVersionId: null,
+              _count: { executions: 0, bindings: 0 },
+              versions: [],
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: { deleteMany: vi.fn() },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
       await expect(deleteRunbook('rb_1', 'user_1', 'delete')).rejects.toThrow(
         RunbookCannotDeleteError
@@ -318,27 +323,27 @@ describe('Runbook Lifecycle Unit Tests', () => {
     });
 
     it('rejects confirmation text that does not match name or slug', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_1',
-                name: 'Draft Diagnostics',
-                slug: 'draft-diagnostics',
-                publishedVersionId: null,
-                _count: { executions: 0, bindings: 0 },
-                versions: [],
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: { deleteMany: vi.fn() },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_1',
+              name: 'Draft Diagnostics',
+              slug: 'draft-diagnostics',
+              publishedVersionId: null,
+              _count: { executions: 0, bindings: 0 },
+              versions: [],
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: { deleteMany: vi.fn() },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
       await expect(deleteRunbook('rb_1', 'user_1', 'random-name')).rejects.toThrow(
         RunbookCannotDeleteError
@@ -346,54 +351,54 @@ describe('Runbook Lifecycle Unit Tests', () => {
     });
 
     it('successfully deletes an unused draft when confirmation matches slug', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_1',
-                name: 'Draft Diagnostics',
-                slug: 'draft-diagnostics',
-                publishedVersionId: null,
-                _count: { executions: 0, bindings: 0 },
-                versions: [],
-              }),
-              update: vi.fn().mockResolvedValue({ id: 'rb_1' }),
-              delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
-            },
-            runbookVersion: { deleteMany: vi.fn() },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_1',
+              name: 'Draft Diagnostics',
+              slug: 'draft-diagnostics',
+              publishedVersionId: null,
+              _count: { executions: 0, bindings: 0 },
+              versions: [],
+            }),
+            update: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+            delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+          },
+          runbookVersion: { deleteMany: vi.fn() },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
       const result = await deleteRunbook('rb_1', 'user_1', 'draft-diagnostics');
       expect((result as { id: string }).id).toBe('rb_1');
     });
 
     it('successfully deletes an unused draft when confirmation matches name', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_1',
-                name: 'Draft Diagnostics',
-                slug: 'draft-diagnostics',
-                publishedVersionId: null,
-                _count: { executions: 0, bindings: 0 },
-                versions: [],
-              }),
-              update: vi.fn().mockResolvedValue({ id: 'rb_1' }),
-              delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
-            },
-            runbookVersion: { deleteMany: vi.fn() },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_1',
+              name: 'Draft Diagnostics',
+              slug: 'draft-diagnostics',
+              publishedVersionId: null,
+              _count: { executions: 0, bindings: 0 },
+              versions: [],
+            }),
+            update: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+            delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+          },
+          runbookVersion: { deleteMany: vi.fn() },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
       const result = await deleteRunbook('rb_1', 'user_1', 'Draft Diagnostics');
       expect((result as { id: string }).id).toBe('rb_1');
@@ -401,15 +406,19 @@ describe('Runbook Lifecycle Unit Tests', () => {
   });
 
   describe('restoreRunbook', () => {
-    it('is idempotent if runbook is not currently archived', async () => {
-      vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce({
-        id: 'rb_1',
-        archivedAt: null,
-      } as unknown as Runbook);
-
+    it('checks idempotent restoration under the same transaction lock', async () => {
+      const read = vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null });
+      const update = vi.fn();
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: Prisma.TransactionClient) => Promise<unknown>
+      ) =>
+        callback({
+          runbook: { findUnique: read, update },
+        } as never)) as never);
       const result = await restoreRunbook('rb_1', 'user_1');
       expect(result.archivedAt).toBeNull();
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.$transaction).toHaveBeenCalledOnce();
+      expect(update).not.toHaveBeenCalled();
     });
 
     it('restores archived runbook and leaves all bindings disabled for safety', async () => {
@@ -419,24 +428,24 @@ describe('Runbook Lifecycle Unit Tests', () => {
       } as unknown as Runbook);
 
       let txPassed: MockTx | undefined;
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          txPassed = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: new Date() }),
-              update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
-              delete: vi.fn(),
-            },
-            runbookVersion: {
-              deleteMany: vi.fn(),
-            },
-            serviceAutomationRule: {
-              updateMany: vi.fn().mockResolvedValue({ count: 2 }),
-            },
-          };
-          return callback(txPassed);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        txPassed = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: new Date() }),
+            update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
+            delete: vi.fn(),
+          },
+          runbookVersion: {
+            deleteMany: vi.fn(),
+          },
+          serviceAutomationRule: {
+            updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+          },
+        };
+        return callback(txPassed);
+      }) as never);
 
       const result = await restoreRunbook('rb_1', 'user_1');
       expect(result.archivedAt).toBeNull();
@@ -485,9 +494,28 @@ describe('Runbook Lifecycle Unit Tests', () => {
         publishedVersion: null,
       } as unknown as Runbook;
 
-      vi.mocked(prisma.runbook.findUnique)
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'rb_orig', archivedAt: null })
         .mockResolvedValueOnce(mockSource)
-        .mockResolvedValueOnce(null); // for ensureUniqueSlug
+        .mockResolvedValueOnce(null);
+      const tx = {
+        runbook: {
+          findUnique: read,
+          create: vi
+            .fn()
+            .mockResolvedValue({
+              id: 'rb_dup_1',
+              name: 'Original Workflow (Copy)',
+              slug: 'orig-workflow-copy',
+            }),
+          update: vi.fn(),
+        },
+        runbookVersion: { create: vi.fn().mockResolvedValue({ id: 'ver_dup_1', version: 1 }) },
+      };
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: Prisma.TransactionClient) => Promise<unknown>
+      ) => callback(tx as never)) as never);
 
       const duplicated = await duplicateRunbook('rb_orig', 'user_1');
       expect(duplicated.id).toBe('rb_dup_1');
@@ -503,37 +531,45 @@ describe('Runbook Lifecycle Unit Tests', () => {
         publishedVersion: null,
       } as unknown as Runbook;
 
-      vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce(mockEmptySource);
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: Prisma.TransactionClient) => Promise<unknown>
+      ) =>
+        callback({
+          runbook: {
+            findUnique: vi
+              .fn()
+              .mockResolvedValueOnce({ id: 'rb_empty', archivedAt: null })
+              .mockResolvedValueOnce(mockEmptySource),
+          },
+        } as never)) as never);
 
-      await expect(duplicateRunbook('rb_empty', 'user_1')).rejects.toThrow(
-        RunbookDefinitionError
-      );
+      await expect(duplicateRunbook('rb_empty', 'user_1')).rejects.toThrow(RunbookDefinitionError);
     });
   });
 
   describe('Archived authoring mutation guards', () => {
     it('rejects updateRunbookMetadata on archived runbooks', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUniqueOrThrow: vi.fn().mockResolvedValue({
-                id: 'rb_archived',
-                archivedAt: new Date(),
-              }),
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_archived',
-                archivedAt: new Date(),
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: { deleteMany: vi.fn() },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUniqueOrThrow: vi.fn().mockResolvedValue({
+              id: 'rb_archived',
+              archivedAt: new Date(),
+            }),
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_archived',
+              archivedAt: new Date(),
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: { deleteMany: vi.fn() },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
       await expect(
         updateRunbookMetadata('rb_archived', { name: 'New Name' }, 'user_1')
@@ -541,31 +577,31 @@ describe('Runbook Lifecycle Unit Tests', () => {
     });
 
     it('rejects updateDraftVersion on archived runbooks', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_archived',
-                archivedAt: new Date(),
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'ver_1',
-                runbookId: 'rb_archived',
-                state: 'DRAFT',
-                runbook: { archivedAt: new Date() },
-              }),
-              deleteMany: vi.fn(),
-            },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_archived',
+              archivedAt: new Date(),
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'ver_1',
+              runbookId: 'rb_archived',
+              state: 'DRAFT',
+              runbook: { archivedAt: new Date() },
+            }),
+            deleteMany: vi.fn(),
+          },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
       await expect(
         updateDraftVersion(
@@ -583,35 +619,35 @@ describe('Runbook Lifecycle Unit Tests', () => {
     });
 
     it('rejects updateDraftVersion when expectedDraftRevision does not match current draft revision', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_1',
-                archivedAt: null,
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'ver_1',
-                runbookId: 'rb_1',
-                state: 'DRAFT',
-                checksum: 'checksum_actual',
-                draftRevision: 5,
-                runbook: { archivedAt: null },
-              }),
-              updateMany: vi.fn(),
-            },
-            serviceAutomationRule: {
-              updateMany: vi.fn(),
-            },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_1',
+              archivedAt: null,
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'ver_1',
+              runbookId: 'rb_1',
+              state: 'DRAFT',
+              checksum: 'checksum_actual',
+              draftRevision: 5,
+              runbook: { archivedAt: null },
+            }),
+            updateMany: vi.fn(),
+          },
+          serviceAutomationRule: {
+            updateMany: vi.fn(),
+          },
+        };
+        return callback(tx);
+      }) as never);
 
       await expect(
         updateDraftVersion(
@@ -629,68 +665,64 @@ describe('Runbook Lifecycle Unit Tests', () => {
     });
 
     it('rejects publishDraftVersion on archived runbooks', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_archived',
-                archivedAt: new Date(),
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'ver_1',
-                runbookId: 'rb_archived',
-                state: 'DRAFT',
-                runbook: { id: 'rb_archived', archivedAt: new Date() },
-                inputs: [],
-              }),
-              deleteMany: vi.fn(),
-            },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_archived',
+              archivedAt: new Date(),
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'ver_1',
+              runbookId: 'rb_archived',
+              state: 'DRAFT',
+              runbook: { id: 'rb_archived', archivedAt: new Date() },
+              inputs: [],
+            }),
+            deleteMany: vi.fn(),
+          },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
-      await expect(publishDraftVersion('ver_1', 'user_1')).rejects.toThrow(
-        RunbookArchivedError
-      );
+      await expect(publishDraftVersion('ver_1', 'user_1')).rejects.toThrow(RunbookArchivedError);
     });
 
     it('rejects cloneVersionToDraft on archived runbooks', async () => {
-      vi.mocked(prisma.$transaction).mockImplementationOnce(
-        (async (callback: (tx: MockTx) => Promise<unknown>) => {
-          const tx: MockTx = {
-            runbook: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'rb_archived',
-                archivedAt: new Date(),
-              }),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            runbookVersion: {
-              findUnique: vi.fn().mockResolvedValue({
-                id: 'ver_1',
-                runbookId: 'rb_archived',
-                inputs: [],
-                runbook: { id: 'rb_archived', archivedAt: new Date() },
-              }),
-              deleteMany: vi.fn(),
-            },
-            serviceAutomationRule: { updateMany: vi.fn() },
-          };
-          return callback(tx);
-        }) as never
-      );
+      vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+        callback: (tx: MockTx) => Promise<unknown>
+      ) => {
+        const tx: MockTx = {
+          runbook: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'rb_archived',
+              archivedAt: new Date(),
+            }),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+          runbookVersion: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: 'ver_1',
+              runbookId: 'rb_archived',
+              inputs: [],
+              runbook: { id: 'rb_archived', archivedAt: new Date() },
+            }),
+            deleteMany: vi.fn(),
+          },
+          serviceAutomationRule: { updateMany: vi.fn() },
+        };
+        return callback(tx);
+      }) as never);
 
-      await expect(cloneVersionToDraft('ver_1', 'user_1')).rejects.toThrow(
-        RunbookArchivedError
-      );
+      await expect(cloneVersionToDraft('ver_1', 'user_1')).rejects.toThrow(RunbookArchivedError);
     });
   });
 });
