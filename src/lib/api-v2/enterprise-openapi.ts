@@ -122,6 +122,55 @@ const authoringVersionSchema = object(
 );
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  StatusPageSubscriber: object(
+    {
+      id,
+      statusPageId: id,
+      email: { type: 'string', format: 'email' },
+      subscribedAt: date,
+      unsubscribedAt: { type: ['string', 'null'], format: 'date-time' },
+      verified: { type: 'boolean' },
+      state: {
+        type: 'string',
+        enum: ['PENDING', 'ACTIVE', 'UNSUBSCRIBED', 'BOUNCED', 'COMPLAINED', 'SUPPRESSED'],
+      },
+      timezone: { type: ['string', 'null'] },
+    },
+    [
+      'id',
+      'statusPageId',
+      'email',
+      'subscribedAt',
+      'unsubscribedAt',
+      'verified',
+      'state',
+      'timezone',
+    ]
+  ),
+  StatusPageSubscriberStats: object(
+    {
+      statusPageId: id,
+      total: integer,
+      states: array(object({ state: string(), count: integer }, ['state', 'count'])),
+    },
+    ['statusPageId', 'total', 'states']
+  ),
+  StatusPageSubscriptionSettings: object(
+    {
+      statusPageId: id,
+      enabled: { type: 'boolean' },
+      showSubscribe: { type: 'boolean' },
+      verificationRequired: { const: true },
+      publicRegistrationSeparate: { const: true },
+    },
+    [
+      'statusPageId',
+      'enabled',
+      'showSubscribe',
+      'verificationRequired',
+      'publicRegistrationSeparate',
+    ]
+  ),
   ...AUTOMATION_SCHEMAS,
   AutomationValidation: object(
     {
@@ -958,6 +1007,38 @@ interface Operation {
 const operations: Operation[] = [
   {
     method: 'get',
+    path: '/status-pages/{id}/subscribers',
+    summary: 'List subscriber contacts with explicit administrator privacy scope',
+    paginated: true,
+    description:
+      'No verification/unsubscribe tokens, phone numbers, preferences or provider details are returned. Public consent flows remain separate.',
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/subscribers/{subscriberId}',
+    summary: 'Read a page-scoped subscriber with explicit privacy permission',
+  },
+  {
+    method: 'delete',
+    path: '/status-pages/{id}/subscribers/{subscriberId}',
+    summary: 'Revoke a subscription and suppress pending notifications',
+    status: 204,
+    description:
+      'Does not erase consent/history or enroll recipients. Durable replay and canonical audit are atomic with revocation; repeated removal does not repeat audit.',
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/subscriber-stats',
+    summary: 'Read consistent subscriber state counts for one page',
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/subscription-settings',
+    summary: 'Read supported public subscription availability and verification behavior',
+  },
+
+  {
+    method: 'get',
     path: '/services/{id}/runbook-rules',
     summary: 'List bounded service runbook rule summaries',
     description:
@@ -1487,15 +1568,17 @@ export function enterpriseOpenApiPaths() {
     const pathItem = (paths[operation.path] ??= {});
     pathItem[operation.method] = {
       tags: [
-        operation.path.startsWith('/settings')
-          ? 'Settings'
-          : operation.path.startsWith('/runbooks')
-            ? 'Runbooks'
-            : operation.path.startsWith('/services')
-              ? 'Services'
-              : operation.path.startsWith('/schedules')
-                ? 'Schedules'
-                : 'Incidents',
+        operation.path.startsWith('/status-pages')
+          ? 'Status Pages'
+          : operation.path.startsWith('/settings')
+            ? 'Settings'
+            : operation.path.startsWith('/runbooks')
+              ? 'Runbooks'
+              : operation.path.startsWith('/services')
+                ? 'Services'
+                : operation.path.startsWith('/schedules')
+                  ? 'Schedules'
+                  : 'Incidents',
       ],
       summary: operation.summary,
       ...(operation.description ? { description: operation.description } : {}),

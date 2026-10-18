@@ -51,6 +51,12 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'DELETE /api/v2/status-pages/[id]/subscribers/[subscriberId]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Administrator-only explicit subscriber scope. Revocation, pending notification suppression, canonical audit and durable replay commit atomically. Natural repeat does not renew consent or repeat audit.',
+  },
   'POST /api/v2/services/[id]/runbook-rules': {
     idempotency: 'required',
     concurrency: 'none',

@@ -280,10 +280,16 @@ const decisions: readonly ApiCapability[] = [
     id: 'status-management',
     area: 'Status pages',
     title: 'Components, subscribers and branding',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Page CRUD and announcements are available. Component/subscriber administration needs dedicated privacy controls, fanout safety and single-page-limit parity.',
-    operationIds: [],
+      'Page CRUD and announcements are available. Subscriber administration uses explicit privacy scopes and shared revocation/suppression commands. Configuration, domains/assets and publication parity remain in progress.',
+    operationIds: [
+      'listStatusPageSubscribers',
+      'getStatusPageSubscriber',
+      'removeStatusPageSubscriber',
+      'getStatusPageSubscriberStats',
+      'getStatusPageSubscriptionSettings',
+    ],
   },
   {
     id: 'postmortem-workflows',

@@ -114,3 +114,14 @@ client.call("updateServiceAutomationMode", {"params": params,
     "body": {"mode": "DISABLED", "expectedActiveVersionId": published["id"]},
     "headers": {"If-Match": '"%s"' % current["revision"], "Idempotency-Key": uuid.uuid4().hex}})
 print("Python live automation validation/simulation/mode/history/restoration/diagnostics passed.")
+
+subscriber_params = {"id": configuration["statusPageId"], "subscriberId": configuration["statusSubscriberId"]}
+subscriber = client.call("getStatusPageSubscriber", {"params": subscriber_params})["data"]
+assert "token" not in subscriber and "verificationToken" not in subscriber
+subscriber_rows = list(client.paginate("listStatusPageSubscribers", {"params": {"id": configuration["statusPageId"]}, "query": {"limit": 1}}, max_pages=1000))
+assert subscriber["id"] in [row["id"] for row in subscriber_rows]
+client.call("getStatusPageSubscriberStats", {"params": {"id": configuration["statusPageId"]}})
+assert client.call("getStatusPageSubscriptionSettings", {"params": {"id": configuration["statusPageId"]}})["data"]["verificationRequired"] is True
+client.call("removeStatusPageSubscriber", {"params": subscriber_params, "headers": {"Idempotency-Key": uuid.uuid4().hex}})
+assert client.call("getStatusPageSubscriber", {"params": subscriber_params})["data"]["state"] == "UNSUBSCRIBED"
+print("Python live status-page subscriber administration passed.")

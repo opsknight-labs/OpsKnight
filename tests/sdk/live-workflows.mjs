@@ -65,6 +65,9 @@ try {
       tokenHash: createHmac('sha256', secret).update(`opsknight:api-key:v2:${token}`).digest('hex'),
       scopes: [
         'admin:manage',
+        'status-page-subscribers:read',
+        'status-page-subscribers:write',
+        'status-pages:read',
         'runbook-rules:read',
         'runbook-rules:write',
         'runbook-rules:activate',
@@ -334,6 +337,60 @@ try {
   const automationService = await prisma.service.create({
     data: { name: `Python automation ${randomUUID()}` },
   });
+  const statusPage =
+    (await prisma.statusPage.findFirst({ select: { id: true } })) ??
+    (await prisma.statusPage.create({
+      data: { name: `SDK status ${randomUUID()}`, slug: `sdk-${randomUUID()}` },
+    }));
+  const tsSubscriber = await prisma.statusPageSubscription.create({
+    data: {
+      statusPageId: statusPage.id,
+      email: `ts-${randomUUID()}@example.com`,
+      token: randomUUID(),
+      state: 'ACTIVE',
+      verified: true,
+    },
+  });
+  const pySubscriber = await prisma.statusPageSubscription.create({
+    data: {
+      statusPageId: statusPage.id,
+      email: `py-${randomUUID()}@example.com`,
+      token: randomUUID(),
+      state: 'ACTIVE',
+      verified: true,
+    },
+  });
+  const subscriberParams = { id: statusPage.id, subscriberId: tsSubscriber.id };
+  const subscriberRows = [];
+  for await (const row of client.paginate(
+    'listStatusPageSubscribers',
+    { params: { id: statusPage.id }, query: { limit: 1 } },
+    1000
+  ))
+    subscriberRows.push(row);
+  if (!subscriberRows.some(row => row.id === tsSubscriber.id))
+    throw new Error('Subscriber cursor omitted fixture.');
+  const subscriberDetail = (
+    await client.call('getStatusPageSubscriber', { params: subscriberParams })
+  ).data;
+  if (
+    subscriberDetail.email !== tsSubscriber.email ||
+    'token' in subscriberDetail ||
+    'verificationToken' in subscriberDetail
+  )
+    throw new Error('Unsafe subscriber representation.');
+  await client.call('getStatusPageSubscriberStats', { params: { id: statusPage.id } });
+  await client.call('getStatusPageSubscriptionSettings', { params: { id: statusPage.id } });
+  await client.call('removeStatusPageSubscriber', {
+    params: subscriberParams,
+    headers: { 'Idempotency-Key': randomUUID() },
+  });
+  if (
+    (await prisma.statusPageSubscription.findUniqueOrThrow({ where: { id: tsSubscriber.id } }))
+      .state !== 'UNSUBSCRIBED'
+  )
+    throw new Error('Subscriber revocation missing.');
+  console.log('TypeScript live status-page subscriber administration passed.');
   const python = spawnSync(
     process.env.DOCKER_BIN ?? 'docker',
     [
@@ -357,6 +414,8 @@ try {
         automationServiceId: automationService.id,
         runbookRuleServiceId: ruleService.id,
         runbookRuleAgentId: ruleAgent.id,
+        statusPageId: statusPage.id,
+        statusSubscriberId: pySubscriber.id,
       }),
       encoding: 'utf8',
       timeout: 90_000,

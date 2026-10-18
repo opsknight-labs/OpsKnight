@@ -32,6 +32,8 @@ export const AUTHORIZATION_ACTIONS = {
   INTEGRATION_MANAGE: 'integration.manage',
   NOTIFICATION_READ: 'notification.read',
   NOTIFICATION_MANAGE: 'notification.manage',
+  STATUS_PAGE_SUBSCRIBER_READ: 'status_page.subscriber.read',
+  STATUS_PAGE_SUBSCRIBER_MANAGE: 'status_page.subscriber.manage',
   STATUS_PAGE_READ: 'status_page.read',
   STATUS_PAGE_MANAGE: 'status_page.manage',
   AUTOMATION_READ: 'automation.read',
@@ -107,6 +109,8 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.INTEGRATION_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.NOTIFICATION_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.NOTIFICATION_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.STATUS_PAGE_SUBSCRIBER_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.STATUS_PAGE_SUBSCRIBER_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.STATUS_PAGE_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.STATUS_PAGE_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.AUTOMATION_READ]?: AuthorizationResource;
@@ -341,6 +345,14 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
       global: CAPABILITIES.OPERATIONS_MANAGE,
       apiScope: API_SCOPES.NOTIFICATIONS_WRITE,
     },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.STATUS_PAGE_SUBSCRIBER_READ,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.STATUS_PAGE_SUBSCRIBERS_READ },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.STATUS_PAGE_SUBSCRIBER_MANAGE,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.STATUS_PAGE_SUBSCRIBERS_WRITE },
   ],
   [
     AUTHORIZATION_ACTIONS.STATUS_PAGE_READ,

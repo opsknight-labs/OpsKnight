@@ -31,6 +31,46 @@ const op = (
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
     'get',
+    '/status-pages/{id}/subscribers',
+    'listStatusPageSubscribers',
+    'status-page-subscribers:read',
+    'list',
+    'StatusPageSubscriber'
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/subscribers/{subscriberId}',
+    'getStatusPageSubscriber',
+    'status-page-subscribers:read',
+    'item',
+    'StatusPageSubscriber'
+  ),
+  op(
+    'delete',
+    '/status-pages/{id}/subscribers/{subscriberId}',
+    'removeStatusPageSubscriber',
+    'status-page-subscribers:write',
+    'none',
+    ''
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/subscriber-stats',
+    'getStatusPageSubscriberStats',
+    'status-page-subscribers:read',
+    'item',
+    'StatusPageSubscriberStats'
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/subscription-settings',
+    'getStatusPageSubscriptionSettings',
+    'status-pages:read',
+    'item',
+    'StatusPageSubscriptionSettings'
+  ),
+  op(
+    'get',
     '/services/{id}/runbook-rules',
     'listServiceRunbookRules',
     'runbook-rules:read',

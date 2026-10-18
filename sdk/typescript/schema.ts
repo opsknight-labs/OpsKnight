@@ -19,6 +19,9 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type StatusPageSubscriber = { "id": string; "statusPageId": string; "email": string; "subscribedAt": string; "unsubscribedAt": string | null; "verified": boolean; "state": "PENDING" | "ACTIVE" | "UNSUBSCRIBED" | "BOUNCED" | "COMPLAINED" | "SUPPRESSED"; "timezone": string | null };
+export type StatusPageSubscriberStats = { "statusPageId": string; "total": number; "states": Array<{ "state": string; "count": number }> };
+export type StatusPageSubscriptionSettings = { "statusPageId": string; "enabled": boolean; "showSubscribe": boolean; "verificationRequired": true; "publicRegistrationSeparate": true };
 export type AutomationSnapshot = { "schemaVersion": 1; "fields": Array<{ "fieldId": string; "key": string; "label": string; "type": "STRING" | "ENUM" | "NUMBER" | "BOOLEAN"; "caseSensitive"?: boolean; "allowedValues"?: Array<string>; "aliases"?: Record<string, string>; "mappings"?: Array<{ "source": "PROVIDER" | "EVENT"; "integrationType"?: string; "path": string }> }>; "rules": Array<{ "id": string; "name": string; "phase": "ENRICH" | "ROUTE"; "enabled"?: boolean; "conditions": Array<{ "fieldKey": string; "operator": "EQ" | "NE" | "IN" | "NOT_IN" | "LT" | "LTE" | "GT" | "GTE" | "IS_SET" | "IS_MISSING" | "IS_UNMAPPED"; "value"?: string | number | boolean | Array<string | number | boolean> }>; "actions": Array<{ "type": "SET_PRIORITY"; "value": "P1" | "P2" | "P3" | "P4" | "P5" } | { "type": "SET_CONTEXT"; "fieldKey": string; "value": string | number | boolean } | { "type": "ADD_TAG"; "value": string } | { "type": "USE_SERVICE_DEFAULT" } | { "type": "USE_ESCALATION_POLICY"; "policyId": string } | { "type": "NO_ESCALATION" } | { "type": "NOTIFY_CHANNEL"; "provider": "SLACK" | "TEAMS"; "destinationId": string }> }> };
 export type AutomationDraft = { "serviceId": string; "revision": number; "restoredFromVersionId"?: string | null; "snapshot": AutomationSnapshot };
 export type AutomationValidation = { "valid": boolean; "requiresActivationReview": true; "issues": Array<AutomationLintIssue> };
@@ -69,6 +72,11 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listStatusPageSubscribers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getStatusPageSubscriber: { "params": { "id": string; "subscriberId": string } };
+  removeStatusPageSubscriber: { "params": { "id": string; "subscriberId": string }; "headers": { "Idempotency-Key": string } };
+  getStatusPageSubscriberStats: { "params": { "id": string } };
+  getStatusPageSubscriptionSettings: { "params": { "id": string } };
   listServiceRunbookRules: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   createServiceRunbookRule: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "configuration": { "runbookId": string; "name"?: string; "runbookVersionId"?: string; "enabled"?: boolean; "mode"?: "MANUAL" | "SUGGESTED" | "AUTOMATIC"; "versionStrategy"?: "PINNED" | "LATEST_PUBLISHED"; "defaultAgentId"?: string; "defaultAgentPoolId"?: string; "agentSelector"?: Record<string, string>; "inputValues"?: Record<string, unknown> }; "trigger"?: { "event": "INCIDENT_CREATED"; "conditionLogic"?: "AND" | "OR"; "enabled"?: boolean; "conditions"?: Array<{ "field": string; "operator": "EQUALS" | "NOT_EQUALS" | "CONTAINS" | "STARTS_WITH" | "IN" | "NOT_IN" | "EXISTS" | "NOT_EXISTS"; "value": unknown; "sequence"?: number }> }; "expectedVersionId": string } };
   getServiceRunbookRule: { "params": { "id": string; "ruleId": string } };
@@ -192,6 +200,11 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listStatusPageSubscribers: { "data": Array<StatusPageSubscriber>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getStatusPageSubscriber: { "data": StatusPageSubscriber; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  removeStatusPageSubscriber: null;
+  getStatusPageSubscriberStats: { "data": StatusPageSubscriberStats; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getStatusPageSubscriptionSettings: { "data": StatusPageSubscriptionSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServiceRunbookRules: { "data": Array<ServiceRunbookRuleSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getServiceRunbookRule: { "data": ServiceRunbookRule; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -315,6 +328,48 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listStatusPageSubscribers": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscribers",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriber": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscribers/{subscriberId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "removeStatusPageSubscriber": {
+    "method": "DELETE",
+    "path": "/status-pages/{id}/subscribers/{subscriberId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriberStats": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscriber-stats",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriptionSettings": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscription-settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listServiceRunbookRules": {
     "method": "GET",
     "path": "/services/{id}/runbook-rules",

@@ -408,3 +408,21 @@ separately, without relaxing checks. The complete endpoint plan, candidate
 isolation and production certification remain unfinished. Daily readiness
 evidence continues to mean conservative daily-bucket freshness, not exact event
 freshness. See review-048a33fd8-remediation.json and runbook-trigger-upgrade.json.
+
+### Status page subscriber administration (section 8B)
+
+Five operations expose page-scoped subscriber listing/detail, revocation, state
+counts and subscription availability. Contact reads and revocation require
+separate explicit administrator-only subscriber scopes; broad status-page read
+or admin credentials cannot imply them. DTOs omit unsubscribe/verification tokens,
+phone numbers, preferences and provider feedback. Lists use signed cursors over
+subscription time and ID, with an index supporting bounded pagination.
+
+The UI DELETE handler and REST revocation share a command. Consent/history stays
+stored, pending/failed notifications are suppressed and encrypted payloads cleared,
+and canonical audit joins the caller transaction. Repeated requests do not repeat
+the business event. PostgreSQL cases cover concurrent keys, revoked/demoted replay,
+missing/nested resources, output schema/privacy, pagination ties, outer rollback
+and audit failure with same-key recovery. Public verification/consent remains on
+its existing endpoints. This closes the subscriber subset, not status-page
+configuration, domains/assets/publication or the overall enterprise plan.
