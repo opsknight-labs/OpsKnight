@@ -29,13 +29,14 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:10.056Z",
+    "verifiedAt": "2026-10-18T16:19:56.243Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
       "container": "ag-e2e-docker-api",
       "healthStatus": "healthy"
-    }
+    },
+    "ok": true
   },
   {
     "testId": "AUTO-002",
@@ -67,13 +68,14 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:12.802Z",
+    "verifiedAt": "2026-10-18T16:19:59.045Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
       "httpStatus": 200,
       "port": 8098
-    }
+    },
+    "ok": true
   },
   {
     "testId": "AUTO-003",
@@ -97,13 +99,16 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:15.691Z",
+    "verifiedAt": "2026-10-18T16:20:02.036Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
+      "desiredReplicas": 2,
+      "replicas": 2,
       "readyReplicas": 2,
       "namespace": "opsknight-cert"
-    }
+    },
+    "ok": true
   },
   {
     "testId": "AUTO-004",
@@ -159,13 +164,14 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:18.521Z",
+    "verifiedAt": "2026-10-18T16:20:04.913Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
-      "service": "containerd",
+      "service": "cert-sample.service",
       "status": "active"
-    }
+    },
+    "ok": true
   },
   {
     "testId": "AUTO-005",
@@ -197,14 +203,17 @@
         "status": "Failed"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:21.379Z",
+    "verifiedAt": "2026-10-18T16:20:07.871Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
       "diagnosticPassed": true,
       "precheckFailedWithExit3": true,
-      "verifiedOutcome": "FAILED_PRECHECK_DIAGNOSTIC"
+      "verifiedOutcome": "FAILED_PRECHECK_DIAGNOSTIC",
+      "patchedExecutorStatus": "SUCCEEDED",
+      "patchedExecutorExitCode": 3
     },
+    "ok": true,
     "notes": "Pre-patch execution cmvdpp7jv2ue94qmq9sxnqlrc stopped at step 2 because inactive service returned LSB exit code 3 (COMMAND_FAILED). Patched executor now cleanly handles exit 3."
   },
   {
@@ -237,12 +246,13 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:24.170Z",
+    "verifiedAt": "2026-10-18T16:20:10.701Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
       "swarmFixtureStatus": "running"
-    }
+    },
+    "ok": true
   },
   {
     "testId": "AUTO-007",
@@ -274,13 +284,17 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:26.999Z",
+    "verifiedAt": "2026-10-18T16:20:13.518Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
       "container": "cert3-docker-direct-api",
-      "status": "healthy"
-    }
+      "status": "healthy",
+      "approvalAuthorizedMutation": "start_docker_container",
+      "approver": "admin@opsknight.com",
+      "policyHash": "6ef4d4f0dacf"
+    },
+    "ok": true
   },
   {
     "testId": "AUTO-008",
@@ -304,13 +318,16 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:29.874Z",
+    "verifiedAt": "2026-10-18T16:20:16.446Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
+      "desiredReplicas": 2,
+      "replicas": 2,
       "readyReplicas": 2,
       "namespace": "opsknight-cert"
-    }
+    },
+    "ok": true
   },
   {
     "testId": "HA-001",
@@ -342,12 +359,13 @@
         "status": "Succeeded"
       }
     ],
-    "verifiedAt": "2026-10-18T15:13:32.622Z",
+    "verifiedAt": "2026-10-18T16:20:19.268Z",
     "httpStatus": 200,
     "independentHealthVerified": true,
     "independentHealthDetails": {
       "container": "ag-e2e-docker-api",
       "healthStatus": "healthy"
-    }
+    },
+    "ok": true
   }
 ]

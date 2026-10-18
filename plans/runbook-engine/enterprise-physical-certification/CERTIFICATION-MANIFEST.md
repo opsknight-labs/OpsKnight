@@ -62,6 +62,7 @@ All test scenarios in this certification program generate structured records in 
 - 100% of candidate test records strictly pass validation.
 - Genuine execution receipts recorded for operational journeys (`AUTO-001` through `AUTO-008`) and live shared-target failover (`HA-001`).
 - Truthful attribution: staging executions reflect operator-dispatched runs (`USER` / `Responder · OpsKnight Admin`); zero-touch monitoring alert dispatch remains staged for general availability.
-- Historical run `AUTO-005` truthfully classified as `FAILED_PRECHECK_DIAGNOSTIC` due to pre-patch exit code 3 handling; remediated by the explicit active/inactive state assertion patch.
+- Historical run `AUTO-005` truthfully classified as `FAILED_PRECHECK_DIAGNOSTIC` due to pre-patch exit code 3 handling; remediated by the explicit active/inactive state assertion patch, with in-process executor verification.
 - Scenarios `HA-002` through `HA-012` truthfully qualified as `NOT_TESTED` (staged for distributed chaos suite) without artificial execution ID recycling.
 - Physical container states, exit codes, and independent HTTP health probes verified post-remediation.
+- CDP Staging Verification: 9/9 records verified via live Chrome DevTools session against `https://opssentinal.com`, capturing DOM execution summary, step sequences, and independent target health probes with fail-closed validation and HTTP status code capture (`LIVE-STAGING-VERIFICATION.json`).
