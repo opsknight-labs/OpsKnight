@@ -34,14 +34,29 @@ export function AutomationReviewDialog({
   destinations?: Array<{ id: string; channelName?: string | null; provider: string }>;
   version: number | null;
   enabled: boolean;
-  counts?: { evaluated: number; routes: number; priorities: number; skips: number; errors: number };
+  counts?: {
+    evaluated: number;
+    routes: number;
+    priorities: number;
+    skips: number;
+    errors: number;
+    fallbacks?: number;
+  };
   busy: boolean;
   error?: string;
   onCancel: () => void;
-  onConfirm: (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean) => void;
+  onConfirm: (
+    acknowledgeNoShadow: boolean,
+    acknowledgeShadowErrors: boolean,
+    acknowledgeMaterialDifferences: boolean
+  ) => void;
 }) {
   const [acknowledge, setAcknowledge] = useState(false);
   const [acknowledgeErrors, setAcknowledgeErrors] = useState(false);
+  const [acknowledgeDifferences, setAcknowledgeDifferences] = useState(false);
+  const materialDifferences =
+    action === 'activateCandidate' &&
+    Boolean(counts?.routes || counts?.priorities || counts?.skips);
 
   const changes = useMemo(
     () => (before ? semanticSnapshotChanges(before, snapshot, { policies, destinations }) : []),
@@ -91,7 +106,8 @@ export function AutomationReviewDialog({
         <div className="space-y-3 text-sm">
           {action === 'publish' && mode === 'LIVE' && (
             <p role="status" className="rounded-lg border border-primary/40 bg-muted/30 p-3">
-              This service is currently LIVE. Publishing stages a candidate version evaluated alongside LIVE traffic in parallel shadow mode without interrupting current routing.
+              This service is currently LIVE. Publishing stages a candidate version evaluated
+              alongside LIVE traffic in parallel shadow mode without interrupting current routing.
             </p>
           )}
           {action !== 'LIVE' && (
@@ -146,7 +162,8 @@ export function AutomationReviewDialog({
             <div className="rounded-lg border p-3 space-y-1">
               <h3 className="font-semibold">Shadow readiness · last 7 days</h3>
               <p>
-                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors/fallbacks
+                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors ·{' '}
+                {counts?.fallbacks ?? 0} fallbacks
               </p>
               <p>
                 {counts?.routes ?? 0} routing differences · {counts?.priorities ?? 0} priority
@@ -156,6 +173,16 @@ export function AutomationReviewDialog({
                 Review context mapping and deployment queue/latency metrics before enabling. These
                 metrics are not measured by this dialog.
               </p>
+              {materialDifferences && (
+                <label className="block text-amber-700 dark:text-amber-300">
+                  <input
+                    type="checkbox"
+                    checked={acknowledgeDifferences}
+                    onChange={event => setAcknowledgeDifferences(event.target.checked)}
+                  />{' '}
+                  I approve the observed routing, priority and suppression differences.
+                </label>
+              )}
               {!counts?.evaluated && (
                 <p className="text-amber-700 dark:text-amber-300">
                   No Shadow evidence is available yet.
@@ -169,7 +196,7 @@ export function AutomationReviewDialog({
                   </label>
                 </p>
               )}
-              {!!counts?.errors && (
+              {!!(counts?.errors || counts?.fallbacks) && (
                 <label className="block text-amber-700 dark:text-amber-300">
                   <input
                     type="checkbox"
@@ -195,14 +222,15 @@ export function AutomationReviewDialog({
           <Button
             disabled={
               busy ||
+              (materialDifferences && !acknowledgeDifferences) ||
               issues.some(issue => issue.level === 'ERROR') ||
               ((action === 'LIVE' || action === 'activateCandidate') &&
                 (!version ||
                   !enabled ||
                   (!counts?.evaluated && !acknowledge) ||
-                  (!!counts?.errors && !acknowledgeErrors)))
+                  (!!(counts?.errors || counts?.fallbacks) && !acknowledgeErrors)))
             }
-            onClick={() => onConfirm(acknowledge, acknowledgeErrors)}
+            onClick={() => onConfirm(acknowledge, acknowledgeErrors, acknowledgeDifferences)}
           >
             {busy
               ? 'Saving…'

@@ -76,7 +76,9 @@ export default function AutomationWorkspace({
   serviceId: string;
   mobile?: boolean;
 }) {
-  const [review, setReview] = useState<'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null>(null);
+  const [review, setReview] = useState<'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null>(
+    null
+  );
   const [confirmDiscardCandidate, setConfirmDiscardCandidate] = useState(false);
   const [ruleSearch, setRuleSearch] = useState('');
   const [contextSearch, setContextSearch] = useState('');
@@ -286,9 +288,13 @@ export default function AutomationWorkspace({
       const response = await automationAction({
         ...input,
         serviceId,
-        expectedActiveVersionId: review
-          ? (reviewData?.activeVersionId ?? null)
-          : (data?.activeVersionId ?? null),
+        ...(input.action === 'discardCandidate'
+          ? {}
+          : {
+              expectedActiveVersionId: review
+                ? (reviewData?.activeVersionId ?? null)
+                : (data?.activeVersionId ?? null),
+            }),
         ...(input.action === 'publish'
           ? {
               expectedRevision: revision.current,
@@ -512,8 +518,9 @@ export default function AutomationWorkspace({
         priorities: sum.priorities + row.priorityDifferent,
         skips: sum.skips + row.noEscalationDifferent,
         errors: sum.errors + row.errors,
+        fallbacks: sum.fallbacks + row.fallbacks,
       }),
-      { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 }
+      { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0, fallbacks: 0 }
     );
   const candidateCounts = (reviewData ?? data)?.candidateAggregates?.reduce(
     (sum, row) => ({
@@ -522,15 +529,17 @@ export default function AutomationWorkspace({
       routes: sum.routes + row.routeDifferent,
       priorities: sum.priorities + row.priorityDifferent,
       skips: sum.skips + row.noEscalationDifferent,
-      errors: sum.errors + row.errors + row.fallbacks,
+      errors: sum.errors + row.errors,
+      fallbacks: sum.fallbacks + row.fallbacks,
     }),
-    { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 }
-  ) ?? { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 };
+    { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0, fallbacks: 0 }
+  ) ?? { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0, fallbacks: 0 };
 
   const startActivateCandidate = async () => {
     setBusy(true);
     try {
-      const loaded = await load('overview');
+      // Review requires the saved snapshots; overview intentionally omits them.
+      const loaded = await load('rules');
       if (loaded && loaded.candidateVersion) {
         setReviewData(loaded);
         setReview('activateCandidate');
@@ -552,7 +561,8 @@ export default function AutomationWorkspace({
           <AlertDialogHeader>
             <AlertDialogTitle>Discard candidate automation version?</AlertDialogTitle>
             <AlertDialogDescription>
-              Staged shadow evaluation will be terminated and this candidate version will be removed. Current LIVE incident routing will remain unaffected.
+              Staged shadow evaluation will be terminated and this candidate version will be
+              removed. Current LIVE incident routing will remain unaffected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -584,8 +594,11 @@ export default function AutomationWorkspace({
         snapshot={
           review === 'LIVE' && reviewData?.activeVersion
             ? snapshotSchema.parse(reviewData.activeVersion.snapshot)
-            : review === 'activateCandidate' && (reviewData?.candidateVersion ?? data?.candidateVersion)
-              ? snapshotSchema.parse((reviewData?.candidateVersion ?? data?.candidateVersion)!.snapshot)
+            : review === 'activateCandidate' &&
+                (reviewData?.candidateVersion ?? data?.candidateVersion)
+              ? snapshotSchema.parse(
+                  (reviewData?.candidateVersion ?? data?.candidateVersion)!.snapshot
+                )
               : review === 'restore' && restoreVersion
                 ? snapshotSchema.parse(restoreVersion.snapshot)
                 : draft
@@ -600,13 +613,18 @@ export default function AutomationWorkspace({
         busy={busy}
         error={error}
         onCancel={() => setReview(null)}
-        onConfirm={(acknowledgeNoShadow, acknowledgeShadowErrors) => {
+        onConfirm={(
+          acknowledgeNoShadow,
+          acknowledgeShadowErrors,
+          acknowledgeMaterialDifferences
+        ) => {
           void command(
             review === 'LIVE'
               ? { action: 'mode', mode: 'LIVE', acknowledgeNoShadow, acknowledgeShadowErrors }
               : review === 'activateCandidate'
                 ? {
                     action: 'activateCandidate',
+                    acknowledgeMaterialDifferences,
                     expectedCandidateVersionId: (reviewData ?? data)?.candidateVersionId,
                     acknowledgeNoShadow,
                     acknowledgeShadowErrors,
@@ -752,9 +770,7 @@ export default function AutomationWorkspace({
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                disabled={
-                  busy || conflict || issues.some(i => i.level === 'ERROR')
-                }
+                disabled={busy || conflict || issues.some(i => i.level === 'ERROR')}
                 onClick={() => {
                   void (async () => {
                     setBusy(true);
@@ -774,7 +790,8 @@ export default function AutomationWorkspace({
               </Button>
               {data.mode === 'LIVE' && (
                 <p className="text-xs text-muted-foreground">
-                  Publishing while LIVE stages a candidate version for parallel shadow evaluation without interrupting routing.
+                  Publishing while LIVE stages a candidate version for parallel shadow evaluation
+                  without interrupting routing.
                 </p>
               )}
               <select

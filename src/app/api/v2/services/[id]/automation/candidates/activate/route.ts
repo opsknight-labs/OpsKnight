@@ -37,6 +37,7 @@ export const POST = defineV2Route({
       expectedActiveVersionId: z.string().cuid().nullable().optional(),
       acknowledgeNoShadow: z.boolean().optional(),
       acknowledgeShadowErrors: z.boolean().optional(),
+      acknowledgeMaterialDifferences: z.boolean().optional(),
     })
     .strict(),
   idempotent: true,
@@ -59,6 +60,7 @@ export const POST = defineV2Route({
           expectedActiveVersionId: body.expectedActiveVersionId,
           acknowledgeNoShadow: body.acknowledgeNoShadow,
           acknowledgeShadowErrors: body.acknowledgeShadowErrors,
+          acknowledgeMaterialDifferences: body.acknowledgeMaterialDifferences,
         },
         tx,
         apiKey.id

@@ -1,4 +1,5 @@
 'use server';
+import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { decodeExplanation } from '@/lib/automation/explanation';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
@@ -60,6 +61,7 @@ const actionSchema = z.discriminatedUnion('action', [
       expectedActiveVersionId: id.nullable().optional(),
       acknowledgeNoShadow: z.boolean().optional(),
       acknowledgeShadowErrors: z.boolean().optional(),
+      acknowledgeMaterialDifferences: z.boolean().optional(),
     })
     .strict(),
   z
@@ -387,6 +389,14 @@ export async function getAutomationArea(
         ? { ...candidateVersion, snapshot: undefined }
         : candidateVersion,
     candidateAggregates,
+    candidateEvidenceFreshness: config?.candidateVersionId
+      ? await candidateEvidenceFreshness(
+          prisma,
+          serviceId,
+          config.candidateVersionId,
+          candidateAggregates[0]?.bucketDate ?? null
+        )
+      : null,
     versions: versions.map(version => ({
       ...version,
       publisherName:

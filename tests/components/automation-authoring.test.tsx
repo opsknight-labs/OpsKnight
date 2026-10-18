@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { TypedValueInput, parseAuthoringScalar } from '@/components/automation/TypedValueInput';
 import AutomationWorkspace from '@/components/automation/AutomationWorkspace';
@@ -271,4 +271,80 @@ it('allows publishing a candidate version while LIVE without leaving LIVE', asyn
       'Publishing while LIVE stages a candidate version for parallel shadow evaluation without interrupting routing.'
     )
   ).toBeVisible();
+});
+
+it('separates candidate errors and fallbacks and requires approval of material differences', async () => {
+  const candidateData = {
+    ...data,
+    mode: 'LIVE',
+    candidateVersionId: 'candidate',
+    candidateVersion: {
+      id: 'candidate',
+      versionNumber: 2,
+      snapshot: emptySnapshot,
+      checksum: 'fixture-checksum',
+      publishedAt: new Date().toISOString(),
+    },
+    candidateAggregates: [
+      {
+        evaluated: 1,
+        same: 0,
+        routeDifferent: 0,
+        priorityDifferent: 1,
+        noEscalationDifferent: 0,
+        errors: 1,
+        fallbacks: 1,
+      },
+    ],
+  };
+  api.area.mockImplementation(async (_serviceId: string, area: string) => ({
+    ...candidateData,
+    candidateVersion: {
+      ...candidateData.candidateVersion,
+      snapshot: area === 'overview' ? undefined : emptySnapshot,
+    },
+  }));
+  render(<AutomationWorkspace serviceId="service" />);
+  expect(await screen.findByText('1 / 1')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Activate candidate (LIVE cutover)' }));
+  expect(await screen.findByText('1 evaluations · 1 errors · 1 fallbacks')).toBeVisible();
+  const confirm = screen.getByRole('button', { name: 'Confirm LIVE' });
+  expect(confirm).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /I explicitly accept enabling LIVE/ }));
+  expect(confirm).toBeDisabled();
+  fireEvent.click(
+    screen.getByRole('checkbox', {
+      name: 'I approve the observed routing, priority and suppression differences.',
+    })
+  );
+  expect(confirm).toBeEnabled();
+});
+
+it('sends only the candidate precondition when discarding through the UI', async () => {
+  api.area.mockResolvedValue({
+    ...data,
+    mode: 'LIVE',
+    candidateVersionId: 'candidate',
+    candidateVersion: {
+      id: 'candidate',
+      versionNumber: 3,
+      snapshot: emptySnapshot,
+      checksum: 'fixture-checksum',
+      publishedAt: new Date().toISOString(),
+    },
+    candidateAggregates: [],
+  });
+  api.action.mockResolvedValue({ ok: true, data: {} });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Discard candidate' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Discard candidate' })
+  );
+  await waitFor(() =>
+    expect(api.action).toHaveBeenCalledWith({
+      action: 'discardCandidate',
+      serviceId: 'service',
+      expectedCandidateVersionId: 'candidate',
+    })
+  );
 });

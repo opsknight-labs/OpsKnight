@@ -32,9 +32,10 @@ export function AutomationOverview({
       routes: acc.routes + cur.routeDifferent,
       priorities: acc.priorities + cur.priorityDifferent,
       skips: acc.skips + cur.noEscalationDifferent,
-      errors: acc.errors + cur.errors + cur.fallbacks,
+      errors: acc.errors + cur.errors,
+      fallbacks: acc.fallbacks + cur.fallbacks,
     }),
-    { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0 }
+    { evaluated: 0, same: 0, routes: 0, priorities: 0, skips: 0, errors: 0, fallbacks: 0 }
   );
 
   return (
@@ -63,8 +64,19 @@ export function AutomationOverview({
             )}
           </div>
           <p className="text-sm">
-            This candidate is evaluating live incident traffic in parallel shadow mode without applying side effects.
+            This candidate is evaluating live incident traffic in parallel shadow mode without
+            applying side effects.
           </p>
+          {data.candidateEvidenceFreshness && (
+            <p className="text-xs text-muted-foreground">
+              Latest evidence bucket (UTC):{' '}
+              {data.candidateEvidenceFreshness.latestEvidenceBucketDate?.slice(0, 10) ?? 'None'}.{' '}
+              Pending observations: {data.candidateEvidenceFreshness.pendingObservations}
+              {data.candidateEvidenceFreshness.pendingObservationsTruncated ? '+' : ''}.
+              {data.candidateEvidenceFreshness.oldestSampledPendingAgeMs !== null &&
+                ` Oldest sampled pending age: ${Math.round(data.candidateEvidenceFreshness.oldestSampledPendingAgeMs / 1000)}s.`}
+            </p>
+          )}
           <div className="grid gap-2 sm:grid-cols-3 text-sm">
             <div className="rounded border bg-background p-2">
               <span className="text-muted-foreground block text-xs">Evaluations</span>
@@ -80,7 +92,9 @@ export function AutomationOverview({
             </div>
             <div className="rounded border bg-background p-2">
               <span className="text-muted-foreground block text-xs">Errors / Fallbacks</span>
-              <span className="text-lg font-bold">{candidateCounts.errors}</span>
+              <span className="text-lg font-bold">
+                {candidateCounts.errors} / {candidateCounts.fallbacks}
+              </span>
             </div>
           </div>
         </div>

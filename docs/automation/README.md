@@ -559,3 +559,30 @@ The publication API accepts the draft ETag and returns immutable version identit
 without an ETag. Read the draft again for its next mutation validator. Replays
 return the original committed result; a different concrete If-Match header does
 not turn the same key and body into a new write.
+
+### Worker-backed candidate evidence and approval
+
+The production browser certification starts two `web` replicas and one
+`general-worker`. It waits for the incident-specific `AUTOMATION_OBSERVE` job to
+reach `COMPLETED`; HTTP ingestion does not itself materialize shadow aggregates.
+The desktop fixture injects a first-attempt rollup failure in its isolated test
+database, then waits for the queue's normal backoff and retry. No evidence rows
+are inserted by the browser fixture.
+
+Candidate read responses and overview show a daily evidence bucket plus a bounded
+pending-observation sample and its age. A truncated sample is explicitly labeled;
+these are not total queue counts or exact event-time freshness measurements.
+
+Candidate activation requires separate approval of observed routing, priority or
+suppression differences. Current seven-day counters, the current minimum of one
+evaluation, and all explicit exception acknowledgments are recorded in the
+transactional activation audit. Error and fallback counters remain separate:
+one failed evaluation may legitimately increment both. Deployment-specific
+representative-traffic requirements and latency acceptance remain release gates.
+
+`tests/integration/automation-candidate-latency.test.ts` records full ingestion-call
+latency with and without a maximum-count candidate and checks that all decisions
+remain on the active LIVE version. Its local results are recorded in
+`plans/rest-api-enterprise/candidate-latency-local.json`. This measures sequential
+local PostgreSQL calls, not HTTP capacity or isolated SQL transaction timing. The
+15 ms candidate guard remains cooperative and cannot preempt synchronous work.

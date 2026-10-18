@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import inventory from '../../plans/rest-api-enterprise/workflow-inventory.json';
+import progress from '../../plans/rest-api-enterprise/combined-progress.json';
+import status from '../../plans/rest-api-enterprise/implementation-status.json';
 import { API_CAPABILITY_CATALOG } from '@/lib/api-v2/capability-catalog';
 import { V2_OPERATIONS } from '@/lib/api-v2/openapi-registry';
 import { V2_MUTATION_CONTRACT } from '@/lib/api-v2/mutation-contract';
@@ -54,6 +56,20 @@ describe('enterprise workflow inventory admission checks', () => {
       expect(contract, key).toBeDefined();
       if (contract?.preconditionRequired) expect(contract.concurrency, key).toBe('etag');
     }
+  });
+
+  it('keeps reported operation counts and automation delivery synchronized with shipped routes', () => {
+    const automation = V2_OPERATIONS.filter(operation =>
+      operation.path.split('/').includes('automation')
+    )
+      .map(operation => operation.operationId)
+      .sort();
+    expect(progress.registeredOperationCount).toBe(V2_OPERATIONS.length);
+    expect([...progress.implementedOperations].sort()).toEqual(automation);
+    expect(status.followupDelivery.registeredOperationCount).toBe(V2_OPERATIONS.length);
+    expect([...status.followupDelivery.implementedAutomationOperations].sort()).toEqual(automation);
+    const workflow = inventory.workflows.find(item => item.capabilityId === 'service-automation');
+    expect([...(workflow?.implementedOperations ?? [])].sort()).toEqual(automation);
   });
 
   it('does not infer enterprise certification from available routes', () => {

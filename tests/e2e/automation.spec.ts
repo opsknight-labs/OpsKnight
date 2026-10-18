@@ -12,6 +12,8 @@ let email: string;
 const password = 'Automation-Local-Test-938!';
 let serviceId: string;
 test.beforeAll(async ({}, testInfo) => {
+  if (!new URL(process.env.DATABASE_URL!).pathname.endsWith('_test'))
+    throw new Error('Automation browser certification requires an isolated test database');
   email = `automation-e2e-${testInfo.project.name}-${Date.now()}@example.com`;
   const passwordHash = await bcrypt.hash(password, 12);
   await db.user.upsert({
@@ -749,6 +751,7 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     allowInsecureHttp: true,
     maxRetries: 0,
   });
+  let observationFaultInstalled = false;
   try {
     const settings = await client.call('getAutomationSettings', {});
     await client.call('updateAutomationSettings', {
@@ -813,7 +816,9 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     await page.getByRole('checkbox', { name: /I understand this version/ }).check();
     await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
     await expect(workspace.getByLabel('Automation mode')).toHaveValue('LIVE');
-    await expect(workspace.getByRole('button', { name: 'Publish candidate', exact: true })).toBeEnabled();
+    await expect(
+      workspace.getByRole('button', { name: 'Publish candidate', exact: true })
+    ).toBeEnabled();
 
     // Author and publish candidate Version 2 with distinct enrichment (P2 priority)
     const candidateDraft = await client.call('getAutomationDraft', { params: { id: serviceId } });
@@ -860,6 +865,26 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
       candidateVersionId: candidatePub.data.id,
     });
 
+    if (testInfo.project.name === 'desktop') {
+      // A test-owned trigger rejects the first worker attempt only. It changes no
+      // aggregate rows and leaves the durable queue's real retry policy intact.
+      if (!/^[a-z0-9]+$/.test(candidatePub.data.id)) throw new Error('Invalid fixture version id');
+      await db.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION automation_browser_fail_observation_once() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW."versionId" = '${candidatePub.data.id}' AND EXISTS (
+            SELECT 1 FROM "BackgroundJob" WHERE type = 'SCHEDULED_TASK'
+              AND status = 'PROCESSING' AND attempts = 1
+              AND payload->>'task' = 'AUTOMATION_OBSERVE'
+              AND payload->'shadow'->>'versionId' = NEW."versionId"
+          ) THEN RAISE EXCEPTION 'Injected transient candidate observation failure'; END IF;
+          RETURN NEW;
+        END $$`);
+      await db.$executeRawUnsafe(
+        'CREATE TRIGGER automation_browser_fail_observation_once BEFORE INSERT OR UPDATE ON "AutomationShadowAggregate" FOR EACH ROW EXECUTE FUNCTION automation_browser_fail_observation_once()'
+      );
+      observationFaultInstalled = true;
+    }
+
     // Ingest pre-cutover alert 1: must use Version 1 LIVE decision while candidate shadows safely
     const dedupKey1 = randomUUID();
     const ingestion1 = await page.request.post('/api/events', {
@@ -894,12 +919,96 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     });
     expect(incident1.priority).toBe('P1');
 
+    if (testInfo.project.name === 'desktop') {
+      await expect
+        .poll(
+          async () => {
+            const job = await db.backgroundJob.findUnique({
+              where: { id: `AUTOMATION_OBSERVE:${incident1.id}` },
+            });
+            return {
+              status: job?.status,
+              attempts: job?.attempts,
+              scheduledForRetry: Boolean(job && job.scheduledAt.getTime() > Date.now()),
+            };
+          },
+          {
+            timeout: 30000,
+            message: 'Real worker requeues the failed first attempt with durable backoff',
+          }
+        )
+        .toEqual({ status: 'PENDING', attempts: 1, scheduledForRetry: true });
+      const delayedEvidence = await client.call('getAutomationCandidate', {
+        params: { id: serviceId },
+      });
+      expect(delayedEvidence.data.shadowAggregates.evaluated).toBe(0);
+      expect(delayedEvidence.data.evidenceFreshness.pendingObservations).toBe(1);
+      expect(delayedEvidence.data.evidenceFreshness.latestEvidenceBucketDate).toBeNull();
+      await testInfo.attach('candidate-observation-delayed-evidence', {
+        body: JSON.stringify(delayedEvidence.data.evidenceFreshness),
+        contentType: 'application/json',
+      });
+    }
+
+    // The real general worker must consume this incident's durable observation;
+    // ingestion alone does not materialize shadow aggregates.
+    await expect
+      .poll(
+        async () =>
+          (
+            await db.backgroundJob.findUnique({
+              where: { id: `AUTOMATION_OBSERVE:${incident1.id}` },
+            })
+          )?.status,
+        {
+          timeout: 120000,
+          message: 'General worker completes candidate observation through durable retry',
+        }
+      )
+      .toBe('COMPLETED');
+    const observation = await db.backgroundJob.findUniqueOrThrow({
+      where: { id: `AUTOMATION_OBSERVE:${incident1.id}` },
+    });
+    expect(observation.attempts).toBe(testInfo.project.name === 'desktop' ? 2 : 1);
+    expect(observation.completedAt).not.toBeNull();
+    await testInfo.attach('candidate-observation-worker', {
+      body: JSON.stringify({
+        id: observation.id,
+        status: observation.status,
+        attempts: observation.attempts,
+        createdAt: observation.createdAt,
+        completedAt: observation.completedAt,
+      }),
+      contentType: 'application/json',
+    });
     // Confirm candidate shadow evaluation accumulated evidence without applying candidate side effects
     const candidateAgg = await db.automationShadowAggregate.findFirst({
       where: { versionId: candidatePub.data.id },
     });
     expect(candidateAgg?.evaluated).toBe(1);
     expect(candidateAgg?.priorityDifferent).toBe(1);
+    const candidateEvidence = await client.call('getAutomationCandidate', {
+      params: { id: serviceId },
+    });
+    expect(candidateEvidence.data.shadowAggregates).toMatchObject({
+      evaluated: 1,
+      priorityDifferent: 1,
+    });
+    expect(candidateEvidence.data.evidenceFreshness).toMatchObject({
+      pendingObservations: 0,
+      pendingObservationsTruncated: false,
+    });
+    expect(candidateEvidence.data.evidenceFreshness.latestEvidenceBucketDate).not.toBeNull();
+    await expect(
+      client.call('activateAutomationCandidate', {
+        params: { id: serviceId },
+        body: {
+          expectedCandidateVersionId: candidatePub.data.id,
+          expectedActiveVersionId: published.data.id,
+        },
+        headers: { 'Idempotency-Key': randomUUID() },
+      })
+    ).rejects.toMatchObject({ status: 400 });
 
     // Operator browser journey: inspect candidate shadow evidence and activate candidate into LIVE
     await page.goto(
@@ -910,7 +1019,23 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     await expect(page.getByText('Pending candidate · Version 2')).toBeVisible();
     await page.getByRole('button', { name: 'Activate candidate (LIVE cutover)' }).click();
     await expect(page.getByText('Review candidate activation · Cutover to LIVE')).toBeVisible();
-    await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Confirm LIVE', exact: true })).toBeDisabled();
+    const differenceApproval = page.getByRole('checkbox', {
+      name: 'I approve the observed routing, priority and suppression differences.',
+    });
+    await differenceApproval.focus();
+    await page.keyboard.press('Space');
+    const confirmCutover = page.getByRole('button', { name: 'Confirm LIVE', exact: true });
+    if (testInfo.project.name === 'desktop' || testInfo.project.name === 'mobile') {
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await expect(confirmCutover).toBeFocused();
+    } else {
+      // Touch WebKit does not enable desktop full-keyboard Tab navigation.
+      // Verify keyboard activation from the accessible control's focus instead.
+      await confirmCutover.focus();
+    }
+    await page.keyboard.press('Enter');
     await expect(workspace.getByText(/Version 2 ·/)).toBeVisible();
     expect(
       await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
@@ -989,6 +1114,14 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
       client.call('getAutomationDraft', { params: { id: serviceId } })
     ).rejects.toMatchObject({ status: 401 });
   } finally {
+    if (observationFaultInstalled) {
+      await db.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS automation_browser_fail_observation_once ON "AutomationShadowAggregate"'
+      );
+      await db.$executeRawUnsafe(
+        'DROP FUNCTION IF EXISTS automation_browser_fail_observation_once()'
+      );
+    }
     await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
   }
 });

@@ -1,0 +1,45 @@
+{
+  "measuredAt": "2026-10-18T06:30:14.181Z",
+  "node": "v20.20.2",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M4 Pro",
+  "logicalCpus": 12,
+  "candidate": {
+    "fields": 64,
+    "rules": 100,
+    "conditionsPerRule": 20,
+    "actionsPerRule": 8
+  },
+  "cooperativeBudgetMs": 15,
+  "results": [
+    {
+      "candidate": false,
+      "samples": 35,
+      "p50Ms": 26.17441699999972,
+      "p95Ms": 31.208667000000332,
+      "p99Ms": 34.275792000000365,
+      "maxMs": 34.275792000000365
+    },
+    {
+      "candidate": true,
+      "samples": 35,
+      "p50Ms": 26.906083000000308,
+      "p95Ms": 31.123000000000047,
+      "p99Ms": 34.77745799999957,
+      "maxMs": 34.77745799999957
+    }
+  ],
+  "scope": "Sequential full PostgreSQL ingestion calls; includes transaction and surrounding application work, not isolated SQL transaction timing or HTTP latency.",
+  "acceptance": "Functional LIVE isolation passed. Deployment-specific latency acceptance and concurrent load/HA remain pending; the cooperative guard cannot preempt synchronous work.",
+  "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
+  "sourceDigests": {
+    "src/lib/automation/runtime.ts": "ab1643badbf4855ae54fb57807f115226e12a76b832ef511ed6b5f2b42ed2824",
+    "tests/integration/automation-candidate-latency.test.ts": "eacc5f497d776b2ffa697fe1731846fd6ecdafe18e5c9289b5b39ac9919698b1"
+  },
+  "limitations": [
+    "One local sequential run, baseline then candidate; not randomized, saturated, multi-replica or HTTP load.",
+    "Candidate has maximum field/rule/condition/action counts with one mapping per field and a small event payload; not every possible adversarial payload dimension.",
+    "No approved production latency threshold has been certified."
+  ]
+}

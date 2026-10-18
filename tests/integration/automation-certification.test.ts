@@ -7,7 +7,13 @@ import {
   createTestNotificationProvider,
 } from '../helpers/test-db';
 import { processEvent, processIntegrationEvent, type EventPayload } from '@/lib/events';
-import { saveDraft, publishVersion, changeMode, activateCandidate, discardCandidate } from '@/lib/automation/versioning';
+import {
+  saveDraft,
+  publishVersion,
+  changeMode,
+  activateCandidate,
+  discardCandidate,
+} from '@/lib/automation/versioning';
 import { resolveIncidentResponderRouting } from '@/lib/escalation/routing';
 import { executeEscalation } from '@/lib/escalation';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
@@ -307,7 +313,9 @@ describe('service automation transaction certification', () => {
     expect((await changeMode({ ...input, acknowledgeShadowErrors: true })).mode).toBe('LIVE');
   });
   it('protects inactive published policy references even before any incident exists', async () => {
-    const historicalPolicy = await db.escalationPolicy.create({ data: { name: 'Historical dependency' } });
+    const historicalPolicy = await db.escalationPolicy.create({
+      data: { name: 'Historical dependency' },
+    });
     const { service, actor, version, draft } = await setup({
       ...emptySnapshot,
       rules: [
@@ -323,10 +331,14 @@ describe('service automation transaction certification', () => {
     });
 
     // 1. Policy referenced by active version cannot be deleted
-    await expect(db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })).rejects.toThrow();
+    await expect(
+      db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })
+    ).rejects.toThrow();
 
     // Publish candidate referencing a candidate policy
-    const candidatePolicy = await db.escalationPolicy.create({ data: { name: 'Candidate dependency' } });
+    const candidatePolicy = await db.escalationPolicy.create({
+      data: { name: 'Candidate dependency' },
+    });
     const candidateDraft = await saveDraft({
       serviceId: service.id,
       actorId: actor.id,
@@ -354,7 +366,9 @@ describe('service automation transaction certification', () => {
     });
 
     // 2. Policy referenced by candidate version cannot be deleted
-    await expect(db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })).rejects.toThrow();
+    await expect(
+      db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })
+    ).rejects.toThrow();
 
     // Discard candidate
     await discardCandidate({
@@ -364,7 +378,9 @@ describe('service automation transaction certification', () => {
     });
 
     // 3. Policy referenced by discarded candidate version remains immutable history and cannot be deleted
-    await expect(db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })).rejects.toThrow();
+    await expect(
+      db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })
+    ).rejects.toThrow();
 
     // Deactivate version so historicalPolicy becomes purely historical
     const nextDraft = await saveDraft({
@@ -381,11 +397,15 @@ describe('service automation transaction certification', () => {
     });
 
     // 4. Policy referenced by historical version cannot be deleted
-    await expect(db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })).rejects.toThrow();
+    await expect(
+      db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })
+    ).rejects.toThrow();
     await expect(db.automationVersion.delete({ where: { id: version.id } })).rejects.toThrow();
 
     // 5. Unreferenced policy can be deleted cleanly
-    const unreferencedPolicy = await db.escalationPolicy.create({ data: { name: 'Unreferenced policy' } });
+    const unreferencedPolicy = await db.escalationPolicy.create({
+      data: { name: 'Unreferenced policy' },
+    });
     await db.escalationPolicy.delete({ where: { id: unreferencedPolicy.id } });
     expect(await db.incidentAutomationDecision.count()).toBe(0);
   });
@@ -1661,6 +1681,23 @@ describe('service automation transaction certification', () => {
       acknowledgeNoShadow: true,
     });
 
+    await db.automationShadowAggregate.create({
+      data: {
+        serviceId: service.id,
+        versionId: candidate2.id,
+        bucketDate: new Date(new Date().toISOString().slice(0, 10)),
+        evaluated: 1,
+        priorityDifferent: 1,
+      },
+    });
+    await expect(
+      activateCandidate({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedCandidateVersionId: candidate2.id,
+        expectedActiveVersionId: version1.id,
+      })
+    ).rejects.toThrow('Explicitly acknowledge candidate routing');
     // Activating candidate cutover atomically updates activeVersionId and clears candidateVersionId
     const promoted = await activateCandidate({
       serviceId: service.id,
@@ -1668,6 +1705,7 @@ describe('service automation transaction certification', () => {
       expectedCandidateVersionId: candidate2.id,
       expectedActiveVersionId: version1.id,
       acknowledgeNoShadow: true,
+      acknowledgeMaterialDifferences: true,
     });
 
     expect(promoted.activeVersionId).toBe(candidate2.id);

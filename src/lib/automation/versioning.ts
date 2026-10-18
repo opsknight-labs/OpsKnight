@@ -252,7 +252,10 @@ export async function publishVersion(
       input.serviceId,
       input.actorId,
       source ? 'automation.rollback.published' : 'automation.version.published',
-      { versionId: config?.activeVersionId ?? null, candidateVersionId: config?.candidateVersionId ?? null },
+      {
+        versionId: config?.activeVersionId ?? null,
+        candidateVersionId: config?.candidateVersionId ?? null,
+      },
       {
         versionId: version.id,
         lint: issues,
@@ -285,6 +288,7 @@ export async function activateCandidate(
     expectedActiveVersionId?: string | null;
     acknowledgeNoShadow?: boolean;
     acknowledgeShadowErrors?: boolean;
+    acknowledgeMaterialDifferences?: boolean;
   },
   externalTx?: Prisma.TransactionClient,
   apiClientId?: string
@@ -319,7 +323,10 @@ export async function activateCandidate(
     )
       throw new AutomationConflict();
     if (!config.candidateVersion)
-      throw new AppError({ code: 'INTERNAL_ERROR', details: { reason: 'candidate version missing' } });
+      throw new AppError({
+        code: 'INTERNAL_ERROR',
+        details: { reason: 'candidate version missing' },
+      });
 
     // Re-validate the candidate before cutover.
     loadCompiledVersion(config.candidateVersion);
@@ -350,7 +357,14 @@ export async function activateCandidate(
         versionId: config.candidateVersion.id,
         bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
       },
-      _sum: { evaluated: true, errors: true, fallbacks: true },
+      _sum: {
+        evaluated: true,
+        errors: true,
+        fallbacks: true,
+        routeDifferent: true,
+        priorityDifferent: true,
+        noEscalationDifferent: true,
+      },
     });
     if (!evidence._sum.evaluated && !input.acknowledgeNoShadow)
       throw new AutomationValidationError(
@@ -359,6 +373,16 @@ export async function activateCandidate(
     if ((evidence._sum.errors || evidence._sum.fallbacks) && !input.acknowledgeShadowErrors)
       throw new AutomationValidationError(
         'Explicitly acknowledge Shadow errors and fallbacks before activating the candidate.'
+      );
+
+    const materialDifferences = Boolean(
+      evidence._sum.routeDifferent ||
+      evidence._sum.priorityDifferent ||
+      evidence._sum.noEscalationDifferent
+    );
+    if (materialDifferences && !input.acknowledgeMaterialDifferences)
+      throw new AutomationValidationError(
+        'Explicitly acknowledge candidate routing, priority and suppression differences before activation.'
       );
 
     // Atomic cutover: swap candidate → active, clear candidate.
@@ -381,10 +405,12 @@ export async function activateCandidate(
         candidateVersionId: null,
         acknowledgeNoShadow: input.acknowledgeNoShadow === true,
         acknowledgeShadowErrors: input.acknowledgeShadowErrors === true,
+        acknowledgeMaterialDifferences: input.acknowledgeMaterialDifferences === true,
+        reviewedEvidence: { windowDays: 7, minimumEvaluations: 1, ...evidence._sum },
       },
       apiClientId
     );
-    logger.info('automation.candidate.activated', {
+    logger.info('automation.candidate.activation.staged', {
       serviceId: input.serviceId,
       previousActiveVersionId: config.activeVersionId,
       newActiveVersionId: updated.activeVersionId,
@@ -437,7 +463,7 @@ export async function discardCandidate(
       { candidateVersionId: null },
       apiClientId
     );
-    logger.info('automation.candidate.discarded', {
+    logger.info('automation.candidate.discard.staged', {
       serviceId: input.serviceId,
       discardedCandidateVersionId: config.candidateVersionId,
     });
