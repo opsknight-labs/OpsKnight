@@ -3625,6 +3625,7 @@ model ServiceAutomationRule {
   @@index([runbookId])
 }
 
+// Partial unique index in 20261018140000: one enabled trigger per binding/event.
 model RunbookTrigger {
   revision       Int                   @default(1)
   id             String                @id @default(cuid())

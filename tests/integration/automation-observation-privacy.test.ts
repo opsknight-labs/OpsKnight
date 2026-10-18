@@ -320,6 +320,18 @@ it('commits emergency OFF even when diagnostic cleanup fails, then retries durab
   const actor = await createTestUser({ role: 'ADMIN' });
   const service = await createTestService('Emergency OFF');
   await db.serviceAutomationConfig.create({ data: { serviceId: service.id, mode: 'SHADOW' } });
+  await db.automationContextObservation.create({
+    data: {
+      serviceId: service.id,
+      integrationId: 'emergency-fixture',
+      integrationType: 'EVENTS_API',
+      fieldKey: 'environment',
+      sourcePath: 'payload.environment',
+      fieldType: 'STRING',
+      normalizedRawValueHash: 'e'.repeat(64),
+      rawValuePreview: 'preview awaiting cleanup',
+    },
+  });
   await db.$executeRawUnsafe(
     `CREATE FUNCTION test_preview_cleanup_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Diagnostic cleanup unavailable'; END; $$`
   );
@@ -406,4 +418,131 @@ it('classifies an invalid global enablement as an actionable conflict', async ()
       { source: 'UI', actorId: actor.id }
     )
   ).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
+});
+
+it('resumes bounded cleanup across transaction failures and post-commit redelivery without duplicating continuation', async () => {
+  const service = await createTestService('Bounded cleanup');
+  const actor = await createTestUser({ role: 'ADMIN' });
+  const {
+    PRIVACY_CLEANUP_BATCH_SIZE: size,
+    getAutomationPrivacyCleanupStatus,
+    retryAutomationPrivacyCleanup,
+  } = await import('@/lib/automation/privacy-cleanup');
+  const total = size * 2 + 3;
+  await db.automationContextObservation.createMany({
+    data: Array.from({ length: total }, (_, index) => ({
+      serviceId: service.id,
+      integrationType: 'EVENTS_API',
+      integrationId: 'batch-fixture',
+      fieldKey: 'environment',
+      sourcePath: `payload.environment${index}`,
+      rawValuePreview: 'private-preview',
+      normalizedRawValueHash: index.toString(16).padStart(64, '0'),
+      fieldType: 'STRING',
+    })),
+  });
+  await db.backgroundJob.createMany({
+    data: Array.from({ length: total }, (_, index) => ({
+      type: 'SCHEDULED_TASK' as const,
+      scheduledAt: new Date(),
+      payload: {
+        task: 'AUTOMATION_OBSERVE',
+        logicalKey: `batch-${index}`,
+        observations: [{ value: 'private-preview', valueHash: 'a'.repeat(64) }],
+      },
+    })),
+  });
+  const current = await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } });
+  await updateAutomationSettings(
+    {
+      automationEnabled: false,
+      automationStoreObservationPreviews: false,
+      automationTraceRetentionDays: 90,
+      expectedRevision: current.automationSettingsRevision,
+    },
+    { actorId: actor.id, source: 'UI' }
+  );
+  const first = await db.backgroundJob.findFirstOrThrow({
+    where: { id: { startsWith: 'AUTOMATION_PRIVACY_CLEANUP:' } },
+  });
+  await processAutomationJob(first.payload, first.id);
+  expect(
+    await db.automationContextObservation.count({ where: { rawValuePreview: { not: '' } } })
+  ).toBe(total - size);
+  await processAutomationJob(first.payload, first.id); // crash after commit, before queue acknowledgement
+  expect(
+    await db.backgroundJob.count({ where: { id: { startsWith: 'AUTOMATION_PRIVACY_CLEANUP:' } } })
+  ).toBe(2);
+  const second = await db.backgroundJob.findFirstOrThrow({
+    where: { id: { startsWith: 'AUTOMATION_PRIVACY_CLEANUP:' }, NOT: { id: first.id } },
+  });
+  await db.$executeRawUnsafe(
+    `CREATE FUNCTION test_batched_cleanup_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Batch unavailable'; END; $$`
+  );
+  await db.$executeRawUnsafe(
+    `CREATE TRIGGER test_batched_cleanup_failure_trigger BEFORE UPDATE ON "AutomationContextObservation" FOR EACH STATEMENT EXECUTE FUNCTION test_batched_cleanup_failure()`
+  );
+  try {
+    for (let retry = 0; retry < 3; retry++)
+      await expect(processAutomationJob(second.payload, second.id)).rejects.toThrow(
+        'Batch unavailable'
+      );
+    expect(
+      await db.automationContextObservation.count({ where: { rawValuePreview: { not: '' } } })
+    ).toBe(total - size);
+    await db.backgroundJob.update({ where: { id: second.id }, data: { status: 'FAILED' } });
+    expect((await getAutomationPrivacyCleanupStatus())?.status).toBe('FAILED');
+    expect((await retryAutomationPrivacyCleanup(actor.id))?.status).toBe('PENDING');
+    expect(
+      await db.auditLog.count({ where: { action: 'automation.privacy.cleanup.retried' } })
+    ).toBe(1);
+  } finally {
+    await db.$executeRawUnsafe(
+      'DROP TRIGGER test_batched_cleanup_failure_trigger ON "AutomationContextObservation"'
+    );
+    await db.$executeRawUnsafe('DROP FUNCTION test_batched_cleanup_failure()');
+  }
+  await processAutomationJob(second.payload, second.id);
+  const third = await db.backgroundJob.findFirstOrThrow({
+    where: {
+      id: { startsWith: 'AUTOMATION_PRIVACY_CLEANUP:' },
+      NOT: { id: { in: [first.id, second.id] } },
+    },
+  });
+  await processAutomationJob(third.payload, third.id);
+  expect(
+    await db.automationContextObservation.count({ where: { rawValuePreview: { not: '' } } })
+  ).toBe(0);
+  const previewJobs = await db.$queryRaw<
+    { count: bigint }[]
+  >`SELECT count(*) FROM "BackgroundJob" WHERE payload @? '$.observations[*] ? (@.value != "")'`;
+  expect(Number(previewJobs[0].count)).toBe(0);
+  expect((await getAutomationPrivacyCleanupStatus())?.status).toBe('COMPLETE');
+});
+
+it('supersedes an old cleanup after a new preview opt-in and rejects manual retry while opted in', async () => {
+  const { retryAutomationPrivacyCleanup, getAutomationPrivacyCleanupStatus } =
+    await import('@/lib/automation/privacy-cleanup');
+  const actor = await createTestUser({ role: 'ADMIN' });
+  const cleanupId = randomUUID();
+  const job = await db.backgroundJob.create({
+    data: {
+      id: `AUTOMATION_PRIVACY_CLEANUP:${cleanupId}:0`,
+      type: 'SCHEDULED_TASK',
+      scheduledAt: new Date(),
+      payload: { task: 'AUTOMATION_PRIVACY_CLEANUP', cleanupId, batch: 0 },
+    },
+  });
+  await db.systemSettings.update({
+    where: { id: 'default' },
+    data: { automationStoreObservationPreviews: true },
+  });
+  await processAutomationJob(job.payload, job.id);
+  expect((await getAutomationPrivacyCleanupStatus())?.status).toBe('SUPERSEDED');
+  await expect(retryAutomationPrivacyCleanup(actor.id)).rejects.toMatchObject({
+    code: 'RESOURCE_CONFLICT',
+  });
+  expect(await db.auditLog.count({ where: { action: 'automation.privacy.cleanup.retried' } })).toBe(
+    0
+  );
 });

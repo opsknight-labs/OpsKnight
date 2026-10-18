@@ -865,7 +865,7 @@ export async function replaceBindingTrigger(
     });
     const previous = await tx.runbookTrigger.findFirst({
       where: { bindingId, event: input.event },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ enabled: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
       include: { conditions: { orderBy: { sequence: 'asc' } } },
     });
     const conditions = normalized.map(condition => ({
@@ -940,6 +940,7 @@ export async function replaceBindingTrigger(
           serviceId: binding.serviceId,
           event: trigger.event,
           triggerId: trigger.id,
+          retiredTriggers: retired,
           revision: trigger.revision,
           before: previous
             ? {

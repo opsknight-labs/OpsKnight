@@ -371,3 +371,40 @@ main and this branch added the same domain error import in different places.
 Matching main's import placement removes that duplicate without changing either
 branch's business behavior. A disposable merged worktree passes strict typecheck and production build;
 latest remote CI must still rerun successfully before readiness.
+
+### Follow-up to review of 048a33fd8 / 4b6b0fe9
+
+The trigger contract is one enabled configuration per rule/event. Disabled
+historical trigger identities remain for execution and suggestion references.
+A partial PostgreSQL unique index enforces the active invariant for every writer.
+The populated upgrade pauses every ambiguous group and its parent rule, records
+a system audit with the previous identities, and preserves conditions. It never
+chooses which legacy conditions should win. Explicit trigger replacement prefers
+the existing active record and retires any competing enabled records under the
+shared lock. Operators must review and reactivate paused ambiguous rules.
+
+Deferred emergency-OFF privacy cleanup now processes at most 200 observations
+and 200 queued payloads per transaction. Partial indexes locate remaining work.
+A durable batch receipt and deterministic continuation commit with scrubbing,
+so failures roll back only one batch and post-commit redelivery cannot duplicate
+continuations. The settings lock fences opt-in changes; later opt-in supersedes
+old cleanup. The administrator System Settings UI displays pending/completed/
+failed status and batch progress, with an authorized audited retry action. Raw
+worker errors and diagnostic values are not exposed in status responses. Explicit
+preview opt-out retains its existing synchronous transaction behavior.
+
+Fault injection covers three failed attempts after a completed batch, recovery,
+post-commit replay, exact clearing, superseded cleanup and manual retry rejection
+while opted in. Browser coverage includes failed-state visibility, administrator
+retry, real worker completion and opt-out across four device profiles. The live
+HTTPS Compose Agent workflow now explicitly activates its configured Automatic
+fixture. UI revision assertions read committed revisions rather than assuming
+that nested trigger writes advance exactly once.
+
+The source inventory labels local rule sources as baseline, matching its existing
+admission contract. Repository-wide lint failures also exist in files and lint
+configuration unchanged from current main; those release blockers are recorded
+separately, without relaxing checks. The complete endpoint plan, candidate
+isolation and production certification remain unfinished. Daily readiness
+evidence continues to mean conservative daily-bucket freshness, not exact event
+freshness. See review-048a33fd8-remediation.json and runbook-trigger-upgrade.json.

@@ -153,3 +153,13 @@ function persist(parsed: z.infer<typeof schema>, actor: { id: string }) {
     return next;
   });
 }
+
+export async function readAutomationPrivacyCleanupStatus() {
+  await assertAdmin();
+  return getAutomationPrivacyCleanupStatus();
+}
+
+export async function retryAutomationPrivacyCleanupAction() {
+  const actor = await assertAdmin();
+  return retryAutomationPrivacyCleanup(actor.id);
+}
