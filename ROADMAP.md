@@ -20,7 +20,7 @@ This roadmap communicates direction, not a delivery date or support commitment. 
 No delivery date is committed. Items will be scoped and scheduled before they become a release gate.
 
 - [ ] Richer enterprise REST API v2 — complete automation, runbook-rule, approval and lifecycle operations with revision-safe authoring, generated OpenAPI spec, and updated TypeScript and Python SDKs
-- [ ] Runbook improvements — draft authoring and publication workflows, version comparison, archive/restore, duplication, dependency-safe deletion, and service-bound rule administration
+- [ ] Interactive runbooks and automated remediation — visual step builder, draft authoring and publication, version comparison, execution previews, and service-bound trigger rules
 - [ ] Streamlined OIDC setup — guided provider configuration, claim-to-role mapping preview, and diagnostic test-login flow
 - [ ] Emergency access — break-glass admin recovery path, bootstrap-code regeneration, and session-override controls for lockout scenarios
 
