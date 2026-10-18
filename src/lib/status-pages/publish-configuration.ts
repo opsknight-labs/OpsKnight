@@ -438,10 +438,7 @@ async function recordPublicationError(pageId: string, error: unknown) {
  * Clearing the marker here would let a privacy tightening whose publish failed be "retried" into
  * serving the very content it was meant to retract.
  */
-export async function retryStatusPagePublication(
-  pageId: string,
-  actor: StatusPageConfigurationActor
-): Promise<StatusPagePublicationState> {
+export async function reconcileStatusPagePublication(pageId: string) {
   const page = await prisma.statusPage.findUnique({
     where: { id: pageId },
     select: { id: true, enabled: true },
@@ -464,15 +461,25 @@ export async function retryStatusPagePublication(
   });
   if (outcome.kind === 'failed') await recordPublicationError(pageId, outcome.error);
 
+  return { outcome: outcome.kind, publication: await readStatusPagePublicationState(pageId) };
+}
+
+export async function retryStatusPagePublication(
+  pageId: string,
+  actor: StatusPageConfigurationActor
+): Promise<StatusPagePublicationState> {
+  const result = await reconcileStatusPagePublication(pageId);
   await emitAuditEvent({
     action: 'status_page.publication.retried',
-    source: 'UI',
+    source: actor.apiClientId ? 'API' : 'UI',
     target: { type: 'STATUS_PAGE', id: pageId },
     actor: { type: 'USER', id: actor.id, email: actor.email, name: actor.name },
-    metadata: { outcome: outcome.kind },
+    metadata: {
+      outcome: result.outcome,
+      ...(actor.apiClientId ? { apiClientId: actor.apiClientId } : {}),
+    },
   });
-
-  return readStatusPagePublicationState(pageId);
+  return result.publication;
 }
 
 /** Derive what to tell the administrator from the control row and the page's enabled flag. */

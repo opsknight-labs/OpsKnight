@@ -164,6 +164,35 @@ const statusPageSectionRepresentations = Object.fromEntries(
 );
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  StatusPagePublicationState: object(
+    {
+      status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
+      revision: string(),
+      stale: { type: 'boolean' },
+      lastError: { type: ['string', 'null'] },
+    },
+    ['status', 'revision']
+  ),
+  StatusPagePublication: object(
+    { id, revision: integer, publication: ref('StatusPagePublicationState') },
+    ['id', 'revision', 'publication']
+  ),
+  StatusPagePublicationReceipt: object(
+    { outcome: string(), completedAt: date, publication: ref('StatusPagePublicationState') },
+    ['outcome', 'completedAt', 'publication']
+  ),
+  StatusPagePublicationJob: object(
+    {
+      id: { type: 'string', format: 'uuid' },
+      statusPageId: id,
+      status: string(),
+      attempts: integer,
+      createdAt: date,
+      completedAt: { type: ['string', 'null'], format: 'date-time' },
+      result: { anyOf: [ref('StatusPagePublicationReceipt'), { type: 'null' }] },
+    },
+    ['id', 'statusPageId', 'status', 'attempts', 'createdAt', 'completedAt', 'result']
+  ),
   StatusPageService: object(
     {
       id,
@@ -1078,6 +1107,25 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/status-pages/{id}/publication',
+    summary: 'Inspect current persisted publication state separately from configuration',
+  },
+  {
+    method: 'post',
+    path: '/status-pages/{id}/publication/retry',
+    summary: 'Queue durable publication reconciliation without loosening privacy withdrawal',
+    status: 202,
+    body: object({}),
+    description:
+      'Returns a persisted job and Location. Matching retry keys do not enqueue again. Inspect job result and current publication; a completed job can report FAILED publication. Queue retries preserve a single canonical audit receipt.',
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/publication/jobs/{jobId}',
+    summary: 'Inspect a page-owned publication retry job without internal queue payloads',
+  },
   {
     method: 'get',
     path: '/status-pages/{id}/services',

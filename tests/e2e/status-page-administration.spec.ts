@@ -141,6 +141,22 @@ test('REST configuration changes appear in the shared settings UI and public pri
       body: { showIncidentTitles: false },
       headers: { 'Idempotency-Key': crypto.randomUUID(), 'If-Match': `"${changed.revision}"` },
     });
+    const publication = await client.call('getStatusPagePublication', {
+      params: { id: statusPage.id },
+    });
+    const retry = await client.call('retryStatusPagePublication', {
+      params: { id: statusPage.id },
+      body: {},
+      headers: {
+        'If-Match': `"${publication.data.revision}"`,
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+    });
+    expect(retry.data.status).toBe('PENDING');
+    const job = await client.call('getStatusPagePublicationJob', {
+      params: { id: statusPage.id, jobId: retry.data.id },
+    });
+    expect(job.data.result).toBeNull();
     await page.goto('/login');
     await page.locator('input[type="email"]').fill(actor.email);
     await page.locator('input[type="password"]').fill(password);

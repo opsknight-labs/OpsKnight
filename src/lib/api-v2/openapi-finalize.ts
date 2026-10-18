@@ -397,6 +397,7 @@ const etagHeader = {
 };
 
 const ETAG_RESOURCES = new Set([
+  '/status-pages/{id}/publication',
   '/status-pages/{id}/services',
   '/status-pages/{id}/appearance',
   '/status-pages/{id}/privacy',

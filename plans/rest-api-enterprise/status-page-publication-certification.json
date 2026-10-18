@@ -1,0 +1,55 @@
+{
+  "sourceParent": "238aef377473e31450b414234c88872ffefdffaf",
+  "measuredAt": "2026-10-18T21:26:46.577723+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Three status-page publication inspection/retry operations; not complete status-page or enterprise coverage.",
+  "registeredOperationCount": 140,
+  "addedOperations": 3,
+  "productionBuild": "passed",
+  "typecheck": "clean non-incremental passed on final source",
+  "changedSourceLint": "passed zero warnings",
+  "generatedClients": "Both live SDKs passed publication inspection, durable retry acceptance and page-owned job inspection against the production build and PostgreSQL; generated drift passed. Worker execution is covered separately by real PostgreSQL processJob tests.",
+  "unitContract": {
+    "passed": 272,
+    "files": 12
+  },
+  "postgres": {
+    "passed": 38,
+    "newCases": 11,
+    "configurationRegression": 14,
+    "publicationRegression": 13,
+    "coverage": [
+      "Required key and concrete revision at acceptance",
+      "Concurrent retry keys, durable job and request-audit atomicity",
+      "Actual general-queue processing, canonical outcome audit and receipt",
+      "Audit failure rollback and retry without duplicate outcome audit",
+      "Replaced claim rejection, page ownership, role/scope denial, role demotion before replay",
+      "Privacy withdrawal and disabled pages remain withheld"
+    ]
+  },
+  "browser": {
+    "passed": 6,
+    "projects": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "skipped": 0,
+    "flaky": 0,
+    "scope": "Subscriber/configuration UI parity plus publication reads and durable retry/job acceptance"
+  },
+  "limits": [
+    "SDK/browser verification inspects accepted jobs; worker outcome and crash retry semantics use the PostgreSQL integration suite.",
+    "Request and outcome audits describe separate acceptance/completion events. A completed job can contain FAILED or PUBLISHING publication.",
+    "Domain ownership, validated assets, preview and remaining enterprise families remain unfinished.",
+    "No mixed-version worker, production load/HA or full release certification claimed."
+  ],
+  "sha256": {
+    "src/lib/status-pages/publication-jobs.ts": "1a8a66372ef800658b6fa8d89efbd057bbef5c28622239acb7be4a4f9163447b",
+    "src/lib/status-pages/publish-configuration.ts": "cfc15d8bc75e4c2205c9963be817b418ee05bd83399ee307bc83a77a1313ea38",
+    "src/lib/jobs/queue.ts": "bd1dbf903f08d2d578960e53e579a5677c78d013ed88b3bd9e3bf8184339be75",
+    "tests/integration/api-v2-status-page-publication.test.ts": "59b0a0386cd9c76feb0d6accf2c11e6af8d45c54d4d4b63bf9f589633f3df652",
+    "tests/e2e/status-page-administration.spec.ts": "6b527a67ede6645aa5c5afedbdccdaee83ec71dafbf1f2b814bc52bc523caa65",
+    "sdk/openapi-v2.json": "ded41bc951052abf5da9125b1e15de15044b3360d24d4a6ae117a5701c82c4f6"
+  }
+}

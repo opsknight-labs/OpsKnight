@@ -518,6 +518,14 @@
         {
           "path": "src/lib/api-v2/status-page-settings.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/status-pages/publication-jobs.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/app/api/v2/status-pages/[id]/publication/route.ts",
+          "branch": "baseline"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -528,7 +536,7 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Remaining domains/validated branding asset lifecycle, publication retry and combined status-page certification."
+        "Domain ownership, validated branding asset lifecycle, preview and combined status-page certification remain unfinished."
       ]
     },
     {

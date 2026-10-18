@@ -19,6 +19,10 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type StatusPagePublicationState = { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "stale"?: boolean; "lastError"?: string | null };
+export type StatusPagePublication = { "id": string; "revision": number; "publication": StatusPagePublicationState };
+export type StatusPagePublicationReceipt = { "outcome": string; "completedAt": string; "publication": StatusPagePublicationState };
+export type StatusPagePublicationJob = { "id": string; "statusPageId": string; "status": string; "attempts": number; "createdAt": string; "completedAt": string | null; "result": StatusPagePublicationReceipt | null };
 export type StatusPageService = { "id": string; "statusPageId": string; "serviceId": string; "displayName": string | null; "order": number; "showOnPage": boolean; "createdAt": string };
 export type StatusPageAppearance = { "id": string; "revision": number; "updatedAt": string; "values": { "branding"?: Record<string, unknown> | null } };
 export type StatusPagePrivacy = { "id": string; "revision": number; "updatedAt": string; "values": { "privacyMode"?: string | null; "requireAuth"?: boolean; "authProvider"?: string | null; "showIncidentDetails"?: boolean; "showIncidentTitles"?: boolean; "showIncidentDescriptions"?: boolean; "showAffectedServices"?: boolean; "showIncidentTimestamps"?: boolean; "showServiceMetrics"?: boolean; "showServiceDescriptions"?: boolean; "showServiceRegions"?: boolean; "showTeamInformation"?: boolean; "showCustomFields"?: boolean; "showIncidentAssignees"?: boolean; "showIncidentUrgency"?: boolean; "showUptimeHistory"?: boolean; "showRecentIncidents"?: boolean; "showIncidentHistoryDetails"?: boolean; "incidentHistoryDetailDays"?: number | null; "maxIncidentsToShow"?: number | null; "incidentHistoryDays"?: number | null; "allowedCustomFields"?: Array<string> | null; "dataRetentionDays"?: number | null } };
@@ -78,6 +82,9 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  getStatusPagePublication: { "params": { "id": string } };
+  retryStatusPagePublication: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  getStatusPagePublicationJob: { "params": { "id": string; "jobId": string } };
   listStatusPageServices: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   setStatusPageServices: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "serviceIds": Array<string>; "serviceConfigs"?: Record<string, { "displayName"?: string | null; "order"?: number; "showOnPage"?: boolean }> } };
   updateStatusPageService: { "params": { "id": string; "serviceId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "displayName"?: string | null; "order"?: number; "showOnPage"?: boolean } };
@@ -217,6 +224,9 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  getStatusPagePublication: { "data": StatusPagePublication; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  retryStatusPagePublication: { "data": StatusPagePublicationJob; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getStatusPagePublicationJob: { "data": StatusPagePublicationJob; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listStatusPageServices: { "data": Array<StatusPageService>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setStatusPageServices: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateStatusPageService: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -356,6 +366,33 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "getStatusPagePublication": {
+    "method": "GET",
+    "path": "/status-pages/{id}/publication",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "retryStatusPagePublication": {
+    "method": "POST",
+    "path": "/status-pages/{id}/publication/retry",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPagePublicationJob": {
+    "method": "GET",
+    "path": "/status-pages/{id}/publication/jobs/{jobId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listStatusPageServices": {
     "method": "GET",
     "path": "/status-pages/{id}/services",

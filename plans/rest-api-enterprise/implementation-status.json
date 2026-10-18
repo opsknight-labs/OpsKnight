@@ -38,11 +38,12 @@
         "Shared domain commands join the outer idempotency/audit transaction",
         "Concrete strong draft revision preconditions, including before idempotency replay",
         "Execution cancellation ownership and service-team boundaries",
-        "Credential migration checklist with role and PostgreSQL compatibility tests"
+        "Credential migration checklist with role and PostgreSQL compatibility tests",
+        "Explicit administrator-only subscriber contact/revocation scopes with safe DTOs and transactionally suppressed delivery"
       ],
       "remaining": [
         "Migrate older handwritten routes with equivalent resource contracts",
-        "Dedicated agent, secret, subscriber and rotation policies",
+        "Dedicated agent, secret and rotation policies",
         "Complete cross-resource and negative authorization matrix for future operations"
       ]
     },
@@ -63,7 +64,7 @@
     },
     {
       "phase": 4,
-      "status": "pending",
+      "status": "in_progress",
       "remaining": [
         "Complete combined-branch certification of the 17 implemented automation operations, including the deployed API-only lifecycle and upgrade evidence",
         "Integration setup/configuration/rotation/test/delete commands",
@@ -80,24 +81,29 @@
         "Optional reviewed-plan digest fence",
         "Cancellation requests retain CANCEL_REQUESTED semantics",
         "Privileged editable draft views with revision-bound preservation of hidden configuration and defaults",
-        "Serializable binding enablement and deterministic archive snapshot race coverage"
+        "Serializable binding enablement and deterministic archive snapshot race coverage",
+        "Eight metadata/lifecycle operations with canonical audit and revision fencing",
+        "Twelve service-rule, policy-check, discovery and readiness operations with trigger invariants"
       ],
       "remaining": [
-        "Metadata/lifecycle endpoints",
-        "Service rules and policy checks",
         "Approvals, agents, pools, enrollment and secret grants",
         "Docker and Kubernetes target-isolation/recovery certification"
       ]
     },
     {
       "phase": 6,
-      "status": "pending",
+      "status": "in_progress",
       "remaining": [
-        "Status components/subscribers/branding and publication reconciliation",
+        "Status-page domain ownership, validated branding assets, preview and combined certification",
         "Structured postmortem impact, collaboration and action items",
         "Durable report/export jobs and result authorization",
         "Product decision on unfinished SLO management",
         "Audit exports, dashboards and approved operational configuration"
+      ],
+      "delivered": [
+        "Five scoped subscriber administration operations",
+        "Eleven revision-fenced configuration/component operations",
+        "Three publication inspection/durable-retry operations using canonical reconciliation"
       ]
     },
     {
@@ -181,7 +187,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 137,
+    "registeredOperationCount": 140,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -227,14 +233,22 @@
   "statusPageSubscribers": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 5,
-    "remaining": "Domains, validated branding assets, publication retry and combined status-page certification; other enterprise families.",
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
     "evidence": "plans/rest-api-enterprise/status-page-subscriber-certification.json"
   },
   "statusPageConfiguration": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 11,
-    "remaining": "Domains/validated branding assets, publication retry and combined certification.",
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
+  },
+  "registeredOperationCount": 140,
+  "statusPagePublication": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 3,
+    "remaining": "Domain ownership, validated assets, preview, and remaining enterprise families and combined certification.",
+    "mutationContract": "Required concrete If-Match and Idempotency-Key; accepted queue job, request audit and replay commit together. Worker canonical outcome audit and receipt commit together. Completion does not imply LIVE publication.",
+    "evidence": "plans/rest-api-enterprise/status-page-publication-certification.json"
   }
 }

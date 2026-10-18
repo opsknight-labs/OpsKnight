@@ -1,4 +1,31 @@
 {
+  "getStatusPagePublication": {
+    "method": "GET",
+    "path": "/status-pages/{id}/publication",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "retryStatusPagePublication": {
+    "method": "POST",
+    "path": "/status-pages/{id}/publication/retry",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPagePublicationJob": {
+    "method": "GET",
+    "path": "/status-pages/{id}/publication/jobs/{jobId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listStatusPageServices": {
     "method": "GET",
     "path": "/status-pages/{id}/services",

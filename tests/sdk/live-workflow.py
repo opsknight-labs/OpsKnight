@@ -140,3 +140,10 @@ components = client.call("setStatusPageServices", {"params": {"id": configuratio
 client.call("updateStatusPageService", {"params": {"id": configuration["statusPageId"], "serviceId": configuration["runbookRuleServiceId"]}, "body": {"displayName": "Python reviewed component"}, "headers": {"Idempotency-Key": uuid.uuid4().hex, "If-Match": '\"%s\"' % components["revision"]}})
 assert client.call("listStatusPageServices", {"params": {"id": configuration["statusPageId"]}, "query": {"limit": 1}})["data"][0]["displayName"] == "Python reviewed component"
 print("Python live status-page configuration, privacy and service components passed.")
+
+publication = client.call("getStatusPagePublication", {"params": {"id": configuration["statusPageId"]}})["data"]
+retry = client.call("retryStatusPagePublication", {"params": {"id": configuration["statusPageId"]}, "body": {}, "headers": {"Idempotency-Key": uuid.uuid4().hex, "If-Match": '"%s"' % publication["revision"]}})["data"]
+assert retry["status"] == "PENDING"
+job = client.call("getStatusPagePublicationJob", {"params": {"id": configuration["statusPageId"], "jobId": retry["id"]}})["data"]
+assert job["id"] == retry["id"] and job["result"] is None
+print("Python live status-page publication inspection and durable retry acceptance passed.")
