@@ -377,7 +377,11 @@ export const runbookTriggerConditionSchema = z
     value: z.unknown(),
     sequence: z.number().int().min(0).default(0),
   })
-  .strict();
+  .strict()
+  .superRefine((condition, context) => {
+    const error = validateConditionComparison(condition, conditionValueType(condition.field, []));
+    if (error) context.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: error });
+  });
 
 export type RunbookTriggerConditionInput = z.infer<typeof runbookTriggerConditionSchema>;
 

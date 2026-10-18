@@ -35,6 +35,65 @@ const lifecycle = object({
   },
 });
 
+const ruleConfigurationProperties: Record<string, Schema> = {
+  runbookId: id,
+  name: string(200),
+  runbookVersionId: id,
+  enabled: { type: 'boolean' },
+  mode: { type: 'string', enum: ['MANUAL', 'SUGGESTED', 'AUTOMATIC'] },
+  versionStrategy: { type: 'string', enum: ['PINNED', 'LATEST_PUBLISHED'] },
+  defaultAgentId: id,
+  defaultAgentPoolId: id,
+  agentSelector: { type: 'object', additionalProperties: string() },
+  inputValues: { type: 'object', additionalProperties: {} },
+};
+const ruleTriggerInput = object(
+  {
+    event: { const: 'INCIDENT_CREATED' },
+    conditionLogic: { type: 'string', enum: ['AND', 'OR'] },
+    enabled: { type: 'boolean' },
+    conditions: array(
+      object(
+        {
+          field: string(),
+          operator: {
+            type: 'string',
+            enum: [
+              'EQUALS',
+              'NOT_EQUALS',
+              'CONTAINS',
+              'STARTS_WITH',
+              'IN',
+              'NOT_IN',
+              'EXISTS',
+              'NOT_EXISTS',
+            ],
+          },
+          value: {},
+          sequence: integer,
+        },
+        ['field', 'operator', 'value']
+      ),
+      20
+    ),
+  },
+  ['event']
+);
+const ruleCondition = object(
+  { field: string(), operator: string(), value: {}, sequence: integer },
+  ['field', 'operator', 'value', 'sequence']
+);
+const ruleTrigger = object(
+  {
+    id,
+    revision: integer,
+    event: string(),
+    conditionLogic: string(),
+    enabled: { type: 'boolean' },
+    conditions: array(ruleCondition, 20),
+  },
+  ['id', 'revision', 'event', 'conditionLogic', 'enabled', 'conditions']
+);
 const authoringVersionSchema = object(
   {
     id,
@@ -610,6 +669,130 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     },
     ['key', 'label']
   ),
+  ServiceRunbookRuleSummary: object(
+    {
+      id,
+      serviceId: id,
+      runbookId: id,
+      name: string(200),
+      configurationRevision: integer,
+      enabled: { type: 'boolean' },
+      mode: { type: 'string', enum: ['MANUAL', 'SUGGESTED', 'AUTOMATIC'] },
+      versionStrategy: { type: 'string', enum: ['PINNED', 'LATEST_PUBLISHED'] },
+      runbookVersionId: { type: ['string', 'null'] },
+      createdAt: date,
+      updatedAt: date,
+    },
+    [
+      'id',
+      'serviceId',
+      'runbookId',
+      'name',
+      'configurationRevision',
+      'enabled',
+      'mode',
+      'versionStrategy',
+      'runbookVersionId',
+      'createdAt',
+      'updatedAt',
+    ]
+  ),
+  ServiceRunbookRule: object(
+    {
+      ...ruleConfigurationProperties,
+      id,
+      serviceId: id,
+      runbookVersionId: { type: ['string', 'null'] },
+      resolvedVersionId: { type: ['string', 'null'] },
+      defaultAgentId: { type: ['string', 'null'] },
+      defaultAgentPoolId: { type: ['string', 'null'] },
+      configurationRevision: integer,
+      createdAt: date,
+      updatedAt: date,
+      triggers: array(ruleTrigger),
+    },
+    [
+      'id',
+      'serviceId',
+      'runbookId',
+      'name',
+      'configurationRevision',
+      'enabled',
+      'mode',
+      'versionStrategy',
+      'runbookVersionId',
+      'resolvedVersionId',
+      'defaultAgentId',
+      'defaultAgentPoolId',
+      'agentSelector',
+      'inputValues',
+      'createdAt',
+      'updatedAt',
+      'triggers',
+    ]
+  ),
+  RunbookRuleReadiness: object(
+    {
+      ruleId: id,
+      configurationRevision: integer,
+      readiness: object(
+        {
+          state: {
+            type: 'string',
+            enum: ['PAUSED', 'BLOCKED', 'CHECKS_REQUIRED', 'CONFIGURATION_VALID', 'UNKNOWN'],
+          },
+          checkedAt: date,
+          eligibleAgents: { type: ['integer', 'null'], minimum: 0 },
+          armed: { type: 'boolean' },
+          checks: array(
+            object(
+              {
+                code: string(),
+                state: { type: 'string', enum: ['passed', 'blocked', 'deferred'] },
+                message: string(),
+              },
+              ['code', 'state', 'message']
+            )
+          ),
+        },
+        ['state', 'checkedAt', 'eligibleAgents', 'armed', 'checks']
+      ),
+    },
+    ['ruleId', 'configurationRevision', 'readiness']
+  ),
+  RunbookRulePolicyCheck: object(
+    {
+      id,
+      ruleId: id,
+      agentId: id,
+      versionId: id,
+      checksum: string(),
+      status: string(),
+      expiresAt: date,
+      checkedAt: { type: ['string', 'null'], format: 'date-time' },
+      createdAt: date,
+    },
+    [
+      'id',
+      'ruleId',
+      'agentId',
+      'versionId',
+      'checksum',
+      'status',
+      'expiresAt',
+      'checkedAt',
+      'createdAt',
+    ]
+  ),
+  RunbookRulePolicyRequest: object(
+    {
+      saved: { const: true },
+      checkedTargets: integer,
+      checkIds: array(id, 100),
+      status: { const: 'PENDING' },
+    },
+    ['saved', 'checkedTargets', 'checkIds', 'status']
+  ),
   RunbookVersionDiff: object(
     {
       base: object({ version: integer, checksum: string() }, ['version', 'checksum']),
@@ -773,6 +956,142 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/services/{id}/runbook-rules',
+    summary: 'List bounded service runbook rule summaries',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 200,
+    paginated: true,
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/runbook-rules',
+    summary: 'Create a service runbook rule with a reviewed version',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 201,
+    body: object(
+      {
+        configuration: object(ruleConfigurationProperties, ['runbookId']),
+        trigger: ruleTriggerInput,
+        expectedVersionId: id,
+      },
+      ['configuration', 'expectedVersionId']
+    ),
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/runbook-rules/{ruleId}',
+    summary: 'Read privileged rule configuration and its revision',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 200,
+  },
+  {
+    method: 'patch',
+    path: '/services/{id}/runbook-rules/{ruleId}',
+    summary: 'Update rule configuration with revision protection',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 200,
+    body: object(
+      {
+        configuration: {
+          ...object(
+            Object.fromEntries(
+              Object.entries(ruleConfigurationProperties).filter(([key]) => key !== 'runbookId')
+            )
+          ),
+          minProperties: 1,
+          properties: {
+            ...Object.fromEntries(
+              Object.entries(ruleConfigurationProperties).filter(([key]) => key !== 'runbookId')
+            ),
+            runbookVersionId: { type: ['string', 'null'] },
+            defaultAgentId: { type: ['string', 'null'] },
+            defaultAgentPoolId: { type: ['string', 'null'] },
+          },
+        },
+        expectedVersionId: id,
+      },
+      ['configuration', 'expectedVersionId']
+    ),
+  },
+  {
+    method: 'delete',
+    path: '/services/{id}/runbook-rules/{ruleId}',
+    summary: 'Detach a rule while preserving execution and suggestion evidence',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 204,
+    body: object({}),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/runbook-rules/{ruleId}/validate',
+    summary: 'Review saved rule readiness without starting work',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. Read-only evaluation of the saved rule as enabled; activation rechecks current evidence. No incidents, executions, notifications or policy-check requests are created.',
+    status: 200,
+    body: object({}),
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/runbook-rules/{ruleId}/policy-checks',
+    summary: 'List safe Agent policy-check status metadata',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 200,
+    paginated: true,
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/runbook-rules/{ruleId}/policy-checks',
+    summary: 'Request durable Agent policy checks for the reviewed rule',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. Creates bounded durable local-policy requests, not executions. Poll the policy-check list; request acceptance is not policy approval. Results exclude frozen action configuration and Agent output.',
+    status: 202,
+    body: object({}),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/runbook-rules/{ruleId}/activate',
+    summary: 'Activate an Automatic rule using current readiness and policy evidence',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. Only paused Automatic rules with immutable pins, current target policy evidence and reviewed trigger configuration can activate.',
+    status: 200,
+    body: object({ confirmMatchAll: { type: 'boolean', default: false } }),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/runbook-rules/{ruleId}/pause',
+    summary: 'Pause new rule-triggered work',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 200,
+    body: object({}),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/runbook-rules/{ruleId}/duplicate',
+    summary: 'Duplicate a rule into an independent paused configuration',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. If-Match identifies the source rule; the response ETag identifies the independent disabled copy.',
+    status: 201,
+    body: object({}),
+  },
+  {
+    method: 'put',
+    path: '/services/{id}/runbook-rules/{ruleId}/triggers',
+    summary: 'Replace the reviewed incident trigger and pause Automatic execution',
+    description:
+      'Requires an explicit runbook-rules scope and administrator runbook-management capability. Configuration includes reviewed input values and secret references; no secret plaintext is resolved. Parent IDs are validated. ',
+    status: 200,
+    body: ruleTriggerInput,
+  },
+
   {
     method: 'get',
     path: '/runbooks/{id}/versions/{versionId}/diff',
@@ -1214,6 +1533,9 @@ export function enterpriseOpenApiPaths() {
         '403': { $ref: '#/components/responses/ProblemError' },
         '404': { $ref: '#/components/responses/ProblemError' },
         '413': { $ref: '#/components/responses/ProblemError' },
+        ...(operation.method === 'get' && operation.path === '/services/{id}/runbook-rules/{ruleId}'
+          ? { '409': { $ref: '#/components/responses/ProblemError' } }
+          : {}),
       },
     };
   }

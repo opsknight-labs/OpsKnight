@@ -65,6 +65,9 @@ try {
       tokenHash: createHmac('sha256', secret).update(`opsknight:api-key:v2:${token}`).digest('hex'),
       scopes: [
         'admin:manage',
+        'runbook-rules:read',
+        'runbook-rules:write',
+        'runbook-rules:activate',
         'runbooks:read',
         'runbooks:write',
         'runbooks:publish',
@@ -165,6 +168,169 @@ try {
   console.log(
     'TypeScript live metadata/archive/restore/duplicate/comparison/deletion workflows passed.'
   );
+  const ruleService = await prisma.service.create({
+    data: { name: `SDK service rules ${randomUUID()}` },
+  });
+  const ruleAgent = await prisma.runbookAgent.create({
+    data: {
+      name: 'SDK policy Agent',
+      status: 'ONLINE',
+      lastHeartbeatAt: new Date(),
+      policyHash: 'a'.repeat(64),
+      capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+    },
+  });
+  const rule = await client.call('createServiceRunbookRule', {
+    params: { id: ruleService.id },
+    body: {
+      configuration: {
+        runbookId: created.data.id,
+        runbookVersionId: published.data.id,
+        mode: 'AUTOMATIC',
+        versionStrategy: 'PINNED',
+      },
+      expectedVersionId: published.data.id,
+      trigger: { event: 'INCIDENT_CREATED', conditions: [] },
+    },
+    headers: { 'Idempotency-Key': randomUUID() },
+  });
+  const ruleParams = { id: ruleService.id, ruleId: rule.data.id };
+  let currentRule = (await client.call('getServiceRunbookRule', { params: ruleParams })).data;
+  const review = await client.call('validateServiceRunbookRule', { params: ruleParams, body: {} });
+  if (review.data.configurationRevision !== currentRule.configurationRevision)
+    throw new Error('Rule readiness reviewed a different revision.');
+  currentRule = (
+    await client.call('replaceRunbookRuleTriggers', {
+      params: ruleParams,
+      body: {
+        event: 'INCIDENT_CREATED',
+        conditions: [{ field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH' }],
+      },
+      headers: {
+        'If-Match': `"${currentRule.configurationRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    })
+  ).data;
+  currentRule = (
+    await client.call('activateServiceRunbookRule', {
+      params: ruleParams,
+      body: { confirmMatchAll: false },
+      headers: {
+        'If-Match': `"${currentRule.configurationRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    })
+  ).data;
+  if (!currentRule.enabled) throw new Error('SDK rule activation failed.');
+  currentRule = (
+    await client.call('updateServiceRunbookRule', {
+      params: ruleParams,
+      body: { configuration: { name: 'Reviewed SDK rule' }, expectedVersionId: published.data.id },
+      headers: {
+        'If-Match': `"${currentRule.configurationRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    })
+  ).data;
+  if (currentRule.enabled) throw new Error('Rule edits did not pause Automatic execution.');
+  currentRule = (
+    await client.call('pauseServiceRunbookRule', {
+      params: ruleParams,
+      body: {},
+      headers: {
+        'If-Match': `"${currentRule.configurationRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    })
+  ).data;
+  const ruleCopy = await client.call('duplicateServiceRunbookRule', {
+    params: ruleParams,
+    body: {},
+    headers: {
+      'If-Match': `"${currentRule.configurationRevision}"`,
+      'Idempotency-Key': randomUUID(),
+    },
+  });
+  if (ruleCopy.data.enabled || ruleCopy.data.id === currentRule.id)
+    throw new Error('Rule duplicate is not independent and paused.');
+  const ruleList = await client.call('listServiceRunbookRules', {
+    params: { id: ruleService.id },
+    query: { limit: 1 },
+  });
+  if (ruleList.data.length !== 1 || 'inputValues' in ruleList.data[0])
+    throw new Error('Rule list is not a bounded summary.');
+  await client.call('detachServiceRunbookRule', {
+    params: { id: ruleService.id, ruleId: ruleCopy.data.id },
+    body: {},
+    headers: {
+      'If-Match': `"${ruleCopy.data.configurationRevision}"`,
+      'Idempotency-Key': randomUUID(),
+    },
+  });
+  const policyBook = await client.call('createRunbook', {
+    body: {
+      name: 'SDK policy workflow',
+      slug: `sdk-policy-${suffix}`,
+      definition: {
+        steps: [
+          {
+            key: 'check',
+            name: 'Check',
+            type: 'LINUX_DIAGNOSTICS',
+            riskClass: 'READ_ONLY',
+            config: { action: 'summary' },
+          },
+        ],
+      },
+    },
+    headers: { 'Idempotency-Key': randomUUID() },
+  });
+  const policyVersion = await client.call('publishRunbookDraft', {
+    params: { id: policyBook.data.id, versionId: policyBook.data.draftVersionId },
+    body: {},
+    headers: { 'If-Match': '"0"', 'Idempotency-Key': randomUUID() },
+  });
+  const policyRule = await client.call('createServiceRunbookRule', {
+    params: { id: ruleService.id },
+    body: {
+      configuration: {
+        runbookId: policyBook.data.id,
+        runbookVersionId: policyVersion.data.id,
+        versionStrategy: 'PINNED',
+        mode: 'MANUAL',
+        enabled: false,
+        defaultAgentId: ruleAgent.id,
+      },
+      expectedVersionId: policyVersion.data.id,
+    },
+    headers: { 'Idempotency-Key': randomUUID() },
+  });
+  const policyParams = { id: ruleService.id, ruleId: policyRule.data.id };
+  const policyRequest = await client.call('requestRunbookRulePolicyChecks', {
+    params: policyParams,
+    body: {},
+    headers: {
+      'If-Match': `"${policyRule.data.configurationRevision}"`,
+      'Idempotency-Key': randomUUID(),
+    },
+  });
+  if (
+    policyRequest.data.checkedTargets !== 1 ||
+    policyRequest.data.status !== 'PENDING' ||
+    policyRequest.data.checkIds.length !== 1
+  )
+    throw new Error('SDK policy request did not freeze one target.');
+  const policyChecks = await client.call('listRunbookRulePolicyChecks', { params: policyParams });
+  if (
+    policyChecks.data.length !== 1 ||
+    'steps' in policyChecks.data[0] ||
+    'results' in policyChecks.data[0]
+  )
+    throw new Error('Policy-check metadata exposed internal configuration.');
+  console.log(
+    'TypeScript live service-rule authoring/revision/readiness/activation/policy-check workflows passed.'
+  );
   const automationService = await prisma.service.create({
     data: { name: `Python automation ${randomUUID()}` },
   });
@@ -189,6 +355,8 @@ try {
         token,
         typescriptRunbookId: created.data.id,
         automationServiceId: automationService.id,
+        runbookRuleServiceId: ruleService.id,
+        runbookRuleAgentId: ruleAgent.id,
       }),
       encoding: 'utf8',
       timeout: 90_000,

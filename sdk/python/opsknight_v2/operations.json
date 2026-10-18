@@ -1,4 +1,123 @@
 {
+  "listServiceRunbookRules": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceRunbookRule": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceRunbookRule": {
+    "method": "PATCH",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "detachServiceRunbookRule": {
+    "method": "DELETE",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listRunbookRulePolicyChecks": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules/{ruleId}/policy-checks",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "requestRunbookRulePolicyChecks": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/policy-checks",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "activateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "pauseServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/pause",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "duplicateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "replaceRunbookRuleTriggers": {
+    "method": "PUT",
+    "path": "/services/{id}/runbook-rules/{ruleId}/triggers",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "compareRunbookVersions": {
     "method": "GET",
     "path": "/runbooks/{id}/versions/{versionId}/diff",

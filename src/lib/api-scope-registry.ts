@@ -221,6 +221,27 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Start runbook executions. Linking an execution to an incident also requires `incidents:read` and access to that incident.',
     { write: true }
   ),
+  [S.RUNBOOK_RULES_READ]: def(
+    S.RUNBOOK_RULES_READ,
+    'Runbook rules read',
+    'Runbooks',
+    'Read administrative service rule configuration, readiness and safe policy-check metadata. Requires an explicit scope and administrator capability.',
+    { issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_RULES_WRITE]: def(
+    S.RUNBOOK_RULES_WRITE,
+    'Runbook rules configure',
+    'Runbooks',
+    'Create, edit, pause, duplicate or detach service runbook rules with revision protection. Requires an explicit scope; automatic activation and policy-check requests require runbook-rules:activate.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_RULES_ACTIVATE]: def(
+    S.RUNBOOK_RULES_ACTIVATE,
+    'Runbook rules activate',
+    'Runbooks',
+    'Request bounded Agent policy checks and activate reviewed automatic rules. Requires an explicit scope and administrator capability.',
+    { write: true, issuableBy: ADMINS }
+  ),
   [S.RUNBOOKS_WRITE]: def(
     S.RUNBOOKS_WRITE,
     'Runbooks author',

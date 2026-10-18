@@ -408,6 +408,14 @@
         {
           "path": "src/lib/runbooks/bindings.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/runbooks/policy-checks.ts",
+          "branch": "feature"
+        },
+        {
+          "path": "src/lib/api-v2/runbook-rules.ts",
+          "branch": "feature"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -417,7 +425,13 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Independent domain review and combined enterprise runbook certification remain pending."
+      ],
+      "evidence": [
+        "plans/rest-api-enterprise/runbook-rules-certification.json",
+        "plans/rest-api-enterprise/runbook-rules-upgrade.json"
+      ]
     },
     {
       "capabilityId": "runbook-agents",

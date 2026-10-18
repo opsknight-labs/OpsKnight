@@ -4390,6 +4390,7 @@ model RunbookPolicyCheck {
 
   @@index([agentId, status, expiresAt])
   @@index([ruleId, createdAt])
+  @@index([ruleId, createdAt, id])
 }
 
 enum AutomationMode {

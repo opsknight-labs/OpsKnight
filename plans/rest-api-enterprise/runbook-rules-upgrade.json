@@ -1,0 +1,20 @@
+{
+  "measuredAt": "2026-10-18T12:38:10.657942+00:00",
+  "baseline": "ee7643b82cb772097ba2812eac5d66784d0bddc7",
+  "database": "Isolated PostgreSQL 16 populated fixture",
+  "preservedAfterMigration": {
+    "enabled": true,
+    "revision": 7,
+    "versionId": "rule-upgrade-version",
+    "triggerRevision": 3,
+    "conditions": 1
+  },
+  "afterDirectConditionEdit": {
+    "enabled": false,
+    "revision": 8,
+    "versionId": "rule-upgrade-version",
+    "triggerRevision": 4,
+    "conditions": 1
+  },
+  "scope": "Migration preserves existing pinned rules and condition identities; future nested writes invalidate rule and trigger revisions and pause Automatic rules. Not mixed-version or rolling-upgrade certification."
+}
