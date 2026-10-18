@@ -671,6 +671,36 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /status-pages/{id}/subscriber-stats [status-page-subscribers:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/subscribers/{subscriberId} [status-page-subscribers:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /status-pages/{id}/subscribers/{subscriberId} [status-page-subscribers:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/subscribers [status-page-subscribers:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/subscription-settings [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /status-pages [status-pages:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

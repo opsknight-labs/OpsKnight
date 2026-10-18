@@ -1,4 +1,46 @@
 {
+  "listStatusPageSubscribers": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscribers",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriber": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscribers/{subscriberId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "removeStatusPageSubscriber": {
+    "method": "DELETE",
+    "path": "/status-pages/{id}/subscribers/{subscriberId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriberStats": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscriber-stats",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriptionSettings": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscription-settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listServiceRunbookRules": {
     "method": "GET",
     "path": "/services/{id}/runbook-rules",

@@ -59,6 +59,20 @@ function def(
 const S = API_SCOPES;
 
 export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
+  [S.STATUS_PAGE_SUBSCRIBERS_READ]: def(
+    S.STATUS_PAGE_SUBSCRIBERS_READ,
+    'Status page subscribers read',
+    'Status pages',
+    'Read subscriber contact addresses and delivery eligibility. Administrator-only explicit privacy scope.',
+    { issuableBy: ADMINS }
+  ),
+  [S.STATUS_PAGE_SUBSCRIBERS_WRITE]: def(
+    S.STATUS_PAGE_SUBSCRIBERS_WRITE,
+    'Status page subscribers remove',
+    'Status pages',
+    'Revoke status page subscriptions and pending notifications. Does not enroll, verify or reactivate recipients.',
+    { write: true, issuableBy: ADMINS }
+  ),
   [S.AUTOMATION_PUBLISH]: def(
     S.AUTOMATION_PUBLISH,
     'Automation publish',

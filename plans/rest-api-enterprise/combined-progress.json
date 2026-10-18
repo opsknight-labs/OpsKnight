@@ -87,7 +87,7 @@
     "applicationReplicas": 2,
     "coverage": "Functional SDK/UI/ingestion parity and publication safety; not load/HA or full enterprise coverage"
   },
-  "registeredOperationCount": 121,
+  "registeredOperationCount": 126,
   "currentReview": {
     "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
     "milestone": "M0",
@@ -148,5 +148,11 @@
     ],
     "remaining": "Combined runbook certification, full enterprise coverage, mixed-version rollout and production load/HA acceptance remain open.",
     "evidence": "plans/rest-api-enterprise/runbook-rules-certification.json"
+  },
+  "statusPageSubscribers": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 5,
+    "remaining": "Status-page configuration, domains/branding assets and publication parity; other enterprise families and combined certification.",
+    "evidence": "plans/rest-api-enterprise/status-page-subscriber-certification.json"
   }
 }

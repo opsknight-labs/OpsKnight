@@ -498,6 +498,14 @@
         {
           "path": "src/lib/status-pages/admin.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/status-pages/subscriber-administration.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/api-v2/status-page-subscribers.ts",
+          "branch": "baseline"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -507,7 +515,9 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Remaining status-page configuration, domains/branding assets, publication parity and combined certification."
+      ]
     },
     {
       "capabilityId": "postmortem-workflows",

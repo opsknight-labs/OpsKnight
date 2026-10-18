@@ -2453,6 +2453,7 @@ model StatusPageSubscription {
 
   @@unique([statusPageId, email])
   @@index([statusPageId, verified])
+  @@index([statusPageId, subscribedAt, id])
   @@index([token])
 }
 
