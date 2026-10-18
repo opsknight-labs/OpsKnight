@@ -70,13 +70,7 @@ export type JobType =
   | 'COMPLIANCE_DRIFT_PROJECT'
   | 'RUNBOOK';
 export type JobStatus =
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'PENDING_V2'
-  | 'PROCESSING_V2'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'CANCELLED';
+  'PENDING' | 'PROCESSING' | 'PENDING_V2' | 'PROCESSING_V2' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 export const GENERAL_WORKER_EXCLUDED_JOB_TYPES: readonly JobType[] = [
   'ESCALATION',
@@ -1355,9 +1349,12 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
       }
       case 'SCHEDULED_TASK': {
         if (
-          ['AUTOMATION_NOTIFY', 'AUTOMATION_OBSERVE', 'AUTOMATION_RETENTION'].includes(
-            String(payloadValue(job.payload, 'task'))
-          )
+          [
+            'AUTOMATION_NOTIFY',
+            'AUTOMATION_OBSERVE',
+            'AUTOMATION_RETENTION',
+            'AUTOMATION_PRIVACY_CLEANUP',
+          ].includes(String(payloadValue(job.payload, 'task')))
         ) {
           const { processAutomationJob } = await import('../automation/jobs');
           await processAutomationJob(job.payload);

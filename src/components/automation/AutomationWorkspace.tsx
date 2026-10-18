@@ -97,6 +97,9 @@ export default function AutomationWorkspace({
   const [deleteField, setDeleteField] = useState<Field | null>(null);
   const [reviewData, setReviewData] = useState<Data | null>(null);
   const data = areaData[area] ?? null;
+  const recoveryKey = data?.recoveryOwnerId
+    ? `automation-draft:${data.recoveryOwnerId}:${serviceId}`
+    : null;
   const [draft, setDraft] = useState<Snapshot>(emptySnapshot);
   const revision = useRef(0),
     initialized = useRef(false),
@@ -223,7 +226,7 @@ export default function AutomationWorkspace({
           setSaveState('Saved');
           setLocalCopy(null);
           try {
-            localStorage.removeItem(`automation-draft:${serviceId}`);
+            if (recoveryKey) localStorage.removeItem(recoveryKey);
           } catch {
             /* Optional browser recovery. */
           }
@@ -241,7 +244,7 @@ export default function AutomationWorkspace({
     } finally {
       if (saving.current === work) saving.current = null;
     }
-  }, [serviceId, conflict]);
+  }, [serviceId, conflict, recoveryKey]);
   useEffect(() => {
     if (
       !dirty ||
@@ -257,22 +260,23 @@ export default function AutomationWorkspace({
     return () => clearTimeout(timer);
   }, [draft, dirty, conflict, data?.canEdit, save, saveState]);
   useEffect(() => {
-    if (!initialized.current || !dirty) return;
+    if (!initialized.current || !dirty || !recoveryKey) return;
     try {
-      localStorage.setItem(`automation-draft:${serviceId}`, JSON.stringify(draft));
+      localStorage.setItem(recoveryKey, JSON.stringify(draft));
     } catch {
       /* Browser storage may be unavailable; in-memory edits remain available. */
     }
-  }, [draft, dirty, serviceId]);
+  }, [draft, dirty, recoveryKey]);
   useEffect(() => {
     try {
       // Browser storage is an external recovery source, unavailable during SSR.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLocalCopy(localStorage.getItem(`automation-draft:${serviceId}`));
+      setLocalCopy(recoveryKey ? localStorage.getItem(recoveryKey) : null);
+      localStorage.removeItem(`automation-draft:${serviceId}`);
     } catch {
       /* Optional recovery copy. */
     }
-  }, [serviceId]);
+  }, [serviceId, recoveryKey]);
   const command = async (input: Record<string, unknown>) => {
     setBusy(true);
     setError('');
@@ -892,7 +896,7 @@ export default function AutomationWorkspace({
                       setSaveState('Saved');
                       setLocalCopy(null);
                       try {
-                        localStorage.removeItem(`automation-draft:${serviceId}`);
+                        if (recoveryKey) localStorage.removeItem(recoveryKey);
                       } catch {
                         /* Optional browser recovery. */
                       }
@@ -956,7 +960,7 @@ export default function AutomationWorkspace({
               variant="ghost"
               onClick={() => {
                 try {
-                  localStorage.removeItem(`automation-draft:${serviceId}`);
+                  if (recoveryKey) localStorage.removeItem(recoveryKey);
                 } catch {
                   /* Browser storage may be unavailable. */
                 }
@@ -1092,7 +1096,7 @@ export default function AutomationWorkspace({
                     setUndo(null);
                     setExpandedRules(new Set());
                     try {
-                      localStorage.removeItem(`automation-draft:${serviceId}`);
+                      if (recoveryKey) localStorage.removeItem(recoveryKey);
                     } catch {
                       /* Optional recovery cache. */
                     }

@@ -162,7 +162,9 @@ export async function updateRunbookMetadataAction(runbookId: string, formData: F
       description: readString(formData, 'description'),
       ...parseRunbookMetadataForm(formData),
     },
-    actor.id
+    actor.id,
+    undefined,
+    z.coerce.number().int().positive().parse(formData.get('expectedRevision'))
   );
   revalidatePath('/runbooks');
   revalidatePath(`/runbooks/${id}`);

@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   trace: vi.fn(),
 }));
 vi.mock('@/lib/automation/access', () => ({ assertAutomationAccess: mocks.access }));
+vi.mock('@/lib/automation/settings', () => ({
+  getAutomationSettings: vi.fn(async () => ({ automationStoreObservationPreviews: false })),
+}));
 vi.mock('@/lib/automation/runtime', () => ({ automationEnabled: vi.fn(async () => true) }));
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -65,6 +68,11 @@ it('does not query stored alert payloads for readers without sensitive incident 
 it('redacts observation previews and diagnostic trace values for Auditors', async () => {
   const context = await getAutomationArea('service-a', 'context');
   expect(context.observations[0].rawValuePreview).toBe('[redacted]');
+  expect(mocks.observation).toHaveBeenCalledWith(
+    expect.objectContaining({
+      select: expect.not.objectContaining({ normalizedRawValueHash: true }),
+    })
+  );
   const trace = await getAutomationArea('service-a', 'trace');
   expect(trace.traces[0].detail).toEqual({ redacted: true, shadowDifferent: true });
   expect(JSON.stringify(trace)).not.toContain('customer-private');
