@@ -27,6 +27,23 @@ assert created["id"] in [row["id"] for row in rows]
 assert configuration["typescriptRunbookId"] in [row["id"] for row in rows]
 print("Python live create/validate/publish/cursor workflows passed.")
 
+lifecycle = client.call("createRunbook", {"body": {"name": "Python lifecycle", "slug": "python-lifecycle-" + suffix}, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
+lifecycle_params = {"id": lifecycle["id"]}
+metadata = client.call("getRunbookMetadata", {"params": lifecycle_params})["data"]
+def lifecycle_headers(revision):
+    return {"If-Match": '\"%s\"' % revision, "Idempotency-Key": uuid.uuid4().hex}
+changed = client.call("updateRunbookMetadata", {"params": lifecycle_params, "body": {"description": "Reviewed through Python"}, "headers": lifecycle_headers(metadata["revision"])})["data"]
+archived = client.call("archiveRunbook", {"params": lifecycle_params, "body": {}, "headers": lifecycle_headers(changed["revision"])})["data"]
+assert archived["archivedAt"] is not None
+restored = client.call("restoreRunbook", {"params": lifecycle_params, "body": {}, "headers": lifecycle_headers(archived["revision"])})["data"]
+assert restored["archivedAt"] is None
+copy = client.call("duplicateRunbook", {"params": lifecycle_params, "body": {}, "headers": lifecycle_headers(restored["revision"])})["data"]
+comparison = client.call("compareRunbookVersions", {"params": {"id": created["id"], "versionId": published["data"]["id"]}, "query": {"baseVersionId": published["data"]["id"]}})["data"]
+assert all(step["change"] == "UNCHANGED" for step in comparison["steps"])
+assert client.call("checkRunbookDeletion", {"params": {"id": copy["id"]}})["data"]["canDelete"]
+client.call("deleteRunbook", {"params": {"id": copy["id"]}, "body": {"confirmationText": copy["name"]}, "headers": lifecycle_headers(copy["revision"])})
+print("Python live metadata/archive/restore/duplicate/comparison/deletion workflows passed.")
+
 # Each automation endpoint is exercised through the generated operation manifest
 # against HTTP, independently of the TypeScript/browser journey.
 params = {"id": configuration["automationServiceId"]}

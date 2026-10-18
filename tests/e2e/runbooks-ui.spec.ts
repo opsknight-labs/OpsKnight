@@ -1,3 +1,5 @@
+import { generateApiKey } from '@/lib/api-keys';
+import { Client } from '../../sdk/typescript/client';
 import { test, expect, type Page } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -121,7 +123,9 @@ test('global history stays synchronized across application pages and authenticat
   await page.goForward();
   await assertDestination(destinations[1]);
 });
-test('library, ordered builder, typed inputs and publish confirmation', async ({ page: initialPage }) => {
+test('library, ordered builder, typed inputs and publish confirmation', async ({
+  page: initialPage,
+}) => {
   let page = initialPage;
   await login(page);
   await page.getByRole('button', { name: 'New Runbook', exact: true }).first().click();
@@ -1519,4 +1523,97 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
     history.getByText('Detached; activation unavailable', { exact: true }).filter({ visible: true })
   ).toBeVisible();
   await history.close();
+});
+
+test('REST lifecycle changes appear in the administrator UI and retain independent draft identities', async ({
+  page,
+}, testInfo) => {
+  await login(page);
+  const actor = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL } });
+  const issued = generateApiKey();
+  const credential = await prisma.apiKey.create({
+    data: {
+      name: 'Lifecycle browser certification',
+      userId: actor.id,
+      prefix: issued.prefix,
+      tokenHash: issued.tokenHash,
+      scopes: ['runbooks:write'],
+    },
+  });
+  const client = new Client({
+    baseUrl: `${new URL(page.url()).origin}/api/v2`,
+    token: issued.token,
+    allowInsecureHttp: true,
+  });
+  try {
+    const created = await client.call('createRunbook', {
+      body: {
+        name: `REST lifecycle ${testInfo.project.name}`,
+        slug: `rest-lifecycle-${crypto.randomUUID()}`,
+      },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const params = { id: created.data.id };
+    const before = await client.call('getRunbookMetadata', { params });
+    const renamed = await client.call('updateRunbookMetadata', {
+      params,
+      body: { name: `Reviewed REST lifecycle ${testInfo.project.name}` },
+      headers: { 'If-Match': `"${before.data.revision}"`, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    await page.goto(`/runbooks/${params.id}`);
+    await expect(page.getByRole('heading', { name: renamed.data.name, exact: true })).toBeVisible();
+    const archived = await client.call('archiveRunbook', {
+      params,
+      body: {},
+      headers: { 'If-Match': `"${renamed.data.revision}"`, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    await page.reload();
+    await expect(page.getByText('Archived', { exact: true }).first()).toBeVisible();
+    const restored = await client.call('restoreRunbook', {
+      params,
+      body: {},
+      headers: {
+        'If-Match': `"${archived.data.revision}"`,
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+    });
+    await page.reload();
+    await expect(page.getByText('Archived', { exact: true })).toHaveCount(0);
+    const copy = await client.call('duplicateRunbook', {
+      params,
+      body: {},
+      headers: {
+        'If-Match': `"${restored.data.revision}"`,
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+    });
+    expect(copy.data.draftVersionId).not.toBe(created.data.draftVersionId);
+    await page.goto(`/runbooks/${copy.data.id}`);
+    await expect(page.getByRole('heading', { name: copy.data.name, exact: true })).toBeVisible();
+    const copyParams = { id: copy.data.id };
+    expect((await client.call('checkRunbookDeletion', { params: copyParams })).data.canDelete).toBe(
+      true
+    );
+    await client.call('deleteRunbook', {
+      params: copyParams,
+      body: { confirmationText: copy.data.name },
+      headers: { 'If-Match': `"${copy.data.revision}"`, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    await expect(client.call('getRunbookMetadata', { params: copyParams })).rejects.toMatchObject({
+      status: 404,
+    });
+    await testInfo.attach('rest-lifecycle-ui-parity', {
+      body: JSON.stringify({
+        project: testInfo.project.name,
+        renamed: true,
+        archiveVisible: true,
+        restoreVisible: true,
+        independentCopy: true,
+        safeDeletion: true,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
+    await prisma.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
+  }
 });

@@ -47,6 +47,10 @@ export type IncidentLifecycleResult = { "incidentId": string; "command": string 
 export type RunbookDefinitionInput = { "steps": Array<RunbookStepInput>; "description"?: string; "defaultTimeoutSeconds"?: number; "defaultMaxRetries"?: number };
 export type RunbookStepInput = { "key": string; "name": string; "type": "MANUAL" | "APPROVAL" | "CONDITION" | "WAIT" | "HTTP" | "LINUX_DIAGNOSTICS" | "SYSTEMD" | "DOCKER" | "KUBERNETES" | "BASH"; "riskClass"?: "READ_ONLY" | "IDEMPOTENT_WRITE" | "NON_IDEMPOTENT"; "description"?: string; "config"?: Record<string, unknown>; "verification"?: { "steps": Array<RunbookStepInput>; "delaySeconds"?: number }; "precheck"?: { "steps": Array<RunbookStepInput> }; "timeoutSeconds"?: number; "maxRetries"?: number; "requiresApproval"?: boolean };
 export type RunbookInputDefinition = { "key": string; "label": string; "type"?: "STRING" | "NUMBER" | "BOOLEAN" | "URL" | "DURATION" | "SECRET_REF" | "SELECT"; "required"?: boolean; "defaultValue"?: string; "description"?: string; "sequence"?: number; "options"?: Array<string> };
+export type RunbookVersionDiff = { "base": { "version": number; "checksum": string }; "next": { "version": number; "checksum": string }; "steps": Array<{ "key": string; "change": "ADDED" | "REMOVED" | "CHANGED" | "UNCHANGED"; "risk": string | null; "before": RunbookDiffStep | null; "after": RunbookDiffStep | null }>; "inputKeys": { "added": Array<string>; "removed": Array<string> }; "rules": Array<{ "id": string; "name": string; "serviceId": string; "enabled": boolean; "mode": string; "versionStrategy": string; "runbookVersionId": string | null; "impact": string }>; "rulesTruncated": boolean; "warning": string };
+export type RunbookDiffStep = { "key": string; "name": string; "type": string; "riskClass": string; "requiresApproval": boolean };
+export type RunbookMetadata = { "id": string; "name": string; "slug": string; "description": string; "ownerTeamId": string | null; "tags": Array<string>; "archivedAt": string | null; "publishedVersionId": string | null; "draftVersionId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
+export type RunbookDeleteEligibility = { "canDelete": boolean; "reason"?: string; "hasExecutions": boolean; "hasBindings": boolean; "hasPublishedVersions": boolean; "executionCount": number; "bindingCount": number; "publishedVersionCount": number };
 export type RunbookAuthoringVersion = { "id": string; "runbookId": string; "version": number; "state": "DRAFT" | "PUBLISHED" | "RETIRED"; "checksum": string; "draftRevision": number; "publishedAt": string | null; "createdAt": string; "updatedAt": string; "steps": Array<RunbookStep> };
 export type RunbookDraftRead = { "id": string; "runbookId": string; "version": number; "state": "DRAFT" | "PUBLISHED" | "RETIRED"; "checksum": string; "draftRevision": number; "publishedAt": string | null; "createdAt": string; "updatedAt": string; "steps": Array<RunbookStep>; "editable": { "definition": RunbookDefinitionInput; "inputs": Array<RunbookInputDefinition>; "preserveConfiguration": true } };
 export type RunbookCreated = { "id": string; "name": string; "slug": string; "description": string; "draftVersionId": string; "draftVersion": RunbookAuthoringVersion };
@@ -60,6 +64,14 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  compareRunbookVersions: { "params": { "id": string; "versionId": string }; "query": { "baseVersionId": string } };
+  getRunbookMetadata: { "params": { "id": string } };
+  updateRunbookMetadata: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "slug"?: string; "description"?: string; "ownerTeamId"?: string | null; "tags"?: Array<string> } };
+  archiveRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  restoreRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  checkRunbookDeletion: { "params": { "id": string } };
+  deleteRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "confirmationText": string } };
+  duplicateRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
   validateAutomation: { "params": { "id": string }; "body": { "snapshot": AutomationSnapshot } };
   simulateAutomation: { "params": { "id": string }; "body": { "snapshot": AutomationSnapshot; "integrationType": string; "integrationId"?: string; "evaluationAt"?: string; "providerPayload"?: unknown; "event": { "event_action": "trigger" | "resolve" | "acknowledge"; "dedup_key": string; "payload": { "summary": string; "source": string; "severity": "critical" | "error" | "warning" | "info"; "custom_details"?: unknown } } } };
   restoreAutomationDraft: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "sourceVersionId": string } };
@@ -163,6 +175,14 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  compareRunbookVersions: { "data": RunbookVersionDiff; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookMetadata: { "data": RunbookMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateRunbookMetadata: { "data": RunbookMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  archiveRunbook: { "data": RunbookMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  restoreRunbook: { "data": RunbookMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  checkRunbookDeletion: { "data": RunbookDeleteEligibility; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteRunbook: null;
+  duplicateRunbook: { "data": RunbookMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
   validateAutomation: { "data": AutomationValidation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   simulateAutomation: { "data": AutomationSimulation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   restoreAutomationDraft: { "data": AutomationDraft; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -266,6 +286,85 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "compareRunbookVersions": {
+    "method": "GET",
+    "path": "/runbooks/{id}/versions/{versionId}/diff",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookMetadata": {
+    "method": "GET",
+    "path": "/runbooks/{id}/metadata",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookMetadata": {
+    "method": "PATCH",
+    "path": "/runbooks/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "archiveRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/archive",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "restoreRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/restore",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "checkRunbookDeletion": {
+    "method": "GET",
+    "path": "/runbooks/{id}/delete-check",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteRunbook": {
+    "method": "DELETE",
+    "path": "/runbooks/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "duplicateRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "validateAutomation": {
     "method": "POST",
     "path": "/services/{id}/automation/validate",

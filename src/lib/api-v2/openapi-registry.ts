@@ -30,6 +30,64 @@ const op = (
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
+    'get',
+    '/runbooks/{id}/versions/{versionId}/diff',
+    'compareRunbookVersions',
+    'runbooks:write',
+    'item',
+    'RunbookVersionDiff'
+  ),
+  op(
+    'get',
+    '/runbooks/{id}/metadata',
+    'getRunbookMetadata',
+    'runbooks:write',
+    'item',
+    'RunbookMetadata'
+  ),
+  op(
+    'patch',
+    '/runbooks/{id}',
+    'updateRunbookMetadata',
+    'runbooks:write',
+    'item',
+    'RunbookMetadata'
+  ),
+  op(
+    'post',
+    '/runbooks/{id}/archive',
+    'archiveRunbook',
+    'runbooks:write',
+    'item',
+    'RunbookMetadata'
+  ),
+  op(
+    'post',
+    '/runbooks/{id}/restore',
+    'restoreRunbook',
+    'runbooks:write',
+    'item',
+    'RunbookMetadata'
+  ),
+  op(
+    'get',
+    '/runbooks/{id}/delete-check',
+    'checkRunbookDeletion',
+    'runbooks:write',
+    'item',
+    'RunbookDeleteEligibility'
+  ),
+  op('delete', '/runbooks/{id}', 'deleteRunbook', 'runbooks:write', 'none', ''),
+  op(
+    'post',
+    '/runbooks/{id}/duplicate',
+    'duplicateRunbook',
+    'runbooks:write',
+    'item',
+    'RunbookMetadata'
+  ),
+
+  op(
     'post',
     '/services/{id}/automation/validate',
     'validateAutomation',

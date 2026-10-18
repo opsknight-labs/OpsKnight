@@ -382,6 +382,8 @@ export async function archiveRunbook(
   const actorId = typeof actor === 'string' ? actor : actor.id;
   return inVersioningTransaction(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'archive' });
+    const current = await tx.runbook.findUniqueOrThrow({ where: { id: runbookId } });
+    if (current.archivedAt) return current;
     const archivedAt = new Date();
     const runbook = await tx.runbook.update({
       where: { id: runbookId },

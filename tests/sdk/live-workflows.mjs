@@ -121,6 +121,50 @@ try {
   console.log(
     'TypeScript live replay/publication/preview/execution/cancellation workflows passed.'
   );
+  const lifecycle = await client.call('createRunbook', {
+    body: { name: 'TypeScript lifecycle', slug: `ts-lifecycle-${suffix}` },
+    headers: { 'Idempotency-Key': randomUUID() },
+  });
+  const lifecycleParams = { id: lifecycle.data.id };
+  const metadata = await client.call('getRunbookMetadata', { params: lifecycleParams });
+  const changed = await client.call('updateRunbookMetadata', {
+    params: lifecycleParams,
+    body: { description: 'Reviewed through SDK' },
+    headers: { 'If-Match': `"${metadata.data.revision}"`, 'Idempotency-Key': randomUUID() },
+  });
+  const archived = await client.call('archiveRunbook', {
+    params: lifecycleParams,
+    body: {},
+    headers: { 'If-Match': `"${changed.data.revision}"`, 'Idempotency-Key': randomUUID() },
+  });
+  if (!archived.data.archivedAt) throw new Error('SDK archive failed.');
+  const restored = await client.call('restoreRunbook', {
+    params: lifecycleParams,
+    body: {},
+    headers: { 'If-Match': `"${archived.data.revision}"`, 'Idempotency-Key': randomUUID() },
+  });
+  if (restored.data.archivedAt) throw new Error('SDK restore failed.');
+  const copy = await client.call('duplicateRunbook', {
+    params: lifecycleParams,
+    body: {},
+    headers: { 'If-Match': `"${restored.data.revision}"`, 'Idempotency-Key': randomUUID() },
+  });
+  const comparison = await client.call('compareRunbookVersions', {
+    params: { id: created.data.id, versionId: published.data.id },
+    query: { baseVersionId: published.data.id },
+  });
+  if (comparison.data.steps.some(step => step.change !== 'UNCHANGED'))
+    throw new Error('Self comparison changed steps.');
+  const eligibility = await client.call('checkRunbookDeletion', { params: { id: copy.data.id } });
+  if (!eligibility.data.canDelete) throw new Error('Independent draft copy cannot be deleted.');
+  await client.call('deleteRunbook', {
+    params: { id: copy.data.id },
+    body: { confirmationText: copy.data.name },
+    headers: { 'If-Match': `"${copy.data.revision}"`, 'Idempotency-Key': randomUUID() },
+  });
+  console.log(
+    'TypeScript live metadata/archive/restore/duplicate/comparison/deletion workflows passed.'
+  );
   const automationService = await prisma.service.create({
     data: { name: `Python automation ${randomUUID()}` },
   });

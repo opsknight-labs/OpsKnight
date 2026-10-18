@@ -51,6 +51,43 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PATCH /api/v2/runbooks/[id]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Runbook parent revision is checked under the shared lifecycle lock; domain state, canonical audit and replay commit atomically. Existing lifecycle dependencies and disabled-binding restoration rules apply.',
+  },
+  'POST /api/v2/runbooks/[id]/archive': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Runbook parent revision is checked under the shared lifecycle lock; domain state, canonical audit and replay commit atomically. Existing lifecycle dependencies and disabled-binding restoration rules apply.',
+  },
+  'POST /api/v2/runbooks/[id]/restore': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Runbook parent revision is checked under the shared lifecycle lock; domain state, canonical audit and replay commit atomically. Existing lifecycle dependencies and disabled-binding restoration rules apply.',
+  },
+  'DELETE /api/v2/runbooks/[id]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Runbook parent revision is checked under the shared lifecycle lock; domain state, canonical audit and replay commit atomically. Deletion preserves published/execution evidence and requires typed confirmation.',
+  },
+  'POST /api/v2/runbooks/[id]/duplicate': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Runbook parent revision is checked under the shared lifecycle lock; domain state, canonical audit and replay commit atomically. Duplicate checks the source revision and returns the new independent resource.',
+  },
+
   'POST /api/v2/services/[id]/automation/validate': natural(
     'Read-only compilation and reference validation; creates no state or replay record.'
   ),
