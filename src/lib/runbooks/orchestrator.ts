@@ -1519,13 +1519,17 @@ export async function advanceExecution(executionId: string): Promise<void> {
   }
 }
 
-export async function approveExecutionStep(input: {
-  executionId: string;
-  stepId: string;
-  planDigest: string;
-  actorId: string;
-}) {
-  return prisma.$transaction(async tx => {
+export async function approveExecutionStep(
+  input: {
+    executionId: string;
+    stepId: string;
+    planDigest: string;
+    actorId: string;
+  },
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
+) {
+  const command = async (tx: Prisma.TransactionClient) => {
     const step = await tx.runbookExecutionStep.findFirst({
       where: { id: input.stepId, executionId: input.executionId },
       include: {
@@ -1581,15 +1585,22 @@ export async function approveExecutionStep(input: {
     await logAudit(
       {
         action: 'runbook.execution.step.approved',
+        ...(auditContext ? { source: 'API' as const } : {}),
         entityType: 'RUNBOOK_EXECUTION',
         entityId: input.executionId,
         actorId: input.actorId,
-        details: { stepId: step.id, planDigest: expected },
+        details: {
+          stepId: step.id,
+          planDigest: expected,
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
+        },
       },
       tx
     );
     return step;
-  });
+  };
+  if (externalTx) return command(externalTx);
+  return prisma.$transaction(command);
 }
 
 export async function cancelExecution(

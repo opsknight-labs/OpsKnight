@@ -369,6 +369,16 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
           value: 'RESOLVED',
         },
       });
+    // Keep every negative case focused on its intended boundary, rather than accidentally
+    // rejecting all cases because fixture configuration writes paused the rule.
+    const configuredRule = await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: change !== 'disabledBinding' },
+    });
+    if (change === 'staleRevision')
+      request.expectedRuleRevision = configuredRule.configurationRevision + 1;
+    else if (change !== 'missingRevision' && change !== 'otherRuleRevision')
+      request.expectedRuleRevision = configuredRule.configurationRevision;
     await expect(
       startTriggeredRunbookExecution(
         request as Parameters<typeof startTriggeredRunbookExecution>[0]
@@ -386,6 +396,10 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
     const trigger = await testPrisma.runbookTrigger.create({
       data: { bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
     });
+    const activeRule = await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     const triggerFingerprint = computeTriggerFingerprint({
       sourceEventId: 'valid-event',
       bindingId: target.binding.id,
@@ -398,7 +412,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       incidentId: target.incident.id,
       bindingId: target.binding.id,
       triggerId: trigger.id,
-      expectedRuleRevision: target.binding.configurationRevision,
+      expectedRuleRevision: activeRule.configurationRevision,
       sourceEventId: 'valid-event',
       triggerFingerprint,
     };
