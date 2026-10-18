@@ -23,6 +23,12 @@ const SYSTEMD_ACTIONS = [
   { value: 'restart', label: 'Restart · full restart (needs approval)' },
 ];
 
+const EXPECTED_STATES = [
+  { value: 'any', label: 'Any state · inspect health (exit 0 or 3 succeeds)' },
+  { value: 'active', label: 'Active · assert service is running (fails if inactive/exit 3)' },
+  { value: 'inactive', label: 'Inactive · assert service is stopped (fails if active/exit 0)' },
+];
+
 export default function SystemdActionEditor({
   config,
   errors = {},
@@ -33,13 +39,26 @@ export default function SystemdActionEditor({
 }: SystemdActionEditorProps) {
   const action = String(config.action ?? 'status');
   const unit = String(config.unit ?? '');
+  const expectedState = String(config.expectedState ?? 'any');
   const rawLines = config.lines;
   const isLogs = action === 'logs';
+  const isStatus = action === 'status';
 
   const handleActionChange = (nextAction: string) => {
     const nextConfig: Record<string, unknown> = { ...config, action: nextAction };
     if (nextAction !== 'logs') {
       delete nextConfig.lines;
+    }
+    if (nextAction !== 'status') {
+      delete nextConfig.expectedState;
+    }
+    onChange(nextConfig);
+  };
+
+  const handleExpectedStateChange = (nextState: string) => {
+    const nextConfig: Record<string, unknown> = { ...config, expectedState: nextState };
+    if (nextState === 'any') {
+      delete nextConfig.expectedState;
     }
     onChange(nextConfig);
   };
@@ -103,6 +122,29 @@ export default function SystemdActionEditor({
         readOnly={readOnly}
         onInsert={reference => onChange({ ...config, unit: reference })}
       />
+
+      {isStatus && (
+        <div className="space-y-1.5">
+          <Label htmlFor={`systemd-expected-state-${editorId}`} className="text-xs">
+            Expected service state
+          </Label>
+          <FormSelect
+            name={`systemd-expected-state-${editorId}`}
+            label="Expected service state"
+            value={expectedState}
+            disabled={readOnly}
+            onValueChange={(nextState: string) => handleExpectedStateChange(nextState)}
+            options={EXPECTED_STATES}
+          />
+          {errors.expectedState && (
+            <p className="text-xs text-destructive">{errors.expectedState}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Explicitly define whether exit code 3 (inactive/dead) succeeds as diagnostic data or
+            fails as a verification assertion.
+          </p>
+        </div>
+      )}
 
       {isLogs && (
         <div className="max-w-xs space-y-1.5">

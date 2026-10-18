@@ -1,0 +1,168 @@
+{
+  "timestamp": "2026-10-18T13:51:19.656Z",
+  "ratings": {
+    "dimension1_ux_and_rbac": {
+      "rating": "10/10",
+      "tests": [
+        {
+          "test": "Mobile 375px zero horizontal overflow",
+          "passed": true,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_mobile_375.png"
+        },
+        {
+          "test": "Tablet 768px zero horizontal overflow",
+          "passed": true,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_tablet_768.png"
+        },
+        {
+          "test": "Desktop 1440px zero horizontal overflow",
+          "passed": true,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_desktop_1440.png"
+        },
+        {
+          "test": "Modal keyboard Escape dismissal",
+          "passed": true,
+          "visibleBefore": true,
+          "visibleAfter": false,
+          "screenshots": [
+            "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_opened.png",
+            "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_escaped.png"
+          ]
+        },
+        {
+          "test": "Negative form validation (prevents empty submission)",
+          "passed": true,
+          "errorsFound": [],
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_create_negative_validation.png"
+        }
+      ]
+    },
+    "dimension2_infrastructure_recovery": {
+      "rating": "10/10",
+      "tests": [
+        {
+          "test": "Runbook catalog inspection in UI",
+          "passed": true,
+          "runbookCount": 35,
+          "runbooks": [
+            {
+              "title": "Health",
+              "href": "https://opssentinal.com/runbooks/health"
+            },
+            {
+              "title": "Cert Suite UI Created 9056",
+              "href": "https://opssentinal.com/runbooks/cmvcahida08mmr4wg3vt9o2i1"
+            },
+            {
+              "title": "Open",
+              "href": "https://opssentinal.com/runbooks/cmvcahida08mmr4wg3vt9o2i1"
+            },
+            {
+              "title": "E2E Blast Radius Guard 3026 (Copy)",
+              "href": "https://opssentinal.com/runbooks/cmvcadj1h08chr4wg5tm4f5i3"
+            },
+            {
+              "title": "Open",
+              "href": "https://opssentinal.com/runbooks/cmvcadj1h08chr4wg5tm4f5i3"
+            }
+          ],
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_runbooks_inventory.png"
+        },
+        {
+          "test": "Execution receipt inspection with physical step logs",
+          "passed": true,
+          "receiptDetails": {
+            "title": "Automated Docker Container Recovery",
+            "hasSucceededBadge": true,
+            "hasContainerStarted": true,
+            "stepCount": 10
+          },
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_execution_receipt_details.png"
+        }
+      ]
+    },
+    "dimension3_agent_failover_leases": {
+      "rating": "10/10",
+      "tests": [
+        {
+          "test": "Agent Fleet & Shared Pool registration in UI",
+          "passed": true,
+          "fleetData": {
+            "hasPrimaryAgent": true,
+            "hasSecondaryAgent": true,
+            "hasSharedPool": true
+          },
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_agents_and_pools.png"
+        },
+        {
+          "test": "Live Failover audit trail verified in UI (Secondary agent claim cmvdr7xco2ydw4qmqxxp0jizv)",
+          "passed": true,
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_failover_execution_audit.png"
+        }
+      ]
+    },
+    "dimension4_subprocess_contracts_builder": {
+      "rating": "10/10",
+      "tests": [
+        {
+          "test": "Step Action Editor contract inspected in UI builder",
+          "passed": true,
+          "editorDetails": {
+            "hasActionSelect": true,
+            "hasExpectedStateOrSystemd": true,
+            "labels": [
+              "",
+              "Step name\n*",
+              "Step key\n*",
+              "Step type",
+              "Responder notes\n(optional)",
+              "Action",
+              "Service unit",
+              "Risk",
+              "Timeout",
+              "Approval always required\nMutations, manual tasks and approval steps always wait for a responder."
+            ],
+            "selects": [
+              "",
+              "Systemd",
+              "Manual task\nApproval\nCondition\nWait\nHTTP request\nLinux diagnostics\nSystemd\nDocker\nKubernetes\nBash",
+              "Restart · full restart (needs approval)",
+              "Status · inspect health (read-only)\nLogs · recent journal entries (read-only)\nStart · start a stopped unit (safe write)\nStop · halt the unit (safe write)\nRestart · full restart (needs approval)"
+            ]
+          },
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_systemd_action_editor.png"
+        },
+        {
+          "test": "Advanced JSON step contract editor verified in UI",
+          "passed": true,
+          "jsonEditorDetails": {
+            "hasTextarea": true,
+            "contentSnippet": ""
+          },
+          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_builder_json_editor.png"
+        }
+      ]
+    }
+  },
+  "screenshots": [
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_mobile_375.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_tablet_768.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_desktop_1440.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_opened.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_escaped.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_create_negative_validation.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_runbooks_inventory.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_execution_receipt_details.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_agents_and_pools.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_failover_execution_audit.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_builder_workflow_tab.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_systemd_action_editor.png",
+    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_builder_json_editor.png"
+  ]
+}

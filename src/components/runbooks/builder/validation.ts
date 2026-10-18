@@ -124,6 +124,13 @@ export function validateStep(
           errors.lines = 'Log lines must be an integer between 1 and 500.';
         }
       }
+
+      if (config.expectedState !== undefined) {
+        const expected = String(config.expectedState);
+        if (!['active', 'inactive', 'any'].includes(expected)) {
+          errors.expectedState = 'Expected state must be active, inactive, or any.';
+        }
+      }
       break;
     }
 

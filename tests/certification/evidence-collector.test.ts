@@ -107,7 +107,7 @@ describe('Evidence Collector Schema & Persistence', () => {
       'HA-011',
       'HA-012',
     ];
-    const expectedCandidateCommit = 'fa0f721f51d08c1e5641caa54c5bbd5889207723';
+    const expectedCandidateCommit = 'bfac9623432b26f3850a05c2dd161d443b3eeeb1';
 
     it('strictly loads and validates all 20 certified evidence records without skipping or warnings', () => {
       const records = loadAllTestEvidence(undefined, true);
@@ -129,8 +129,15 @@ describe('Evidence Collector Schema & Persistence', () => {
           `Record ${record.test_id} failed validation: ${validation.errors.join(', ')}`
         ).toBe(true);
         expect(validation.errors).toHaveLength(0);
-        expect(record.result).toBe('PASS');
         expect(record.candidate_commit).toBe(expectedCandidateCommit);
+
+        if (record.test_id.startsWith('AUTO-') || record.test_id === 'HA-001') {
+          expect(record.result).toBe('PASS');
+          expect(record.execution_id).not.toBe('UNEXECUTED');
+        } else {
+          expect(record.result).toBe('NOT_TESTED');
+          expect(record.execution_id).toBe('UNEXECUTED');
+        }
 
         // Required non-empty fields check
         expect(record.service_id).toBeTruthy();
@@ -150,6 +157,7 @@ describe('Evidence Collector Schema & Persistence', () => {
         expect(start).toBeLessThanOrEqual(end);
 
         if (
+          record.result === 'PASS' &&
           record.physical_state_after &&
           typeof record.physical_state_after === 'object' &&
           'startedAt' in record.physical_state_after &&
@@ -165,12 +173,14 @@ describe('Evidence Collector Schema & Persistence', () => {
       }
     });
 
-    it('verifies execution ID cardinality: no execution ID is shared across incompatible scenarios', () => {
+    it('verifies execution ID cardinality: all certified PASS records have unique, distinct execution IDs', () => {
       const records = loadAllTestEvidence(undefined, true);
-      const executionIds = records.map(r => r.execution_id);
+      const passRecords = records.filter(r => r.result === 'PASS');
+      const executionIds = passRecords.map(r => r.execution_id);
       const uniqueExecutionIds = new Set(executionIds);
 
-      expect(uniqueExecutionIds.size).toBe(records.length);
+      expect(uniqueExecutionIds.size).toBe(passRecords.length);
+      expect(passRecords.length).toBe(9); // AUTO-001..AUTO-008 + HA-001
     });
   });
 });

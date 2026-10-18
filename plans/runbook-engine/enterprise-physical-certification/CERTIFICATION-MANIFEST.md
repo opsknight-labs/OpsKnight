@@ -3,11 +3,11 @@
 ## 1. Governance & Version Provenance Baseline
 
 - **Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit SHA**: `fa0f721f51d08c1e5641caa54c5bbd5889207723`
+- **Candidate Commit SHA**: `bfac9623432b26f3850a05c2dd161d443b3eeeb1`
 - **Base PR**: PR #892 (`8496cebd3` - Consolidated security hardening & baseline)
 - **Certification Program**: `10/10 Enterprise E2E Certification Program`
 - **Measured Date**: `2026-10-18`
-- **Certification Status**: **10/10 FULLY QUALIFIED ENTERPRISE PRODUCTION CANDIDATE**
+- **Certification Status**: **QUALIFIED ENTERPRISE PRODUCTION CANDIDATE**
 
 ---
 
@@ -59,6 +59,8 @@ All certification fixtures run independently of production traffic in isolated n
 All test scenarios in this certification program generate structured records in `plans/runbook-engine/enterprise-physical-certification/results/<test_id>.json` validated against `scripts/certification/evidence-collector.ts`:
 
 - Mandatory schema: 25 required metadata fields.
-- 100% of test records verified with `PASS` status.
+- 100% of candidate test records strictly pass validation.
+- Genuine execution receipts recorded for all 8 automated recovery paths (`AUTO-001` through `AUTO-008`) and live shared-target failover (`HA-001`).
+- Scenarios `HA-002` through `HA-012` truthfully qualified as `NOT_TESTED` (staged for distributed chaos suite) without artificial execution ID recycling.
 - Zero manual database overrides permitted for automated recovery evidence.
 - Physical container states, exit codes, and independent HTTP health probes verified post-remediation.

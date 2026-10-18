@@ -1,7 +1,7 @@
 {
   "test_id": "HA-005",
-  "test_run_id": "run-1792323503224",
-  "candidate_commit": "fa0f721f51d08c1e5641caa54c5bbd5889207723",
+  "test_run_id": "run-ha-005",
+  "candidate_commit": "bfac9623432b26f3850a05c2dd161d443b3eeeb1",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -11,28 +11,24 @@
   "service_id": "cmvbffoig07q614marj783x7f",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-mutation-crash-quarantine",
-  "incident_id": "cmvdqqbdu2wyi4qmq7podn4fb",
+  "incident_id": "UNEXECUTED",
   "rule_id": "cmvbggld301silnzi9b329eey",
   "rule_revision": 3,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
-  "execution_id": "cmvc8nq9i03q1r4wgklbgtr2e",
-  "step_attempt_ids": ["step_in_flight_crash_check"],
+  "execution_id": "UNEXECUTED",
+  "step_attempt_ids": ["NOT_TESTED"],
   "agent_id": "cmvdqw3n82xgj4qmqyaz4tk6m",
   "policy_hash": "6ef4d4f0dacf",
-  "result": "PASS",
-  "physical_state_before": {
-    "status": "executing_mutation"
-  },
-  "physical_state_after": {
-    "status": "UNKNOWN",
-    "quarantined": true
-  },
+  "result": "NOT_TESTED",
+  "physical_state_before": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
+  "physical_state_after": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
   "independent_health_result": {
-    "ok": true,
-    "ambiguous_retry_prevented": true
+    "verified": false,
+    "status": "NOT_TESTED",
+    "staged_for": "distributed_chaos_suite"
   },
   "log_artifact_paths": [
-    "plans/runbook-engine/enterprise-physical-certification/screenshots/ha_failover_execution_receipt.png"
+    "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Mutation crash quarantine certified: Agent failure mid-write leaves execution safely in UNKNOWN; no blind second mutation."
+  "notes": "Mutation crash quarantine: In-flight crashes during mutation are preserved as UNKNOWN to prevent blind double-writes."
 }

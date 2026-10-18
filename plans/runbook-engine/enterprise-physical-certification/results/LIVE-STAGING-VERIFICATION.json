@@ -1,0 +1,69 @@
+{
+  "verifiedAt": "2026-10-18T14:04:10.787Z",
+  "allPassed": true,
+  "executions": [
+    {
+      "testId": "AUTO-001",
+      "executionId": "cmvdpapw42taf4qmq7moudh12",
+      "url": "https://opssentinal.com/runbooks/executions/cmvdpapw42taf4qmq7moudh12",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "AUTO-002",
+      "executionId": "cmvdsgt9s31if4qmqbx6mcms6",
+      "url": "https://opssentinal.com/runbooks/executions/cmvdsgt9s31if4qmqbx6mcms6",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "AUTO-003",
+      "executionId": "cmvdpgtum2trk4qmqcsw4jbzr",
+      "url": "https://opssentinal.com/runbooks/executions/cmvdpgtum2trk4qmqcsw4jbzr",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "AUTO-004",
+      "executionId": "cmvdqqbdu2wyi4qmq7podn4f1",
+      "url": "https://opssentinal.com/runbooks/executions/cmvdqqbdu2wyi4qmq7podn4f1",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "AUTO-005",
+      "executionId": "cmvdpp7jv2ue94qmq9sxnqlrc",
+      "url": "https://opssentinal.com/runbooks/executions/cmvdpp7jv2ue94qmq9sxnqlrc",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "AUTO-006",
+      "executionId": "cmvdshjja31lb4qmqza231w10",
+      "url": "https://opssentinal.com/runbooks/executions/cmvdshjja31lb4qmqza231w10",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "AUTO-007",
+      "executionId": "cmvchadqm09584qmqassxvp0s",
+      "url": "https://opssentinal.com/runbooks/executions/cmvchadqm09584qmqassxvp0s",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "AUTO-008",
+      "executionId": "cmvcf0z5k03gj4qmqyxd9v63s",
+      "url": "https://opssentinal.com/runbooks/executions/cmvcf0z5k03gj4qmqyxd9v63s",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "testId": "HA-001",
+      "executionId": "cmvdr7xco2ydw4qmqxxp0jizv",
+      "url": "https://opssentinal.com/runbooks/executions/cmvdr7xco2ydw4qmqxxp0jizv",
+      "status": 200,
+      "ok": true
+    }
+  ]
+}

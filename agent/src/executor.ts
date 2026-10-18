@@ -358,14 +358,13 @@ export async function executeAttempt(
 export function isSystemdActiveRequired(step: ClaimedAttempt['step']): boolean {
   if (step.type !== 'SYSTEMD') return false;
   const config = step.config ?? {};
-  const phase = (step as { phase?: string }).phase;
-  return Boolean(
+  if (config.expectedState === 'any') return false;
+  return (
     config.expectedState === 'active' ||
     config.requireActive === true ||
     config.expectedStatus === 'active' ||
-    (phase && ['VERIFICATION', 'POSTCHECK'].includes(phase)) ||
-    /verify|assert|health/i.test(step.key ?? '') ||
-    /verify|health|active/i.test(step.name ?? '')
+    step.phase === 'verification' ||
+    config.phase === 'verification'
   );
 }
 
@@ -390,8 +389,23 @@ export function resolveCommandResult(
     (attempt.step.config?.action === 'status' || !attempt.step.config?.action);
 
   if (isSystemdStatus) {
-    const activeRequired = isSystemdActiveRequired(attempt.step);
+    const config = attempt.step.config ?? {};
+    const expected = config.expectedState;
+    const requireActive =
+      expected === 'active' || config.requireActive === true || config.expectedStatus === 'active';
+    const requireInactive = expected === 'inactive';
+
     if (code === 0) {
+      if (requireInactive) {
+        return {
+          status: 'FAILED',
+          exitCode: 0,
+          output,
+          errorCode: 'SERVICE_ACTIVE',
+          errorMessage:
+            'Systemd service unit is active (exit code 0), but inactive state was required.',
+        };
+      }
       return {
         status: 'SUCCEEDED',
         exitCode: 0,
@@ -399,7 +413,7 @@ export function resolveCommandResult(
       };
     }
     if (code === 3) {
-      if (activeRequired) {
+      if (requireActive) {
         return {
           status: 'FAILED',
           exitCode: 3,

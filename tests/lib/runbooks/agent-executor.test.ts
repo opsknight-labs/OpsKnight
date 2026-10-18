@@ -483,7 +483,7 @@ describe('runbook Agent executor', () => {
     expect(result.errorCode).toBeUndefined();
   });
 
-  it('fails systemctl status with SERVICE_INACTIVE when step requires active service and exit code is 3', () => {
+  it('fails systemctl status with SERVICE_INACTIVE when expectedState is active and exit code is 3', () => {
     const attemptObj: ClaimedAttempt = {
       attemptId: 'att-systemd-status-verify',
       leaseToken: 'tok-sys-verify',
@@ -494,11 +494,11 @@ describe('runbook Agent executor', () => {
       inputValues: {},
       secretInputKeys: [],
       step: {
-        key: 'verify_systemd_active',
-        name: 'Verify cert-sample.service active',
+        key: 'check_unit_state',
+        name: 'Check unit state',
         type: 'SYSTEMD',
         riskClass: 'READ_ONLY',
-        config: { action: 'status', unit: 'cert-sample.service', requireActive: true },
+        config: { action: 'status', unit: 'cert-sample.service', expectedState: 'active' },
         timeoutSeconds: 10,
       },
     };
@@ -514,6 +514,72 @@ describe('runbook Agent executor', () => {
     expect(result.exitCode).toBe(3);
     expect(result.errorCode).toBe('SERVICE_INACTIVE');
     expect(result.errorMessage).toContain('inactive or dead');
+  });
+
+  it('fails systemctl status with SERVICE_ACTIVE when expectedState is inactive and exit code is 0', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-inactive-fail',
+      leaseToken: 'tok-sys-inact',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-inact',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'assert_stopped',
+        name: 'Assert stopped',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service', expectedState: 'inactive' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      0,
+      '● cert-sample.service - Active Service\n   Active: active (running)',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(0);
+    expect(result.errorCode).toBe('SERVICE_ACTIVE');
+    expect(result.errorMessage).toContain('inactive state was required');
+  });
+
+  it('treats benign diagnostic step named "Verify details" as successful on exit 3 when expectedState is not active', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-diagnostic-verify',
+      leaseToken: 'tok-sys-diag',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-diag',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'verify_unit_diagnostic',
+        name: 'Verify unit diagnostic details',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      3,
+      '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
+      false
+    );
+
+    // Because expectedState was not explicitly set to active, the display name does NOT cause a false failure
+    expect(result.status).toBe('SUCCEEDED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBeUndefined();
   });
 
   it('fails systemctl status with UNIT_NOT_FOUND when exit code is 4', () => {

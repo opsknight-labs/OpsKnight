@@ -541,6 +541,11 @@ export async function claimAgentAttempt(
               name: attempt.executionStep.name,
               type: attempt.executionStep.type,
               riskClass: attempt.executionStep.riskClass,
+              phase:
+                (resolvedConfig.phase as string | undefined) ??
+                ((attempt.executionStep.config as Record<string, unknown>)?.phase as
+                  string | undefined) ??
+                undefined,
               config: resolvedConfig,
               timeoutSeconds: Math.max(
                 1,

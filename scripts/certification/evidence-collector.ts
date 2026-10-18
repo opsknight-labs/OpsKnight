@@ -162,9 +162,7 @@ export function loadAllTestEvidence(
 ): TestEvidenceRecord[] {
   if (!fs.existsSync(resultsDir)) return [];
 
-  const files = fs
-    .readdirSync(resultsDir)
-    .filter(f => f.endsWith('.json') && !f.includes('UI-VERIFICATION') && !f.startsWith('.'));
+  const files = fs.readdirSync(resultsDir).filter(f => /^(AUTO|HA)-\d+\.json$/.test(f));
   const records: TestEvidenceRecord[] = [];
 
   for (const file of files) {
