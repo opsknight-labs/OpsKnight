@@ -65,6 +65,7 @@ it('defaults off with 90 days and ignores deployment environment values', async 
     automationEnabled: false,
     automationTraceRetentionDays: 90,
     automationSettingsRevision: 0,
+    automationStoreObservationPreviews: false,
   });
   expect(await automationEnabled()).toBe(false);
   vi.unstubAllEnvs();

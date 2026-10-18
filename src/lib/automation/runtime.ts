@@ -1,3 +1,4 @@
+import { isSensitiveObservation, protectObservationValues } from './observation-privacy';
 import { compareAutomationOutcomes } from './comparison';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import type { EvaluationPosition } from './evaluator/guard';
@@ -237,7 +238,9 @@ export async function prepareAutomation(
     runtime.observations = [
       ...configuredObservations,
       ...discoverFields(envelope.providerPayload).filter(field => !observedPaths.has(field.path)),
-    ].slice(0, LIMITS.fields);
+    ]
+      .filter(observation => !isSensitiveObservation(observation))
+      .slice(0, LIMITS.fields);
   } catch (error) {
     // Database failures must abort ingestion and use the transaction/replay path,
     // never silently commit a different responder route as an engine fallback.
@@ -595,8 +598,16 @@ export async function persistAutomation(
   runtime.tracePersistenceMs = performance.now() - tracePersistenceStarted;
   if (encodedDetail.diagnosticLevel === 'FULL')
     runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(encodedDetail), 'utf8');
-  // Store bounded scalar discovery candidates, never provider payloads or headers.
-  if (runtime.observations.length || shadow)
+  // Default-off previews are removed before durable enqueueing, not just at response time.
+  if (runtime.observations.length) await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR SHARE`;
+  const observationSettings = runtime.observations.length ? await getAutomationSettings(tx) : null;
+  const protectedObservations = protectObservationValues(
+    envelope.serviceId,
+    runtime.observations,
+    observationSettings?.automationStoreObservationPreviews === true
+  );
+  // Store bounded discovery metadata, never provider payloads or headers.
+  if (protectedObservations.length || shadow)
     await tx.backgroundJob.create({
       select: { id: true },
       data: {
@@ -609,7 +620,7 @@ export async function persistAutomation(
           serviceId: envelope.serviceId,
           integrationId: envelope.integrationId,
           integrationType: envelope.integrationType,
-          observations: runtime.observations,
+          observations: protectedObservations,
           ...(shadow ? { shadow } : {}),
         }),
         maxAttempts: 3,

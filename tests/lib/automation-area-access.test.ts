@@ -124,3 +124,27 @@ it('recalculates unmapped readiness after a new active alias handles an older ob
   expect(overview.unmappedCount).toBe(0);
   expect(overview.activeVersion?.snapshot).toBeUndefined();
 });
+it('uses recorded normalization status when preview minimization prevents re-evaluation', async () => {
+  mocks.versionOne.mockResolvedValue({
+    id: 'active',
+    versionNumber: 2,
+    snapshot: {
+      ...emptySnapshot,
+      fields: [
+        {
+          fieldId: 'env',
+          key: 'environment',
+          label: 'Environment',
+          type: 'STRING',
+          aliases: {},
+          mappings: [],
+        },
+      ],
+    },
+  });
+  mocks.observation.mockResolvedValue([
+    { fieldKey: 'environment', rawValuePreview: '', unmapped: false },
+    { fieldKey: 'environment', rawValuePreview: '', unmapped: true },
+  ]);
+  expect((await getAutomationArea('service-a', 'overview')).unmappedCount).toBe(1);
+});

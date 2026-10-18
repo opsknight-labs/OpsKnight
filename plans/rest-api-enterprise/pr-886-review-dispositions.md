@@ -192,3 +192,21 @@ The Explorer's obsolete endpoint-count assertion and Teams queue-state race were
 corrected in f33870f67. Its 708 Explorer tests and 12 provider/device browser cases
 passed locally. Latest-commit CI, readiness policy, candidate isolation, storage
 privacy and remaining enterprise API coverage are still separate open items.
+
+### Deep audit — discovery storage minimization
+
+Observation previews are now default-off and administrator-controlled through the
+existing database/UI/REST settings command. New durable observation jobs omit raw
+preview scalars by default; retained identities use a service-scoped keyed hash.
+Configured mappings, discovery traversal and legacy worker input exclude recognized
+contact/credential data. Preview opt-out scrubs stored rows and durable payloads;
+shared settings locks fence concurrent enqueue/worker writes. The alias UI disables
+mapping from a missing/redacted preview and preserves recorded normalization counts.
+
+The upgrade intentionally resets legacy discovery sample rows and clears old job
+observation arrays. This removes unkeyed hashes/raw samples; published routing,
+active pointers and shadow aggregates are preserved. A populated upgrade from
+35938aeb3 passed against isolated PostgreSQL; evidence is in
+`automation-privacy-upgrade.json`. The classifier is deliberately bounded and is
+not a general personal-data guarantee. Broader retention/export/deletion and
+production privacy acceptance remain part of the overall release gates.

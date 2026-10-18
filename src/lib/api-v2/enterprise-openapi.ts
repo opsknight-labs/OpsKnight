@@ -395,6 +395,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   AutomationSettings: object(
     {
       automationEnabled: { type: 'boolean' },
+      automationStoreObservationPreviews: { type: 'boolean' },
       automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
       automationSettingsRevision: integer,
     },
@@ -756,6 +757,7 @@ const operations: Operation[] = [
     body: object(
       {
         automationEnabled: { type: 'boolean' },
+        automationStoreObservationPreviews: { type: 'boolean' },
         automationTraceRetentionDays: { type: 'integer', minimum: 1, maximum: 3650 },
       },
       ['automationEnabled', 'automationTraceRetentionDays']

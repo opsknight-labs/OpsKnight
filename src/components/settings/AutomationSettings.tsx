@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/shadcn/label';
 
 type Settings = {
   automationEnabled: boolean;
+  automationStoreObservationPreviews?: boolean;
   automationTraceRetentionDays: number;
   automationSettingsRevision: number;
 };
@@ -54,6 +55,22 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
           retention removes older diagnostics during the next cleanup.
         </p>
       </div>
+      <label className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          checked={settings.automationStoreObservationPreviews === true}
+          disabled={busy}
+          onChange={event =>
+            setSettings({ ...settings, automationStoreObservationPreviews: event.target.checked })
+          }
+        />
+        Store diagnostic field-value previews
+      </label>
+      <p className="text-sm text-muted-foreground">
+        Off by default. Discovery retains keyed value identities and counts. Enabling stores bounded
+        previews for alias authoring; recognizable contact details and credentials are excluded.
+        Disabling clears stored previews. Observation retention also applies to previews.
+      </p>
       <Button
         disabled={busy}
         onClick={async () => {
@@ -64,6 +81,8 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
               await saveAutomationSettings({
                 automationEnabled: settings.automationEnabled,
                 automationTraceRetentionDays: settings.automationTraceRetentionDays,
+                automationStoreObservationPreviews:
+                  settings.automationStoreObservationPreviews === true,
                 expectedRevision: settings.automationSettingsRevision,
               })
             );

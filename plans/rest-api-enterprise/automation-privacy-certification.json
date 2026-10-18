@@ -1,0 +1,109 @@
+{
+  "sourceParent": "e9cbb1b2c42d5ae9a1acac48f7972fdedd116dc0",
+  "measuredAt": "2026-10-18T09:54:26.290198+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Discovery privacy follow-up to the deep audit of 654b0ed32. Not complete enterprise or production certification.",
+  "productionBuild": "passed",
+  "typecheck": "passed",
+  "changedSourceLint": "passed",
+  "generatedClientsCheck": "passed",
+  "unit": {
+    "passed": 1239,
+    "files": 62
+  },
+  "postgresRegression": {
+    "passed": 131,
+    "skipped": 1,
+    "files": 22
+  },
+  "privacyConcurrencySubset": {
+    "passed": 4
+  },
+  "browser": {
+    "existingMatrix": {
+      "startTime": "2026-10-18T09:49:48.203Z",
+      "duration": 213161.543,
+      "expected": 36,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "settingsMatrix": {
+      "startTime": "2026-10-18T09:53:32.959Z",
+      "duration": 18725.947,
+      "expected": 4,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "settingsEvidence": [
+      {
+        "project": "desktop",
+        "optInPersisted": true,
+        "previewClearedOnOptOut": true
+      },
+      {
+        "project": "mobile",
+        "optInPersisted": true,
+        "previewClearedOnOptOut": true
+      },
+      {
+        "project": "iphone",
+        "optInPersisted": true,
+        "previewClearedOnOptOut": true
+      },
+      {
+        "project": "tablet",
+        "optInPersisted": true,
+        "previewClearedOnOptOut": true
+      }
+    ],
+    "topology": {
+      "webReplicas": 2,
+      "generalWorkers": 1
+    }
+  },
+  "liveSdks": {
+    "typescript": "passed against the production build and PostgreSQL",
+    "python": "passed against the production build and PostgreSQL"
+  },
+  "upgrade": "automation-privacy-upgrade.json",
+  "localLoad": "automation-privacy-local-load.json",
+  "sourceDigests": {
+    ".github/workflows/automation-validation.yml": "ce5338d96a08c4d99fa0f9ab3e5c89a2b5a684d3df61d5aade97ccfb9cdae10b",
+    "prisma/migrations/20261018101000_automation_observation_privacy/migration.sql": "229b78a0fae09695fa2b3ccc03e5d701d1d01602dfda9ffcefb72552496af107",
+    "prisma/migrations/20261018102000_automation_legacy_observation_payloads/migration.sql": "5cfdb6b66212f99910cb140318aa3eb45e97ef86870fcb0699eb0406562cd828",
+    "prisma/schema.prisma": "f817b969a41c724615644516c2d929cc6c3d3d983205ec344f80e765da4f285a",
+    "sdk/openapi-v2.json": "5bd8be3f44fa1973f68ce1d194684034eccde4e189dffc709e6651ea459ab1a3",
+    "sdk/python/opsknight_v2/models.py": "45fb4a612a7cae535e9f88ff1191bc9f522bb4141bc3a1e640e28fbd08552910",
+    "sdk/typescript/schema.ts": "7c64500de369d2e4599a39789f12bd8c00afc573bcaccd2571bd23786b7e5f8c",
+    "src/app/(app)/services/[id]/automation/actions.ts": "04e25f25f9ce7bf9a30b8ef39ac3b68d91d12ae5edd043532637731032992565",
+    "src/components/automation/AutomationContext.tsx": "a1d2da9f5a0f1fdbf6ff7cbd423733993f55e2f85623bcb390293fa0d8850c44",
+    "src/components/settings/AutomationSettings.tsx": "6896eb4c72f685a84053c88a803588b11d03cbb1395519483cd9c94845a34f3d",
+    "src/lib/api-v2/enterprise-openapi.ts": "4db817619f5370b8f94d8223b71b0b6a0376c1ce2c5573e281830cd1f65b59b7",
+    "src/lib/automation/discovery.ts": "8a8a81b45939862b732176fd06ea3b58908ad6e067e69eb09276518818891bc9",
+    "src/lib/automation/jobs.ts": "e9be40ce51245d08f2fbcfdf0f931abac229db9ac673be578fb462512c5a4734",
+    "src/lib/automation/observation-batch.ts": "9b4e7b8671d9b53f78c39cdf6d0e29c328cd49e703a43f0498601e294877174a",
+    "src/lib/automation/observation-payload-privacy.ts": "91bb9fd4896ae5d323205c731be0a3eb6f9fa0b1252d63f41604a34ce2e50de9",
+    "src/lib/automation/observation-privacy.ts": "3100a6d583c3b17f5cd3699b15bf57596d08fa457bd573f094eff18fa949471d",
+    "src/lib/automation/runtime.ts": "ac05cf6eb27e4f2b0c8004d05715bdfa8ea2f9dd600242bb3a5bb98a1442cfd5",
+    "src/lib/automation/settings-command.ts": "6ea578735a12aa24312ce97cd9ca761d8e0b665183e6dcdfbab9494079a88e63",
+    "src/lib/automation/settings.ts": "21f6cdf06383aa9df80351a9bf0c385bf1aea89dd4b9f2be810d3af6799fcccd",
+    "tests/e2e/automation.spec.ts": "701b57ed716fb803a749b18f031c1a72b395847a308a6c6b56e0bbcad2221f2d",
+    "tests/integration/automation-certification.test.ts": "0b3cdb7c35d211a632a6cef902b8085419ec5009970ab6f6c4aa38597267dd75",
+    "tests/integration/automation-observation-privacy.test.ts": "88b8af9c9530115b9a0c84dbf7f13c8e2e2b0216dad74666d2c7d97653d4b66f",
+    "tests/integration/automation-settings.test.ts": "f0c61718cfe4dca48a8a06801b7c5b4dbf6ec4f324fc6b4cf54c1448a2e7721c",
+    "tests/lib/automation-area-access.test.ts": "6c47d151de47f09f2ceeaa1ce0f251f258b5e6a2df85fded01da80c60d7f1b3a",
+    "tests/lib/automation-observation-privacy.test.ts": "09274dcb8f5e5889c8354d1ac5f90a1d79a07bd450c48c6f79b657b06d992ff8",
+    "tests/unit/api-v2-automation-settings.test.ts": "662b0d5c7b21e1823734d04fd689ba6ae36f8162a4cbca01307575a02378ef0a",
+    "tests/unit/automation-observation-batch.test.ts": "ddd1fbd20e9a5e30f932e5c8e67c651ac55e3923f67a3383ea20eea6fb3ea212"
+  },
+  "limitations": [
+    "Legacy discovery sample rows are reset during upgrade; new traffic repopulates the diagnostic statistics.",
+    "Old web/worker binaries do not enforce the preview setting. Replace all instances before claiming minimization; mixed-version privacy is not certified.",
+    "Field/value classifications are bounded, not a guarantee that arbitrary free text is free of personal data.",
+    "Recognized contact/credential values are excluded even with preview opt-in. Routing/incident traces follow their separate existing sensitive-data contract.",
+    "Key rotation starts a new observation identity space. No production throughput, latency acceptance, load/HA or agent certification is claimed.",
+    "Configurable activation qualification, candidate isolation and remaining enterprise API domains remain open. Latest-commit CI must pass."
+  ]
+}

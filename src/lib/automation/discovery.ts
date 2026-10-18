@@ -1,9 +1,10 @@
-import { isSensitiveValue } from './context/privacy';
+import { isSensitiveObservation } from './observation-privacy';
 import { forbiddenSegment } from './context/extract';
 export type Observation = {
   key: string;
   path: string;
   value: string;
+  valueHash?: string;
   type: string;
   unmapped: boolean;
 };
@@ -16,7 +17,12 @@ export function discoverFields(payload: unknown): Observation[] {
     if (value === null || value === undefined) return;
     if (['string', 'number', 'boolean'].includes(typeof value)) {
       const text = String(value);
-      if (!tokens.length || text.length > 256 || isSensitiveValue(text)) return;
+      if (
+        !tokens.length ||
+        text.length > 256 ||
+        isSensitiveObservation({ key: tokens.join('_'), path: tokens.join('.'), value: text })
+      )
+        return;
       fields.push({
         key: tokens
           .join('_')

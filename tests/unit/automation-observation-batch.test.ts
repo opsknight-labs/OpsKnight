@@ -12,7 +12,13 @@ describe('persistObservationBatch', () => {
     integrationType: 'CLOUDWATCH',
     observations: [
       { key: 'env', path: 'detail.env', value: 'prod', type: 'ENUM', unmapped: true },
-      { key: 'severity', path: 'detail.severity', value: 'critical', type: 'STRING', unmapped: false },
+      {
+        key: 'severity',
+        path: 'detail.severity',
+        value: 'critical',
+        type: 'STRING',
+        unmapped: false,
+      },
     ],
   };
 
@@ -48,6 +54,9 @@ describe('persistObservationBatch', () => {
     const { receiptExists = false, pendingRows = [], existingReceipts = [] } = options ?? {};
 
     return {
+      systemSettings: {
+        findUnique: vi.fn().mockResolvedValue({ automationStoreObservationPreviews: false }),
+      },
       $executeRaw: vi.fn().mockResolvedValue(0),
       $queryRaw: vi.fn().mockResolvedValue(pendingRows),
       backgroundJob: {

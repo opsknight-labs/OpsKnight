@@ -28,6 +28,7 @@ export async function getAutomationSettings(client: Prisma.TransactionClient = p
     select: {
       automationEnabled: true,
       automationTraceRetentionDays: true,
+      automationStoreObservationPreviews: true,
       automationSettingsRevision: true,
     },
   });
@@ -35,6 +36,7 @@ export async function getAutomationSettings(client: Prisma.TransactionClient = p
     settings ?? {
       automationEnabled: false,
       automationTraceRetentionDays: 90,
+      automationStoreObservationPreviews: false,
       automationSettingsRevision: 0,
     }
   );

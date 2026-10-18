@@ -188,8 +188,8 @@ export function AutomationContext({
                 .map(o => (
                   <div className="flex flex-wrap items-center gap-2 text-sm" key={o.id}>
                     <Badge variant="outline">Unmapped</Badge>
-                    {o.rawValuePreview} · {o.count} alerts{' '}
-                    {data.canEdit && (
+                    {o.rawValuePreview || 'Value preview not retained'} · {o.count} alerts{' '}
+                    {data.canEdit && o.rawValuePreview && o.rawValuePreview !== '[redacted]' && (
                       <select
                         aria-label={`Map ${o.rawValuePreview}`}
                         className={controlClass}
