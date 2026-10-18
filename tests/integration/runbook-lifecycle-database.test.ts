@@ -845,3 +845,89 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     ).rejects.toThrow(/Cannot delete RETIRED runbook version/);
   });
 });
+
+describeIfRealDB('Runbook lifecycle REST transaction preparation', () => {
+  it('duplicates SELECT inputs with defaults and choices through the canonical creator', async () => {
+    const actor = await createTestUser();
+    const team = await testPrisma.team.create({
+      data: { name: `Duplicate choices ${crypto.randomUUID()}` },
+    });
+    const source = await createRunbook(
+      {
+        name: 'Select preservation',
+        slug: `select-copy-${crypto.randomUUID()}`,
+        description: '',
+        ownerTeamId: team.id,
+        tags: ['operations'],
+        inputs: [
+          {
+            key: 'environment',
+            label: 'Environment',
+            type: 'SELECT',
+            required: true,
+            defaultValue: 'production',
+            description: 'Target',
+            sequence: 0,
+            options: ['staging', 'production'],
+          },
+        ],
+      },
+      actor.id
+    );
+    const copy = await duplicateRunbook(source.id, actor.id);
+    expect(copy).toMatchObject({ ownerTeamId: team.id, tags: ['operations'] });
+    expect(copy.draftVersion.inputs[0]).toMatchObject({
+      key: 'environment',
+      type: 'SELECT',
+      defaultValue: 'production',
+      options: ['staging', 'production'],
+    });
+    expect(copy.publishedVersionId).toBeNull();
+  });
+
+  it('joins the outer transaction and rolls state and canonical API attribution back together', async () => {
+    const actor = await createTestUser();
+    const source = await createRunbook(
+      {
+        name: 'Transactional lifecycle',
+        slug: `tx-lifecycle-${crypto.randomUUID()}`,
+        description: '',
+      },
+      actor.id
+    );
+    const key = await testPrisma.apiKey.create({
+      data: {
+        name: 'Lifecycle fixture',
+        userId: actor.id,
+        prefix: 'fixture',
+        tokenHash: crypto.randomUUID(),
+        scopes: ['runbooks:write'],
+      },
+    });
+    const identity = { id: actor.id, apiKeyId: key.id };
+    await archiveRunbook(source.id, actor.id);
+    await expect(
+      testPrisma.$transaction(async tx => {
+        await restoreRunbook(source.id, identity, tx);
+        await duplicateRunbook(source.id, identity, tx);
+        throw new Error('Abort lifecycle transaction');
+      })
+    ).rejects.toThrow('Abort lifecycle transaction');
+    expect(
+      (await testPrisma.runbook.findUniqueOrThrow({ where: { id: source.id } })).archivedAt
+    ).not.toBeNull();
+    expect(
+      await testPrisma.runbook.count({ where: { slug: { startsWith: `${source.slug}-copy` } } })
+    ).toBe(0);
+    await testPrisma.$transaction(tx => restoreRunbook(source.id, identity, tx));
+    const audit = await testPrisma.auditLog.findFirstOrThrow({
+      where: { entityId: source.id, action: 'runbook.restored' },
+    });
+    expect(audit.details).toMatchObject({ source: 'API', metadata: { apiClientId: key.id } });
+    const results = await Promise.all([
+      duplicateRunbook(source.id, actor.id),
+      duplicateRunbook(source.id, actor.id),
+    ]);
+    expect(new Set(results.map(result => result.slug)).size).toBe(2);
+  });
+});

@@ -2,36 +2,18 @@ import 'server-only';
 
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { logAudit } from '@/lib/audit';
-import { runSerializableTransaction } from '@/lib/db-utils';
+import {
+  logRunbookCommandAudit,
+  runRunbookCommand,
+  type RunbookCommandActor,
+  type RunbookCommandClient,
+} from './command-context';
+import { createRunbook } from './versioning';
 import { lockRunbookForUpdate } from './locking';
 import { RunbookCannotDeleteError, RunbookDefinitionError, RunbookNotFoundError } from './errors';
 
 export { RunbookCannotDeleteError, RunbookDefinitionError, RunbookNotFoundError };
-import {
-  computeDefinitionChecksum,
-  parseRunbookDefinition,
-  validateInputKeyUniqueness,
-} from './definition';
-import {
-  createRunbookSchema,
-  runbookInputsSchema,
-  type RunbookInputInput,
-  type RunbookLibraryFilter,
-} from './schemas';
-
-function toInputCreateMany(inputs: RunbookInputInput[]) {
-  return inputs.map((input, index) => ({
-    key: input.key,
-    label: input.label,
-    type: input.type,
-    required: input.required,
-    defaultValue: input.defaultValue,
-    description: input.description,
-    sequence: input.sequence ?? index,
-    options: input.type === 'SELECT' ? (input.options ?? []) : [],
-  }));
-}
+import { type RunbookLibraryFilter } from './schemas';
 
 export type RunbookDeleteEligibility = {
   canDelete: boolean;
@@ -52,9 +34,10 @@ export type RunbookDeleteEligibility = {
  * - Any runbook with published or retired version history MUST NOT be hard-deleted (archive instead).
  */
 export async function checkRunbookDeleteEligibility(
-  runbookId: string
+  runbookId: string,
+  client: RunbookCommandClient = prisma
 ): Promise<RunbookDeleteEligibility> {
-  const runbook = await prisma.runbook.findUnique({
+  const runbook = await client.runbook.findUnique({
     where: { id: runbookId },
     include: {
       _count: {
@@ -147,7 +130,13 @@ export async function checkRunbookDeleteEligibility(
  * - Re-checks all eligibility conditions inside the same serializable transaction
  *   to eliminate any race condition where a draft could be published or bound concurrently.
  */
-export async function deleteRunbook(runbookId: string, actorId: string, confirmationText: string) {
+export async function deleteRunbook(
+  runbookId: string,
+  actor: RunbookCommandActor,
+  confirmationText: string,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
   const trimmedConfirmation = (confirmationText ?? '').trim();
   if (!trimmedConfirmation) {
     throw new RunbookCannotDeleteError(
@@ -155,7 +144,7 @@ export async function deleteRunbook(runbookId: string, actorId: string, confirma
     );
   }
 
-  return runSerializableTransaction(async tx => {
+  return runRunbookCommand(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'delete' });
     const runbook = await tx.runbook.findUnique({
       where: { id: runbookId },
@@ -226,7 +215,8 @@ export async function deleteRunbook(runbookId: string, actorId: string, confirma
       where: { id: runbookId },
     });
 
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.deleted',
         entityType: 'RUNBOOK',
@@ -246,20 +236,13 @@ export async function deleteRunbook(runbookId: string, actorId: string, confirma
  * Safety rule: All service bindings remain disabled (`enabled: false`) upon restore,
  * requiring explicit operator review and activation to prevent unintended automated actions.
  */
-export async function restoreRunbook(runbookId: string, actorId: string) {
-  const runbook = await prisma.runbook.findUnique({
-    where: { id: runbookId },
-  });
-
-  if (!runbook) {
-    throw new RunbookNotFoundError(runbookId);
-  }
-
-  if (!runbook.archivedAt) {
-    return runbook; // Idempotent restore
-  }
-
-  return prisma.$transaction(async tx => {
+export async function restoreRunbook(
+  runbookId: string,
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'restore' });
     const current = await tx.runbook.findUnique({
       where: { id: runbookId },
@@ -285,7 +268,8 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
       data: { enabled: false },
     });
 
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.restored',
         entityType: 'RUNBOOK',
@@ -306,148 +290,85 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
 /**
  * Generates a collision-free slug by suffixing incrementing integers when necessary.
  */
-export async function ensureUniqueSlug(baseSlug: string): Promise<string> {
+export async function ensureUniqueSlug(
+  baseSlug: string,
+  client: RunbookCommandClient = prisma
+): Promise<string> {
   const normalized =
     baseSlug
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 110) || 'runbook';
-
-  let slug = normalized;
-  let counter = 1;
-
-  while (await prisma.runbook.findUnique({ where: { slug }, select: { id: true } })) {
-    slug = `${normalized}-${counter++}`;
+  for (let counter = 0; counter < 1000; counter++) {
+    const slug = counter === 0 ? normalized : `${normalized}-${counter}`;
+    if (!(await client.runbook.findUnique({ where: { slug }, select: { id: true } }))) return slug;
   }
-
-  return slug;
+  throw new RunbookDefinitionError(
+    'Could not allocate a duplicate slug within the supported search limit.'
+  );
 }
 
-/**
- * Clones an existing runbook into a new independent draft runbook.
- * Enterprise guarantees:
- * 1. Fully atomic creation: runbook row, draft version, inputs, created audit, and duplicated audit
- *    occur within a single database transaction.
- * 2. Bounded collision retry: if concurrent requests choose the same slug, unique constraint
- *    violations (P2002) are caught and retried with incrementing suffixes.
+/** Source locking makes the cloned definition and metadata one coherent revision.
+ * The canonical creator preserves input choices/defaults and validates definitions.
  */
-export async function duplicateRunbook(runbookId: string, actorId: string) {
-  const source = await prisma.runbook.findUnique({
-    where: { id: runbookId },
-    include: {
-      draftVersion: {
-        include: { inputs: { orderBy: { sequence: 'asc' } } },
+export async function duplicateRunbook(
+  runbookId: string,
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
+    await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'duplicate' });
+    const source = await tx.runbook.findUnique({
+      where: { id: runbookId },
+      include: {
+        draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+        publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
       },
-      publishedVersion: {
-        include: { inputs: { orderBy: { sequence: 'asc' } } },
+    });
+    if (!source) throw new RunbookNotFoundError(runbookId);
+    const version = source.draftVersion ?? source.publishedVersion;
+    if (!version)
+      throw new RunbookDefinitionError(
+        'Cannot duplicate a runbook without any version definition.'
+      );
+    const slug = await ensureUniqueSlug(`${source.slug}-copy`, tx);
+    const copy = await createRunbook(
+      {
+        name: `${source.name.slice(0, 193).trimEnd()} (Copy)`,
+        slug,
+        description: source.description,
+        ownerTeamId: source.ownerTeamId,
+        tags: source.tags,
+        definition: version.definition,
+        inputs: version.inputs.map(input => ({
+          key: input.key,
+          label: input.label,
+          type: input.type,
+          required: input.required,
+          defaultValue: input.defaultValue ?? undefined,
+          description: input.description,
+          sequence: input.sequence,
+          options: input.options,
+        })),
       },
-    },
-  });
-
-  if (!source) {
-    throw new RunbookNotFoundError(runbookId);
-  }
-
-  const activeVersion = source.draftVersion || source.publishedVersion;
-  if (!activeVersion) {
-    throw new RunbookDefinitionError('Cannot duplicate a runbook without any version definition.');
-  }
-
-  const baseSlugCandidate = `${source.slug}-copy`;
-  const baseName = source.name.slice(0, 193).trimEnd();
-  const name = `${baseName} (Copy)`;
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const slug = await ensureUniqueSlug(
-      attempt === 0 ? baseSlugCandidate : `${baseSlugCandidate}-${attempt + 1}`
+      actor,
+      tx
     );
-
-    try {
-      return await prisma.$transaction(async tx => {
-        const metadata = createRunbookSchema.parse({
-          name,
-          slug,
-          description: source.description,
-        });
-        const inputs = runbookInputsSchema.parse(
-          activeVersion.inputs.map(input => ({
-            key: input.key,
-            label: input.label,
-            type: input.type as unknown as RunbookInputInput['type'],
-            required: input.required,
-            defaultValue: input.defaultValue ?? undefined,
-            description: input.description,
-            sequence: input.sequence,
-          }))
-        );
-        const definition = parseRunbookDefinition(activeVersion.definition, inputs);
-        validateInputKeyUniqueness(inputs);
-        const checksum = computeDefinitionChecksum(definition);
-
-        const runbook = await tx.runbook.create({
-          data: { ...metadata, createdById: actorId },
-        });
-
-        const draft = await tx.runbookVersion.create({
-          data: {
-            runbookId: runbook.id,
-            version: 1,
-            state: 'DRAFT',
-            definition: definition as unknown as Prisma.InputJsonValue,
-            checksum,
-            createdById: actorId,
-            inputs: inputs.length ? { createMany: { data: toInputCreateMany(inputs) } } : undefined,
-          },
-          include: { inputs: { orderBy: { sequence: 'asc' } } },
-        });
-
-        await tx.runbook.update({
-          where: { id: runbook.id },
-          data: { draftVersionId: draft.id },
-        });
-
-        await logAudit(
-          {
-            action: 'runbook.created',
-            entityType: 'RUNBOOK',
-            entityId: runbook.id,
-            actorId,
-            newValue: { name: runbook.name, slug: runbook.slug, draftVersion: 1 },
-          },
-          tx
-        );
-
-        await logAudit(
-          {
-            action: 'runbook.duplicated',
-            entityType: 'RUNBOOK',
-            entityId: runbook.id,
-            actorId,
-            details: { sourceRunbookId: runbookId, slug: runbook.slug },
-          },
-          tx
-        );
-
-        return { ...runbook, draftVersionId: draft.id, draftVersion: draft };
-      });
-    } catch (err: unknown) {
-      if (
-        err &&
-        typeof err === 'object' &&
-        'code' in err &&
-        (err as { code: string }).code === 'P2002' &&
-        attempt < 4
-      ) {
-        continue;
-      }
-      throw err;
-    }
-  }
-
-  throw new RunbookDefinitionError(
-    'Failed to allocate unique slug for runbook duplication after multiple attempts.'
-  );
+    await logRunbookCommandAudit(
+      actor,
+      {
+        action: 'runbook.duplicated',
+        entityType: 'RUNBOOK',
+        entityId: copy.id,
+        actorId,
+        details: { sourceRunbookId: runbookId, slug: copy.slug },
+      },
+      tx
+    );
+    return copy;
+  });
 }
 
 /**

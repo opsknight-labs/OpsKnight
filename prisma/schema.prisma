@@ -3470,6 +3470,7 @@ enum RunbookSuggestionState {
 }
 
 model Runbook {
+  revision Int @default(1)
   id                 String    @id @default(cuid())
   name               String
   slug               String    @unique
