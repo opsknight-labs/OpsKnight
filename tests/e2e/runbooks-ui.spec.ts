@@ -120,7 +120,8 @@ test('global history stays synchronized across application pages and authenticat
   await page.goForward();
   await assertDestination(destinations[1]);
 });
-test('library, ordered builder, typed inputs and publish confirmation', async ({ page }) => {
+test('library, ordered builder, typed inputs and publish confirmation', async ({ page: initialPage }) => {
+  let page = initialPage;
   await login(page);
   await page.getByRole('button', { name: 'New Runbook', exact: true }).first().click();
   await page.getByLabel('Name', { exact: true }).fill('UI Service Recovery');
@@ -191,12 +192,13 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
   ).toBeVisible();
-  // Wait for any in-flight router revalidation to settle before reloading.
-  // Firefox aborts the reload (NS_BINDING_ABORTED) when a concurrent fetch
-  // response arrives after the reload is initiated; networkidle prevents the race.
-  await page.waitForLoadState('networkidle');
-  await page.reload();
-  await page.waitForLoadState('domcontentloaded');
+  // A fresh document proves persistence without racing the saved tab's router
+  // refresh. Firefox can abort a reload while that refresh is committing.
+  const savedUrl = page.url();
+  const savedTab = page;
+  page = await savedTab.context().newPage();
+  await page.goto(savedUrl);
+  await savedTab.close();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await expect(
     page.locator('[role="tabpanel"]:visible').getByLabel('Input 1 key', { exact: true })
