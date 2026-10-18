@@ -30,12 +30,4 @@ No delivery date is committed. Items will be scoped and scheduled before they be
 - [ ] Alert correlation and assisted incident learning
 - [ ] Configurable workflow triggers and response automation
 
-## Further out
-
-These items are under consideration and not yet scoped.
-
-- [ ] Real-time event streaming (WebSocket / SSE) for external consumers
-- [ ] Multi-tenant workspace isolation
-- [ ] Plugin and extension framework
-
 Have a suggestion? [Open a feature request](https://github.com/opsknight-labs/OpsKnight/issues/new?template=feature_request.yml).
