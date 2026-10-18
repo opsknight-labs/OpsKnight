@@ -89,3 +89,76 @@ test('REST removal and administrator UI share subscriber consent and audit behav
     await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
   }
 });
+
+test('REST configuration changes appear in the shared settings UI and public privacy projection', async ({
+  page,
+  baseURL,
+}) => {
+  const suffix = crypto.randomUUID();
+  const password = 'Status-config-fixture-783!';
+  const actor = await db.user.create({
+    data: {
+      email: `status-config-${suffix}@example.invalid`,
+      name: 'Status configuration administrator',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      passwordHash: await bcrypt.hash(password, 12),
+    },
+  });
+  const issued = generateApiKey();
+  const key = await db.apiKey.create({
+    data: {
+      name: 'Status configuration browser credential',
+      userId: actor.id,
+      prefix: issued.prefix,
+      tokenHash: issued.tokenHash,
+      scopes: ['status-pages:read', 'status-pages:write'],
+    },
+  });
+  const statusPage =
+    (await db.statusPage.findFirst({ select: { id: true } })) ??
+    (await db.statusPage.create({
+      data: { name: 'Status configuration browser fixture', slug: `status-${suffix}` },
+    }));
+  const client = new Client({
+    baseUrl: `${baseURL}/api/v2`,
+    token: issued.token,
+    allowInsecureHttp: true,
+  });
+  try {
+    const before = (await client.call('getStatusPageContent', { params: { id: statusPage.id } }))
+      .data;
+    const footer = `Reviewed footer ${suffix}`;
+    const changed = (
+      await client.call('updateStatusPageContent', {
+        params: { id: statusPage.id },
+        body: { footerText: footer },
+        headers: { 'Idempotency-Key': crypto.randomUUID(), 'If-Match': `"${before.revision}"` },
+      })
+    ).data;
+    await client.call('updateStatusPagePrivacy', {
+      params: { id: statusPage.id },
+      body: { showIncidentTitles: false },
+      headers: { 'Idempotency-Key': crypto.randomUUID(), 'If-Match': `"${changed.revision}"` },
+    });
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill(actor.email);
+    await page.locator('input[type="password"]').fill(password);
+    await page.locator('form button[type="submit"]').click();
+    await expect(page).not.toHaveURL(/\/login/);
+    await page.goto(`/settings/status-pages/${statusPage.id}`);
+    await page.getByRole('button', { name: 'Content', exact: true }).click();
+    await expect(page.getByLabel('Footer Text', { exact: true })).toHaveValue(footer);
+    const latest = await client.call('getStatusPagePrivacy', { params: { id: statusPage.id } });
+    expect(latest.data.values.showIncidentTitles).toBe(false);
+    expect((await db.statusPage.findUniqueOrThrow({ where: { id: statusPage.id } })).revision).toBe(
+      latest.data.revision
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
+    ).toBe(true);
+  } finally {
+    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+  }
+});

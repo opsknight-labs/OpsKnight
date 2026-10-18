@@ -1,3 +1,4 @@
+import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import { MAX_SELECT_OPTIONS } from '@/lib/runbooks/input-options';
 import {
@@ -121,7 +122,79 @@ const authoringVersionSchema = object(
   ]
 );
 
+const statusPageSectionProperties = (section: string): Record<string, Schema> =>
+  Object.fromEntries(
+    [...(statusPageSectionFields(section) ?? [])]
+      .filter(key => !['id', 'expectedUpdatedAt', 'customDomain', 'subdomain'].includes(key))
+      .map(key => [
+        key,
+        key === 'branding'
+          ? { type: ['object', 'null'], additionalProperties: true }
+          : key === 'allowedCustomFields'
+            ? { type: ['array', 'null'], items: string() }
+            : key.startsWith('show') || ['enabled', 'requireAuth'].includes(key)
+              ? { type: 'boolean' }
+              : key.includes('Threshold')
+                ? { type: 'number', minimum: 0, maximum: 100 }
+                : [
+                      'incidentHistoryDetailDays',
+                      'maxIncidentsToShow',
+                      'incidentHistoryDays',
+                      'dataRetentionDays',
+                    ].includes(key)
+                  ? { type: ['integer', 'null'], minimum: 1 }
+                  : key === 'name'
+                    ? string(200)
+                    : { type: ['string', 'null'] },
+      ])
+  );
+const statusPageSectionRepresentations = Object.fromEntries(
+  ['appearance', 'privacy', 'content', 'settings'].map(section => [
+    `StatusPage${section[0].toUpperCase()}${section.slice(1)}`,
+    object(
+      {
+        id,
+        revision: integer,
+        updatedAt: date,
+        values: object(statusPageSectionProperties(section === 'settings' ? 'general' : section)),
+      },
+      ['id', 'revision', 'updatedAt', 'values']
+    ),
+  ])
+);
+
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  StatusPageService: object(
+    {
+      id,
+      statusPageId: id,
+      serviceId: id,
+      displayName: { type: ['string', 'null'] },
+      order: integer,
+      showOnPage: { type: 'boolean' },
+      createdAt: date,
+    },
+    ['id', 'statusPageId', 'serviceId', 'displayName', 'order', 'showOnPage', 'createdAt']
+  ),
+  ...statusPageSectionRepresentations,
+  StatusPageConfigurationResult: object(
+    {
+      updatedAt: date,
+      revision: integer,
+      replayed: { type: 'boolean' },
+      classification: { type: 'object', additionalProperties: true },
+      publication: object(
+        {
+          status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
+          revision: string(),
+          stale: { type: 'boolean' },
+          lastError: { type: ['string', 'null'] },
+        },
+        ['status', 'revision']
+      ),
+    },
+    ['updatedAt', 'revision', 'classification', 'publication']
+  ),
   StatusPageSubscriber: object(
     {
       id,
@@ -1005,6 +1078,94 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/status-pages/{id}/services',
+    summary:
+      'List configured service components with cursor pagination and a page configuration ETag',
+    paginated: true,
+  },
+  {
+    method: 'put',
+    path: '/status-pages/{id}/services',
+    summary: 'Replace reviewed service component membership and presentation',
+    body: object(
+      {
+        serviceIds: { type: 'array', items: id, maxItems: 10000, uniqueItems: true },
+        serviceConfigs: {
+          type: 'object',
+          additionalProperties: object({
+            displayName: { type: ['string', 'null'], maxLength: 200 },
+            order: { type: 'integer', minimum: 0, maximum: 100000 },
+            showOnPage: { type: 'boolean' },
+          }),
+        },
+      },
+      ['serviceIds']
+    ),
+  },
+  {
+    method: 'patch',
+    path: '/status-pages/{id}/services/{serviceId}',
+    summary: 'Update a selected service component without changing other memberships',
+    body: object({
+      displayName: { type: ['string', 'null'], maxLength: 200 },
+      order: { type: 'integer', minimum: 0, maximum: 100000 },
+      showOnPage: { type: 'boolean' },
+    }),
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/appearance',
+    summary: 'Read status-page appearance with a strong configuration revision',
+  },
+  {
+    method: 'patch',
+    path: '/status-pages/{id}/appearance',
+    summary: 'Update reviewed status-page appearance through the canonical publication command',
+    description:
+      'Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.',
+    body: object(statusPageSectionProperties('appearance')),
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/privacy',
+    summary: 'Read status-page privacy with a strong configuration revision',
+  },
+  {
+    method: 'patch',
+    path: '/status-pages/{id}/privacy',
+    summary: 'Update reviewed status-page privacy through the canonical publication command',
+    description:
+      'Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.',
+    body: object(statusPageSectionProperties('privacy')),
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/content',
+    summary: 'Read status-page content with a strong configuration revision',
+  },
+  {
+    method: 'patch',
+    path: '/status-pages/{id}/content',
+    summary: 'Update reviewed status-page content through the canonical publication command',
+    description:
+      'Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.',
+    body: object(statusPageSectionProperties('content')),
+  },
+  {
+    method: 'get',
+    path: '/status-pages/{id}/settings',
+    summary: 'Read status-page settings with a strong configuration revision',
+  },
+  {
+    method: 'patch',
+    path: '/status-pages/{id}/settings',
+    summary: 'Update reviewed status-page settings through the canonical publication command',
+    description:
+      'Requires a concrete If-Match configuration revision. Requires an Idempotency-Key; committed configuration metadata replays without a second audit. New keys with stale validators return 412. Publication status is read after commit and can advance on replay. Privacy narrowing withdraws the old projection before publication. A saved configuration does not imply LIVE publication. Domain claims and inline secret/provider settings are not accepted here.',
+    body: object(statusPageSectionProperties('general')),
+  },
   {
     method: 'get',
     path: '/status-pages/{id}/subscribers',

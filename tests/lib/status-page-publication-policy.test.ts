@@ -193,8 +193,10 @@ describe('classifyStatusPageChange', () => {
     expect(classify({ enabled: false }).dominant).toBe('DISABLE');
     expect(classify({ enabled: false }).revocationReason).toBe('DISABLED');
     expect(
-      classifyStatusPageChange({ current: { ...baseline, enabled: false }, patch: { enabled: true } })
-        .dominant
+      classifyStatusPageChange({
+        current: { ...baseline, enabled: false },
+        patch: { enabled: true },
+      }).dominant
     ).toBe('ENABLE');
   });
 
@@ -254,7 +256,9 @@ describe('classifyStatusPageChange', () => {
         classifyStatusPageChange({
           current: {
             ...baseline,
-            serviceMappings: [{ serviceId: 'svc-a', showOnPage: false, displayName: null, order: 0 }],
+            serviceMappings: [
+              { serviceId: 'svc-a', showOnPage: false, displayName: null, order: 0 },
+            ],
           },
           patch: {},
           serviceIds: ['svc-a'],
@@ -316,8 +320,8 @@ describe('classifier coverage', () => {
       'authProvider',
     ]);
 
-    // Identity, timestamps and relations are not settings and carry no disclosure policy.
-    const notSettings = new Set(['id', 'createdAt', 'updatedAt']);
+    // Identity, timestamps, revision metadata and relations are not settings and carry no disclosure policy.
+    const notSettings = new Set(['id', 'createdAt', 'updatedAt', 'revision']);
 
     const unclassified = body
       .split('\n')

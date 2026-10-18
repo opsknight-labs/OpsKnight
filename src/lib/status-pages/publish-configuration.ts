@@ -2,6 +2,13 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
+import { AppError } from '@/lib/errors';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import {
+  executeIdempotentOperation,
+  readIdempotentOperationResult,
+  type IdempotencyContext,
+} from '@/lib/idempotency';
 import { logger } from '@/lib/logger';
 import {
   addOperationalMetric,
@@ -31,11 +38,18 @@ export type StatusPagePublicationState = {
 
 export type StatusPageConfigurationActor = {
   id: string;
+  apiClientId?: string;
   email?: string | null;
   name?: string | null;
 };
 
+export type StatusPageConfigurationIdempotency = {
+  scope: string;
+  context: IdempotencyContext;
+  payload: unknown;
+};
 export type StatusPageConfigurationChange = {
+  idempotency?: StatusPageConfigurationIdempotency;
   pageId: string;
   actor: StatusPageConfigurationActor;
   /** Already normalized the way persistence stores it, so the classifier can diff it directly. */
@@ -46,6 +60,7 @@ export type StatusPageConfigurationChange = {
     { displayName?: string | null; order?: number; showOnPage?: boolean }
   >;
   expectedUpdatedAt?: string;
+  expectedRevision?: number;
   /** Settings section that produced the patch, recorded for audit only. */
   section?: string;
   /**
@@ -60,6 +75,8 @@ export type StatusPageConfigurationChange = {
 
 export type StatusPageConfigurationResult = {
   updatedAt: string;
+  revision: number;
+  replayed?: boolean;
   classification: StatusPageChangeClassification;
   publication: StatusPagePublicationState;
 };
@@ -87,9 +104,21 @@ export async function applyStatusPageConfigurationChange(
   const { pageId, actor, patch, serviceIds, serviceConfigs, expectedUpdatedAt, section } = change;
   const startedAt = performance.now();
 
+  if (change.idempotency) {
+    const replay = await readStatusPageConfigurationReplay(pageId, change.idempotency);
+    if (replay) return replay;
+  }
   const current = await prisma.statusPage.findUnique({ where: { id: pageId } });
   if (!current) {
     throw new StatusPageAdminError('STATUS_PAGE_NOT_FOUND', 'Status page not found.');
+  }
+
+  if (change.expectedRevision !== undefined && current.revision !== change.expectedRevision) {
+    if (change.idempotency) {
+      const replay = await readStatusPageConfigurationReplay(pageId, change.idempotency);
+      if (replay) return replay;
+    }
+    throw new AppError({ code: 'PRECONDITION_FAILED' });
   }
 
   const serviceMappings =
@@ -109,11 +138,33 @@ export async function applyStatusPageConfigurationChange(
 
   // A save that changes nothing must not disturb a working page.
   if (classification.classes.length === 0) {
-    return {
+    const value = {
       updatedAt: current.updatedAt.toISOString(),
+      revision: current.revision,
       classification,
-      publication: await readStatusPagePublicationState(pageId),
     };
+    if (change.idempotency) {
+      const result = await runSerializableTransaction(tx =>
+        executeIdempotentOperation(tx, {
+          ...change.idempotency!,
+          execute: async () => {
+            const latest = await tx.statusPage.findUniqueOrThrow({
+              where: { id: pageId },
+              select: { revision: true },
+            });
+            if (latest.revision !== current.revision)
+              throw new AppError({ code: 'PRECONDITION_FAILED' });
+            return value;
+          },
+        })
+      );
+      return {
+        ...result.value,
+        replayed: result.replayed,
+        publication: await readStatusPagePublicationState(pageId),
+      };
+    }
+    return { ...value, publication: await readStatusPagePublicationState(pageId) };
   }
 
   const store = getStatusPageServingStore();
@@ -125,14 +176,15 @@ export async function applyStatusPageConfigurationChange(
     preRevoked = true;
   }
 
-  let updatedAt: string;
+  let committed: Omit<StatusPageConfigurationResult, 'publication'>;
   try {
-    updatedAt = await prisma.$transaction(async tx => {
+    const write = async (tx: Prisma.TransactionClient) => {
       const data = change.transform ? await change.transform(tx, { ...patch }) : patch;
 
       const saved = await tx.statusPage.update({
         where: {
           id: pageId,
+          ...(change.expectedRevision !== undefined ? { revision: change.expectedRevision } : {}),
           updatedAt: expectedUpdatedAt ? new Date(expectedUpdatedAt) : current.updatedAt,
         },
         data: data as Prisma.StatusPageUpdateInput,
@@ -175,11 +227,16 @@ export async function applyStatusPageConfigurationChange(
               data: { state: 'COMPLETE', completedAt: new Date(), lastError: null },
             });
             await tx.statusPageRouteOperation.upsert({
-              where: { statusPageId_routeKey_operation: { statusPageId: pageId, routeKey, operation } },
+              where: {
+                statusPageId_routeKey_operation: { statusPageId: pageId, routeKey, operation },
+              },
               create: { statusPageId: pageId, routeKey, operation },
               update: {
-                state: 'PENDING', attempts: 0, nextAttemptAt: new Date(),
-                lastError: null, completedAt: null,
+                state: 'PENDING',
+                attempts: 0,
+                nextAttemptAt: new Date(),
+                lastError: null,
+                completedAt: null,
               },
             });
           }
@@ -189,12 +246,13 @@ export async function applyStatusPageConfigurationChange(
       await emitAuditEvent(
         {
           action: 'status_page.config.updated',
-          source: 'UI',
+          source: actor.apiClientId ? 'API' : 'UI',
           target: { type: 'STATUS_PAGE', id: pageId },
           actor: { type: 'USER', id: actor.id, email: actor.email, name: actor.name },
           oldValue: { updatedAt: current.updatedAt.toISOString() },
           newValue: { updatedAt: saved.updatedAt.toISOString() },
           metadata: {
+            ...(actor.apiClientId ? { apiClientId: actor.apiClientId } : {}),
             changedFields: classification.changedFields,
             changeClasses: classification.classes,
             dominantClass: classification.dominant,
@@ -216,17 +274,49 @@ export async function applyStatusPageConfigurationChange(
          WHERE "statusPageId" = ${pageId}
       `;
 
-      return saved.updatedAt.toISOString();
-    });
+      const committedPage = await tx.statusPage.findUniqueOrThrow({
+        where: { id: pageId },
+        select: { updatedAt: true, revision: true },
+      });
+      return {
+        updatedAt: committedPage.updatedAt.toISOString(),
+        revision: committedPage.revision,
+        classification,
+      };
+    };
+    if (change.idempotency) {
+      const result = await runSerializableTransaction(tx =>
+        executeIdempotentOperation(tx, { ...change.idempotency!, execute: () => write(tx) })
+      );
+      committed = result.value;
+      if (result.replayed) {
+        if (preRevoked)
+          await publishStatusPageSnapshot(pageId, {
+            lockAttempts: 3,
+            budgetMs: SYNC_PUBLISH_BUDGET_MS,
+          });
+        return {
+          ...committed,
+          replayed: true,
+          publication: await readStatusPagePublicationState(pageId),
+        };
+      }
+    } else committed = await prisma.$transaction(write);
   } catch (error) {
     if (preRevoked) {
       // Nothing was committed, so republishing restores exactly the previous content. Failing to
       // do so is not fatal because the background projector is the backstop, but leaving a page
       // dark after a save that changed nothing is the worse outcome.
       try {
-        await publishStatusPageSnapshot(pageId, { lockAttempts: 3, budgetMs: SYNC_PUBLISH_BUDGET_MS });
+        await publishStatusPageSnapshot(pageId, {
+          lockAttempts: 3,
+          budgetMs: SYNC_PUBLISH_BUDGET_MS,
+        });
       } catch (compensationError) {
-        logger.error('status.publication.compensation_failed', { pageId, error: compensationError });
+        logger.error('status.publication.compensation_failed', {
+          pageId,
+          error: compensationError,
+        });
       }
     }
     throw error;
@@ -243,7 +333,20 @@ export async function applyStatusPageConfigurationChange(
     outcome: publication.status,
   });
 
-  return { updatedAt, classification, publication };
+  return { ...committed, publication };
+}
+
+/** Read-only replay lookup also works after a later edit or deletion; the caller authorizes access. */
+export async function readStatusPageConfigurationReplay(
+  pageId: string,
+  input: StatusPageConfigurationIdempotency
+): Promise<StatusPageConfigurationResult | null> {
+  const cached = await readIdempotentOperationResult<
+    Omit<StatusPageConfigurationResult, 'publication'>
+  >(prisma, input);
+  return cached
+    ? { ...cached.value, replayed: true, publication: await readStatusPagePublicationState(pageId) }
+    : null;
 }
 
 function servingStateFor(classification: StatusPageChangeClassification) {

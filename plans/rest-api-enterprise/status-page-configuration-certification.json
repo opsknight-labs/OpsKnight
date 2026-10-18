@@ -1,0 +1,54 @@
+{
+  "sourceParent": "9ffd69e9df97b4c7a048cab639891dff7dd251d9",
+  "measuredAt": "2026-10-18T21:15:58.011992+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Eleven status-page section/component operations; not complete status-page or enterprise coverage.",
+  "registeredOperationCount": 137,
+  "addedOperations": 11,
+  "productionBuild": "passed",
+  "typecheck": "Clean non-incremental TypeScript passed; incremental cache initially retained previous generated SDK request headers.",
+  "changedSourceLint": "passed zero warnings",
+  "generatedClients": "Both live TypeScript and Python SDKs passed all eleven new operations against production build and isolated PostgreSQL; drift check passed.",
+  "unitContract": {
+    "passed": 266,
+    "files": 11
+  },
+  "postgres": {
+    "passed": 27,
+    "newCases": 14,
+    "publicationRegression": 13,
+    "coverage": [
+      "All-writer and nested-component revision fencing",
+      "Required replay keys, conflicts, concurrent identical keys, audit failure rollback and retry",
+      "Role demotion before replay, unsafe fields and inline assets rejected",
+      "Privacy withdrawal and live projection restoration on concurrent replay"
+    ]
+  },
+  "browser": {
+    "passed": 6,
+    "projects": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "skipped": 0,
+    "flaky": 0,
+    "scope": "Subscriber removal and REST configuration appear in administrator UI, including narrow viewport"
+  },
+  "populatedUpgrade": "status-page-configuration-upgrade.json",
+  "limits": [
+    "Validated asset lifecycle, domain ownership, preview and publication retry remain unfinished.",
+    "Remaining integration, runbook administration and other enterprise workflows remain unfinished.",
+    "No production load/HA, rolling upgrade or full release certification claimed."
+  ],
+  "sha256": {
+    "src/lib/idempotency.ts": "5a4cb8b217745bd8fabd237ccbb5b64d494a8d22b66ff552b85644b726724669",
+    "src/lib/status-pages/settings-command.ts": "70600bbc02c66ee17d4b43a6c1f016e64384dc2786873559ec953dbba468460e",
+    "src/lib/status-pages/publish-configuration.ts": "c1193ac6b41984ac4ce8d76e00f601f8e4ddeed95151961c3461994c03b8aa3e",
+    "src/lib/api-v2/status-page-settings.ts": "d7195f814b9745c60d92b9db3f3a3345d69c0b0b9e700345d2fef9e9e466c381",
+    "tests/integration/api-v2-status-page-settings.test.ts": "f0d7d9adfc721511bc3a931cf2439a1df63912fb3f530ec5fdae12309c12e6c0",
+    "tests/e2e/status-page-administration.spec.ts": "48778434da67bf87f82c8bf2d232177b4a5a76aef52d12a31fb089a3da825842",
+    "prisma/migrations/20261019013000_status_page_configuration_revision/migration.sql": "56cf465f0f6faefa32ff609e17871bca31b110fe15c134c163971141750a6f05",
+    "sdk/openapi-v2.json": "d0ab0f7d72988a61d9f9a669c4ed28f1561d3fd95e6fb8f508d03f12f6ffb055"
+  }
+}

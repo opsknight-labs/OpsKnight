@@ -1,4 +1,110 @@
 {
+  "listStatusPageServices": {
+    "method": "GET",
+    "path": "/status-pages/{id}/services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setStatusPageServices": {
+    "method": "PUT",
+    "path": "/status-pages/{id}/services",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "updateStatusPageService": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/services/{serviceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageAppearance": {
+    "method": "GET",
+    "path": "/status-pages/{id}/appearance",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageAppearance": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/appearance",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPagePrivacy": {
+    "method": "GET",
+    "path": "/status-pages/{id}/privacy",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPagePrivacy": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/privacy",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageContent": {
+    "method": "GET",
+    "path": "/status-pages/{id}/content",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageContent": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/content",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageSettings": {
+    "method": "GET",
+    "path": "/status-pages/{id}/settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageSettings": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/settings",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listStatusPageSubscribers": {
     "method": "GET",
     "path": "/status-pages/{id}/subscribers",

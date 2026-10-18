@@ -158,29 +158,15 @@ function parseRecord(payload: Prisma.JsonValue): PersistedIdempotencyPayload | n
   return candidate as unknown as PersistedIdempotencyPayload;
 }
 
-/**
- * Executes an operation with a persistent idempotency key inside the caller's
- * transaction. The operation result and the incident mutation commit or roll
- * back together. A deterministic BackgroundJob primary key provides the
- * concurrency fence; runSerializableTransaction retries the losing P2002 race.
- *
- * Completed BackgroundJob cleanup currently gives these records the same
- * seven-day retention window as other completed durable jobs.
- */
-export async function executeIdempotentOperation<T>(
+export async function readIdempotentOperationResult<T>(
   tx: Prisma.TransactionClient,
   input: {
     scope: string;
-    context?: IdempotencyContext;
+    context: IdempotencyContext;
     payload: unknown;
-    execute: () => Promise<T>;
     onReplay?: (tx: Prisma.TransactionClient) => Promise<void>;
   }
-): Promise<IdempotentExecution<T>> {
-  if (!input.context) {
-    return { value: await input.execute(), replayed: false };
-  }
-
+): Promise<IdempotentExecution<T> | null> {
   const context = normalizeContext(input.context);
   const fingerprint = fingerprintIdempotencyPayload(input.payload);
   const id = recordId(input.scope, context);
@@ -217,6 +203,38 @@ export async function executeIdempotentOperation<T>(
 
     return { value: decodeJson(record.result) as T, replayed: true };
   }
+
+  return null;
+}
+
+/**
+ * Executes an operation with a persistent idempotency key inside the caller's
+ * transaction. The operation result and the incident mutation commit or roll
+ * back together. A deterministic BackgroundJob primary key provides the
+ * concurrency fence; runSerializableTransaction retries the losing P2002 race.
+ *
+ * Completed BackgroundJob cleanup currently gives these records the same
+ * seven-day retention window as other completed durable jobs.
+ */
+export async function executeIdempotentOperation<T>(
+  tx: Prisma.TransactionClient,
+  input: {
+    scope: string;
+    context?: IdempotencyContext;
+    payload: unknown;
+    execute: () => Promise<T>;
+    onReplay?: (tx: Prisma.TransactionClient) => Promise<void>;
+  }
+): Promise<IdempotentExecution<T>> {
+  if (!input.context) {
+    return { value: await input.execute(), replayed: false };
+  }
+
+  const context = normalizeContext(input.context);
+  const fingerprint = fingerprintIdempotencyPayload(input.payload);
+  const id = recordId(input.scope, context);
+  const replay = await readIdempotentOperationResult<T>(tx, { ...input, context });
+  if (replay) return replay;
 
   const value = await input.execute();
   const now = new Date();

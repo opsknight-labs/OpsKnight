@@ -506,6 +506,18 @@
         {
           "path": "src/lib/api-v2/status-page-subscribers.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/status-pages/settings-command.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/status-pages/publish-configuration.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/api-v2/status-page-settings.ts",
+          "branch": "baseline"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -516,7 +528,7 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Remaining status-page configuration, domains/branding assets, publication parity and combined certification."
+        "Remaining domains/validated branding asset lifecycle, publication retry and combined status-page certification."
       ]
     },
     {

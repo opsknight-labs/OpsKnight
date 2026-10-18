@@ -26,7 +26,6 @@ describe('truthful capability inventory', () => {
       'identity-lifecycle',
       'runbook-agents',
       'runbook-secrets',
-      'status-management',
       'report-exports',
       'slo-management',
       'operational-settings',
@@ -40,6 +39,18 @@ describe('truthful capability inventory', () => {
     ).toMatchObject({
       status: 'partial',
       operationIds: expect.arrayContaining(['getAutomationDraft', 'publishAutomationVersion']),
+    });
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'status-management')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining([
+        'listStatusPageSubscribers',
+        'removeStatusPageSubscriber',
+        'getStatusPageContent',
+        'updateStatusPagePrivacy',
+        'setStatusPageServices',
+      ]),
     });
     for (const id of ['agent-protocol', 'scim', 'provider-oauth', 'sensitive-maintenance']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(

@@ -2259,6 +2259,7 @@ model ChatOpsIntent {
 }
 
 model StatusPage {
+  revision Int @default(1)
   id                          String                     @id @default(cuid())
   name                        String                     @unique @default("Status Page")
   slug                        String?                    @unique

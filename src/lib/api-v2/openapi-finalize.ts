@@ -397,6 +397,11 @@ const etagHeader = {
 };
 
 const ETAG_RESOURCES = new Set([
+  '/status-pages/{id}/services',
+  '/status-pages/{id}/appearance',
+  '/status-pages/{id}/privacy',
+  '/status-pages/{id}/content',
+  '/status-pages/{id}/settings',
   '/services/{id}/runbook-rules/{ruleId}',
   '/runbooks/{id}',
   '/runbooks/{id}/metadata',
