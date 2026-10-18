@@ -1,3 +1,4 @@
+import { compareAutomationOutcomes } from './comparison';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import type { EvaluationPosition } from './evaluator/guard';
 import {
@@ -334,15 +335,20 @@ export async function prepareAutomation(
 
       // Compare candidate outcome against the actual LIVE routing decision
       const candPriority = candidateResult.enrichedContext.priority;
-      const priorityDifferent =
-        candPriority?.state === 'RECOGNIZED' && candPriority.value !== runtime.finalPriority;
-      const routeDifferent =
-        (candidateResult.outcome.type === 'NO_ESCALATION' &&
-          runtime.result?.outcome.type !== 'NO_ESCALATION') ||
-        (candidateResult.outcome.type === 'ESCALATION_POLICY' &&
-          candidateResult.outcome.policyId !== runtime.policyId) ||
-        (candidateResult.outcome.type === 'SERVICE_DEFAULT' &&
-          runtime.policyId !== service?.policy?.id);
+      const { priorityDifferent, routeDifferent, noEscalationDifferent } =
+        compareAutomationOutcomes({
+          actual: runtime.fallbackReason
+            ? { type: 'SERVICE_DEFAULT' }
+            : (runtime.result?.outcome ?? { type: 'SERVICE_DEFAULT' }),
+          hypothetical: candidateResult.outcome,
+          defaultPolicyId: service?.policy?.id ?? null,
+          actualPolicyId: runtime.policyId,
+          actualPriority: runtime.finalPriority,
+          hypotheticalPriority:
+            candPriority?.state === 'RECOGNIZED'
+              ? String(candPriority.value)
+              : runtime.basePriority,
+        });
 
       runtime.candidateShadowDifferent = priorityDifferent || routeDifferent;
       const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
@@ -353,7 +359,7 @@ export async function prepareAutomation(
         same: Number(!priorityDifferent && !routeDifferent),
         priorityDifferent: Number(priorityDifferent),
         routeDifferent: Number(routeDifferent),
-        noEscalationDifferent: Number(candidateResult.outcome.type === 'NO_ESCALATION'),
+        noEscalationDifferent: Number(noEscalationDifferent),
         errors: 0,
         fallbacks: 0,
       };
