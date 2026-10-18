@@ -171,3 +171,24 @@ changed-source lint and the production build passed. Source digests and per-devi
 API-only/worker evidence are in `automation-m1-certification.json`. This remains
 local verification; latest-commit CI and all remaining enterprise domains and
 production acceptance gates remain open in the same PR.
+
+### Deep audit at 654b0ed32 — suppression comparison
+
+Candidate comparisons now compare intentional suppression in both directions and
+resolve explicit/default policy choices to their effective policy identity.
+Unchanged `NO_ESCALATION` is the same outcome; newly introduced or removed
+suppression is a route/suppression difference, including when no default policy is
+configured. A priority-only change does not manufacture a suppression difference.
+Active evaluator fallback compares against the actual service-default route.
+
+Verification: seven focused comparison cases and 144 automation unit cases passed.
+Three PostgreSQL cases execute the real preparation/persistence and observation
+worker handler, verify its aggregates, preserve LIVE routing, and verify the
+canonical activation acknowledgment behavior. No aggregate rows are injected by
+these regression cases. Existing historical aggregate rows are not rewritten;
+the correction applies to newly evaluated traffic.
+
+The Explorer's obsolete endpoint-count assertion and Teams queue-state race were
+corrected in f33870f67. Its 708 Explorer tests and 12 provider/device browser cases
+passed locally. Latest-commit CI, readiness policy, candidate isolation, storage
+privacy and remaining enterprise API coverage are still separate open items.
