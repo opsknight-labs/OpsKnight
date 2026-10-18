@@ -1695,6 +1695,12 @@
             "type": "integer",
             "minimum": 0
           },
+          "restoredFromVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "snapshot": {
             "$ref": "#/components/schemas/AutomationSnapshot"
           }
@@ -1703,6 +1709,708 @@
           "serviceId",
           "revision",
           "snapshot"
+        ]
+      },
+      "AutomationValidation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "requiresActivationReview": {
+            "const": true,
+            "type": "boolean"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutomationLintIssue"
+            }
+          }
+        },
+        "required": [
+          "valid",
+          "requiresActivationReview",
+          "issues"
+        ]
+      },
+      "AutomationLintIssue": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "ERROR",
+              "WARNING"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ruleId": {
+            "type": "string"
+          },
+          "fieldKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "code",
+          "message"
+        ]
+      },
+      "AutomationSimulation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "durationMs": {
+            "type": "number",
+            "minimum": 0
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutomationLintIssue"
+            }
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AutomationSimulationResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "valid",
+          "durationMs",
+          "issues",
+          "result"
+        ]
+      },
+      "AutomationSimulationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "evaluationAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "SERVICE_DEFAULT",
+                  "ESCALATION_POLICY",
+                  "NO_ESCALATION"
+                ]
+              },
+              "policyId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "matchedRuleId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contextStates": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "phase": {
+                  "type": "string",
+                  "enum": [
+                    "ENRICH",
+                    "ROUTE"
+                  ]
+                },
+                "ruleId": {
+                  "type": "string"
+                },
+                "result": {
+                  "type": "string"
+                },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "fieldKey": {
+                        "type": "string"
+                      },
+                      "operator": {
+                        "type": "string"
+                      },
+                      "result": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "fieldKey",
+                      "operator",
+                      "result"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "phase",
+                "ruleId",
+                "result",
+                "conditions"
+              ]
+            }
+          }
+        },
+        "required": [
+          "evaluationAt",
+          "outcome",
+          "matchedRuleId",
+          "priority",
+          "tags",
+          "contextStates",
+          "rules"
+        ]
+      },
+      "AutomationDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "incidentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "versionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "DISABLED",
+              "SHADOW",
+              "LIVE"
+            ]
+          },
+          "routeType": {
+            "type": "string"
+          },
+          "escalationPolicyId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matchedRouteRuleId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "basePriority": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finalPriority": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evaluationAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "incidentId",
+          "serviceId",
+          "versionId",
+          "mode",
+          "routeType",
+          "escalationPolicyId",
+          "matchedRouteRuleId",
+          "basePriority",
+          "finalPriority",
+          "evaluationAt",
+          "createdAt"
+        ]
+      },
+      "AutomationObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "integrationId": {
+            "type": "string"
+          },
+          "integrationType": {
+            "type": "string"
+          },
+          "fieldKey": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "fieldType": {
+            "type": "string"
+          },
+          "unmapped": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "firstSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "serviceId",
+          "integrationId",
+          "integrationType",
+          "fieldKey",
+          "sourcePath",
+          "fieldType",
+          "unmapped",
+          "count",
+          "firstSeenAt",
+          "lastSeenAt"
+        ]
+      },
+      "AutomationVersionHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evaluated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "same": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "routeDifferent": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "priorityDifferent": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "noEscalationDifferent": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fallbacks": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "latestEvidenceBucketDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "versionId",
+          "evaluated",
+          "same",
+          "routeDifferent",
+          "priorityDifferent",
+          "noEscalationDifferent",
+          "errors",
+          "fallbacks",
+          "latestEvidenceBucketDate"
+        ]
+      },
+      "AutomationEvidenceFreshness": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "latestEvidenceBucketDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "pendingObservations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingObservationsTruncated": {
+            "type": "boolean"
+          },
+          "oldestSampledPendingAgeMs": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "required": [
+          "latestEvidenceBucketDate",
+          "pendingObservations",
+          "pendingObservationsTruncated",
+          "oldestSampledPendingAgeMs"
+        ]
+      },
+      "AutomationConfiguration": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "health": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "windowDays": {
+                "type": "integer",
+                "const": 7
+              },
+              "active": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AutomationVersionHealth"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "candidate": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AutomationVersionHealth"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "candidateEvidenceFreshness": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AutomationEvidenceFreshness"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "windowDays",
+              "active",
+              "candidate",
+              "candidateEvidenceFreshness"
+            ]
+          },
+          "globalEnabled": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "DISABLED",
+              "SHADOW",
+              "LIVE"
+            ]
+          },
+          "effectiveMode": {
+            "type": "string",
+            "enum": [
+              "DISABLED",
+              "SHADOW",
+              "LIVE"
+            ]
+          },
+          "activeVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "candidateVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draftRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activeVersion": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "versionNumber": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "checksum": {
+                    "type": "string"
+                  },
+                  "publishedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "id",
+                  "versionNumber",
+                  "checksum",
+                  "publishedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidateVersion": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "versionNumber": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "checksum": {
+                    "type": "string"
+                  },
+                  "publishedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "id",
+                  "versionNumber",
+                  "checksum",
+                  "publishedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "serviceId",
+          "revision",
+          "globalEnabled",
+          "health",
+          "mode",
+          "effectiveMode",
+          "activeVersionId",
+          "candidateVersionId",
+          "draftRevision",
+          "activeVersion",
+          "candidateVersion"
+        ]
+      },
+      "AutomationVersionSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "versionNumber": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "sourceVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedBy": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "serviceId",
+          "versionNumber",
+          "checksum",
+          "sourceVersionId",
+          "publishedAt",
+          "publishedBy"
+        ]
+      },
+      "AutomationVersionDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "versionNumber": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "sourceVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedBy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/AutomationSnapshot"
+          },
+          "lintReport": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "id",
+          "serviceId",
+          "versionNumber",
+          "checksum",
+          "sourceVersionId",
+          "publishedAt",
+          "publishedBy",
+          "snapshot",
+          "lintReport"
         ]
       },
       "AutomationPublishedVersion": {
@@ -10194,10 +10902,1231 @@
         "x-concurrency": "none"
       }
     },
+    "/services/{id}/automation/validate": {
+      "post": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Validate a draft without saving or publishing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "snapshot": {
+                    "$ref": "#/components/schemas/AutomationSnapshot"
+                  }
+                },
+                "required": [
+                  "snapshot"
+                ]
+              },
+              "example": {
+                "snapshot": {
+                  "schemaVersion": 1,
+                  "fields": [],
+                  "rules": []
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationValidation"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "validateAutomation",
+        "x-required-scope": "automation:read",
+        "description": "Requires API scope `automation:read` (Automation read).",
+        "x-idempotency": "natural",
+        "x-concurrency": "none"
+      }
+    },
+    "/services/{id}/automation/simulate": {
+      "post": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Simulate automation without operational side effects",
+        "description": "Uses the production evaluator. Explanations contain outcomes and condition truth states, never received values or raw provider payloads.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "snapshot": {
+                    "$ref": "#/components/schemas/AutomationSnapshot"
+                  },
+                  "integrationType": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 1
+                  },
+                  "integrationId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evaluationAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "providerPayload": {},
+                  "event": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "event_action": {
+                        "type": "string",
+                        "enum": [
+                          "trigger",
+                          "resolve",
+                          "acknowledge"
+                        ]
+                      },
+                      "dedup_key": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "payload": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "summary": {
+                            "type": "string",
+                            "maxLength": 500,
+                            "minLength": 1
+                          },
+                          "source": {
+                            "type": "string",
+                            "maxLength": 500,
+                            "minLength": 1
+                          },
+                          "severity": {
+                            "type": "string",
+                            "enum": [
+                              "critical",
+                              "error",
+                              "warning",
+                              "info"
+                            ]
+                          },
+                          "custom_details": {}
+                        },
+                        "required": [
+                          "summary",
+                          "source",
+                          "severity"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "event_action",
+                      "dedup_key",
+                      "payload"
+                    ]
+                  }
+                },
+                "required": [
+                  "snapshot",
+                  "integrationType",
+                  "event"
+                ]
+              },
+              "example": {
+                "snapshot": {
+                  "schemaVersion": 1,
+                  "fields": [],
+                  "rules": []
+                },
+                "integrationType": "events",
+                "event": {
+                  "event_action": "trigger",
+                  "dedup_key": "simulation",
+                  "payload": {
+                    "summary": "Example",
+                    "source": "api",
+                    "severity": "info"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationSimulation"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "simulateAutomation",
+        "x-required-scope": "automation:read",
+        "x-idempotency": "natural",
+        "x-concurrency": "none"
+      }
+    },
+    "/services/{id}/automation/restore": {
+      "post": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Restore a historical version as an editable draft",
+        "description": "Requires the current draft ETag and team edit permission. Does not publish or change active/candidate versions or operational mode.\n\nRequires API scope `automation:write` (Automation drafts).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sourceVersionId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "sourceVersionId"
+                ]
+              },
+              "example": {
+                "sourceVersionId": "cm123456789012345678901234"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationDraft"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "restoreAutomationDraft",
+        "x-required-scope": "automation:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/services/{id}/automation/decisions": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "List pinned incident routing decisions",
+        "description": "Requires both automation:read and incidents:read, and applies incident visibility filters. Exposes routing metadata only; stored source summaries are never returned.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-additional-required-scopes": [
+          "incidents:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AutomationDecision"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listAutomationDecisions",
+        "x-required-scope": "automation:read"
+      }
+    },
+    "/services/{id}/automation/observations": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "List safe field-discovery statistics",
+        "description": "Stable first-seen cursor ordering. Optional unmapped=true/false filter. Raw value previews and value hashes are never returned.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unmapped",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AutomationObservation"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listAutomationObservations",
+        "x-required-scope": "automation:read"
+      }
+    },
+    "/services/{id}/automation/versions": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "List immutable service automation versions",
+        "description": "Bounded cursor pagination in descending version-number order. Cursors must belong to this service. Use the version detail resource for snapshots.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AutomationVersionSummary"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listAutomationVersions",
+        "x-required-scope": "automation:read"
+      }
+    },
+    "/services/{id}/automation/versions/{versionId}": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Inspect an immutable automation version",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationVersionDetail"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getAutomationVersion",
+        "x-required-scope": "automation:read",
+        "description": "Requires API scope `automation:read` (Automation read)."
+      }
+    },
+    "/services/{id}/automation": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Read effective service automation configuration",
+        "description": "Returns the configuration ETag for mode changes. Draft revision is a separate validator. Global OFF always produces effectiveMode DISABLED.\n\nRequires API scope `automation:read` (Automation read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationConfiguration"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceAutomation",
+        "x-required-scope": "automation:read"
+      }
+    },
+    "/services/{id}/automation/mode": {
+      "patch": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Change the service automation mode",
+        "description": "Send the ETag from GET /services/{id}/automation, not the draft ETag. Requires explicit publishing scope and administrator privilege. Global OFF prevents SHADOW/LIVE; LIVE validates its version-specific dependencies and shadow acknowledgments.\n\nRequires API scope `automation:publish` (Automation publish).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "DISABLED",
+                      "SHADOW",
+                      "LIVE"
+                    ]
+                  },
+                  "expectedActiveVersionId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "acknowledgeNoShadow": {
+                    "type": "boolean"
+                  },
+                  "acknowledgeShadowErrors": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "mode",
+                  "expectedActiveVersionId"
+                ]
+              },
+              "example": {
+                "mode": "DISABLED",
+                "expectedActiveVersionId": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationConfiguration"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateServiceAutomationMode",
+        "x-required-scope": "automation:publish",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
     "/services/{id}/automation/publish": {
       "post": {
         "tags": [
-          "Incidents"
+          "Services"
         ],
         "summary": "Publish a validated immutable service automation version",
         "description": "Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE stages a candidate version evaluated in parallel shadow mode without interrupting current routing. Replayed requests return the original committed result, even with a different concrete If-Match value; use a new idempotency key for a new conditional write.\n\nRequires API scope `automation:publish` (Automation publish).",
@@ -10226,7 +12155,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }
@@ -10358,7 +12287,7 @@
     "/services/{id}/automation/draft": {
       "get": {
         "tags": [
-          "Incidents"
+          "Services"
         ],
         "summary": "Read a service automation draft",
         "parameters": [
@@ -10448,7 +12377,7 @@
       },
       "put": {
         "tags": [
-          "Incidents"
+          "Services"
         ],
         "summary": "Save a revision-protected automation draft",
         "parameters": [
@@ -10476,7 +12405,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }
@@ -10610,7 +12539,7 @@
     "/services/{id}/automation/candidate": {
       "get": {
         "tags": [
-          "Incidents"
+          "Services"
         ],
         "summary": "Read a published candidate automation version and shadow metrics",
         "description": "Reads the pending candidate version, compiled configuration and seven-day shadow evaluation metrics for a service in LIVE mode.\n\nRequires API scope `automation:read` (Automation read).",
@@ -10700,7 +12629,7 @@
       },
       "delete": {
         "tags": [
-          "Incidents"
+          "Services"
         ],
         "summary": "Discard a published candidate automation version",
         "description": "Discards a pending candidate version without promoting it to production. Requires expectedCandidateVersionId.\n\nRequires API scope `automation:publish` (Automation publish).",
@@ -10831,7 +12760,7 @@
     "/services/{id}/automation/candidates/activate": {
       "post": {
         "tags": [
-          "Incidents"
+          "Services"
         ],
         "summary": "Atomically activate a candidate automation version as LIVE",
         "description": "Promotes the pending candidate version to active production routing with zero interruption. Validates shadow evidence and escalation policy safety before cutover.\n\nRequires API scope `automation:publish` (Automation publish).",
@@ -11076,7 +13005,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }
@@ -13488,7 +15417,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }
@@ -13793,7 +15722,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.",
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }

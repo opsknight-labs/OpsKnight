@@ -288,13 +288,14 @@ export default function AutomationWorkspace({
       const response = await automationAction({
         ...input,
         serviceId,
-        ...(input.action === 'discardCandidate'
+        ...(['discardCandidate', 'restoreDraft'].includes(String(input.action))
           ? {}
           : {
               expectedActiveVersionId: review
                 ? (reviewData?.activeVersionId ?? null)
                 : (data?.activeVersionId ?? null),
             }),
+        ...(input.action === 'restoreDraft' ? { expectedRevision: revision.current } : {}),
         ...(input.action === 'publish'
           ? {
               expectedRevision: revision.current,
@@ -1074,6 +1075,32 @@ export default function AutomationWorkspace({
             versionView={versionView}
             setVersionView={setVersionView}
             busy={busy}
+            onRestoreDraft={versionId => {
+              void command({ action: 'restoreDraft', sourceVersionId: versionId }).then(
+                async success => {
+                  if (!success) return;
+                  setBusy(true);
+                  try {
+                    initialized.current = false;
+                    generation.current = 0;
+                    persistedGeneration.current = 0;
+                    setDirty(false);
+                    setSaveState('Saved');
+                    setUndo(null);
+                    setExpandedRules(new Set());
+                    try {
+                      localStorage.removeItem(`automation-draft:${serviceId}`);
+                    } catch {
+                      /* Optional recovery cache. */
+                    }
+                    setLocalCopy(null);
+                    if (await load('rules')) setArea('rules');
+                  } finally {
+                    setBusy(false);
+                  }
+                }
+              );
+            }}
             onRestore={version => {
               setRestoreVersion(version);
               setBusy(true);

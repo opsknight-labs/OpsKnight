@@ -19,6 +19,7 @@ export function AutomationActivity({
   setVersionView,
   busy,
   onRestore,
+  onRestoreDraft,
 }: {
   data: Data;
   serviceId: string;
@@ -28,6 +29,7 @@ export function AutomationActivity({
   setVersionView: (value: string | null) => void;
   busy: boolean;
   onRestore: (version: Data['versions'][number] & { snapshot: Snapshot }) => void;
+  onRestoreDraft?: (versionId: string) => void;
 }) {
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [error, setError] = useState('');
@@ -98,6 +100,16 @@ export function AutomationActivity({
               >
                 View / compare
               </Button>
+              {data.canEdit && onRestoreDraft && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || loading === version.id}
+                  onClick={() => onRestoreDraft(version.id)}
+                >
+                  Restore as draft
+                </Button>
+              )}
               {data.canPublish && (
                 <Button
                   variant="outline"

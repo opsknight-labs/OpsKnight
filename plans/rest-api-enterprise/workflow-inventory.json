@@ -89,6 +89,22 @@
         {
           "path": "src/lib/automation/versioning.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/automation/authoring.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/automation/configuration.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/automation/history.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/automation/observation-history.ts",
+          "branch": "baseline"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -100,10 +116,19 @@
       ],
       "blockers": [
         "Local worker-backed four-device journey passed; latest CI and broader fault/authorization acceptance cases pending",
-        "Effective configuration, validation, simulation, modes, immutable history, draft restore, decisions and discovery REST operations remain unfinished",
+        "Seventeen automation operations passed local API-only, four-device, PostgreSQL, SDK and upgrade verification; latest-commit CI and production qualification remain pending",
         "Production latency acceptance, load/HA and rolling-version coexistence not certified"
       ],
       "implementedOperations": [
+        "validateAutomation",
+        "simulateAutomation",
+        "restoreAutomationDraft",
+        "listAutomationDecisions",
+        "listAutomationObservations",
+        "listAutomationVersions",
+        "getAutomationVersion",
+        "getServiceAutomation",
+        "updateServiceAutomationMode",
         "publishAutomationVersion",
         "getAutomationDraft",
         "saveAutomationDraft",
@@ -492,7 +517,9 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": ["Approve and certify supported SLO product contract"]
+      "blockers": [
+        "Approve and certify supported SLO product contract"
+      ]
     },
     {
       "capabilityId": "dashboards",

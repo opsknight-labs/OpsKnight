@@ -138,3 +138,36 @@ operations and 92 total operations, with a drift check against the registry.
 
 This does not close all M0 acceptance scenarios, M1–M5 endpoint work, production
 latency approval or load/HA certification. The current source needs a new CI run.
+
+### Automation control plane follow-up (local checks passed; CI pending)
+
+The registry now contains 101 operations, including 17 automation operations. The
+nine new operations cover effective configuration, validation, simulation, mode
+changes, immutable history/detail, historical restoration into an editable draft,
+routing decisions and safe observation metadata. This is implementation status;
+production certification and the remaining enterprise domains are still open.
+
+Mode writes use a dedicated configuration revision advanced by a database trigger
+for every writer, independently of the draft revision. Restoration uses the draft
+revision, service/team locks, canonical credential-attributed audit and durable
+idempotency. Restoration does not publish or change active/candidate pointers;
+subsequent edits preserve historical lineage for explicit publication.
+
+Simulation and validation share the UI's domain functions and production evaluator.
+They persist no operational state. Public simulation omits received/enrichment
+values and provider payloads. Decision history requires both automation and incident
+read scopes and applies the incident visibility filter. Observations expose field
+metadata, unmapped flags and frequencies; raw previews and value hashes are never
+selected. Discovery pagination uses immutable first-seen timestamps and IDs, with a
+supporting index, so counter updates do not move rows between pages.
+
+
+Verification: 36 browser cases passed across all four device profiles with two web
+replicas and an actual general worker; 124 PostgreSQL tests passed with one opt-in
+case skipped; 521 broad unit tests passed; 12 upgrade/authentication checks passed.
+Both TypeScript and Python exercised the production application over HTTP, including
+all nine new automation operations through Python. Generated clients, typecheck,
+changed-source lint and the production build passed. Source digests and per-device
+API-only/worker evidence are in `automation-m1-certification.json`. This remains
+local verification; latest-commit CI and all remaining enterprise domains and
+production acceptance gates remain open in the same PR.

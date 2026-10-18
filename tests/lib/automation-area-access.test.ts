@@ -90,9 +90,10 @@ it('fetches metadata without full snapshots for version history', async () => {
 });
 it('scopes selected snapshots to the service and rejects corrupt stored data', async () => {
   mocks.versionSelected.mockResolvedValue({ versionNumber: 14, snapshot: { corrupt: true } });
-  await expect(getAutomationVersionSnapshot('service-a', 'version-a')).rejects.toThrow(
-    'Version 14 failed integrity validation'
-  );
+  await expect(getAutomationVersionSnapshot('service-a', 'version-a')).rejects.toMatchObject({
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
   expect(mocks.versionSelected).toHaveBeenCalledWith(
     expect.objectContaining({ where: { id: 'version-a', serviceId: 'service-a' } })
   );

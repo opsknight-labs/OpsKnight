@@ -31,6 +31,79 @@ const op = (
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
     'post',
+    '/services/{id}/automation/validate',
+    'validateAutomation',
+    'automation:read',
+    'item',
+    'AutomationValidation'
+  ),
+  op(
+    'post',
+    '/services/{id}/automation/simulate',
+    'simulateAutomation',
+    'automation:read',
+    'item',
+    'AutomationSimulation'
+  ),
+  op(
+    'post',
+    '/services/{id}/automation/restore',
+    'restoreAutomationDraft',
+    'automation:write',
+    'item',
+    'AutomationDraft'
+  ),
+  op(
+    'get',
+    '/services/{id}/automation/decisions',
+    'listAutomationDecisions',
+    'automation:read',
+    'list',
+    'AutomationDecision'
+  ),
+  op(
+    'get',
+    '/services/{id}/automation/observations',
+    'listAutomationObservations',
+    'automation:read',
+    'list',
+    'AutomationObservation'
+  ),
+
+  op(
+    'get',
+    '/services/{id}/automation/versions',
+    'listAutomationVersions',
+    'automation:read',
+    'list',
+    'AutomationVersionSummary'
+  ),
+  op(
+    'get',
+    '/services/{id}/automation/versions/{versionId}',
+    'getAutomationVersion',
+    'automation:read',
+    'item',
+    'AutomationVersionDetail'
+  ),
+  op(
+    'get',
+    '/services/{id}/automation',
+    'getServiceAutomation',
+    'automation:read',
+    'item',
+    'AutomationConfiguration'
+  ),
+  op(
+    'patch',
+    '/services/{id}/automation/mode',
+    'updateServiceAutomationMode',
+    'automation:publish',
+    'item',
+    'AutomationConfiguration'
+  ),
+  op(
+    'post',
     '/services/{id}/automation/publish',
     'publishAutomationVersion',
     'automation:publish',

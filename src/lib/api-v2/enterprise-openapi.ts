@@ -64,6 +64,264 @@ const authoringVersionSchema = object(
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...AUTOMATION_SCHEMAS,
+  AutomationValidation: object(
+    {
+      valid: { type: 'boolean' },
+      requiresActivationReview: { const: true, type: 'boolean' },
+      issues: array(ref('AutomationLintIssue')),
+    },
+    ['valid', 'requiresActivationReview', 'issues']
+  ),
+  AutomationLintIssue: object(
+    {
+      level: { type: 'string', enum: ['ERROR', 'WARNING'] },
+      code: string(),
+      message: string(),
+      ruleId: string(),
+      fieldKey: string(),
+    },
+    ['level', 'code', 'message']
+  ),
+  AutomationSimulation: object(
+    {
+      valid: { type: 'boolean' },
+      durationMs: { type: 'number', minimum: 0 },
+      issues: array(ref('AutomationLintIssue')),
+      result: { oneOf: [ref('AutomationSimulationResult'), { type: 'null' }] },
+    },
+    ['valid', 'durationMs', 'issues', 'result']
+  ),
+  AutomationSimulationResult: object(
+    {
+      evaluationAt: date,
+      outcome: object(
+        {
+          type: { type: 'string', enum: ['SERVICE_DEFAULT', 'ESCALATION_POLICY', 'NO_ESCALATION'] },
+          policyId: id,
+        },
+        ['type']
+      ),
+      matchedRuleId: { type: ['string', 'null'] },
+      priority: { type: ['string', 'null'] },
+      tags: array(string()),
+      contextStates: { type: 'object', additionalProperties: { type: 'string' } },
+      rules: array(
+        object(
+          {
+            phase: { type: 'string', enum: ['ENRICH', 'ROUTE'] },
+            ruleId: string(),
+            result: string(),
+            conditions: array(
+              object({ fieldKey: string(), operator: string(), result: string() }, [
+                'fieldKey',
+                'operator',
+                'result',
+              ])
+            ),
+          },
+          ['phase', 'ruleId', 'result', 'conditions']
+        )
+      ),
+    },
+    ['evaluationAt', 'outcome', 'matchedRuleId', 'priority', 'tags', 'contextStates', 'rules']
+  ),
+  AutomationDecision: object(
+    {
+      incidentId: id,
+      serviceId: id,
+      versionId: { type: ['string', 'null'] },
+      mode: { type: 'string', enum: ['DISABLED', 'SHADOW', 'LIVE'] },
+      routeType: string(),
+      escalationPolicyId: { type: ['string', 'null'] },
+      matchedRouteRuleId: { type: ['string', 'null'] },
+      basePriority: { type: ['string', 'null'] },
+      finalPriority: { type: ['string', 'null'] },
+      evaluationAt: date,
+      createdAt: date,
+    },
+    [
+      'incidentId',
+      'serviceId',
+      'versionId',
+      'mode',
+      'routeType',
+      'escalationPolicyId',
+      'matchedRouteRuleId',
+      'basePriority',
+      'finalPriority',
+      'evaluationAt',
+      'createdAt',
+    ]
+  ),
+  AutomationObservation: object(
+    {
+      id,
+      serviceId: id,
+      integrationId: string(),
+      integrationType: string(),
+      fieldKey: string(),
+      sourcePath: string(),
+      fieldType: string(),
+      unmapped: { type: 'boolean' },
+      count: integer,
+      firstSeenAt: date,
+      lastSeenAt: date,
+    },
+    [
+      'id',
+      'serviceId',
+      'integrationId',
+      'integrationType',
+      'fieldKey',
+      'sourcePath',
+      'fieldType',
+      'unmapped',
+      'count',
+      'firstSeenAt',
+      'lastSeenAt',
+    ]
+  ),
+
+  AutomationVersionHealth: object(
+    {
+      versionId: id,
+      evaluated: integer,
+      same: integer,
+      routeDifferent: integer,
+      priorityDifferent: integer,
+      noEscalationDifferent: integer,
+      errors: integer,
+      fallbacks: integer,
+      latestEvidenceBucketDate: { type: ['string', 'null'], format: 'date-time' },
+    },
+    [
+      'versionId',
+      'evaluated',
+      'same',
+      'routeDifferent',
+      'priorityDifferent',
+      'noEscalationDifferent',
+      'errors',
+      'fallbacks',
+      'latestEvidenceBucketDate',
+    ]
+  ),
+  AutomationEvidenceFreshness: object(
+    {
+      latestEvidenceBucketDate: { type: ['string', 'null'], format: 'date-time' },
+      pendingObservations: integer,
+      pendingObservationsTruncated: { type: 'boolean' },
+      oldestSampledPendingAgeMs: { type: ['number', 'null'], minimum: 0 },
+    },
+    [
+      'latestEvidenceBucketDate',
+      'pendingObservations',
+      'pendingObservationsTruncated',
+      'oldestSampledPendingAgeMs',
+    ]
+  ),
+  AutomationConfiguration: object(
+    {
+      serviceId: id,
+      revision: integer,
+      health: object(
+        {
+          windowDays: { type: 'integer', const: 7 },
+          active: { oneOf: [ref('AutomationVersionHealth'), { type: 'null' }] },
+          candidate: { oneOf: [ref('AutomationVersionHealth'), { type: 'null' }] },
+          candidateEvidenceFreshness: {
+            oneOf: [ref('AutomationEvidenceFreshness'), { type: 'null' }],
+          },
+        },
+        ['windowDays', 'active', 'candidate', 'candidateEvidenceFreshness']
+      ),
+      globalEnabled: { type: 'boolean' },
+      mode: { type: 'string', enum: ['DISABLED', 'SHADOW', 'LIVE'] },
+      effectiveMode: { type: 'string', enum: ['DISABLED', 'SHADOW', 'LIVE'] },
+      activeVersionId: { type: ['string', 'null'] },
+      candidateVersionId: { type: ['string', 'null'] },
+      draftRevision: integer,
+      activeVersion: {
+        oneOf: [
+          object({ id, versionNumber: integer, checksum: string(), publishedAt: date }, [
+            'id',
+            'versionNumber',
+            'checksum',
+            'publishedAt',
+          ]),
+          { type: 'null' },
+        ],
+      },
+      candidateVersion: {
+        oneOf: [
+          object({ id, versionNumber: integer, checksum: string(), publishedAt: date }, [
+            'id',
+            'versionNumber',
+            'checksum',
+            'publishedAt',
+          ]),
+          { type: 'null' },
+        ],
+      },
+    },
+    [
+      'serviceId',
+      'revision',
+      'globalEnabled',
+      'health',
+      'mode',
+      'effectiveMode',
+      'activeVersionId',
+      'candidateVersionId',
+      'draftRevision',
+      'activeVersion',
+      'candidateVersion',
+    ]
+  ),
+  AutomationVersionSummary: object(
+    {
+      id,
+      serviceId: id,
+      versionNumber: integer,
+      checksum: string(),
+      sourceVersionId: { type: ['string', 'null'] },
+      publishedAt: date,
+      publishedBy: id,
+    },
+    [
+      'id',
+      'serviceId',
+      'versionNumber',
+      'checksum',
+      'sourceVersionId',
+      'publishedAt',
+      'publishedBy',
+    ]
+  ),
+  AutomationVersionDetail: object(
+    {
+      id,
+      serviceId: id,
+      versionNumber: integer,
+      checksum: string(),
+      sourceVersionId: { type: ['string', 'null'] },
+      publishedAt: date,
+      publishedBy: id,
+      snapshot: ref('AutomationSnapshot'),
+      lintReport: { type: 'array', items: { type: 'object', additionalProperties: true } },
+    },
+    [
+      'id',
+      'serviceId',
+      'versionNumber',
+      'checksum',
+      'sourceVersionId',
+      'publishedAt',
+      'publishedBy',
+      'snapshot',
+      'lintReport',
+    ]
+  ),
   AutomationPublishedVersion: object(
     { id, serviceId: id, versionNumber: { type: 'integer', minimum: 1 }, checksum: string() },
     ['id', 'serviceId', 'versionNumber', 'checksum']
@@ -335,6 +593,106 @@ interface Operation {
 const operations: Operation[] = [
   {
     method: 'post',
+    path: '/services/{id}/automation/validate',
+    summary: 'Validate a draft without saving or publishing',
+    body: object({ snapshot: ref('AutomationSnapshot') }, ['snapshot']),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/automation/simulate',
+    summary: 'Simulate automation without operational side effects',
+    description:
+      'Uses the production evaluator. Explanations contain outcomes and condition truth states, never received values or raw provider payloads.',
+    body: object(
+      {
+        snapshot: ref('AutomationSnapshot'),
+        integrationType: { ...string(64), minLength: 1 },
+        integrationId: id,
+        evaluationAt: date,
+        providerPayload: {},
+        event: object(
+          {
+            event_action: { type: 'string', enum: ['trigger', 'resolve', 'acknowledge'] },
+            dedup_key: string(512),
+            payload: object(
+              {
+                summary: { ...string(500), minLength: 1 },
+                source: { ...string(500), minLength: 1 },
+                severity: { type: 'string', enum: ['critical', 'error', 'warning', 'info'] },
+                custom_details: {},
+              },
+              ['summary', 'source', 'severity']
+            ),
+          },
+          ['event_action', 'dedup_key', 'payload']
+        ),
+      },
+      ['snapshot', 'integrationType', 'event']
+    ),
+  },
+  {
+    method: 'post',
+    path: '/services/{id}/automation/restore',
+    summary: 'Restore a historical version as an editable draft',
+    description:
+      'Requires the current draft ETag and team edit permission. Does not publish or change active/candidate versions or operational mode.',
+    body: object({ sourceVersionId: id }, ['sourceVersionId']),
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/decisions',
+    summary: 'List pinned incident routing decisions',
+    paginated: true,
+    description:
+      'Requires both automation:read and incidents:read, and applies incident visibility filters. Exposes routing metadata only; stored source summaries are never returned.',
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/observations',
+    summary: 'List safe field-discovery statistics',
+    paginated: true,
+    description:
+      'Stable first-seen cursor ordering. Optional unmapped=true/false filter. Raw value previews and value hashes are never returned.',
+  },
+
+  {
+    method: 'get',
+    path: '/services/{id}/automation/versions',
+    summary: 'List immutable service automation versions',
+    paginated: true,
+    description:
+      'Bounded cursor pagination in descending version-number order. Cursors must belong to this service. Use the version detail resource for snapshots.',
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation/versions/{versionId}',
+    summary: 'Inspect an immutable automation version',
+  },
+  {
+    method: 'get',
+    path: '/services/{id}/automation',
+    summary: 'Read effective service automation configuration',
+    description:
+      'Returns the configuration ETag for mode changes. Draft revision is a separate validator. Global OFF always produces effectiveMode DISABLED.',
+  },
+  {
+    method: 'patch',
+    path: '/services/{id}/automation/mode',
+    summary: 'Change the service automation mode',
+    description:
+      'Send the ETag from GET /services/{id}/automation, not the draft ETag. Requires explicit publishing scope and administrator privilege. Global OFF prevents SHADOW/LIVE; LIVE validates its version-specific dependencies and shadow acknowledgments.',
+    body: object(
+      {
+        mode: { type: 'string', enum: ['DISABLED', 'SHADOW', 'LIVE'] },
+        expectedActiveVersionId: { type: ['string', 'null'] },
+        acknowledgeNoShadow: { type: 'boolean' },
+        acknowledgeShadowErrors: { type: 'boolean' },
+      },
+      ['mode', 'expectedActiveVersionId']
+    ),
+  },
+  {
+    method: 'post',
     path: '/services/{id}/automation/publish',
     summary: 'Publish a validated immutable service automation version',
     description:
@@ -564,13 +922,31 @@ export function enterpriseOpenApiPaths() {
           ? 'Settings'
           : operation.path.startsWith('/runbooks')
             ? 'Runbooks'
-            : operation.path.startsWith('/schedules')
-              ? 'Schedules'
-              : 'Incidents',
+            : operation.path.startsWith('/services')
+              ? 'Services'
+              : operation.path.startsWith('/schedules')
+                ? 'Schedules'
+                : 'Incidents',
       ],
       summary: operation.summary,
       ...(operation.description ? { description: operation.description } : {}),
-      parameters: [...parameters, ...queryParameters],
+      parameters: [
+        ...parameters,
+        ...queryParameters,
+        ...(operation.path.endsWith('/automation/observations')
+          ? [
+              {
+                name: 'unmapped',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', enum: ['true', 'false'] },
+              },
+            ]
+          : []),
+      ],
+      ...(operation.path.endsWith('/automation/decisions')
+        ? { 'x-additional-required-scopes': ['incidents:read'] }
+        : {}),
       ...(operation.body
         ? {
             requestBody: {
