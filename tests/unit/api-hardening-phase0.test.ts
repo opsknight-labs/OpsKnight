@@ -64,6 +64,7 @@ const get = (url: string, headers: Record<string, string> = {}) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  delete process.env.TRUST_PROXY_HEADERS;
   rateLimitMemoryCache.clear();
 });
 

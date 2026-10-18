@@ -91,10 +91,40 @@ export async function claimInboundDelivery(
     }
   }
 
-  const existing = await prisma.inboundDelivery.findUnique({
+  let existing = await prisma.inboundDelivery.findUnique({
     where: { integrationId_deliveryHash: { integrationId, deliveryHash: hash } },
     select: { id: true, status: true, leaseExpiresAt: true },
   });
+
+  // If a concurrent request with the identical delivery nonce is currently being processed,
+  // briefly wait for it to complete. Webhook retry storms or concurrent duplicate deliveries
+  // typically resolve within 10-50ms; waiting avoids returning spurious 503 errors when
+  // the delivery will complete successfully into a 200 duplicate response.
+  if (
+    existing &&
+    existing.status === InboundDeliveryStatus.PROCESSING &&
+    existing.leaseExpiresAt &&
+    existing.leaseExpiresAt > now
+  ) {
+    const pollIntervalMs = 25;
+    const maxWaitMs = 250;
+    let waitedMs = 0;
+    while (
+      existing &&
+      existing.status === InboundDeliveryStatus.PROCESSING &&
+      existing.leaseExpiresAt &&
+      existing.leaseExpiresAt > new Date() &&
+      waitedMs < maxWaitMs
+    ) {
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      waitedMs += pollIntervalMs;
+      existing = await prisma.inboundDelivery.findUnique({
+        where: { integrationId_deliveryHash: { integrationId, deliveryHash: hash } },
+        select: { id: true, status: true, leaseExpiresAt: true },
+      });
+    }
+  }
+
   if (!existing || existing.status === InboundDeliveryStatus.COMPLETED) {
     return { disposition: 'COMPLETED' };
   }

@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-007",
   "test_run_id": "run-1792323503217",
-  "candidate_commit": "bfac9623432b26f3850a05c2dd161d443b3eeeb1",
+  "candidate_commit": "e1ef56ea18f08b2d17d5f26996f95359d05e0005",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",

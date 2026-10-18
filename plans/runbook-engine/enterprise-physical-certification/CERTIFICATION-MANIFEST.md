@@ -3,7 +3,7 @@
 ## 1. Governance & Version Provenance Baseline
 
 - **Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit SHA**: `bfac9623432b26f3850a05c2dd161d443b3eeeb1`
+- **Candidate Commit SHA**: `e1ef56ea18f08b2d17d5f26996f95359d05e0005`
 - **Base PR**: PR #892 (`8496cebd3` - Consolidated security hardening & baseline)
 - **Certification Program**: `10/10 Enterprise E2E Certification Program`
 - **Measured Date**: `2026-10-18`

@@ -9,21 +9,21 @@
           "passed": true,
           "scrollWidth": 375,
           "innerWidth": 375,
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_mobile_375.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_mobile_375.png"
         },
         {
           "test": "Tablet 768px zero horizontal overflow",
           "passed": true,
           "scrollWidth": 768,
           "innerWidth": 768,
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_tablet_768.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_tablet_768.png"
         },
         {
           "test": "Desktop 1440px zero horizontal overflow",
           "passed": true,
           "scrollWidth": 1440,
           "innerWidth": 1440,
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_desktop_1440.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_desktop_1440.png"
         },
         {
           "test": "Modal keyboard Escape dismissal",
@@ -31,15 +31,15 @@
           "visibleBefore": true,
           "visibleAfter": false,
           "screenshots": [
-            "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_opened.png",
-            "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_escaped.png"
+            "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_modal_opened.png",
+            "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_modal_escaped.png"
           ]
         },
         {
           "test": "Negative form validation (prevents empty submission)",
           "passed": true,
           "errorsFound": [],
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_create_negative_validation.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_create_negative_validation.png"
         }
       ]
     },
@@ -72,7 +72,7 @@
               "href": "https://opssentinal.com/runbooks/cmvcadj1h08chr4wg5tm4f5i3"
             }
           ],
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_runbooks_inventory.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim2_runbooks_inventory.png"
         },
         {
           "test": "Execution receipt inspection with physical step logs",
@@ -83,7 +83,7 @@
             "hasContainerStarted": true,
             "stepCount": 10
           },
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_execution_receipt_details.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim2_execution_receipt_details.png"
         }
       ]
     },
@@ -98,12 +98,12 @@
             "hasSecondaryAgent": true,
             "hasSharedPool": true
           },
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_agents_and_pools.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim3_agents_and_pools.png"
         },
         {
           "test": "Live Failover audit trail verified in UI (Secondary agent claim cmvdr7xco2ydw4qmqxxp0jizv)",
           "passed": true,
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_failover_execution_audit.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim3_failover_execution_audit.png"
         }
       ]
     },
@@ -136,7 +136,7 @@
               "Status · inspect health (read-only)\nLogs · recent journal entries (read-only)\nStart · start a stopped unit (safe write)\nStop · halt the unit (safe write)\nRestart · full restart (needs approval)"
             ]
           },
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_systemd_action_editor.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim4_systemd_action_editor.png"
         },
         {
           "test": "Advanced JSON step contract editor verified in UI",
@@ -145,24 +145,24 @@
             "hasTextarea": true,
             "contentSnippet": ""
           },
-          "screenshot": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_builder_json_editor.png"
+          "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim4_builder_json_editor.png"
         }
       ]
     }
   },
   "screenshots": [
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_mobile_375.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_tablet_768.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_desktop_1440.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_opened.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_modal_escaped.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim1_create_negative_validation.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_runbooks_inventory.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim2_execution_receipt_details.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_agents_and_pools.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim3_failover_execution_audit.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_builder_workflow_tab.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_systemd_action_editor.png",
-    "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ui_dim4_builder_json_editor.png"
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_mobile_375.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_tablet_768.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_desktop_1440.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_modal_opened.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_modal_escaped.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_create_negative_validation.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim2_runbooks_inventory.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim2_execution_receipt_details.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim3_agents_and_pools.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim3_failover_execution_audit.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim4_builder_workflow_tab.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim4_systemd_action_editor.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim4_builder_json_editor.png"
   ]
 }

@@ -6,7 +6,7 @@ import {
 import fs from 'node:fs';
 import path from 'node:path';
 
-const candidateCommit = 'bfac9623432b26f3850a05c2dd161d443b3eeeb1';
+const candidateCommit = 'e1ef56ea18f08b2d17d5f26996f95359d05e0005';
 const serverImage = 'sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62';
 const agentImage = 'sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3';
 const env = 'production-staging-opssentinal';
@@ -99,18 +99,19 @@ const allRecords: TestEvidenceRecord[] = [
     rule_revision: 1,
     runbook_version_id: 'cmvbg15q20023lnziex471d2v',
     execution_id: 'cmvdpgtum2trk4qmqcsw4jbzr',
-    step_attempt_ids: ['k8s_scale_up', 'k8s_rollout_status'],
+    step_attempt_ids: ['k8s_rollout_restart', 'k8s_verify_rollout'],
     agent_id: 'cmvcimfqe000ckpdgm6x26h5h',
     policy_hash: '3ab829e1f5cd',
     result: 'PASS',
-    physical_state_before: { replicas: 0, readyReplicas: 0, status: 'scaled_to_zero' },
+    physical_state_before: { replicas: 2, readyReplicas: 0, status: 'pods_unhealthy' },
     physical_state_after: { replicas: 2, readyReplicas: 2, status: 'running_healthy' },
     independent_health_result: { ok: true, readyReplicas: 2, totalReplicas: 2 },
     log_artifact_paths: [
+      'plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-003_cmvdpgtum2trk4qmqcsw4jbzr.png',
       'plans/runbook-engine/enterprise-physical-certification/screenshots/k8s_waiting_approval_evidence.png',
     ],
     notes:
-      'Kubernetes scale and rollout recovery certified: Deployment scaled up to 2 replicas (action: scale) and rollout verified in opsknight-cert namespace; 2/2 pods ready.',
+      'Kubernetes approval-gated rollout restart certified: Human operator reviewed and approved non-idempotent mutation (k8s_rollout_restart); in-cluster agent executed rollout restart and independently verified rollout status (2/2 ready) in opsknight-cert namespace.',
   },
   {
     test_id: 'AUTO-004',

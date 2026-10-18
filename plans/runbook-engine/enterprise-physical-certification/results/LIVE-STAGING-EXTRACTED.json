@@ -1,0 +1,316 @@
+[
+  {
+    "testId": "AUTO-001",
+    "executionId": "cmvdpapw42taf4qmq7moudh12",
+    "url": "https://opssentinal.com/runbooks/executions/cmvdpapw42taf4qmq7moudh12",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-001_cmvdpapw42taf4qmq7moudh12.png",
+    "title": "Automated Docker Container Recovery",
+    "service": "E2E Docker Service",
+    "incident": "None",
+    "target": "Agent · docker-host-agent (9c30a68ed4c9)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "11s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 1,
+        "title": "Start Container",
+        "category": "DOCKER",
+        "idempotency": "IDEMPOTENT WRITE",
+        "stepName": "start_docker_container",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 2,
+        "title": "Verify Health",
+        "category": "DOCKER",
+        "idempotency": "READ ONLY",
+        "stepName": "verify_docker_health",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:37:45.797Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "AUTO-002",
+    "executionId": "cmvdsgt9s31if4qmqbx6mcms6",
+    "url": "https://opssentinal.com/runbooks/executions/cmvdsgt9s31if4qmqbx6mcms6",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-002_cmvdsgt9s31if4qmqbx6mcms6.png",
+    "title": "Automated Docker Container Recovery",
+    "service": "E2E Docker Service",
+    "incident": "None",
+    "target": "Pool · E2E Fleet Pool (SHARED_TARGET)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "8s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 1,
+        "title": "Start Container",
+        "category": "DOCKER",
+        "idempotency": "IDEMPOTENT WRITE",
+        "stepName": "start_docker_container",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 2,
+        "title": "Verify Health",
+        "category": "DOCKER",
+        "idempotency": "READ ONLY",
+        "stepName": "verify_docker_health",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:37:48.407Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "AUTO-003",
+    "executionId": "cmvdpgtum2trk4qmqcsw4jbzr",
+    "url": "https://opssentinal.com/runbooks/executions/cmvdpgtum2trk4qmqcsw4jbzr",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-003_cmvdpgtum2trk4qmqcsw4jbzr.png",
+    "title": "E2E K8s Restart Recovery",
+    "service": "E2E Kubernetes Service",
+    "incident": "None",
+    "target": "Agent · test-cert-agent-ui (opsknight-agent-agent-575ccbc878-czdfc)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "34s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 2,
+        "title": "Verify rollout status",
+        "category": "KUBERNETES",
+        "idempotency": "READ ONLY",
+        "stepName": "k8s_verify_rollout",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:37:50.982Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "AUTO-004",
+    "executionId": "cmvdqqbdu2wyi4qmq7podn4f1",
+    "url": "https://opssentinal.com/runbooks/executions/cmvdqqbdu2wyi4qmq7podn4f1",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-004_cmvdqqbdu2wyi4qmq7podn4f1.png",
+    "title": "E2E Native Systemd and Podman Suite",
+    "service": "E2E Kubernetes Service",
+    "incident": "E2E Native Systemd and Podman Outage",
+    "target": "Agent · linux-native-host-agent (opsknight-cluster-control-plane)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "49s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 1,
+        "title": "Capture Host Diagnostics",
+        "category": "LINUX DIAGNOSTICS",
+        "idempotency": "READ ONLY",
+        "stepName": "host_diagnostics",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 2,
+        "title": "Precheck systemd status",
+        "category": "SYSTEMD",
+        "idempotency": "READ ONLY",
+        "stepName": "pre_systemd_status",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 4,
+        "title": "Verify systemd status",
+        "category": "SYSTEMD",
+        "idempotency": "READ ONLY",
+        "stepName": "post_systemd_status",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 5,
+        "title": "Precheck podman container inspect",
+        "category": "DOCKER",
+        "idempotency": "READ ONLY",
+        "stepName": "pre_podman_inspect",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 7,
+        "title": "Verify podman container inspect",
+        "category": "DOCKER",
+        "idempotency": "READ ONLY",
+        "stepName": "post_podman_inspect",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:37:53.588Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "AUTO-005",
+    "executionId": "cmvdpp7jv2ue94qmq9sxnqlrc",
+    "url": "https://opssentinal.com/runbooks/executions/cmvdpp7jv2ue94qmq9sxnqlrc",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-005_cmvdpp7jv2ue94qmq9sxnqlrc.png",
+    "title": "E2E Native Systemd and Podman Suite",
+    "service": "Loaded: loaded (/etc/systemd/system/cert-sample.service; disabled; preset: enabled)",
+    "incident": "E2E Native Systemd and Podman Outage",
+    "target": "Agent · linux-native-host-agent (opsknight-cluster-control-plane)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "8s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 1,
+        "title": "Capture Host Diagnostics",
+        "category": "LINUX DIAGNOSTICS",
+        "idempotency": "READ ONLY",
+        "stepName": "host_diagnostics",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 2,
+        "title": "Precheck systemd status",
+        "category": "SYSTEMD",
+        "idempotency": "READ ONLY",
+        "stepName": "pre_systemd_status",
+        "status": "Failed"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:37:56.337Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "AUTO-006",
+    "executionId": "cmvdshjja31lb4qmqza231w10",
+    "url": "https://opssentinal.com/runbooks/executions/cmvdshjja31lb4qmqza231w10",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-006_cmvdshjja31lb4qmqza231w10.png",
+    "title": "Automated Docker Container Recovery",
+    "service": "E2E Docker Service",
+    "incident": "None",
+    "target": "Pool · E2E Fleet Pool (SHARED_TARGET)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "5s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 1,
+        "title": "Start Container",
+        "category": "DOCKER",
+        "idempotency": "IDEMPOTENT WRITE",
+        "stepName": "start_docker_container",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 2,
+        "title": "Verify Health",
+        "category": "DOCKER",
+        "idempotency": "READ ONLY",
+        "stepName": "verify_docker_health",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:37:58.919Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "AUTO-007",
+    "executionId": "cmvchadqm09584qmqassxvp0s",
+    "url": "https://opssentinal.com/runbooks/executions/cmvchadqm09584qmqassxvp0s",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-007_cmvchadqm09584qmqassxvp0s.png",
+    "title": "Automated Docker Container Recovery",
+    "service": "E2E Docker Service",
+    "incident": "None",
+    "target": "Agent · docker-host-agent (9c30a68ed4c9)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "11s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 1,
+        "title": "Start Container",
+        "category": "DOCKER",
+        "idempotency": "IDEMPOTENT WRITE",
+        "stepName": "start_docker_container",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 2,
+        "title": "Verify Health",
+        "category": "DOCKER",
+        "idempotency": "READ ONLY",
+        "stepName": "verify_docker_health",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:38:01.530Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "AUTO-008",
+    "executionId": "cmvcf0z5k03gj4qmqyxd9v63s",
+    "url": "https://opssentinal.com/runbooks/executions/cmvcf0z5k03gj4qmqyxd9v63s",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-008_cmvcf0z5k03gj4qmqyxd9v63s.png",
+    "title": "E2E K8s Restart Recovery",
+    "service": "E2E Kubernetes Service",
+    "incident": "Cert3 K8s API Health Check Failing",
+    "target": "Agent · test-cert-agent-ui (opsknight-agent-agent-575ccbc878-czdfc)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "55s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 2,
+        "title": "Verify rollout status",
+        "category": "KUBERNETES",
+        "idempotency": "READ ONLY",
+        "stepName": "k8s_verify_rollout",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:38:04.156Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  },
+  {
+    "testId": "HA-001",
+    "executionId": "cmvdr7xco2ydw4qmqxxp0jizv",
+    "url": "https://opssentinal.com/runbooks/executions/cmvdr7xco2ydw4qmqxxp0jizv",
+    "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_HA-001_cmvdr7xco2ydw4qmqxxp0jizv.png",
+    "title": "Automated Docker Container Recovery",
+    "service": "E2E Docker Service",
+    "incident": "None",
+    "target": "Pool · E2E Fleet Pool (SHARED_TARGET)",
+    "trigger": "Responder · OpsKnight Admin",
+    "duration": "10s",
+    "status": "SUCCEEDED",
+    "steps": [
+      {
+        "sequence": 1,
+        "title": "Start Container",
+        "category": "DOCKER",
+        "idempotency": "IDEMPOTENT WRITE",
+        "stepName": "start_docker_container",
+        "status": "Succeeded"
+      },
+      {
+        "sequence": 2,
+        "title": "Verify Health",
+        "category": "DOCKER",
+        "idempotency": "READ ONLY",
+        "stepName": "verify_docker_health",
+        "status": "Succeeded"
+      }
+    ],
+    "verifiedAt": "2026-10-18T14:38:06.734Z",
+    "httpStatus": 200,
+    "independentHealthVerified": true
+  }
+]

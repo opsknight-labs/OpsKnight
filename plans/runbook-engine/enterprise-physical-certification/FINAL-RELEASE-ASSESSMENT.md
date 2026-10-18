@@ -4,7 +4,7 @@
 
 - **Program**: OpsKnight Runbook Engine — Enterprise Physical Certification Program
 - **Evaluated Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit Base**: `bfac9623432b26f3850a05c2dd161d443b3eeeb1`
+- **Candidate Commit Base**: `e1ef56ea18f08b2d17d5f26996f95359d05e0005`
 - **Measured Date**: `2026-10-18`
 - **Verdict**: **QUALIFIED ENTERPRISE PRODUCTION RUNTIME CANDIDATE (CHAOS STAGED)**
 
