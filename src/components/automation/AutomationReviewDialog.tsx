@@ -86,6 +86,7 @@ export function AutomationReviewDialog({
   version,
   enabled,
   counts,
+  readiness,
   busy,
   error,
   onCancel,
@@ -107,6 +108,7 @@ export function AutomationReviewDialog({
     errors: number;
     fallbacks?: number;
   };
+  readiness?: Awaited<ReturnType<typeof readAutomationReadiness>> | null;
   busy: boolean;
   error?: string;
   onCancel: () => void;
@@ -284,7 +286,7 @@ export function AutomationReviewDialog({
               </p>
               <p>
                 {counts?.routes ?? 0} routing differences · {counts?.priorities ?? 0} priority
-                differences · {counts?.skips ?? 0} would skip escalation
+                differences · {counts?.skips ?? 0} suppression differences
               </p>
               <p className="text-muted-foreground">
                 Review context mapping and deployment queue/latency metrics before enabling. These

@@ -2137,6 +2137,176 @@
           "oldestSampledPendingAgeMs"
         ]
       },
+      "AutomationReadinessPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minimumEvaluations": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "maximumEvidenceAgeHours": {
+            "type": "integer",
+            "minimum": 24,
+            "maximum": 168
+          },
+          "maximumPendingObservations": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "maximumErrorRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "minimumEvaluations",
+          "maximumEvidenceAgeHours",
+          "maximumPendingObservations",
+          "maximumErrorRate"
+        ]
+      },
+      "AutomationReadiness": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "settingsRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "policy": {
+            "$ref": "#/components/schemas/AutomationReadinessPolicy"
+          },
+          "policyValid": {
+            "type": "boolean"
+          },
+          "windowDays": {
+            "type": "integer",
+            "const": 7
+          },
+          "evaluated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errorRate": {
+            "type": "number",
+            "minimum": 0
+          },
+          "latestEvidenceBucketDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "evidenceAgeHours": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "sufficientRecentEvidence": {
+            "type": "boolean"
+          },
+          "pendingObservations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingObservationsTruncated": {
+            "type": "boolean"
+          },
+          "backlogWithinPolicy": {
+            "type": "boolean"
+          },
+          "errorsWithinPolicy": {
+            "type": "boolean"
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "evaluated": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "same": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "routeDifferent": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "priorityDifferent": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "noEscalationDifferent": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "errors": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "fallbacks": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "evaluated",
+              "same",
+              "routeDifferent",
+              "priorityDifferent",
+              "noEscalationDifferent",
+              "errors",
+              "fallbacks"
+            ]
+          }
+        },
+        "required": [
+          "settingsRevision",
+          "policy",
+          "policyValid",
+          "windowDays",
+          "evaluated",
+          "errorRate",
+          "latestEvidenceBucketDate",
+          "evidenceAgeHours",
+          "sufficientRecentEvidence",
+          "pendingObservations",
+          "pendingObservationsTruncated",
+          "backlogWithinPolicy",
+          "errorsWithinPolicy",
+          "counts"
+        ]
+      },
       "AutomationConfiguration": {
         "type": "object",
         "additionalProperties": false,
@@ -2496,6 +2666,9 @@
           "snapshot": {
             "$ref": "#/components/schemas/AutomationSnapshot"
           },
+          "readiness": {
+            "$ref": "#/components/schemas/AutomationReadiness"
+          },
           "evidenceFreshness": {
             "type": "object",
             "additionalProperties": false,
@@ -2583,7 +2756,8 @@
           "checksum",
           "snapshot",
           "shadowAggregates",
-          "evidenceFreshness"
+          "evidenceFreshness",
+          "readiness"
         ]
       },
       "AutomationConfig": {
@@ -2618,8 +2792,14 @@
           "automationEnabled": {
             "type": "boolean"
           },
+          "automationReadinessPolicyValid": {
+            "type": "boolean"
+          },
           "automationStoreObservationPreviews": {
             "type": "boolean"
+          },
+          "automationReadinessPolicy": {
+            "$ref": "#/components/schemas/AutomationReadinessPolicy"
           },
           "automationTraceRetentionDays": {
             "type": "integer",
@@ -12545,7 +12725,7 @@
           "Services"
         ],
         "summary": "Read a published candidate automation version and shadow metrics",
-        "description": "Reads the pending candidate version, compiled configuration and seven-day shadow evaluation metrics for a service in LIVE mode.\n\nRequires API scope `automation:read` (Automation read).",
+        "description": "Reads the immutable candidate snapshot without its internal compiled representation, seven-day metrics, the reviewed qualification policy and bounded pending-observation state.\n\nRequires API scope `automation:read` (Automation read).",
         "parameters": [
           {
             "name": "id",
@@ -12766,7 +12946,7 @@
           "Services"
         ],
         "summary": "Atomically activate a candidate automation version as LIVE",
-        "description": "Promotes the pending candidate version to active production routing with zero interruption. Validates shadow evidence and escalation policy safety before cutover.\n\nRequires API scope `automation:publish` (Automation publish).",
+        "description": "Atomically promotes the pending candidate after dependency and configured readiness checks. Pending observations above policy block activation. acknowledgeNoShadow explicitly accepts insufficient or stale daily evidence; acknowledgeShadowErrors accepts an excessive error rate. Supply expectedReadinessPolicyRevision from the candidate read to reject a stale policy review with 412. The canonical audit records current policy, evidence and exceptions.\n\nRequires API scope `automation:publish` (Automation publish).",
         "parameters": [
           {
             "name": "id",
@@ -12815,6 +12995,10 @@
                   },
                   "acknowledgeMaterialDifferences": {
                     "type": "boolean"
+                  },
+                  "expectedReadinessPolicyRevision": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -13027,6 +13211,9 @@
                   },
                   "automationStoreObservationPreviews": {
                     "type": "boolean"
+                  },
+                  "automationReadinessPolicy": {
+                    "$ref": "#/components/schemas/AutomationReadinessPolicy"
                   },
                   "automationTraceRetentionDays": {
                     "type": "integer",

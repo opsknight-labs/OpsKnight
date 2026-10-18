@@ -1,3 +1,4 @@
+import { DEFAULT_AUTOMATION_READINESS_POLICY } from '@/lib/automation/readiness-policy';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { authorize, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
@@ -10,6 +11,8 @@ vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 
 const previous = {
   automationEnabled: true,
+  automationReadinessPolicy: DEFAULT_AUTOMATION_READINESS_POLICY,
+  automationReadinessPolicyValid: true,
   automationStoreObservationPreviews: false,
   automationTraceRetentionDays: 90,
   automationSettingsRevision: 2,

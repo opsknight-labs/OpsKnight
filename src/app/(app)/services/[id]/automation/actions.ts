@@ -1,4 +1,5 @@
 'use server';
+import { readAutomationReadiness } from '@/lib/automation/readiness';
 import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { decodeExplanation } from '@/lib/automation/explanation';
 import { z, ZodError } from 'zod';
@@ -62,6 +63,7 @@ const actionSchema = z.discriminatedUnion('action', [
       serviceId: id,
       expectedCandidateVersionId: id,
       expectedActiveVersionId: id.nullable().optional(),
+      expectedReadinessPolicyRevision: z.number().int().nonnegative().optional(),
       acknowledgeNoShadow: z.boolean().optional(),
       acknowledgeShadowErrors: z.boolean().optional(),
       acknowledgeMaterialDifferences: z.boolean().optional(),
@@ -460,6 +462,10 @@ export async function getAutomationArea(
         ? { ...candidateVersion, snapshot: undefined }
         : candidateVersion,
     candidateAggregates,
+    candidateReadiness:
+      config?.candidateVersionId && ['overview', 'rules'].includes(area)
+        ? await readAutomationReadiness(prisma, serviceId, config.candidateVersionId)
+        : null,
     candidateEvidenceFreshness: config?.candidateVersionId
       ? await candidateEvidenceFreshness(
           prisma,

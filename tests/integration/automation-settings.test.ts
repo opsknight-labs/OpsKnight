@@ -1,3 +1,4 @@
+import { DEFAULT_AUTOMATION_READINESS_POLICY } from '@/lib/automation/readiness-policy';
 import { beforeEach, afterAll, expect, it, vi } from 'vitest';
 import {
   testPrisma as db,
@@ -67,6 +68,8 @@ it('defaults off with 90 days and ignores deployment environment values', async 
     automationTraceRetentionDays: 90,
     automationSettingsRevision: 0,
     automationStoreObservationPreviews: false,
+    automationReadinessPolicy: DEFAULT_AUTOMATION_READINESS_POLICY,
+    automationReadinessPolicyValid: true,
   });
   expect(await automationEnabled()).toBe(false);
   vi.unstubAllEnvs();

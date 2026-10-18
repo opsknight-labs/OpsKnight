@@ -1,3 +1,4 @@
+import { readAutomationReadiness } from '@/lib/automation/readiness';
 import { requireAutomationService } from '@/lib/api-v2/automation-access';
 import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { z } from 'zod';
@@ -71,6 +72,7 @@ export const GET = defineV2Route({
         lintReport: candidate.lintReport,
         snapshot: candidate.snapshot,
         shadowAggregates: aggregates,
+        readiness: await readAutomationReadiness(prisma, params.id, candidate.id),
         evidenceFreshness: await candidateEvidenceFreshness(
           prisma,
           params.id,
