@@ -173,6 +173,24 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
         where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
       })
     ).toBe(0);
+    // No Teams provider is configured in this fixture. Let the real worker
+    // persist its terminal failure before inspecting UI state; PENDING is transient.
+    if (notificationCase !== 'SLACK') {
+      await expect
+        .poll(
+          () =>
+            db.notification.count({
+              where: {
+                incidentId: incident.id,
+                channel: 'MICROSOFT_TEAMS',
+                sourceType: 'AUTOMATION',
+                status: 'FAILED',
+              },
+            }),
+          { timeout: 30000 }
+        )
+        .toBe(1);
+    }
     await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
     await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
     await expect(
@@ -200,7 +218,8 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       expect(operation.requestPayload).toMatchObject({ origin: 'AUTOMATION' });
     }
     const delivery = page.getByRole('region', { name: 'Channel notification status' });
-    await expect(delivery).toContainText('Queued');
+    if (notificationCase !== 'TEAMS') await expect(delivery).toContainText('Queued');
+    if (notificationCase !== 'SLACK') await expect(delivery).toContainText('Failed');
     await expect(delivery).not.toContainText('Delivery confirmed');
     await page.getByText(/^Show \d+ more context fields$/).click();
     await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
