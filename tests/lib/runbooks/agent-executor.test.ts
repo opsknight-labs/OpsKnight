@@ -448,4 +448,95 @@ describe('runbook Agent executor', () => {
     expect(result.errorCode).toBe('LEASE_LOST');
     expect(result.errorMessage).toContain('Local execution authority expired');
   });
+
+  it('treats systemctl status exit code 3 (inactive/dead) as a successful status query', async () => {
+    const fakeRunner = async () => ({
+      status: 'SUCCEEDED' as const,
+      output: '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
+      exitCode: 3,
+    });
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-1',
+      leaseToken: 'tok-sys-1',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-1',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'pre_systemd_status',
+        name: 'Precheck systemd status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const systemdPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['SYSTEMD'],
+      systemdUnits: ['cert-sample.service'],
+    };
+
+    const result = await executeAttempt(
+      attemptObj,
+      systemdPolicy,
+      new AbortController().signal,
+      fakeRunner
+    );
+
+    expect(result.status).toBe('SUCCEEDED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBeUndefined();
+  });
+
+  it('treats non-zero exit code on systemctl restart as a failure', async () => {
+    const fakeRunner = async () => ({
+      status: 'UNKNOWN' as const,
+      output: 'Failed to restart cert-sample.service: Unit not found.',
+      exitCode: 5,
+      errorCode: 'COMMAND_FAILED',
+      errorMessage: 'Command exited with 5.',
+    });
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-restart-1',
+      leaseToken: 'tok-sys-2',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-2',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'systemd_service_restart',
+        name: 'Restart cert-sample.service',
+        type: 'SYSTEMD',
+        riskClass: 'NON_IDEMPOTENT',
+        config: { action: 'restart', unit: 'cert-sample.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const systemdPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['SYSTEMD'],
+      allowNonIdempotent: true,
+      systemdUnits: ['cert-sample.service'],
+    };
+
+    const result = await executeAttempt(
+      attemptObj,
+      systemdPolicy,
+      new AbortController().signal,
+      fakeRunner
+    );
+
+    expect(result.status).toBe('UNKNOWN');
+    expect(result.exitCode).toBe(5);
+    expect(result.errorCode).toBe('COMMAND_FAILED');
+  });
 });

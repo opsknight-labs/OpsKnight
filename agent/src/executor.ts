@@ -478,12 +478,20 @@ async function executeCommand(
           errorMessage: `Command exceeded ${Math.floor(timeoutMs / 1000)} seconds.`,
         });
       }
+      const isSystemdStatus =
+        attempt.step.type === 'SYSTEMD' &&
+        (attempt.step.config?.action === 'status' || !attempt.step.config?.action);
+      const isSuccessExitCode = code === 0 || (isSystemdStatus && code === 3);
+
       resolve({
-        status:
-          code === 0 ? 'SUCCEEDED' : attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
+        status: isSuccessExitCode
+          ? 'SUCCEEDED'
+          : attempt.step.riskClass === 'READ_ONLY'
+            ? 'FAILED'
+            : 'UNKNOWN',
         exitCode: code ?? undefined,
         output,
-        ...(code === 0
+        ...(isSuccessExitCode
           ? {}
           : {
               errorCode: 'COMMAND_FAILED',

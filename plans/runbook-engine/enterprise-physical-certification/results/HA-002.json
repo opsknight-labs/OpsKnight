@@ -1,0 +1,41 @@
+{
+  "test_id": "HA-002",
+  "test_run_id": "run-1792323503219",
+  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
+  "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
+  "environment": "production-staging-opssentinal",
+  "topology": "E2E Fleet Pool (SHARED_TARGET: Agent A offline)",
+  "test_start_time": "2026-10-18T12:31:00.000Z",
+  "test_end_time": "2026-10-18T12:31:45.000Z",
+  "service_id": "cmvbffoig07q614marj783x7f",
+  "integration_id": "cmvbffoih07q714marj883x7g",
+  "alert_fingerprint": "alert-ha-pool-agent-a-offline",
+  "incident_id": "cmvdqqbdu2wyi4qmq7podn4f6",
+  "rule_id": "cmvbggld301silnzi9b329eey",
+  "rule_revision": 3,
+  "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
+  "execution_id": "cmvdr7xco2ydw4qmqxxp0jizv",
+  "step_attempt_ids": ["start_docker_container", "verify_docker_health"],
+  "agent_id": "cmvdqw3n82xgj4qmqyaz4tk6m",
+  "policy_hash": "6ef4d4f0dacf",
+  "result": "PASS",
+  "physical_state_before": {
+    "agent_a": "offline",
+    "agent_b": "online",
+    "workload": "stopped"
+  },
+  "physical_state_after": {
+    "agent_a": "offline",
+    "agent_b": "online",
+    "workload": "running"
+  },
+  "independent_health_result": {
+    "ok": true,
+    "executing_agent": "docker-host-agent-ha-secondary"
+  },
+  "log_artifact_paths": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ha_failover_execution_receipt.png"
+  ],
+  "notes": "Agent A offline before dispatch: Agent B seamlessly claimed and executed remediation from SHARED_TARGET pool."
+}

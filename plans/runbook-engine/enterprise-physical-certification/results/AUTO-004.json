@@ -1,0 +1,41 @@
+{
+  "test_id": "AUTO-004",
+  "test_run_id": "run-1792322874895",
+  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
+  "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
+  "environment": "production-staging-opssentinal",
+  "topology": "linux-native-host-agent (opsknight-cluster-control-plane)",
+  "test_start_time": "2026-10-18T11:26:54.895Z",
+  "test_end_time": "2026-10-18T11:27:54.897Z",
+  "service_id": "cmvbfg7yn07r614ma11le9p6n",
+  "rule_id": "rerun-workflow-e2e-native-systemd",
+  "rule_revision": 1,
+  "runbook_version_id": "cmvc74yhq01vh16nohq6nn1ym",
+  "execution_id": "cmvdqqbdu2wyi4qmq7podn4f1",
+  "step_attempt_ids": [
+    "host_diagnostics",
+    "pre_systemd_status",
+    "systemd_service_restart",
+    "post_systemd_status"
+  ],
+  "agent_id": "cmvc488by0gsh11uzw5o34uxy",
+  "policy_hash": "33307b11eb9b",
+  "result": "PASS",
+  "physical_state_before": {
+    "active": "inactive"
+  },
+  "physical_state_after": {
+    "active": "active",
+    "pid": "MainPID=420623"
+  },
+  "approval_governance": {
+    "required": true,
+    "step": "Restart cert-sample.service",
+    "riskClass": "NON_IDEMPOTENT",
+    "decision": "APPROVED",
+    "approver": "OpsKnight Admin (admin@opsknight.com)"
+  },
+  "screenshot_evidence": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/systemd_podman_execution_succeeded.png",
+  "notes": "Systemd service restart physical recovery certified: cert-sample.service stopped (inactive) -> Plan reviewed & dispatched -> Precheck passed with exit code 3 -> Execution entered WAITING_APPROVAL -> Approval granted via UI -> Agent restarted unit -> Active status confirmed in Kind node."
+}

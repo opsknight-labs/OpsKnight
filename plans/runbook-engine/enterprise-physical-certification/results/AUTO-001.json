@@ -1,0 +1,41 @@
+{
+  "test_id": "AUTO-001",
+  "test_run_id": "run-1792320435262",
+  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
+  "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
+  "environment": "production-staging-opssentinal",
+  "topology": "docker-host-agent",
+  "test_start_time": "2026-10-18T10:46:38.376Z",
+  "test_end_time": "2026-10-18T10:47:15.262Z",
+  "service_id": "cmvbffoig07q614marj783x7f",
+  "rule_id": "cmvbggld301silnzi9b329eey",
+  "rule_revision": 2,
+  "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
+  "execution_id": "cmvdpapw42taf4qmq7moudh12",
+  "step_attempt_ids": ["start_docker_container", "verify_docker_health"],
+  "agent_id": "9c30a68ed4c9",
+  "policy_hash": "6ef4d4f0dacf",
+  "result": "PASS",
+  "physical_state_before": {
+    "status": "exited",
+    "running": false,
+    "exitCode": 137
+  },
+  "physical_state_after": {
+    "status": "running",
+    "running": true,
+    "startedAt": "2026-10-18T10:46:56.904104209Z"
+  },
+  "independent_health_result": {
+    "ok": true,
+    "status": 200,
+    "body": {
+      "status": "ok",
+      "counter": 6,
+      "uptime": 14.960957382
+    }
+  },
+  "screenshot_evidence": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/docker_recovery_execution_receipt.png",
+  "notes": "Service automation rule execution verified: Failure injection -> Plan preview -> Execution dispatch -> Agent execution (start_docker_container, verify_docker_health) -> Physical container recovery -> Independent HTTP probe 200 OK."
+}
