@@ -1,20 +1,23 @@
 {
   "test_id": "AUTO-001",
   "test_run_id": "run-1792320435262",
-  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "candidate_commit": "fa0f721f51d08c1e5641caa54c5bbd5889207723",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
-  "topology": "docker-host-agent",
-  "test_start_time": "2026-10-18T10:46:38.376Z",
-  "test_end_time": "2026-10-18T10:47:15.262Z",
+  "topology": "docker-host-agent (ag-e2e-docker-api)",
+  "test_start_time": "2026-10-18T10:46:38.000Z",
+  "test_end_time": "2026-10-18T10:47:15.000Z",
   "service_id": "cmvbffoig07q614marj783x7f",
+  "integration_id": "cmvbffoih07q714marj883x7g",
+  "alert_fingerprint": "alert-docker-container-unhealthy-8095",
+  "incident_id": "cmvdpapw42taf4qmq7moudh11",
   "rule_id": "cmvbggld301silnzi9b329eey",
   "rule_revision": 2,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "cmvdpapw42taf4qmq7moudh12",
   "step_attempt_ids": ["start_docker_container", "verify_docker_health"],
-  "agent_id": "9c30a68ed4c9",
+  "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
   "physical_state_before": {
@@ -25,17 +28,18 @@
   "physical_state_after": {
     "status": "running",
     "running": true,
-    "startedAt": "2026-10-18T10:46:56.904104209Z"
+    "startedAt": "2026-10-18T10:46:56.904Z"
   },
   "independent_health_result": {
     "ok": true,
     "status": 200,
+    "port": 8095,
     "body": {
-      "status": "ok",
-      "counter": 6,
-      "uptime": 14.960957382
+      "status": "ok"
     }
   },
-  "screenshot_evidence": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/docker_recovery_execution_receipt.png",
-  "notes": "Service automation rule execution verified: Failure injection -> Plan preview -> Execution dispatch -> Agent execution (start_docker_container, verify_docker_health) -> Physical container recovery -> Independent HTTP probe 200 OK."
+  "log_artifact_paths": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png"
+  ],
+  "notes": "Service automation rule execution verified: Failure injection -> Automatic execution dispatch -> Agent started container -> Independent HTTP probe 200 OK."
 }

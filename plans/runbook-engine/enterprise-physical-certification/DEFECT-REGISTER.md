@@ -24,11 +24,11 @@ Every defect discovered during physical qualification was root-cause analyzed, f
 
 - **Severity**: P1 (High)
 - **Component**: `agent/src/executor.ts`
-- **Symptom**: Precheck steps on stopped systemd units failed with `COMMAND_FAILED`, blocking restart runbooks from executing.
+- **Symptom**: Precheck steps on stopped systemd units failed with `COMMAND_FAILED`, blocking restart runbooks from executing. Inversely, treating exit code 3 as an unconditional success caused false positives during postcheck verification when a service remained dead.
 - **Root Cause**: `systemctl status` returns standard LSB exit code 3 when a service is dead or inactive. The executor strictly rejected all non-zero exit codes.
-- **Resolution**: Updated `agent/src/executor.ts` to accept exit code 3 as `SUCCEEDED` when `step.type === 'SYSTEMD'` and `action === 'status'`.
-- **Regression Test**: Added exit code 3 assertions in `tests/lib/runbooks/agent-executor.test.ts` (PASS, 20/20 tests).
-- **Physical Verification**: Successfully executed systemd restart runbook `cmvdqqbdu2wyi4qmq7podn4f1`.
+- **Resolution**: Updated `agent/src/executor.ts` to contextually handle systemd exit codes: exit code 3 returns `SUCCEEDED` for status queries/precheck diagnostics, while returning `FAILED` with `errorCode: 'SERVICE_INACTIVE'` when an active service is required (`requireActive: true`, verification phase, or verification step naming). Exit code 4 returns `FAILED` with `errorCode: 'UNIT_NOT_FOUND'`.
+- **Regression Test**: Added comprehensive exit code 0, 3 (precheck vs verification), 4, and timeout test cases in `tests/lib/runbooks/agent-executor.test.ts` (PASS, 23/23 tests).
+- **Physical Verification**: Successfully executed systemd restart runbook `cmvdqqbdu2wyi4qmq7podn4f1` on `linux-native-host-agent`.
 
 ---
 
@@ -39,4 +39,4 @@ Every defect discovered during physical qualification was root-cause analyzed, f
 - **Symptom**: Connection URIs containing internal database hostnames without domain suffixes could escape regex masking.
 - **Root Cause**: Regular expressions in logger sanitization assumed FQDNs for hostnames.
 - **Resolution**: Hardened connection URI regex to redact passwords regardless of hostname syntax.
-- **Regression Test**: `tests/lib/logger-redaction.test.ts` (PASS).
+- **Regression Test**: `tests/lib/logger-buffer.test.ts` (PASS, 15/15 tests).

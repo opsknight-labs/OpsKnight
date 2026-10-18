@@ -327,8 +327,21 @@ export async function executeAttempt(
       result.status === 'SUCCEEDED' &&
       attempt.step.type === 'SYSTEMD' &&
       attempt.step.config.action === 'logs'
-    )
+    ) {
       postState.logSummary = result.output.slice(0, 4096);
+    }
+    if (
+      result.status === 'SUCCEEDED' &&
+      attempt.step.type === 'SYSTEMD' &&
+      (attempt.step.config.action === 'status' || !attempt.step.config.action)
+    ) {
+      if (isSystemdActiveRequired(attempt.step) && result.exitCode === 3) {
+        result.status = 'FAILED';
+        result.errorCode = 'SERVICE_INACTIVE';
+        result.errorMessage =
+          'Systemd service is inactive or dead (exit code 3). Verification expecting active state failed.';
+      }
+    }
     if (signal.aborted && result.status === 'SUCCEEDED')
       return {
         ...result,
@@ -340,6 +353,91 @@ export async function executeAttempt(
     return { ...result, preState, postState };
   }
   return executeCommand(attempt, policy, signal);
+}
+
+export function isSystemdActiveRequired(step: ClaimedAttempt['step']): boolean {
+  if (step.type !== 'SYSTEMD') return false;
+  const config = step.config ?? {};
+  const phase = (step as { phase?: string }).phase;
+  return Boolean(
+    config.expectedState === 'active' ||
+    config.requireActive === true ||
+    config.expectedStatus === 'active' ||
+    (phase && ['VERIFICATION', 'POSTCHECK'].includes(phase)) ||
+    /verify|assert|health/i.test(step.key ?? '') ||
+    /verify|health|active/i.test(step.name ?? '')
+  );
+}
+
+export function resolveCommandResult(
+  attempt: ClaimedAttempt,
+  code: number | null,
+  output: string,
+  timedOut: boolean
+): ExecutionResult {
+  if (timedOut) {
+    return {
+      status: attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
+      exitCode: code ?? undefined,
+      output,
+      errorCode: 'COMMAND_TIMEOUT',
+      errorMessage: `Command exceeded timeout deadline.`,
+    };
+  }
+
+  const isSystemdStatus =
+    attempt.step.type === 'SYSTEMD' &&
+    (attempt.step.config?.action === 'status' || !attempt.step.config?.action);
+
+  if (isSystemdStatus) {
+    const activeRequired = isSystemdActiveRequired(attempt.step);
+    if (code === 0) {
+      return {
+        status: 'SUCCEEDED',
+        exitCode: 0,
+        output,
+      };
+    }
+    if (code === 3) {
+      if (activeRequired) {
+        return {
+          status: 'FAILED',
+          exitCode: 3,
+          output,
+          errorCode: 'SERVICE_INACTIVE',
+          errorMessage:
+            'Systemd service is inactive or dead (exit code 3). Verification expecting active state failed.',
+        };
+      }
+      return {
+        status: 'SUCCEEDED',
+        exitCode: 3,
+        output,
+      };
+    }
+    if (code === 4) {
+      return {
+        status: 'FAILED',
+        exitCode: 4,
+        output,
+        errorCode: 'UNIT_NOT_FOUND',
+        errorMessage: 'Systemd unit not found (exit code 4).',
+      };
+    }
+  }
+
+  const isSuccess = code === 0;
+  return {
+    status: isSuccess ? 'SUCCEEDED' : attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
+    exitCode: code ?? undefined,
+    output,
+    ...(isSuccess
+      ? {}
+      : {
+          errorCode: 'COMMAND_FAILED',
+          errorMessage: `Command exited with ${code ?? 'unknown'}.`,
+        }),
+  };
 }
 
 async function executeCommand(
@@ -469,35 +567,8 @@ async function executeCommand(
           ...(errorCode ? { errorCode, errorMessage } : {}),
         });
       }
-      if (timedOut) {
-        return resolve({
-          status: attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
-          exitCode: code ?? undefined,
-          output,
-          errorCode: 'COMMAND_TIMEOUT',
-          errorMessage: `Command exceeded ${Math.floor(timeoutMs / 1000)} seconds.`,
-        });
-      }
-      const isSystemdStatus =
-        attempt.step.type === 'SYSTEMD' &&
-        (attempt.step.config?.action === 'status' || !attempt.step.config?.action);
-      const isSuccessExitCode = code === 0 || (isSystemdStatus && code === 3);
 
-      resolve({
-        status: isSuccessExitCode
-          ? 'SUCCEEDED'
-          : attempt.step.riskClass === 'READ_ONLY'
-            ? 'FAILED'
-            : 'UNKNOWN',
-        exitCode: code ?? undefined,
-        output,
-        ...(isSuccessExitCode
-          ? {}
-          : {
-              errorCode: 'COMMAND_FAILED',
-              errorMessage: `Command exited with ${code ?? 'unknown'}.`,
-            }),
-      });
+      resolve(resolveCommandResult(attempt, code, output, timedOut));
     });
   });
 }

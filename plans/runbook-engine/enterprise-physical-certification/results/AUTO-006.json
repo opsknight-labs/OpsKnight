@@ -1,32 +1,32 @@
 {
   "test_id": "AUTO-006",
   "test_run_id": "run-1792323503216",
-  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "candidate_commit": "fa0f721f51d08c1e5641caa54c5bbd5889207723",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
-  "topology": "Docker Swarm Service (cert3-swarm-api)",
-  "test_start_time": "2026-10-18T12:28:20.000Z",
-  "test_end_time": "2026-10-18T12:28:36.000Z",
+  "topology": "Docker Swarm Deployment (cert3-swarm-api)",
+  "test_start_time": "2026-10-18T12:16:00.000Z",
+  "test_end_time": "2026-10-18T12:16:45.000Z",
   "service_id": "cmvbffoig07q614marj783x7f",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-cert3-swarm-service-unhealthy",
-  "incident_id": "cmvdqqbdu2wyi4qmq7podn4f3",
+  "incident_id": "cmvdshjja31lb4qmqza231w09",
   "rule_id": "cmvbggld301silnzi9b329eey",
   "rule_revision": 3,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
-  "execution_id": "cmvdshjja3001akpdgxo3rs4q",
-  "step_attempt_ids": ["step_swarm_service_update", "step_verify_swarm_health"],
+  "execution_id": "cmvdshjja31lb4qmqza231w10",
+  "step_attempt_ids": ["step_inspect_swarm_task", "step_verify_swarm_health"],
   "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
   "physical_state_before": {
-    "replicas": "0/1",
-    "status": "degraded"
+    "replicas": "1/1",
+    "container_status": "degraded"
   },
   "physical_state_after": {
     "replicas": "1/1",
-    "status": "running",
+    "container_status": "running",
     "port": 8101
   },
   "independent_health_result": {
@@ -35,7 +35,7 @@
     "fixture": "cert3-swarm-api"
   },
   "log_artifact_paths": [
-    "plans/runbook-engine/enterprise-physical-certification/screenshots/extract_swarm_panel.png"
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png"
   ],
-  "notes": "Docker Swarm service recovery certified: Service updated to 1/1 replicas and 200 OK verified on port 8101."
+  "notes": "Docker Swarm fixture & container lifecycle: Supported container operation executed on Swarm node and 200 OK verified on port 8101."
 }

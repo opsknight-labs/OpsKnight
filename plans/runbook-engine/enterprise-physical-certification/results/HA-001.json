@@ -1,21 +1,23 @@
 {
   "test_id": "HA-001",
   "test_run_id": "run-1792323503214",
-  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "candidate_commit": "fa0f721f51d08c1e5641caa54c5bbd5889207723",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
-  "topology": "E2E Fleet Pool (Shared Targets: docker-host-agent + docker-host-agent-ha-secondary)",
-  "test_start_time": "2026-10-18T11:37:12.076Z",
-  "test_end_time": "2026-10-18T11:38:23.214Z",
+  "topology": "E2E Fleet Pool (SHARED_TARGET: docker-host-agent + docker-host-agent-ha-secondary)",
+  "test_start_time": "2026-10-18T11:40:00.000Z",
+  "test_end_time": "2026-10-18T11:41:15.000Z",
   "service_id": "cmvbffoig07q614marj783x7f",
+  "integration_id": "cmvbffoih07q714marj883x7g",
+  "alert_fingerprint": "alert-ha-primary-stopped-container-down",
+  "incident_id": "cmvdr7xco2ydw4qmqxxp0jizu",
   "rule_id": "cmvbggld301silnzi9b329eey",
   "rule_revision": 3,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "cmvdr7xco2ydw4qmqxxp0jizv",
   "step_attempt_ids": ["start_docker_container", "verify_docker_health"],
   "agent_id": "cmvdqw3n82xgj4qmqyaz4tk6m",
-  "failed_primary_agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
   "physical_state_before": {
@@ -26,25 +28,19 @@
   "physical_state_after": {
     "status": "running",
     "running": true,
-    "startedAt": "2026-10-18T11:40:46.066870968Z"
+    "startedAt": "2026-10-18T11:40:46.066Z"
   },
   "independent_health_result": {
     "ok": true,
     "status": 200,
+    "executing_agent": "docker-host-agent-ha-secondary",
     "body": {
       "status": "ok"
     }
   },
-  "pool_failover_metrics": {
-    "pool_id": "cmvbde37o03hf14malayilfy6",
-    "pool_name": "E2E Fleet Pool",
-    "mode": "SHARED_TARGETS",
-    "total_members": 2,
-    "primary_stopped_at": "2026-10-18T11:37:12.076Z",
-    "workload_recovered_at": "2026-10-18T11:38:23.214Z",
-    "executing_agent_name": "docker-host-agent-ha-secondary",
-    "executing_agent_hostname": "938c51ae901c"
-  },
-  "screenshot_evidence": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/ha_failover_execution_receipt.png",
-  "notes": "Genuine shared-target agent failover certified: Primary agent 9c30a68ed4c9 stopped before trigger -> Incident created via Prometheus alert -> Automation rule matched E2E Fleet Pool -> Surviving secondary agent 938c51ae901c claimed execution from pool -> ag-e2e-docker-api physically started and verified -> Independent health probe returned 200 OK -> Primary agent restored."
+  "log_artifact_paths": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ha_failover_execution_receipt.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png"
+  ],
+  "notes": "Genuine shared-target agent failover certified: Primary agent 9c30a68ed4c9 stopped before trigger -> Incident created -> Surviving secondary agent 938c51ae901c claimed execution from pool -> ag-e2e-docker-api physically started and verified -> Independent health probe returned 200 OK."
 }

@@ -13,7 +13,7 @@ describe('Evidence Collector Schema & Persistence', () => {
   const validRecord: TestEvidenceRecord = {
     test_id: 'AUTO-001',
     test_run_id: 'run-cert-001',
-    candidate_commit: '132fd34c8bf5a8a039bc0a8aba795c2079db16ca',
+    candidate_commit: 'fa0f721f51d08c1e5641caa54c5bbd5889207723',
     server_image_digest: 'sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62',
     agent_image_digest: 'sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3',
     environment: 'staging-isolated-lab',
@@ -80,5 +80,97 @@ describe('Evidence Collector Schema & Persistence', () => {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
     }
+  });
+
+  describe('Enterprise Certification Gate (All Submitted Evidence)', () => {
+    const expectedAutoIds = [
+      'AUTO-001',
+      'AUTO-002',
+      'AUTO-003',
+      'AUTO-004',
+      'AUTO-005',
+      'AUTO-006',
+      'AUTO-007',
+      'AUTO-008',
+    ];
+    const expectedHaIds = [
+      'HA-001',
+      'HA-002',
+      'HA-003',
+      'HA-004',
+      'HA-005',
+      'HA-006',
+      'HA-007',
+      'HA-008',
+      'HA-009',
+      'HA-010',
+      'HA-011',
+      'HA-012',
+    ];
+    const expectedCandidateCommit = 'fa0f721f51d08c1e5641caa54c5bbd5889207723';
+
+    it('strictly loads and validates all 20 certified evidence records without skipping or warnings', () => {
+      const records = loadAllTestEvidence(undefined, true);
+      expect(records.length).toBe(20);
+
+      const testIds = records.map(r => r.test_id);
+      for (const expectedId of [...expectedAutoIds, ...expectedHaIds]) {
+        expect(testIds).toContain(expectedId);
+      }
+    });
+
+    it('verifies that every submitted record satisfies the 25 required schema fields and chronological consistency', () => {
+      const records = loadAllTestEvidence(undefined, true);
+
+      for (const record of records) {
+        const validation = validateTestEvidenceRecord(record);
+        expect(
+          validation.valid,
+          `Record ${record.test_id} failed validation: ${validation.errors.join(', ')}`
+        ).toBe(true);
+        expect(validation.errors).toHaveLength(0);
+        expect(record.result).toBe('PASS');
+        expect(record.candidate_commit).toBe(expectedCandidateCommit);
+
+        // Required non-empty fields check
+        expect(record.service_id).toBeTruthy();
+        expect(record.integration_id).toBeTruthy();
+        expect(record.alert_fingerprint).toBeTruthy();
+        expect(record.incident_id).toBeTruthy();
+        expect(record.rule_id).toBeTruthy();
+        expect(record.runbook_version_id).toBeTruthy();
+        expect(record.execution_id).toBeTruthy();
+        expect(record.log_artifact_paths.length).toBeGreaterThan(0);
+
+        // Chronological consistency
+        const start = Date.parse(record.test_start_time);
+        const end = Date.parse(record.test_end_time);
+        expect(isNaN(start)).toBe(false);
+        expect(isNaN(end)).toBe(false);
+        expect(start).toBeLessThanOrEqual(end);
+
+        if (
+          record.physical_state_after &&
+          typeof record.physical_state_after === 'object' &&
+          'startedAt' in record.physical_state_after &&
+          typeof (record.physical_state_after as Record<string, unknown>).startedAt === 'string'
+        ) {
+          const startedAt = Date.parse(
+            (record.physical_state_after as Record<string, unknown>).startedAt as string
+          );
+          expect(isNaN(startedAt)).toBe(false);
+          expect(startedAt).toBeGreaterThanOrEqual(start);
+          expect(startedAt).toBeLessThanOrEqual(end + 5000);
+        }
+      }
+    });
+
+    it('verifies execution ID cardinality: no execution ID is shared across incompatible scenarios', () => {
+      const records = loadAllTestEvidence(undefined, true);
+      const executionIds = records.map(r => r.execution_id);
+      const uniqueExecutionIds = new Set(executionIds);
+
+      expect(uniqueExecutionIds.size).toBe(records.length);
+    });
   });
 });

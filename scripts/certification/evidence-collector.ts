@@ -96,6 +96,39 @@ export function validateTestEvidenceRecord(record: unknown): { valid: boolean; e
     errors.push('log_artifact_paths must be an array');
   }
 
+  // Chronological consistency validation
+  if (typeof rec.test_start_time === 'string' && typeof rec.test_end_time === 'string') {
+    const startTime = Date.parse(rec.test_start_time);
+    const endTime = Date.parse(rec.test_end_time);
+    if (isNaN(startTime)) {
+      errors.push(`Invalid test_start_time timestamp: ${rec.test_start_time}`);
+    }
+    if (isNaN(endTime)) {
+      errors.push(`Invalid test_end_time timestamp: ${rec.test_end_time}`);
+    }
+    if (!isNaN(startTime) && !isNaN(endTime) && startTime > endTime) {
+      errors.push(
+        `Chronological inconsistency: test_start_time (${rec.test_start_time}) is after test_end_time (${rec.test_end_time})`
+      );
+    }
+
+    if (
+      rec.physical_state_after &&
+      typeof rec.physical_state_after === 'object' &&
+      'startedAt' in rec.physical_state_after &&
+      typeof (rec.physical_state_after as Record<string, unknown>).startedAt === 'string'
+    ) {
+      const startedAt = Date.parse(
+        (rec.physical_state_after as Record<string, unknown>).startedAt as string
+      );
+      if (!isNaN(startedAt) && !isNaN(endTime) && startedAt > endTime + 5000) {
+        errors.push(
+          `Chronological inconsistency: physical_state_after.startedAt (${(rec.physical_state_after as Record<string, unknown>).startedAt}) occurred after test_end_time (${rec.test_end_time})`
+        );
+      }
+    }
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -124,11 +157,14 @@ export function loadAllTestEvidence(
   resultsDir = path.resolve(
     process.cwd(),
     'plans/runbook-engine/enterprise-physical-certification/results'
-  )
+  ),
+  strict = false
 ): TestEvidenceRecord[] {
   if (!fs.existsSync(resultsDir)) return [];
 
-  const files = fs.readdirSync(resultsDir).filter(f => f.endsWith('.json'));
+  const files = fs
+    .readdirSync(resultsDir)
+    .filter(f => f.endsWith('.json') && !f.includes('UI-VERIFICATION') && !f.startsWith('.'));
   const records: TestEvidenceRecord[] = [];
 
   for (const file of files) {
@@ -140,9 +176,15 @@ export function loadAllTestEvidence(
       if (validation.valid) {
         records.push(parsed);
       } else {
+        if (strict) {
+          throw new Error(
+            `Evidence validation failed for ${file}: ${validation.errors.join('; ')}`
+          );
+        }
         console.warn(`[WARN] Skipping invalid evidence file ${file}:`, validation.errors);
       }
     } catch (err) {
+      if (strict) throw err;
       console.warn(`[WARN] Failed to parse evidence file ${file}:`, err);
     }
   }

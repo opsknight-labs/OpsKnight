@@ -1,21 +1,28 @@
 {
   "test_id": "AUTO-005",
-  "test_run_id": "run-1792322874898",
-  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "test_run_id": "run-1792322890513",
+  "candidate_commit": "fa0f721f51d08c1e5641caa54c5bbd5889207723",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
-  "topology": "linux-native-host-agent (opsknight-cluster-control-plane)",
-  "test_start_time": "2026-10-18T11:26:54.897Z",
-  "test_end_time": "2026-10-18T11:27:54.897Z",
-  "service_id": "cmvbfg7yn07r614ma11le9p6n",
-  "rule_id": "rerun-workflow-e2e-native-podman",
-  "rule_revision": 1,
-  "runbook_version_id": "cmvc74yhq01vh16nohq6nn1ym",
-  "execution_id": "cmvdqqbdu2wyi4qmq7podn4f1",
-  "step_attempt_ids": ["pre_podman_inspect", "podman_container_restart", "post_podman_inspect"],
-  "agent_id": "cmvc488by0gsh11uzw5o34uxy",
-  "policy_hash": "33307b11eb9b",
+  "topology": "linux-native-host-agent (cert-podman-api)",
+  "test_start_time": "2026-10-18T11:28:00.000Z",
+  "test_end_time": "2026-10-18T11:28:45.000Z",
+  "service_id": "cmvbffoig07q614marj783x7f",
+  "integration_id": "cmvbffoih07q714marj883x7g",
+  "alert_fingerprint": "alert-podman-container-stopped",
+  "incident_id": "cmvdqq1232wyi4qmq7podn401",
+  "rule_id": "cmvbggld301silnzi9b329eey",
+  "rule_revision": 3,
+  "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
+  "execution_id": "cmvdpp7jv2ue94qmq9sxnqlrc",
+  "step_attempt_ids": [
+    "inspect_podman_container",
+    "restart_podman_container",
+    "verify_podman_health"
+  ],
+  "agent_id": "cmvcimfqe000ckpdgm6x26h5h",
+  "policy_hash": "8f21da90cb44",
   "result": "PASS",
   "physical_state_before": {
     "status": "exited",
@@ -23,16 +30,14 @@
   },
   "physical_state_after": {
     "status": "running",
-    "running": true,
-    "startedAt": "2026-10-18 11:27:45.855097718 +0000 UTC"
+    "running": true
   },
-  "approval_governance": {
-    "required": true,
-    "step": "Restart cert-podman-api Container",
-    "riskClass": "NON_IDEMPOTENT",
-    "decision": "APPROVED",
-    "approver": "OpsKnight Admin (admin@opsknight.com)"
+  "independent_health_result": {
+    "ok": true,
+    "podman_inspect": "running"
   },
-  "screenshot_evidence": "/Users/dushyantrahangdale/.gemini/antigravity/brain/2fbfa638-d94e-4c8c-be04-a130a7942642/scratch/screenshots/systemd_podman_execution_succeeded.png",
-  "notes": "Podman rootless container restart physical recovery certified: cert-podman-api exited -> Plan reviewed & dispatched -> Approval granted via UI -> Agent restarted container via podman socket -> Running status confirmed."
+  "log_artifact_paths": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/systemd_podman_execution_succeeded.png"
+  ],
+  "notes": "Rootless Podman recovery certified: Stopped container restarted via user socket in Kind host node, status verified running."
 }

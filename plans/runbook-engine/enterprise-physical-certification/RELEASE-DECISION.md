@@ -4,7 +4,7 @@
 
 - **Program**: OpsKnight Runbook Engine — 10/10 Enterprise E2E Certification Program
 - **Evaluated Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit Base**: `132fd34c8bf5a8a039bc0a8aba795c2079db16ca`
+- **Candidate Commit Base**: `fa0f721f51d08c1e5641caa54c5bbd5889207723`
 - **Measured Date**: `2026-10-18`
 - **Verdict**: **QUALIFIED FOR ENTERPRISE PRODUCTION RELEASE (10/10 PASS)**
 

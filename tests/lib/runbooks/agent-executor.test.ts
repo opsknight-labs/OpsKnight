@@ -3,6 +3,8 @@ import {
   containerHealthPassed,
   executeAttempt,
   isContainerStarting,
+  isSystemdActiveRequired,
+  resolveCommandResult,
   sliceUtf8Safe,
 } from '../../../agent/src/executor';
 import type { AgentPolicy, ClaimedAttempt } from '../../../agent/src/types';
@@ -449,13 +451,7 @@ describe('runbook Agent executor', () => {
     expect(result.errorMessage).toContain('Local execution authority expired');
   });
 
-  it('treats systemctl status exit code 3 (inactive/dead) as a successful status query', async () => {
-    const fakeRunner = async () => ({
-      status: 'SUCCEEDED' as const,
-      output: '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
-      exitCode: 3,
-    });
-
+  it('treats systemctl status exit code 3 as successful for diagnostic/precheck query', () => {
     const attemptObj: ClaimedAttempt = {
       attemptId: 'att-systemd-status-1',
       leaseToken: 'tok-sys-1',
@@ -475,22 +471,107 @@ describe('runbook Agent executor', () => {
       },
     };
 
-    const systemdPolicy: AgentPolicy = {
-      ...policy,
-      allowedStepTypes: ['SYSTEMD'],
-      systemdUnits: ['cert-sample.service'],
-    };
-
-    const result = await executeAttempt(
+    const result = resolveCommandResult(
       attemptObj,
-      systemdPolicy,
-      new AbortController().signal,
-      fakeRunner
+      3,
+      '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
+      false
     );
 
     expect(result.status).toBe('SUCCEEDED');
     expect(result.exitCode).toBe(3);
     expect(result.errorCode).toBeUndefined();
+  });
+
+  it('fails systemctl status with SERVICE_INACTIVE when step requires active service and exit code is 3', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-verify',
+      leaseToken: 'tok-sys-verify',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-verify',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'verify_systemd_active',
+        name: 'Verify cert-sample.service active',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service', requireActive: true },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      3,
+      '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBe('SERVICE_INACTIVE');
+    expect(result.errorMessage).toContain('inactive or dead');
+  });
+
+  it('fails systemctl status with UNIT_NOT_FOUND when exit code is 4', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-notfound',
+      leaseToken: 'tok-sys-notfound',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-notfound',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'check_status',
+        name: 'Check status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'nonexistent.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      4,
+      'Unit nonexistent.service could not be found.',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(4);
+    expect(result.errorCode).toBe('UNIT_NOT_FOUND');
+  });
+
+  it('handles command timeout in resolveCommandResult', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-timeout',
+      leaseToken: 'tok-sys-to',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-to',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'status',
+        name: 'Status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'hung.service' },
+        timeoutSeconds: 5,
+      },
+    };
+
+    const result = resolveCommandResult(attemptObj, null, '', true);
+
+    expect(result.status).toBe('FAILED');
+    expect(result.errorCode).toBe('COMMAND_TIMEOUT');
   });
 
   it('treats non-zero exit code on systemctl restart as a failure', async () => {

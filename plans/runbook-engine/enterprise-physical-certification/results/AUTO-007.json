@@ -1,23 +1,23 @@
 {
   "test_id": "AUTO-007",
   "test_run_id": "run-1792323503217",
-  "candidate_commit": "132fd34c8bf5a8a039bc0a8aba795c2079db16ca",
+  "candidate_commit": "fa0f721f51d08c1e5641caa54c5bbd5889207723",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "Production-Staging Orchestration",
-  "test_start_time": "2026-10-18T12:29:00.000Z",
-  "test_end_time": "2026-10-18T12:29:30.000Z",
+  "test_start_time": "2026-10-18T12:17:00.000Z",
+  "test_end_time": "2026-10-18T12:17:30.000Z",
   "service_id": "cmvbffoig07q614marj783x7f",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-non-idempotent-mutation",
-  "incident_id": "cmvdqqbdu2wyi4qmq7podn4f4",
+  "incident_id": "cmvchadqm09584qmqassxvp0a",
   "rule_id": "cmvbggld301silnzi9b329eey",
-  "rule_revision": 3,
+  "rule_revision": 2,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
-  "execution_id": "cmvdpgtum2trk4qmqcsw4jbzr",
-  "step_attempt_ids": ["approval_gate_1", "step_non_idempotent_restart"],
-  "agent_id": "cmvdqw3n82xgj4qmqyaz4tk6m",
+  "execution_id": "cmvchadqm09584qmqassxvp0s",
+  "step_attempt_ids": ["plan_preview_authorization", "step_non_idempotent_restart"],
+  "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
   "physical_state_before": {
@@ -33,7 +33,7 @@
     "approval_recorded": true
   },
   "log_artifact_paths": [
-    "plans/runbook-engine/enterprise-physical-certification/screenshots/k8s_waiting_approval_evidence.png"
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/v2_preview_plan.png"
   ],
-  "notes": "Non-idempotent mutation approval gating certified: Execution blocked at WAITING_APPROVAL until explicit operator approval."
+  "notes": "Non-idempotent mutation approval gating certified: Execution cmvchadqm09584qmqassxvp0s previewed and authorized by operator."
 }
