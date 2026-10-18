@@ -257,17 +257,19 @@ async function normalizeTriggerConditions<
 export async function createServiceBinding(
   serviceId: string,
   raw: CreateServiceRunbookBindingInput,
-  actorId: string,
+  actor: RunbookCommandActor,
   initialTrigger?: CreateRunbookTriggerInput,
-  expectedVersionId?: string
+  expectedVersionId?: string,
+  client?: RunbookCommandClient
 ) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
   const input = createServiceRunbookBindingSchema.parse(raw);
   const requestedEnabled = input.enabled;
   if (input.mode === 'AUTOMATIC') input.enabled = false;
   const trigger = initialTrigger ? createRunbookTriggerSchema.parse(initialTrigger) : undefined;
   // Participate in lifecycle serializability: a row lock alone cannot refresh
   // an archive transaction's earlier snapshot of the binding collection.
-  return runSerializableTransaction(async tx => {
+  return runRunbookCommand(client, async tx => {
     await lockRunbookForUpdate(tx, input.runbookId, { action: 'bind' });
     const service = await tx.service.findUnique({ where: { id: serviceId }, select: { id: true } });
     if (!service) throw new RunbookDefinitionError('Service not found.');
@@ -348,7 +350,8 @@ export async function createServiceBinding(
           : {}),
       },
     });
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.service.attached',
         entityType: 'RUNBOOK',
@@ -373,12 +376,14 @@ export async function updateServiceBinding(
   serviceId: string,
   bindingId: string,
   raw: UpdateServiceRunbookBindingInput,
-  actorId: string,
+  actor: RunbookCommandActor,
   expectedVersionId?: string,
-  expectedConfigurationRevision?: number
+  expectedConfigurationRevision?: number,
+  client?: RunbookCommandClient
 ) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
   const input = updateServiceRunbookBindingSchema.parse(raw);
-  return runSerializableTransaction(async tx => {
+  return runRunbookCommand(client, async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, bindingId);
     const requestedEnabled = input.enabled;
     const current = await tx.serviceAutomationRule.findFirst({
@@ -818,7 +823,8 @@ export async function detachServiceBinding(serviceId: string, bindingId: string,
       data: { enabled: false, detachedAt: new Date(), configurationRevision: { increment: 1 } },
     });
     if (deleted.count !== 1) throw new RunbookDefinitionError('Service runbook binding not found.');
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.service.detached',
         entityType: 'RUNBOOK',
@@ -836,11 +842,13 @@ export async function replaceBindingTrigger(
   serviceId: string,
   bindingId: string,
   raw: CreateRunbookTriggerInput,
-  actorId: string,
-  expectedConfigurationRevision?: number
+  actor: RunbookCommandActor,
+  expectedConfigurationRevision?: number,
+  client?: RunbookCommandClient
 ) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
   const input = createRunbookTriggerSchema.parse(raw);
-  return prisma.$transaction(async tx => {
+  return runRunbookCommand(client, async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, bindingId);
     const binding = await tx.serviceAutomationRule.findFirst({
       where: { id: bindingId, serviceId, detachedAt: null },
@@ -966,8 +974,14 @@ export async function replaceBindingTrigger(
   });
 }
 
-export async function pauseServiceRule(serviceId: string, ruleId: string, actorId: string) {
-  return prisma.$transaction(async tx => {
+export async function pauseServiceRule(
+  serviceId: string,
+  ruleId: string,
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, ruleId);
     const rule = await tx.serviceAutomationRule.findFirst({
       where: { id: ruleId, serviceId, detachedAt: null },
@@ -977,7 +991,8 @@ export async function pauseServiceRule(serviceId: string, ruleId: string, actorI
       where: { id: ruleId },
       data: { enabled: false, configurationRevision: { increment: 1 } },
     });
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.rule.paused',
         entityType: 'RUNBOOK',
@@ -989,8 +1004,14 @@ export async function pauseServiceRule(serviceId: string, ruleId: string, actorI
     );
   });
 }
-export async function duplicateServiceRule(serviceId: string, ruleId: string, actorId: string) {
-  return prisma.$transaction(async tx => {
+export async function duplicateServiceRule(
+  serviceId: string,
+  ruleId: string,
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, ruleId);
     const original = await tx.serviceAutomationRule.findFirst({
       where: { id: ruleId, serviceId, detachedAt: null },
@@ -1037,7 +1058,8 @@ export async function duplicateServiceRule(serviceId: string, ruleId: string, ac
         },
       },
     });
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.rule.duplicated',
         entityType: 'RUNBOOK',
@@ -1055,10 +1077,12 @@ export async function duplicateServiceRule(serviceId: string, ruleId: string, ac
 export async function activateServiceRule(
   serviceId: string,
   ruleId: string,
-  actorId: string,
-  confirmMatchAll: boolean
+  actor: RunbookCommandActor,
+  confirmMatchAll: boolean,
+  client?: RunbookCommandClient
 ) {
-  return runSerializableTransaction(async tx => {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, ruleId);
     const rule = await tx.serviceAutomationRule.findFirst({
       where: { id: ruleId, serviceId, detachedAt: null },
@@ -1124,7 +1148,8 @@ export async function activateServiceRule(
       where: { id: rule.id },
       data: { enabled: true, configurationRevision: { increment: 1 } },
     });
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.rule.activated',
         entityType: 'RUNBOOK',

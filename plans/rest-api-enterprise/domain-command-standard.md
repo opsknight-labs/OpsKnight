@@ -118,3 +118,11 @@ Switch to SHADOW or DISABLED first; subsequent LIVE activation runs the existing
 revision-specific reference validation and shadow acknowledgment checks. Publication
 and mode logs use staged-event names because caller-owned transactions can still
 abort; committed database audit remains authoritative.
+
+Service runbook rule commands accept the caller's transaction and server-derived
+API actor context through the shared runbook command boundary. Create/update,
+trigger replacement, pause, duplication, detachment, activation and policy-check
+requests can therefore join the REST replay transaction. Policy-check requests
+lock the runbook before the service rule, matching lifecycle and execution lock
+order. The transaction regression fixture proves caller rollback removes rule,
+trigger, duplicate and policy-check state together with canonical audits.

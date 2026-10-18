@@ -4,7 +4,13 @@ import { hasUnverifiablePolicyInput } from '../../../agent/src/policy-inputs';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { logAudit } from '@/lib/audit';
+import {
+  runRunbookCommand,
+  logRunbookCommandAudit,
+  type RunbookCommandActor,
+  type RunbookCommandClient,
+} from './command-context';
+import { lockServiceRuleForUpdate } from './locking';
 import {
   flattenSteps,
   parseRunbookDefinition,
@@ -36,9 +42,15 @@ export function policyCheckSteps(
 export function samePolicySnapshot(before: unknown, after: unknown) {
   return JSON.stringify(sortJsonValue(before)) === JSON.stringify(sortJsonValue(after));
 }
-export async function requestRulePolicyChecks(serviceId: string, ruleId: string, actorId: string) {
-  return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${ruleId} AND "serviceId" = ${serviceId} FOR UPDATE`;
+export async function requestRulePolicyChecks(
+  serviceId: string,
+  ruleId: string,
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
+    await lockServiceRuleForUpdate(tx, serviceId, ruleId);
     const rule = await tx.serviceAutomationRule.findFirst({
       where: { id: ruleId, serviceId, detachedAt: null },
       include: {
@@ -120,7 +132,8 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
         })),
       });
     }
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.rule.policy_check.requested',
         entityType: 'RUNBOOK',
