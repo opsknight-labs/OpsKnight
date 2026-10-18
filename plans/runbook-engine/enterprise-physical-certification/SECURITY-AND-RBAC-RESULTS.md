@@ -37,4 +37,4 @@ In compliance with security hardening requirements, `src/lib/logger.ts` was veri
 // postgresql://user:password@db:5432/db -> postgresql://user:[REDACTED]@db:5432/db
 ```
 
-Regression tests in `tests/lib/logger-redaction.test.ts` verify that serialized JSON log streams contain zero plain-text credentials.
+Regression tests in `tests/lib/logger-buffer.test.ts` verify that serialized JSON log streams contain zero plain-text credentials.
