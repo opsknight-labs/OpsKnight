@@ -1,6 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
+import { lockFleetClaim } from './pool-labels';
 import { Prisma, type RunbookStepType } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { enqueueVerificationEvidence } from './verification-evidence';
@@ -170,6 +171,9 @@ export async function claimAgentAttempt(
             await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
           }
           await tx.$executeRaw`SET LOCAL lock_timeout = '1000ms'`;
+          // Acquire before identity/membership reads. READ COMMITTED then observes
+          // every removal committed before this shared administrative fence.
+          await lockFleetClaim(tx);
           const now = new Date();
           // Serialize assignment against identity revocation. A claim that won this
           // shared row lock commits before revocation; a later claim observes REVOKED.
@@ -211,7 +215,7 @@ export async function claimAgentAttempt(
               { targetAgentId: agentId },
               {
                 targetAgentId: null,
-                targetAgentPool: { members: { some: { agentId } } },
+                targetAgentPool: { lifecycle: 'ACTIVE', members: { some: { agentId } } },
               },
             ],
             executionStep: {
@@ -243,7 +247,7 @@ export async function claimAgentAttempt(
             (process.env.NODE_ENV === 'development' &&
               process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true');
           const memberships = await tx.runbookAgentPoolMember.findMany({
-            where: { agentId },
+            where: { agentId, pool: { lifecycle: 'ACTIVE' } },
             select: { poolId: true },
           });
           const memberPoolIds = new Set(memberships.map(m => m.poolId));
@@ -324,7 +328,7 @@ export async function claimAgentAttempt(
               poolIdsToInspect.length > 0
                 ? await Promise.all([
                     tx.runbookAgentPool.findMany({
-                      where: { id: { in: poolIdsToInspect } },
+                      where: { id: { in: poolIdsToInspect }, lifecycle: 'ACTIVE' },
                       select: { id: true },
                     }),
                     tx.runbookAgentPoolMember.groupBy({
@@ -594,6 +598,7 @@ export async function fenceAgentAttempt(input: {
   leaseToken: string;
 }) {
   return prisma.$transaction(async tx => {
+    await lockFleetClaim(tx);
     const now = new Date();
     const authority = await tx.runbookStepAttempt.findUnique({
       where: { id: input.attemptId },
@@ -607,6 +612,18 @@ export async function fenceAgentAttempt(input: {
       typeof selection.sourcePoolId === 'string'
         ? selection.sourcePoolId
         : null;
+    if (
+      sourcePoolId &&
+      !(await tx.runbookAgentPool.findFirst({
+        where: { id: sourcePoolId, lifecycle: 'ACTIVE' },
+        select: { id: true },
+      }))
+    ) {
+      throw new RunbookPreExecutionFenceError(
+        input.attemptId,
+        'Source pool is retired or unavailable'
+      );
+    }
     if (
       sourcePoolId &&
       !(await tx.runbookAgentPoolMember.findUnique({

@@ -1,4 +1,61 @@
 {
+  "listRunbookSigningIdentities": {
+    "method": "GET",
+    "path": "/runbooks/signing-identities",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "stageRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "activateRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities/{id}/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "retireRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities/{id}/retire",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecretUsage": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}/usage",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "retireRunbookAgentPool": {
+    "method": "POST",
+    "path": "/runbooks/agent-pools/{id}/retire",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listRunbookAgentPools": {
     "method": "GET",
     "path": "/runbooks/agent-pools",

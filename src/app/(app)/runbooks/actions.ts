@@ -25,7 +25,7 @@ import {
   retireExecutionSigningKey,
   RunbookSigningRotationError,
 } from '@/lib/runbooks/execution-signing';
-import { assertCapability } from '@/lib/rbac';
+import { assertCapability, getUserPermissions } from '@/lib/rbac';
 import { createAgentEnrollment } from '@/lib/runbooks/agent-auth';
 import {
   createRunbookAgentPoolSchema,
@@ -342,8 +342,13 @@ export async function updateSchedulingLabelsAction(formData: FormData) {
   const id = idSchema.parse(readString(formData, 'id'));
   const kind = z.enum(['agent', 'pool']).parse(readString(formData, 'kind'));
   const labels = schedulingLabelsSchema.parse(JSON.parse(readString(formData, 'labels') || '{}'));
-  if (kind === 'agent') await updateRunbookAgentMetadata(id, { labels }, actor.id);
-  else await updateRunbookAgentPool(id, { matchLabels: labels }, actor.id);
+  const options = {
+    allowSecretScopeExpansion: (await getUserPermissions()).capabilities.includes(
+      CAPABILITIES.RUNBOOK_SECRET_MANAGE
+    ),
+  };
+  if (kind === 'agent') await updateRunbookAgentMetadata(id, { labels }, actor.id, options);
+  else await updateRunbookAgentPool(id, { matchLabels: labels }, actor.id, options);
   revalidateAgentFleet();
 }
 
@@ -436,7 +441,11 @@ export async function addAgentToPoolAction(formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const agentId = idSchema.parse(readString(formData, 'agentId'));
   const poolId = idSchema.parse(readString(formData, 'poolId'));
-  await setRunbookPoolMember(poolId, agentId, true, actor.id);
+  await setRunbookPoolMember(poolId, agentId, true, actor.id, {
+    allowSecretScopeExpansion: (await getUserPermissions()).capabilities.includes(
+      CAPABILITIES.RUNBOOK_SECRET_MANAGE
+    ),
+  });
   revalidateAgentFleet();
 }
 

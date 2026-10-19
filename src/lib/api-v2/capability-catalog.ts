@@ -270,6 +270,11 @@ const decisions: readonly ApiCapability[] = [
       'createRunbookAgentEnrollment',
       'getRunbookAgentEnrollment',
       'revokeRunbookAgent',
+      'listRunbookSigningIdentities',
+      'stageRunbookSigningIdentity',
+      'activateRunbookSigningIdentity',
+      'retireRunbookSigningIdentity',
+      'retireRunbookAgentPool',
       'listRunbookAgentPools',
       'createRunbookAgentPool',
       'getRunbookAgentPool',
@@ -291,8 +296,9 @@ const decisions: readonly ApiCapability[] = [
     title: 'Secret references, rotation and grants',
     status: 'partial',
     explanation:
-      'Dedicated scopes protect write-only secret creation/rotation and grant administration. Concrete revisions, canonical audits and metadata-only replay protect concurrent updates. Combined Agent certification and usage reporting remain pending.',
+      'Dedicated scopes protect write-only secret creation/rotation and grant administration. Concrete revisions, canonical audits and metadata-only replay protect concurrent updates. Usage inspection covers exact stored references. Combined Agent certification remains pending.',
     operationIds: [
+      'listRunbookSecretUsage',
       'listRunbookSecrets',
       'createRunbookSecret',
       'getRunbookSecret',

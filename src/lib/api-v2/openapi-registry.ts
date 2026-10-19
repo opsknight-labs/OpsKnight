@@ -31,6 +31,55 @@ const op = (
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
     'get',
+    '/runbooks/signing-identities',
+    'listRunbookSigningIdentities',
+    'runbook-signing:read',
+    'list',
+    'RunbookSigningIdentity'
+  ),
+  op(
+    'post',
+    '/runbooks/signing-identities',
+    'stageRunbookSigningIdentity',
+    'runbook-signing:write',
+    'item',
+    'RunbookSigningIdentity'
+  ),
+  op(
+    'post',
+    '/runbooks/signing-identities/{id}/activate',
+    'activateRunbookSigningIdentity',
+    'runbook-signing:write',
+    'item',
+    'RunbookSigningIdentity'
+  ),
+  op(
+    'post',
+    '/runbooks/signing-identities/{id}/retire',
+    'retireRunbookSigningIdentity',
+    'runbook-signing:write',
+    'item',
+    'RunbookSigningIdentity'
+  ),
+
+  op(
+    'get',
+    '/runbooks/secrets/{id}/usage',
+    'listRunbookSecretUsage',
+    'runbook-secrets:read',
+    'list',
+    'RunbookSecretUsage'
+  ),
+  op(
+    'post',
+    '/runbooks/agent-pools/{id}/retire',
+    'retireRunbookAgentPool',
+    'runbook-agent-pools:write',
+    'item',
+    'RunbookAgentPool'
+  ),
+  op(
+    'get',
     '/runbooks/agent-pools',
     'listRunbookAgentPools',
     'runbook-agents:read',

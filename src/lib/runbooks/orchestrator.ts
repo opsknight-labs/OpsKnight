@@ -370,7 +370,7 @@ async function prepareRunbookExecution(
             select: { id: true },
           })
         : await tx.runbookAgentPool.findUnique({
-            where: { id: input.targetAgentPoolId },
+            where: { id: input.targetAgentPoolId, lifecycle: 'ACTIVE' },
             select: { id: true },
           });
       if (!target)
@@ -384,6 +384,16 @@ async function prepareRunbookExecution(
     const resolvedTargetAgentPoolId = planSnapshot
       ? planSnapshot.agentPoolId
       : (binding?.defaultAgentPoolId ?? input.targetAgentPoolId ?? null);
+    if (resolvedTargetAgentPoolId) {
+      const sourcePool = await tx.runbookAgentPool.findUnique({
+        where: { id: resolvedTargetAgentPoolId },
+        select: { lifecycle: true },
+      });
+      if (!sourcePool || sourcePool.lifecycle === 'RETIRED')
+        throw new RunbookDefinitionError(
+          'TARGET_NOT_FOUND: the selected Agent pool is retired or unavailable.'
+        );
+    }
     if (
       steps.some(step => requiresAgent(step.type)) &&
       !resolvedTargetAgentId &&

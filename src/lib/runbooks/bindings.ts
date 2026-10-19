@@ -127,7 +127,7 @@ async function validateBindingTarget(
   }
   if (agentPoolId) {
     const pool = await tx.runbookAgentPool.findUnique({
-      where: { id: agentPoolId },
+      where: { id: agentPoolId, lifecycle: 'ACTIVE' },
       select: { id: true, mode: true, _count: { select: { members: true } } },
     });
     if (!pool) throw new RunbookDefinitionError('The selected Runbook Agent pool was not found.');

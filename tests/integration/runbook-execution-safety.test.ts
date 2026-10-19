@@ -1439,6 +1439,109 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(secureClaim?.secretInputKeys).toEqual(['unit']);
   });
 
+  it.each(['membership', 'grant', 'agent', 'pool'] as const)(
+    'fences secret disclosure behind a committing %s removal',
+    async kind => {
+      const { setRunbookPoolMember, retireRunbookAgentPool } =
+        await import('@/lib/runbooks/pool-commands');
+      const { revokeRunbookSecretGrant } = await import('@/lib/runbooks/secrets');
+      const { revokeRunbookAgent } = await import('@/lib/runbooks/fleet-commands');
+      const target = await createAgentTarget(
+        {
+          steps: [
+            {
+              key: 'status',
+              name: 'Status',
+              type: 'SYSTEMD',
+              riskClass: 'READ_ONLY',
+              config: {
+                action: 'status',
+                unit: 'api.service',
+                environment: { TOKEN: '${{ inputs.token }}' },
+              },
+            },
+          ],
+        },
+        [{ key: 'token', label: 'Token', type: 'SECRET_REF', required: true }]
+      );
+      const secret = await testPrisma.runbookSecret.create({
+        data: {
+          name: 'claim-race-secret',
+          valueEncrypted: await encrypt('never-disclose-after-removal'),
+          grants: { create: { agentPoolId: target.pool.id } },
+        },
+        include: { grants: true },
+      });
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: target.binding.id },
+        data: { inputValues: { token: 'secret://claim-race-secret' } },
+      });
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+      });
+      await advanceExecution(execution.id);
+      let ready!: () => void;
+      let release!: () => void;
+      const locked = new Promise<void>(resolve => {
+        ready = resolve;
+      });
+      const unlock = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const mutation = testPrisma.$transaction(
+        async tx => {
+          if (kind === 'membership')
+            await setRunbookPoolMember(target.pool.id, target.agent.id, false, target.actor.id, {
+              client: tx,
+            });
+          else if (kind === 'grant')
+            await revokeRunbookSecretGrant(secret.grants[0].id, target.actor.id, { client: tx });
+          else if (kind === 'agent') await revokeRunbookAgent(target.agent.id, target.actor.id, tx);
+          else await retireRunbookAgentPool(target.pool.id, target.actor.id, { client: tx });
+          ready();
+          await unlock;
+        },
+        { timeout: 10000 }
+      );
+      await Promise.race([
+        locked,
+        mutation.then(() => {
+          throw new Error('Mutation ended before barrier');
+        }),
+      ]);
+      const claim = claimAgentAttempt(target.agent.id, true).then(
+        value => ({ value }),
+        error => ({ error })
+      );
+      try {
+        let blocked = false;
+        for (let attempt = 0; attempt < 30; attempt++) {
+          const rows = await testPrisma.$queryRaw<
+            Array<{ waiting: boolean }>
+          >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event = 'advisory' AND query LIKE '%pg_advisory_xact_lock_shared%') AS waiting`;
+          if (rows[0]?.waiting) {
+            blocked = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(blocked).toBe(true);
+      } finally {
+        release();
+        await mutation;
+      }
+      const result = await claim;
+      expect('value' in result ? result.value : null).toBeNull();
+      expect(
+        await testPrisma.runbookStepAttempt.count({
+          where: { executionStep: { executionId: execution.id }, status: 'CLAIMED' },
+        })
+      ).toBe(0);
+    }
+  );
+
   it('rejects a published definition with a corrupted checksum', async () => {
     const target = await createAgentTarget({
       description: 'Checksum',

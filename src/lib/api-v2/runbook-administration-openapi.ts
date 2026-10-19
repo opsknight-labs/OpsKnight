@@ -48,11 +48,30 @@ const settingsPatch = {
   dependentRequired: { runbookArtifactRetentionDays: ['confirmArtifactCleanup'] },
 };
 export const RUNBOOK_ADMINISTRATION_SCHEMAS: Record<string, Schema> = {
+  RunbookSigningIdentity: object({
+    id: text,
+    publicKey: text,
+    state: { type: 'string', enum: ['ACTIVE', 'NEXT', 'RETIRING', 'RETIRED'] },
+    createdAt: date,
+    activatedAt: { type: ['string', 'null'], format: 'date-time' },
+    retiredAt: { type: ['string', 'null'], format: 'date-time' },
+  }),
+  RunbookSecretUsage: object({
+    id: text,
+    sourceType: { type: 'string', enum: ['SERVICE_RULE', 'EXECUTION', 'INPUT_DEFAULT'] },
+    sourceId: text,
+    runbookId: text,
+    runbookVersionId: nullableText,
+    serviceId: nullableText,
+    createdAt: date,
+  }),
   RunbookAgentPool: object({
     id: text,
     name: text,
     description,
     mode,
+    lifecycle: { type: 'string', enum: ['ACTIVE', 'RETIRED'] },
+    retiredAt: { type: ['string', 'null'], format: 'date-time' },
     matchLabels: labels,
     revision: integer,
     createdAt: date,
@@ -112,6 +131,57 @@ export const RUNBOOK_ADMINISTRATION_OPERATIONS: {
   status?: number;
   paginated?: boolean;
 }[] = [
+  {
+    method: 'get',
+    path: '/runbooks/signing-identities',
+    summary: 'listRunbookSigningIdentities',
+    paginated: true,
+    description:
+      'Dedicated administrator signing scope. Public metadata only; private signing material is never returned. Activation requires old and NEXT pins acknowledged by every enrolled Agent, including offline Agents. Retirement preserves the 24-hour overlap. Expected active identity and state are reviewed in the request body.',
+  },
+  {
+    method: 'post',
+    path: '/runbooks/signing-identities',
+    summary: 'stageRunbookSigningIdentity',
+    status: 201,
+    body: object({
+      expectedActiveKeyId: { type: ['string', 'null'], minLength: 1, maxLength: 100 },
+    }),
+    description:
+      'Dedicated administrator signing scope. Public metadata only; private signing material is never returned. Activation requires old and NEXT pins acknowledged by every enrolled Agent, including offline Agents. Retirement preserves the 24-hour overlap. Expected active identity and state are reviewed in the request body.',
+  },
+  {
+    method: 'post',
+    path: '/runbooks/signing-identities/{id}/activate',
+    summary: 'activateRunbookSigningIdentity',
+    body: object({ expectedActiveKeyId: { type: 'string', minLength: 1, maxLength: 100 } }),
+    description:
+      'Dedicated administrator signing scope. Public metadata only; private signing material is never returned. Activation requires old and NEXT pins acknowledged by every enrolled Agent, including offline Agents. Retirement preserves the 24-hour overlap. Expected active identity and state are reviewed in the request body.',
+  },
+  {
+    method: 'post',
+    path: '/runbooks/signing-identities/{id}/retire',
+    summary: 'retireRunbookSigningIdentity',
+    body: object({ expectedState: { const: 'RETIRING' } }),
+    description:
+      'Dedicated administrator signing scope. Public metadata only; private signing material is never returned. Activation requires old and NEXT pins acknowledged by every enrolled Agent, including offline Agents. Retirement preserves the 24-hour overlap. Expected active identity and state are reviewed in the request body.',
+  },
+  {
+    method: 'get',
+    path: '/runbooks/secrets/{id}/usage',
+    summary: 'List secret-reference dependencies without values or executable configuration',
+    paginated: true,
+    description:
+      'Privileged indexed cursor-paginated inspection of service-rule inputs, historical execution inputs and SECRET_REF defaults. Exact top-level reference matches follow resolver semantics. References show potential dependency, not proof that a command consumed a particular secret version. Applies the search/export rate tier and a two-second database statement budget.',
+  },
+  {
+    method: 'post',
+    path: '/runbooks/agent-pools/{id}/retire',
+    summary: 'Retire a pool while preserving execution history',
+    body: object({}),
+    description:
+      'Terminal retirement requires concrete If-Match and Idempotency-Key. Disables service rules and rejects new membership, grants, execution targets and Agent claims. Already running commands retain their evidence and may finish. No reactivation endpoint.',
+  },
   {
     method: 'get',
     path: '/runbooks/agent-pools',
