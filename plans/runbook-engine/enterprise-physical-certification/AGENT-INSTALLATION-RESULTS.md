@@ -20,6 +20,11 @@ Per `src/lib/runbooks/agent-auth.ts`, enrollment tokens are single-use, cryptogr
 | **6. Rootless Podman**      | `Podman`        | `podman run -d --name opsknight-agent-... -v $XDG_RUNTIME_DIR/podman/podman.sock:...`                                                   | Verified (15m token TTL)          | **PHYSICAL LIVE CERTIFIED**   | Connected via rootless podman socket; executed restart on `cert-podman-api`                                                                                 |
 | **7. Docker Swarm**         | `Swarm`         | `docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.agent.yml opsknight-agent-...`                                   | Verified (15m token TTL)          | **PHYSICAL LIVE CERTIFIED**   | Swarm stack deployment & overlay network verified; recovered `cert3-swarm-api`                                                                              |
 
+> [!NOTE]
+> **Kustomize Qualification Boundary**:
+> - Direct Docker, Docker Compose, Kubernetes Helm, Native Linux Systemd, Rootless Podman, and Docker Swarm (6/7 platforms) are physically certified with live agent enrollments and runbook execution receipts.
+> - Kubernetes Kustomize overlay manifests (`deploy/kubernetes/kustomize/components/agent`) are qualified via specification validation and `kubectl apply --dry-run=server`. A persistent live pod deployed via Kustomize is designated for Phase 2 fleet rollout.
+
 ---
 
 ## 3. Cryptographic Security & Lifecycle Verification

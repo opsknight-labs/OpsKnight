@@ -1,7 +1,7 @@
 {
   "test_id": "HA-003",
   "test_run_id": "run-ha-003-physical",
-  "candidate_commit": "6983d61e9a514b062615b7fb7c4bc8ebbb355316",
+  "candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -47,5 +47,7 @@
     "plans/runbook-engine/enterprise-physical-certification/screenshots/ha_003_failover_execution_detail.png",
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Agent B offline before dispatch: Secondary agent 938c51ae901c stopped before dispatch -> Primary agent 9c30a68ed4c9 claimed queued execution cmvesgk6c1x92d9pa3jktzn77 from shared-target pool backlog -> 2/2 steps complete (100% Succeeded) -> Workload restored and healthy on port 8095."
+  "notes": "Agent B offline before dispatch: Secondary agent 938c51ae901c stopped before dispatch -> Primary agent 9c30a68ed4c9 claimed queued execution cmvesgk6c1x92d9pa3jktzn77 from shared-target pool backlog -> 2/2 steps complete (100% Succeeded) -> Workload restored and healthy on port 8095.",
+  "release_candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
+  "verified_branch": "feat/runbook-physical-enterprise-certification"
 }

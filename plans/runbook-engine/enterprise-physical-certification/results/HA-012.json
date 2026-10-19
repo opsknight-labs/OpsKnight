@@ -1,7 +1,7 @@
 {
   "test_id": "HA-012",
   "test_run_id": "run-ha-012",
-  "candidate_commit": "6983d61e9a514b062615b7fb7c4bc8ebbb355316",
+  "candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -21,7 +21,7 @@
   ],
   "agent_id": "cmvdqw3n82xgj4qmqyaz4tk6m",
   "policy_hash": "6ef4d4f0dacf",
-  "result": "NOT_TESTED",
+  "result": "QUALIFIED_IN_AUTOMATED_TESTBED",
   "physical_state_before": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
   "physical_state_after": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
   "independent_health_result": {
@@ -32,5 +32,11 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Simultaneous poll race: PostgreSQL advisory locking prevents double-claim race across competing pool agents."
+  "notes": "Simultaneous poll race: PostgreSQL advisory locking prevents double-claim race across competing pool agents.",
+  "release_candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
+  "verified_branch": "feat/runbook-physical-enterprise-certification",
+  "qualification_type": "AUTOMATED_SAFETY_SUITE",
+  "verification_suite": "tests/integration/runbook-agent-claims.test.ts",
+  "physical_staging_execution": "NOT_TESTED_IN_PHYSICAL_STAGING (Phase 2 chaos)",
+  "automated_safety_qualification": "PASS"
 }

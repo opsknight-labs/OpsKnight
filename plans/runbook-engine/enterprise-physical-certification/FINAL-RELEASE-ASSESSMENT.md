@@ -4,7 +4,7 @@
 
 - **Program**: OpsKnight Runbook Engine — Enterprise Physical Certification Program
 - **Evaluated Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit Base**: `cefb70ee1` (rebased onto `origin/main`)
+- **Candidate Commit Base**: `9cb255994` (HEAD of PR #893, rebased onto `origin/main`)
 - **Pull Request**: [PR #893 — Enterprise Runbook Certification](https://github.com/opsknight-labs/OpsKnight/pull/893)
 - **Measured Date**: `2026-10-19`
 - **Verdict**: **PRODUCTION-READY FOR ENTERPRISE OPERATOR-DISPATCHED RUNBOOKS, APPROVAL GATES, AND PRE-DISPATCH HA; ARCHITECTURALLY QUALIFIED FOR UNATTENDED REMEDIATION & MID-WRITE FENCING.**
@@ -15,7 +15,7 @@
 
 | Release Gate                                    | Required Standard                                            | Measured Result                                                                                          |           Evaluation           |
 | ----------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | :----------------------------: |
-| **Gate 1: Agent Fleet Coverage**                | 7/7 platforms physically installed or spec-qualified         | Docker, Compose, Helm, Kustomize, Linux Systemd, Podman, Swarm certified                                 |           **PASSED**           |
+| **Gate 1: Agent Fleet Coverage**                | 7 platforms verified                                         | 6/7 live certified (Docker, Compose, Helm, Systemd, Podman, Swarm); Kustomize server-dry-run & manifest certified | **PASSED (6 LIVE / 1 SPEC)** |
 | **Gate 2: Remediated Operational Executions**   | Physical execution and state recovery proven on staging      | AUTO-001..008 passed; CLOSED-LOOP incident `#cmvero05` restored & resolved (`cmves846q1whpd9paj4x1agj3`) | **PASSED (STAGING OPERATOR CERTIFIED; UNATTENDED QUALIFIED)** |
 | **Gate 3: Shared-Target HA**                    | Genuine execution takeover in multi-agent shared pool        | HA-001, HA-002 (`cmvescqg41wvmd9pahuz028jr`), HA-003 (`cmvesgk6c1x92d9pa3jktzn77`) physically certified; HA-004..012 qualified in safety suites | **PASSED (PRE-DISPATCH STAGING CERTIFIED; MID-WRITE TESTBED QUALIFIED)** |
 | **Gate 4: Safety & Fencing**                    | Zero blind duplicate writes; uncertain mutations quarantined | 300s lease expiry watchdog (`reconciler.ts`); non-idempotent steps quarantine to `UNKNOWN_OUTCOME`; 409 fencing |           **PASSED**           |

@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-008",
   "test_run_id": "run-1792323503218",
-  "candidate_commit": "6983d61e9a514b062615b7fb7c4bc8ebbb355316",
+  "candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -38,5 +38,7 @@
     "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-008_cmvcf0z5k03gj4qmqyxd9v63s.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png"
   ],
-  "notes": "Operator-dispatched physical execution on staging: Kubernetes rollout verification execution verified following incident resolution. (Alert deduplication rule engine verified in test suite)."
+  "notes": "Operator-dispatched physical execution on staging: Kubernetes rollout verification execution verified following incident resolution. (Alert deduplication rule engine verified in test suite).",
+  "release_candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
+  "verified_branch": "feat/runbook-physical-enterprise-certification"
 }
