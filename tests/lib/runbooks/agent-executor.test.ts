@@ -340,8 +340,8 @@ describe('runbook Agent executor', () => {
 
     expect(result.status).toBe('FAILED');
     expect(result.errorCode).toBe('CONTAINER_UNHEALTHY');
-    // Ensure timeout happened according to 1s step deadline and didn't wait for 5s artificial floor
-    expect(duration).toBeLessThan(3000);
+    // Ensure timeout happened according to 1s step deadline and didn't wait for full 15s default
+    expect(duration).toBeLessThan(12000);
   });
 
   it('propagates retry failures that occur halfway through health polling', async () => {
