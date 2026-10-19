@@ -25,7 +25,13 @@ node tests/certification/kubernetes/sdk-kind.mjs
 The wrapper verifies namespace ownership, source labels and each runtime image,
 then starts loopback-only API/database forwards. Signing credentials are read
 from the namespaced Secret into memory and child environments. Both SDK workflows
-use the deployed application and its real workers. The wrapper stops only its own
+use the deployed application and its real workers. External mode additionally
+creates approval-only runbooks through REST and waits for the deployed runbook
+worker to materialize their steps, then verifies approval, rejection, reviewed
+rerun, exact retries and canonical decision events. It never seeds execution or
+step states for this additional journey. This covers native control-plane work;
+Docker and Kubernetes Agent execution require separate certification.
+The wrapper stops only its own
 forwards. Its tests reject unsafe external configuration before any network/DB
 access. The default local SDK mode still builds its own web/general-worker pair.
 

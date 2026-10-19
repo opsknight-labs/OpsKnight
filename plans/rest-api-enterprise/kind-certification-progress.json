@@ -1,6 +1,6 @@
 {
-  "sourceParent": "20f762a10da40d07c17cd17672ad2b302d1e8f18",
-  "updatedAt": "2026-10-19T07:57:17.125566+00:00",
+  "sourceParent": "2d30c0251f4886739a528570651bf975a69b910c",
+  "updatedAt": "2026-10-19T08:18:45.620631+00:00",
   "status": "image_build_pending",
   "context": "kind-opsknight-cluster",
   "namespace": "opsknight-api-886-072b69f",
@@ -31,7 +31,6 @@
     }
   ],
   "next": [
-    "Push configurable build heap and namespace SDK harness",
     "Build exact pushed source with 2 GiB Node heap and 3 GiB container limit/four CPUs",
     "Load and deploy the image into the owned namespace",
     "Run both SDKs and real worker functional paths",
@@ -42,5 +41,20 @@
     "Single-node Kind does not prove physical node or database HA",
     "Kindnet NetworkPolicy enforcement and production TLS are not established by this run",
     "Real Agent approval/rerun, missing API families and mixed-version/combined certification remain open"
-  ]
+  ],
+  "currentAttempt": {
+    "applicationRevision": "2d30c0251f4886739a528570651bf975a69b910c",
+    "status": "image_build_pending",
+    "buildResources": {
+      "nodeHeapMiB": 2048,
+      "containerMemoryGiB": 3,
+      "cpuLimit": 4
+    },
+    "observations": [
+      "Immutable source archive uploaded; Dockerfile builder COPY reached.",
+      "Cluster API requests timed out during shared-VM contention; no application pods deployed.",
+      "Native worker approval/rejection/rerun REST journey added; positive cluster execution still pending.",
+      "External-mode safety tests: first run 9 passed and 2 startup timeouts; unchanged rerun all 11 passed."
+    ]
+  }
 }
