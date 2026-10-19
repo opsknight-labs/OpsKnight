@@ -595,7 +595,20 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Approve and certify supported SLO product contract"
+        "Complete history/evaluation UI parity, performance and combined certification of the supported four-metric contract"
+      ],
+      "implementedOperations": [
+        "getServiceObjectiveCatalog",
+        "listServiceObjectives",
+        "createServiceObjective",
+        "getServiceObjective",
+        "updateServiceObjective",
+        "archiveServiceObjective",
+        "listServiceObjectiveVersions",
+        "listServiceObjectiveSnapshots",
+        "getServiceObjectiveHistory",
+        "evaluateServiceObjective",
+        "getServiceObjectiveEvaluation"
       ]
     },
     {

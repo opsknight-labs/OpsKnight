@@ -1,4 +1,102 @@
 {
+  "getServiceObjectiveCatalog": {
+    "method": "GET",
+    "path": "/service-objectives/catalog",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceObjectives": {
+    "method": "GET",
+    "path": "/service-objectives",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceObjective": {
+    "method": "GET",
+    "path": "/service-objectives/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceObjective": {
+    "method": "PATCH",
+    "path": "/service-objectives/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "archiveServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives/{id}/archive",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listServiceObjectiveVersions": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/versions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceObjectiveSnapshots": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/snapshots",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getServiceObjectiveHistory": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/history",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "evaluateServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives/{id}/evaluate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceObjectiveEvaluation": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/evaluations/{evaluationId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getStatusPagePublication": {
     "method": "GET",
     "path": "/status-pages/{id}/publication",

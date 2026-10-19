@@ -8,25 +8,39 @@ if (!databaseUrl || !new URL(databaseUrl).pathname.slice(1).endsWith('_test')) {
   throw new Error('Live SDK certification requires a dedicated database whose name ends in _test.');
 }
 const port = Number(process.env.API_SDK_TEST_PORT ?? 3159);
-if (!Number.isInteger(port) || port < 1024 || port > 65535)
+if (!Number.isInteger(port) || port < 1024 || port > 65534)
   throw new Error('Invalid API_SDK_TEST_PORT.');
 const secret = randomBytes(32).toString('hex');
 const token = `ok_test_${randomBytes(32).toString('base64url')}`;
 const prisma = new PrismaClient();
+async function stopProcess(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise(resolve => {
+    const timeout = setTimeout(() => child.kill('SIGKILL'), 5000);
+    child.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    child.kill('SIGTERM');
+  });
+}
 let keyId;
+let pythonKeyId;
+let worker;
+const runtimeEnvironment = {
+  ...process.env,
+  NODE_ENV: 'production',
+  PORT: String(port),
+  HOSTNAME: '0.0.0.0',
+  NEXTAUTH_SECRET: randomBytes(48).toString('base64url'),
+  API_KEY_SECRET: secret,
+  ENCRYPTION_KEY: randomBytes(32).toString('hex'),
+  APP_HOST_ALIASES: 'host.docker.internal',
+  NEXTAUTH_URL: `http://127.0.0.1:${port}`,
+  NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${port}`,
+};
 const server = spawn(process.execPath, ['.next/standalone/server.js'], {
-  env: {
-    ...process.env,
-    NODE_ENV: 'production',
-    PORT: String(port),
-    HOSTNAME: '0.0.0.0',
-    NEXTAUTH_SECRET: randomBytes(48).toString('base64url'),
-    API_KEY_SECRET: secret,
-    ENCRYPTION_KEY: randomBytes(32).toString('hex'),
-    APP_HOST_ALIASES: 'host.docker.internal',
-    NEXTAUTH_URL: `http://127.0.0.1:${port}`,
-    NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${port}`,
-  },
+  env: { ...runtimeEnvironment, OPSKNIGHT_PROCESS_ROLE: 'web' },
   stdio: 'ignore',
 });
 try {
@@ -65,6 +79,9 @@ try {
       tokenHash: createHmac('sha256', secret).update(`opsknight:api-key:v2:${token}`).digest('hex'),
       scopes: [
         'admin:manage',
+        'service-objectives:read',
+        'service-objectives:write',
+        'service-objectives:evaluate',
         'status-page-subscribers:read',
         'status-page-subscribers:write',
         'status-pages:read',
@@ -463,6 +480,92 @@ try {
   )
     throw new Error('Subscriber revocation missing.');
   console.log('TypeScript live status-page subscriber administration passed.');
+  worker = spawn(process.execPath, ['.next/standalone/server.js'], {
+    env: {
+      ...runtimeEnvironment,
+      PORT: String(port + 1),
+      OPSKNIGHT_PROCESS_ROLE: 'general-worker',
+    },
+    stdio: 'ignore',
+  });
+  const objectiveCatalog = await client.call('getServiceObjectiveCatalog', {});
+  if (objectiveCatalog.data.metrics.length !== 4) throw new Error('Objective catalog mismatch.');
+  const objectiveRequest = {
+    body: {
+      definition: {
+        serviceId: ruleService.id,
+        name: 'TypeScript response objective',
+        metricType: 'MTTA',
+        target: 30,
+        comparator: 'LESS_THAN_OR_EQUAL',
+        windowType: 'SEVEN_DAYS',
+      },
+      expectedActiveVersionId: null,
+    },
+    headers: { 'Idempotency-Key': randomUUID() },
+  };
+  const objective = await client.call('createServiceObjective', objectiveRequest);
+  if ((await client.call('createServiceObjective', objectiveRequest)).data.id !== objective.data.id)
+    throw new Error('Objective replay duplicated a definition.');
+  const objectiveParams = { id: objective.data.id };
+  await client.call('listServiceObjectives', { query: { serviceId: ruleService.id, limit: 1 } });
+  await client.call('getServiceObjective', { params: objectiveParams });
+  const editedObjective = await client.call('updateServiceObjective', {
+    params: objectiveParams,
+    body: { target: 20 },
+    headers: { 'If-Match': `"${objective.data.revision}"`, 'Idempotency-Key': randomUUID() },
+  });
+  for (const operation of [
+    'listServiceObjectiveVersions',
+    'listServiceObjectiveSnapshots',
+    'getServiceObjectiveHistory',
+  ])
+    await client.call(operation, { params: objectiveParams });
+  const evaluation = await client.call('evaluateServiceObjective', {
+    params: objectiveParams,
+    body: { expectedVersionId: editedObjective.data.versionId },
+    headers: { 'Idempotency-Key': randomUUID() },
+  });
+  let completed = false;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (worker.exitCode !== null) throw new Error('Objective worker exited.');
+    const result = await client.call('getServiceObjectiveEvaluation', {
+      params: { ...objectiveParams, evaluationId: evaluation.data.id },
+    });
+    if (result.data.status === 'COMPLETED') {
+      if (
+        result.data.result?.outcome !== 'EVALUATED' ||
+        result.data.result.evaluation?.definitionVersion !== 2
+      )
+        throw new Error('Worker did not evaluate the immutable requested definition.');
+      completed = true;
+      break;
+    }
+    if (result.data.status === 'FAILED') throw new Error('Objective evaluation failed.');
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  if (!completed) throw new Error('Objective evaluation did not complete.');
+  await client.call('archiveServiceObjective', {
+    params: objectiveParams,
+    body: {},
+    headers: { 'If-Match': `"${editedObjective.data.revision}"`, 'Idempotency-Key': randomUUID() },
+  });
+  console.log('TypeScript objective lifecycle and real general-worker evaluation passed.');
+  // Each SDK is an independent caller with its own normal production rate-limit budget.
+  const pythonToken = `ok_test_${randomBytes(32).toString('base64url')}`;
+  const pythonKey = await prisma.apiKey.create({
+    data: {
+      name: 'Ephemeral Python live SDK certification',
+      userId: user.id,
+      prefix: pythonToken.slice(0, 12),
+      tokenHash: createHmac('sha256', secret)
+        .update(`opsknight:api-key:v2:${pythonToken}`)
+        .digest('hex'),
+      scopes: key.scopes,
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+    },
+  });
+  pythonKeyId = pythonKey.id;
   const python = spawnSync(
     process.env.DOCKER_BIN ?? 'docker',
     [
@@ -481,7 +584,7 @@ try {
     {
       input: JSON.stringify({
         baseUrl: `http://host.docker.internal:${port}/api/v2`,
-        token,
+        token: pythonToken,
         typescriptRunbookId: created.data.id,
         automationServiceId: automationService.id,
         runbookRuleServiceId: ruleService.id,
@@ -499,10 +602,12 @@ try {
   console.log('Both SDKs passed against the built OpsKnight application and PostgreSQL.');
 } finally {
   try {
-    if (keyId)
-      await prisma.apiKey.update({ where: { id: keyId }, data: { revokedAt: new Date() } });
+    await prisma.apiKey.updateMany({
+      where: { id: { in: [keyId, pythonKeyId].filter(Boolean) } },
+      data: { revokedAt: new Date() },
+    });
   } finally {
-    server.kill('SIGTERM');
+    await Promise.all([stopProcess(worker), stopProcess(server)]);
     await prisma.$disconnect();
   }
 }

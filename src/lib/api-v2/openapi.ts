@@ -44,6 +44,7 @@ function buildBaseSpec(): Record<string, unknown> {
         name: 'Status Pages',
         description: 'Status pages, components, and public incident announcements',
       },
+      { name: 'Service Objectives', description: 'Versioned measurement contracts, authorized history and bounded asynchronous evaluations' },
       { name: 'Runbooks', description: 'Automated remediation workflows and execution tracking' },
       {
         name: 'Service Accounts',

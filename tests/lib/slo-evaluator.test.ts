@@ -52,3 +52,14 @@ describe('service objective evaluator semantics', () => {
     ).toBe(true);
   });
 });
+
+it('compares exact elapsed-time ratios before UI rounding or unsafe integer conversion', async () => {
+  const { objectiveElapsedIsCompliant: compare } = await import('@/lib/slo/evaluator');
+  expect(compare(BigInt(1800001), BigInt(1), 30, 'LESS_THAN_OR_EQUAL')).toBe(false);
+  expect(compare(BigInt(1800000), BigInt(1), 30, 'LESS_THAN_OR_EQUAL')).toBe(true);
+  expect(compare(BigInt(1), BigInt(3), 0.000005555555555555555, 'LESS_THAN_OR_EQUAL')).toBe(false);
+  expect(compare(BigInt(0), BigInt(0), 30, 'LESS_THAN_OR_EQUAL')).toBeNull();
+  const count = BigInt(Number.MAX_SAFE_INTEGER) + BigInt(1);
+  expect(compare(count * BigInt(60000) + BigInt(1), count, 1, 'LESS_THAN_OR_EQUAL')).toBe(false);
+  expect(compare(BigInt(0), BigInt(1), 5e-324, 'LESS_THAN_OR_EQUAL')).toBe(true);
+});

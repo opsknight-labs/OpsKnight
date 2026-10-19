@@ -24,10 +24,7 @@ const guardedPages = [
   ['src/app/(mobile)/m/policies/[id]/page.tsx', 'assertCanViewPolicy(id)'],
   ['src/app/(mobile)/m/teams/[id]/page.tsx', 'assertCanViewTeam(id)'],
   ['src/app/(app)/services/[id]/webhooks/new/page.tsx', 'assertCanModifyService(id)'],
-  [
-    'src/app/(app)/services/[id]/webhooks/[webhookId]/edit/page.tsx',
-    'assertCanModifyService(id)',
-  ],
+  ['src/app/(app)/services/[id]/webhooks/[webhookId]/edit/page.tsx', 'assertCanModifyService(id)'],
 ] as const;
 
 describe('RBAC page guard contract', () => {
@@ -72,8 +69,6 @@ describe('RBAC page guard contract', () => {
       'src/app/(app)/settings/api-keys/page.tsx',
       'src/app/(app)/settings/security/page.tsx',
       'src/app/(mobile)/m/more/page.tsx',
-      // This route redirects unconditionally before its retained, unreachable implementation.
-      'src/app/(app)/settings/service-objectives/page.tsx',
     ]);
     const authorizationDecision =
       /assertCan|assertCapability|getCurrentAuthorizationActor|ReadWhere\(|getViewable|assertAdmin|assertResponder|assertAuditor|permissions\.(capabilities\.includes|isAdmin|isResponderOrAbove|isAuditor)|user\.role\s*[!=]==?/;

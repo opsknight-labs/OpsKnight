@@ -27,13 +27,13 @@ describe('truthful capability inventory', () => {
       'runbook-agents',
       'runbook-secrets',
       'report-exports',
-      'slo-management',
       'operational-settings',
     ]) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
         'not-supported'
       );
     }
+    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'slo-management')).toMatchObject({status:'partial',operationIds:expect.arrayContaining(['createServiceObjective','evaluateServiceObjective','getServiceObjectiveHistory'])});
     expect(
       API_CAPABILITY_CATALOG.find(capability => capability.id === 'service-automation')
     ).toMatchObject({

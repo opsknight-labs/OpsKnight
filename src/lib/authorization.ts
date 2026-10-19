@@ -103,6 +103,9 @@ export const API_SCOPES = {
   RUNBOOKS_PUBLISH: 'runbooks:publish',
   AUDIT_READ: 'audit:read',
   REPORTS_READ: 'reports:read',
+  SERVICE_OBJECTIVES_READ: 'service-objectives:read',
+  SERVICE_OBJECTIVES_WRITE: 'service-objectives:write',
+  SERVICE_OBJECTIVES_EVALUATE: 'service-objectives:evaluate',
   POSTMORTEMS_READ: 'postmortems:read',
   POSTMORTEMS_WRITE: 'postmortems:write',
   SERVICE_ACCOUNTS_READ: 'service-accounts:read',
@@ -127,6 +130,9 @@ export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
   API_SCOPES.RUNBOOKS_WRITE,
   API_SCOPES.RUNBOOKS_PUBLISH,
   API_SCOPES.RUNBOOKS_EXECUTE,
+  API_SCOPES.SERVICE_OBJECTIVES_READ,
+  API_SCOPES.SERVICE_OBJECTIVES_WRITE,
+  API_SCOPES.SERVICE_OBJECTIVES_EVALUATE,
 ]);
 
 export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];

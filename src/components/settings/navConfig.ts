@@ -92,6 +92,14 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         ],
       },
       {
+        id: 'service-objectives',
+        label: 'Service Objectives',
+        description: 'Versioned uptime and response-time targets',
+        href: '/settings/service-objectives',
+        icon: 'activity',
+        keywords: ['slo', 'objectives', 'uptime', 'availability', 'mtta', 'mttr'],
+      },
+      {
         id: 'custom-fields',
         label: 'Custom Fields',
         description: 'Define custom incident metadata, dropdown attributes, and validation rules',

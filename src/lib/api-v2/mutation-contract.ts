@@ -51,6 +51,32 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/service-objectives': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Explicit expectedActiveVersionId body fence (null for an empty slot). Slot lock, immutable definition, canonical audit and replay commit atomically; a mismatched active version returns 412.',
+  },
+  'PATCH /api/v2/service-objectives/[id]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Concrete revision fences immutable version replacement. Definition retirement/new version, canonical audit and replay commit together.',
+  },
+  'POST /api/v2/service-objectives/[id]/archive': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Concrete revision fences retirement; archived state changes the strong ETag. Immutable history and snapshots remain readable. Canonical audit and replay commit with retirement.',
+  },
+  'POST /api/v2/service-objectives/[id]/evaluate': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Body identifies the immutable version to evaluate. Quota admission, durable job, request audit and replay commit together. The worker reauthorizes and commits its recorded outcome and audit together; inspect the job for eventual measurement availability.',
+  },
   'POST /api/v2/status-pages/[id]/publication/retry': {
     idempotency: 'required',
     concurrency: 'etag',

@@ -1747,3 +1747,79 @@ test('REST service rules share UI readiness, automatic activation and paused con
     await prisma.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
   }
 });
+
+test('service objectives retain immutable versions through UI create edit and archive', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto('/settings/service-objectives');
+  await expect(
+    page.getByRole('heading', { name: 'Service objectives', exact: true })
+  ).toBeVisible();
+  const name = `Response objective ${crypto.randomUUID()}`;
+  const createSection = page
+    .locator('details')
+    .filter({ has: page.locator('summary', { hasText: /^Create objective$/ }) });
+  await createSection.locator('summary').click();
+  await createSection.getByLabel('Measurement', { exact: true }).selectOption('MTTA');
+  await createSection.getByLabel('Name', { exact: true }).fill(name);
+  await createSection
+    .getByLabel('Target (percent for uptime, minutes for MTTA/MTTR)', { exact: true })
+    .fill('20');
+  await createSection.getByLabel('Comparison', { exact: true }).selectOption('LESS_THAN_OR_EQUAL');
+  await createSection.getByRole('button', { name: 'Create objective', exact: true }).click();
+  const article = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name, exact: true }) });
+  await expect(article).toBeVisible();
+  await article.getByText('Edit objective', { exact: true }).click();
+  await article
+    .getByLabel('Target (percent for uptime, minutes for MTTA/MTTR)', { exact: true })
+    .fill('15');
+  await article.getByRole('button', { name: 'Save new version', exact: true }).click();
+  await expect(article.getByText(/Version 2/)).toBeVisible();
+  const versions = await prisma.serviceObjective.findMany({
+    where: { name },
+    orderBy: { version: 'asc' },
+  });
+  expect(versions.map(version => version.target)).toEqual([20, 15]);
+  expect(versions[0].activeTo).not.toBeNull();
+  expect(versions[1].activeTo).toBeNull();
+  await article
+    .locator('summary')
+    .filter({ hasText: /^Archive objective$/ })
+    .click();
+  await article.getByRole('button', { name: 'Archive objective', exact: true }).click();
+  await expect(article).not.toBeVisible();
+  const retained = await prisma.serviceObjective.findMany({ where: { name } });
+  expect(retained).toHaveLength(2);
+  expect(retained.every(version => version.activeTo !== null)).toBe(true);
+  const legacy = await prisma.serviceObjective.create({
+    data: {
+      lineageId: `so_${crypto.randomUUID()}`,
+      serviceId,
+      name: `Legacy latency ${crypto.randomUUID()}`,
+      metricType: 'LATENCY_P99',
+      target: 250,
+      comparator: 'LESS_THAN_OR_EQUAL',
+      windowType: 'SEVEN_DAYS',
+    },
+  });
+  await page.reload();
+  const legacyArticle = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name: legacy.name, exact: true }) });
+  await expect(legacyArticle).toBeVisible();
+  await expect(legacyArticle.getByText('Edit objective', { exact: true })).toHaveCount(0);
+  await expect(legacyArticle.getByText(/legacy target; evaluation unavailable/)).toBeVisible();
+  await legacyArticle
+    .locator('summary')
+    .filter({ hasText: /^Archive objective$/ })
+    .click();
+  await legacyArticle.getByRole('button', { name: 'Archive objective', exact: true }).click();
+  await expect(legacyArticle).not.toBeVisible();
+  expect(
+    (await prisma.serviceObjective.findUniqueOrThrow({ where: { id: legacy.id } })).activeTo
+  ).not.toBeNull();
+  await noOverflow(page);
+});
