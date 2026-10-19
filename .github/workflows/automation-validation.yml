@@ -78,7 +78,7 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Install browser
-        run: npx playwright install --with-deps chromium webkit
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Desktop and mobile authoring
         env:
           PLAYWRIGHT_PRODUCTION_SERVER: 'true'

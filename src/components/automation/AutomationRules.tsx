@@ -152,7 +152,7 @@ const RuleRow = memo(
           className="flex min-h-12 w-full items-start gap-3 rounded-lg p-3 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onToggle(rule.id)}
         >
-          <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-muted px-1.5 text-xs font-semibold tabular-nums text-muted-foreground">
+          <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-muted px-1.5 text-xs font-semibold tabular-nums text-foreground">
             {position}
           </span>
           <span className="min-w-0 flex-1">

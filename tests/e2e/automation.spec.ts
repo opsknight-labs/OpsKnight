@@ -9,7 +9,8 @@ import { checksum } from '@/lib/automation/cache';
 import { randomUUID } from 'node:crypto';
 const db = new PrismaClient();
 // Desktop browsers (Chromium, Firefox, WebKit) use desktop routes; device emulations use /m.
-const isDesktop = (info: { project: { use: { isMobile?: boolean } } }) => !info.project.use.isMobile;
+const isDesktop = (info: { project: { use: { isMobile?: boolean } } }) =>
+  !info.project.use.isMobile;
 let email: string;
 const password = 'Automation-Local-Test-938!';
 let serviceId: string;
@@ -176,7 +177,7 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
     await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
     await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
     await expect(
-      page.getByText('production', { exact: true }).filter({ visible: true })
+      page.getByText('production', { exact: true }).filter({ visible: true }).first()
     ).toBeVisible();
     await expect(
       page.getByText('Personal paging intentionally skipped', { exact: false })
@@ -322,6 +323,14 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
     ],
     rules: [
       {
+        id: 'production-priority',
+        name: 'Production alerts are P1',
+        phase: 'ENRICH' as const,
+        enabled: true,
+        conditions: [{ fieldKey: 'environment', operator: 'EQ' as const, value: 'production' }],
+        actions: [{ type: 'SET_PRIORITY' as const, value: 'P1' as const }],
+      },
+      {
         id: 'production',
         name: 'Production critical alerts',
         phase: 'ROUTE' as const,
@@ -422,7 +431,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
     `${isDesktop(testInfo) ? '' : '/m'}/incidents/${missing.data.result.incident.id}`
   );
   await expect(
-    page.getByText('Not provided', { exact: true }).filter({ visible: true })
+    page.getByText('Not provided', { exact: true }).filter({ visible: true }).first()
   ).toBeVisible();
   await expect(
     page
@@ -454,10 +463,13 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await expect(page.getByRole('heading', { name: 'Policy Dependencies · Archived' })).toBeVisible();
   await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
   await expect(
-    page.getByText('production', { exact: true }).filter({ visible: true })
+    page.getByText('production', { exact: true }).filter({ visible: true }).first()
   ).toBeVisible();
   await expect(
-    page.getByText('Responder route:', { exact: false }).filter({ visible: true })
+    page
+      .locator('dt', { hasText: /^Responder route$/ })
+      .filter({ visible: true })
+      .locator('xpath=following-sibling::dd')
   ).toContainText(policy.name);
   if (!isDesktop(testInfo)) {
     await page

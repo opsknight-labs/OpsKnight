@@ -29,7 +29,7 @@ export const SectionNav = memo(function SectionNav({
                 'inline-flex min-h-10 shrink-0 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background sm:flex-none',
                 selected
                   ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                  : 'text-foreground/80 hover:bg-background/60 hover:text-foreground'
               )}
             >
               {label}
