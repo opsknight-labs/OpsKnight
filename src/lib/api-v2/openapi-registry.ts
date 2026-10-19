@@ -29,6 +29,48 @@ const op = (
 ): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
+  op('get', '/runbooks/agents', 'listRunbookAgents', 'runbook-agents:read', 'list', 'RunbookAgent'),
+  op(
+    'get',
+    '/runbooks/agents/{id}',
+    'getRunbookAgent',
+    'runbook-agents:read',
+    'item',
+    'RunbookAgent'
+  ),
+  op(
+    'get',
+    '/runbooks/agents/{id}/policy-status',
+    'getRunbookAgentPolicyStatus',
+    'runbook-agents:read',
+    'item',
+    'RunbookAgentPolicyStatus'
+  ),
+  op(
+    'post',
+    '/runbooks/agent-enrollments',
+    'createRunbookAgentEnrollment',
+    'runbook-agents:enroll',
+    'item',
+    'RunbookAgentEnrollment'
+  ),
+  op(
+    'get',
+    '/runbooks/agent-enrollments/{id}',
+    'getRunbookAgentEnrollment',
+    'runbook-agents:read',
+    'item',
+    'RunbookAgentEnrollmentStatus'
+  ),
+  op(
+    'post',
+    '/runbooks/agents/{id}/revoke',
+    'revokeRunbookAgent',
+    'runbook-agents:revoke',
+    'item',
+    'RunbookAgentRevocation'
+  ),
+
   op(
     'get',
     '/runbooks/executions/{id}/steps',

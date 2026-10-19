@@ -260,10 +260,17 @@ const decisions: readonly ApiCapability[] = [
     id: 'runbook-agents',
     area: 'Runbooks',
     title: 'Agents, pools and enrollment',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Agent administration needs dedicated scopes, one-time enrollment handling, revocation and target-isolation certification before public exposure.',
-    operationIds: [],
+      'Administrator-only fleet reads, policy status, one-time enrollment and terminal revocation use explicit scopes and canonical audits. Enrollment replay stores metadata only. Pools, settings and full target-isolation certification remain in progress.',
+    operationIds: [
+      'listRunbookAgents',
+      'getRunbookAgent',
+      'getRunbookAgentPolicyStatus',
+      'createRunbookAgentEnrollment',
+      'getRunbookAgentEnrollment',
+      'revokeRunbookAgent',
+    ],
   },
   {
     id: 'runbook-secrets',

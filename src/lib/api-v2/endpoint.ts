@@ -63,6 +63,10 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
   replayAuthGuard?: (
     ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders'>
   ) => Promise<void>;
+  /** One-time disclosure routes persist safe replay metadata, never their initial secret. */
+  persistIdempotencyResult?: (
+    result: V2RouteHandlerResult<TResult>
+  ) => V2RouteHandlerResult<TResult>;
   scopedFilter?: boolean;
   handler: (ctx: V2RouteContext<TParams, TQuery, TBody>) => Promise<V2RouteHandlerResult<TResult>>;
 } & (
@@ -214,7 +218,8 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
                     tx,
                   });
                 }
-              : undefined
+              : undefined,
+            config.persistIdempotencyResult
           );
 
           const result = execution.value;

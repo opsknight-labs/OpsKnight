@@ -2,6 +2,11 @@ import 'server-only';
 
 import crypto from 'crypto';
 import prisma from '@/lib/prisma';
+import {
+  runRunbookCommand,
+  logRunbookCommandAudit,
+  type RunbookCommandClient,
+} from './command-context';
 import { getExecutionSigningKey } from './execution-signing';
 import { RunbookAgentNotFoundError, RunbookAgentRevokedError } from './errors';
 
@@ -51,25 +56,42 @@ export function agentSignaturePayload(input: {
   ].join('\n');
 }
 
-export async function createAgentEnrollment(input: {
-  name: string;
-  hostname?: string;
-  actorId: string;
-}) {
+export async function createAgentEnrollment(
+  input: {
+    name: string;
+    hostname?: string;
+    actorId: string;
+  },
+  client?: RunbookCommandClient,
+  apiClientId?: string
+) {
   const token = crypto.randomBytes(32).toString('base64url');
   const { publicKey: executionPublicKey } = await getExecutionSigningKey();
   const enrollmentExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  const agent = await prisma.runbookAgent.create({
-    data: {
-      name: input.name,
-      hostname: input.hostname,
-      status: 'ENROLLING',
-      enrollmentTokenHash: sha256(token),
-      enrollmentExpiresAt,
-      createdById: input.actorId,
-    },
+  return runRunbookCommand(client, async tx => {
+    const agent = await tx.runbookAgent.create({
+      data: {
+        name: input.name,
+        hostname: input.hostname,
+        status: 'ENROLLING',
+        enrollmentTokenHash: sha256(token),
+        enrollmentExpiresAt,
+        createdById: input.actorId,
+      },
+    });
+    await logRunbookCommandAudit(
+      apiClientId ? { id: input.actorId, apiKeyId: apiClientId } : input.actorId,
+      {
+        action: 'runbook.agent.enrollment.created',
+        entityType: 'RUNBOOK_AGENT',
+        entityId: agent.id,
+        actorId: input.actorId,
+        details: { name: agent.name, expiresAt: enrollmentExpiresAt.toISOString() },
+      },
+      tx
+    );
+    return { agent, token, enrollmentExpiresAt, executionPublicKey };
   });
-  return { agent, token, enrollmentExpiresAt, executionPublicKey };
 }
 
 export async function consumeEnrollmentToken(input: {

@@ -19,6 +19,11 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type RunbookAgent = { "id": string; "name": string; "hostname": string | null; "status": string; "version": string | null; "platform": string | null; "capabilities": Array<string>; "policyHash": string | null; "lastHeartbeatAt": string | null; "spoolDepth": number; "deadLetterDepth": number; "activeAttemptCount": number; "hasDiagnosticError": boolean; "enrolledAt": string | null; "revokedAt": string | null; "createdAt": string; "updatedAt": string };
+export type RunbookAgentPolicyStatus = { "agentId": string; "status": string; "capabilities": Array<string>; "policyHash": string | null; "lastHeartbeatAt": string | null; "hasDiagnosticError": boolean };
+export type RunbookAgentRevocation = { "id": string; "status": "REVOKED"; "revokedAt": string | null };
+export type RunbookAgentEnrollment = { "id": string; "status": string; "token": string | null; "executionPublicKey": string; "expiresAt": string };
+export type RunbookAgentEnrollmentStatus = { "id": string; "status": string; "enrollmentState": "PENDING" | "EXPIRED" | "CONSUMED" | "REVOKED" | "UNKNOWN"; "expiresAt": string | null; "enrolledAt": string | null; "revokedAt": string | null };
 export type RunbookIntervention = { "executionId": string; "stepId": string; "status": "APPROVED" | "CANCEL_REQUESTED" };
 export type RunbookRerun = { "executionId": string; "sourceExecutionId": string; "status": string };
 export type RunbookExecutionStepSummary = { "id": string; "stepKey": string; "sequence": number; "name": string; "type": string; "riskClass": string; "status": string; "requiresApproval": boolean; "approvedAt": string | null; "attemptCount": number; "startedAt": string | null; "completedAt": string | null; "createdAt": string; "pendingApproval": null | { "planDigest": string; "timeoutSeconds": number; "plan": Array<Array<string>> } };
@@ -95,6 +100,12 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listRunbookAgents: { "query"?: { "limit"?: number; "cursor"?: string } };
+  getRunbookAgent: { "params": { "id": string } };
+  getRunbookAgentPolicyStatus: { "params": { "id": string } };
+  createRunbookAgentEnrollment: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "hostname"?: string } };
+  getRunbookAgentEnrollment: { "params": { "id": string } };
+  revokeRunbookAgent: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": Record<string, never> };
   listRunbookExecutionSteps: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listRunbookExecutionEvidence: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listRunbookExecutionEvents: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
@@ -255,6 +266,12 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listRunbookAgents: { "data": Array<RunbookAgent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookAgent: { "data": RunbookAgent; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookAgentPolicyStatus: { "data": RunbookAgentPolicyStatus; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createRunbookAgentEnrollment: { "data": RunbookAgentEnrollment; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookAgentEnrollment: { "data": RunbookAgentEnrollmentStatus; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  revokeRunbookAgent: { "data": RunbookAgentRevocation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookExecutionSteps: { "data": Array<RunbookExecutionStepSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookExecutionEvidence: { "data": Array<RunbookExecutionEvidence>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookExecutionEvents: { "data": Array<RunbookExecutionEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -415,6 +432,58 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listRunbookAgents": {
+    "method": "GET",
+    "path": "/runbooks/agents",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookAgent": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookAgentPolicyStatus": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}/policy-status",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookAgentEnrollment": {
+    "method": "POST",
+    "path": "/runbooks/agent-enrollments",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookAgentEnrollment": {
+    "method": "GET",
+    "path": "/runbooks/agent-enrollments/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "revokeRunbookAgent": {
+    "method": "POST",
+    "path": "/runbooks/agents/{id}/revoke",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
   "listRunbookExecutionSteps": {
     "method": "GET",
     "path": "/runbooks/executions/{id}/steps",

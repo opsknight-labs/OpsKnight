@@ -1,0 +1,52 @@
+{
+  "sourceParent": "133f1ee66997df4b429f20ad224ed58aef4041d7",
+  "updatedAt": "2026-10-19T09:55:46.638049+00:00",
+  "status": "local_checks_passed_runtime_certification_pending",
+  "operations": [
+    "listRunbookAgents",
+    "getRunbookAgent",
+    "getRunbookAgentPolicyStatus",
+    "createRunbookAgentEnrollment",
+    "getRunbookAgentEnrollment",
+    "revokeRunbookAgent"
+  ],
+  "checks": {
+    "actualRoutePostgres": {
+      "passed": 19,
+      "file": "tests/integration/api-v2-runbook-fleet.test.ts"
+    },
+    "selectedExistingClaimPostgres": {
+      "passed": 8,
+      "notSelected": 57,
+      "file": "tests/integration/runbook-execution-safety.test.ts",
+      "filter": "claim|revok|enroll"
+    },
+    "focusedUnitAndContracts": {
+      "passed": 293,
+      "files": 6,
+      "selection": "docs sync, OpenAPI, mutation contract, workflow inventory, SDK and scope issuance"
+    },
+    "claimAndIdempotencyRegressions": {
+      "passed": 23,
+      "files": 4,
+      "selection": "claim disconnect, Agent routes, state machine and persistent idempotency"
+    },
+    "typecheck": "passed",
+    "migration": "Applied successfully to isolated api_completion_test",
+    "finalLintAndDrift": "passed with zero lint warnings",
+    "typescriptSdkBuild": "passed",
+    "pythonSdkUnitTests": {
+      "passed": 9
+    }
+  },
+  "failedAttempts": [
+    "Initial PostgreSQL worker did not start before timeout; no tests ran.",
+    "First route run hit database reset hook timeout and overlapping fixture seeding; no timeouts or production limits were relaxed.",
+    "Audit expectations were corrected to assert the canonical details.source and details.metadata.apiClientId envelope."
+  ],
+  "limits": [
+    "No runtime certification for these new fleet routes yet",
+    "Pools, secrets and all other pending API families remain unfinished",
+    "Kind application image 133f1ee66 predates the fleet changes and cannot certify them"
+  ]
+}

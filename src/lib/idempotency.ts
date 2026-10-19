@@ -223,6 +223,8 @@ export async function executeIdempotentOperation<T>(
     context?: IdempotencyContext;
     payload: unknown;
     execute: () => Promise<T>;
+    /** Persist only a safe projection for one-time disclosures; first delivery stays in memory. */
+    persistResult?: (value: T) => T;
     onReplay?: (tx: Prisma.TransactionClient) => Promise<void>;
   }
 ): Promise<IdempotentExecution<T>> {
@@ -252,7 +254,7 @@ export async function executeIdempotentOperation<T>(
         principalId: context.principalId,
         requestId: context.key,
         fingerprint,
-        result: encodeJson(value),
+        result: encodeJson(input.persistResult ? input.persistResult(value) : value),
       },
     },
   });

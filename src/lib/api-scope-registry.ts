@@ -59,6 +59,28 @@ function def(
 const S = API_SCOPES;
 
 export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
+  [S.RUNBOOK_AGENTS_READ]: def(
+    S.RUNBOOK_AGENTS_READ,
+    'Agent fleet read',
+    'Runbooks',
+    'Read safe Agent fleet health and enrollment status without credentials.',
+    { issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_AGENTS_ENROLL]: def(
+    S.RUNBOOK_AGENTS_ENROLL,
+    'Agent enrollment',
+    'Runbooks',
+    'Issue one-time Agent enrollment material. Replays return metadata only.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_AGENTS_REVOKE]: def(
+    S.RUNBOOK_AGENTS_REVOKE,
+    'Agent revocation',
+    'Runbooks',
+    'Revoke Agent identity and future assignments.',
+    { write: true, issuableBy: ADMINS }
+  ),
+
   [S.STATUS_PAGE_SUBSCRIBERS_READ]: def(
     S.STATUS_PAGE_SUBSCRIBERS_READ,
     'Status page subscribers read',

@@ -1,3 +1,4 @@
+import { RUNBOOK_FLEET_SCHEMAS, RUNBOOK_FLEET_OPERATIONS } from './runbook-fleet-openapi';
 import {
   RUNBOOK_INTERVENTION_SCHEMAS,
   RUNBOOK_INTERVENTION_OPERATIONS,
@@ -172,6 +173,7 @@ const statusPageSectionRepresentations = Object.fromEntries(
 );
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  ...RUNBOOK_FLEET_SCHEMAS,
   ...RUNBOOK_INTERVENTION_SCHEMAS,
   ...SERVICE_OBJECTIVE_SCHEMAS,
   StatusPagePublicationState: object(
@@ -1118,6 +1120,7 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  ...RUNBOOK_FLEET_OPERATIONS,
   ...RUNBOOK_INTERVENTION_OPERATIONS,
   ...SERVICE_OBJECTIVE_OPERATIONS,
   {

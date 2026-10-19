@@ -171,6 +171,11 @@ export async function claimAgentAttempt(
           }
           await tx.$executeRaw`SET LOCAL lock_timeout = '1000ms'`;
           const now = new Date();
+          // Serialize assignment against identity revocation. A claim that won this
+          // shared row lock commits before revocation; a later claim observes REVOKED.
+          // KEY SHARE is insufficient because status updates do not change a key.
+          await tx.$queryRaw`SELECT id FROM "RunbookAgent"
+            WHERE id = ${agentId} AND status IN ('ONLINE', 'DEGRADED') FOR SHARE`;
           const agent = await tx.runbookAgent.findFirst({
             where: { id: agentId, status: { in: ['ONLINE', 'DEGRADED'] } },
             select: { id: true, capabilities: true },
