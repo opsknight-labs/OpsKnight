@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import prisma from '@/lib/prisma';
 import { DEFAULT_STEP_TIMEOUT_SECONDS, isSafeToRetryAfterUnknown } from './types';
 import { retryDelayMs } from './safety';
+import { finalizeVerificationEvidence } from './verification-evidence';
+import { recordRecoveryVerification } from './recovery';
 
 export async function reconcileRunbooks(limit = 100) {
   const now = new Date();
@@ -72,6 +74,8 @@ export async function reconcileRunbooks(limit = 100) {
           },
         });
       }
+      await finalizeVerificationEvidence(tx, executionId);
+      await recordRecoveryVerification(tx, executionId);
     });
   }
   const expired = await prisma.runbookStepAttempt.findMany({

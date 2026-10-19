@@ -19,11 +19,27 @@ import {
   resolveInputTemplates,
   validateResolvedStepConfig,
 } from './definition';
-import { matchesCondition, validateAndMatchTrigger } from './matcher';
+import { evaluateTrigger, matchesCondition } from './matcher';
+import { automationContextFields, loadRunbookIncidentContext } from './incident-context';
+import {
+  approvedBindingTargets,
+  resolveBindingAutomationPlan,
+  type InputProvenance,
+  type TargetProvenance,
+} from './automation-binding';
+import {
+  readIncidentResponseContext,
+  type IncidentResponseContext,
+} from '@/lib/automation/response-context';
 import { redactRunbookDisplayName } from './display-name';
 import { finalizeVerificationEvidence } from './verification-evidence';
+import { processVerifiedResolution, recordRecoveryVerification } from './recovery';
 import { workflowConditionSchema } from './conditions';
-import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
+import {
+  applyRunbookInputDefaults,
+  bindingAuthorizesUnattendedWrites,
+  validateBindingInputValues,
+} from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
 import {
   DEFAULT_EXECUTION_TIMEOUT_SECONDS,
@@ -53,11 +69,13 @@ import { lockRunbookForShare } from './locking';
 const jobPayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ADVANCE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('RECONCILE_EXECUTION'), executionId: z.string().cuid() }).strict(),
+  z.object({ kind: z.literal('VERIFIED_RESOLUTION'), executionId: z.string().cuid() }).strict(),
   z
     .object({
       kind: z.literal('EVALUATE_TRIGGER'),
       incidentId: z.string().cuid(),
       sourceEventId: z.string().min(1).max(200),
+      source: z.string().max(40).optional(),
     })
     .strict(),
 ]);
@@ -110,6 +128,7 @@ export interface RunbookExecutionRequest {
   sourceEventId?: string;
   expectedPlanDigest?: string;
   previewAuthorizationToken?: string;
+  evaluationSource?: 'MONITORING' | 'MANUAL';
 }
 
 /** Responder entry point. Absence of an actor never authorizes an automatic execution. */
@@ -135,6 +154,7 @@ const automaticExecutionSchema = z
     triggerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     sourceEventId: z.string().min(1).max(200),
     inputValues: z.record(z.string(), z.unknown()).optional(),
+    evaluationSource: z.enum(['MONITORING', 'MANUAL']).optional(),
   })
   .strict();
 
@@ -201,12 +221,25 @@ async function prepareRunbookExecution(
     if (input.triggerId && !input.bindingId) {
       throw new RunbookDefinitionError('A trigger execution requires its service binding.');
     }
+    // Verified automation context is read once per execution and reused for targeting/snapshot.
+    let verifiedResponseContext: IncidentResponseContext | null | undefined;
+    const readVerifiedResponseContext = async () => {
+      if (verifiedResponseContext === undefined) {
+        const read = input.incidentId
+          ? await readIncidentResponseContext(tx, input.incidentId)
+          : null;
+        verifiedResponseContext = read?.status === 'AVAILABLE' ? read.context : null;
+      }
+      return verifiedResponseContext;
+    };
+    let matchReason: string | null = null;
     if (mode === 'AUTOMATIC') {
       if (
         !binding ||
         binding.mode !== 'AUTOMATIC' ||
         binding.versionStrategy !== 'PINNED' ||
-        binding.runbookVersionId !== input.runbookVersionId
+        binding.runbookVersionId !== input.runbookVersionId ||
+        (input.evaluationSource === 'MONITORING' && !binding.runOnMonitoringIncidents)
       ) {
         throw new RunbookDefinitionError(
           'AUTOMATION_NOT_AUTHORIZED: An enabled AUTOMATIC binding pinned to this version is required.'
@@ -221,35 +254,21 @@ async function prepareRunbookExecution(
         },
         include: { conditions: { orderBy: { sequence: 'asc' } } },
       });
-      const incident = await tx.incident.findFirst({
-        where: { id: input.incidentId, serviceId: binding.serviceId },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          status: true,
-          urgency: true,
-          priority: true,
-          tags: { select: { tag: { select: { name: true } } } },
-          service: { select: { id: true, name: true, teamId: true } },
-        },
-      });
-      if (
-        !trigger ||
-        !incident ||
-        !validateAndMatchTrigger(
-          {
-            incident: { ...incident, tags: incident.tags.map(item => item.tag.name) },
-            service: incident.service,
-          },
-          trigger.conditions,
-          trigger.conditionLogic
-        )
-      ) {
+      // Same loader and fail-closed matcher as trigger evaluation, so both see identical context.
+      const loaded = input.incidentId
+        ? await loadRunbookIncidentContext(tx, input.incidentId)
+        : null;
+      if (loaded) verifiedResponseContext = loaded.responseContext;
+      const evaluation =
+        trigger && loaded && loaded.trigger.service.id === binding.serviceId
+          ? evaluateTrigger(loaded.trigger, trigger.conditions, trigger.conditionLogic)
+          : null;
+      if (evaluation?.status !== 'MATCHED') {
         throw new RunbookDefinitionError(
           'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
         );
       }
+      matchReason = evaluation.reason;
     }
     const suggestion = input.suggestionId
       ? await tx.runbookSuggestion.findFirst({
@@ -319,12 +338,49 @@ async function prepareRunbookExecution(
     if (planSnapshot && planSnapshot.definitionChecksum !== version.checksum)
       throw new RunbookDefinitionError('Suggested definition checksum changed.');
     const steps = executionSteps(definition);
-    let resolvedTargetAgentId = planSnapshot
-      ? planSnapshot.agentId
-      : (binding?.defaultAgentId ?? null);
-    const resolvedTargetAgentPoolId = planSnapshot
-      ? planSnapshot.agentPoolId
-      : (binding?.defaultAgentPoolId ?? null);
+    // AUTOMATIC executions resolve context-mapped inputs and approved targets from the
+    // verified context inside this transaction; suggestions reuse their frozen plan.
+    const automationPlan =
+      mode === 'AUTOMATIC' && binding
+        ? resolveBindingAutomationPlan({
+            definitions: version.inputs,
+            binding,
+            context: automationContextFields(await readVerifiedResponseContext()),
+          })
+        : null;
+    if (automationPlan && !automationPlan.ok)
+      throw new RunbookDefinitionError(automationPlan.reason);
+    const automaticPlan = automationPlan?.ok ? automationPlan : null;
+    let resolvedTargetAgentId = automaticPlan
+      ? automaticPlan.agentId
+      : planSnapshot
+        ? planSnapshot.agentId
+        : (binding?.defaultAgentId ?? null);
+    const resolvedTargetAgentPoolId = automaticPlan
+      ? automaticPlan.agentPoolId
+      : planSnapshot
+        ? planSnapshot.agentPoolId
+        : (binding?.defaultAgentPoolId ?? null);
+    const targetProvenance: TargetProvenance = automaticPlan
+      ? automaticPlan.targetProvenance
+      : planSnapshot
+        ? ((planSnapshot.targetProvenance as TargetProvenance | undefined) ?? {
+            kind: 'SUGGESTION_PLAN',
+          })
+        : resolvedTargetAgentId || resolvedTargetAgentPoolId
+          ? { kind: 'BINDING_DEFAULT' }
+          : { kind: 'NONE' };
+    if (binding && targetProvenance.kind === 'CONTEXT_MAPPING') {
+      // A context-selected target must still be approved by this service's binding.
+      const approved = approvedBindingTargets(binding);
+      if (
+        (resolvedTargetAgentId && !approved.agentIds.has(resolvedTargetAgentId)) ||
+        (resolvedTargetAgentPoolId && !approved.poolIds.has(resolvedTargetAgentPoolId))
+      )
+        throw new RunbookDefinitionError(
+          'TARGET_NOT_AUTHORIZED: the selected Agent or Agent pool is not approved for this service binding.'
+        );
+    }
     if (
       steps.some(step => requiresAgent(step.type)) &&
       !resolvedTargetAgentId &&
@@ -339,13 +395,40 @@ async function prepareRunbookExecution(
     }
     const resolvedInputs = applyRunbookInputDefaults(
       version.inputs,
-      planSnapshot
-        ? planSnapshot.inputValues
-        : binding
-          ? (binding.inputValues as Record<string, unknown>)
-          : (input.inputValues ?? {})
+      automaticPlan
+        ? automaticPlan.inputValues
+        : planSnapshot
+          ? planSnapshot.inputValues
+          : binding
+            ? (binding.inputValues as Record<string, unknown>)
+            : (input.inputValues ?? {})
     );
     validateBindingInputValues(version.inputs, resolvedInputs);
+    const plannedProvenance = (automaticPlan?.inputProvenance ??
+      planSnapshot?.inputProvenance ??
+      {}) as Record<string, InputProvenance>;
+    const inputProvenance: Record<string, InputProvenance | { source: 'VERSION_DEFAULT' }> =
+      Object.fromEntries(
+        Object.keys(resolvedInputs).map(key => [
+          key,
+          (Object.getOwnPropertyDescriptor(plannedProvenance, key)?.value as
+            | InputProvenance
+            | undefined) ?? (binding ? { source: 'BINDING' } : { source: 'VERSION_DEFAULT' }),
+        ])
+      );
+    if (targetProvenance.kind === 'CONTEXT_MAPPING') {
+      // Dispatch-time eligibility through the existing readiness/capability checks.
+      const readiness = await checkExecutionReadiness(tx, {
+        steps,
+        inputValues: resolvedInputs,
+        agentId: resolvedTargetAgentId,
+        agentPoolId: resolvedTargetAgentPoolId,
+      });
+      if (readiness.some(check => check.state === 'blocked'))
+        throw new RunbookDefinitionError(
+          'TARGET_NOT_ELIGIBLE: the approved target for this context value has no healthy, capable, authorized Agent.'
+        );
+    }
     const selector = (planSnapshot?.agentSelector ?? binding?.agentSelector ?? {}) as Record<
       string,
       string
@@ -467,6 +550,18 @@ async function prepareRunbookExecution(
       )
         throw new RunbookDefinitionError(
           'AUTO_REMEDIATION_BUDGET_EXHAUSTED: responder approval is required.'
+        );
+      // Serialized by the per-incident budget lock: one automatic execution per incident and binding.
+      if (
+        mode === 'AUTOMATIC' &&
+        binding &&
+        (await tx.runbookExecution.findFirst({
+          where: { incidentId: input.incidentId, bindingId: binding.id, triggerId: { not: null } },
+          select: { id: true },
+        }))
+      )
+        throw new RunbookDefinitionError(
+          'TRIGGER_ALREADY_HANDLED: this incident already started an automatic execution for the binding.'
         );
     }
     if (!input.triggeredByUserId && hasWriteAction) {
@@ -736,6 +831,50 @@ async function prepareRunbookExecution(
         'PREVIEW_AUTHORIZATION_INVALID: Preview authorization is invalid, expired, already used or belongs to another responder or incident. Preview again.'
       );
     }
+    // Actor-less (automatic) write steps wait for approval unless an admin authorized
+    // unattended writes for exactly this pinned version. NON_IDEMPOTENT always waits.
+    const automaticExecution = mode === 'AUTOMATIC' || !input.triggeredByUserId;
+    const unattendedWritesAuthorized =
+      automaticExecution &&
+      hasWriteAction &&
+      binding !== null &&
+      bindingAuthorizesUnattendedWrites(binding, version.id);
+    const pinnedContext = await readVerifiedResponseContext();
+    const executionPlan = {
+      schemaVersion: 1,
+      evaluationSource:
+        input.evaluationSource ?? (planSnapshot?.evaluationSource as string | undefined) ?? null,
+      trigger: binding
+        ? {
+            bindingId: binding.id,
+            configRevision: planSnapshot?.configRevision ?? binding.configRevision,
+            triggerId: input.triggerId ?? suggestion?.triggerId ?? null,
+            triggerFingerprint: input.triggerFingerprint ?? suggestion?.fingerprint ?? null,
+            suggestionId: suggestion?.id ?? null,
+          }
+        : null,
+      match: { reason: matchReason ?? planSnapshot?.matchReason ?? null },
+      runbook: {
+        runbookId: runbook.id,
+        versionId: version.id,
+        version: version.version,
+        definitionChecksum: version.checksum,
+      },
+      automation: pinnedContext
+        ? {
+            versionId: pinnedContext.versionId,
+            versionNumber: pinnedContext.versionNumber,
+            contextChecksum: pinnedContext.checksum,
+          }
+        : null,
+      inputs: { values: resolvedInputs, provenance: inputProvenance },
+      target: {
+        agentId: resolvedTargetAgentId,
+        agentPoolId: resolvedTargetAgentPoolId,
+        provenance: targetProvenance,
+      },
+      unattendedWritesAuthorized,
+    };
     const execution = await tx.runbookExecution.create({
       data: {
         runbookId: runbook.id,
@@ -747,6 +886,7 @@ async function prepareRunbookExecution(
         triggerId: input.triggerId ?? suggestion?.triggerId,
         triggeredByType: input.triggeredByUserId ? 'USER' : 'TRIGGER',
         triggeredByUserId: input.triggeredByUserId,
+        unattendedWritesAuthorized,
         inputValues: asJson(resolvedInputs),
         definitionChecksum: version.checksum,
         timeoutSeconds: executionTimeoutSeconds,
@@ -759,7 +899,11 @@ async function prepareRunbookExecution(
           implicitLocalHost,
           selectedAgentId: resolvedTargetAgentId,
           sourcePoolId: resolvedTargetAgentPoolId,
+          provenance: asJson(targetProvenance),
         },
+        // Immutable, checksum-verified snapshot of the incident's automation context (or NULL).
+        ...(pinnedContext ? { responseContext: asJson(pinnedContext) } : {}),
+        executionPlan: asJson(executionPlan),
         steps: {
           create: steps.map(step => ({
             stepKey: step.key,
@@ -774,7 +918,9 @@ async function prepareRunbookExecution(
                 : 'docker',
             riskClass: step.riskClass,
             config: asJson(step.config),
-            requiresApproval: stepRequiresApproval(step),
+            requiresApproval:
+              stepRequiresApproval(step) ||
+              (automaticExecution && step.riskClass !== 'READ_ONLY' && !unattendedWritesAuthorized),
             timeoutSeconds: step.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS,
             maxRetries: step.maxRetries ?? definition.defaultMaxRetries ?? 0,
           })),
@@ -1310,6 +1456,8 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_FAILED',
               'Runbook execution failed due to an unknown step outcome during cancellation.'
             );
+            await finalizeVerificationEvidence(tx, executionId);
+            await recordRecoveryVerification(tx, executionId);
           }
         } else {
           const cancelled = await tx.runbookExecution.updateMany({
@@ -1323,6 +1471,8 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_CANCELLED',
               'Runbook execution cancelled.'
             );
+            await finalizeVerificationEvidence(tx, executionId);
+            await recordRecoveryVerification(tx, executionId);
           }
         }
       }
@@ -1421,6 +1571,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'Runbook execution timed out with an unverified write outcome.'
             );
             await finalizeVerificationEvidence(tx, executionId);
+            await recordRecoveryVerification(tx, executionId);
           }
         } else {
           const timedOut = await tx.runbookExecution.updateMany({
@@ -1442,6 +1593,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'Runbook execution timed out.'
             );
             await finalizeVerificationEvidence(tx, executionId);
+            await recordRecoveryVerification(tx, executionId);
           }
         }
       }
@@ -1474,6 +1626,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           `Runbook failed at step: ${failed.name}`
         );
         await finalizeVerificationEvidence(tx, executionId);
+        await recordRecoveryVerification(tx, executionId);
       }
     });
     return;
@@ -1496,6 +1649,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'Runbook execution completed.'
         );
         await finalizeVerificationEvidence(tx, executionId);
+        await recordRecoveryVerification(tx, executionId);
       }
     });
     return;
@@ -1670,6 +1824,12 @@ export async function processRunbookJob(raw: unknown): Promise<void> {
     await advanceExecution(payload.executionId);
     return;
   }
+  if (payload.kind === 'VERIFIED_RESOLUTION') {
+    await processVerifiedResolution(payload.executionId);
+    return;
+  }
   const { evaluateIncidentTriggers } = await import('./triggers');
-  await evaluateIncidentTriggers(payload.incidentId, payload.sourceEventId);
+  await evaluateIncidentTriggers(payload.incidentId, payload.sourceEventId, {
+    source: payload.source,
+  });
 }

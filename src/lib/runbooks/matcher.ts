@@ -1,4 +1,14 @@
-import { conditionContextFieldSchema, conditionOperatorSchema } from './conditions';
+import {
+  conditionOperatorSchema,
+  isAutomationOnlyOperator,
+  triggerConditionFieldSchema,
+} from './conditions';
+import {
+  VALUELESS_OPERATORS,
+  evaluateAutomationCondition,
+  isAutomationConditionField,
+  type AutomationContextField,
+} from './automation-binding';
 import { RunbookDefinitionError } from './errors';
 import type { RunbookConditionLogic, RunbookConditionOperator } from './types';
 
@@ -145,6 +155,9 @@ export function matchesCondition(
       return asComparableList(condition.value).some(item => areEqual(actual, item, allowCoercion));
     case 'NOT_IN':
       return !asComparableList(condition.value).some(item => areEqual(actual, item, allowCoercion));
+    case 'IS_MISSING':
+    case 'IS_UNMAPPED':
+      return false;
   }
 }
 
@@ -160,23 +173,85 @@ export function matchesTrigger(
     : conditions.some(condition => matchesCondition(context, condition, inputTypes));
 }
 
-/** Validate every stored condition before evaluating AND/OR, including legacy database records. */
-export function validateAndMatchTrigger(
-  context: Record<string, unknown>,
+/** Verified automation context as seen by trigger matching; null fields mean UNAVAILABLE. */
+export type TriggerAutomationContext = {
+  available: boolean;
+  reason: string | null;
+  fields: ReadonlyArray<AutomationContextField> | null;
+};
+
+export type TriggerEvaluation =
+  | { status: 'MATCHED'; reason: string }
+  | { status: 'NOT_MATCHED' }
+  | { status: 'CONTEXT_UNAVAILABLE'; reason: string }
+  | { status: 'CONFIG_INVALID'; reason: string };
+
+function describe(condition: TriggerCondition): string {
+  const value = VALUELESS_OPERATORS.has(condition.operator)
+    ? ''
+    : ` ${JSON.stringify(condition.value)?.slice(0, 200) ?? ''}`;
+  return `${condition.field} ${condition.operator}${value}`;
+}
+
+/**
+ * Validates every stored condition (including legacy rows) before evaluating AND/OR.
+ * Rules referencing `automation.*` never fire without verified context, and become
+ * configuration-invalid (never reinterpreted) when a referenced field disappears.
+ */
+export function evaluateTrigger(
+  context: Record<string, unknown> & { automation?: TriggerAutomationContext },
   conditions: TriggerCondition[],
   logic: RunbookConditionLogic
-): boolean {
+): TriggerEvaluation {
   if (
     !['AND', 'OR'].includes(logic) ||
     conditions.some(
       condition =>
-        !conditionContextFieldSchema.safeParse(condition.field).success ||
-        !conditionOperatorSchema.safeParse(condition.operator).success
+        !triggerConditionFieldSchema.safeParse(condition.field).success ||
+        !conditionOperatorSchema.safeParse(condition.operator).success ||
+        (!isAutomationConditionField(condition.field) &&
+          isAutomationOnlyOperator(condition.operator))
     )
   ) {
     throw new RunbookDefinitionError(
       'Trigger has an unsupported condition field, operator or logic.'
     );
   }
-  return matchesTrigger(context, conditions, logic);
+  const automationConditions = conditions.filter(condition =>
+    isAutomationConditionField(condition.field)
+  );
+  const automation = context.automation;
+  if (automationConditions.length && (!automation?.available || !automation.fields))
+    return {
+      status: 'CONTEXT_UNAVAILABLE',
+      reason: `AUTOMATION_CONTEXT_UNAVAILABLE: ${automation?.reason ?? 'NO_LIVE_DECISION'}`,
+    };
+  const results: boolean[] = [];
+  for (const condition of conditions) {
+    if (isAutomationConditionField(condition.field)) {
+      const outcome = evaluateAutomationCondition(condition, automation!.fields!);
+      if (outcome.kind === 'INVALID') return { status: 'CONFIG_INVALID', reason: outcome.reason };
+      results.push(outcome.matched);
+    } else {
+      results.push(matchesCondition(context, condition));
+    }
+  }
+  const matched =
+    conditions.length === 0 || (logic === 'AND' ? results.every(Boolean) : results.some(Boolean));
+  if (!matched) return { status: 'NOT_MATCHED' };
+  const matchedConditions = conditions.filter((_, index) => results.at(index));
+  return {
+    status: 'MATCHED',
+    reason: conditions.length
+      ? `${logic}: ${matchedConditions.map(describe).join('; ')}`
+      : 'No conditions: every incident matches.',
+  };
+}
+
+export function validateAndMatchTrigger(
+  context: Record<string, unknown> & { automation?: TriggerAutomationContext },
+  conditions: TriggerCondition[],
+  logic: RunbookConditionLogic
+): boolean {
+  return evaluateTrigger(context, conditions, logic).status === 'MATCHED';
 }

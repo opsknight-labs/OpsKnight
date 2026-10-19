@@ -303,7 +303,7 @@ function atDelay(now: Date, delayMinutes: number): Date {
 }
 
 function resolutionEventType(input: IncidentLifecycleInput): IncidentEventType {
-  return input.source === 'EVENT' ? 'AUTO_RESOLVED' : 'MANUAL_RESOLVED';
+  return input.source === 'EVENT' || input.source === 'SYSTEM' ? 'AUTO_RESOLVED' : 'MANUAL_RESOLVED';
 }
 
 function resolutionKind(input: IncidentLifecycleInput): IncidentResolutionKind {

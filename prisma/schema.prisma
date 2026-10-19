@@ -353,6 +353,9 @@ enum IncidentEventType {
   RUNBOOK_COMPLETED
   RUNBOOK_FAILED
   RUNBOOK_CANCELLED
+  RUNBOOK_SKIPPED
+  RUNBOOK_VERIFIED
+  RUNBOOK_UNVERIFIED
 }
 
 enum ActionItemStatus {
@@ -515,6 +518,7 @@ model User {
   runbookVersionsCreated      RunbookVersion[]             @relation("RunbookVersionCreatedBy")
   runbookVersionsPublished    RunbookVersion[]             @relation("RunbookVersionPublishedBy")
   runbookBindingsCreated      ServiceRunbookBinding[]      @relation("ServiceRunbookBindingCreatedBy")
+  runbookUnattendedWritesAuthorized ServiceRunbookBinding[]  @relation("ServiceRunbookBindingUnattendedWritesAuthorizedBy")
   runbookTriggersCreated      RunbookTrigger[]             @relation("RunbookTriggerCreatedBy")
   runbookExecutionsTriggered  RunbookExecution[]           @relation("RunbookExecutionTriggeredBy")
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
@@ -3365,6 +3369,8 @@ enum RunbookConditionOperator {
   NOT_IN
   EXISTS
   NOT_EXISTS
+  IS_MISSING
+  IS_UNMAPPED
 }
 
 enum RunbookInputType {
@@ -3481,6 +3487,20 @@ model ServiceRunbookBinding {
   defaultAgentId     String?
   inputValues        Json                   @default("{}")
   createdById        String?
+  /// Opt-in: resolve the incident only when every write action of a completed execution is verified.
+  resolveOnVerifiedRecovery     Boolean   @default(false)
+  /// Unattended write steps run without approval only while this equals the pinned runbookVersionId.
+  unattendedWritesVersionId     String?
+  unattendedWritesAuthorizedById String?
+  unattendedWritesAuthorizedAt  DateTime?
+  /// Monitoring-sourced trigger evaluations only consider bindings that opt in.
+  runOnMonitoringIncidents      Boolean   @default(false)
+  /// [{ inputKey, contextKey }]: runbook input <- automation.<contextKey>.
+  contextInputMappings          Json      @default("[]")
+  /// { contextKey, entries: [{ value, agentPoolId | agentId }] }: admin-approved targets.
+  contextTargetMappings         Json      @default("{}")
+  /// Incremented on every binding or trigger configuration change; pinned on executions.
+  configRevision                Int       @default(1)
 
   service          Service             @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   runbook          Runbook             @relation(fields: [runbookId], references: [id], onDelete: Cascade)
@@ -3488,6 +3508,7 @@ model ServiceRunbookBinding {
   defaultAgentPool RunbookAgentPool?   @relation(fields: [defaultAgentPoolId], references: [id], onDelete: SetNull)
   defaultAgent     RunbookAgent?       @relation(fields: [defaultAgentId], references: [id], onDelete: SetNull)
   createdBy        User?               @relation("ServiceRunbookBindingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  unattendedWritesAuthorizedBy User? @relation("ServiceRunbookBindingUnattendedWritesAuthorizedBy", fields: [unattendedWritesAuthorizedById], references: [id], onDelete: SetNull)
   triggers         RunbookTrigger[]
   executions       RunbookExecution[]
   suggestions      RunbookSuggestion[]
@@ -3597,6 +3618,15 @@ model RunbookExecution {
   resolvedTargetAgentId     String?
   resolvedTargetAgentPoolId String?
   targetSelection           Json @default("{}")
+  /// Checksum-verified copy of the incident response context used for matching and targeting.
+  responseContext           Json?
+  /// true when unattended write steps ran under the binding's version-pinned authorization.
+  unattendedWritesAuthorized Boolean @default(false)
+  /// NOT_REQUESTED | PENDING | RESOLVED | NOT_VERIFIED | ALREADY_CLOSED | BLOCKED
+  recoveryOutcome           String?
+  recoveryCheckedAt         DateTime?
+  /// Immutable plan pinned at creation: trigger, versions, checksums, inputs, target, match reason.
+  executionPlan             Json?
 
   runbook                 Runbook                @relation(fields: [runbookId], references: [id], onDelete: Restrict)
   runbookVersion          RunbookVersion         @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
@@ -3954,6 +3984,7 @@ model IncidentAutomationDecision {
   evaluationAt                 DateTime
   fallbackReason               String?
   summary                      Json
+  responseContext              Json?
   createdAt                    DateTime            @default(now())
   incident                     Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   service                      Service             @relation(fields: [serviceId], references: [id], onDelete: Restrict)

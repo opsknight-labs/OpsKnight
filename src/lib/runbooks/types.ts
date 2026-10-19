@@ -240,6 +240,8 @@ export const RUNBOOK_CONDITION_OPERATORS = [
   'NOT_IN',
   'EXISTS',
   'NOT_EXISTS',
+  'IS_MISSING',
+  'IS_UNMAPPED',
 ] as const;
 export type RunbookConditionOperator = (typeof RUNBOOK_CONDITION_OPERATORS)[number];
 
@@ -279,6 +281,7 @@ export const RUNBOOK_JOB_KINDS = [
   'EVALUATE_TRIGGER',
   'ADVANCE_EXECUTION',
   'RECONCILE_EXECUTION',
+  'VERIFIED_RESOLUTION',
 ] as const;
 export type RunbookJobKind = (typeof RUNBOOK_JOB_KINDS)[number];
 
@@ -289,6 +292,17 @@ export interface RunbookJobPayload {
   sourceEventId?: string;
   bindingId?: string;
 }
+
+/** Outcome of the incident-recovery decision recorded on a terminal execution. */
+export const RUNBOOK_RECOVERY_OUTCOMES = [
+  'PENDING',
+  'RESOLVED',
+  'ALREADY_CLOSED',
+  'BLOCKED',
+  'NOT_VERIFIED',
+  'NOT_REQUESTED',
+] as const;
+export type RunbookRecoveryOutcome = (typeof RUNBOOK_RECOVERY_OUTCOMES)[number];
 
 // ---------------------------------------------------------------------------
 // Step definition (within RunbookVersion.definition JSON)

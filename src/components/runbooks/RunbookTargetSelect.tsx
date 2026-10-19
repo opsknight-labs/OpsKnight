@@ -11,8 +11,17 @@ export default function RunbookTargetSelect({
   pools,
   defaultValue = 'none',
   hasAgentWrite = false,
-}: RunbookTargetOptions & { defaultValue?: string; hasAgentWrite?: boolean }) {
+  onValueChange,
+}: RunbookTargetOptions & {
+  defaultValue?: string;
+  hasAgentWrite?: boolean;
+  onValueChange?: (value: string) => void;
+}) {
   const [value, setValue] = useState(defaultValue || 'none');
+  const changeValue = (next: string) => {
+    setValue(next);
+    onValueChange?.(next);
+  };
   const invalid =
     hasAgentWrite &&
     pools.some(
@@ -27,7 +36,7 @@ export default function RunbookTargetSelect({
         name="executionTarget"
         label="Execution target"
         value={value}
-        onValueChange={setValue}
+        onValueChange={changeValue}
         options={[
           { value: 'none', label: 'No Agent target · control-plane steps only' },
           ...pools.map(pool => ({

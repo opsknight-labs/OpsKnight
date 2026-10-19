@@ -285,8 +285,32 @@ describe('Runbooks State Machine Safety and Invariants', () => {
     vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.runbookStepAttempt.count).mockResolvedValueOnce(0);
     vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 1 });
+    // Terminalization finalizes verification evidence before recording the recovery decision.
+    vi.mocked(prisma.runbookExecution.findUniqueOrThrow).mockResolvedValueOnce({
+      id: 'exec_cancel',
+      status: 'CANCELLED',
+      inputValues: {},
+      runbookVersion: {
+        definition: {
+          steps: [
+            {
+              key: 'deploy',
+              name: 'Deploy',
+              type: 'HTTP',
+              riskClass: 'IDEMPOTENT_WRITE',
+              config: { url: 'https://example.com/api/deploy', method: 'PUT' },
+            },
+          ],
+        },
+      },
+      steps: [],
+    } as never);
 
     await advanceExecution('exec_cancel');
+
+    expect(prisma.runbookExecution.findUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'exec_cancel' } })
+    );
 
     expect(prisma.runbookExecutionStep.updateMany).toHaveBeenCalledWith({
       where: {

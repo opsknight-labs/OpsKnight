@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import ExecutionTroubleshooting from '@/components/runbooks/executions/ExecutionTroubleshooting';
 import RunbookExecutionPreview from '@/components/runbooks/RunbookExecutionPreview';
@@ -16,6 +17,16 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { compareEvidence, verificationResultSchema } from '@/lib/runbooks/evidence';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import EmptyState from '@/components/ui/EmptyState';
+import {
+  parseRecoveryOutcome,
+  recoveryOutcomePresentation,
+  summarizeExecutionTarget,
+  summarizeExecutionVerification,
+  toneChipClass,
+  verificationStatePresentation,
+  type ResponseTone,
+} from '@/lib/incidents/response-presentation';
+import { cn } from '@/lib/utils';
 import {
   ActionForm,
   ConfirmAction,
@@ -111,6 +122,7 @@ export default async function IncidentRunbooks({
     }),
   ]);
   const canApprove = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_APPROVE);
+  const canViewSensitive = permissions.capabilities.includes(CAPABILITIES.INCIDENT_SENSITIVE_READ);
   return (
     <div className="space-y-4">
       <div className="rounded-xl border bg-card p-4 text-sm">
@@ -137,7 +149,8 @@ export default async function IncidentRunbooks({
             {suggestions.map(suggestion => (
               <div
                 key={suggestion.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background p-3"
+                id={`runbook-suggestion-${suggestion.id}`}
+                className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3 rounded-md border bg-background p-3"
               >
                 <div>
                   <div className="font-medium">{suggestion.binding.runbook.name}</div>
@@ -236,7 +249,11 @@ export default async function IncidentRunbooks({
         </details>
       )}
       {executions.map(execution => (
-        <Card key={execution.id}>
+        <Card
+          key={execution.id}
+          id={`runbook-execution-${execution.id}`}
+          className="scroll-mt-24"
+        >
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -244,6 +261,13 @@ export default async function IncidentRunbooks({
                 <CardDescription>
                   Version {execution.runbookVersion.version} · started{' '}
                   {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
+                  {' · '}
+                  <Link
+                    href={`/runbooks/executions/${execution.id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    Execution record
+                  </Link>
                 </CardDescription>
               </div>
               <StatusBadge status={execution.status} />
@@ -251,6 +275,11 @@ export default async function IncidentRunbooks({
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <ExecutionResponseSummary
+              execution={execution}
+              canViewSensitive={canViewSensitive}
+              userTimeZone={userTimeZone}
+            />
             <ol aria-label={`${execution.runbook.name} execution timeline`}>
               {execution.steps.map(step => {
                 const digest = computePlanDigest({
@@ -407,6 +436,149 @@ export default async function IncidentRunbooks({
     </div>
   );
 }
+
+function ToneChip({ tone, children }: { tone: ResponseTone; children: ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+        toneChipClass(tone)
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ExecutionResponseSummary({
+  execution,
+  canViewSensitive,
+  userTimeZone,
+}: {
+  execution: {
+    status: string;
+    runbook: { name: string };
+    targetSelection: unknown;
+    unattendedWritesAuthorized: boolean;
+    recoveryOutcome: string | null;
+    recoveryCheckedAt: Date | null;
+    resolvedTargetAgent: { name: string; hostname: string | null } | null;
+    resolvedTargetAgentPool: { name: string } | null;
+    steps: Array<{
+      id: string;
+      stepKey: string;
+      name: string;
+      riskClass: string;
+      status: string;
+      verificationResult: unknown;
+    }>;
+  };
+  canViewSensitive: boolean;
+  userTimeZone: string;
+}) {
+  const target = summarizeExecutionTarget(execution.targetSelection, canViewSensitive);
+  const verification = summarizeExecutionVerification(execution.steps);
+  const outcome = parseRecoveryOutcome(execution.recoveryOutcome);
+  const recommended =
+    outcome === 'NOT_REQUESTED' &&
+    execution.status === 'SUCCEEDED' &&
+    verification.state === 'VERIFIED';
+  const recovery = recommended
+    ? {
+        label: 'Resolution recommended',
+        description:
+          'Every write action was verified. Automatic resolution is off for this binding, so a responder confirms recovery and resolves the incident.',
+        tone: 'success' as const,
+      }
+    : outcome
+      ? recoveryOutcomePresentation(outcome)
+      : null;
+  const waiting = PENDING_RECOVERY_NOTE.get(execution.status);
+  const verificationPresentation = verificationStatePresentation(verification.state);
+  return (
+    <dl
+      aria-label={`${execution.runbook.name} response summary`}
+      className="grid gap-x-4 gap-y-2 rounded-lg border bg-muted/20 p-3 text-xs sm:grid-cols-[9rem_1fr]"
+    >
+      <dt className="text-muted-foreground">Target</dt>
+      <dd className="min-w-0 break-words">
+        {execution.resolvedTargetAgent
+          ? `${execution.resolvedTargetAgent.name}${execution.resolvedTargetAgent.hostname ? ` (${execution.resolvedTargetAgent.hostname})` : ''}`
+          : execution.resolvedTargetAgentPool
+            ? `Pool: ${execution.resolvedTargetAgentPool.name}`
+            : target.implicitLocalHost
+              ? 'Local host Agent'
+              : 'OpsKnight control plane'}
+        {target.labels.length > 0 && (
+          <span className="mt-1 flex flex-wrap gap-1">
+            {target.labels.map(label => (
+              <span
+                key={label.key}
+                className="rounded border px-1.5 py-0.5 font-mono text-[11px]"
+                title={label.fromContext ? 'Resolved from incident context' : undefined}
+              >
+                {label.key}={label.value ?? '[restricted]'}
+                {label.fromContext ? ' · context' : ''}
+              </span>
+            ))}
+          </span>
+        )}
+      </dd>
+      {target.contextKeys.length > 0 && (
+        <>
+          <dt className="text-muted-foreground">Context keys</dt>
+          <dd className="break-words font-mono">{target.contextKeys.join(', ')}</dd>
+        </>
+      )}
+      {verification.writeActions.length > 0 && (
+        <>
+          <dt className="text-muted-foreground">Write actions</dt>
+          <dd>
+            {execution.unattendedWritesAuthorized ? (
+              <ToneChip tone="warning">Unattended writes authorized</ToneChip>
+            ) : (
+              <ToneChip tone="info">Approval required</ToneChip>
+            )}
+          </dd>
+          <dt className="text-muted-foreground">Verification</dt>
+          <dd className="space-y-1">
+            <ToneChip tone={verificationPresentation.tone}>
+              {verificationPresentation.label}
+            </ToneChip>
+            <span className="ml-2 text-muted-foreground">
+              {verification.verifiedCount} verified · {verification.unverifiedCount} unverified ·{' '}
+              {verification.pendingCount} pending
+            </span>
+          </dd>
+        </>
+      )}
+      <dt className="text-muted-foreground">Recovery</dt>
+      <dd>
+        {recovery ? (
+          <>
+            <ToneChip tone={recovery.tone}>{recovery.label}</ToneChip>
+            {execution.recoveryCheckedAt && (
+              <span className="ml-2 text-muted-foreground">
+                checked{' '}
+                {formatDateTime(execution.recoveryCheckedAt, userTimeZone, { format: 'datetime' })}
+              </span>
+            )}
+            <span className="mt-1 block text-muted-foreground">{recovery.description}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">{waiting ?? 'Not evaluated yet'}</span>
+        )}
+      </dd>
+    </dl>
+  );
+}
+
+const PENDING_RECOVERY_NOTE = new Map<string, string>([
+  ['WAITING_APPROVAL', 'Waiting for approval. Paging continues meanwhile.'],
+  ['WAITING_AGENT', 'Waiting for an Agent. Paging continues meanwhile.'],
+  ['RUNNING', 'Not evaluated yet. Paging continues while the runbook runs.'],
+  ['QUEUED', 'Not evaluated yet. Paging continues while the runbook runs.'],
+]);
 
 function safePlanValue(value: unknown): string {
   if (typeof value === 'string') {

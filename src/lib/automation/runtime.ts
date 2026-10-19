@@ -22,6 +22,11 @@ import { evaluateAutomation, type Evaluation } from './evaluator';
 import { asJson } from './versioning';
 import { discoverFields } from './discovery';
 import { captureResponderSnapshot } from '@/lib/escalation/automation-snapshot';
+import {
+  buildResponseContext,
+  responseContextFieldDefinitions,
+  type ResponseContextFieldDefinition,
+} from './response-context';
 // Process-level historical delay context; it cannot measure an ongoing synchronous stall.
 const evaluationLoopDelay = monitorEventLoopDelay({ resolution: 20 });
 evaluationLoopDelay.enable();
@@ -38,6 +43,9 @@ export type IntegrationEventEnvelope = {
 export type RuntimeEvaluation = {
   mode: 'SHADOW' | 'LIVE';
   versionId: string | null;
+  versionNumber: number | null;
+  /** Declared fields of the evaluated version (builtins first); never raw payload paths. */
+  contextFields: ResponseContextFieldDefinition[];
   evaluationAt: Date;
   durationMs: number;
   extractionMs: number;
@@ -71,6 +79,8 @@ export async function prepareAutomation(
   const runtime: RuntimeEvaluation = {
     mode: config.mode,
     versionId: config.activeVersionId,
+    versionNumber: null,
+    contextFields: [],
     evaluationAt,
     durationMs: 0,
     extractionMs: 0,
@@ -104,10 +114,13 @@ export async function prepareAutomation(
       ? null
       : await tx.automationVersion.findUnique({
           where: { id: config.activeVersionId },
-          select: { id: true, compiledSnapshot: true, checksum: true },
+          select: { id: true, compiledSnapshot: true, checksum: true, versionNumber: true },
         });
     if (!cached && !stored) throw new Error('VERSION_MISSING');
-    const version = cached ?? loadCompiledVersion(stored!);
+    const loaded = cached ?? loadCompiledVersion(stored!);
+    const version = loaded.compiled;
+    runtime.versionNumber = loaded.versionNumber;
+    runtime.contextFields = responseContextFieldDefinitions(version);
     runtime.versionLoadMs = performance.now() - versionLoadStart;
     let timeoutPosition: EvaluationPosition = {
       phase: 'EXTRACTION',
@@ -356,6 +369,17 @@ export async function persistAutomation(
       MAX_AUTOMATION_DECISION_BYTES
     );
     runtime.decisionBytes = Buffer.byteLength(JSON.stringify(summary), 'utf8');
+    // Only an intact LIVE evaluation may hand context to downstream consumers (runbooks).
+    const responseContext =
+      result && runtime.versionId && runtime.versionNumber !== null && !runtime.fallbackReason
+        ? buildResponseContext({
+            versionId: runtime.versionId,
+            versionNumber: runtime.versionNumber,
+            fields: runtime.contextFields,
+            inputContext: result.inputContext,
+            enrichedContext: result.enrichedContext,
+          })
+        : null;
     await tx.incidentAutomationDecision.create({
       select: { incidentId: true },
       data: {
@@ -373,6 +397,7 @@ export async function persistAutomation(
         evaluationAt: runtime.evaluationAt,
         fallbackReason: runtime.fallbackReason,
         summary,
+        ...(responseContext ? { responseContext } : {}),
       },
     });
     runtime.decisionPersistenceMs = performance.now() - decisionPersistenceStarted;

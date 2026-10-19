@@ -329,11 +329,18 @@ export async function enqueueIncidentUpdateSideEffects(
 ): Promise<void> {
   await enqueueSideEffects(tx, incidentId, effects);
 }
-export async function enqueueIncidentCreationSideEffects(
+export type RunbookEvaluationSource = 'MONITORING' | 'MANUAL';
+
+/**
+ * The single entry point that queues runbook trigger evaluation for a newly created incident.
+ * Must run in the incident-creation transaction so the job commits atomically with the
+ * incident and its automation decision. Only OPEN incidents are eligible.
+ */
+export async function enqueueIncidentCreatedRunbookEvaluation(
   tx: Prisma.TransactionClient,
-  input: IncidentCreationOutboxInput
-): Promise<void> {
-  const runbookSourceEventId = crypto.randomUUID();
+  input: { incidentId: string; status: IncidentStatus; source: RunbookEvaluationSource }
+): Promise<boolean> {
+  if (input.status !== 'OPEN') return false;
   await tx.backgroundJob.create({
     data: {
       type: 'RUNBOOK',
@@ -343,9 +350,21 @@ export async function enqueueIncidentCreationSideEffects(
       payload: {
         kind: 'EVALUATE_TRIGGER',
         incidentId: input.incidentId,
-        sourceEventId: runbookSourceEventId,
+        sourceEventId: crypto.randomUUID(),
+        source: input.source,
       },
     },
+  });
+  return true;
+}
+export async function enqueueIncidentCreationSideEffects(
+  tx: Prisma.TransactionClient,
+  input: IncidentCreationOutboxInput
+): Promise<void> {
+  await enqueueIncidentCreatedRunbookEvaluation(tx, {
+    incidentId: input.incidentId,
+    status: 'OPEN',
+    source: 'MANUAL',
   });
   await enqueueSideEffects(
     tx,

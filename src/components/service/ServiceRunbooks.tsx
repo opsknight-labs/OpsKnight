@@ -18,8 +18,13 @@ import {
   ExternalLink,
   Shield,
   Filter,
+  ShieldCheck,
 } from 'lucide-react';
 import { requiresAgent } from '@/lib/runbooks/types';
+import {
+  parseContextInputMappings,
+  parseContextTargetMapping,
+} from '@/lib/runbooks/automation-binding';
 import { minimumRiskForStep } from '@/lib/runbooks/definition';
 import EmptyState from '@/components/ui/EmptyState';
 import {
@@ -29,8 +34,6 @@ import {
   SubmitButton,
   FormSelect,
 } from '@/components/runbooks/RunbookControls';
-import RunbookTargetSelect from '@/components/runbooks/RunbookTargetSelect';
-import { Textarea } from '@/components/ui/shadcn/textarea';
 import {
   attachRunbookAction,
   detachRunbookAction,
@@ -48,9 +51,23 @@ import {
 } from '@/components/ui/shadcn/card';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
-import RunbookBindingVersionInputs from './RunbookBindingVersionInputs';
 import Field from '@/components/runbooks/RunbookField';
 import { cn } from '@/lib/utils';
+import TriggerConditionEditor from './runbooks/TriggerConditionEditor';
+import ResolveOnVerifiedRecoveryToggle from './runbooks/ResolveOnVerifiedRecoveryToggle';
+import { AttachTargetFields, BindingVersionTargetFields } from './runbooks/BindingTargetFields';
+import UnattendedWritesPanel, {
+  UnattendedWritesBadge,
+  unattendedWritesStatus,
+  type UnattendedWriteEligibility,
+  type UnattendedWriteAuthorization,
+} from './runbooks/UnattendedWritesPanel';
+import { contextFieldKey, type AutomationContextSummary } from './runbooks/context-helpers';
+import MonitoringIncidentsToggle from './runbooks/MonitoringIncidentsToggle';
+import {
+  ContextInputMappingEditor,
+  ContextTargetMappingEditor,
+} from './runbooks/AutomationMappingEditors';
 
 export type ServiceRunbookBinding = Prisma.ServiceRunbookBindingGetPayload<{
   include: {
@@ -69,7 +86,14 @@ export type ServiceRunbookBinding = Prisma.ServiceRunbookBindingGetPayload<{
   _count?: {
     executions?: number;
   };
+  unattendedWritesAuthorizedBy?: { name: string | null } | null;
 };
+
+/** Server-computed unattended-write details keyed by binding id (admin view only). */
+export type ServiceRunbookUnattendedWriteDetails = Record<
+  string,
+  { eligibility: UnattendedWriteEligibility | null; authorizedAtLabel: string | null }
+>;
 
 export type AvailableRunbook = Prisma.RunbookGetPayload<{
   include: {
@@ -100,6 +124,9 @@ export default function ServiceRunbooks({
   availableAgentPools,
   canManage,
   loadError,
+  automationContext = null,
+  unattendedWriteDetails = {},
+  canAuthorizeUnattendedWrites = false,
 }: {
   serviceId: string;
   bindings: ServiceRunbookBinding[];
@@ -108,7 +135,11 @@ export default function ServiceRunbooks({
   availableAgentPools: ServiceRunbookAgentPool[];
   canManage: boolean;
   loadError?: boolean;
+  automationContext?: AutomationContextSummary | null;
+  unattendedWriteDetails?: ServiceRunbookUnattendedWriteDetails;
+  canAuthorizeUnattendedWrites?: boolean;
 }) {
+  const contextFields = automationContext?.fields ?? [];
   const [searchQuery, setSearchQuery] = useState('');
   const [modeFilter, setModeFilter] = useState<'ALL' | 'AUTOMATIC' | 'MANUAL' | 'SUGGESTED'>('ALL');
   const [selectedAttachId, setSelectedAttachId] = useState<string>('');
@@ -263,26 +294,31 @@ export default function ServiceRunbooks({
                       />
                     </Field>
 
-                    <Field label="Execution target">
-                      <RunbookTargetSelect
+                    <AttachTargetFields
+                      agents={availableAgents}
+                      pools={availableAgentPools}
+                      hasAgentWrite={
+                        activeAttachRunbook.publishedVersion
+                          ? hasAgentWrites(activeAttachRunbook.publishedVersion.definition)
+                          : false
+                      }
+                    />
+
+                    <div className="space-y-3 lg:col-span-3">
+                      <ResolveOnVerifiedRecoveryToggle />
+                      <MonitoringIncidentsToggle />
+                      <ContextInputMappingEditor
+                        inputs={activeAttachRunbook.publishedVersion?.inputs ?? []}
+                        contextFields={contextFields}
+                        defaultValue={[]}
+                      />
+                      <ContextTargetMappingEditor
+                        contextFields={contextFields}
                         agents={availableAgents}
                         pools={availableAgentPools}
-                        hasAgentWrite={
-                          activeAttachRunbook.publishedVersion
-                            ? hasAgentWrites(activeAttachRunbook.publishedVersion.definition)
-                            : false
-                        }
+                        defaultValue={{}}
                       />
-                    </Field>
-
-                    <Field label="Agent selector (JSON)">
-                      <Textarea
-                        name="agentSelector"
-                        aria-label="Agent selector"
-                        defaultValue="{}"
-                        className="font-mono text-xs"
-                      />
-                    </Field>
+                    </div>
 
                     {(activeAttachRunbook.publishedVersion?.inputs.length ?? 0) > 0 && (
                       <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
@@ -384,6 +420,22 @@ export default function ServiceRunbooks({
           const boundAgent = availableAgents.find(a => a.id === binding.defaultAgentId);
           const boundPool = availableAgentPools.find(p => p.id === binding.defaultAgentPoolId);
           const lastExecution = binding.executions?.[0];
+          const unattendedEligible =
+            binding.mode === 'AUTOMATIC' && binding.versionStrategy === 'PINNED';
+          const authorization = authorizationFor(
+            binding,
+            unattendedWriteDetails[binding.id]?.authorizedAtLabel ?? null
+          );
+          const writesStatus = unattendedWritesStatus(binding.runbookVersionId, authorization);
+          const usesContext = (binding.triggers ?? []).some(
+            trigger =>
+              trigger.enabled &&
+              trigger.conditions.some(condition => contextFieldKey(condition.field) !== null)
+          );
+          const targetMapping = parseContextTargetMapping(binding.contextTargetMappings);
+          const inputMappings = parseContextInputMappings(binding.contextInputMappings) ?? [];
+          const bindingInputs =
+            binding.runbookVersion?.inputs ?? binding.runbook.publishedVersion?.inputs ?? [];
 
           return (
             <Card
@@ -479,6 +531,30 @@ export default function ServiceRunbooks({
                         Last run: {lastExecution.status}
                       </Badge>
                     )}
+
+                    {binding.runOnMonitoringIncidents && (
+                      <Badge variant="outline" className="gap-1 text-[11px] font-medium">
+                        <Zap className="h-3 w-3" aria-hidden="true" />
+                        Runs on monitoring incidents
+                      </Badge>
+                    )}
+
+                    {binding.resolveOnVerifiedRecovery && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-[11px] font-medium text-emerald-700 dark:text-emerald-400"
+                      >
+                        <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                        Resolves on verified recovery
+                      </Badge>
+                    )}
+
+                    {unattendedEligible && (
+                      <UnattendedWritesBadge
+                        status={writesStatus}
+                        versionNumber={binding.runbookVersion?.version ?? null}
+                      />
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -505,6 +581,11 @@ export default function ServiceRunbooks({
                           )
                           .join('; ')
                       : 'Manual only'}
+                    {usesContext && ' · uses automation context'}
+                    {targetMapping?.contextKey &&
+                      ` · target by automation.${targetMapping.contextKey} (${targetMapping.entries.length} approved)`}
+                    {inputMappings.length > 0 &&
+                      ` · ${inputMappings.length} input${inputMappings.length === 1 ? '' : 's'} from context`}
                   </p>
                 </div>
 
@@ -515,6 +596,19 @@ export default function ServiceRunbooks({
                   }
                   values={binding.inputValues as Record<string, unknown>}
                 />
+
+                {unattendedEligible && (canAuthorizeUnattendedWrites || canManage) && (
+                  <UnattendedWritesPanel
+                    serviceId={serviceId}
+                    bindingId={binding.id}
+                    runbookName={binding.runbook.name}
+                    pinnedVersionId={binding.runbookVersionId}
+                    pinnedVersionNumber={binding.runbookVersion?.version ?? null}
+                    authorization={authorization}
+                    eligibility={unattendedWriteDetails[binding.id]?.eligibility ?? null}
+                    canAuthorize={canAuthorizeUnattendedWrites}
+                  />
+                )}
 
                 {/* Actions Toolbar */}
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
@@ -553,7 +647,8 @@ export default function ServiceRunbooks({
                               ]}
                             />
                           </Field>
-                          <RunbookBindingVersionInputs
+                          <BindingVersionTargetFields
+                            agentSelector={JSON.stringify(binding.agentSelector ?? {})}
                             versions={
                               availableRunbooks
                                 .find(item => item.id === binding.runbookId)
@@ -586,13 +681,6 @@ export default function ServiceRunbooks({
                                   : 'none',
                             }}
                           />
-                          <Field label="Agent selector (JSON)">
-                            <Textarea
-                              name="agentSelector"
-                              aria-label="Agent selector"
-                              defaultValue={JSON.stringify(binding.agentSelector ?? {})}
-                            />
-                          </Field>
                           <Field label="Status">
                             <FormSelect
                               name="enabled"
@@ -604,6 +692,25 @@ export default function ServiceRunbooks({
                               ]}
                             />
                           </Field>
+                          <div className="order-2 space-y-3 lg:col-span-4">
+                            <ResolveOnVerifiedRecoveryToggle
+                              defaultChecked={binding.resolveOnVerifiedRecovery}
+                            />
+                            <MonitoringIncidentsToggle
+                              defaultChecked={binding.runOnMonitoringIncidents}
+                            />
+                            <ContextInputMappingEditor
+                              inputs={bindingInputs}
+                              contextFields={contextFields}
+                              defaultValue={inputMappings}
+                            />
+                            <ContextTargetMappingEditor
+                              contextFields={contextFields}
+                              agents={availableAgents}
+                              pools={availableAgentPools}
+                              defaultValue={targetMapping ?? {}}
+                            />
+                          </div>
                           <div className="order-2 flex gap-2 lg:col-span-4">
                             <SubmitButton variant="outline">
                               <Settings2 className="mr-1.5 h-3.5 w-3.5" /> Save binding
@@ -644,21 +751,11 @@ export default function ServiceRunbooks({
                               Save trigger
                             </SubmitButton>
                           </div>
-                          <div className="space-y-3 lg:col-span-3">
-                            <Label>Conditions</Label>
-                            {(binding.triggers?.[0]?.conditions ?? []).map(condition => (
-                              <TriggerConditionRow
-                                key={condition.id}
-                                field={condition.field}
-                                operator={condition.operator}
-                                value={condition.value}
-                              />
-                            ))}
-                            <TriggerConditionRow />
-                            <p className="text-xs text-muted-foreground">
-                              Leave the final field empty to add no condition. Comma-separate values for
-                              “in” operators. Automatic mode still stops at approval gates.
-                            </p>
+                          <div className="lg:col-span-3">
+                            <TriggerConditionEditor
+                              conditions={binding.triggers?.[0]?.conditions ?? []}
+                              automationContext={automationContext}
+                            />
                           </div>
                         </ActionForm>
                       </ConfigureSheet>
@@ -806,62 +903,18 @@ function InputSummary({
   );
 }
 
-const triggerFields = [
-  ['incident.urgency', 'Incident urgency'],
-  ['incident.priority', 'Incident priority'],
-  ['incident.status', 'Incident status'],
-  ['incident.title', 'Incident title'],
-  ['incident.description', 'Incident description'],
-  ['incident.tags', 'Incident tags'],
-  ['service.name', 'Service name'],
-  ['service.teamId', 'Service team'],
-] as const;
-
-function TriggerConditionRow({
-  field = '',
-  operator = 'EQUALS',
-  value = '',
-}: {
-  field?: string;
-  operator?: string;
-  value?: unknown;
-}) {
-  const knownField = triggerFields.some(([candidate]) => candidate === field);
-  const displayedValue = Array.isArray(value)
-    ? value.join(', ')
-    : value === null
-      ? ''
-      : String(value);
-  return (
-    <div className="grid gap-2 sm:grid-cols-3">
-      <FormSelect
-        name="conditionField"
-        label="Trigger condition field"
-        defaultValue={field || 'none'}
-        options={[
-          { value: 'none', label: 'No additional condition' },
-          ...(field && !knownField ? [{ value: field, label: field }] : []),
-          ...triggerFields.map(([value, label]) => ({ value, label })),
-        ]}
-      />
-      <FormSelect
-        name="conditionOperator"
-        label="Trigger condition operator"
-        defaultValue={operator}
-        options={[
-          { value: 'EQUALS', label: 'Equals' },
-          { value: 'NOT_EQUALS', label: 'Does not equal' },
-          { value: 'CONTAINS', label: 'Contains' },
-          { value: 'STARTS_WITH', label: 'Starts with' },
-          { value: 'IN', label: 'Is one of' },
-          { value: 'NOT_IN', label: 'Is not one of' },
-          { value: 'EXISTS', label: 'Exists' },
-          { value: 'NOT_EXISTS', label: 'Does not exist' },
-        ]}
-      />
-      <Input name="conditionValue" defaultValue={displayedValue} placeholder="Match value" />
-    </div>
-  );
+function authorizationFor(
+  binding: ServiceRunbookBinding,
+  authorizedAtLabel: string | null
+): UnattendedWriteAuthorization | null {
+  if (!binding.unattendedWritesVersionId || !binding.unattendedWritesAuthorizedAt) return null;
+  const authorizedAt = new Date(binding.unattendedWritesAuthorizedAt);
+  return {
+    versionId: binding.unattendedWritesVersionId,
+    authorizedAtIso: authorizedAt.toISOString(),
+    authorizedAtLabel: authorizedAtLabel ?? `${authorizedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
+    authorizedBy: binding.unattendedWritesAuthorizedBy?.name ?? null,
+  };
 }
 
 /**

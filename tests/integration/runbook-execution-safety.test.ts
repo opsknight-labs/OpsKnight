@@ -187,6 +187,9 @@ async function createAgentTarget(
       versionStrategy: 'PINNED',
       mode: 'AUTOMATIC',
       defaultAgentPoolId: pool.id,
+      // These fixtures exercise unattended execution; unauthorized automatic writes wait for approval.
+      unattendedWritesVersionId: version.id,
+      unattendedWritesAuthorizedAt: new Date(),
     },
   });
   return { runbook, version, service, agent, actor, pool, binding };

@@ -2,16 +2,24 @@
 
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
+import { isRunbookEventType, runbookEventDisplay } from '@/lib/incidents/response-presentation';
 
 type TimelineEventProps = {
   message: string;
   createdAt: Date;
+  type?: string | null;
   isFirst?: boolean;
   isLast?: boolean;
 };
 
-export default function TimelineEvent({ message, createdAt, isLast = false }: TimelineEventProps) {
+export default function TimelineEvent({
+  message,
+  createdAt,
+  type,
+  isLast = false,
+}: TimelineEventProps) {
   const { userTimeZone } = useTimezone();
+  const runbookLabel = isRunbookEventType(type) ? runbookEventDisplay(type, message).label : null;
   return (
     <div
       style={{ position: 'relative', paddingLeft: '1.5rem', paddingBottom: isLast ? 0 : '1.5rem' }}
@@ -62,6 +70,11 @@ export default function TimelineEvent({ message, createdAt, isLast = false }: Ti
           <span style={{ marginLeft: '0.5rem', opacity: 0.6 }}>
             {formatDateTime(createdAt, userTimeZone, { format: 'short' })}
           </span>
+          {runbookLabel && (
+            <span style={{ marginLeft: '0.5rem' }} data-event-type={type}>
+              · {runbookLabel}
+            </span>
+          )}
         </div>
         <div
           style={{

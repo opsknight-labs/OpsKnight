@@ -76,7 +76,12 @@ import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingS
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
-import ServiceRunbooks from '@/components/service/ServiceRunbooks';
+import ServiceRunbooks, {
+  type ServiceRunbookUnattendedWriteDetails,
+} from '@/components/service/ServiceRunbooks';
+import { getServiceAutomationContextFields } from '@/lib/automation/context-fields';
+import { summarizeUnattendedWriteEligibility } from '@/lib/runbooks/bindings';
+import { formatDateTime } from '@/lib/timezone';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import {
   getGlobalWarRoomPolicy,
@@ -431,6 +436,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     availableRunbooksResult,
     availableRunbookAgentsResult,
     availableRunbookAgentPoolsResult,
+    automationContextResult,
   ] = await Promise.allSettled([
     prisma.serviceRunbookBinding.findMany({
       where: { serviceId: id },
@@ -440,6 +446,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         },
         runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
         triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
+        unattendedWritesAuthorizedBy: { select: { name: true } },
         executions: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -477,6 +484,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
       orderBy: { name: 'asc' },
     }),
+    canManageService ? getServiceAutomationContextFields(id) : Promise.resolve(null),
   ]);
 
   const serviceRunbookBindings =
@@ -511,6 +519,36 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     logger.warn('[Service Detail] Failed to load available runbooks', {
       error: availableRunbooksResult.reason,
     });
+  }
+  if (automationContextResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load automation context fields', {
+      error: automationContextResult.reason,
+    });
+  }
+  const runbookAutomationContext =
+    automationContextResult.status === 'fulfilled' ? automationContextResult.value : null;
+  const canAuthorizeUnattendedWrites =
+    canManageService &&
+    hasCapability(actor.role, CAPABILITIES.AUTOMATION_PUBLISH) &&
+    hasCapability(actor.role, CAPABILITIES.RUNBOOK_READ_ALL);
+  const unattendedWriteDetails: ServiceRunbookUnattendedWriteDetails = {};
+  for (const binding of serviceRunbookBindings) {
+    if (binding.mode !== 'AUTOMATIC' || binding.versionStrategy !== 'PINNED') continue;
+    unattendedWriteDetails[binding.id] = {
+      eligibility:
+        canAuthorizeUnattendedWrites && binding.runbookVersion
+          ? summarizeUnattendedWriteEligibility(
+              binding.runbookVersion.definition,
+              binding.runbookVersion.inputs
+            )
+          : null,
+      authorizedAtLabel: binding.unattendedWritesAuthorizedAt
+        ? formatDateTime(binding.unattendedWritesAuthorizedAt, currentUser.timeZone || 'UTC', {
+            format: 'datetime',
+            includeTimeZone: true,
+          })
+        : null,
+    };
   }
 
   // SLA and Health Computations with truthful failure degradation
@@ -1314,6 +1352,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             availableAgentPools={availableRunbookAgentPools}
             canManage={canManageService}
             loadError={runbooksLoadError}
+            automationContext={runbookAutomationContext}
+            unattendedWriteDetails={unattendedWriteDetails}
+            canAuthorizeUnattendedWrites={canAuthorizeUnattendedWrites}
           />
         }
         integrationsContent={integrationsContent}

@@ -33,6 +33,7 @@ export default function RunbookBindingVersionInputs({
   initialVersionId,
   values,
   targets,
+  onTargetChange,
 }: {
   versions: Version[];
   publishedVersionId: string;
@@ -40,6 +41,7 @@ export default function RunbookBindingVersionInputs({
   initialVersionId: string | null;
   values: Record<string, unknown>;
   targets?: RunbookTargetOptions & { defaultValue: string };
+  onTargetChange?: (value: string) => void;
 }) {
   const [strategy, setStrategy] = useState(initialStrategy);
   const [versionId, setVersionId] = useState(initialVersionId ?? publishedVersionId);
@@ -81,7 +83,11 @@ export default function RunbookBindingVersionInputs({
       {targets && (
         <div className="space-y-2">
           <Label>Execution target</Label>
-          <RunbookTargetSelect {...targets} hasAgentWrite={version?.hasAgentWrite} />
+          <RunbookTargetSelect
+            {...targets}
+            hasAgentWrite={version?.hasAgentWrite}
+            onValueChange={onTargetChange}
+          />
         </div>
       )}
       <div

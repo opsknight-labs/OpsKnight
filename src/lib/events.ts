@@ -10,7 +10,11 @@ import { logger } from './logger';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import { createHash } from 'crypto';
 import { runReadCommittedTransaction } from './db-utils';
-import { enqueueEventSideEffects, enqueueLifecycleSideEffects } from './event-outbox';
+import {
+  enqueueEventSideEffects,
+  enqueueLifecycleSideEffects,
+  enqueueIncidentCreatedRunbookEvaluation,
+} from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
@@ -418,6 +422,11 @@ export async function processEvent(
         });
 
         await persistAutomation(tx, resolvedIncident.id, envelope, automation, false);
+        await enqueueIncidentCreatedRunbookEvaluation(tx, {
+          incidentId: resolvedIncident.id,
+          status: resolvedIncident.status,
+          source: 'MONITORING',
+        });
         await tx.alert.updateMany({
           where: { id: { in: [alert.id, recentResolveAlert.id] } },
           data: { incidentId: resolvedIncident.id },
@@ -581,6 +590,12 @@ export async function processEvent(
           engagement.earliestDeliveryAt
         );
       }
+      // Same transaction as persistAutomation, so evaluation always sees the committed decision.
+      await enqueueIncidentCreatedRunbookEvaluation(tx, {
+        incidentId: newIncident.id,
+        status: newIncident.status,
+        source: 'MONITORING',
+      });
 
       return {
         action: isFlapping ? ('suppressed' as const) : ('triggered' as const),

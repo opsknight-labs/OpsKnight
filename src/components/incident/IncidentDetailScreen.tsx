@@ -21,6 +21,11 @@ import IncidentDescriptionCard from '@/components/incident/detail/IncidentDescri
 import IncidentSLABadges from '@/components/incident/detail/IncidentSLABadges';
 import IncidentCustomFieldsCard from '@/components/incident/detail/IncidentCustomFieldsCard';
 import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLinksCard';
+import IncidentResponseTimeline from '@/components/incident/detail/IncidentResponseTimeline';
+import IncidentContextCard from '@/components/incident/detail/IncidentContextCard';
+import { getIncidentResponseTimeline } from '@/lib/incidents/response-timeline';
+import { getUserTimeZone } from '@/lib/timezone';
+import { logger } from '@/lib/logger';
 import MobileOperationalContextCard from '@/components/incident/MobileOperationalContextCard';
 import {
   IncidentStatusBadge,
@@ -191,6 +196,15 @@ export default async function IncidentDetailScreen({
     getEscalationExecutionHealth(id).catch(() => null),
   ]);
 
+  // The access check above already ran; the viewer's capabilities drive lane redaction.
+  const responseTimeline = await getIncidentResponseTimeline(id, permissions, {
+    escalationHealth,
+  }).catch(error => {
+    logger.warn('incident.response_timeline.unavailable', { incidentId: id, error });
+    return null;
+  });
+  const userTimeZone = getUserTimeZone(user);
+
   const incidentJiraIssues = jiraLinks.map(serializeJiraIssueReference);
   const resolutionNote =
     incident.notes.find(note => note.content.startsWith('Resolution:')) ?? null;
@@ -269,6 +283,18 @@ export default async function IncidentDetailScreen({
       totalActivityCount={totalActivityCount}
     />
   );
+
+  const responseContent = (
+    <IncidentResponseTimeline
+      timeline={responseTimeline}
+      timeZone={userTimeZone}
+      compact={presentation === 'mobile'}
+    />
+  );
+  const contextContent = responseTimeline ? (
+    <IncidentContextCard context={responseTimeline.context} />
+  ) : null;
+  const hasContextCard = !!responseTimeline && responseTimeline.context.visibility !== 'HIDDEN';
 
   const postmortemContent = (
     <IncidentPostmortemTabContent
@@ -466,8 +492,24 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
-      {presentation === 'mobile' && <IncidentAutomationCard incidentId={id} />}
+      {presentation === 'mobile' && (
+        <div id="automation-decision" className="scroll-mt-24">
+          <IncidentAutomationCard incidentId={id} />
+        </div>
+      )}
       <EscalationExecutionHealth health={escalationHealth} />
+      {presentation === 'mobile' && hasContextCard && (
+        <details className="group overflow-hidden rounded-xl border border-border bg-card">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+            <span>Incident context</span>
+            <ChevronDown
+              className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <div className="border-t border-border p-2">{contextContent}</div>
+        </details>
+      )}
 
       {presentation === 'mobile' && (
         <MobileOperationalContextCard
@@ -563,7 +605,11 @@ export default async function IncidentDetailScreen({
         />
       )}
 
-      {presentation !== 'mobile' && <IncidentAutomationCard incidentId={id} />}
+      {presentation !== 'mobile' && (
+        <div id="automation-decision" className="scroll-mt-24">
+          <IncidentAutomationCard incidentId={id} />
+        </div>
+      )}
       {sourceRestricted ? (
         <section className="rounded-xl border p-4">
           <h2 className="font-semibold">Incident Description</h2>
@@ -593,6 +639,7 @@ export default async function IncidentDetailScreen({
             eventCount={totalEventsCount}
             noteCount={totalNotesCount}
             activityContent={activityContent}
+            responseContent={responseContent}
             runbooksContent={
               canReadRunbooks ? (
                 <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
@@ -628,6 +675,7 @@ export default async function IncidentDetailScreen({
           </>
         ) : (
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-6 2xl:col-span-3">
+            {contextContent}
             {watchersContent}
             {customFieldsContent}
             {quickLinksContent}
