@@ -11,6 +11,24 @@ beforeEach(async () => {
 });
 const scopes = ['runbook-secrets:read', 'runbook-secrets:write'];
 const value = 'private-material-do-not-persist-in-receipts';
+it('returns retryable overload for an actual PostgreSQL statement timeout', async () => {
+  const { apiV2Error } = await import('@/lib/api-v2/response');
+  const { NextRequest } = await import('next/server');
+  let failure: unknown;
+  try {
+    await db.$transaction(async tx => {
+      await tx.$executeRaw`SET LOCAL statement_timeout = '10ms'`;
+      await tx.$executeRaw`SELECT pg_sleep(0.1)`;
+    });
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeDefined();
+  const response = apiV2Error(failure, new NextRequest('http://localhost/api/v2/runbooks/secrets'));
+  expect(response.status).toBe(503);
+  expect(response.headers.get('Retry-After')).toBe('2');
+  expect(await response.json()).toMatchObject({ code: 'DATABASE_UNAVAILABLE', retryable: true });
+});
 it('encrypts submitted values and excludes them from responses, audit and retry receipts', async () => {
   const credential = await createV2Credential(scopes);
   const send = (submitted = value) =>

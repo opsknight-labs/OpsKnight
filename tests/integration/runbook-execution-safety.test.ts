@@ -216,6 +216,86 @@ async function createAgentTarget(
 
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase(), 30000);
+
+  it.each(['PENDING', 'CLAIMED', 'RUNNING', 'CLAIMED_LIVE'] as const)(
+    'converges %s work after pool retirement without assigning a retry',
+    async state => {
+      const target = await createAgentTarget({
+        description: 'Retirement convergence',
+        steps: [
+          {
+            key: 'status',
+            name: 'Status',
+            type: 'SYSTEMD',
+            riskClass: 'READ_ONLY',
+            config: { action: 'status', unit: 'api.service' },
+          },
+        ],
+      });
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        serviceId: target.service.id,
+        bindingId: target.binding.id,
+      });
+      await advanceExecution(execution.id);
+      const attempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
+        where: { executionStep: { executionId: execution.id } },
+      });
+      await testPrisma.runbookExecutionStep.update({
+        where: { id: attempt.executionStepId },
+        data: { maxRetries: 3 },
+      });
+      if (state !== 'PENDING') {
+        const claim = await claimAgentAttempt(target.agent.id);
+        expect(claim?.attemptId).toBe(attempt.id);
+        if (state === 'RUNNING')
+          await fenceAgentAttempt({
+            attemptId: attempt.id,
+            agentId: target.agent.id,
+            leaseToken: claim!.leaseToken,
+          });
+        if (state !== 'CLAIMED_LIVE')
+          await testPrisma.runbookStepAttempt.update({
+            where: { id: attempt.id },
+            data: { leaseExpiresAt: new Date(Date.now() - 1000) },
+          });
+      }
+      const { retireRunbookAgentPool } = await import('@/lib/runbooks/pool-commands');
+      await retireRunbookAgentPool(target.pool.id, target.actor.id);
+      await reconcileRunbooks();
+      if (state === 'CLAIMED_LIVE') {
+        expect(
+          await testPrisma.runbookStepAttempt.findUniqueOrThrow({ where: { id: attempt.id } })
+        ).toMatchObject({ status: 'CLAIMED', completedAt: null });
+        await testPrisma.runbookStepAttempt.update({
+          where: { id: attempt.id },
+          data: { leaseExpiresAt: new Date(Date.now() - 1000) },
+        });
+        await reconcileRunbooks();
+      }
+      const result = await testPrisma.runbookStepAttempt.findUniqueOrThrow({
+        where: { id: attempt.id },
+      });
+      expect(result.status).toBe(state === 'RUNNING' ? 'UNKNOWN' : 'FAILED');
+      expect(result.errorCode).toBe(
+        state === 'RUNNING' ? 'AGENT_LEASE_EXPIRED' : 'TARGET_POOL_RETIRED'
+      );
+      expect(
+        await testPrisma.runbookStepAttempt.count({
+          where: { executionStepId: attempt.executionStepId },
+        })
+      ).toBe(1);
+      const jobs = await testPrisma.backgroundJob.count({
+        where: { type: 'RUNBOOK', payload: { path: ['executionId'], equals: execution.id } },
+      });
+      await reconcileRunbooks();
+      expect(
+        await testPrisma.backgroundJob.count({
+          where: { type: 'RUNBOOK', payload: { path: ['executionId'], equals: execution.id } },
+        })
+      ).toBe(jobs);
+    }
+  );
   afterAll(async () => testPrisma.$disconnect());
 
   it.each(['pause', 'start'] as const)(
