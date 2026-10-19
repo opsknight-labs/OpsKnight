@@ -1,12 +1,12 @@
 {
   "suite": "OpsKnight Deep UI Functional Lifecycle Certification",
-  "timestamp": "2026-10-19T04:16:16.657Z",
-  "candidateCommit": "ab7c492ab0b7baec5d2eb4b3133121b0f2664e83",
+  "timestamp": "2026-10-19T05:14:25.836Z",
+  "candidateCommit": "3c2a8945c3ae2faccfa743a77f4cd7e2e6c898f6",
   "lifecycleJourneys": {
     "runbook_creation": {
       "passed": true,
-      "createdRunbookId": "cmveqsctc1sc1d9pa0s0x1723",
-      "url": "https://opssentinal.com/runbooks/cmveqsctc1sc1d9pa0s0x1723",
+      "createdRunbookId": "cmvesv4op1yakd9pahpydx14i",
+      "url": "https://opssentinal.com/runbooks/cmvesv4op1yakd9pahpydx14i",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_deep_01_creation_redirect.png"
     },
     "runbook_editing_builder": {
@@ -52,10 +52,10 @@
     },
     "runbook_secrets_lifecycle": {
       "passed": true,
-      "secretName": "e2e-live-secret-08659o",
+      "secretName": "e2e-live-secret-78d08613",
       "details": {
         "foundSecret": true,
-        "matchingRow": "e2e-live-secret-08659o\n\tE2E Certified secret credential for runner fleet\t••••••••\t\n1\ngrant\tOct 19, 2026\tManage grants / Rotate",
+        "matchingRow": "e2e-live-secret-78d08613\n\tE2E Certified secret credential for runner fleet\t••••••••\t\n1\ngrant\tOct 19, 2026\tManage grants / Rotate",
         "hasMaskedValue": true,
         "hasGrant": true,
         "hasManageButton": true

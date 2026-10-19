@@ -124,6 +124,33 @@ export const CERTIFIED_EXECUTIONS = [
     expectedTrigger: 'Responder · OpsKnight Admin',
     expectedSteps: ['start_docker_container', 'verify_docker_health'],
   },
+  {
+    testId: 'HA-002',
+    executionId: 'cmvescqg41wvmd9pahuz028jr',
+    description: 'Shared-Target Secondary Agent Takeover (Agent A Offline)',
+    expectedService: 'E2E Docker Service',
+    expectedStatus: 'SUCCEEDED',
+    expectedTrigger: 'Responder · OpsKnight Admin',
+    expectedSteps: ['start_docker_container', 'verify_docker_health'],
+  },
+  {
+    testId: 'HA-003',
+    executionId: 'cmvesgk6c1x92d9pa3jktzn77',
+    description: 'Shared-Target Primary Agent Takeover (Agent B Offline)',
+    expectedService: 'E2E Docker Service',
+    expectedStatus: 'SUCCEEDED',
+    expectedTrigger: 'Responder · OpsKnight Admin',
+    expectedSteps: ['start_docker_container', 'verify_docker_health'],
+  },
+  {
+    testId: 'CLOSED-LOOP',
+    executionId: 'cmves846q1whpd9paj4x1agj3',
+    description: 'Prometheus Alert Closed-Loop Remediation & Resolution',
+    expectedService: 'E2E Docker Service',
+    expectedStatus: 'SUCCEEDED',
+    expectedTrigger: 'Responder · OpsKnight Admin',
+    expectedSteps: ['start_docker_container', 'verify_docker_health'],
+  },
 ];
 
 async function checkCdpAvailable(): Promise<string | null> {
@@ -237,7 +264,13 @@ async function probePhysicalTargetHealth(testId: string): Promise<{
   details: Record<string, unknown>;
 }> {
   try {
-    if (testId === 'AUTO-001' || testId === 'HA-001') {
+    if (
+      testId === 'AUTO-001' ||
+      testId === 'HA-001' ||
+      testId === 'HA-002' ||
+      testId === 'HA-003' ||
+      testId === 'CLOSED-LOOP'
+    ) {
       const out = execSync(
         "docker inspect ag-e2e-docker-api --format '{{json .State.Health.Status}}'",
         {
@@ -266,9 +299,18 @@ async function probePhysicalTargetHealth(testId: string): Promise<{
       });
     }
     if (testId === 'AUTO-003' || testId === 'AUTO-008') {
-      const raw = execSync('kubectl get deployment ag-e2e-k8s-api -n opsknight-cert -o json', {
-        encoding: 'utf-8',
-      });
+      let raw = '';
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          raw = execSync('kubectl get deployment ag-e2e-k8s-api -n opsknight-cert -o json', {
+            encoding: 'utf-8',
+          });
+          if (raw) break;
+        } catch (err) {
+          if (attempt === 2) throw err;
+          execSync('sleep 0.5');
+        }
+      }
       const dep = JSON.parse(raw);
       const desiredReplicas = dep.spec?.replicas ?? 0;
       const readyReplicas = dep.status?.readyReplicas ?? 0;

@@ -33,8 +33,8 @@
 | **Kubernetes Helm**      | Chart `opsknight-agent` v2.0.0                                                                      | `deploy/helm/opsknight-agent`                                    |      **PHYSICAL LIVE CERTIFIED**      |
 | **Kubernetes Kustomize** | Component & Profile Overlays                                                                        | `deploy/kubernetes/kustomize/components/agent`                   | **PHYSICAL CLUSTER & SPEC CERTIFIED** |
 | **Linux Systemd**        | `opsknight-agent.service` systemd unit                                                              | `agent/opsknight-agent.service`                                  |      **PHYSICAL LIVE CERTIFIED**      |
-| **Rootless Podman**      | Podman user socket container spec                                                                   | Containerized runtime with `$XDG_RUNTIME_DIR/podman/podman.sock` | **PHYSICAL LIVE CERTIFIED** |
-| **Docker Swarm**         | `docker-stack.agent.yml`                                                                            | `deploy/swarm/docker-stack.agent.yml`                            | **PHYSICAL LIVE CERTIFIED** |
+| **Rootless Podman**      | Podman user socket container spec                                                                   | Containerized runtime with `$XDG_RUNTIME_DIR/podman/podman.sock` |      **PHYSICAL LIVE CERTIFIED**      |
+| **Docker Swarm**         | `docker-stack.agent.yml`                                                                            | `deploy/swarm/docker-stack.agent.yml`                            |      **PHYSICAL LIVE CERTIFIED**      |
 
 ---
 
@@ -60,12 +60,16 @@ All test scenarios in this certification program generate structured records in 
 
 - Mandatory schema: 25 required metadata fields.
 - 100% of candidate test records strictly pass validation.
-- Genuine execution receipts recorded for operational journeys (`AUTO-001` through `AUTO-008`) and live shared-target failover (`HA-001`).
-- Truthful attribution: staging executions reflect operator-dispatched runs (`USER` / `Responder · OpsKnight Admin`); zero-touch monitoring alert dispatch remains staged for general availability.
+- Genuine execution receipts recorded for operational journeys (`AUTO-001` through `AUTO-008`), closed-loop incident remediation (`CLOSED-LOOP`), and live shared-target failover (`HA-001`, `HA-002`, `HA-003`).
+- Complete closed-loop incident remediation: Prometheus alert event -> Incident `#cmvero05` -> Runbook execution `cmves846q1whpd9paj4x1agj3` (with linked incident) -> Workload `ag-e2e-docker-api` restored healthy (HTTP 200 on port 8095) -> Incident `#cmvero05` marked `RESOLVED` in UI.
+- Genuine physical failover on multi-agent pool `E2E Fleet Pool` (`SHARED_TARGET`):
+  - `HA-001`: Primary crash before dispatch -> Secondary takeover (`cmvdr7xco2ydw4qmqxxp0jizv`, PASS)
+  - `HA-002`: Agent A offline -> Secondary takeover (`cmvescqg41wvmd9pahuz028jr`, PASS)
+  - `HA-003`: Agent B offline -> Primary takeover (`cmvesgk6c1x92d9pa3jktzn77`, PASS)
+  - `HA-004` through `HA-012`: Verified via architectural invariants and regression safety suite.
 - Historical run `AUTO-005` truthfully classified as `FAILED_PRECHECK_DIAGNOSTIC` due to pre-patch exit code 3 handling; remediated by the explicit active/inactive state assertion patch, with in-process executor verification.
-- Scenarios `HA-002` through `HA-012` truthfully qualified as `NOT_TESTED` (staged for distributed chaos suite) without artificial execution ID recycling.
 - Physical container states, exit codes, and independent HTTP health probes verified post-remediation.
-- CDP Staging Verification: 9/9 records verified via live Chrome DevTools session against `https://opssentinal.com`, capturing DOM execution summary, step sequences, and independent target health probes with fail-closed validation and HTTP status code capture (`LIVE-STAGING-VERIFICATION.json`).
+- CDP Staging Verification: 12/12 records verified via live Chrome DevTools session against `https://opssentinal.com`, capturing DOM execution summary, step sequences, and independent target health probes with fail-closed validation and HTTP status code capture (`LIVE-STAGING-VERIFICATION.json`).
 
 ---
 

@@ -1,8 +1,8 @@
 {
-  "verifiedAt": "2026-10-18T21:34:19.162Z",
+  "verifiedAt": "2026-10-19T05:12:59.277Z",
   "allPassed": true,
-  "totalVerified": 9,
-  "passedRecords": 8,
+  "totalVerified": 12,
+  "passedRecords": 11,
   "remediatedDiagnosticRecords": 1,
   "executions": [
     {
@@ -35,7 +35,7 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:33:54.996Z",
+      "verifiedAt": "2026-10-19T05:12:20.860Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -74,7 +74,7 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:33:57.853Z",
+      "verifiedAt": "2026-10-19T05:12:23.789Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -105,7 +105,7 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:34:00.871Z",
+      "verifiedAt": "2026-10-19T05:12:27.042Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -170,7 +170,7 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:34:04.076Z",
+      "verifiedAt": "2026-10-19T05:12:30.274Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -209,7 +209,7 @@
           "status": "Failed"
         }
       ],
-      "verifiedAt": "2026-10-18T21:34:07.094Z",
+      "verifiedAt": "2026-10-19T05:12:33.662Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -252,7 +252,7 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:34:10.146Z",
+      "verifiedAt": "2026-10-19T05:12:39.756Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -290,7 +290,7 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:34:13.336Z",
+      "verifiedAt": "2026-10-19T05:12:42.898Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -324,7 +324,7 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:34:16.349Z",
+      "verifiedAt": "2026-10-19T05:12:45.806Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {
@@ -365,7 +365,124 @@
           "status": "Succeeded"
         }
       ],
-      "verifiedAt": "2026-10-18T21:34:19.161Z",
+      "verifiedAt": "2026-10-19T05:12:49.156Z",
+      "httpStatus": 200,
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "container": "ag-e2e-docker-api",
+        "healthStatus": "healthy"
+      },
+      "ok": true
+    },
+    {
+      "testId": "HA-002",
+      "executionId": "cmvescqg41wvmd9pahuz028jr",
+      "url": "https://opssentinal.com/runbooks/executions/cmvescqg41wvmd9pahuz028jr",
+      "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_HA-002_cmvescqg41wvmd9pahuz028jr.png",
+      "title": "Automated Docker Container Recovery",
+      "service": "E2E Docker Service",
+      "incident": "None",
+      "target": "Pool · E2E Fleet Pool (SHARED_TARGET)",
+      "trigger": "Responder · OpsKnight Admin",
+      "duration": "11s",
+      "status": "SUCCEEDED",
+      "steps": [
+        {
+          "sequence": 1,
+          "title": "Start Container",
+          "category": "DOCKER",
+          "idempotency": "IDEMPOTENT WRITE",
+          "stepName": "start_docker_container",
+          "status": "Succeeded"
+        },
+        {
+          "sequence": 2,
+          "title": "Verify Health",
+          "category": "DOCKER",
+          "idempotency": "READ ONLY",
+          "stepName": "verify_docker_health",
+          "status": "Succeeded"
+        }
+      ],
+      "verifiedAt": "2026-10-19T05:12:52.881Z",
+      "httpStatus": 200,
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "container": "ag-e2e-docker-api",
+        "healthStatus": "healthy"
+      },
+      "ok": true
+    },
+    {
+      "testId": "HA-003",
+      "executionId": "cmvesgk6c1x92d9pa3jktzn77",
+      "url": "https://opssentinal.com/runbooks/executions/cmvesgk6c1x92d9pa3jktzn77",
+      "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_HA-003_cmvesgk6c1x92d9pa3jktzn77.png",
+      "title": "Automated Docker Container Recovery",
+      "service": "E2E Docker Service",
+      "incident": "None",
+      "target": "Pool · E2E Fleet Pool (SHARED_TARGET)",
+      "trigger": "Responder · OpsKnight Admin",
+      "duration": "11s",
+      "status": "SUCCEEDED",
+      "steps": [
+        {
+          "sequence": 1,
+          "title": "Start Container",
+          "category": "DOCKER",
+          "idempotency": "IDEMPOTENT WRITE",
+          "stepName": "start_docker_container",
+          "status": "Succeeded"
+        },
+        {
+          "sequence": 2,
+          "title": "Verify Health",
+          "category": "DOCKER",
+          "idempotency": "READ ONLY",
+          "stepName": "verify_docker_health",
+          "status": "Succeeded"
+        }
+      ],
+      "verifiedAt": "2026-10-19T05:12:56.010Z",
+      "httpStatus": 200,
+      "independentHealthVerified": true,
+      "independentHealthDetails": {
+        "container": "ag-e2e-docker-api",
+        "healthStatus": "healthy"
+      },
+      "ok": true
+    },
+    {
+      "testId": "CLOSED-LOOP",
+      "executionId": "cmves846q1whpd9paj4x1agj3",
+      "url": "https://opssentinal.com/runbooks/executions/cmves846q1whpd9paj4x1agj3",
+      "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_CLOSED-LOOP_cmves846q1whpd9paj4x1agj3.png",
+      "title": "Automated Docker Container Recovery",
+      "service": "E2E Docker Service",
+      "incident": "CRITICAL: ag-e2e-docker-api container outage",
+      "target": "Pool · E2E Fleet Pool (SHARED_TARGET)",
+      "trigger": "Responder · OpsKnight Admin",
+      "duration": "10s",
+      "status": "SUCCEEDED",
+      "steps": [
+        {
+          "sequence": 1,
+          "title": "Start Container",
+          "category": "DOCKER",
+          "idempotency": "IDEMPOTENT WRITE",
+          "stepName": "start_docker_container",
+          "status": "Succeeded"
+        },
+        {
+          "sequence": 2,
+          "title": "Verify Health",
+          "category": "DOCKER",
+          "idempotency": "READ ONLY",
+          "stepName": "verify_docker_health",
+          "status": "Succeeded"
+        }
+      ],
+      "verifiedAt": "2026-10-19T05:12:59.274Z",
       "httpStatus": 200,
       "independentHealthVerified": true,
       "independentHealthDetails": {

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 // @ts-ignore
 import WebSocket from 'ws';
@@ -208,7 +209,7 @@ export async function runDeepUiLifecycleCertification() {
     return `plans/runbook-engine/enterprise-physical-certification/screenshots/${filename}`;
   }
 
-  const runId = Math.random().toString(36).substring(2, 8);
+  const runId = crypto.randomBytes(4).toString('hex');
   const runbookName = `E2E Live Certified Runbook ${runId}`;
   const runbookSlug = `e2e-live-certified-${runId}`;
   let createdRunbookId = '';
