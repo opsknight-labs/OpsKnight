@@ -1,7 +1,10 @@
 'use client';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, RotateCw, Workflow } from 'lucide-react';
-import { saveAutomationSettings } from '@/app/(app)/settings/system/automation-actions';
+import {
+  saveAutomationSettings,
+  type SaveAutomationSettingsResult,
+} from '@/app/(app)/settings/system/automation-actions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,8 +29,6 @@ type Settings = {
 
 const MIN_RETENTION_DAYS = 1;
 const MAX_RETENTION_DAYS = 3650;
-const CONFLICT_PREFIX = 'Automation settings changed';
-const ACTIVE_SERVICES_PREFIX = 'Services are already configured';
 
 type Feedback = { kind: 'saved' } | { kind: 'error'; text: string; conflict: boolean } | null;
 
@@ -41,23 +42,16 @@ function retentionError(value: string): string | null {
   return null;
 }
 
-function errorFeedback(error: unknown): Feedback {
-  const message = error instanceof Error ? error.message : '';
-  if (message.startsWith(CONFLICT_PREFIX))
-    return {
-      kind: 'error',
-      conflict: true,
-      text: 'Another administrator changed these settings. Reload to see the latest values, then save again.',
-    };
-  if (message.startsWith(ACTIVE_SERVICES_PREFIX))
-    return { kind: 'error', conflict: false, text: message };
-  // Production Server Actions mask thrown messages, so a conflict may arrive unlabeled.
-  return {
-    kind: 'error',
-    conflict: true,
-    text: 'Could not save automation settings. If another administrator changed them, reload and try again.',
-  };
+function failureFeedback(result: Extract<SaveAutomationSettingsResult, { ok: false }>): Feedback {
+  return { kind: 'error', conflict: result.code === 'CONFLICT', text: result.message };
 }
+
+// Unexpected failures arrive masked in production, so offer a reload in case of a stale page.
+const UNEXPECTED_FEEDBACK: Feedback = {
+  kind: 'error',
+  conflict: true,
+  text: 'Could not save automation settings. If another administrator changed them, reload and try again.',
+};
 
 export default function AutomationSettings({ initialSettings }: { initialSettings: Settings }) {
   const ids = useId();
@@ -71,11 +65,17 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
   const [enabled, setEnabled] = useState(initialSettings.automationEnabled);
   const [retention, setRetention] = useState(String(initialSettings.automationTraceRetentionDays));
   const [showRetentionError, setShowRetentionError] = useState(false);
+  const [serverRetentionError, setServerRetentionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const retentionProblem = retentionError(retention);
+
+  // The fieldset is disabled while saving, so focus once it re-enables.
+  useEffect(() => {
+    if (!busy && serverRetentionError) retentionRef.current?.focus();
+  }, [busy, serverRetentionError]);
   const disabling = saved.automationEnabled && !enabled;
   const enabling = !saved.automationEnabled && enabled;
 
@@ -83,17 +83,24 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
     setBusy(true);
     setFeedback(null);
     try {
-      const next = await saveAutomationSettings({
+      const result = await saveAutomationSettings({
         automationEnabled: enabled,
         automationTraceRetentionDays: Number(retention.trim()),
         expectedRevision: saved.automationSettingsRevision,
       });
+      if (!result.ok) {
+        const fieldError = result.fieldErrors?.automationTraceRetentionDays;
+        if (fieldError) setServerRetentionError(fieldError);
+        setFeedback(failureFeedback(result));
+        return;
+      }
+      const next = result.settings;
       setSaved(next);
       setEnabled(next.automationEnabled);
       setRetention(String(next.automationTraceRetentionDays));
       setFeedback({ kind: 'saved' });
-    } catch (error) {
-      setFeedback(errorFeedback(error));
+    } catch {
+      setFeedback(UNEXPECTED_FEEDBACK);
     } finally {
       setBusy(false);
     }
@@ -118,7 +125,8 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
     if (feedback?.kind === 'saved') setFeedback(null);
   }
 
-  const invalid = showRetentionError && !!retentionProblem;
+  const shownRetentionError = (showRetentionError && retentionProblem) || serverRetentionError;
+  const invalid = !!shownRetentionError;
 
   return (
     <section
@@ -214,6 +222,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
               }
               onChange={event => {
                 setRetention(event.target.value);
+                setServerRetentionError(null);
                 edited();
               }}
               onBlur={() => setShowRetentionError(true)}
@@ -228,7 +237,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
           </div>
           {invalid && (
             <p id={retentionErrorId} className="text-sm font-medium text-destructive">
-              {retentionProblem}
+              {shownRetentionError}
             </p>
           )}
           <p id={retentionHelpId} className="text-sm text-muted-foreground">

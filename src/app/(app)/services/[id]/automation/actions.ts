@@ -1,6 +1,8 @@
 'use server';
 import { decodeExplanation } from '@/lib/automation/explanation';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
+import { AppError } from '@/lib/errors/app-error';
+import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { assertAutomationAccess } from '@/lib/automation/access';
 import {
@@ -160,12 +162,54 @@ export async function automationAction(raw: unknown) {
       ),
     };
   } catch (error) {
-    return {
-      ok: false as const,
-      conflict: error instanceof AutomationConflict,
-      error: error instanceof Error ? error.message : 'Automation request failed',
-    };
+    return automationFailure(error);
   }
+}
+export type AutomationActionFailure = {
+  ok: false;
+  code: 'CONFLICT' | 'FORBIDDEN' | 'VALIDATION' | 'REJECTED' | 'UNEXPECTED';
+  conflict: boolean;
+  error: string;
+};
+function automationFailure(error: unknown): AutomationActionFailure {
+  const fail = (code: AutomationActionFailure['code'], message: string) => ({
+    ok: false as const,
+    code,
+    conflict: code === 'CONFLICT',
+    error: message,
+  });
+  if (error instanceof AutomationConflict) return fail('CONFLICT', error.message);
+  if (error instanceof ZodError) {
+    const issue = error.issues[0];
+    return fail(
+      'VALIDATION',
+      issue
+        ? `${issue.path.length ? `${issue.path.join('.')}: ` : ''}${issue.message}`
+        : 'Automation request is invalid'
+    );
+  }
+  if (error instanceof AppError) {
+    const denied = ['AUTHORIZATION_DENIED', 'AUTHENTICATION_REQUIRED'].includes(error.code);
+    return fail(
+      denied ? 'FORBIDDEN' : 'REJECTED',
+      error.exposure === 'public' ? error.userMessage : 'Automation request failed'
+    );
+  }
+  // Domain guards throw plain Errors with user-facing text; anything else is internal.
+  if (error instanceof Error && error.constructor === Error) {
+    if (error.message === 'VERSION_INVALID')
+      return fail(
+        'REJECTED',
+        'The active version failed integrity validation. Publish a new version and try again.'
+      );
+    if (error.message.startsWith('Transaction failed after'))
+      return fail('REJECTED', 'Automation is busy with another change. Try again.');
+    return fail('REJECTED', error.message);
+  }
+  logger.error('automation.action.failed', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  return fail('UNEXPECTED', 'Automation request failed. Try again.');
 }
 export async function getAutomationArea(
   serviceIdRaw: string,

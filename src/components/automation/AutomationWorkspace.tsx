@@ -172,6 +172,8 @@ export default function AutomationWorkspace({
           ...(input.action === 'publish' ? { expectedRevision: revision.current } : {}),
         });
         if (!response.ok) {
+          // A stale active version or draft revision: refresh so a retry uses current state.
+          if (response.code === 'CONFLICT') await load(area);
           setError(response.error);
           return false;
         }

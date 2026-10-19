@@ -11,10 +11,11 @@ import { saveDraft, publishVersion, changeMode } from '@/lib/automation/versioni
 import { emptySnapshot } from '@/lib/automation/contract';
 import { automationEnabled } from '@/lib/automation/runtime';
 import { saveAutomationSettings } from '@/app/(app)/settings/system/automation-actions';
+import { AuthorizationError } from '@/lib/authorization';
 const auth = vi.hoisted(() => ({ actorId: '', denied: false }));
 vi.mock('@/lib/rbac', () => ({
   assertAdmin: async () => {
-    if (auth.denied) throw new Error('Unauthorized');
+    if (auth.denied) throw new AuthorizationError('Unauthorized', 'admin.manage' as never);
     return { id: auth.actorId };
   },
 }));
@@ -73,7 +74,14 @@ it('persists audited settings and immediately exposes disable to independent rea
     automationTraceRetentionDays: 120,
     expectedRevision: 0,
   });
-  expect(saved.automationSettingsRevision).toBe(1);
+  expect(saved).toEqual({
+    ok: true,
+    settings: {
+      automationEnabled: true,
+      automationTraceRetentionDays: 120,
+      automationSettingsRevision: 1,
+    },
+  });
   expect(await automationEnabled()).toBe(true);
   await saveAutomationSettings({
     automationEnabled: false,
@@ -84,7 +92,7 @@ it('persists audited settings and immediately exposes disable to independent rea
   expect(await db.auditLog.count({ where: { action: 'automation.settings.updated' } })).toBe(2);
 });
 it('concurrent administrators cannot overwrite a newer revision', async () => {
-  const results = await Promise.allSettled(
+  const results = await Promise.all(
     [120, 180].map(days =>
       saveAutomationSettings({
         automationEnabled: true,
@@ -93,27 +101,72 @@ it('concurrent administrators cannot overwrite a newer revision', async () => {
       })
     )
   );
-  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter(result => result.ok)).toHaveLength(1);
+  expect(results.find(result => !result.ok)).toEqual({
+    ok: false,
+    code: 'CONFLICT',
+    message:
+      'Another administrator changed these settings. Reload to see the latest values, then save again.',
+  });
   expect((await getAutomationSettings()).automationSettingsRevision).toBe(1);
+  expect(await db.auditLog.count({ where: { action: 'automation.settings.updated' } })).toBe(1);
 });
-it('requires administrator authorization and validates retention bounds', async () => {
-  auth.denied = true;
-  await expect(
-    saveAutomationSettings({
+it('returns ACTIVE_SERVICES without enabling while services are staged', async () => {
+  const service = await createTestService('Staged before enable');
+  await db.serviceAutomationConfig.create({ data: { serviceId: service.id, mode: 'SHADOW' } });
+  expect(
+    await saveAutomationSettings({
       automationEnabled: true,
       automationTraceRetentionDays: 90,
       expectedRevision: 0,
     })
-  ).rejects.toThrow('Unauthorized');
+  ).toEqual({
+    ok: false,
+    code: 'ACTIVE_SERVICES',
+    message: expect.stringContaining('Services are already configured SHADOW or LIVE.'),
+  });
+  expect(await getAutomationSettings()).toEqual({
+    automationEnabled: false,
+    automationTraceRetentionDays: 90,
+    automationSettingsRevision: 0,
+  });
+  expect(
+    (await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId: service.id } })).mode
+  ).toBe('SHADOW');
+  expect(await db.auditLog.count({ where: { action: 'automation.settings.updated' } })).toBe(0);
+});
+it('requires administrator authorization and validates retention bounds', async () => {
+  auth.denied = true;
+  expect(
+    await saveAutomationSettings({
+      automationEnabled: true,
+      automationTraceRetentionDays: 90,
+      expectedRevision: 0,
+    })
+  ).toEqual({
+    ok: false,
+    code: 'FORBIDDEN',
+    message: 'Administrator access is required to change automation settings.',
+  });
   auth.denied = false;
   for (const days of [0, 3651, 1.5])
-    await expect(
-      saveAutomationSettings({
+    expect(
+      await saveAutomationSettings({
         automationEnabled: true,
         automationTraceRetentionDays: days,
         expectedRevision: 0,
       })
-    ).rejects.toThrow();
+    ).toEqual({
+      ok: false,
+      code: 'VALIDATION',
+      message: 'Check the highlighted settings and try again.',
+      fieldErrors: {
+        automationTraceRetentionDays: 'Enter a whole number of days from 1 to 3650.',
+      },
+    });
+  expect(
+    await saveAutomationSettings({ automationEnabled: true, automationTraceRetentionDays: 90 })
+  ).toMatchObject({ ok: false, code: 'VALIDATION', fieldErrors: {} });
   expect(await automationEnabled()).toBe(false);
 });
 

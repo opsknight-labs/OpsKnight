@@ -17,9 +17,12 @@ const initial = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.save.mockImplementation(async (input: Record<string, unknown>) => ({
-    automationEnabled: input.automationEnabled,
-    automationTraceRetentionDays: input.automationTraceRetentionDays,
-    automationSettingsRevision: 5,
+    ok: true,
+    settings: {
+      automationEnabled: input.automationEnabled,
+      automationTraceRetentionDays: input.automationTraceRetentionDays,
+      automationSettingsRevision: 5,
+    },
   }));
 });
 
@@ -99,9 +102,12 @@ describe('AutomationSettings', () => {
   });
 
   it('explains an optimistic-concurrency conflict and offers a reload', async () => {
-    mocks.save.mockRejectedValue(
-      new Error('Automation settings changed. Reload this page before saving.')
-    );
+    mocks.save.mockResolvedValue({
+      ok: false,
+      code: 'CONFLICT',
+      message:
+        'Another administrator changed these settings. Reload to see the latest values, then save again.',
+    });
     render(<AutomationSettings initialSettings={initial} />);
     fireEvent.click(save());
     const alert = await screen.findByRole('alert');
@@ -113,11 +119,60 @@ describe('AutomationSettings', () => {
   it('shows the active-services guard message verbatim without a reload action', async () => {
     const message =
       'Services are already configured SHADOW or LIVE. Save global OFF to reset their modes before enabling; then activate services individually.';
-    mocks.save.mockRejectedValue(new Error(message));
+    mocks.save.mockResolvedValue({ ok: false, code: 'ACTIVE_SERVICES', message });
     render(<AutomationSettings initialSettings={{ ...initial, automationEnabled: false }} />);
     fireEvent.click(screen.getByLabelText('Enable service automation globally'));
     fireEvent.click(save());
     expect((await screen.findByRole('alert')).textContent).toContain(message);
     expect(screen.queryByRole('button', { name: 'Reload settings' })).toBeNull();
+    expect(
+      screen.getByLabelText('Enable service automation globally').getAttribute('aria-checked')
+    ).toBe('true');
+  });
+
+  it('maps server field errors to the retention input and clears them on edit', async () => {
+    mocks.save.mockResolvedValue({
+      ok: false,
+      code: 'VALIDATION',
+      message: 'Check the highlighted settings and try again.',
+      fieldErrors: { automationTraceRetentionDays: 'Enter a whole number of days from 1 to 3650.' },
+    });
+    render(<AutomationSettings initialSettings={initial} />);
+    fireEvent.click(save());
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Check the highlighted settings and try again.'
+    );
+    const fieldError = screen.getByText('Enter a whole number of days from 1 to 3650.');
+    expect(retention().getAttribute('aria-invalid')).toBe('true');
+    expect(retention().getAttribute('aria-describedby')).toContain(fieldError.id);
+    expect(document.activeElement).toBe(retention());
+    expect(screen.queryByRole('button', { name: 'Reload settings' })).toBeNull();
+    fireEvent.change(retention(), { target: { value: '45' } });
+    expect(screen.queryByText('Enter a whole number of days from 1 to 3650.')).toBeNull();
+    expect(retention().getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('shows the forbidden message without a reload action', async () => {
+    mocks.save.mockResolvedValue({
+      ok: false,
+      code: 'FORBIDDEN',
+      message: 'Administrator access is required to change automation settings.',
+    });
+    render(<AutomationSettings initialSettings={initial} />);
+    fireEvent.click(save());
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Administrator access is required to change automation settings.'
+    );
+    expect(screen.queryByRole('button', { name: 'Reload settings' })).toBeNull();
+  });
+
+  it('falls back to a generic message with reload when the action throws unexpectedly', async () => {
+    mocks.save.mockRejectedValue(new Error('An error occurred in the Server Components render.'));
+    render(<AutomationSettings initialSettings={initial} />);
+    fireEvent.click(save());
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Could not save automation settings.');
+    expect(alert.textContent).not.toContain('Server Components');
+    expect(screen.getByRole('button', { name: 'Reload settings' })).toBeTruthy();
   });
 });
