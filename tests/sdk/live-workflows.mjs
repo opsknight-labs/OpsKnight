@@ -1,3 +1,4 @@
+import { certifyNativeRunbookControl } from './native-runbook-workflow.mjs';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
@@ -717,6 +718,7 @@ try {
   if (python.stdout) process.stdout.write(python.stdout);
   if (python.status !== 0)
     throw new Error(`Python live workflow failed (${python.status}): ${python.stderr}`);
+  if (externalBase) await certifyNativeRunbookControl(prisma, externalBase, secret, user.id);
   console.log('Both SDKs passed against the built OpsKnight application and PostgreSQL.');
 } finally {
   try {
