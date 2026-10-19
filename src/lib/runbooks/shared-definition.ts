@@ -311,6 +311,30 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
       step.key,
       allowInputTemplates
     );
+    if (step.config.expectedState !== undefined) {
+      const state = String(step.config.expectedState);
+      if (!['active', 'inactive', 'any'].includes(state)) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" has invalid expectedState "${state}". Must be "active", "inactive", or "any".`
+        );
+      }
+      if (
+        state === 'inactive' &&
+        (step.config.requireActive === true || step.config.expectedStatus === 'active')
+      ) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" has contradictory configuration: expectedState is "inactive" but requireActive or expectedStatus is active.`
+        );
+      }
+      if (
+        state === 'active' &&
+        (step.config.requireActive === false || step.config.expectedStatus === 'inactive')
+      ) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" has contradictory configuration: expectedState is "active" but requireActive is false or expectedStatus is inactive.`
+        );
+      }
+    }
   }
   if (step.type === 'DOCKER') {
     const action = configuredString(step, 'action', 'inspect');

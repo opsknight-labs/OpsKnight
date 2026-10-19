@@ -52,6 +52,26 @@ describe('inbound delivery inbox', () => {
     });
   });
 
+  it('waits and resolves to completed when an in-flight delivery finishes during backoff', async () => {
+    inboundDelivery.create.mockRejectedValueOnce({ code: 'P2002', meta: {} });
+    // First query: PROCESSING with active lease
+    inboundDelivery.findUnique.mockResolvedValueOnce({
+      id: 'delivery-1',
+      status: 'PROCESSING',
+      leaseExpiresAt: new Date(Date.now() + 60_000),
+    });
+    // Second query (after sleep): COMPLETED
+    inboundDelivery.findUnique.mockResolvedValueOnce({
+      id: 'delivery-1',
+      status: 'COMPLETED',
+      leaseExpiresAt: null,
+    });
+
+    expect(await claimInboundDelivery('integration-1', 'GITHUB', 'delivery-1')).toEqual({
+      disposition: 'COMPLETED',
+    });
+  });
+
   it('does not allow a stale lease to mark a newer claim completed', async () => {
     const claim = {
       disposition: 'CLAIMED' as const,

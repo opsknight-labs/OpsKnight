@@ -126,6 +126,11 @@ export function commandFor(
       return selected;
     }
     case 'SYSTEMD': {
+      if (hasContradictorySystemdConfig(config)) {
+        throw new Error(
+          'INVALID_STEP_CONFIG: Contradictory Systemd configuration (conflicting active and inactive expectations).'
+        );
+      }
       const action = String(config.action ?? 'status');
       if (action === 'logs')
         return {
@@ -327,8 +332,21 @@ export async function executeAttempt(
       result.status === 'SUCCEEDED' &&
       attempt.step.type === 'SYSTEMD' &&
       attempt.step.config.action === 'logs'
-    )
+    ) {
       postState.logSummary = result.output.slice(0, 4096);
+    }
+    if (
+      result.status === 'SUCCEEDED' &&
+      attempt.step.type === 'SYSTEMD' &&
+      (attempt.step.config.action === 'status' || !attempt.step.config.action)
+    ) {
+      if (isSystemdActiveRequired(attempt.step) && result.exitCode === 3) {
+        result.status = 'FAILED';
+        result.errorCode = 'SERVICE_INACTIVE';
+        result.errorMessage =
+          'Systemd service is inactive or dead (exit code 3). Verification expecting active state failed.';
+      }
+    }
     if (signal.aborted && result.status === 'SUCCEEDED')
       return {
         ...result,
@@ -340,6 +358,134 @@ export async function executeAttempt(
     return { ...result, preState, postState };
   }
   return executeCommand(attempt, policy, signal);
+}
+
+export function hasContradictorySystemdConfig(config: Record<string, unknown> = {}): boolean {
+  const expected = config.expectedState;
+  const legacyActive = config.requireActive === true || config.expectedStatus === 'active';
+  const legacyInactive = config.requireActive === false || config.expectedStatus === 'inactive';
+  if (expected === 'inactive' && legacyActive) return true;
+  if (expected === 'active' && legacyInactive) return true;
+  return false;
+}
+
+export function isSystemdActiveRequired(step: ClaimedAttempt['step']): boolean {
+  if (step.type !== 'SYSTEMD') return false;
+  const config = step.config ?? {};
+  if (hasContradictorySystemdConfig(config)) {
+    throw new Error(
+      'INVALID_STEP_CONFIG: Contradictory Systemd configuration (conflicting active and inactive expectations).'
+    );
+  }
+  if (config.expectedState === 'any') return false;
+  if (config.expectedState === 'inactive') return false;
+  return (
+    config.expectedState === 'active' ||
+    config.requireActive === true ||
+    config.expectedStatus === 'active' ||
+    step.phase === 'verification' ||
+    config.phase === 'verification'
+  );
+}
+
+export function resolveCommandResult(
+  attempt: ClaimedAttempt,
+  code: number | null,
+  output: string,
+  timedOut: boolean
+): ExecutionResult {
+  if (timedOut) {
+    return {
+      status: attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
+      exitCode: code ?? undefined,
+      output,
+      errorCode: 'COMMAND_TIMEOUT',
+      errorMessage: `Command exceeded timeout deadline.`,
+    };
+  }
+
+  if (attempt.step.type === 'SYSTEMD') {
+    const config = attempt.step.config ?? {};
+    if (hasContradictorySystemdConfig(config)) {
+      return {
+        status: 'FAILED',
+        exitCode: code ?? undefined,
+        output,
+        errorCode: 'INVALID_CONFIG',
+        errorMessage:
+          'Contradictory Systemd configuration: expectedState conflicts with requireActive or expectedStatus.',
+      };
+    }
+  }
+
+  const isSystemdStatus =
+    attempt.step.type === 'SYSTEMD' &&
+    (attempt.step.config?.action === 'status' || !attempt.step.config?.action);
+
+  if (isSystemdStatus) {
+    const config = attempt.step.config ?? {};
+    const expected = config.expectedState;
+    const requireActive =
+      expected === 'active' || config.requireActive === true || config.expectedStatus === 'active';
+    const requireInactive = expected === 'inactive';
+
+    if (code === 0) {
+      if (requireInactive) {
+        return {
+          status: 'FAILED',
+          exitCode: 0,
+          output,
+          errorCode: 'SERVICE_ACTIVE',
+          errorMessage:
+            'Systemd service unit is active (exit code 0), but inactive state was required.',
+        };
+      }
+      return {
+        status: 'SUCCEEDED',
+        exitCode: 0,
+        output,
+      };
+    }
+    if (code === 3) {
+      if (requireActive) {
+        return {
+          status: 'FAILED',
+          exitCode: 3,
+          output,
+          errorCode: 'SERVICE_INACTIVE',
+          errorMessage:
+            'Systemd service is inactive or dead (exit code 3). Verification expecting active state failed.',
+        };
+      }
+      return {
+        status: 'SUCCEEDED',
+        exitCode: 3,
+        output,
+      };
+    }
+    if (code === 4) {
+      return {
+        status: 'FAILED',
+        exitCode: 4,
+        output,
+        errorCode: 'UNIT_NOT_FOUND',
+        errorMessage: 'Systemd unit not found (exit code 4).',
+      };
+    }
+  }
+
+  const isSuccess = code === 0;
+  return {
+    status: isSuccess ? 'SUCCEEDED' : attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
+    exitCode: code ?? undefined,
+    output,
+    ...(isSuccess
+      ? {}
+      : {
+          errorCode: 'COMMAND_FAILED',
+          errorMessage: `Command exited with ${code ?? 'unknown'}.`,
+        }),
+  };
 }
 
 async function executeCommand(
@@ -469,27 +615,8 @@ async function executeCommand(
           ...(errorCode ? { errorCode, errorMessage } : {}),
         });
       }
-      if (timedOut) {
-        return resolve({
-          status: attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
-          exitCode: code ?? undefined,
-          output,
-          errorCode: 'COMMAND_TIMEOUT',
-          errorMessage: `Command exceeded ${Math.floor(timeoutMs / 1000)} seconds.`,
-        });
-      }
-      resolve({
-        status:
-          code === 0 ? 'SUCCEEDED' : attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
-        exitCode: code ?? undefined,
-        output,
-        ...(code === 0
-          ? {}
-          : {
-              errorCode: 'COMMAND_FAILED',
-              errorMessage: `Command exited with ${code ?? 'unknown'}.`,
-            }),
-      });
+
+      resolve(resolveCommandResult(attempt, code, output, timedOut));
     });
   });
 }

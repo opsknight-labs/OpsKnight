@@ -110,3 +110,7 @@ tsconfig.tsbuildinfo
 /sdk/python/*.egg-info/
 __pycache__/
 *.pyc
+
+# Runbook physical certification output (retain as CI artifacts, not source)
+/plans/runbook-engine/enterprise-physical-certification/screenshots/
+/plans/runbook-engine/enterprise-physical-certification/results/

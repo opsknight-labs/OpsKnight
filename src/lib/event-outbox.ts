@@ -292,6 +292,22 @@ export async function enqueueEventSideEffects(
   incidentId: string,
   responderNotBefore?: Date
 ): Promise<void> {
+  if (action === 'triggered') {
+    const runbookSourceEventId = crypto.randomUUID();
+    await tx.backgroundJob.create({
+      data: {
+        type: 'RUNBOOK',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 8,
+        payload: {
+          kind: 'EVALUATE_TRIGGER',
+          incidentId,
+          sourceEventId: runbookSourceEventId,
+        },
+      },
+    });
+  }
   await enqueueSideEffects(
     tx,
     incidentId,
