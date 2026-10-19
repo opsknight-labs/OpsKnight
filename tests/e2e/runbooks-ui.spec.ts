@@ -687,7 +687,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   await page.getByRole('option', { name: 'v1 · PUBLISHED', exact: true }).click();
   await page.getByLabel('Rule name', { exact: true }).fill(ruleName);
   await page.getByRole('button', { name: 'Continue to target and inputs', exact: true }).click();
-  await page.getByLabel('Legacy input', { exact: false }).fill('selected-old-schema');
+  await page.getByRole('textbox', { name: /Legacy input/ }).fill('selected-old-schema');
   await expect(page.getByLabel('Service unit', { exact: false })).not.toBeVisible();
   await page.getByRole('button', { name: 'Continue to trigger', exact: true }).click();
   await page.getByRole('button', { name: 'Continue to review and save', exact: true }).click();
