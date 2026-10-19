@@ -45,7 +45,7 @@ Every arrow is a durable `BackgroundJob`. A crashed worker, a lost lease or a re
 
 When a LIVE automation decision is evaluated without a fallback, OpsKnight stores a **response context** on the incident's decision row:
 
-- Only the active automation version's built-in and declared fields are captured (up to 64), with their value, state (`RECOGNIZED`, `MISSING`, `UNMAPPED`), type and source (`ALERT` or `ENRICHMENT`). Raw payload keys that the version does not declare are never copied — not into the decision, not into runbook executions, not into the timeline.
+- Only the active automation version's built-in and declared fields are captured (every built-in field plus up to 64 declared fields; an automation version that exceeds the limit fails with `CONTEXT_FIELD_LIMIT` instead of being truncated), with their value, state (`RECOGNIZED`, `MISSING`, `UNMAPPED`), type and source (`ALERT` or `ENRICHMENT`). Raw payload keys that the version does not declare are never copied — not into the decision, not into runbook executions, not into the timeline.
 - The context carries the automation version id/number and a SHA-256 checksum. Readers verify the checksum before trusting any value.
 - The decision row is immutable. The database rejects any `UPDATE` of the decision, including its context, and a `CHECK` constraint only accepts a context on LIVE, non-fallback rows for the matching version.
 - Every runbook execution started for the incident copies the verified context into `RunbookExecution.responseContext`, so later audits show exactly what the run saw.

@@ -152,6 +152,7 @@ jobs:
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1
           tests/integration/runbook-enterprise-readiness-database.test.ts
+          tests/integration/runbook-legacy-compat.test.ts
           tests/integration/runbook-execution-safety.test.ts
           tests/integration/runbook-preview-authorization.test.ts
           tests/integration/runbook-lifecycle-database.test.ts
