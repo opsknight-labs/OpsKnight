@@ -4,7 +4,11 @@ import prisma from '@/lib/prisma';
 import { computeTriggerFingerprint } from './definition';
 import { evaluateTrigger } from './matcher';
 import { loadRunbookIncidentContext } from './incident-context';
-import { startTriggeredRunbookExecution } from './orchestrator';
+import {
+  INCIDENT_NOT_OPEN,
+  lockOpenIncidentForAutomation,
+  startTriggeredRunbookExecution,
+} from './orchestrator';
 import { RunbookArchivedError, RunbookDefinitionError, RunbookError } from './errors';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { resolveBindingAutomationPlan } from './automation-binding';
@@ -13,22 +17,24 @@ import type { Prisma } from '@prisma/client';
 
 export type TriggerEvaluationSource = 'MONITORING' | 'MANUAL';
 
-const MONITORING_SOURCES = new Set(['MONITORING', 'EVENT', 'ALERT', 'INTEGRATION']);
-
-export function normalizeEvaluationSource(raw: unknown): TriggerEvaluationSource | null {
-  if (typeof raw !== 'string' || !raw) return null;
-  return MONITORING_SOURCES.has(raw.toUpperCase()) ? 'MONITORING' : 'MANUAL';
+/**
+ * Fails closed: an alert-linked incident is always MONITORING, and only an exact 'MANUAL'
+ * (or a legacy job without a source) on an incident without alerts is MANUAL.
+ */
+export function classifyEvaluationSource(
+  raw: unknown,
+  alertLinked: boolean
+): TriggerEvaluationSource {
+  if (alertLinked) return 'MONITORING';
+  return raw === undefined || raw === 'MANUAL' ? 'MANUAL' : 'MONITORING';
 }
 
-/** Without an explicit job source, an alert-linked incident is treated as monitoring-sourced. */
 async function resolveEvaluationSource(
   incidentId: string,
   raw: unknown
 ): Promise<TriggerEvaluationSource> {
-  const normalized = normalizeEvaluationSource(raw);
-  if (normalized) return normalized;
   const alerts = await prisma.alert.count({ where: { incidentId } });
-  return alerts > 0 ? 'MONITORING' : 'MANUAL';
+  return classifyEvaluationSource(raw, alerts > 0);
 }
 
 /** Actionable audit: at most one skip event per binding, reason and incident, across retries. */
@@ -52,6 +58,9 @@ async function recordRunbookSkip(input: {
   });
 }
 
+const isIncidentNotOpen = (error: unknown) =>
+  error instanceof RunbookDefinitionError && error.message.startsWith(INCIDENT_NOT_OPEN);
+
 const isAlreadyHandled = (error: unknown) =>
   (error as { code?: string })?.code === 'P2002' ||
   (error instanceof RunbookDefinitionError && error.message.includes('TRIGGER_ALREADY_HANDLED'));
@@ -63,8 +72,6 @@ export async function evaluateIncidentTriggers(
 ) {
   const loaded = await loadRunbookIncidentContext(prisma, incidentId);
   if (!loaded) return { matched: 0, started: 0, suggested: 0 };
-  // The job runs after commit; an incident closed in between must not start remediation.
-  if (loaded.trigger.incident.status !== 'OPEN') return { matched: 0, started: 0, suggested: 0 };
   const context = loaded.trigger;
   const serviceId = context.service.id;
   const evaluationSource = await resolveEvaluationSource(incidentId, options.source);
@@ -90,6 +97,19 @@ export async function evaluateIncidentTriggers(
   let suggested = 0;
   let suppressed = 0;
   let skipped = 0;
+  // The job runs after commit; an incident closed in between must not start remediation.
+  if (context.incident.status !== 'OPEN') {
+    for (const binding of bindings) {
+      skipped++;
+      await recordRunbookSkip({
+        incidentId,
+        bindingId: binding.id,
+        runbookName: binding.runbook.name,
+        reason: `${INCIDENT_NOT_OPEN}: incident is ${context.incident.status}`,
+      });
+    }
+    return { matched, started, suggested, suppressed, skipped };
+  }
   const transientFailures: unknown[] = [];
   for (const binding of bindings) {
     let matchedTrigger: { id: string; reason: string } | null = null;
@@ -101,11 +121,7 @@ export async function evaluateIncidentTriggers(
     try {
       let blocker: string | null = null;
       for (const candidate of binding.triggers) {
-        const evaluation = evaluateTrigger(
-          context,
-          candidate.conditions,
-          candidate.conditionLogic
-        );
+        const evaluation = evaluateTrigger(context, candidate.conditions, candidate.conditionLogic);
         if (evaluation.status === 'MATCHED') {
           matchedTrigger = { id: candidate.id, reason: evaluation.reason };
           break;
@@ -178,6 +194,8 @@ export async function evaluateIncidentTriggers(
       if (binding.mode === 'SUGGESTED') {
         try {
           const created = await prisma.$transaction(async tx => {
+            const incidentLock = await lockOpenIncidentForAutomation(tx, incidentId);
+            if (!incidentLock.open) return incidentLock.reason;
             await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-trigger:${incidentId}:${binding.id}`}))`;
             if (
@@ -207,7 +225,15 @@ export async function evaluateIncidentTriggers(
             });
             return true;
           });
-          if (created) suggested++;
+          if (typeof created === 'string') {
+            skipped++;
+            await recordRunbookSkip({
+              incidentId,
+              bindingId: binding.id,
+              runbookName: binding.runbook.name,
+              reason: created,
+            });
+          } else if (created) suggested++;
         } catch (error) {
           if (error instanceof RunbookArchivedError) continue;
           if (!isAlreadyHandled(error)) throw error;
@@ -229,6 +255,16 @@ export async function evaluateIncidentTriggers(
         });
         started++;
       } catch (error) {
+        if (isIncidentNotOpen(error)) {
+          skipped++;
+          await recordRunbookSkip({
+            incidentId,
+            bindingId: binding.id,
+            runbookName: binding.runbook.name,
+            reason: (error as Error).message,
+          });
+          continue;
+        }
         if (!isAlreadyHandled(error)) throw error;
       }
     } catch (error) {
@@ -246,6 +282,8 @@ export async function evaluateIncidentTriggers(
         });
         try {
           const createdSuggestion = await prisma.$transaction(async tx => {
+            const incidentLock = await lockOpenIncidentForAutomation(tx, incidentId);
+            if (!incidentLock.open) return incidentLock.reason;
             await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-incident-budget:${incidentId}`}))`;
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
@@ -289,7 +327,15 @@ export async function evaluateIncidentTriggers(
             });
             return true;
           });
-          if (createdSuggestion) suggested++;
+          if (typeof createdSuggestion === 'string') {
+            skipped++;
+            await recordRunbookSkip({
+              incidentId,
+              bindingId: binding.id,
+              runbookName: binding.runbook.name,
+              reason: createdSuggestion,
+            });
+          } else if (createdSuggestion) suggested++;
         } catch (failure) {
           if (failure instanceof RunbookArchivedError) continue;
           throw failure;

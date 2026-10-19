@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { testPrisma as db, resetDatabase, createTestUser } from '../helpers/test-db';
+import type { Prisma } from '@prisma/client';
+import {
+  testPrisma as db,
+  resetDatabase,
+  createTestUser,
+  createTestService,
+} from '../helpers/test-db';
 import { processIntegrationEvent, type EventPayload } from '@/lib/events';
 import { executeIncidentCreation } from '@/lib/incidents/creation';
+import { computeDefinitionChecksum, parseRunbookDefinition } from '@/lib/runbooks/definition';
+import { createServiceBinding } from '@/lib/runbooks/bindings';
+import { processRunbookJob } from '@/lib/runbooks/orchestrator';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
@@ -52,6 +61,78 @@ async function evaluationJobs(incidentId: string) {
 
 async function newService() {
   return db.service.create({ data: { name: `Monitoring ${crypto.randomUUID()}` } });
+}
+
+/** SUGGESTED binding that matches every incident but has NOT opted into monitoring incidents. */
+async function suggestedBindingWithoutMonitoringOptIn() {
+  const definition = parseRunbookDefinition(
+    {
+      steps: [
+        {
+          key: 'check',
+          name: 'Check api',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    } as unknown as Prisma.InputJsonValue,
+    []
+  );
+  const runbook = await db.runbook.create({
+    data: { name: `Provenance ${crypto.randomUUID()}`, slug: `prov-${crypto.randomUUID()}` },
+  });
+  const version = await db.runbookVersion.create({
+    data: {
+      runbookId: runbook.id,
+      version: 1,
+      state: 'PUBLISHED',
+      publishedAt: new Date(),
+      definition: definition as unknown as Prisma.InputJsonValue,
+      checksum: computeDefinitionChecksum(definition),
+    },
+  });
+  await db.runbook.update({ where: { id: runbook.id }, data: { publishedVersionId: version.id } });
+  const [service, admin, agent] = await Promise.all([
+    createTestService('Provenance'),
+    createTestUser({ role: 'ADMIN' }),
+    db.runbookAgent.create({
+      data: {
+        name: `agent-${crypto.randomUUID()}`,
+        status: 'ONLINE',
+        capabilities: ['RUNBOOK_SYSTEMD'],
+        lastHeartbeatAt: new Date(),
+      },
+    }),
+  ]);
+  const pool = await db.runbookAgentPool.create({
+    data: { name: `pool-${crypto.randomUUID()}`, members: { create: { agentId: agent.id } } },
+  });
+  const binding = await createServiceBinding(
+    service.id,
+    {
+      runbookId: runbook.id,
+      runbookVersionId: version.id,
+      enabled: true,
+      mode: 'SUGGESTED',
+      versionStrategy: 'PINNED',
+      defaultAgentPoolId: pool.id,
+      inputValues: {},
+    },
+    admin.id
+  );
+  expect(binding.runOnMonitoringIncidents).toBe(false);
+  await db.runbookTrigger.create({ data: { bindingId: binding.id, event: 'INCIDENT_CREATED' } });
+  return { service, binding };
+}
+
+function evaluate(incidentId: string, source: unknown, omitSource = false) {
+  return processRunbookJob({
+    kind: 'EVALUATE_TRIGGER',
+    incidentId,
+    sourceEventId: crypto.randomUUID(),
+    ...(omitSource ? {} : { source }),
+  });
 }
 
 describeIfRealDB('runbook evaluation for monitoring incidents (real PostgreSQL)', () => {
@@ -150,5 +231,55 @@ describeIfRealDB('runbook evaluation for monitoring incidents (real PostgreSQL)'
     const merged = await executeIncidentCreation({ ...input, now: new Date() });
     expect(merged).toMatchObject({ id: created.id, outcome: 'MERGED' });
     expect(await evaluationJobs(created.id)).toHaveLength(1);
+  });
+
+  describe('evaluation source provenance cannot bypass the monitoring opt-in', () => {
+    const legacyOrForged = ['manual', 'MANUAL ', 'Manual', 'OTHER', 'EVENT', '', 'MANUAL'];
+
+    it.each(legacyOrForged)('ignores source %j for an alert-linked incident', async source => {
+      const { service, binding } = await suggestedBindingWithoutMonitoringOptIn();
+      const incidentId = (await ingest(service.id, alert(crypto.randomUUID()))).incident!.id;
+      await evaluate(incidentId, source);
+      expect(await db.runbookSuggestion.count({ where: { bindingId: binding.id } })).toBe(0);
+    });
+
+    it('ignores a missing source for an alert-linked incident', async () => {
+      const { service, binding } = await suggestedBindingWithoutMonitoringOptIn();
+      const incidentId = (await ingest(service.id, alert(crypto.randomUUID()))).incident!.id;
+      await evaluate(incidentId, undefined, true);
+      expect(await db.runbookSuggestion.count({ where: { bindingId: binding.id } })).toBe(0);
+    });
+
+    it('rejects a non-string source in the job payload without side effects', async () => {
+      const { service, binding } = await suggestedBindingWithoutMonitoringOptIn();
+      const incidentId = (await ingest(service.id, alert(crypto.randomUUID()))).incident!.id;
+      for (const source of [0, 1, null, { value: 'MANUAL' }])
+        await expect(evaluate(incidentId, source)).rejects.toThrow();
+      expect(await db.runbookSuggestion.count({ where: { bindingId: binding.id } })).toBe(0);
+    });
+
+    it('fails closed for unexpected sources on an incident without alerts', async () => {
+      const { service, binding } = await suggestedBindingWithoutMonitoringOptIn();
+      for (const source of ['manual', 'MANUAL ', 'OTHER', '']) {
+        const incident = await db.incident.create({
+          data: { title: 'Manual', serviceId: service.id, urgency: 'HIGH', status: 'OPEN' },
+        });
+        await evaluate(incident.id, source);
+      }
+      expect(await db.runbookSuggestion.count({ where: { bindingId: binding.id } })).toBe(0);
+    });
+
+    it('still treats exact MANUAL on an incident without alerts as manual', async () => {
+      const { service, binding } = await suggestedBindingWithoutMonitoringOptIn();
+      const incident = await db.incident.create({
+        data: { title: 'Manual', serviceId: service.id, urgency: 'HIGH', status: 'OPEN' },
+      });
+      await evaluate(incident.id, 'MANUAL');
+      expect(
+        await db.runbookSuggestion.count({
+          where: { bindingId: binding.id, incidentId: incident.id },
+        })
+      ).toBe(1);
+    });
   });
 });

@@ -188,12 +188,38 @@ export async function previewRunbookExecution(input: RunbookExecutionRequest) {
   return result;
 }
 
+export const INCIDENT_NOT_OPEN = 'INCIDENT_NOT_OPEN';
+
+/**
+ * Takes the same row lock the lifecycle UPDATE takes (FOR NO KEY UPDATE), so automatic
+ * runbook starts and lifecycle transitions serialize. Must be the first lock in the transaction.
+ */
+export async function lockOpenIncidentForAutomation(
+  tx: Prisma.TransactionClient,
+  incidentId: string
+): Promise<{ open: true } | { open: false; reason: string }> {
+  const rows = await tx.$queryRaw<{ status: string }[]>`
+    SELECT "status"::text AS "status" FROM "Incident" WHERE "id" = ${incidentId} FOR NO KEY UPDATE
+  `;
+  const status = rows[0]?.status;
+  if (status === 'OPEN') return { open: true };
+  return { open: false, reason: `${INCIDENT_NOT_OPEN}: incident is ${status ?? 'missing'}` };
+}
+
 async function prepareRunbookExecution(
   input: RunbookExecutionRequest,
   previewOnly: boolean,
   mode: 'MANUAL' | 'AUTOMATIC'
 ) {
   return prisma.$transaction(async tx => {
+    if (mode === 'AUTOMATIC') {
+      if (!input.incidentId)
+        throw new RunbookDefinitionError(
+          'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
+        );
+      const incidentLock = await lockOpenIncidentForAutomation(tx, input.incidentId);
+      if (!incidentLock.open) throw new RunbookDefinitionError(incidentLock.reason);
+    }
     await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
     const runbook = await tx.runbook.findFirst({
       where: { id: input.runbookId, archivedAt: null },
