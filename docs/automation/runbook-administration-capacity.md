@@ -12,6 +12,14 @@ The eight-writer workload exhausts the retry budget for some requests. Therefore
 
 Full samples, write amplification, cluster-wide WAL deltas and concurrent outcomes are in [the fleet benchmark evidence](../../plans/rest-api-enterprise/runbook-fleet-concurrent-benchmark.json). WAL includes co-resident activity. Advisory-lock statement duration includes waiting and execution; it is not isolated lock-wait attribution. This evidence does not establish a production fleet mutation SLA.
 
+### Membership parent lock order
+
+Concurrent membership inserts previously acquired shared parent-pool locks in the active-assignment guard, then attempted to upgrade those locks when the revision trigger updated the pool. Two inserts could retain each other's shared lock and deadlock. Migration `20261019164000_runbook_membership_parent_lock_order` adds an earlier database trigger which locks affected parent rows with `FOR NO KEY UPDATE`, in ID order. This runs for direct SQL and older application writers as well as shared commands. Retirement checks and revision updates remain enabled; the change does not weaken the authority fence or eliminate configuration revisions. Apply this migration before exercising concurrent membership administration.
+
+The unchanged policy-check scenarios still create 1, 10, 50 and 100 Agents concurrently. Additional tests cover 50 direct nested writes, opposite membership moves and parent revision increments. A separate test deliberately pre-acquires competing shared locks to recreate the old cycle and verify classification of the actual Prisma failure. That deliberate error-shape test is not evidence that normal membership inserts still follow the old locking order.
+
+Prisma 5.22 returns some nested-write deadlocks as `PrismaClientUnknownRequestError` without structured SQLSTATE metadata. The compatibility adapter accepts only that error class and the engine frame's machine-readable SQLSTATE header. It does not classify by words such as “deadlock” inside a server message. Structured metadata takes precedence for known Prisma errors. Unknown frame formats retain the generic error response, and driver diagnostics remain private. Driver upgrades must rerun both the actual-error integration test and the negative classification tests.
+
 ## Secret reference lookup
 
 The API and scale harness share the same parameterized SQL builder. Matching remains an exact top-level input reference, or a `SECRET_REF` default; the endpoint does not report proof of runtime secret consumption. Results expose reference metadata, never decrypted values.
@@ -24,6 +32,6 @@ See [the secret lookup evidence](../../plans/rest-api-enterprise/runbook-secret-
 
 Retirement is terminal and blocks new assignments, claims and pre-execution authorization. Paused service rules explain that an active target must be selected before re-enabling them.
 
-The reconciler fails pending attempts against retired pools with `TARGET_POOL_RETIRED`, then schedules execution advancement atomically. Claimed work retains its live lease; after expiry, work which never passed the execution fence fails without creating another attempt. Already-running work follows existing result, cancellation and lease-expiry rules. An expired running attempt retains an unknown outcome and cannot retry into the retired pool, even if its action would otherwise be safe to retry. Repeated reconciliation does not duplicate the terminal transition or its advancement job.
+The reconciler checks both the attempt's direct pool and its execution's `targetSelection.sourcePoolId`. This includes individually selected Agents whose direct target pool is null. It fails pending attempts against retired pools with `TARGET_POOL_RETIRED`, then schedules execution advancement atomically. Claimed work retains its live lease; after expiry, work which never passed the execution fence fails without creating another attempt. Already-running work follows existing result, cancellation and lease-expiry rules. An expired running attempt retains an unknown outcome and cannot retry into the retired pool, even if its action would otherwise be safe to retry. Repeated reconciliation does not duplicate the terminal transition or its advancement job.
 
 These transitions have PostgreSQL regression coverage. A physical Agent journey through retirement, command fencing, result delivery and restart remains a separate deployment certification gate.

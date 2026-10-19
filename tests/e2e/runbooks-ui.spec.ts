@@ -306,6 +306,10 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .getByRole('navigation', { name: 'Infrastructure sections' })
     .getByRole('link', { name: /^agents/i })
     .click();
+  // Sonner pauses dismissal while hovered. Moving directly onto the next
+  // top-right action can keep its overlapping success stack alive indefinitely.
+  await page.mouse.move(0, 0);
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Enroll agent', exact: true }).click();
   const cancelledName = `UI cancelled enrollment ${Date.now()}`;
   await page.getByLabel('Agent name', { exact: true }).fill(cancelledName);

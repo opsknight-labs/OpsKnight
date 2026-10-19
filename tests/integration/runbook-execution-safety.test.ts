@@ -227,9 +227,13 @@ async function createAgentTarget(
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase(), 30000);
 
-  it.each(['PENDING', 'CLAIMED', 'RUNNING', 'CLAIMED_LIVE'] as const)(
-    'converges %s work after pool retirement without assigning a retry',
-    async state => {
+  it.each(
+    (['PENDING', 'CLAIMED', 'RUNNING', 'CLAIMED_LIVE'] as const).flatMap(state =>
+      (['DIRECT_POOL', 'SELECTED_AGENT'] as const).map(target => ({ state, target }))
+    )
+  )(
+    'converges $state work from $target after pool retirement without assigning a retry',
+    async ({ state, target: selection }) => {
       const target = await createAgentTarget({
         description: 'Retirement convergence',
         steps: [
@@ -237,11 +241,19 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
             key: 'status',
             name: 'Status',
             type: 'SYSTEMD',
-            riskClass: 'READ_ONLY',
-            config: { action: 'status', unit: 'api.service' },
+            riskClass: selection === 'SELECTED_AGENT' ? 'IDEMPOTENT_WRITE' : 'READ_ONLY',
+            config: {
+              action: selection === 'SELECTED_AGENT' ? 'start' : 'status',
+              unit: 'api.service',
+            },
           },
         ],
       });
+      if (selection === 'SELECTED_AGENT')
+        await testPrisma.runbookAgentPool.update({
+          where: { id: target.pool.id },
+          data: { mode: 'LOCAL_HOSTS' },
+        });
       const execution = await startRunbookExecution({
         runbookId: target.runbook.id,
         serviceId: target.service.id,
@@ -251,6 +263,14 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       const attempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
         where: { executionStep: { executionId: execution.id } },
       });
+      if (selection === 'SELECTED_AGENT') {
+        expect(attempt.targetAgentId).toBe(target.agent.id);
+        expect(attempt.targetAgentPoolId).toBeNull();
+        const pinned = await testPrisma.runbookExecution.findUniqueOrThrow({
+          where: { id: execution.id },
+        });
+        expect(pinned.targetSelection).toMatchObject({ sourcePoolId: target.pool.id });
+      }
       await testPrisma.runbookExecutionStep.update({
         where: { id: attempt.executionStepId },
         data: { maxRetries: 3 },

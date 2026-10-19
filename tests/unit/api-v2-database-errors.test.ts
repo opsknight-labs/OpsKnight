@@ -11,6 +11,40 @@ const known = (code: string) =>
 const req = () => new NextRequest('http://x/api/v2/teams');
 
 describe('REST v2 database error mapping', () => {
+  it.each(['40P01', '40001'])(
+    'maps the Prisma 5.22 nested-write engine frame %s without disclosing diagnostics',
+    async state => {
+      const error = new Prisma.PrismaClientUnknownRequestError(
+        `Invalid invocation:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "${state}", message: "secret=abc", severity: "ERROR", detail: None }), transient: false })`,
+        { clientVersion: '5.22.0' }
+      );
+      const response = apiV2Error(error, req());
+      expect(response.status).toBe(409);
+      const body = await response.json();
+      expect(body).toMatchObject({ code: 'TRANSIENT_CONFLICT', retryable: true });
+      expect(JSON.stringify(body)).not.toMatch(/secret=abc|ConnectorError|PostgresError/);
+    }
+  );
+
+  it('does not infer conflicts from prose or a nested lookalike in another server error', () => {
+    expect(
+      apiV2Error(
+        new Error(
+          'ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "40P01", message: "untrusted text" }) })'
+        ),
+        req()
+      ).status
+    ).toBe(500);
+    for (const message of [
+      'secret=abc deadlock detected code: "40P01"',
+      'ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "23514", message: "deadlock detected PostgresError { code: \\"40P01\\" }" }), transient: false })',
+    ]) {
+      const error = new Prisma.PrismaClientUnknownRequestError(message, {
+        clientVersion: '5.22.0',
+      });
+      expect(apiV2Error(error, req()).status).toBe(500);
+    }
+  });
   it.each([
     ['P2002', 409, 'RESOURCE_CONFLICT'],
     ['P2003', 409, 'RESOURCE_CONFLICT'],
