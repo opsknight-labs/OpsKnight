@@ -547,3 +547,8 @@ Single-node Kind cluster in the shared 12-CPU / 8 GiB Docker VM, Helm split topo
 - Observed, not yet fixed: one `ESCALATION` step-1 job reached `FAILED` ("timed out in PROCESSING state") after repeated worker evictions while later step 2 completed; `reconcileEscalations` leaves FAILED executions alone by design, so confirm that a missed step is operator-visible. Thousands of unresolved incidents also kept critical-worker readiness at 503 until they were resolved.
 - Browser journeys (desktop) through the cluster were unreliable here (port-forwarded DB connections dropped and pods were still restarting); only the first desktop run passed 3 of 7. Repeat on a dedicated host.
 
+### Helm historical backfill and escalation visibility (2026-10-19)
+
+- Helm upgrade on a Kind cluster with 300,000 incidents (90,000 with automation decisions or SHADOW traces, seeded before the upgrade) while four writers updated incidents: the pre-upgrade hook classified exactly 90,000 incidents, none outside the automation history, and the release finished in 60 s. Writers had 0 failed transactions, a worst per-second average latency of 18 ms and a lowest per-second throughput of 216 tps.
+- Incident Details now shows Escalation Execution Health. It reads each step's job by exact logical key (served by `BackgroundJob_escalation_logical_key_lookup_idx`; 0.08 ms on 200,000 jobs) and treats a FAILED step job separately from `Incident.escalationStatus`. A failed step with no ESCALATED timeline event is reported Failed; with one, Outcome uncertain. A later completed step never hides it. Failed steps are not retried automatically.
+
