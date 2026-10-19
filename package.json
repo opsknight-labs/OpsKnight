@@ -101,7 +101,8 @@
     "api:clients": "TS_NODE_PROJECT=tsconfig.script.json node -r ts-node/register -r tsconfig-paths/register scripts/api-v2/generate-clients.ts",
     "api:clients:check": "npm run api:clients -- --check",
     "test:api:clients": "vitest run tests/unit/api-v2-sdk.test.ts && python3 -m unittest discover -s tests/sdk -p \"test_*.py\"",
-    "certify:api:clients:live": "node tests/sdk/live-workflows.mjs"
+    "certify:api:clients:live": "node tests/sdk/live-workflows.mjs",
+    "api:coverage": "TS_NODE_PROJECT=tsconfig.script.json node -r ts-node/register -r tsconfig-paths/register scripts/api-v2/coverage-matrix.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1149.0",

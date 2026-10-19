@@ -1,5 +1,7 @@
 'use server';
 
+import { setTeamMembership, teamMemberInput } from '@/lib/teams/administration';
+
 import {
   getAuthenticationPolicy,
   assertPasswordOperationAllowed,
@@ -22,7 +24,6 @@ import {
   type UserDependencyReport,
 } from '@/lib/users/dependencies';
 import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
-import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 type EmailInviteResult = {
   sent: boolean;
@@ -462,32 +463,12 @@ export async function addUserToTeam(userId: string, formData: FormData) {
           : 'Unauthorized. Admin or team owner access required.',
     };
   }
-  const requestedRole = (formData.get('role') as string) || 'MEMBER';
-  const role = ['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole) ? requestedRole : 'MEMBER';
-
-  const existing = await prisma.teamMember.findFirst({
-    where: { teamId, userId },
-  });
-
-  if (existing) return;
-
-  await prisma.$transaction(
-    async tx => {
-      await requireOperationalUser(tx, userId);
-      await tx.teamMember.create({
-        data: { userId, teamId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
-      });
-    },
-    { isolationLevel: 'Serializable' }
+  await setTeamMembership(
+    teamId,
+    userId,
+    teamMemberInput.parse({ role: formData.get('role') || 'MEMBER' }),
+    { id: currentUser.id }
   );
-
-  await logAudit({
-    action: 'team.member.added',
-    entityType: 'TEAM_MEMBER',
-    entityId: `${teamId}:${userId}`,
-    actorId: currentUser?.id || null,
-    details: { teamId, userId, role: role || 'MEMBER' },
-  });
 
   revalidatePath('/users');
   revalidatePath('/teams');
@@ -496,15 +477,7 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 
 export async function removeUserFromTeam(memberId: string) {
   const currentUser = await assertAdmin();
-  const member = await removeTeamMembership(memberId);
-
-  await logAudit({
-    action: 'team.member.removed',
-    entityType: 'TEAM_MEMBER',
-    entityId: memberId,
-    actorId: currentUser.id,
-    details: { teamId: member.teamId, userId: member.userId },
-  });
+  await removeTeamMembership(memberId, currentUser);
 
   revalidatePath('/users');
   revalidatePath('/teams');

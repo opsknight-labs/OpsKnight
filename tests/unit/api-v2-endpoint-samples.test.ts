@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
 import { describe, expect, it } from 'vitest';
+import { teamMemberInput, teamLeadInput } from '@/lib/teams/administration';
 import { ENDPOINT_SAMPLES, getVerifiedSampleBody } from '@/lib/api-v2/endpoint-samples';
 import {
   IncidentCreateV2Schema,
@@ -39,6 +40,8 @@ describe('API v2 Endpoint Verified Samples', () => {
     'POST /services': ServiceCreateV2Schema,
     'PATCH /services/{id}': ServiceUpdateV2Schema,
     'POST /teams': TeamCreateV2Schema,
+    'PUT /teams/{id}/members/{userId}': teamMemberInput,
+    'PUT /teams/{id}/lead': teamLeadInput,
     'PATCH /teams/{id}': TeamUpdateV2Schema,
     'POST /schedules': ScheduleCreateV2Schema,
     'PATCH /schedules/{id}': ScheduleUpdateV2Schema,

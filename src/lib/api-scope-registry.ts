@@ -235,13 +235,25 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Create and update schedules, manage rotation participants, and create overrides. Layer configuration editing is not available over REST.',
     { write: true }
   ),
-  [S.TEAMS_READ]: def(S.TEAMS_READ, 'Teams read', 'Teams', 'List and read teams.', {
-    issuableBy: NON_USER,
-  }),
-  [S.TEAMS_WRITE]: def(S.TEAMS_WRITE, 'Teams manage', 'Teams', 'Create, update and delete teams.', {
-    write: true,
-    issuableBy: ADMINS,
-  }),
+  [S.TEAMS_READ]: def(
+    S.TEAMS_READ,
+    'Teams read',
+    'Teams',
+    'Read teams allowed by the actor role, including scoped membership and lead reads.',
+    {
+      issuableBy: ALL_ROLES,
+    }
+  ),
+  [S.TEAMS_WRITE]: def(
+    S.TEAMS_WRITE,
+    'Teams manage',
+    'Teams',
+    'Administrators manage teams. Current team owners may manage membership and lead on their own teams.',
+    {
+      write: true,
+      issuableBy: ['ADMIN', 'RESPONDER', 'USER'],
+    }
+  ),
   [S.USERS_READ]: def(S.USERS_READ, 'Users read', 'Users', 'List and read users.', {
     issuableBy: NON_USER,
   }),

@@ -1,4 +1,8 @@
 import {
+  TEAM_ADMINISTRATION_SCHEMAS,
+  TEAM_ADMINISTRATION_OPERATIONS,
+} from './team-administration-openapi';
+import {
   RUNBOOK_ADMINISTRATION_SCHEMAS,
   RUNBOOK_ADMINISTRATION_OPERATIONS,
 } from './runbook-administration-openapi';
@@ -179,6 +183,7 @@ const statusPageSectionRepresentations = Object.fromEntries(
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...RUNBOOK_ADMINISTRATION_SCHEMAS,
   ...RUNBOOK_FLEET_SCHEMAS,
+  ...TEAM_ADMINISTRATION_SCHEMAS,
   ...RUNBOOK_INTERVENTION_SCHEMAS,
   ...SERVICE_OBJECTIVE_SCHEMAS,
   StatusPagePublicationState: object(
@@ -1127,6 +1132,7 @@ interface Operation {
 const operations: Operation[] = [
   ...RUNBOOK_ADMINISTRATION_OPERATIONS,
   ...RUNBOOK_FLEET_OPERATIONS,
+  ...TEAM_ADMINISTRATION_OPERATIONS,
   ...RUNBOOK_INTERVENTION_OPERATIONS,
   ...SERVICE_OBJECTIVE_OPERATIONS,
   {
@@ -1811,7 +1817,9 @@ export function enterpriseOpenApiPaths() {
                   ? 'Services'
                   : operation.path.startsWith('/schedules')
                     ? 'Schedules'
-                    : 'Incidents',
+                    : operation.path.startsWith('/teams')
+                      ? 'Teams'
+                      : 'Incidents',
       ],
       summary: operation.summary,
       ...(operation.description ? { description: operation.description } : {}),

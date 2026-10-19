@@ -613,6 +613,7 @@ model Team {
 }
 
 model TeamMember {
+  createdAt                DateTime @default(now())
   id                       String   @id @default(cuid())
   userId                   String
   teamId                   String
@@ -623,6 +624,7 @@ model TeamMember {
 
   @@unique([userId, teamId])
   @@index([teamId])
+  @@index([teamId, createdAt, id], map: "TeamMember_team_page_idx")
 }
 
 model Service {

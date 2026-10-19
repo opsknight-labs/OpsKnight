@@ -183,11 +183,17 @@ const decisions: readonly ApiCapability[] = [
   {
     id: 'team-membership',
     area: 'Identity',
-    title: 'Team membership administration',
-    status: 'not-supported',
+    title: 'Team membership and lead administration',
+    status: 'partial',
     explanation:
-      'Team CRUD is available. Membership and role writes need atomic last-owner, session-revocation and audit parity.',
-    operationIds: [],
+      'Bounded membership reads and revision-protected membership/lead changes use shared UI/REST commands, current ownership checks, last-active-owner protection, SCIM ownership restrictions, session revocation, transactional audits and notifications. Managed service assignment and activity contracts remain in progress.',
+    operationIds: [
+      'listTeamMembers',
+      'setTeamMember',
+      'removeTeamMember',
+      'getTeamLead',
+      'setTeamLead',
+    ],
   },
   {
     id: 'identity-lifecycle',

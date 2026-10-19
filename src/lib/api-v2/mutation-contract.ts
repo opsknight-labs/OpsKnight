@@ -51,6 +51,22 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  ...Object.fromEntries(
+    [
+      'PUT /api/v2/teams/[id]/members/[userId]',
+      'DELETE /api/v2/teams/[id]/members/[userId]',
+      'PUT /api/v2/teams/[id]/lead',
+    ].map(operation => [
+      operation,
+      {
+        idempotency: 'required' as const,
+        concurrency: 'etag' as const,
+        preconditionRequired: true,
+        rationale:
+          'Concrete parent Team revision covers all membership writers. Shared UI/REST commands preserve active owners and SCIM ownership. Mutation, attributed audit, notification and receipt commit together. Replay rechecks current role and team ownership.',
+      },
+    ])
+  ),
   'POST /api/v2/runbooks/signing-identities/[id]/retire': {
     idempotency: 'required',
     concurrency: 'none',

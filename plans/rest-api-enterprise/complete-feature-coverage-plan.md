@@ -4,6 +4,27 @@ Objective: Close the remaining REST API gaps so customers can automate every sup
 
 This plan is based on the implementation in [OpsKnight PR #883](https://github.com/opsknight-labs/OpsKnight/pull/883?utm_source=chatgpt.com), including its capability catalog and implementation tracker, plus the separate `feat/service-automation` branch.
 
+## Current delivery contract
+
+All work packages remain in draft PR #886. The newer `feat/service-automation`
+runtime is included in the intended scope and must be reconciled by subsystem;
+it is not certified by the existing Automation REST operations and must not be
+merged wholesale. The eight release gates stay pending until final-candidate
+evidence supports each gate.
+
+Generate the operation review matrix with `npm run --silent api:coverage`.
+It derives operation IDs, methods, scopes, input/response schemas, mutation
+contracts and route authorization actions from the actual registry, OpenAPI and
+TypeScript route declarations. Capability disposition and UI/domain sources come
+from `workflow-inventory.json`. Missing domain reviews remain explicitly null;
+a generated row or operation count does not establish authorization or parity
+certification. CI retains the matrix as a source-SHA-labelled artifact, rather
+than committing repeated raw output.
+
+The baseline for this completion pass is `2799a70ab`; its eleven workflow families
+passed, and its seven application roles were upgraded successfully in the owned
+Kind namespace. Later changes require new affected evidence and exact-head CI.
+
 ## 1. Target architecture
 
 The most important decision is that OpsKnight must have one business-logic layer shared by the UI, REST API, and future CLI/MCP integrations.

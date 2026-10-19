@@ -71,9 +71,40 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
 import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { fingerprintV2SensitiveValue } from '@/lib/api-v2/auth';
 import { executeIdempotentOperation } from '@/lib/idempotency';
+import { runSerializableTransaction } from '@/lib/db-utils';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 
 describe('defineV2Route Endpoint Factory', () => {
+  it('evicts local security projections only after successful commit, never after rollback', async () => {
+    let committed = false;
+    const invalidate = vi.fn(() => {
+      expect(committed).toBe(true);
+    });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.TEAM_MANAGE,
+      idempotent: true,
+      invalidateAfterCommit: invalidate,
+      handler: async () => ({ data: { userId: 'affected-user' } }),
+    });
+    vi.mocked(runSerializableTransaction).mockImplementationOnce(async fn => {
+      const result = await fn(
+        {} as Parameters<Parameters<typeof runSerializableTransaction>[0]>[0]
+      );
+      committed = true;
+      return result;
+    });
+    const request = () =>
+      new NextRequest('http://localhost/api/v2/teams', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer admin-token' },
+      });
+    expect((await route(request())).status).toBe(200);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    vi.mocked(runSerializableTransaction).mockRejectedValueOnce(new Error('commit failed'));
+    expect((await route(request())).status).toBe(500);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
   it('handles standard GET request with pagination and envelopes', async () => {
     const route = defineV2Route({
       action: AUTHORIZATION_ACTIONS.INCIDENT_READ,

@@ -34,6 +34,10 @@ export type RunbookAgentPolicyStatus = { "agentId": string; "status": string; "c
 export type RunbookAgentRevocation = { "id": string; "status": "REVOKED"; "revokedAt": string | null };
 export type RunbookAgentEnrollment = { "id": string; "status": string; "token": string | null; "executionPublicKey": string; "expiresAt": string };
 export type RunbookAgentEnrollmentStatus = { "id": string; "status": string; "enrollmentState": "PENDING" | "EXPIRED" | "CONSUMED" | "REVOKED" | "UNKNOWN"; "expiresAt": string | null; "enrolledAt": string | null; "revokedAt": string | null };
+export type TeamMembership = { "id": string; "teamId": string; "userId": string; "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications": boolean; "createdAt": string };
+export type TeamMembershipChange = { "teamId": string; "userId": string; "revision": number; "membership": TeamMembership | null };
+export type TeamLead = { "teamId": string; "teamLeadId": string | null; "revision": number };
+export type TeamLeadChange = { "teamId": string; "userId": string | null; "teamLeadId": string | null; "revision": number };
 export type RunbookIntervention = { "executionId": string; "stepId": string; "status": "APPROVED" | "CANCEL_REQUESTED" };
 export type RunbookRerun = { "executionId": string; "sourceExecutionId": string; "status": string };
 export type RunbookExecutionStepSummary = { "id": string; "stepKey": string; "sequence": number; "name": string; "type": string; "riskClass": string; "status": string; "requiresApproval": boolean; "approvedAt": string | null; "attemptCount": number; "startedAt": string | null; "completedAt": string | null; "createdAt": string; "pendingApproval": null | { "planDigest": string; "timeoutSeconds": number; "plan": Array<Array<string>> } };
@@ -110,6 +114,11 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listTeamMembers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  setTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications"?: boolean } };
+  removeTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  getTeamLead: { "params": { "id": string } };
+  setTeamLead: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "userId": string | null } };
   listRunbookSigningIdentities: { "query"?: { "limit"?: number; "cursor"?: string } };
   stageRunbookSigningIdentity: { "headers": { "Idempotency-Key": string }; "body": { "expectedActiveKeyId": string | null } };
   activateRunbookSigningIdentity: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedActiveKeyId": string } };
@@ -302,6 +311,11 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listTeamMembers: { "data": Array<TeamMembership>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  setTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  removeTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getTeamLead: { "data": TeamLead; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  setTeamLead: { "data": TeamLeadChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookSigningIdentities: { "data": Array<RunbookSigningIdentity>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   stageRunbookSigningIdentity: { "data": RunbookSigningIdentity; "requestId": string; "timestamp": string } & Record<string, unknown>;
   activateRunbookSigningIdentity: { "data": RunbookSigningIdentity; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -494,6 +508,55 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listTeamMembers": {
+    "method": "GET",
+    "path": "/teams/{id}/members",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setTeamMember": {
+    "method": "PUT",
+    "path": "/teams/{id}/members/{userId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "removeTeamMember": {
+    "method": "DELETE",
+    "path": "/teams/{id}/members/{userId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getTeamLead": {
+    "method": "GET",
+    "path": "/teams/{id}/lead",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setTeamLead": {
+    "method": "PUT",
+    "path": "/teams/{id}/lead",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listRunbookSigningIdentities": {
     "method": "GET",
     "path": "/runbooks/signing-identities",

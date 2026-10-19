@@ -225,6 +225,34 @@ describe('deployment secret matrix', () => {
     }
   });
 
+  it('identifies PgBouncer infrastructure to the pre-migration cutover guard without changing immutable selectors', () => {
+    const docs = helmTemplate([
+      '--set',
+      'image.tag=2.0.0',
+      '--set',
+      'runtime.mode=split',
+      '--set',
+      'pgbouncer.enabled=true',
+      '--set-string',
+      'postgresql.password=isolated-pool-test',
+    ]);
+    if (!docs) {
+      const source = read('deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml');
+      expect(source.match(/app\.kubernetes\.io\/component: pgbouncer/g)).toHaveLength(2);
+      expect(
+        source.slice(source.indexOf('  selector:'), source.indexOf('  template:'))
+      ).not.toContain('app.kubernetes.io/component');
+      return;
+    }
+    const pooler = docs.find(
+      doc => doc.kind === 'Deployment' && doc.metadata.name.endsWith('-pgbouncer')
+    );
+    if (!pooler) throw new Error('PgBouncer Deployment missing from rendered chart.');
+    expect(pooler.metadata.labels['app.kubernetes.io/component']).toBe('pgbouncer');
+    expect(pooler.spec.template.metadata.labels['app.kubernetes.io/component']).toBe('pgbouncer');
+    expect(pooler.spec.selector.matchLabels).not.toHaveProperty('app.kubernetes.io/component');
+  });
+
   it('keeps Prisma compatibility selectable without changing worker database routing', () => {
     const args = [
       '--set',

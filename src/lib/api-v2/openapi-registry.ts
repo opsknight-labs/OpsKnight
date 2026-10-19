@@ -29,6 +29,25 @@ const op = (
 ): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
+  op('get', '/teams/{id}/members', 'listTeamMembers', 'teams:read', 'list', 'TeamMembership'),
+  op(
+    'put',
+    '/teams/{id}/members/{userId}',
+    'setTeamMember',
+    'teams:write',
+    'item',
+    'TeamMembershipChange'
+  ),
+  op(
+    'delete',
+    '/teams/{id}/members/{userId}',
+    'removeTeamMember',
+    'teams:write',
+    'item',
+    'TeamMembershipChange'
+  ),
+  op('get', '/teams/{id}/lead', 'getTeamLead', 'teams:read', 'item', 'TeamLead'),
+  op('put', '/teams/{id}/lead', 'setTeamLead', 'teams:write', 'item', 'TeamLeadChange'),
   op(
     'get',
     '/runbooks/signing-identities',

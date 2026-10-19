@@ -39,6 +39,11 @@ function classifyChanges(paths) {
       path.startsWith('agent/') ||
       path.startsWith('src/lib/') ||
       path.startsWith('src/components/runbooks/') ||
+      path.startsWith('src/components/teams/') ||
+      path === 'src/components/TeamMemberForm.tsx' ||
+      path.startsWith('src/app/(app)/teams/') ||
+      path.startsWith('src/app/(app)/users/') ||
+      path === 'tests/e2e/team-administration.spec.ts' ||
       path.startsWith('src/components/incident/') ||
       path.startsWith('src/components/service/') ||
       path.startsWith('src/components/ui/') ||

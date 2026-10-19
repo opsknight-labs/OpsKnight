@@ -24,6 +24,8 @@ export const AUTHORIZATION_ACTIONS = {
   SCHEDULE_MANAGE: 'schedule.manage',
   TEAM_READ: 'team.read',
   TEAM_MANAGE: 'team.manage',
+  TEAM_MEMBERSHIP_READ: 'team.membership.read',
+  TEAM_MEMBERSHIP_MANAGE: 'team.membership.manage',
   USER_READ: 'user.read',
   USER_MANAGE: 'user.manage',
   ESCALATION_POLICY_READ: 'escalation_policy.read',
@@ -94,7 +96,7 @@ export type AuthorizationResource =
     }
   | { type: 'service'; teamId?: string | null }
   | { type: 'schedule'; participantIds?: readonly string[]; relatedTeamIds?: readonly string[] }
-  | { type: 'team'; teamId?: string | null }
+  | { type: 'team'; teamId?: string | null; ownerIds?: readonly string[] }
   | { type: 'status_page'; teamId?: string | null };
 
 type IncidentResource = Extract<AuthorizationResource, { type: 'incident' }>;
@@ -117,6 +119,11 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.SCHEDULE_MANAGE]?: ScheduleResource;
   [AUTHORIZATION_ACTIONS.TEAM_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.TEAM_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_READ]: Extract<AuthorizationResource, { type: 'team' }>;
+  [AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE]: Extract<
+    AuthorizationResource,
+    { type: 'team' }
+  > & { ownerIds: readonly string[] };
   [AUTHORIZATION_ACTIONS.USER_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.USER_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.ESCALATION_POLICY_READ]?: AuthorizationResource;
@@ -371,6 +378,22 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     },
   ],
   [
+    AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_READ,
+    {
+      global: CAPABILITIES.USER_READ_ALL,
+      scoped: CAPABILITIES.SERVICE_READ_SCOPED,
+      apiScope: API_SCOPES.TEAMS_READ,
+    },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE,
+    {
+      global: CAPABILITIES.ADMIN_MANAGE,
+      scoped: CAPABILITIES.TEAM_ADMINISTER_SCOPED,
+      apiScope: API_SCOPES.TEAMS_WRITE,
+    },
+  ],
+  [
     AUTHORIZATION_ACTIONS.USER_READ,
     {
       global: CAPABILITIES.USER_READ_ALL,
@@ -563,7 +586,10 @@ function isResourceInScope(actor: AuthorizationActor, resource: AuthorizationRes
       resource.relatedTeamIds?.some(teamId => teams.has(teamId)) === true
     );
   }
-  if (resource.type === 'team') return Boolean(resource.teamId && teams.has(resource.teamId));
+  if (resource.type === 'team')
+    return resource.ownerIds !== undefined
+      ? resource.ownerIds.includes(actor.id)
+      : Boolean(resource.teamId && teams.has(resource.teamId));
   if (resource.type === 'status_page') return true;
   if (resource.type === 'incident') {
     if (resource.assigneeId === actor.id || resource.watcherIds?.includes(actor.id)) return true;
@@ -611,6 +637,11 @@ export function authorize<A extends AuthorizationAction>(
     return { allowed: false, reason: 'MISSING_CAPABILITY', requiredCapability: policy.global };
   }
   if (!resource) return { allowed: true, scope: 'resource' };
+  if (
+    action === AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE &&
+    (resource.type !== 'team' || !resource.ownerIds?.includes(actor.id))
+  )
+    return { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };
   if (isResourceInScope(actor, resource)) return { allowed: true, scope: 'resource' };
   return { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };
 }

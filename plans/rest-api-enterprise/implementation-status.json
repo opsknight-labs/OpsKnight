@@ -43,7 +43,7 @@
       ],
       "remaining": [
         "Migrate older handwritten routes with equivalent resource contracts",
-        "Dedicated agent, secret and rotation policies",
+        "Combined certification of the implemented Agent, secret and signing-rotation policies",
         "Complete cross-resource and negative authorization matrix for future operations"
       ]
     },
@@ -53,12 +53,13 @@
       "delivered": [
         "Six canonical incident lifecycle operations",
         "Shared UI/REST watcher commands",
-        "Active schedule participant add, move and remove operations"
+        "Active schedule participant add, move and remove operations",
+        "Five team membership/lead operations with shared UI/REST commands, SCIM restrictions, owner invariants, session revocation and all-writer revisions"
       ],
       "remaining": [
         "Incident custom-field updates, tags, templates and collaboration",
         "Layer editing, override cancellation and coverage previews",
-        "Team membership and manual identity administration",
+        "Managed team services/activity and manual user lifecycle administration",
         "Service settings and escalation usage/validation operations"
       ]
     },
@@ -92,7 +93,7 @@
         "Shared claim fence and database authority revision serialize grants/membership/retirement across stale snapshots; targeted fleet reconciliation benchmarked"
       ],
       "remaining": [
-        "Physical Agent execution, signed result, target-isolation, restart/recovery and combined final-image certification",
+        "Combined final-image REST Agent lifecycle covering live retirement, secret grants, signing rotation, cancellation and multi-replica recovery; baseline basic HTTPS/physical Agent CI already passed",
         "Mixed-version and broader enterprise release gates"
       ]
     },
@@ -194,7 +195,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 190,
+    "registeredOperationCount": 195,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -250,7 +251,7 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 190,
+  "registeredOperationCount": 195,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,
@@ -276,10 +277,22 @@
       "Fleet keyset pagination index"
     ],
     "remaining": [
-      "Agent pools and membership",
-      "Operational settings",
-      "Secret lifecycle and grants",
-      "Real Docker/Kubernetes Agent execution and recovery certification"
+      "Combined final-image REST-driven fleet/pool/secret/signing lifecycle and multi-replica recovery certification"
+    ]
+  },
+  "teamAdministration": {
+    "status": "implemented_local_verification_in_progress",
+    "operations": [
+      "listTeamMembers",
+      "setTeamMember",
+      "removeTeamMember",
+      "getTeamLead",
+      "setTeamLead"
+    ],
+    "remaining": [
+      "Managed service assignment and activity",
+      "Complete user identity lifecycle",
+      "Exact-head CI and final combined certification"
     ]
   }
 }

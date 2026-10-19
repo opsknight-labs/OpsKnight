@@ -37,6 +37,7 @@ export const CAPABILITIES = {
   REPORT_READ: 'report.read',
   REPORT_EXPORT: 'report.export',
   USER_READ_ALL: 'user.read.all',
+  TEAM_ADMINISTER_SCOPED: 'team.administer.scoped',
   POLICY_READ_ALL: 'policy.read.all',
   PRIVACY_READ: 'privacy.read',
   PRIVACY_REQUESTS_MANAGE: 'privacy.requests.manage',
@@ -224,6 +225,7 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_READ_ALL,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.TEAM_ADMINISTER_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,
   CAPABILITIES.METRICS_READ_SCOPED,
@@ -266,7 +268,7 @@ export const ROLE_DESCRIPTIONS = new Map<AppRole, string>([
   ],
   [
     'USER',
-    'Read-only access to incidents and services in your teams, plus incidents assigned to or watched by you.',
+    'Access to incidents and services in your teams, plus incidents assigned to or watched by you. Team owners can administer their own teams.',
   ],
 ]);
 

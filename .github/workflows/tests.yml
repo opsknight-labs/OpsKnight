@@ -51,6 +51,18 @@ jobs:
       - name: Verify generated REST clients and OpenAPI
         run: npm run api:clients:check
 
+      - name: Generate enterprise API coverage review matrix
+        run: |
+          mkdir -p reports
+          npm run --silent api:coverage > reports/rest-api-coverage.json
+
+      - name: Upload enterprise API coverage review matrix
+        uses: actions/upload-artifact@v4
+        with:
+          name: rest-api-coverage-${{ github.sha }}
+          path: reports/rest-api-coverage.json
+          if-no-files-found: error
+
       - name: Set up Python SDK runtime
         uses: actions/setup-python@v6
         with:

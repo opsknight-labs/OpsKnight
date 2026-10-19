@@ -1097,6 +1097,36 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /teams/{id}/lead [teams:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PUT /teams/{id}/lead [teams:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:resource",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "allow:resource"
+  },
+  "PUT /teams/{id}/members/{userId} [teams:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:resource",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "allow:resource"
+  },
+  "DELETE /teams/{id}/members/{userId} [teams:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:resource",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "allow:resource"
+  },
+  "GET /teams/{id}/members [teams:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /teams/{id} [teams:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

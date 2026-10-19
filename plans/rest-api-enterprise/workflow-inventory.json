@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "baselineCommit": "e6361eab15ec98766cff28145b9e24c68d2a632e",
   "releaseStatus": "not_certified",
-  "scope": "Capability-family source inventory; individual operation grants and domain extraction require review in the owning delivery.",
+  "scope": "Full enterprise REST parity in PR #886. Capability families are planned here; runtime operation contracts come from the canonical registry and OpenAPI. Release gates require final-candidate evidence.",
   "plan": "plans/rest-api-enterprise/complete-feature-coverage-plan.md",
   "workflows": [
     {
@@ -163,9 +163,8 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Local worker-backed four-device journey passed; latest CI and broader fault/authorization acceptance cases pending",
-        "Seventeen automation operations passed local API-only, four-device, PostgreSQL, SDK and upgrade verification; latest-commit CI and production qualification remain pending",
-        "Production latency acceptance, load/HA and rolling-version coexistence not certified"
+        "Newer feat/service-automation monitoring context, target policy and verified recovery runtime must be reconciled subsystem by subsystem; no wholesale branch merge.",
+        "Final combined authorization, latency, load/recovery and deployment compatibility certification remain pending."
       ],
       "implementedOperations": [
         "validateAutomation",
@@ -307,18 +306,44 @@
       "workflow": "Membership roles, team lead and service assignment",
       "sources": [
         {
+          "path": "src/lib/teams/administration.ts",
+          "branch": "baseline"
+        },
+        {
           "path": "src/lib/teams/membership-commands.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/app/(app)/teams/actions.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/app/(app)/users/actions.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/api-v2/team-administration.ts",
           "branch": "baseline"
         }
       ],
-      "reviewStatus": "pending-domain-review",
+      "reviewStatus": "partial-implementation-verification-pending",
       "requiredEvidence": [
         "authorization-negative",
         "business-parity",
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Managed service assignment and activity contracts remain in progress.",
+        "Final browser, SDK/live and complete identity lifecycle certification remain pending."
+      ],
+      "implementedOperations": [
+        "listTeamMembers",
+        "setTeamMember",
+        "removeTeamMember",
+        "getTeamLead",
+        "setTeamLead"
+      ]
     },
     {
       "capabilityId": "identity-lifecycle",
@@ -478,7 +503,7 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Pools, membership, operational settings and full Agent administration certification remain in progress."
+        "Combined final-image REST Agent lifecycle, rotation, live retirement, cancellation and multi-replica recovery certification remain pending. Pool/member/settings operations are implemented."
       ]
     },
     {

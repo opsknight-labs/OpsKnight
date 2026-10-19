@@ -71,6 +71,8 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
   persistIdempotencyResult?: (
     result: V2RouteHandlerResult<TResult>
   ) => V2RouteHandlerResult<TResult>;
+  /** Synchronous local cache eviction only, after the mutation transaction commits (also on replay). */
+  invalidateAfterCommit?: (result: V2RouteHandlerResult<TResult>) => void;
   scopedFilter?: boolean;
   handler: (ctx: V2RouteContext<TParams, TQuery, TBody>) => Promise<V2RouteHandlerResult<TResult>>;
 } & (
@@ -230,6 +232,7 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
           );
 
           const result = execution.value;
+          config.invalidateAfterCommit?.(result);
           if (result instanceof Response) {
             return result;
           }

@@ -6,6 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
     app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: pgbouncer
 spec:
   replicas: {{ .Values.pgbouncer.replicas }}
   selector:
@@ -17,6 +18,7 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
         app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: pgbouncer
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/pgbouncer-configmap.yaml") . | sha256sum }}
         {{- if not .Values.pgbouncer.existingAuthSecret }}
