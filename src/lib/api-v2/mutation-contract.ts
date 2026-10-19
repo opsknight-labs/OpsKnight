@@ -15,7 +15,7 @@
  *                audit record. Keys are scoped to (credential, operation) and
  *                retained for 7 days (the completed-job retention window); after
  *                that a reused key executes again. Reusing a key with a different
- *                body returns 409 IDEMPOTENCY_KEY_CONFLICT.
+ *                body or a different normalized required If-Match revision returns 409 IDEMPOTENCY_KEY_CONFLICT.
  * - `natural`    Repeating the request cannot duplicate work: it sets state to the
  *                same value, is a compare-and-set, or is rejected by a uniqueness
  *                rule (409/404 on repeat).

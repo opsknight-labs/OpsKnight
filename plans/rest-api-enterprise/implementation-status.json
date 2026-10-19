@@ -244,7 +244,7 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 140,
+  "registeredOperationCount": 151,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,

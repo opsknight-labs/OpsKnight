@@ -245,3 +245,168 @@ it('rolls back acceptance, request audit and replay on request-audit failure', a
     await db.auditLog.count({ where: { action: 'status_page.publication.retry_requested' } })
   ).toBe(1);
 });
+
+it('rejects a changed revision on an existing publication retry key', async () => {
+  const f = await fixture();
+  expect((await f.call()).status).toBe(202);
+  expect((await f.call()).headers.get('idempotency-replayed')).toBe('true');
+  const changed = await invokeV2(
+    retry,
+    f.credential.token,
+    'POST',
+    `${f.path}/retry`,
+    f.params,
+    {},
+    { ...f.headers, 'If-Match': `"${f.page.revision + 1}"` }
+  );
+  expect(changed.status).toBe(409);
+  expect(
+    await db.auditLog.count({ where: { action: 'status_page.publication.retry_requested' } })
+  ).toBe(1);
+});
+
+it('coalesces distinct pending retry keys and makes new requests wait for running publication', async () => {
+  const f = await fixture();
+  const responses = await Promise.all(
+    Array.from({ length: 4 }, (_, index) =>
+      invokeV2(
+        retry,
+        f.credential.token,
+        'POST',
+        `${f.path}/retry`,
+        f.params,
+        {},
+        { ...f.headers, 'Idempotency-Key': `coalesced-${index}` }
+      )
+    )
+  );
+  expect(responses.map(response => response.status)).toEqual([202, 202, 202, 202]);
+  const ids = await Promise.all(responses.map(async response => (await response.json()).data.id));
+  expect(new Set(ids).size).toBe(1);
+  expect(
+    await db.auditLog.count({ where: { action: 'status_page.publication.retry_requested' } })
+  ).toBe(1);
+  await db.statusPage.update({
+    where: { id: f.page.id },
+    data: { name: 'New reviewed configuration' },
+  });
+  const latest = await db.statusPage.findUniqueOrThrow({ where: { id: f.page.id } });
+  const absorbed = await invokeV2(
+    retry,
+    f.credential.token,
+    'POST',
+    `${f.path}/retry`,
+    f.params,
+    {},
+    { 'If-Match': `"${latest.revision}"`, 'Idempotency-Key': 'pending-newer-revision' }
+  );
+  expect(absorbed.status).toBe(202);
+  expect((await absorbed.json()).data.id).toBe(ids[0]);
+  const stored = await db.backgroundJob.findUniqueOrThrow({ where: { id: ids[0] } });
+  // Preserve the strict payload shape accepted by the previously shipped worker.
+  expect(Object.keys(stored.payload as Record<string, unknown>).sort()).toEqual([
+    'actorId',
+    'apiClientId',
+    'pageId',
+    'task',
+  ]);
+  await db.backgroundJob.update({
+    where: { id: ids[0] },
+    data: { status: 'PROCESSING', claimToken: crypto.randomUUID() },
+  });
+  const blocked = await invokeV2(
+    retry,
+    f.credential.token,
+    'POST',
+    `${f.path}/retry`,
+    f.params,
+    {},
+    { 'If-Match': `"${latest.revision}"`, 'Idempotency-Key': 'new-revision-outstanding' }
+  );
+  expect(blocked.status).toBe(429);
+  expect(blocked.headers.get('retry-after')).toBe('1');
+  expect(await processJob(ids[0])).toBe(true);
+  expect(
+    (
+      await invokeV2(
+        retry,
+        f.credential.token,
+        'POST',
+        `${f.path}/retry`,
+        f.params,
+        {},
+        { 'If-Match': `"${latest.revision}"`, 'Idempotency-Key': 'new-revision-outstanding' }
+      )
+    ).status
+  ).toBe(202);
+});
+it.each([
+  ['credential', 4],
+  ['global', 16],
+] as const)('bounds %s outstanding publication work', async (kind, count) => {
+  const f = await fixture();
+  await db.backgroundJob.createMany({
+    data: Array.from({ length: count }, () => ({
+      id: crypto.randomUUID(),
+      type: 'SCHEDULED_TASK' as const,
+      status: 'PENDING' as const,
+      scheduledAt: new Date(),
+      payload: {
+        task: 'STATUS_PAGE_PUBLICATION_RETRY',
+        pageId: `cl${crypto.randomUUID().replaceAll('-', '')}`,
+        actorId: f.credential.user.id,
+        apiClientId: kind === 'credential' ? f.credential.key.id : crypto.randomUUID(),
+      },
+    })),
+  });
+  expect((await f.call()).status).toBe(429);
+  expect(
+    await db.auditLog.count({ where: { action: 'status_page.publication.retry_requested' } })
+  ).toBe(0);
+});
+it('redacts stored publication error text in state and legacy job receipts', async () => {
+  const f = await fixture();
+  const privateError = 'storage https://user:secret@example.invalid/internal?token=sensitive';
+  await db.$executeRaw`UPDATE "StatusPageSnapshot" SET "lastError"=${privateError} WHERE "statusPageId"=${f.page.id}`;
+  for (const role of ['ADMIN', 'RESPONDER', 'AUDITOR'] as const) {
+    const credential = await createV2Credential(['status-pages:read'], role);
+    const response = await invokeV2(read, credential.token, 'GET', f.path, f.params);
+    const text = await response.text();
+    expect(response.status).toBe(200);
+    expect(text).not.toContain(privateError);
+    expect(JSON.parse(text).data.publication.lastError).toBe('PUBLICATION_RECONCILIATION_FAILED');
+  }
+  const job = await db.backgroundJob.create({
+    data: {
+      id: crypto.randomUUID(),
+      type: 'SCHEDULED_TASK',
+      status: 'COMPLETED',
+      scheduledAt: new Date(),
+      payload: {
+        task: 'STATUS_PAGE_PUBLICATION_RETRY',
+        pageId: f.page.id,
+        actorId: f.credential.user.id,
+        apiClientId: f.credential.key.id,
+        receipt: {
+          outcome: 'failed',
+          completedAt: new Date().toISOString(),
+          publication: { status: 'FAILED', revision: '1', lastError: privateError },
+        },
+      },
+    },
+  });
+  const response = await invokeV2(getJob, f.credential.token, 'GET', `${f.path}/jobs/${job.id}`, {
+    ...f.params,
+    jobId: job.id,
+  });
+  const text = await response.text();
+  expect(response.status).toBe(200);
+  expect(text).not.toContain(privateError);
+  expect(JSON.parse(text).data.result.publication.lastError).toBe(
+    'PUBLICATION_RECONCILIATION_FAILED'
+  );
+  const stored = await db.$queryRaw<
+    { lastError: string }[]
+  >`SELECT "lastError" FROM "StatusPageSnapshot" WHERE "statusPageId"=${f.page.id}`;
+  expect(stored[0].lastError).toBe(privateError);
+});

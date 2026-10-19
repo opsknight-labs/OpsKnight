@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { safePublicationResult } from './publication-diagnostics';
 import { reconcileStatusPagePublication } from './publish-configuration';
 
 const task = 'STATUS_PAGE_PUBLICATION_RETRY';
@@ -39,19 +40,60 @@ export async function requestStatusPagePublicationRetry(
   expectedRevision: number,
   actor: { id: string; apiClientId: string }
 ) {
+  // Coordinate admission across replicas; existing accepted jobs remain inspectable.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('status-page-publication-admission', 0))`;
   const page = await tx.statusPage.findUnique({
     where: { id: pageId },
     select: { revision: true },
   });
   if (!page) throw new AppError({ code: 'STATUS_PAGE_NOT_FOUND' });
   if (page.revision !== expectedRevision) throw new AppError({ code: 'PRECONDITION_FAILED' });
+  const active = await tx.$queryRaw<{ total: bigint; owned: bigint }[]>`
+    SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE payload->>'apiClientId'=${actor.apiClientId}) AS owned
+    FROM "BackgroundJob" WHERE type='SCHEDULED_TASK'::"JobType" AND status IN ('PENDING','PROCESSING')
+      AND payload->>'task'='STATUS_PAGE_PUBLICATION_RETRY'`;
+  const existing = await tx.backgroundJob.findFirst({
+    where: {
+      type: 'SCHEDULED_TASK',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      AND: [
+        { payload: { path: ['task'], equals: task } },
+        { payload: { path: ['pageId'], equals: pageId } },
+      ],
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
+  if (existing) {
+    const payload = payloadSchema.parse(existing.payload);
+    // Pending work reads the latest configuration when claimed. Running work may
+    // already have read an older revision, so it cannot absorb a new request.
+    if (existing.status === 'PENDING' && !payload.receipt) return project(existing);
+    throw new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      details: { retryAfter: 1 },
+      userMessage:
+        'Publication work for this page is still outstanding. Wait for it to finish before retrying the current revision.',
+    });
+  }
+  if (Number(active[0]?.total ?? 0) >= 16 || Number(active[0]?.owned ?? 0) >= 4)
+    throw new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      details: { retryAfter: 1 },
+      userMessage:
+        'Publication capacity is full (four active jobs per credential and sixteen globally). Wait for accepted work to finish.',
+    });
   const job = await tx.backgroundJob.create({
     data: {
       id: randomUUID(),
       type: 'SCHEDULED_TASK',
       status: 'PENDING',
       scheduledAt: new Date(),
-      payload: { task, pageId, actorId: actor.id, apiClientId: actor.apiClientId },
+      payload: {
+        task,
+        pageId,
+        actorId: actor.id,
+        apiClientId: actor.apiClientId,
+      },
     },
   });
   await emitAuditEvent(
@@ -95,7 +137,7 @@ function project(job: {
     attempts: job.attempts,
     createdAt: job.createdAt,
     completedAt: job.completedAt,
-    result: payload.receipt ?? null,
+    result: payload.receipt ? safePublicationResult(payload.receipt) : null,
   };
 }
 

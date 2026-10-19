@@ -1,0 +1,57 @@
+{
+  "reviewedCommit": "fac454a7cf91da862981dfe25a4826b2f9570f82",
+  "measuredAt": "2026-10-19T04:30:37.926355+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Shared revision/replay correctness, bounded publication retry admission, safe publication diagnostics, generated tracker counts and verified Alpine package installation. Not full enterprise completion.",
+  "changes": {
+    "revisionReplay": "Shared-factory revision-protected request identity contains the normalized required revision and body. Changed validators conflict; exact retries still replay after revision advances. Earlier generic receipts cannot prove the original revision and fail closed; upgrade handling is documented.",
+    "publicationAdmission": "At most one pending/running job per page from the new admission command. Distinct requests coalesce while pending; processing work returns 429. Four outstanding jobs per credential and sixteen globally, under a shared advisory lock. Existing accepted legacy jobs are preserved.",
+    "publicationDiagnostics": "Ordinary REST state/configuration/job responses normalize lastError to PUBLICATION_RECONCILIATION_FAILED, including old stored job receipts. Detailed control-plane data remains intact.",
+    "trackerCounts": "Client generation/check derives every nested registeredOperationCount in live trackers from V2_OPERATIONS. Phase/release decisions remain evidence-reviewed.",
+    "containerPackages": "One digest-pinned shared base, one verified package installation, three bounded attempts, package inventory stored in image. Both ARM64 and AMD64 base builds passed; no TLS/signature bypass."
+  },
+  "checks": {
+    "sharedAndRepresentativePostgres": {
+      "passed": 88,
+      "files": 5,
+      "scope": "Registry-driven shared factory replay contracts, real runbook metadata and service rules, SLO edits/evaluation, publication admission/diagnostics/worker paths"
+    },
+    "existingDomainPostgres": {
+      "passed": 59,
+      "files": 4,
+      "scope": "Runbook metadata/lifecycle, rules, status-page configuration and domain publication; overlaps final runbook suites."
+    },
+    "unitContract": {
+      "passed": 38,
+      "files": 6
+    },
+    "packageRetryTests": {
+      "passed": 4
+    },
+    "dockerPackageBase": {
+      "arm64": "passed",
+      "amd64": "passed"
+    },
+    "typecheck": "passed production build TypeScript stage on final source",
+    "lint": "changed source passed zero warnings; generator checked separately with --no-ignore",
+    "generatedDrift": "passed, including generated tracker counts",
+    "productionBuild": "passed on final source",
+    "liveSdk": "Both complete TypeScript/Python SDK workflows passed against final production build and a separate real general worker.",
+    "executionNote": "A parallel build/test run hit one unchanged database setup timeout under local memory pressure. The same checks passed in a serial run without increasing timeouts.",
+    "diagnosticAndDocsUnit": {
+      "passed": 4,
+      "files": 2,
+      "note": "Two documentation cases overlap the six-file unit run."
+    },
+    "publicationAdmissionIndex": "applied and valid/ready in both isolated test databases"
+  },
+  "remainingReleaseWork": [
+    "Final-head CI including complete image and multi-replica/failover certification",
+    "Independent full resource-level authorization certification",
+    "SLO historical query execution budgets, fairness and cancellation contract",
+    "Subscriber revocation against already-processing provider delivery",
+    "Combined old/new worker, crash replay, privacy and recovery certification",
+    "Immutable OS package snapshot/mirror for byte-for-byte reproducible OS rebuilds",
+    "All unfinished endpoint families and product UI parity in the complete feature coverage plan"
+  ]
+}

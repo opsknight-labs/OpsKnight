@@ -160,7 +160,9 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
           });
         }
 
-        if (config.preconditionRequired) requireRevisionIfMatch(req);
+        const expectedRevision = config.preconditionRequired
+          ? requireRevisionIfMatch(req)
+          : undefined;
 
         // 7. Execute Handler (Idempotent vs Non-Idempotent)
         if (config.idempotent) {
@@ -183,7 +185,9 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
             req,
             apiKey.id,
             scope,
-            body,
+            expectedRevision === undefined
+              ? body
+              : { contract: 'revision-bound-v1', body, ifMatch: expectedRevision },
             async tx => {
               return await config.handler({
                 req,
