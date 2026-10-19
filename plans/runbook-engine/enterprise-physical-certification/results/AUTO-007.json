@@ -16,7 +16,10 @@
   "rule_revision": 2,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "cmvchadqm09584qmqassxvp0s",
-  "step_attempt_ids": ["start_docker_container", "verify_docker_health"],
+  "step_attempt_ids": [
+    "start_docker_container",
+    "verify_docker_health"
+  ],
   "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",

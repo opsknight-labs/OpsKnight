@@ -16,7 +16,9 @@
   "rule_revision": 3,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "cmvcf0z5k03gj4qmqyxd9v63s",
-  "step_attempt_ids": ["k8s_verify_rollout"],
+  "step_attempt_ids": [
+    "k8s_verify_rollout"
+  ],
   "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",

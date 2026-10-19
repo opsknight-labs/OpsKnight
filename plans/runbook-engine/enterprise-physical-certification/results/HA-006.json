@@ -16,7 +16,9 @@
   "rule_revision": 3,
   "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
   "execution_id": "UNEXECUTED",
-  "step_attempt_ids": ["NOT_TESTED"],
+  "step_attempt_ids": [
+    "NOT_TESTED"
+  ],
   "agent_id": "cmvbcv9lr02hz14mah9j953nm",
   "policy_hash": "6ef4d4f0dacf",
   "result": "NOT_TESTED",

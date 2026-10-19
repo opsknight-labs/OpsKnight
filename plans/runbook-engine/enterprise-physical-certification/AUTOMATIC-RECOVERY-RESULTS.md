@@ -26,6 +26,13 @@ Unattended and approval-gated physical remediation was executed against live wor
 > [!NOTE]
 > **AUTO-006 Swarm Execution Scope**: OpsKnight Agent executes Docker container lifecycle and orchestration recovery commands on Swarm nodes within supported step types (`DOCKER` / `COMMAND`), validating container health and replica restoration without claiming native Swarm `docker service update` engine step primitives.
 
+### 2.1 Trigger Origin & Staging Runtime Architecture (Automation trigger vs. Responder)
+
+OpsKnight's execution orchestrator distinguishes execution origins via `triggeredByType`:
+- **Unattended Automation Trigger (`TRIGGER`)**: In unattended recovery via `IntegratedRunbookWorker` or `startTriggeredRunbookExecution`, `triggeredByUserId` is `null` and `triggeredByType` is `'TRIGGER'`. The UI displays `Trigger: Automation trigger`. This automated contract is formally verified in unit and integration test suites (e.g., `tests/integration/runbook-preview-authorization.test.ts:406-414` asserting `{ triggeredByType: 'TRIGGER', triggeredByUserId: null }`).
+- **Responder Dispatch (`USER`)**: When an authenticated operator executes or verifies a runbook from the UI console (as done across staging certification runs AUTO-001..AUTO-008 and HA-001..HA-003), `triggeredByUserId` points to the operator session, and the UI displays `Responder · OpsKnight Admin`.
+- **Staging Deployment Isolation**: On the live staging environment (`opssentinal.com`), `OPSKNIGHT_PROCESS_ROLE=web` isolates web processes from running persistent background worker polling loops. In single-process deployments (`OPSKNIGHT_PROCESS_ROLE=integrated`) or dedicated worker pods (`OPSKNIGHT_PROCESS_ROLE=runbook-worker`), the `IntegratedRunbookWorker` drains `EVALUATE_TRIGGER` jobs automatically upon alert webhook ingestion.
+
 ---
 
 ## 3. Core Engine Defect Discovered & Root Cause Fix

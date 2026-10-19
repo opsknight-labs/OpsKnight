@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-19T03:33:06.238Z",
+  "timestamp": "2026-10-19T05:49:01.444Z",
   "viewports": {
     "320px_small_mobile": {
       "passed": true,
@@ -86,7 +86,7 @@
     "scope1_runbook_library": {
       "passed": true,
       "details": {
-        "catalogCount": 39,
+        "catalogCount": 45,
         "hasFilterBar": true,
         "hasGridAndList": true
       },
