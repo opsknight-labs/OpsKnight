@@ -510,3 +510,20 @@ changed required If-Match validators to replay. Both now assert 409; exact origi
 validator retries still replay successfully. The two full PostgreSQL suites pass
 35 cases. OpenAPI and the automation/command references now consistently describe
 revision-bound replay and candidate staging while LIVE.
+
+## Review of 072b69f8: documentation and review input privacy
+
+Corrected the manual API coverage section and its anchor. Delivered approval,
+service-rule, component, subscriber and branding-setting operations are identified
+separately from unavailable administration, domains, asset uploads and previews.
+Registry presence no longer claims that every actual route has been certified.
+
+Review output masks submitted inputs before interpolation, rather than relying on
+recognizable token patterns. The approval digest continues to bind actual inputs.
+Known string inputs are removed from REST and execution-detail evidence before
+JSON escaping and from serialized object keys. Eight focused privacy cases include
+Bash, URL paths/queries, ignored headers, target configuration, exact scalar/secret
+references and arbitrary escaped nested evidence. The real PostgreSQL response
+regression passes alongside all existing intervention cases. These focused checks
+are not a claim of comprehensive Agent/output or full enterprise certification.
+See `review-072b69f-privacy.json`.
