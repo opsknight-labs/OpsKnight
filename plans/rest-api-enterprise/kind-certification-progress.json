@@ -1,7 +1,7 @@
 {
   "sourceParent": "2d30c0251f4886739a528570651bf975a69b910c",
-  "updatedAt": "2026-10-19T09:02:26.423811+00:00",
-  "status": "native_ci_image_pending",
+  "updatedAt": "2026-10-19T11:06:05.479258+00:00",
+  "status": "pinned_native_worker_and_sdk_journeys_passed_remaining_gates_open",
   "context": "kind-opsknight-cluster",
   "namespace": "opsknight-api-886-072b69f",
   "topology": {
@@ -18,7 +18,13 @@
     "Namespace-owned SDK forwarding harness with image/readiness preflight",
     "11 external-mode guard tests and 4 package-installer tests passed",
     "Changed-source lint and typecheck passed",
-    "Both SDKs passed the unchanged default local workflow mode against the prior local production artifact; this is harness regression evidence, not current-image certification."
+    "Both SDKs passed the unchanged default local workflow mode against the prior local production artifact; this is harness regression evidence, not current-image certification.",
+    "Native ARM64 image archive built in GitHub Actions run 39227564024; downloaded archive and metadata checksums verified",
+    "Loaded image config, manifest, ARM64 architecture and OCI revision verified before Kind import",
+    "All seven application process roles became ready after namespace-only migrations and Helm installation",
+    "First administrator created through the supported setup action with a fresh CLI bootstrap capability",
+    "Both TypeScript and Python live SDK suites passed through namespace-only proxy and PostgreSQL forwards",
+    "REST-created native Runbook approval, rejection, duplicate requests and reviewed rerun passed through the deployed real Runbook worker"
   ],
   "failedAttempts": [
     {
@@ -31,11 +37,10 @@
     }
   ],
   "next": [
-    "Push and dispatch native ARM64 certification archive job, verify and import exact image",
-    "Load and deploy the image into the owned namespace",
-    "Run both SDKs and real worker functional paths",
+    "Build and deploy subsequent fleet/pool/secret code after pushing it; the certified image predates those endpoints",
+    "Certify actual Docker/Kubernetes Agent command execution, signed results, cancellation and recovery",
     "Run measured 1/2/4-replica load, quota/revocation and pod/database recovery checks",
-    "Record limitations and failures without marking unsupported enterprise gates passed"
+    "Finish missing API families and combined authorization/mixed-version certification"
   ],
   "limitations": [
     "Single-node Kind does not prove physical node or database HA",
@@ -59,12 +64,33 @@
     ]
   },
   "nativeCiFallback": {
-    "status": "implemented_not_dispatched",
+    "status": "passed_image_imported",
     "workflow": "docker-image.yml",
     "input": "certification_archive=true",
     "architecture": "arm64",
     "registryPublication": false,
     "retentionDays": 1,
-    "purpose": "Build the official production Dockerfile away from the resource-constrained shared local VM; verify archive/source/image identity before Kind import."
+    "purpose": "Build the official production Dockerfile away from the resource-constrained shared local VM; verify archive/source/image identity before Kind import.",
+    "workflowRun": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39227564024",
+    "artifactId": 12175366926
+  },
+  "certifiedApplicationRevision": "133f1ee66997df4b429f20ad224ed58aef4041d7",
+  "imageIdentity": {
+    "verified": true,
+    "configDigest": "sha256:f3feb34e499b790226f44a33069fccf34e59728acea8ff4ad90a09b05059bd85",
+    "manifestDigest": "sha256:c3db7a2d2aba75c343d355f4e79e9e6b603b05b97d17e52a84bd592786473509",
+    "architecture": "arm64",
+    "revision": "133f1ee66997df4b429f20ad224ed58aef4041d7",
+    "workflowRun": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39227564024"
+  },
+  "passingRuntimeEvidence": {
+    "harnessSourceRevision": "133f1ee66997df4b429f20ad224ed58aef4041d7",
+    "generatedPrismaClient": "Copied from the deployed image; matching Prisma 5.22 Darwin engine used by the host harness without schema regeneration",
+    "logSha256": "4f57ba428bb8eb54941b9d140e460854337bc11818e80ce7ed82fe7bcc31314e",
+    "bootstrapBrowserJourneyCertified": false,
+    "bootstrapSupportedServerActionPassed": true,
+    "physicalAgentJourneyPassed": false,
+    "loadHaCertified": false,
+    "latestBranchCertified": false
   }
 }

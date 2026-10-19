@@ -99,9 +99,13 @@ jobs:
           artifact-name: next-build-artifact
 
   db-integration:
-    name: Database integration (L2)
+    name: Database integration (L2, shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         image: postgres:16
@@ -154,20 +158,32 @@ jobs:
         # general opsknight_test database. No assertions or dedicated gates are skipped.
         run: >-
           npm run test:ci:db --
+          --shard=${{ matrix.shard }}/2
           --exclude tests/integration/authentication-policy-database.test.ts
           --exclude tests/integration/emergency-authentication-database.test.ts
           --exclude tests/integration/oidc-staged-authentication-database.test.ts
           --exclude tests/integration/provider-feedback-isolation-database.test.ts
           --exclude tests/integration/emergency-password-database.test.ts
 
+      - name: Name isolated database shard reports
+        if: always()
+        env:
+          DB_SHARD: ${{ matrix.shard }}
+        run: |
+          test -f reports/junit-db.xml
+          mv reports/junit-db.xml "reports/junit-db-${DB_SHARD}.xml"
+          if test -f reports/ci-db-smoke.xml; then
+            mv reports/ci-db-smoke.xml "reports/ci-db-smoke-${DB_SHARD}.xml"
+          fi
+
       - name: Upload db test report artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-db-report
+          name: junit-db-report-${{ matrix.shard }}
           path: |
-            reports/junit-db.xml
-            reports/ci-db-smoke.xml
+            reports/junit-db-${{ matrix.shard }}.xml
+            reports/ci-db-smoke-${{ matrix.shard }}.xml
           if-no-files-found: error
 
   auth-e2e:
@@ -328,7 +344,8 @@ jobs:
       - name: Download db test reports
         uses: actions/download-artifact@v4
         with:
-          name: junit-db-report
+          pattern: junit-db-report-*
+          merge-multiple: true
           path: reports
 
       - name: Publish test results to GitHub Checks
@@ -395,22 +412,26 @@ jobs:
             }
 
             const unitPath = 'reports/junit-unit.xml';
-            const dbPath = 'reports/junit-db.xml';
+            const dbPaths = ['reports/junit-db-1.xml', 'reports/junit-db-2.xml'];
             if (!fs.existsSync(unitPath)) {
               throw new Error(`${unitPath} is missing; unit test report artifact was not produced`);
             }
-            if (!fs.existsSync(dbPath)) {
-              throw new Error(`${dbPath} is missing; database integration test report artifact was not produced`);
+            for (const dbPath of dbPaths) {
+              if (!fs.existsSync(dbPath)) {
+                throw new Error(`${dbPath} is missing; every database shard must produce a report`);
+              }
             }
 
             const unitCounts = parseXml(fs.readFileSync(unitPath, 'utf8'));
-            const dbCounts = parseXml(fs.readFileSync(dbPath, 'utf8'));
+            const dbCounts = dbPaths.map(dbPath => ({ path: dbPath, ...parseXml(fs.readFileSync(dbPath, 'utf8')) }));
 
             if (unitCounts.tests === 0) {
               throw new Error(`${unitPath} reports 0 tests; unit suite was empty or failed silently`);
             }
-            if (dbCounts.tests === 0) {
-              throw new Error(`${dbPath} reports 0 tests; database integration suite was empty or failed silently`);
+            for (const counts of dbCounts) {
+              if (counts.tests === 0) {
+                throw new Error(`${counts.path} reports 0 tests; every database shard must execute tests`);
+              }
             }
 
             const totals = xmlFiles.reduce(
@@ -450,12 +471,13 @@ jobs:
               `- **Mobile & PWA browser E2E**: ${process.env.MOBILE_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
             ];
 
-            const smokePath = 'reports/ci-db-smoke.xml';
-            if (fs.existsSync(smokePath)) {
+            for (const shard of [1, 2]) {
+              const smokePath = `reports/ci-db-smoke-${shard}.xml`;
+              if (!fs.existsSync(smokePath)) continue;
               const smokeXml = fs.readFileSync(smokePath, 'utf8');
               const smokeCounts = parseXml(smokeXml);
               const ok = (smokeCounts.failures + smokeCounts.errors) === 0;
-              prereqLines.push(`- **DB smoke test**: ${ok ? '✅ Passed' : '❌ Failed'}`);
+              prereqLines.push(`- **DB smoke test (shard ${shard}/2)**: ${ok ? '✅ Passed' : '❌ Failed'}`);
             }
 
             const md = [

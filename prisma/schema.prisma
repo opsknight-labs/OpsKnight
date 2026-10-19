@@ -3852,6 +3852,7 @@ model RunbookStepAttempt {
 }
 
 model RunbookAgent {
+  configurationRevision Int @default(0)
   policyChecks RunbookPolicyCheck[]
   id                  String             @id @default(cuid())
   name                String
@@ -3908,6 +3909,7 @@ model RunbookAgentRequestNonce {
 }
 
 model RunbookAgentPool {
+  revision    Int                  @default(0)
   id          String               @id @default(cuid())
   name        String
   description String               @default("")
@@ -3924,6 +3926,8 @@ model RunbookAgentPool {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([createdAt, id])
 }
 
 model RunbookAgentPoolMember {
@@ -3940,11 +3944,14 @@ model RunbookAgentPoolMember {
   @@unique([poolId, agentId])
   @@index([poolId])
   @@index([agentId])
+  @@index([poolId, createdAt, id])
 }
 
 model RunbookSecret {
+  revision       Int     @default(0)
   id             String  @id @default(cuid())
   name           String  @unique
+  lastRotatedAt DateTime? @default(now())
   valueEncrypted String
   description    String  @default("")
   createdById    String?
@@ -3954,6 +3961,8 @@ model RunbookSecret {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([createdAt, id])
 }
 
 model RunbookSecretGrant {
@@ -3972,6 +3981,7 @@ model RunbookSecretGrant {
   @@unique([secretId, agentPoolId])
   @@index([agentId])
   @@index([agentPoolId])
+  @@index([secretId, createdAt, id])
 }
 
 model RunbookArtifact {

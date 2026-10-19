@@ -2,9 +2,15 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { schedulingLabelsSchema } from './labels';
 export { schedulingLabelsSchema } from './labels';
-export async function synchronizeLabelMemberships(tx: Prisma.TransactionClient) {
+export async function lockFleetConfiguration(tx: Prisma.TransactionClient) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('runbook-label-memberships'))`;
-  const pools = await tx.runbookAgentPool.findMany({ select: { id: true, matchLabels: true } });
+}
+export async function synchronizeLabelMemberships(tx: Prisma.TransactionClient, poolId?: string) {
+  await lockFleetConfiguration(tx);
+  const pools = await tx.runbookAgentPool.findMany({
+    ...(poolId ? { where: { id: poolId } } : {}),
+    select: { id: true, matchLabels: true },
+  });
   for (const pool of pools) {
     const labels = schedulingLabelsSchema.parse(pool.matchLabels);
     const agents = Object.keys(labels).length

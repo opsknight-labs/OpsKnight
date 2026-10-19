@@ -63,6 +63,10 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
   replayAuthGuard?: (
     ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders'>
   ) => Promise<void>;
+  /** Transform secret-bearing inputs before fingerprinting; never persist an unkeyed secret digest. */
+  idempotencyPayload?: (
+    ctx: Pick<V2RouteContext<TParams, TQuery, TBody>, 'req' | 'params' | 'body'>
+  ) => Prisma.InputJsonValue;
   /** One-time disclosure routes persist safe replay metadata, never their initial secret. */
   persistIdempotencyResult?: (
     result: V2RouteHandlerResult<TResult>
@@ -185,13 +189,16 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
               ? config.idempotencyScope({ params, body })
               : (config.idempotencyScope ?? `${req.method}:${new URL(req.url).pathname}`);
 
+          const receiptPayload = config.idempotencyPayload
+            ? config.idempotencyPayload({ req, params, body })
+            : body;
           const execution = await runV2IdempotentMutation(
             req,
             apiKey.id,
             scope,
             expectedRevision === undefined
-              ? body
-              : { contract: 'revision-bound-v1', body, ifMatch: expectedRevision },
+              ? receiptPayload
+              : { contract: 'revision-bound-v1', body: receiptPayload, ifMatch: expectedRevision },
             async tx => {
               return await config.handler({
                 req,

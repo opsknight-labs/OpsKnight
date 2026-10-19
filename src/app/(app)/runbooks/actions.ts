@@ -1,6 +1,13 @@
 'use server';
 
 import { revokeRunbookAgent } from '@/lib/runbooks/fleet-commands';
+import {
+  createRunbookAgentPool,
+  updateRunbookAgentPool,
+  updateRunbookAgentMetadata,
+  setRunbookPoolMember,
+  removeRunbookPoolMemberById,
+} from '@/lib/runbooks/pool-commands';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -11,7 +18,7 @@ import { RUNBOOK_TEMPLATES, runbookTemplate, runbookTemplateInputs } from '@/lib
 import { CAPABILITIES } from '@/lib/authorization';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
-import { schedulingLabelsSchema, synchronizeLabelMemberships } from '@/lib/runbooks/pool-labels';
+import { schedulingLabelsSchema } from '@/lib/runbooks/pool-labels';
 import {
   stageExecutionSigningKey,
   activateExecutionSigningKey,
@@ -326,20 +333,7 @@ export async function createAgentPoolAction(formData: FormData) {
       JSON.parse(readString(formData, 'matchLabels') || '{}')
     ),
   });
-  await prisma.$transaction(async tx => {
-    const pool = await tx.runbookAgentPool.create({ data: { ...input, createdById: actor.id } });
-    await synchronizeLabelMemberships(tx);
-    await logAudit(
-      {
-        action: 'runbook.agent_pool.created',
-        entityType: 'RUNBOOK_AGENT_POOL',
-        entityId: pool.id,
-        actorId: actor.id,
-        details: { name: pool.name, mode: pool.mode },
-      },
-      tx
-    );
-  });
+  await createRunbookAgentPool(input, actor.id);
   revalidateAgentFleet();
 }
 
@@ -348,21 +342,8 @@ export async function updateSchedulingLabelsAction(formData: FormData) {
   const id = idSchema.parse(readString(formData, 'id'));
   const kind = z.enum(['agent', 'pool']).parse(readString(formData, 'kind'));
   const labels = schedulingLabelsSchema.parse(JSON.parse(readString(formData, 'labels') || '{}'));
-  await prisma.$transaction(async tx => {
-    if (kind === 'agent') await tx.runbookAgent.update({ where: { id }, data: { labels } });
-    else await tx.runbookAgentPool.update({ where: { id }, data: { matchLabels: labels } });
-    await synchronizeLabelMemberships(tx);
-    await logAudit(
-      {
-        action: 'runbook.scheduling_labels.updated',
-        entityType: kind === 'agent' ? 'RUNBOOK_AGENT' : 'RUNBOOK_AGENT_POOL',
-        entityId: id,
-        actorId: actor.id,
-        newValue: labels,
-      },
-      tx
-    );
-  });
+  if (kind === 'agent') await updateRunbookAgentMetadata(id, { labels }, actor.id);
+  else await updateRunbookAgentPool(id, { matchLabels: labels }, actor.id);
   revalidateAgentFleet();
 }
 
@@ -455,46 +436,14 @@ export async function addAgentToPoolAction(formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const agentId = idSchema.parse(readString(formData, 'agentId'));
   const poolId = idSchema.parse(readString(formData, 'poolId'));
-  await prisma.$transaction(async tx => {
-    const member = await tx.runbookAgentPoolMember.upsert({
-      where: { poolId_agentId: { poolId, agentId } },
-      create: { poolId, agentId },
-      update: { source: 'EXPLICIT' },
-    });
-    await logAudit(
-      {
-        action: 'runbook.agent_pool.member_added',
-        entityType: 'RUNBOOK_AGENT_POOL',
-        entityId: poolId,
-        actorId: actor.id,
-        details: { agentId, membershipId: member.id },
-      },
-      tx
-    );
-  });
+  await setRunbookPoolMember(poolId, agentId, true, actor.id);
   revalidateAgentFleet();
 }
 
 export async function removeAgentFromPoolAction(memberId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const id = idSchema.parse(memberId);
-  await prisma.$transaction(async tx => {
-    const existing = await tx.runbookAgentPoolMember.findUniqueOrThrow({ where: { id } });
-    if (existing.source === 'DYNAMIC')
-      throw new Error('Change the pool selector or Agent labels to remove dynamic membership.');
-    const member = await tx.runbookAgentPoolMember.delete({ where: { id } });
-    await synchronizeLabelMemberships(tx);
-    await logAudit(
-      {
-        action: 'runbook.agent_pool.member_removed',
-        entityType: 'RUNBOOK_AGENT_POOL',
-        entityId: member.poolId,
-        actorId: actor.id,
-        details: { agentId: member.agentId, membershipId: member.id },
-      },
-      tx
-    );
-  });
+  await removeRunbookPoolMemberById(id, actor.id);
   revalidateAgentFleet();
 }
 

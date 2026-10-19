@@ -19,6 +19,14 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type RunbookAgentPool = { "id": string; "name": string; "description": string; "mode": "LOCAL_HOSTS" | "SHARED_TARGET"; "matchLabels": Record<string, string>; "revision": number; "createdAt": string; "updatedAt": string };
+export type RunbookAgentPoolMember = { "id": string; "poolId": string; "agentId": string; "source": "EXPLICIT" | "DYNAMIC"; "createdAt": string; "agent": { "id": string; "name": string; "status": string } };
+export type RunbookAgentPoolMembership = { "poolId": string; "agentId": string; "revision": number; "membership": null | { "id": string; "source": string } };
+export type RunbookAgentConfiguration = { "id": string; "name": string; "labels": Record<string, string>; "revision": number };
+export type RunbookAgentPoolDeletionCheck = { "poolId": string; "revision": number; "canDelete": boolean; "dependencies": { "serviceRules": number; "executions": number; "attempts": number; "secretGrants": number } };
+export type RunbookSecretMetadata = { "id": string; "name": string; "reference": string; "description": string; "revision": number; "lastRotatedAt": string | null; "createdAt": string; "updatedAt": string };
+export type RunbookSecretGrant = { "id": string; "secretId": string; "agentId": string | null; "agentPoolId": string | null; "createdAt": string };
+export type RunbookSettings = { "runbookArtifactRetentionDays": number | null; "runbookAutoExecutionsPerIncident": number; "runbookAutoWritesPerIncident": number; "runbookAutoNonIdempotentPerIncident": number; "runbookSettingsRevision": number };
 export type RunbookAgent = { "id": string; "name": string; "hostname": string | null; "status": string; "version": string | null; "platform": string | null; "capabilities": Array<string>; "policyHash": string | null; "lastHeartbeatAt": string | null; "spoolDepth": number; "deadLetterDepth": number; "activeAttemptCount": number; "hasDiagnosticError": boolean; "enrolledAt": string | null; "revokedAt": string | null; "createdAt": string; "updatedAt": string };
 export type RunbookAgentPolicyStatus = { "agentId": string; "status": string; "capabilities": Array<string>; "policyHash": string | null; "lastHeartbeatAt": string | null; "hasDiagnosticError": boolean };
 export type RunbookAgentRevocation = { "id": string; "status": "REVOKED"; "revokedAt": string | null };
@@ -100,6 +108,26 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listRunbookAgentPools: { "query"?: { "limit"?: number; "cursor"?: string } };
+  createRunbookAgentPool: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "description"?: string; "mode"?: "LOCAL_HOSTS" | "SHARED_TARGET"; "matchLabels"?: Record<string, string> } };
+  getRunbookAgentPool: { "params": { "id": string } };
+  updateRunbookAgentPool: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "description"?: string; "mode"?: "LOCAL_HOSTS" | "SHARED_TARGET"; "matchLabels"?: Record<string, string> } };
+  deleteRunbookAgentPool: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  checkRunbookAgentPoolDeletion: { "params": { "id": string } };
+  listRunbookAgentPoolMembers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  setRunbookAgentPoolMember: { "params": { "id": string; "agentId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  removeRunbookAgentPoolMember: { "params": { "id": string; "agentId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  getRunbookAgentConfiguration: { "params": { "id": string } };
+  updateRunbookAgentConfiguration: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "labels"?: Record<string, string> } };
+  listRunbookSecrets: { "query"?: { "limit"?: number; "cursor"?: string } };
+  createRunbookSecret: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "value": string; "description"?: string } };
+  getRunbookSecret: { "params": { "id": string } };
+  rotateRunbookSecret: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "value": string } };
+  listRunbookSecretGrants: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  grantRunbookSecret: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "agentId": string } | { "agentPoolId": string } };
+  revokeRunbookSecretGrant: { "params": { "id": string; "grantId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  getRunbookSettings: Record<string, never>;
+  updateRunbookSettings: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "runbookArtifactRetentionDays"?: number; "runbookAutoExecutionsPerIncident"?: number; "runbookAutoWritesPerIncident"?: number; "runbookAutoNonIdempotentPerIncident"?: number; "confirmArtifactCleanup"?: true } };
   listRunbookAgents: { "query"?: { "limit"?: number; "cursor"?: string } };
   getRunbookAgent: { "params": { "id": string } };
   getRunbookAgentPolicyStatus: { "params": { "id": string } };
@@ -266,6 +294,26 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listRunbookAgentPools: { "data": Array<RunbookAgentPool>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createRunbookAgentPool: { "data": RunbookAgentPool; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookAgentPool: { "data": RunbookAgentPool; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateRunbookAgentPool: { "data": RunbookAgentPool; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteRunbookAgentPool: null;
+  checkRunbookAgentPoolDeletion: { "data": RunbookAgentPoolDeletionCheck; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookAgentPoolMembers: { "data": Array<RunbookAgentPoolMember>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  setRunbookAgentPoolMember: { "data": RunbookAgentPoolMembership; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  removeRunbookAgentPoolMember: { "data": RunbookAgentPoolMembership; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookAgentConfiguration: { "data": RunbookAgentConfiguration; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateRunbookAgentConfiguration: { "data": RunbookAgentConfiguration; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookSecrets: { "data": Array<RunbookSecretMetadata>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createRunbookSecret: { "data": RunbookSecretMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getRunbookSecret: { "data": RunbookSecretMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  rotateRunbookSecret: { "data": RunbookSecretMetadata; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookSecretGrants: { "data": Array<RunbookSecretGrant>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  grantRunbookSecret: { "data": RunbookSecretGrant; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  revokeRunbookSecretGrant: null;
+  getRunbookSettings: { "data": RunbookSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateRunbookSettings: { "data": RunbookSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookAgents: { "data": Array<RunbookAgent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getRunbookAgent: { "data": RunbookAgent; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getRunbookAgentPolicyStatus: { "data": RunbookAgentPolicyStatus; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -432,6 +480,197 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listRunbookAgentPools": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookAgentPool": {
+    "method": "POST",
+    "path": "/runbooks/agent-pools",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookAgentPool": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookAgentPool": {
+    "method": "PATCH",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteRunbookAgentPool": {
+    "method": "DELETE",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "checkRunbookAgentPoolDeletion": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}/deletion-check",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookAgentPoolMembers": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}/members",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setRunbookAgentPoolMember": {
+    "method": "PUT",
+    "path": "/runbooks/agent-pools/{id}/members/{agentId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "removeRunbookAgentPoolMember": {
+    "method": "DELETE",
+    "path": "/runbooks/agent-pools/{id}/members/{agentId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getRunbookAgentConfiguration": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}/configuration",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookAgentConfiguration": {
+    "method": "PATCH",
+    "path": "/runbooks/agents/{id}/configuration",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecrets": {
+    "method": "GET",
+    "path": "/runbooks/secrets",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookSecret": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "rotateRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets/{id}/rotate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecretGrants": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}/grants",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "grantRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets/{id}/grants",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "revokeRunbookSecretGrant": {
+    "method": "DELETE",
+    "path": "/runbooks/secrets/{id}/grants/{grantId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getRunbookSettings": {
+    "method": "GET",
+    "path": "/settings/runbooks",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookSettings": {
+    "method": "PATCH",
+    "path": "/settings/runbooks",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listRunbookAgents": {
     "method": "GET",
     "path": "/runbooks/agents",
