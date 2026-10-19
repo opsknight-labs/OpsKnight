@@ -1,3 +1,4 @@
+import { readableObservationPreviews } from '@/lib/automation/observation-read-privacy';
 import { persistObservationBatch } from '@/lib/automation/observation-batch';
 import { beforeEach, expect, it } from 'vitest';
 import {
@@ -22,6 +23,24 @@ beforeEach(async () => {
     update: { automationEnabled: true, automationStoreObservationPreviews: false },
   });
 });
+async function drainPrivacyCleanup() {
+  for (let batch = 0; batch < 20; batch++) {
+    const jobs = await db.backgroundJob.findMany({
+      where: { id: { startsWith: 'AUTOMATION_PRIVACY_CLEANUP:' } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const next = jobs.find(
+      job =>
+        job.payload &&
+        typeof job.payload === 'object' &&
+        !Array.isArray(job.payload) &&
+        job.payload.completed !== true
+    );
+    if (!next) return;
+    await processAutomationJob(next.payload, next.id);
+  }
+  throw new Error('Cleanup did not converge within test batch bound');
+}
 it('keeps values out of default-off jobs and observation rows while retaining counts', async () => {
   const service = await createTestService('Private discovery');
   const safe = {
@@ -109,6 +128,12 @@ it('requires explicit opt-in and clears persisted and queued previews on disable
     },
     { source: 'UI', actorId: actor.id }
   );
+  const retained = await db.automationContextObservation.findMany({
+    where: { serviceId: service.id },
+  });
+  expect(retained[0].rawValuePreview).toBe(observation.value);
+  expect((await readableObservationPreviews(retained, true))[0].rawValuePreview).toBe('[redacted]');
+  await drainPrivacyCleanup();
   expect(
     (await db.automationContextObservation.findFirstOrThrow({ where: { serviceId: service.id } }))
       .rawValuePreview
@@ -214,6 +239,13 @@ it('fences in-flight worker preview writes against administrative disablement', 
     releaseWorker();
     await worker;
     await disable;
+    const retained = await db.automationContextObservation.findMany({
+      where: { serviceId: service.id },
+    });
+    expect((await readableObservationPreviews(retained, true))[0].rawValuePreview).toBe(
+      '[redacted]'
+    );
+    await drainPrivacyCleanup();
     expect(
       (await db.automationContextObservation.findFirstOrThrow({ where: { serviceId: service.id } }))
         .rawValuePreview
@@ -545,4 +577,118 @@ it('supersedes an old cleanup after a new preview opt-in and rejects manual retr
   expect(await db.auditLog.count({ where: { action: 'automation.privacy.cleanup.retried' } })).toBe(
     0
   );
+});
+
+it('accepts explicit preview opt-out without synchronous scans and hides retained previews until bounded cleanup completes', async () => {
+  const { createV2Credential, invokeV2 } = await import('../helpers/api-v2');
+  const { PATCH } = await import('@/app/api/v2/settings/automation/route');
+  const { listAutomationObservations } = await import('@/lib/automation/observation-history');
+  const { PRIVACY_CLEANUP_BATCH_SIZE: size } = await import('@/lib/automation/privacy-cleanup');
+  const credential = await createV2Credential(['automation-settings:write']);
+  const service = await createTestService('Active preview opt-out');
+  await db.systemSettings.update({
+    where: { id: 'default' },
+    data: { automationStoreObservationPreviews: true },
+  });
+  const current = await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } });
+  const total = size * 2 + 3;
+  await db.automationContextObservation.createMany({
+    data: Array.from({ length: total }, (_, i) => ({
+      serviceId: service.id,
+      integrationType: 'EVENTS_API',
+      integrationId: 'opt-out',
+      fieldKey: 'environment',
+      sourcePath: `payload.env${i}`,
+      rawValuePreview: 'retained-private-value',
+      normalizedRawValueHash: i.toString(16).padStart(64, '0'),
+      fieldType: 'STRING',
+    })),
+  });
+  await db.backgroundJob.createMany({
+    data: Array.from({ length: total }, (_, i) => ({
+      type: 'SCHEDULED_TASK' as const,
+      scheduledAt: new Date(),
+      payload: {
+        task: 'AUTOMATION_OBSERVE',
+        logicalKey: `opt-out-${i}`,
+        observations: [{ value: 'retained-private-value', valueHash: 'c'.repeat(64) }],
+      },
+    })),
+  });
+  await db.$executeRawUnsafe(
+    `CREATE FUNCTION test_explicit_opt_out_cleanup_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Opt-out cleanup blocked'; END; $$`
+  );
+  await db.$executeRawUnsafe(
+    'CREATE TRIGGER test_explicit_opt_out_cleanup_failure_trigger BEFORE UPDATE ON "AutomationContextObservation" FOR EACH STATEMENT EXECUTE FUNCTION test_explicit_opt_out_cleanup_failure()'
+  );
+  const headers = {
+    'If-Match': `"${current.automationSettingsRevision}"`,
+    'Idempotency-Key': 'explicit-bounded-opt-out',
+  };
+  const call = () =>
+    invokeV2(
+      PATCH,
+      credential.token,
+      'PATCH',
+      '/settings/automation',
+      {},
+      {
+        automationEnabled: true,
+        automationStoreObservationPreviews: false,
+        automationTraceRetentionDays: 90,
+      },
+      headers
+    );
+  let first: Awaited<ReturnType<typeof db.backgroundJob.findFirstOrThrow>>;
+  try {
+    expect((await call()).status).toBe(200);
+    expect(await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } })).toMatchObject({
+      automationEnabled: true,
+      automationStoreObservationPreviews: false,
+    });
+    const retained = await db.automationContextObservation.findMany({
+      where: { serviceId: service.id },
+      take: 1,
+    });
+    expect(retained[0].rawValuePreview).toBe('retained-private-value');
+    expect((await readableObservationPreviews(retained, true))[0].rawValuePreview).toBe(
+      '[redacted]'
+    );
+    expect(
+      JSON.stringify(await listAutomationObservations(db, service.id, 100, null))
+    ).not.toContain('retained-private-value');
+    first = await db.backgroundJob.findFirstOrThrow({
+      where: { id: { startsWith: 'AUTOMATION_PRIVACY_CLEANUP:' } },
+    });
+    await expect(processAutomationJob(first.payload, first.id)).rejects.toThrow(
+      'Opt-out cleanup blocked'
+    );
+    expect(
+      await db.automationContextObservation.count({ where: { rawValuePreview: { not: '' } } })
+    ).toBe(total);
+  } finally {
+    await db.$executeRawUnsafe(
+      'DROP TRIGGER test_explicit_opt_out_cleanup_failure_trigger ON "AutomationContextObservation"'
+    );
+    await db.$executeRawUnsafe('DROP FUNCTION test_explicit_opt_out_cleanup_failure()');
+  }
+  await processAutomationJob(first!.payload, first!.id);
+  expect(
+    await db.automationContextObservation.count({ where: { rawValuePreview: { not: '' } } })
+  ).toBe(total - size);
+  const remaining = await db.$queryRaw<
+    { count: bigint }[]
+  >`SELECT count(*) FROM "BackgroundJob" WHERE payload @? '$.observations[*] ? (@.value != "")'`;
+  expect(Number(remaining[0].count)).toBe(total - size);
+  await processAutomationJob(first!.payload, first!.id);
+  expect(
+    await db.backgroundJob.count({ where: { id: { startsWith: 'AUTOMATION_PRIVACY_CLEANUP:' } } })
+  ).toBe(2);
+  await drainPrivacyCleanup();
+  expect(
+    await db.automationContextObservation.count({ where: { rawValuePreview: { not: '' } } })
+  ).toBe(0);
+  expect(await db.automationContextObservation.count()).toBe(total);
+  expect((await call()).headers.get('idempotency-replayed')).toBe('true');
+  expect(await db.auditLog.count({ where: { action: 'automation.settings.updated' } })).toBe(1);
 });

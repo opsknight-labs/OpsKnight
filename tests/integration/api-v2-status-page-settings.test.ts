@@ -478,3 +478,148 @@ it('serializes simultaneous identical keys and naturally unchanged configuration
     ).toBe(200);
   expect(await db.auditLog.count({ where: { action: 'status_page.config.updated' } })).toBe(1);
 });
+
+it('updates one component in place and preserves mapping cursor boundaries and unchanged revisions', async () => {
+  const { GET: listServices } = await import('@/app/api/v2/status-pages/[id]/services/route');
+  const { PATCH: updateService } =
+    await import('@/app/api/v2/status-pages/[id]/services/[serviceId]/route');
+  const f = await fixture();
+  const services = await Promise.all(
+    Array.from({ length: 4 }, (_, i) => createTestService(`Stable component ${i}`))
+  );
+  const mappings = await Promise.all(
+    services.map((service, i) =>
+      db.statusPageService.create({
+        data: {
+          statusPageId: f.page.id,
+          serviceId: service.id,
+          createdAt: new Date(Date.UTC(2025, 0, i + 1)),
+          order: i,
+        },
+      })
+    )
+  );
+  const before = await db.statusPage.findUniqueOrThrow({ where: { id: f.page.id } });
+  const first = await invokeV2(
+    listServices,
+    f.credential.token,
+    'GET',
+    `${f.path}/services?limit=2`,
+    f.params
+  );
+  const firstPage = await first.json();
+  expect(firstPage.data.map((row: { id: string }) => row.id)).toEqual([
+    mappings[3].id,
+    mappings[2].id,
+  ]);
+  const changed = await invokeV2(
+    updateService,
+    f.credential.token,
+    'PATCH',
+    `${f.path}/services/${services[3].id}`,
+    { ...f.params, serviceId: services[3].id },
+    { displayName: 'Changed in place' },
+    { 'If-Match': `"${before.revision}"` }
+  );
+  expect(changed.status).toBe(200);
+  expect((await changed.json()).data.revision).toBe(before.revision + 2);
+  for (const mapping of mappings) {
+    const saved = await db.statusPageService.findUniqueOrThrow({ where: { id: mapping.id } });
+    expect(saved.createdAt).toEqual(mapping.createdAt);
+    expect(saved.displayName).toBe(
+      mapping.serviceId === services[3].id ? 'Changed in place' : null
+    );
+  }
+  const next = await invokeV2(
+    listServices,
+    f.credential.token,
+    'GET',
+    `${f.path}/services?limit=2&cursor=${encodeURIComponent(firstPage.pagination.nextCursor)}`,
+    f.params
+  );
+  expect(next.status).toBe(200);
+  expect((await next.json()).data.map((row: { id: string }) => row.id)).toEqual([
+    mappings[1].id,
+    mappings[0].id,
+  ]);
+});
+it('applies bulk membership deltas while preserving retained component identities', async () => {
+  const f = await fixture();
+  const services = await Promise.all(
+    Array.from({ length: 4 }, (_, i) => createTestService(`Delta component ${i}`))
+  );
+  const existing = await Promise.all(
+    services.slice(0, 3).map((service, i) =>
+      db.statusPageService.create({
+        data: {
+          statusPageId: f.page.id,
+          serviceId: service.id,
+          displayName: `Component ${i}`,
+          order: i,
+        },
+      })
+    )
+  );
+  const page = await db.statusPage.findUniqueOrThrow({ where: { id: f.page.id } });
+  const result = await saveStatusPageSection(
+    f.page.id,
+    {
+      serviceIds: [services[0].id, services[1].id, services[3].id],
+      serviceConfigs: {
+        [services[0].id]: { displayName: 'Component 0', order: 0 },
+        [services[1].id]: { displayName: 'Changed 1', order: 1 },
+        [services[3].id]: { displayName: 'New 3', order: 3 },
+      },
+    },
+    { id: f.credential.user.id },
+    page.revision,
+    'services'
+  );
+  expect(result.revision).toBe(page.revision + 4);
+  expect(await db.statusPageService.findUniqueOrThrow({ where: { id: existing[0].id } })).toEqual(
+    existing[0]
+  );
+  expect(
+    await db.statusPageService.findUniqueOrThrow({ where: { id: existing[1].id } })
+  ).toMatchObject({
+    id: existing[1].id,
+    createdAt: existing[1].createdAt,
+    displayName: 'Changed 1',
+  });
+  expect(await db.statusPageService.findUnique({ where: { id: existing[2].id } })).toBeNull();
+  expect(await db.statusPageService.count({ where: { statusPageId: f.page.id } })).toBe(3);
+});
+
+it('serializes mapping-only writes against one reviewed parent revision without losing concurrent edits', async () => {
+  const { PATCH: updateService } =
+    await import('@/app/api/v2/status-pages/[id]/services/[serviceId]/route');
+  const f = await fixture();
+  const services = await Promise.all([
+    createTestService('Concurrent component A'),
+    createTestService('Concurrent component B'),
+  ]);
+  const mappings = await Promise.all(
+    services.map(service =>
+      db.statusPageService.create({ data: { statusPageId: f.page.id, serviceId: service.id } })
+    )
+  );
+  const page = await db.statusPage.findUniqueOrThrow({ where: { id: f.page.id } });
+  const responses = await Promise.all(
+    services.map((service, i) =>
+      invokeV2(
+        updateService,
+        f.credential.token,
+        'PATCH',
+        `${f.path}/services/${service.id}`,
+        { ...f.params, serviceId: service.id },
+        { displayName: `Reviewed ${i}` },
+        { 'If-Match': `"${page.revision}"` }
+      )
+    )
+  );
+  expect(responses.map(r => r.status).sort()).toEqual([200, 412]);
+  const retained = await db.statusPageService.findMany({ where: { statusPageId: f.page.id } });
+  expect(retained.map(row => row.id).sort()).toEqual(mappings.map(row => row.id).sort());
+  expect(retained.filter(row => row.displayName !== null)).toHaveLength(1);
+  expect(await db.auditLog.count({ where: { action: 'status_page.config.updated' } })).toBe(1);
+});

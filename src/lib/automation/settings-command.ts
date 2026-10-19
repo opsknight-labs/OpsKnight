@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { automationReadinessPolicySchema } from './readiness-policy';
-import { clearObservationJobPreviews } from './observation-payload-privacy';
 import 'server-only';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
@@ -59,8 +58,12 @@ export async function updateAutomationSettings(
       false;
     const disablingPreviews =
       previous.automationStoreObservationPreviews === true && !storePreviews;
-    if (!parsed.automationEnabled && previous.automationEnabled && !storePreviews) {
-      // Emergency OFF must not depend on diagnostic-table cleanup succeeding.
+    if (
+      disablingPreviews ||
+      (!parsed.automationEnabled && previous.automationEnabled && !storePreviews)
+    ) {
+      // Opt-out and emergency OFF commit immediately; physical deletion is bounded and resumable.
+      // Readers and writers fence previews using the committed settings while cleanup runs.
       const cleanupId = randomUUID();
       await tx.backgroundJob.create({
         data: {
@@ -71,12 +74,6 @@ export async function updateAutomationSettings(
           maxAttempts: 10,
         },
       });
-    } else if (disablingPreviews) {
-      await tx.automationContextObservation.updateMany({
-        where: { rawValuePreview: { not: '' } },
-        data: { rawValuePreview: '' },
-      });
-      await clearObservationJobPreviews(tx);
     }
     const readinessPolicy = parsed.automationReadinessPolicy ?? previous.automationReadinessPolicy;
     const next = await tx.systemSettings.upsert({

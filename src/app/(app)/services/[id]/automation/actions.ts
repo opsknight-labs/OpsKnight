@@ -1,5 +1,5 @@
 'use server';
-import { getAutomationSettings } from '@/lib/automation/settings';
+import { readableObservationPreviews } from '@/lib/automation/observation-read-privacy';
 import { readAutomationReadiness } from '@/lib/automation/readiness';
 import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { decodeExplanation } from '@/lib/automation/explanation';
@@ -497,13 +497,7 @@ export async function getAutomationArea(
         'Former administrator',
     })),
     versionTotal,
-    observations:
-      canReadSensitive && (await getAutomationSettings()).automationStoreObservationPreviews
-        ? observations
-        : observations.map(observation => ({
-            ...observation,
-            rawValuePreview: '[redacted]',
-          })),
+    observations: await readableObservationPreviews(observations, canReadSensitive),
     unmappedCount,
     aggregates,
     traces: canReadSensitive

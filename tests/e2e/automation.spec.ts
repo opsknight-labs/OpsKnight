@@ -1395,15 +1395,19 @@ test('administrator explicitly opts into discovery previews and disables storage
             .automationStoreObservationPreviews
       )
       .toBe(false);
-    expect(
-      (await db.automationContextObservation.findUniqueOrThrow({ where: { id: sample.id } }))
-        .rawValuePreview
-    ).toBe('');
+    // Settings hide previews immediately; a real general worker performs bounded physical cleanup.
+    await expect
+      .poll(
+        async () =>
+          (await db.automationContextObservation.findUniqueOrThrow({ where: { id: sample.id } }))
+            .rawValuePreview
+      )
+      .toBe('');
     await testInfo.attach('discovery-preview-opt-out', {
       body: JSON.stringify({
         project: testInfo.project.name,
         optInPersisted: true,
-        previewClearedOnOptOut: true,
+        previewClearedByDurableWorkerAfterOptOut: true,
         readinessPolicyReviewedAndRestored: true,
       }),
       contentType: 'application/json',

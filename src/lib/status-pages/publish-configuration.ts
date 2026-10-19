@@ -187,24 +187,56 @@ export async function applyStatusPageConfigurationChange(
           ...(change.expectedRevision !== undefined ? { revision: change.expectedRevision } : {}),
           updatedAt: expectedUpdatedAt ? new Date(expectedUpdatedAt) : current.updatedAt,
         },
-        data: data as Prisma.StatusPageUpdateInput,
+        // Prisma treats an empty update as a read. Mapping-only changes still need
+        // a real conditional parent write before their delta to fence every writer.
+        data: {
+          ...data,
+          ...(serviceIds !== undefined ? { updatedAt: new Date() } : {}),
+        } as Prisma.StatusPageUpdateInput,
       });
 
       if (serviceIds !== undefined) {
-        await tx.statusPageService.deleteMany({ where: { statusPageId: pageId } });
-        if (serviceIds.length > 0) {
-          await tx.statusPageService.createMany({
-            data: serviceIds.map(serviceId => {
-              const config = Reflect.get(serviceConfigs ?? {}, serviceId) || {};
-              return {
-                statusPageId: pageId,
-                serviceId,
+        // Preserve identity and cursor ordering for unchanged memberships. The parent
+        // write above fences configuration before reading and applying this delta.
+        const existing = await tx.statusPageService.findMany({ where: { statusPageId: pageId } });
+        const desired = new Map(
+          serviceIds.map(serviceId => {
+            const config = Reflect.get(serviceConfigs ?? {}, serviceId) || {};
+            return [
+              serviceId,
+              {
                 displayName: config.displayName || null,
                 order: config.order || 0,
                 showOnPage: config.showOnPage !== false,
-              };
-            }),
+              },
+            ] as const;
+          })
+        );
+        const existingIds = new Set(existing.map(row => row.serviceId));
+        const removed = existing.filter(row => !desired.has(row.serviceId));
+        if (removed.length)
+          await tx.statusPageService.deleteMany({
+            where: { id: { in: removed.map(row => row.id) } },
           });
+        const additions = serviceIds.filter(serviceId => !existingIds.has(serviceId));
+        if (additions.length)
+          await tx.statusPageService.createMany({
+            data: additions.map(serviceId => ({
+              statusPageId: pageId,
+              serviceId,
+              ...desired.get(serviceId)!,
+            })),
+          });
+        for (const row of existing) {
+          const next = desired.get(row.serviceId);
+          if (
+            next &&
+            (row.displayName !== next.displayName ||
+              row.order !== next.order ||
+              row.showOnPage !== next.showOnPage)
+          ) {
+            await tx.statusPageService.update({ where: { id: row.id }, data: next });
+          }
         }
       }
 

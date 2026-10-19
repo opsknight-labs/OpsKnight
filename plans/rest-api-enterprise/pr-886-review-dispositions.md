@@ -426,3 +426,24 @@ missing/nested resources, output schema/privacy, pagination ties, outer rollback
 and audit failure with same-key recovery. Public verification/consent remains on
 its existing endpoints. This closes the subscriber subset, not status-page
 configuration, domains/assets/publication or the overall enterprise plan.
+
+
+## Fresh status-page and preview opt-out audit (reviewed 238aef3)
+
+The subsequent publication checkpoint is e71b4c9ae (140 operations). The phase tracker
+now includes delivered metadata, service-rule, subscriber, configuration and publication
+work; all enterprise release gates remain pending.
+
+Component updates now apply membership deltas through the canonical UI/REST publication
+command. Retained mappings preserve IDs and creation timestamps; unchanged rows receive no
+write, while changed presentation is updated in place. This also preserves cursor boundaries
+across presentation edits and bounds revision increments to actual mapping changes.
+
+Explicit preview opt-out now uses the same bounded durable cleanup as emergency OFF.
+Committed settings immediately fence UI disclosure and worker/enqueue storage, while physical
+cleanup proceeds in replay-safe batches. Its progress and administrator retry remain available.
+This supersedes the earlier synchronous explicit-opt-out limitation recorded above. A new
+explicit opt-in retains the existing documented supersession policy. No production load or
+mixed-version rollout certification is claimed by these fixes.
+
+The latest runbook browser CI failure was also traced to selecting a pool result during a debounced options refresh. The shared selector now disables stale results immediately and ignores responses from aborted searches. Delayed/out-of-order response tests and all three affected browser projects pass locally. Evidence: review-238aef3-remediation.json.
