@@ -261,8 +261,8 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.USERS_WRITE,
     'Users manage',
     'Users',
-    'Reserved: no REST v2 endpoint modifies users yet.',
-    { write: true, issuableBy: ADMINS, status: 'reserved' }
+    'Administer user roles, lifecycle and session revocation with current administrator authorization.',
+    { write: true, issuableBy: ADMINS }
   ),
   [S.ESCALATION_POLICIES_READ]: def(
     S.ESCALATION_POLICIES_READ,

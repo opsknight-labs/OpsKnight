@@ -34,6 +34,7 @@ export type RunbookAgentPolicyStatus = { "agentId": string; "status": string; "c
 export type RunbookAgentRevocation = { "id": string; "status": "REVOKED"; "revokedAt": string | null };
 export type RunbookAgentEnrollment = { "id": string; "status": string; "token": string | null; "executionPublicKey": string; "expiresAt": string };
 export type RunbookAgentEnrollmentStatus = { "id": string; "status": string; "enrollmentState": "PENDING" | "EXPIRED" | "CONSUMED" | "REVOKED" | "UNKNOWN"; "expiresAt": string | null; "enrolledAt": string | null; "revokedAt": string | null };
+export type UserAdministration = { "id": string; "name": string; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER"; "roleSource": "MANUAL" | "OIDC" | "SCIM"; "status": "ACTIVE" | "INVITED" | "DISABLED"; "revision": number; "deactivatedAt": string | null; "updatedAt": string };
 export type TeamManagedService = { "id": string; "name": string; "teamId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
 export type TeamActivity = { "id": string; "action": string; "createdAt": string; "actor": { "id": string; "name": string | null } | null; "details": unknown };
 export type TeamMembership = { "id": string; "teamId": string; "userId": string; "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications": boolean; "createdAt": string };
@@ -122,6 +123,8 @@ export interface OperationRequests {
   listTeamMembers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   setTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications"?: boolean } };
   removeTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  getUserAdministration: { "params": { "id": string } };
+  administerUser: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "operation": "set-role"; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER" } | { "operation": "deactivate" } | { "operation": "reactivate" } | { "operation": "revoke-sessions" } };
   getTeamLead: { "params": { "id": string } };
   setTeamLead: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "userId": string | null } };
   listRunbookSigningIdentities: { "query"?: { "limit"?: number; "cursor"?: string } };
@@ -322,6 +325,8 @@ export interface OperationResponses {
   listTeamMembers: { "data": Array<TeamMembership>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getUserAdministration: { "data": UserAdministration; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  administerUser: { "data": UserAdministration; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getTeamLead: { "data": TeamLead; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setTeamLead: { "data": TeamLeadChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookSigningIdentities: { "data": Array<RunbookSigningIdentity>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -572,6 +577,25 @@ export const OPERATIONS = {
       "If-Match"
     ],
     "bodyRequired": false
+  },
+  "getUserAdministration": {
+    "method": "GET",
+    "path": "/users/{id}/administration",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "administerUser": {
+    "method": "PATCH",
+    "path": "/users/{id}/administration",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
   },
   "getTeamLead": {
     "method": "GET",

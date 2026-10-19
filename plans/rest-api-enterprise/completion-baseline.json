@@ -127,5 +127,103 @@
       "auditRowsPreserved": 3000
     },
     "productionRegression": "Activity queries use complete tagged first-page/cursor SQL. Production browser and PostgreSQL both verify these query paths."
+  },
+  "userAdministration": {
+    "sourceParentCommit": "38beab49b8b5695b3e002978c6355645abc5153f",
+    "operations": [
+      "getUserAdministration",
+      "administerUser"
+    ],
+    "sharedCommands": [
+      "src/lib/users/administration.ts",
+      "src/lib/users/admin-invariants.ts",
+      "src/lib/session-registry.ts:revokeAllRegisteredSessions"
+    ],
+    "scope": "Role, deactivate/reactivate and session revocation share UI commands. Invitations, dependencies and bulk/profile parity remain unfinished.",
+    "postgresTests": 12,
+    "postgresRegressions": {
+      "teamAndServiceActivity": 29,
+      "sessionRegistry": 10
+    },
+    "contractTests": 190,
+    "sessionUnitTests": 45,
+    "pythonSdkTests": 9,
+    "manualRoleSourceCompatibility": "OIDC-origin role can be explicitly overridden by an administrator, matching existing UI MANUAL-source semantics. Provider mappings may reassert roles.",
+    "credentialScope": "users:write must be explicit; admin:manage alone grants no new destructive operation.",
+    "freshInstallAndPopulatedUpgradeMigrations": 276,
+    "usersPreservedOnUpgrade": 500,
+    "existingMigrationChecksums": "preserved",
+    "productionBuild": "passed",
+    "browser": "Production Chromium, Firefox and WebKit passed; actual UI role/deactivation and REST reactivation/session tombstones/replay.",
+    "fullTypecheck": "passed without incremental caching",
+    "changedSourceLint": "zero errors and warnings",
+    "latestCI": "pending",
+    "releaseCertified": false,
+    "parentCI": {
+      "commit": "38beab49b8b5695b3e002978c6355645abc5153f",
+      "workflowFamilies": 11,
+      "runs": [
+        {
+          "workflow": "Security Suite",
+          "runId": 39292962150,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Enterprise SSO certification",
+          "runId": 39292962196,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Deployment manifests",
+          "runId": 39292962230,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "SBOM artifact validation",
+          "runId": 39292962232,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Microsoft Teams Contract + DB Integration",
+          "runId": 39292962316,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Docker Image (build + push)",
+          "runId": 39292962328,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Integration control-plane certification",
+          "runId": 39292962198,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Service automation validation",
+          "runId": 39292962371,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Tests",
+          "runId": 39292962253,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Docker Swarm Validation",
+          "runId": 39292962126,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Runbook protocol validation",
+          "runId": 39292962197,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Runbook protocol validation",
+          "runId": 39292952915,
+          "conclusion": "success"
+        }
+      ]
+    }
   }
 }

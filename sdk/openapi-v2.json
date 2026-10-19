@@ -2037,6 +2037,68 @@
           "revokedAt"
         ]
       },
+      "UserAdministration": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "RESPONDER",
+              "AUDITOR",
+              "USER"
+            ]
+          },
+          "roleSource": {
+            "type": "string",
+            "enum": [
+              "MANUAL",
+              "OIDC",
+              "SCIM"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INVITED",
+              "DISABLED"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "deactivatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "roleSource",
+          "status",
+          "revision",
+          "deactivatedAt",
+          "updatedAt"
+        ]
+      },
       "TeamManagedService": {
         "type": "object",
         "additionalProperties": false,
@@ -18551,6 +18613,309 @@
         "x-required-scope": "runbook-agents:revoke",
         "x-idempotency": "required",
         "x-concurrency": "none"
+      }
+    },
+    "/users/{id}/administration": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read administrator-only user lifecycle state",
+        "description": "users:read plus a current active administrator role. Returns a concrete User ETag and safe metadata, excluding email, credentials, invitation capabilities and session token versions.\n\nRequires API scope `users:read` (Users read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserAdministration"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getUserAdministration",
+        "x-required-scope": "users:read"
+      },
+      "patch": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Change user role or lifecycle, or revoke sessions",
+        "description": "Explicit users:write plus current active administrator role; admin:manage alone does not grant this new destructive capability. Required Idempotency-Key and concrete User If-Match from the administration read. Every User writer invalidates the revision, including SCIM/OIDC. Shared UI/REST command preserves the last active administrator, prevents self-role-change and self-deactivation, and commits one canonical attributed audit with the mutation and receipt. Role changes explicitly set the source to MANUAL, matching the UI; configured identity-provider mappings may reassert a role on subsequent synchronization. Deactivation revokes API keys, unused invitation/reset tokens, OIDC linking approvals and devices. Reactivation requires DISABLED and returns passwordless users to INVITED; it grants no login approval and restores no credentials. Session revocation increments the session security version and marks registered sessions revoked without revoking API keys. No-op role/deactivation requests have no audit or session side effects. Replay rechecks current administrator authority.\n\nRequires API scope `users:write` (Users manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation": {
+                        "const": "set-role",
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string",
+                        "enum": [
+                          "ADMIN",
+                          "RESPONDER",
+                          "AUDITOR",
+                          "USER"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "operation",
+                      "role"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation": {
+                        "const": "deactivate",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "operation"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation": {
+                        "const": "reactivate",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "operation"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation": {
+                        "const": "revoke-sessions",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "operation"
+                    ]
+                  }
+                ]
+              },
+              "example": {
+                "operation": "set-role",
+                "role": "RESPONDER"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserAdministration"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "administerUser",
+        "x-required-scope": "users:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
       }
     },
     "/teams/{id}/activity": {

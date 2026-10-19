@@ -6,6 +6,7 @@
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'PUT /teams/{id}/services/{serviceId}': {},
   'PUT /teams/{id}/members/{userId}': { role: 'MEMBER', receiveTeamNotifications: true },
+  'PATCH /users/{id}/administration': { operation: 'set-role', role: 'RESPONDER' },
   'PUT /teams/{id}/lead': { userId: 'cm123456789012345678901234' },
   'POST /services/{id}/automation/validate': {
     snapshot: { schemaVersion: 1, fields: [], rules: [] },

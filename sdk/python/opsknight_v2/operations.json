@@ -56,6 +56,25 @@
     ],
     "bodyRequired": false
   },
+  "getUserAdministration": {
+    "method": "GET",
+    "path": "/users/{id}/administration",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "administerUser": {
+    "method": "PATCH",
+    "path": "/users/{id}/administration",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "getTeamLead": {
     "method": "GET",
     "path": "/teams/{id}/lead",

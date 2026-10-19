@@ -363,16 +363,32 @@
         {
           "path": "src/lib/users/admin-invariants.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/users/administration.ts",
+          "branch": "feat/api-13-enterprise-contracts"
+        },
+        {
+          "path": "src/app/(app)/users/actions.ts",
+          "branch": "baseline"
         }
       ],
-      "reviewStatus": "pending-domain-review",
+      "reviewStatus": "partial-domain-review",
       "requiredEvidence": [
         "authorization-negative",
         "business-parity",
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Invitation issuance/renewal and delivery need shared durable commands with SSO/recovery boundaries.",
+        "Dependency inspection, bulk administration and profile parity remain unfinished.",
+        "Final candidate browser, authorization and deployment certification remain required."
+      ],
+      "operationIds": [
+        "getUserAdministration",
+        "administerUser"
+      ]
     },
     {
       "capabilityId": "scim",

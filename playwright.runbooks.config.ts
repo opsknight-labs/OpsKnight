@@ -14,7 +14,7 @@ if (
 }
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: /(runbooks-ui|team-administration)\.spec\.ts/,
+  testMatch: /(runbooks-ui|team-administration|user-administration)\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   projects: [

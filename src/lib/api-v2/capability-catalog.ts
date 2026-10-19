@@ -202,10 +202,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'identity-lifecycle',
     area: 'Identity',
     title: 'Invitations, user roles and activation',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Directory reads are available. Manual management must preserve SCIM/SSO ownership, break-glass restrictions, account linking, last-admin and session-revocation invariants.',
-    operationIds: [],
+      'Administrator-only lifecycle reads and revision-protected role, deactivation, reactivation and session-revocation commands share UI authorization, last-active-admin protection, canonical transactional audits and credential revocation. Manual role overrides match existing UI semantics; provider mappings may reassert roles on synchronization. Invitations, dependency inspection, bulk/profile parity and combined certification remain unfinished.',
+    operationIds: ['getUserAdministration', 'administerUser'],
   },
   {
     id: 'scim',

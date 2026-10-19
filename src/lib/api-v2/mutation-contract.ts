@@ -51,6 +51,13 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PATCH /api/v2/users/[id]/administration': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Concrete all-writer User revision and serialized last-active-admin invariant. Shared UI/REST command commits lifecycle, credential revocation, canonical audit and receipt together; replay checks current admin authority and caches are invalidated only after commit.',
+  },
   'PUT /api/v2/teams/[id]/services/[serviceId]': {
     idempotency: 'required',
     concurrency: 'etag',

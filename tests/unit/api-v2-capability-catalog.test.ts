@@ -22,11 +22,17 @@ describe('truthful capability inventory', () => {
     }
   });
   it('retains explicit security and product decisions for unfinished plan areas', () => {
-    for (const id of ['identity-lifecycle', 'report-exports', 'operational-settings']) {
+    for (const id of ['report-exports', 'operational-settings']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
         'not-supported'
       );
     }
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'identity-lifecycle')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: ['getUserAdministration', 'administerUser'],
+    });
     for (const id of ['runbook-agents', 'runbook-secrets']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
         'partial'

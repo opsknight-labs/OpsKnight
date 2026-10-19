@@ -1,5 +1,6 @@
 'use server';
 
+import { administerUser } from '@/lib/users/administration';
 import { setTeamMembership, teamMemberInput } from '@/lib/teams/administration';
 
 import {
@@ -430,19 +431,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
     }
   }
 
-  await updateUserSecurityState(
-    userId,
-    { role, roleSource: 'MANUAL' },
-    { tokenVersion: { increment: 1 } }
-  );
-
-  await logAudit({
-    action: 'user.role.updated',
-    entityType: 'USER',
-    entityId: userId,
-    actorId: currentUser?.id || null,
-    details: { role },
-  });
+  await administerUser(userId, { operation: 'set-role', role }, { id: currentUser.id });
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -495,37 +484,7 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  await updateUserSecurityState(
-    userId,
-    { status: 'DISABLED' },
-    {
-      deactivatedAt: new Date(),
-      tokenVersion: { increment: 1 },
-      invitationGeneration: { increment: 1 },
-    },
-    async tx => {
-      const revokedAt = new Date();
-      await tx.userToken.updateMany({
-        where: { userId, usedAt: null, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.apiKey.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.oidcLinkingApproval.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.userDevice.deleteMany({ where: { userId } });
-    }
-  );
-  await logAudit({
-    action: 'user.deactivated',
-    entityType: 'USER',
-    entityId: userId,
-    actorId: currentUser?.id || null,
-  });
+  await administerUser(userId, { operation: 'deactivate' }, { id: currentUser.id });
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -540,30 +499,11 @@ export async function reactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  const target = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { status: true, passwordHash: true },
-  });
-  if (!target) return { error: 'User not found.' };
-  if (target.status !== 'DISABLED') return { error: 'Only disabled users can be reactivated.' };
-
-  await updateUserSecurityState(
-    userId,
-    {
-      status: target.passwordHash ? 'ACTIVE' : 'INVITED',
-      tokenVersion: { increment: 1 },
-    },
-    {
-      deactivatedAt: null,
-    }
-  );
-
-  await logAudit({
-    action: 'user.reactivated',
-    entityType: 'USER',
-    entityId: userId,
-    actorId: currentUser?.id || null,
-  });
+  try {
+    await administerUser(userId, { operation: 'reactivate' }, { id: currentUser.id });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to reactivate user.' };
+  }
 
   revalidatePath('/users');
   revalidatePath('/audit');

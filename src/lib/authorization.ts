@@ -131,6 +131,7 @@ export const API_SCOPES = {
 
 /** Infrastructure permissions are never implied by a broad administrator credential. */
 export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
+  API_SCOPES.USERS_WRITE,
   API_SCOPES.AUTOMATION_READ,
   API_SCOPES.AUTOMATION_WRITE,
   API_SCOPES.AUTOMATION_PUBLISH,

@@ -29,6 +29,7 @@ export const AUTHORIZATION_ACTIONS = {
   TEAM_MEMBERSHIP_MANAGE: 'team.membership.manage',
   USER_READ: 'user.read',
   USER_MANAGE: 'user.manage',
+  USER_ADMINISTRATION_READ: 'user.administration.read',
   ESCALATION_POLICY_READ: 'escalation_policy.read',
   ESCALATION_POLICY_MANAGE: 'escalation_policy.manage',
   INTEGRATION_READ: 'integration.read',
@@ -130,6 +131,7 @@ type AuthorizationResourceByAction = {
   > & { ownerIds: readonly string[] };
   [AUTHORIZATION_ACTIONS.USER_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.USER_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.USER_ADMINISTRATION_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.ESCALATION_POLICY_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.ESCALATION_POLICY_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.INTEGRATION_READ]?: ServiceResource;
@@ -411,6 +413,10 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
       global: CAPABILITIES.USER_READ_ALL,
       apiScope: API_SCOPES.USERS_READ,
     },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.USER_ADMINISTRATION_READ,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.USERS_READ },
   ],
   [
     AUTHORIZATION_ACTIONS.USER_MANAGE,

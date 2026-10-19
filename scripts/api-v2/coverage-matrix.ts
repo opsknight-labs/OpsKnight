@@ -34,7 +34,7 @@ const spec = getOpenApiV2Spec() as unknown as {
 const actions = new Map(Object.entries(AUTHORIZATION_ACTIONS));
 const schemas = new Map(Object.entries(spec.paths));
 const contracts = new Map(Object.entries(V2_MUTATION_CONTRACT));
-const teamOperationIds = new Set([
+const reviewedOperationIds = new Set([
   'listTeamMembers',
   'setTeamMember',
   'removeTeamMember',
@@ -43,8 +43,10 @@ const teamOperationIds = new Set([
   'listTeamServices',
   'assignTeamService',
   'listTeamActivity',
+  'getUserAdministration',
+  'administerUser',
 ]);
-const teamReviews = new Map<
+const domainReviews = new Map<
   string,
   {
     sharedCommands: string[];
@@ -56,6 +58,43 @@ const teamReviews = new Map<
     finalCandidateCertification: string;
   }
 >([
+  [
+    'getUserAdministration',
+    {
+      sharedCommands: ['src/lib/users/administration.ts:requireUserAdministrator'],
+      uiCommands: ['src/app/(app)/users/page.tsx:administrator directory'],
+      auditEvents: [],
+      sideEffects: [],
+      resourceAuthorization:
+        'Current active administrator and users:read. Explicit safe lifecycle projection, no credentials or session versions.',
+      acceptanceTests: ['tests/integration/api-v2-user-administration.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
+  ],
+  [
+    'administerUser',
+    {
+      sharedCommands: [
+        'src/lib/users/administration.ts:administerUser',
+        'src/lib/users/admin-invariants.ts:updateUserSecurityState',
+      ],
+      uiCommands: ['src/app/(app)/users/actions.ts:updateUserRole/deactivateUser/reactivateUser'],
+      auditEvents: [
+        'user.role.updated',
+        'user.deactivated',
+        'user.reactivated',
+        'user.sessions.revoked',
+      ],
+      sideEffects: [
+        'Session-version increment on changes, revocation of credentials/approvals/devices on deactivation; no-op has no effects',
+        'Post-commit session projection eviction',
+      ],
+      resourceAuthorization:
+        'Current active administrator and users:write; self-change and last-active-admin guards; all-writer User revision; replay rechecks authority. Manual role source matches UI.',
+      acceptanceTests: ['tests/integration/api-v2-user-administration.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
+  ],
   [
     'listTeamMembers',
     {
@@ -252,8 +291,8 @@ const operations = V2_OPERATIONS.map(operation => {
     authorization: declaredActions(source, method),
     mutation: contracts.get(`${method} /api/v2${relativePath}`) ?? null,
     capabilityIds,
-    domainReview: teamReviews.get(operation.operationId) ?? null,
-    reviewRequired: !teamOperationIds.has(operation.operationId),
+    domainReview: domainReviews.get(operation.operationId) ?? null,
+    reviewRequired: !reviewedOperationIds.has(operation.operationId),
   };
 });
 const capabilities = API_CAPABILITY_CATALOG.filter(

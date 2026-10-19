@@ -473,6 +473,7 @@ model User {
   name                         String
   email                        String     @unique
   emailVerified                DateTime?
+  revision                     Int        @default(1)
   tokenVersion                 Int        @default(0)
   invitationGeneration         Int        @default(0)
   role                         Role       @default(USER)

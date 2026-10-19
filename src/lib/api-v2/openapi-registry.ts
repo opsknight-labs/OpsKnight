@@ -56,6 +56,22 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'TeamMembershipChange'
   ),
+  op(
+    'get',
+    '/users/{id}/administration',
+    'getUserAdministration',
+    'users:read',
+    'item',
+    'UserAdministration'
+  ),
+  op(
+    'patch',
+    '/users/{id}/administration',
+    'administerUser',
+    'users:write',
+    'item',
+    'UserAdministration'
+  ),
   op('get', '/teams/{id}/lead', 'getTeamLead', 'teams:read', 'item', 'TeamLead'),
   op('put', '/teams/{id}/lead', 'setTeamLead', 'teams:write', 'item', 'TeamLeadChange'),
   op(
