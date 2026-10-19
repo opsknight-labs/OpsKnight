@@ -1,4 +1,5 @@
 import { readStatusPageConfigurationReplay } from '@/lib/status-pages/publish-configuration';
+import { safePublicationResult } from '@/lib/status-pages/publication-diagnostics';
 import prisma from '@/lib/prisma';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
@@ -25,7 +26,15 @@ export const PATCH = defineV2Route({
     const expected = requireRevisionIfMatch(req);
     const idempotency = requireStatusPageIdempotency(req, apiKey.id, body, expected);
     const replay = await readStatusPageConfigurationReplay(params.id, idempotency);
-    if (replay) return { data: replay, headers: { ...etagHeaders(replay.revision), 'Idempotency-Replayed': 'true', 'Cache-Control': 'no-store' } };
+    if (replay)
+      return {
+        data: safePublicationResult(replay),
+        headers: {
+          ...etagHeaders(replay.revision),
+          'Idempotency-Replayed': 'true',
+          'Cache-Control': 'no-store',
+        },
+      };
     const page = await requireStatusPageSettings(prisma, params.id);
     if (page.revision !== expected) throw preconditionFailed();
     const rows = await prisma.statusPageService.findMany({
@@ -60,8 +69,12 @@ export const PATCH = defineV2Route({
       idempotency
     );
     return {
-      data: result,
-      headers: { ...etagHeaders(result.revision), 'Cache-Control': 'no-store', ...(result.replayed ? { 'Idempotency-Replayed': 'true' } : {}) },
+      data: safePublicationResult(result),
+      headers: {
+        ...etagHeaders(result.revision),
+        'Cache-Control': 'no-store',
+        ...(result.replayed ? { 'Idempotency-Replayed': 'true' } : {}),
+      },
     };
   },
 });

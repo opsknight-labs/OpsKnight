@@ -1,3 +1,4 @@
+import { safePublicationDiagnostic } from '@/lib/status-pages/publication-diagnostics';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import {
@@ -150,7 +151,7 @@ export const PATCH = withV2Observability(async function PATCH(
             return data;
           },
         });
-        publication = configured.publication;
+        publication = safePublicationDiagnostic(configured.publication);
       }
     } catch (err) {
       if (err instanceof StatusPageAdminError) {
@@ -175,9 +176,12 @@ export const PATCH = withV2Observability(async function PATCH(
       },
     });
 
-    return apiV2Success(publication ? { ...updated, publication } : updated, {
-      headers: rlHeaders,
-    });
+    return apiV2Success(
+      publication ? { ...updated, publication: safePublicationDiagnostic(publication) } : updated,
+      {
+        headers: rlHeaders,
+      }
+    );
   } catch (error) {
     return apiV2Error(error, req);
   }

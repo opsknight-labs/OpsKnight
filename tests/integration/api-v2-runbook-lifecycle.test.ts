@@ -460,3 +460,49 @@ it('compares versions through the shared UI engine without disclosing executable
   );
   expect(bad.status).toBe(404);
 });
+
+it('rejects changed-validator replay for real runbook metadata edits', async () => {
+  const f = await fixture();
+  const etag = (await call(metadata, f.token, f.runbook.id)).headers.get('etag')!;
+  const key = randomUUID();
+  const original = await call(
+    update,
+    f.token,
+    f.runbook.id,
+    'PATCH',
+    '',
+    { description: 'Reviewed edit' },
+    etag,
+    key
+  );
+  expect(original.status).toBe(200);
+  const after = await db.auditLog.count();
+  const replay = await call(
+    update,
+    f.token,
+    f.runbook.id,
+    'PATCH',
+    '',
+    { description: 'Reviewed edit' },
+    etag,
+    key
+  );
+  expect(replay.headers.get('idempotency-replayed')).toBe('true');
+  const next = (await call(metadata, f.token, f.runbook.id)).headers.get('etag')!;
+  expect(next).not.toBe(etag);
+  expect(
+    (
+      await call(
+        update,
+        f.token,
+        f.runbook.id,
+        'PATCH',
+        '',
+        { description: 'Reviewed edit' },
+        next,
+        key
+      )
+    ).status
+  ).toBe(409);
+  expect(await db.auditLog.count()).toBe(after);
+});

@@ -464,3 +464,27 @@ same scopes and production limits. Both complete live SDK workflows now pass,
 including separate production general-worker evaluation completion. Final SLO
 browser journeys pass Chromium, Firefox and WebKit with no skips or retries.
 See `service-objective-certification.json` for scope, results and remaining gates.
+
+
+## Release-readiness audit at fac454a7
+
+The shared-factory P1 replay defect is corrected by binding the normalized
+required revision and body into request identity. Required validator checks run
+before cache access. Generic receipts produced before this change cannot attest
+the original revision and fail closed; deployment compatibility and safe resource
+reconciliation are documented.
+
+Publication retry admission coalesces pending work per page, makes callers wait
+while work is processing, and bounds per-credential/global outstanding work.
+The prior strict worker payload shape is preserved. API publication diagnostics
+normalize stored errors across state, configuration and legacy job receipts;
+privileged control-plane diagnostics retain the original error.
+
+Tracker counts are generated from the operation registry. Phase certification
+continues to require reviewed evidence. The failing Alpine TLS package step now
+uses one digest-pinned shared base, verified installation with bounded retries,
+and a resolved package inventory. Immutable package repositories and final-head
+Docker/failover CI remain release gates. These fixes do not certify remaining
+resource authorization, SLO execution budgets or mixed-version worker recovery.
+
+See `review-fac454a7-remediation.json` for exact checks and open gates.

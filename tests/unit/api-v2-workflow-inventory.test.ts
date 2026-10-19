@@ -66,6 +66,7 @@ describe('enterprise workflow inventory admission checks', () => {
       .sort();
     expect(progress.registeredOperationCount).toBe(V2_OPERATIONS.length);
     expect([...progress.implementedOperations].sort()).toEqual(automation);
+    expect(status.registeredOperationCount).toBe(V2_OPERATIONS.length);
     expect(status.followupDelivery.registeredOperationCount).toBe(V2_OPERATIONS.length);
     expect([...status.followupDelivery.implementedAutomationOperations].sort()).toEqual(automation);
     const workflow = inventory.workflows.find(item => item.capabilityId === 'service-automation');

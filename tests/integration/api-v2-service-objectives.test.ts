@@ -739,3 +739,23 @@ it('evaluates real MTTA samples using captured SLA time rather than rounded mean
   });
   expect(recorded.value).toBeGreaterThan(30);
 });
+
+it('binds replay to the reviewed revision while preserving exact retries after the resource advances', async () => {
+  const f = await fixture();
+  const key = 'reviewed-revision-identity';
+  const call = (revision: number) =>
+    invokeV2(
+      update,
+      f.credential.token,
+      'PATCH',
+      f.path,
+      f.params,
+      { target: 99.95 },
+      headers(revision, key)
+    );
+  expect((await call(2)).status).toBe(200);
+  expect((await call(2)).headers.get('idempotency-replayed')).toBe('true');
+  expect((await call(4)).status).toBe(409);
+  expect(await db.serviceObjective.count({ where: { lineageId: f.objective.id } })).toBe(2);
+  expect(await db.auditLog.count({ where: { action: 'service_objective.updated' } })).toBe(1);
+});

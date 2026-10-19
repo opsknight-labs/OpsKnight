@@ -1,3 +1,4 @@
+import { safePublicationResult } from '@/lib/status-pages/publication-diagnostics';
 import { saveStatusPageSection } from '@/lib/status-pages/settings-command';
 import type {
   StatusPageConfigurationActor,
@@ -101,7 +102,7 @@ export async function executeIdempotentStatusPageSection(
   expectedRevision: number,
   section: string
 ) {
-  return saveStatusPageSection(
+  const result = await saveStatusPageSection(
     pageId,
     body,
     actor,
@@ -109,4 +110,5 @@ export async function executeIdempotentStatusPageSection(
     section,
     requireStatusPageIdempotency(req, principalId, body, expectedRevision)
   );
+  return safePublicationResult(result);
 }

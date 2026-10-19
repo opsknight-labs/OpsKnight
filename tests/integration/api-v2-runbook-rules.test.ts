@@ -628,3 +628,32 @@ it('accepts presence-only trigger conditions without requiring a fabricated comp
     value: null,
   });
 });
+
+it('rejects changed-validator replay for real service-rule edits', async () => {
+  const f = await fixture();
+  const rule = await createRule(f);
+  const body = { configuration: { name: 'Reviewed rule' }, expectedVersionId: f.version.id };
+  const key = 'rule-reviewed-revision';
+  const original = await call(
+    update,
+    f.token,
+    'PATCH',
+    f.service.id,
+    rule.data.id,
+    body,
+    rule.etag,
+    key
+  );
+  expect(original.status).toBe(200);
+  expect(
+    (
+      await call(update, f.token, 'PATCH', f.service.id, rule.data.id, body, rule.etag, key)
+    ).headers.get('idempotency-replayed')
+  ).toBe('true');
+  const next = (await call(read, f.token, 'GET', f.service.id, rule.data.id)).headers.get('etag')!;
+  expect(next).not.toBe(rule.etag);
+  expect(
+    (await call(update, f.token, 'PATCH', f.service.id, rule.data.id, body, next, key)).status
+  ).toBe(409);
+  expect(await db.auditLog.count({ where: { action: 'runbook.service.binding.updated' } })).toBe(1);
+});

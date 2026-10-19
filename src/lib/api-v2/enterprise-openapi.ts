@@ -1125,7 +1125,7 @@ const operations: Operation[] = [
     status: 202,
     body: object({}),
     description:
-      'Returns a persisted job and Location. Matching retry keys do not enqueue again. Inspect job result and current publication; a completed job can report FAILED publication. Queue retries preserve a single canonical audit receipt.',
+      'Returns a persisted job and Location. Matching keys bind body and concrete If-Match revision. Distinct keys coalesce into pending work, which reads the latest configuration when claimed. New requests wait while page work is processing. Admission permits at most four active jobs per credential and sixteen globally; capacity returns 429 with Retry-After. Inspect job result and current publication; completion can report FAILED publication. lastError contains a stable safe diagnostic code, never stored transport error text. Queue retries preserve a single canonical audit receipt.',
   },
   {
     method: 'get',

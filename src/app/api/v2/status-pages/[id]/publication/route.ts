@@ -1,3 +1,4 @@
+import { safePublicationDiagnostic } from '@/lib/status-pages/publication-diagnostics';
 import prisma from '@/lib/prisma';
 import { z } from 'zod';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
@@ -16,7 +17,7 @@ export const GET = defineV2Route({
       data: {
         id: page.id,
         revision: page.revision,
-        publication: await readStatusPagePublicationState(page.id),
+        publication: safePublicationDiagnostic(await readStatusPagePublicationState(page.id)),
       },
       headers: { ...etagHeaders(page.revision), 'Cache-Control': 'no-store' },
     };
