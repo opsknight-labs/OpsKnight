@@ -1,0 +1,78 @@
+import { Prisma, PrismaClient } from '@prisma/client';
+import { compileAutomation } from '@/lib/automation/compiler';
+import { checksum } from '@/lib/automation/cache';
+const asJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+/** Explicit benchmark provisioning through the same persisted settings as the UI. */
+export async function provisionAutomationProviderCapacity(db: PrismaClient) {
+  for (const { channel, provider } of [
+    { channel: 'EMAIL', provider: 'smtp' },
+    { channel: 'PUSH', provider: 'web-push' },
+    { channel: 'WEBHOOK', provider: 'default' },
+  ] as const) {
+    const capacity = {
+      mode: 'CUSTOM' as const,
+      ratePerSecond: 200,
+      maxInFlight: 40,
+      bulkSharePercent: 80,
+      adaptiveBackpressure: true,
+      updatedBy: 'automation-load-certification',
+    };
+    await db.notificationProviderCapacity.upsert({
+      where: { provider_channel: { provider, channel } },
+      create: { provider, channel, ...capacity },
+      update: { ...capacity, revision: { increment: 1 } },
+    });
+  }
+}
+import {
+  automationLoadSnapshot,
+  type AutomationLoadProfile,
+  AUTOMATION_LOAD_PROFILES,
+} from '../fixtures/automation';
+/** Extend the existing seed/topology/load suite with service-scoped policies. */
+export async function configureAutomationLoadProfile(
+  db: PrismaClient,
+  serviceIds: string[],
+  actorId: string,
+  profile: AutomationLoadProfile
+) {
+  for (const serviceId of serviceIds) {
+    const snapshot = automationLoadSnapshot(profile);
+    const { compiled, issues } = compileAutomation(snapshot);
+    if (issues.some(issue => issue.level === 'ERROR')) throw new Error('Invalid load profile');
+    await db.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`automation:${serviceId}`}, 0))`;
+      const latest = await tx.automationVersion.findFirst({
+        where: { serviceId },
+        orderBy: { versionNumber: 'desc' },
+        select: { versionNumber: true },
+      });
+      const version = await tx.automationVersion.create({
+        data: {
+          serviceId,
+          versionNumber: (latest?.versionNumber ?? 0) + 1,
+          snapshot: asJson(snapshot),
+          compiledSnapshot: asJson(compiled),
+          checksum: checksum(compiled),
+          publishedBy: actorId,
+          lintReport: asJson(issues),
+        },
+      });
+      const mode = ['global-off', 'service-disabled', 'disabled'].includes(profile)
+        ? 'DISABLED'
+        : profile === 'shadow-small'
+          ? 'SHADOW'
+          : 'LIVE';
+      await tx.serviceAutomationConfig.upsert({
+        where: { serviceId },
+        create: { serviceId, mode, activeVersionId: version.id },
+        update: { mode, activeVersionId: version.id },
+      });
+    });
+  }
+}
+export function parseAutomationLoadProfile(value: string): AutomationLoadProfile {
+  if (!AUTOMATION_LOAD_PROFILES.some(profile => profile === value))
+    throw new Error(`Expected one of ${AUTOMATION_LOAD_PROFILES.join(', ')}`);
+  return value as AutomationLoadProfile;
+}

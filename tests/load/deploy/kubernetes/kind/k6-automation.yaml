@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k6-automation-cert
+  namespace: automation-cert
+  labels:
+    app.kubernetes.io/name: automation-load-generator
+    app.kubernetes.io/instance: automation-load-generator
+  annotations:
+    checkov.io/skip1: CKV_K8S_15=The image is side-loaded into the disposable Kind node, so Never is required.
+    checkov.io/skip2: CKV_K8S_8=Short-lived load generator that only sleeps; a probe would add nothing.
+    checkov.io/skip3: CKV_K8S_9=Short-lived load generator that only sleeps; a probe would add nothing.
+    checkov.io/skip4: CKV2_K8S_6=Disposable certification namespace; egress to the application is the purpose.
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 12345
+    runAsGroup: 12345
+    fsGroup: 12345
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: k6
+      # Imported from the official pinned Linux/arm64 v2.3.0 manifest:
+      # sha256:06181d5d1aebfde4dce5b5ea970041fd3e7d4613a9ed895f65509525fb73dcb2
+      image: grafana/k6:automation-2.3.0-arm64
+      imagePullPolicy: Never
+      command: [sh, -c, 'sleep infinity']
+      resources:
+        requests:
+          # Share the reserved/auxiliary CPUs without displacing application replicas.
+          cpu: '0'
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      volumeMounts:
+        - name: work
+          mountPath: /work
+  volumes:
+    - name: work
+      emptyDir: {}

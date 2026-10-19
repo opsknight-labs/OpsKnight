@@ -112,6 +112,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     "**/node_modules/**",
     ".next/**",
+    ".next-*/**",
     ".next-pre-push/**",
     "out/**",
     "build/**",

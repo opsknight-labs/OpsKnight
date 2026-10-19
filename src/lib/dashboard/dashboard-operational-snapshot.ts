@@ -1,3 +1,5 @@
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
+import { hasCapability, CAPABILITIES } from '@/lib/authorization';
 import 'server-only';
 
 import type { IncidentStatus, IncidentUrgency, Prisma } from '@prisma/client';
@@ -24,6 +26,9 @@ const FOCUS_LIMIT = 5;
 const incidentSelect = {
   id: true,
   title: true,
+  automationSourceRestricted: true,
+  automationDecision: { select: { incidentId: true } },
+  automationTraces: { select: { incidentId: true }, take: 1 },
   status: true,
   urgency: true,
   priority: true,
@@ -97,6 +102,7 @@ export async function getDashboardOperationalSnapshot(
   sortOrder: 'asc' | 'desc' = 'desc'
 ): Promise<DashboardOperationalSnapshot> {
   const startedAt = Date.now();
+  const sensitive = hasCapability(actor.role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
   const dateFilter = await buildRetainedDateFilter(
     filters.range,
     filters.customStart,
@@ -165,6 +171,9 @@ export async function getDashboardOperationalSnapshot(
       select: {
         id: true,
         title: true,
+        automationSourceRestricted: true,
+        automationDecision: { select: { incidentId: true } },
+        automationTraces: { select: { incidentId: true }, take: 1 },
         status: true,
         urgency: true,
         priority: true,
@@ -180,6 +189,9 @@ export async function getDashboardOperationalSnapshot(
       select: {
         id: true,
         title: true,
+        automationSourceRestricted: true,
+        automationDecision: { select: { incidentId: true } },
+        automationTraces: { select: { incidentId: true }, take: 1 },
         status: true,
         urgency: true,
         priority: true,
@@ -205,7 +217,7 @@ export async function getDashboardOperationalSnapshot(
       },
     }),
     getActiveOnCallShifts(new Date()),
-    getWidgetRealtimeProjection({ ...currentFilter, ...actorMetricReadScope(actor) }),
+    getWidgetRealtimeProjection({ ...currentFilter, ...actorMetricReadScope(actor) }, sensitive),
     prisma.incident.groupBy({
       by: ['serviceId', 'urgency'],
       where: { AND: [currentWhere, { status: { in: ['OPEN', 'ACKNOWLEDGED'] } }] },
@@ -220,7 +232,7 @@ export async function getDashboardOperationalSnapshot(
     (Date.now() - startedAt) / 1000
   );
   const toListItem = (incident: (typeof preview)[number]): IncidentListItem => ({
-    ...incident,
+    ...visibleIncidentSource(incident, sensitive),
     status: incident.status as IncidentStatus,
     urgency: incident.urgency as IncidentUrgency,
     slaPausedMs: incident.slaPausedMs ?? 0,
@@ -244,8 +256,8 @@ export async function getDashboardOperationalSnapshot(
     totalInRange,
     previewIncidents: preview.map(toListItem),
     recentIncidents: recent.map(toListItem),
-    criticalFocus,
-    myQueue,
+    criticalFocus: criticalFocus.map(incident => visibleIncidentSource(incident, sensitive)),
+    myQueue: myQueue.map(incident => visibleIncidentSource(incident, sensitive)),
     myQueueCount,
     currentShifts,
     slaBreachAlerts: widgetProjection.slaBreachAlerts,

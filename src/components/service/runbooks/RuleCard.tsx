@@ -52,8 +52,15 @@ import {
   ruleStatusKind,
 } from '@/components/service/automation-rule/rule-presentation';
 import RunbookBindingVersionInputs from '../RunbookBindingVersionInputs';
-import { InputSummary, TriggerConditionRows, hasAgentWrites } from './rule-fields';
+import { InputSummary, hasAgentWrites } from './rule-fields';
 import { RuleSheet, SheetGroup, SheetJumpNav } from './RuleSheet';
+import TriggerConditionEditor from './TriggerConditionEditor';
+import {
+  RuleAutomationFields,
+  RuleUnattendedWrites,
+  type ServiceRunbookUnattendedWriteDetails,
+} from './RuleAutomationControls';
+import type { AutomationContextSummary } from './context-helpers';
 import type {
   AvailableRunbook,
   ServiceRunbookAgent,
@@ -113,6 +120,9 @@ export function RuleCard({
   configurationAvailable,
   loadErrors,
   userTimeZone,
+  automationContext = null,
+  unattendedWriteDetails,
+  canAuthorizeUnattendedWrites = false,
 }: {
   serviceId: string;
   binding: ServiceRunbookBinding;
@@ -123,6 +133,9 @@ export function RuleCard({
   configurationAvailable: boolean;
   loadErrors: RunbookResource[];
   userTimeZone?: string;
+  automationContext?: AutomationContextSummary | null;
+  unattendedWriteDetails?: ServiceRunbookUnattendedWriteDetails[string];
+  canAuthorizeUnattendedWrites?: boolean;
 }) {
   const { userTimeZone: contextTz } = useTimezone();
   const activeTz = userTimeZone || contextTz;
@@ -322,6 +335,7 @@ export function RuleCard({
               availableRunbooks={availableRunbooks}
               availableAgents={availableAgents}
               availableAgentPools={availableAgentPools}
+              automationContext={automationContext}
             />
           </div>
         )}
@@ -345,6 +359,14 @@ export function RuleCard({
               values={binding.inputValues as Record<string, unknown>}
             />
           </div>
+          {(canManage || canAuthorizeUnattendedWrites) && (
+            <RuleUnattendedWrites
+              serviceId={serviceId}
+              rule={binding}
+              details={unattendedWriteDetails}
+              canAuthorize={canAuthorizeUnattendedWrites}
+            />
+          )}
           {canManage && (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
@@ -400,12 +422,14 @@ function RuleConfigureSheet({
   availableRunbooks,
   availableAgents,
   availableAgentPools,
+  automationContext,
 }: {
   serviceId: string;
   binding: ServiceRunbookBinding;
   availableRunbooks: AvailableRunbook[];
   availableAgents: ServiceRunbookAgent[];
   availableAgentPools: ServiceRunbookAgentPool[];
+  automationContext: AutomationContextSummary | null;
 }) {
   const automatic = binding.mode === 'AUTOMATIC';
   return (
@@ -424,6 +448,7 @@ function RuleConfigureSheet({
         items={[
           { id: 'rule-config-version', label: 'Version & inputs' },
           { id: 'rule-config-target', label: 'Target' },
+          { id: 'rule-config-automation', label: 'Service Automation' },
           { id: 'rule-config-trigger', label: 'Trigger' },
           { id: 'rule-config-danger', label: 'Danger zone', tone: 'danger' },
         ]}
@@ -524,6 +549,26 @@ function RuleConfigureSheet({
               </div>
             </div>
           </SheetGroup>
+          <SheetGroup
+            id="rule-config-automation"
+            title="Service Automation"
+            description="Monitoring opt-in, verified recovery and inputs or targets taken from the incident's automation context."
+          >
+            <RuleAutomationFields
+              inputs={
+                binding.runbookVersion?.inputs ?? binding.runbook.publishedVersion?.inputs ?? []
+              }
+              automationContext={automationContext}
+              agents={availableAgents}
+              pools={availableAgentPools}
+              defaults={{
+                resolveOnVerifiedRecovery: binding.resolveOnVerifiedRecovery,
+                runOnMonitoringIncidents: binding.runOnMonitoringIncidents,
+                contextInputMappings: binding.contextInputMappings,
+                contextTargetMappings: binding.contextTargetMappings,
+              }}
+            />
+          </SheetGroup>
           <div className="sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center justify-between gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
             <p className="text-xs text-muted-foreground">
               {automatic
@@ -579,7 +624,10 @@ function RuleConfigureSheet({
             </div>
             <div className="space-y-2">
               <p className="text-sm font-medium">Conditions</p>
-              <TriggerConditionRows conditions={binding.triggers?.[0]?.conditions ?? []} />
+              <TriggerConditionEditor
+                conditions={binding.triggers?.[0]?.conditions ?? []}
+                automationContext={automationContext}
+              />
               <p className="text-xs text-muted-foreground">
                 Rows set to “No additional condition” are ignored. Comma-separate values for “is one
                 of”.

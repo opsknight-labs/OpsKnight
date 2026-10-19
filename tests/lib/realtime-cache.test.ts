@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearCache, getCachedOrFetch } from '@/lib/realtime-cache';
+import { clearCache, getCachedOrFetch, getCachedRecentIncidents } from '@/lib/realtime-cache';
 
 describe('realtime cache', () => {
   beforeEach(() => clearCache());
@@ -38,5 +38,32 @@ describe('realtime cache', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it('does not share sensitive alert source projections with globally scoped restricted readers', async () => {
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.mocked(prisma.incident.findMany).mockResolvedValue([
+      {
+        id: 'protected',
+        title: 'Customer ABC123 failure',
+        description: 'ABC123',
+        automationDecision: { incidentId: 'protected' },
+        automationTraces: [],
+        slaPausedMs: BigInt(0),
+        slaAckElapsedMs: null,
+        slaResolveElapsedMs: null,
+      },
+    ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
+    const privileged = await getCachedRecentIncidents('admin', 'ADMIN', [], undefined, 'privacy');
+    const restricted = await getCachedRecentIncidents(
+      'auditor',
+      'AUDITOR',
+      [],
+      undefined,
+      'privacy'
+    );
+    if (!privileged || !restricted) throw new Error('Expected initial incident cache projections');
+    expect(privileged.data[0].title).toContain('ABC123');
+    expect(JSON.stringify(restricted.data)).not.toContain('ABC123');
+    expect(restricted.data[0].title).toBe('Restricted alert content');
   });
 });

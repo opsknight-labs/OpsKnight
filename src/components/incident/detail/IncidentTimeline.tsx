@@ -9,6 +9,11 @@ import { Button } from '@/components/ui/shadcn/button';
 import { loadOlderIncidentTimelineActivity } from './actions';
 import { cn } from '@/lib/utils';
 import {
+  isRunbookEventType,
+  runbookEventDisplay,
+  type ResponseTone,
+} from '@/lib/incidents/response-presentation';
+import {
   Clock,
   AlertCircle,
   CheckCircle2,
@@ -17,6 +22,7 @@ import {
   MessageSquare,
   BellRing,
   Loader2,
+  Workflow,
 } from 'lucide-react';
 
 type TimelineFilter =
@@ -26,6 +32,7 @@ type TimelineFilter =
   | 'ASSIGNMENT'
   | 'NOTIFICATIONS'
   | 'INTEGRATIONS'
+  | 'RUNBOOKS'
   | 'NOTES';
 
 const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
@@ -35,6 +42,7 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
   { id: 'ASSIGNMENT', label: 'Assignment' },
   { id: 'NOTIFICATIONS', label: 'Notifications' },
   { id: 'INTEGRATIONS', label: 'Integrations' },
+  { id: 'RUNBOOKS', label: 'Runbooks' },
   { id: 'NOTES', label: 'Notes' },
 ];
 
@@ -45,6 +53,7 @@ export function categorize(type: string, message: string): TimelineFilter {
   if (type === 'NOTE' || type === 'COMMENT') return 'NOTES';
   if (type === 'CREATED' || type === 'ACKNOWLEDGED' || type === 'RESOLVED') return 'LIFECYCLE';
   if (type === 'NOTIFICATION') return 'NOTIFICATIONS';
+  if (isRunbookEventType(type)) return 'RUNBOOKS';
   if (/\bnote\b|pinned message|comment/i.test(message)) return 'NOTES';
   if (/escalat/i.test(message)) return 'ESCALATION';
   if (/assign|unassigned/i.test(message)) return 'ASSIGNMENT';
@@ -121,6 +130,32 @@ function formatNotificationMessage(notification: IncidentTimelineNotification): 
   }
 }
 
+const RUNBOOK_BADGE_VARIANT: Record<
+  ResponseTone,
+  'danger' | 'warning' | 'success' | 'info' | 'neutral'
+> = {
+  critical: 'danger',
+  warning: 'warning',
+  success: 'success',
+  info: 'info',
+  oncall: 'info',
+  neutral: 'neutral',
+};
+const RUNBOOK_AVATAR: Record<ResponseTone, { bg: string; text: string }> = {
+  critical: { bg: 'bg-rose-100 dark:bg-rose-950/40', text: 'text-rose-600 dark:text-rose-400' },
+  warning: { bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400' },
+  success: {
+    bg: 'bg-emerald-100 dark:bg-emerald-950/40',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
+  info: { bg: 'bg-blue-100 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400' },
+  oncall: {
+    bg: 'bg-violet-100 dark:bg-violet-950/40',
+    text: 'text-violet-600 dark:text-violet-400',
+  },
+  neutral: { bg: 'bg-gray-100', text: 'text-gray-600' },
+};
+
 export type Event = {
   id: string;
   message: string;
@@ -179,6 +214,8 @@ export default function IncidentTimeline({
   const [hasExhaustedOlder, setHasExhaustedOlder] = useState(false);
 
   useEffect(() => {
+    // Server props replace the locally paginated list when the incident data refreshes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedEvents(prev => {
       if (prev === events) return prev;
       if (prev.length === 0 && events.length === 0) return prev;
@@ -187,6 +224,8 @@ export default function IncidentTimeline({
   }, [events]);
 
   useEffect(() => {
+    // Server props replace the locally paginated list when the incident data refreshes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedNotes(prev => {
       if (prev === notes) return prev;
       if (prev.length === 0 && notes.length === 0) return prev;
@@ -195,6 +234,8 @@ export default function IncidentTimeline({
   }, [notes]);
 
   useEffect(() => {
+    // Server props replace the locally paginated list when the incident data refreshes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedNotifications(prev => {
       if (prev === notifications) return prev;
       if (prev.length === 0 && notifications.length === 0) return prev;
@@ -204,9 +245,8 @@ export default function IncidentTimeline({
 
   const totalItemsCount =
     totalActivityCount ??
-    ((totalEventsCount ?? 0) + (totalNotesCount ?? 0) + (totalNotificationsCount ?? 0));
-  const currentItemsCount =
-    loadedEvents.length + loadedNotes.length + loadedNotifications.length;
+    (totalEventsCount ?? 0) + (totalNotesCount ?? 0) + (totalNotificationsCount ?? 0);
+  const currentItemsCount = loadedEvents.length + loadedNotes.length + loadedNotifications.length;
   const hasMoreActivity =
     Boolean(incidentId) &&
     !hasExhaustedOlder &&
@@ -481,7 +521,10 @@ export default function IncidentTimeline({
         }
 
         // Suppress synthesized entry when an equivalent persisted voice call connected event exists for this responder
-        if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
+        if (
+          notif.channel?.toUpperCase() === 'VOICE' &&
+          notif.status?.toUpperCase() === 'DELIVERED'
+        ) {
           const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
           const recipientName = notif.user?.name?.trim().toLowerCase();
           const recipientEmail = notif.user?.email?.trim().toLowerCase();
@@ -546,7 +589,7 @@ export default function IncidentTimeline({
       : timelineEvents.filter(e => categorize(e.type, e.message) === activeFilter);
   }, [timelineEvents, activeFilter]);
 
-  const getEventConfig = (type: string) => {
+  const getEventConfig = (type: string, message: string) => {
     switch (type) {
       case 'CREATED':
         return {
@@ -590,6 +633,16 @@ export default function IncidentTimeline({
           avatarText: 'text-purple-600 dark:text-purple-400',
         };
       default:
+        if (isRunbookEventType(type)) {
+          const presentation = runbookEventDisplay(type, message);
+          return {
+            variant: RUNBOOK_BADGE_VARIANT[presentation.tone],
+            icon: <Workflow className="h-4 w-4" />,
+            label: presentation.label,
+            avatarBg: RUNBOOK_AVATAR[presentation.tone].bg,
+            avatarText: RUNBOOK_AVATAR[presentation.tone].text,
+          };
+        }
         return {
           variant: 'neutral' as const,
           icon: <Activity className="h-4 w-4" />,
@@ -655,7 +708,7 @@ export default function IncidentTimeline({
         {/* Continuous vertical line background */}
         <div className="absolute left-[19px] top-2 bottom-4 w-px bg-slate-200 dark:bg-slate-700" />
         {filteredEvents.map((event, index) => {
-          const config = getEventConfig(event.type);
+          const config = getEventConfig(event.type, event.message);
           const isLifecycleEvent =
             event.type === 'CREATED' || event.type === 'ACKNOWLEDGED' || event.type === 'RESOLVED';
           const isNote = event.type === 'NOTE' || event.type === 'COMMENT';
@@ -663,7 +716,8 @@ export default function IncidentTimeline({
           return (
             <div
               key={event.id}
-              className="relative flex gap-4 group animate-in slide-in-from-left-2 fade-in duration-500 fill-mode-backwards"
+              id={`timeline-${event.id}`}
+              className="relative flex scroll-mt-24 gap-4 group animate-in slide-in-from-left-2 fade-in duration-500 fill-mode-backwards target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
               style={{ animationDelay: `${index * 50}ms` }}
             >
               {/* Node Icon */}

@@ -20,11 +20,15 @@ const prismaMocks = vi.hoisted(() => {
   const notificationUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
   const attemptCreate = vi.fn().mockResolvedValue({ id: 'att-1' });
   const attemptCount = vi.fn().mockResolvedValue(0);
+  const notificationUpdate = vi.fn().mockResolvedValue({ id: 'claimed' });
+  const attemptUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
 
   return {
     notificationUpdateMany,
     attemptCreate,
     attemptCount,
+    notificationUpdate,
+    attemptUpdateMany,
   };
 });
 
@@ -38,6 +42,7 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       updateMany: prismaMocks.notificationUpdateMany,
+      update: prismaMocks.notificationUpdate,
     },
     user: { findUnique: vi.fn() },
     incident: { findUnique: vi.fn() },
@@ -46,6 +51,7 @@ vi.mock('@/lib/prisma', () => ({
     notificationDeliveryAttempt: {
       create: prismaMocks.attemptCreate,
       count: prismaMocks.attemptCount,
+      updateMany: prismaMocks.attemptUpdateMany,
     },
     userNotificationEndpoint: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     notificationProvider: { findMany: vi.fn(), findUnique: vi.fn() },
@@ -94,6 +100,8 @@ describe('Control Plane Email Provider Failover', () => {
     prismaMocks.notificationUpdateMany.mockResolvedValue({ count: 1 });
     prismaMocks.attemptCreate.mockResolvedValue({ id: 'att-1' });
     prismaMocks.attemptCount.mockResolvedValue(0);
+    prismaMocks.notificationUpdate.mockResolvedValue({ id: 'claimed' });
+    prismaMocks.attemptUpdateMany.mockResolvedValue({ count: 1 });
 
     vi.spyOn(providerAdmission, 'acquireProviderAdmission').mockResolvedValue({ allowed: true });
     vi.spyOn(providerAdmission, 'acquireProviderConcurrency').mockResolvedValue({
@@ -260,14 +268,14 @@ describe('Control Plane Email Provider Failover', () => {
       );
 
       // Attempt recorded as AMBIGUOUS
-      expect(prismaMocks.attemptCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          notificationId: 'notif-ambig-1',
-          ordinal: 1,
-          outcome: 'AMBIGUOUS',
-          provider: 'resend',
-        }),
-      });
+      expect(prismaMocks.attemptUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            outcome: 'AMBIGUOUS',
+            provider: 'resend',
+          }),
+        })
+      );
     });
   });
 
@@ -533,26 +541,28 @@ describe('Control Plane Email Provider Failover', () => {
       expect(result.success).toBe(true);
 
       // Verify Attempt 1 was written to notificationDeliveryAttempt:
-      expect(prismaMocks.attemptCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          notificationId: 'notif-ledger-1',
-          ordinal: 1,
-          outcome: 'RATE_LIMITED',
-          provider: 'resend',
-          errorMessage: 'Rate limit exceeded',
-        }),
-      });
+      expect(prismaMocks.attemptUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            outcome: 'RATE_LIMITED',
+            provider: 'resend',
+            errorMessage: 'Rate limit exceeded',
+          }),
+        })
+      );
 
       // Verify Attempt 2 was written to notificationDeliveryAttempt:
-      expect(prismaMocks.attemptCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          notificationId: 'notif-ledger-1',
-          ordinal: 2,
-          outcome: 'ACCEPTED',
-          provider: 'ses',
-          providerMessageId: 'ses-msg-ledger-999',
-        }),
-      });
+      expect(prismaMocks.attemptUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            provider: 'ses',
+            providerMessageId: 'ses-msg-ledger-999',
+          }),
+        })
+      );
+      expect(prismaMocks.attemptUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { outcome: 'ACCEPTED' } })
+      );
     });
   });
 
@@ -807,23 +817,28 @@ describe('Control Plane Email Provider Failover', () => {
         .mockResolvedValueOnce({ success: false, statusCode: 429, error: 'SES rate limited' })
         .mockResolvedValueOnce({ success: true, providerMessageId: 'smtp-should-not-be-called' });
 
-      const attemptLedger: Array<{ ordinal: number; outcome: string; provider: string }> = [];
-      vi.mocked(prisma.notificationDeliveryAttempt.create).mockImplementation(((args: {
-        data: { ordinal: number; outcome: string; provider: string };
-      }) => {
-        attemptLedger.push({
-          ordinal: args.data.ordinal,
-          outcome: args.data.outcome,
-          provider: args.data.provider,
+      const ledgerById = new Map<string, { ordinal: number; outcome: string; provider: string }>();
+      prismaMocks.notificationUpdate.mockImplementation(async args => {
+        const attempt = args.data.deliveryAttempts.create;
+        ledgerById.set(attempt.id, {
+          ordinal: attempt.ordinal,
+          outcome: attempt.outcome,
+          provider: attempt.provider,
         });
-        return Promise.resolve({} as never);
-      }) as never);
+        return { id: 'claimed' };
+      });
+      prismaMocks.attemptUpdateMany.mockImplementation(async args => {
+        const attempt = ledgerById.get(args.where.id);
+        if (attempt && args.data.outcome) attempt.outcome = args.data.outcome;
+        return { count: 1 };
+      });
 
       const result = await deliverCentralNotification('notif-max-attempts-route');
 
       expect(result.success).toBe(false);
       // Only 3 attempts must be executed, SMTP (4th) must NOT be executed!
       expect(mocks.sendEmail).toHaveBeenCalledTimes(3);
+      const attemptLedger = [...ledgerById.values()];
       expect(attemptLedger).toHaveLength(3);
       expect(attemptLedger[0]).toMatchObject({
         ordinal: 1,

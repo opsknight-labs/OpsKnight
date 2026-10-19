@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { PrismaClient } = require('@prisma/client');
+const { pendingClassificationCount } = require('./backfill-automation-source-classification.cjs');
 
 const REQUIRED_INDEXES = [
   'idx_notification_tenant_fair_delivery',
@@ -58,6 +59,9 @@ async function readinessProblem(prisma, expectedMigrations) {
   if (missingIndexes.length > 0) {
     return `required indexes are missing or invalid: ${missingIndexes.join(', ')}`;
   }
+
+  const unclassified = await pendingClassificationCount(prisma);
+  if (unclassified > 0) return `${unclassified} incident(s) await automation source classification`;
 
   const [projection] = await prisma.$queryRawUnsafe(`SELECT EXISTS (
     SELECT 1 FROM "UserDevice" WHERE "deviceId" LIKE 'session:%' AND "sessionDiagnosticProjectedAt" IS NULL

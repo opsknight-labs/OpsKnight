@@ -1,19 +1,14 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
+import { logger } from './logger';
 
-export const TRANSACTION_MAX_ATTEMPTS = Number(
-  process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 5
-);
+export const TRANSACTION_MAX_ATTEMPTS = Number(process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 5);
 export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = Number(
   process.env.OPSKNIGHT_TX_MAX_ATTEMPTS_HIGH_LOAD ?? 5
 );
 
-const TRANSACTION_TIMEOUT_MS = Number(
-  process.env.OPSKNIGHT_TX_TIMEOUT_MS ?? 10000
-);
-const TRANSACTION_MAX_WAIT_MS = Number(
-  process.env.OPSKNIGHT_TX_MAX_WAIT_MS ?? 2000
-);
+const TRANSACTION_TIMEOUT_MS = Number(process.env.OPSKNIGHT_TX_TIMEOUT_MS ?? 10000);
+const TRANSACTION_MAX_WAIT_MS = Number(process.env.OPSKNIGHT_TX_MAX_WAIT_MS ?? 2000);
 
 // Exponential backoff delays for retries (ms)
 const RETRY_DELAYS = [20, 50, 100, 200, 400];
@@ -22,9 +17,7 @@ export function isRetryableTransactionError(error: unknown): boolean {
   if (!error) return false;
 
   const code =
-    typeof error === 'object' && 'code' in error && error.code != null
-      ? String(error.code)
-      : null;
+    typeof error === 'object' && 'code' in error && error.code != null ? String(error.code) : null;
 
   const meta =
     typeof error === 'object' && 'meta' in error && error.meta && typeof error.meta === 'object'
@@ -57,7 +50,10 @@ export function isRetryableTransactionError(error: unknown): boolean {
   const message =
     error instanceof Error
       ? error.message
-      : typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
+      : typeof error === 'object' &&
+          error &&
+          'message' in error &&
+          typeof error.message === 'string'
         ? error.message
         : '';
   const metaMessage = meta && typeof meta.message === 'string' ? meta.message : '';
@@ -99,6 +95,7 @@ export async function runSerializableTransaction<T>(
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
+        logger.warn('db.transaction.retry', { isolation: 'Serializable', attempt: attempt + 1 });
         // Exponential backoff with jitter to reduce contention
         const baseDelay = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)];
         const jitter = Math.random() * baseDelay * 0.5;
@@ -131,6 +128,7 @@ export async function runReadCommittedTransaction<T>(
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
+        logger.warn('db.transaction.retry', { isolation: 'ReadCommitted', attempt: attempt + 1 });
         // Shorter delays for ReadCommitted since contention is lower
         const delay = RETRY_DELAYS[Math.min(attempt, 2)] + Math.random() * 10;
         await sleep(delay);

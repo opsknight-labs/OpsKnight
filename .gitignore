@@ -67,9 +67,12 @@ artifacts/load-certification/**/*.json
 !artifacts/load-certification/certification-summary.json
 artifacts/load-certification/**/*.jsonl
 artifacts/load-certification/**/*.log
+artifacts/load-certification/**/*.cpuprofile
 artifacts/load-test-25m/
 artifacts/single-image-test-10m/
 artifacts/soak-test/
+artifacts/automation-ui/
+artifacts/automation-rolling/
 
 # debug API routes
 /src/app/api/debug/
@@ -104,6 +107,7 @@ test-results/
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
 
+/.next-automation-build/
 # REST SDK build and Python caches
 /sdk/typescript/dist/
 /sdk/python/build/

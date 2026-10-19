@@ -1,4 +1,5 @@
 import 'server-only';
+import { resolveIncidentResponderRouting } from '@/lib/escalation/routing';
 
 import type {
   IncidentEventType,
@@ -11,6 +12,7 @@ import { AppError } from '@/lib/errors';
 import { enqueueLifecycleSideEffects } from '@/lib/event-outbox';
 import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
+import { fenceAutomaticRemediation } from '@/lib/runbooks/remediation-fence';
 
 export const INCIDENT_LIFECYCLE_COMMANDS = [
   'ACKNOWLEDGE',
@@ -26,14 +28,7 @@ export const INCIDENT_LIFECYCLE_COMMANDS = [
 export type IncidentLifecycleCommand = (typeof INCIDENT_LIFECYCLE_COMMANDS)[number];
 
 export type IncidentLifecycleSource =
-  | 'WEB'
-  | 'MOBILE'
-  | 'REST_API'
-  | 'BULK'
-  | 'CHATOPS'
-  | 'VOICE'
-  | 'EVENT'
-  | 'SYSTEM';
+  'WEB' | 'MOBILE' | 'REST_API' | 'BULK' | 'CHATOPS' | 'VOICE' | 'EVENT' | 'SYSTEM';
 
 export interface IncidentLifecycleActor {
   id?: string;
@@ -65,6 +60,7 @@ export interface IncidentLifecycleResult {
 }
 
 type IncidentLifecycleSnapshot = {
+  serviceId: string;
   status: IncidentStatus;
   createdAt: Date;
   acknowledgedAt: Date | null;
@@ -301,7 +297,9 @@ function atDelay(now: Date, delayMinutes: number): Date {
 }
 
 function resolutionEventType(input: IncidentLifecycleInput): IncidentEventType {
-  return input.source === 'EVENT' ? 'AUTO_RESOLVED' : 'MANUAL_RESOLVED';
+  return input.source === 'EVENT' || input.source === 'SYSTEM'
+    ? 'AUTO_RESOLVED'
+    : 'MANUAL_RESOLVED';
 }
 
 function resolutionKind(input: IncidentLifecycleInput): IncidentResolutionKind {
@@ -519,6 +517,7 @@ async function loadSnapshot(
   const incident = await tx.incident.findUnique({
     where: { id: incidentId },
     select: {
+      serviceId: true,
       status: true,
       createdAt: true,
       acknowledgedAt: true,
@@ -607,7 +606,18 @@ export async function applyIncidentLifecycleCommand(
     await assertRequiredCustomFieldsPresent(tx, input.incidentId);
   }
 
+  let responderRouteNone = false;
+  if (targetStatus === 'OPEN' && tx.incidentAutomationDecision) {
+    const routing = await resolveIncidentResponderRouting(input.incidentId, incident.serviceId, tx);
+    incident.service.policy = routing.policy;
+    responderRouteNone = routing.type === 'NO_ESCALATION';
+  }
   const updateData = updateDataForCommand(incident, input, now);
+  if (responderRouteNone) {
+    updateData.escalationStatus = 'COMPLETED';
+    updateData.nextEscalationAt = null;
+    updateData.currentEscalationStep = null;
+  }
   const lifecycleEvent = eventForCommand(input, resolutionNote);
 
   const updated = await tx.incident.update({
@@ -617,6 +627,13 @@ export async function applyIncidentLifecycleCommand(
       events: { create: lifecycleEvent },
     },
   });
+  if (targetStatus === 'RESOLVED') {
+    await fenceAutomaticRemediation(
+      tx,
+      { incidentId: input.incidentId },
+      'Stopped: the incident was resolved.'
+    );
+  }
   if (updated?.slaAckTargetMs != null && updated.slaResolveTargetMs != null) {
     const next = deriveNextSlaTransition(updated, now);
     await tx.incident.update({

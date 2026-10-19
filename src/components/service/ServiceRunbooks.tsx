@@ -27,6 +27,10 @@ import type {
 } from '@/lib/runbooks/presentation/binding-contract';
 import { ArchivedRuleCard, RuleCard } from './runbooks/RuleCard';
 import { CreateRuleSheet } from './runbooks/CreateRuleSheet';
+import type { AutomationContextSummary } from './runbooks/context-helpers';
+import type { ServiceRunbookUnattendedWriteDetails } from './runbooks/RuleAutomationControls';
+
+export type { ServiceRunbookUnattendedWriteDetails };
 
 export type ServiceRunbookBinding = Prisma.ServiceAutomationRuleGetPayload<{
   include: {
@@ -37,6 +41,7 @@ export type ServiceRunbookBinding = Prisma.ServiceAutomationRuleGetPayload<{
 }> & {
   presentation?: BindingPresentation;
   readiness?: BindingReadiness;
+  unattendedWritesAuthorizedBy?: { name: string | null } | null;
   executions?: Array<{
     id: string;
     status: string;
@@ -104,6 +109,9 @@ export default function ServiceRunbooks({
   rulesState = 'active',
   rulesSearch = '',
   userTimeZone,
+  automationContext = null,
+  unattendedWriteDetails = {},
+  canAuthorizeUnattendedWrites = false,
 }: {
   pagination?: { after?: string; nextCursor?: string; hasNext: boolean };
   catalogQuery?: string;
@@ -119,6 +127,9 @@ export default function ServiceRunbooks({
   loadError?: boolean;
   loadErrors?: RunbookResource[];
   userTimeZone?: string;
+  automationContext?: AutomationContextSummary | null;
+  unattendedWriteDetails?: ServiceRunbookUnattendedWriteDetails;
+  canAuthorizeUnattendedWrites?: boolean;
 }) {
   const ids = useId();
   const [searchQuery, setSearchQuery] = useState(rulesSearch);
@@ -279,6 +290,7 @@ export default function ServiceRunbooks({
               runbooks={availableRunbooks}
               agents={availableAgents}
               pools={availableAgentPools}
+              automationContext={automationContext}
             />
           )}
         </div>
@@ -434,6 +446,9 @@ export default function ServiceRunbooks({
                 configurationAvailable={configurationAvailable}
                 loadErrors={loadErrors}
                 userTimeZone={userTimeZone}
+                automationContext={automationContext}
+                unattendedWriteDetails={unattendedWriteDetails[binding.id]}
+                canAuthorizeUnattendedWrites={canAuthorizeUnattendedWrites}
               />
             )
           )}

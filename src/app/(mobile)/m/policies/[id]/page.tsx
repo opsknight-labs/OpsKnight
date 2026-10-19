@@ -3,17 +3,20 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
-import { assertCanViewPolicy } from '@/lib/rbac';
+import { assertCanViewPolicy, getUserPermissions } from '@/lib/rbac';
+import PolicyDependencies from '@/components/policies/PolicyDependencies';
 
 export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ depPage?: string }>;
 };
 
-export default async function MobilePolicyDetailPage({ params }: PageProps) {
+export default async function MobilePolicyDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   await assertCanViewPolicy(id);
+  const permissions = await getUserPermissions();
 
   const policy = await prisma.escalationPolicy.findUnique({
     where: { id },
@@ -67,6 +70,14 @@ export default async function MobilePolicyDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      <PolicyDependencies
+        page={Number((await searchParams)?.depPage ?? 1)}
+        policyId={id}
+        archived={!!policy.archivedAt}
+        canManage={permissions.role === 'ADMIN'}
+        mobile
+      />
 
       {/* Steps */}
       <div className="flex flex-col gap-3">

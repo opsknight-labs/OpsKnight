@@ -20,6 +20,7 @@ export const USER_REFERENCE_POLICY = {
   runbookVersionsCreated: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbookVersionsPublished: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbookBindingsCreated: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  runbookUnattendedWritesAuthorized: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbookTriggersCreated: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbookExecutionsTriggered: { deactivate: 'KEEP', delete: 'SET_NULL' },
   runbookStepsApproved: { deactivate: 'KEEP', delete: 'SET_NULL' },

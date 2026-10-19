@@ -83,7 +83,12 @@ import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingS
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
-import ServiceRunbooks from '@/components/service/ServiceRunbooks';
+import ServiceRunbooks, {
+  type ServiceRunbookUnattendedWriteDetails,
+} from '@/components/service/ServiceRunbooks';
+import AutomationShell from '@/components/automation/AutomationShell';
+import { getServiceAutomationContextFields } from '@/lib/automation/context-fields';
+import { summarizeUnattendedWriteEligibility } from '@/lib/runbooks/bindings';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import {
   getGlobalWarRoomPolicy,
@@ -318,6 +323,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     canManageService ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
     canManageService
       ? prisma.escalationPolicy.findMany({
+          where: { archivedAt: null },
           select: { id: true, name: true, description: true },
           orderBy: { name: 'asc' },
         })
@@ -456,6 +462,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     availableRunbooksResult,
     availableRunbookAgentsResult,
     availableRunbookAgentPoolsResult,
+    automationContextResult,
   ] = await Promise.allSettled([
     loadRunbookView
       ? getServiceRulePage(id, rulesAfter, prisma, { state: rulesState, search: rulesSearch })
@@ -503,6 +510,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           orderBy: { name: 'asc' },
         })
       : Promise.resolve([]),
+    loadRunbookView && canManageService
+      ? getServiceAutomationContextFields(id)
+      : Promise.resolve(null),
   ]);
 
   const serviceAutomationRules =
@@ -517,6 +527,36 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     availableRunbookAgentPoolsResult.status === 'fulfilled'
       ? availableRunbookAgentPoolsResult.value
       : [];
+  if (automationContextResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load automation context fields', {
+      error: automationContextResult.reason,
+    });
+  }
+  const runbookAutomationContext =
+    automationContextResult.status === 'fulfilled' ? automationContextResult.value : null;
+  const canAuthorizeUnattendedWrites =
+    canManageService &&
+    hasCapability(actor.role, CAPABILITIES.AUTOMATION_PUBLISH) &&
+    hasCapability(actor.role, CAPABILITIES.RUNBOOK_READ_ALL);
+  const unattendedWriteDetails: ServiceRunbookUnattendedWriteDetails = {};
+  for (const rule of serviceAutomationRules) {
+    if (rule.mode !== 'AUTOMATIC' || rule.versionStrategy !== 'PINNED') continue;
+    unattendedWriteDetails[rule.id] = {
+      eligibility:
+        canAuthorizeUnattendedWrites && rule.runbookVersion
+          ? summarizeUnattendedWriteEligibility(
+              rule.runbookVersion.definition,
+              rule.runbookVersion.inputs
+            )
+          : null,
+      authorizedAtLabel: rule.unattendedWritesAuthorizedAt
+        ? formatDateTime(rule.unattendedWritesAuthorizedAt, userTimeZone, {
+            format: 'datetime',
+            includeTimeZone: true,
+          })
+        : null,
+    };
+  }
 
   const runbooksLoadErrors: RunbookResource[] = [];
   if (serviceAutomationRulesResult.status === 'rejected') runbooksLoadErrors.push('bindings');
@@ -1322,6 +1362,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         }
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
+        automationContent={
+          hasCapability(actor.role, CAPABILITIES.AUTOMATION_READ) ? (
+            <AutomationShell serviceId={service.id} />
+          ) : undefined
+        }
         escalationContent={escalationContent}
         runbooksContent={
           !canReadRunbooks ? (
@@ -1367,6 +1412,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               canManage={canManageService && hasCapability(actor.role, CAPABILITIES.RUNBOOK_MANAGE)}
               loadErrors={runbooksLoadErrors}
               userTimeZone={userTimeZone}
+              automationContext={runbookAutomationContext}
+              unattendedWriteDetails={unattendedWriteDetails}
+              canAuthorizeUnattendedWrites={canAuthorizeUnattendedWrites}
             />
           )
         }

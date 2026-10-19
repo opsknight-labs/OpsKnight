@@ -1,5 +1,7 @@
 import AuthenticationSettingsLoader from '@/components/settings/AuthenticationSettingsLoader';
+import AutomationSettings from '@/components/settings/AutomationSettings';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
+import { getAutomationSettings } from '@/lib/automation/settings';
 import { getUserPermissions } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
@@ -52,19 +54,28 @@ async function loadSystemSettings() {
   const permissions = await getUserPermissions();
   if (!permissions.isAdmin) return { kind: 'forbidden' as const, role: permissions.role };
   const prisma = (await import('@/lib/prisma')).default;
-  const [systemSettings, rawOidcConfig, scimConfig, effectivePolicy] = await Promise.all([
-    prisma.systemSettings.findUnique({
-      where: { id: 'default' },
-      select: { appUrl: true, updatedAt: true },
-    }),
-    prisma.oidcConfig.findUnique({
-      where: { id: 'default' },
-      select: { enabled: true, providerType: true },
-    }),
-    getScimConfig(),
-    getAuthenticationPolicy(),
-  ]);
-  return { kind: 'ok' as const, systemSettings, rawOidcConfig, scimConfig, effectivePolicy };
+  const [systemSettings, rawOidcConfig, scimConfig, effectivePolicy, automationSettings] =
+    await Promise.all([
+      prisma.systemSettings.findUnique({
+        where: { id: 'default' },
+        select: { appUrl: true, updatedAt: true },
+      }),
+      prisma.oidcConfig.findUnique({
+        where: { id: 'default' },
+        select: { enabled: true, providerType: true },
+      }),
+      getScimConfig(),
+      getAuthenticationPolicy(),
+      getAutomationSettings(),
+    ]);
+  return {
+    kind: 'ok' as const,
+    systemSettings,
+    rawOidcConfig,
+    scimConfig,
+    effectivePolicy,
+    automationSettings,
+  };
 }
 
 export default async function SystemSettingsPage() {
@@ -112,7 +123,7 @@ export default async function SystemSettingsPage() {
     );
   }
 
-  const { systemSettings, rawOidcConfig, scimConfig, effectivePolicy } = loaded;
+  const { systemSettings, rawOidcConfig, scimConfig, effectivePolicy, automationSettings } = loaded;
 
   const appUrl = systemSettings?.appUrl ?? null;
   const appUrlFallback =
@@ -195,6 +206,7 @@ export default async function SystemSettingsPage() {
   );
 
   const retentionTab = <RetentionPolicySettings />;
+  const automationTab = <AutomationSettings initialSettings={automationSettings} />;
 
   const envRows = [
     {
@@ -515,6 +527,7 @@ export default async function SystemSettingsPage() {
       )}
 
       <SystemSettingsTabs
+        automationTab={automationTab}
         appUrlTab={appUrlTab}
         ssoTab={ssoTab}
         scimTab={scimTab}

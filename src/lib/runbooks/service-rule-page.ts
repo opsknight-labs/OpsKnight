@@ -61,6 +61,7 @@ export async function getServiceRulePage(
       },
       runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
       triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
+      unattendedWritesAuthorizedBy: { select: { name: true } },
       executions: {
         orderBy: { createdAt: 'desc' },
         take: 1,

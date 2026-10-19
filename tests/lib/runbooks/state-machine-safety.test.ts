@@ -106,7 +106,9 @@ describe('Runbooks State Machine Safety and Invariants', () => {
   it('accepts an existing cancellation without repeating queue or audit work', async () => {
     vi.clearAllMocks();
     vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 0 });
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'CANCEL_REQUESTED' } as never);
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({
+      status: 'CANCEL_REQUESTED',
+    } as never);
     await expect(cancelExecution('exec_1', 'user_1', 'repeat')).resolves.toBeUndefined();
     expect(prisma.backgroundJob.create).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
@@ -304,7 +306,6 @@ describe('Runbooks State Machine Safety and Invariants', () => {
     vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.runbookStepAttempt.count).mockResolvedValueOnce(0);
     vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 1 });
-
     await advanceExecution('exec_cancel');
 
     expect(prisma.runbookExecutionStep.updateMany).toHaveBeenCalledWith({

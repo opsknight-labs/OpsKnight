@@ -54,7 +54,8 @@
     "prisma:validate": "node scripts/validate-migrations.cjs",
     "prisma:health": "node scripts/check-migration-health.cjs",
     "prisma:auto-recover": "node --loader ts-node/esm scripts/auto-recover-migrations.ts",
-    "prisma:migrate:safe": "npm run prisma:validate && npm run prisma:health && npx prisma migrate deploy && npm run prisma:indexes:status-platform && npm run prisma:indexes:sla-scheduler && npm run prisma:indexes:voice-attempts && node scripts/prepare-authentication-diagnostics.cjs",
+    "prisma:migrate:safe": "npm run prisma:validate && npm run prisma:health && npx prisma migrate deploy && npm run prisma:indexes:status-platform && npm run prisma:indexes:sla-scheduler && npm run prisma:indexes:voice-attempts && npm run prisma:backfill:automation-source && node scripts/prepare-authentication-diagnostics.cjs",
+    "prisma:backfill:automation-source": "node scripts/backfill-automation-source-classification.cjs",
     "prisma:indexes:status-platform": "node scripts/create-status-platform-online-indexes.cjs",
     "prisma:indexes:sla-scheduler": "node scripts/create-sla-scheduler-online-index.cjs",
     "prisma:indexes:voice-attempts": "node scripts/create-voice-attempt-online-indexes.cjs",
@@ -170,6 +171,7 @@
     "twilio": "^5.13.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@cyclonedx/cyclonedx-npm": "^6.0.1",
     "@microsoft/eslint-formatter-sarif": "^3.1.0",
     "@playwright/test": "^1.64.0",

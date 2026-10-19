@@ -14,6 +14,7 @@ import * as ruleLocks from '@/lib/runbooks/locking';
 import {
   pauseServiceRule,
   createServiceBinding,
+  computeRuleUnattendedScope,
   updateServiceBinding,
 } from '@/lib/runbooks/bindings';
 import {
@@ -73,6 +74,12 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
           update: {},
           create: { id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' },
         });
+    // The fixture's approval covers the rule as it stands once its trigger exists.
+    if (binding.unattendedWritesAuthorizedAt)
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: binding.id },
+        data: { unattendedWritesScopeHash: await computeRuleUnattendedScope(testPrisma, binding) },
+      });
     const incidentId =
       input.incidentId ??
       (await createTestIncident('Automatic safety fixture', binding.serviceId)).id;
@@ -199,6 +206,9 @@ async function createAgentTarget(
       versionStrategy: 'PINNED',
       mode: 'AUTOMATIC',
       defaultAgentPoolId: pool.id,
+      // These fixtures exercise unattended execution; unauthorized automatic writes wait for approval.
+      unattendedWritesVersionId: version.id,
+      unattendedWritesAuthorizedAt: new Date(),
     },
   });
   return { runbook, version, service, agent, actor, pool, binding };

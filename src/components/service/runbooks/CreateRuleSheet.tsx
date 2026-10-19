@@ -17,6 +17,8 @@ import { Label } from '@/components/ui/shadcn/label';
 import RunbookBindingVersionInputs from '../RunbookBindingVersionInputs';
 import { InputFields, hasAgentWrites } from './rule-fields';
 import { RuleSheet } from './RuleSheet';
+import { RuleAutomationFields } from './RuleAutomationControls';
+import type { AutomationContextSummary } from './context-helpers';
 import type {
   AvailableRunbook,
   ServiceRunbookAgent,
@@ -28,11 +30,13 @@ export function CreateRuleSheet({
   runbooks,
   agents,
   pools,
+  automationContext = null,
 }: {
   serviceId: string;
   runbooks: AvailableRunbook[];
   agents: ServiceRunbookAgent[];
   pools: ServiceRunbookAgentPool[];
+  automationContext?: AutomationContextSummary | null;
 }) {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState('');
@@ -209,6 +213,22 @@ export function CreateRuleSheet({
                           values={{}}
                         />
                       </div>
+                    </div>
+                    <div className="space-y-3 border-t pt-4">
+                      <div>
+                        <p className="text-sm font-medium">Service Automation</p>
+                        <p className="text-xs text-muted-foreground">
+                          Optional. Monitoring incidents only run rules that opt in. Inputs and
+                          targets can come from the incident automation context.
+                        </p>
+                      </div>
+                      <RuleAutomationFields
+                        key={version?.id}
+                        inputs={version?.inputs ?? []}
+                        automationContext={automationContext}
+                        agents={agents}
+                        pools={pools}
+                      />
                     </div>
                   </>
                 ),

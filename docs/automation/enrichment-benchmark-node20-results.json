@@ -1,0 +1,91 @@
+{
+  "scope": "Whole enrichment evaluation; isolated no-op deadline guard, not HTTP capacity certification",
+  "node": "v20.20.2",
+  "platform": "linux",
+  "architecture": "arm64",
+  "sourceRevision": "a4e8723f6e771ced1a78873087b56db5c94954ca",
+  "results": [
+    {
+      "fieldCount": 4,
+      "ruleCount": 4,
+      "actionCount": 1,
+      "iterationsPerSample": 1000,
+      "samples": {
+        "before": [
+          0.02121049999999991,
+          0.010008041000000049,
+          0.00677412500000014,
+          0.0015844999999999345,
+          0.0016614170000000285,
+          0.00155537500000014,
+          0.0016358749999999418,
+          0.0016059170000000903,
+          0.001726207999999815,
+          0.0015625840000000153
+        ],
+        "candidate": [
+          0.010671624999999949,
+          0.016038166000000048,
+          0.002023167000000058,
+          0.0018335409999999683,
+          0.0017655420000000958,
+          0.0019219170000001214,
+          0.0017077500000000328,
+          0.001782041000000163,
+          0.0016245839999999134,
+          0.001782666000000063
+        ]
+      },
+      "medianBeforeMs": 0.0016614170000000285,
+      "medianCandidateMs": 0.0018335409999999683
+    },
+    {
+      "fieldCount": 64,
+      "ruleCount": 100,
+      "actionCount": 8,
+      "iterationsPerSample": 1000,
+      "samples": {
+        "before": [
+          2.006892958,
+          2.095140501,
+          3.2321174180000005,
+          2.854325376999999,
+          1.4712366249999995,
+          2.5058585429999987,
+          2.8326524179999977,
+          1.9693109589999986,
+          2.5678530009999996,
+          2.015006751000001
+        ],
+        "candidate": [
+          0.2610197079999998,
+          0.2660954579999998,
+          0.31954395900000054,
+          0.31933841699999904,
+          0.13609791600000062,
+          0.1780978749999995,
+          0.16771733400000086,
+          0.1960859169999967,
+          0.2389908749999995,
+          0.21740812499999812
+        ]
+      },
+      "medianBeforeMs": 2.5058585429999987,
+      "medianCandidateMs": 0.2389908749999995
+    }
+  ],
+  "runtimeImage": "opsknight-automation:audit48",
+  "runtimeImageConfigDigest": "sha256:63d3ff78d595395087a15dbd09ad40ca0727bfe22bd98025155b3dbefb84790b",
+  "resources": {
+    "cpuLimit": 2,
+    "memoryLimitMiB": 384,
+    "network": "none"
+  },
+  "driverSha256": "b31e962bc4a473e2d64a6d272f53fabaf81008e7b8a100ddbcd23a8c04d82663",
+  "candidateSha256": "dea60376e88d4d9b27228e5d85285b04a9bfea7aa3f843e797f6f3e7a32cde93",
+  "limitations": [
+    "Isolated enrichment CPU benchmark with a no-op deadline guard.",
+    "Shared local Docker host; absolute timings are not deployment capacity.",
+    "Small-case overhead is retained; this does not establish HTTP latency or recovery certification."
+  ]
+}

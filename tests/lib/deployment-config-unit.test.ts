@@ -204,12 +204,34 @@ describe('deployment configuration invariants', () => {
         },
       ])
       .mockResolvedValueOnce(readiness.REQUIRED_INDEXES.map(name => ({ name, valid: true })))
+      .mockResolvedValueOnce([{ pending: 0 }])
       .mockResolvedValueOnce([{ pending: false }]);
 
     expect(readiness.REQUIRED_INDEXES).not.toContain('idx_incident_next_sla_transition');
     await expect(
       readiness.readinessProblem({ $queryRawUnsafe: query }, expectedMigrations)
     ).resolves.toBeNull();
+  });
+
+  it('holds readiness until automation source classification is backfilled', async () => {
+    const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
+      REQUIRED_INDEXES: string[];
+      readinessProblem: (
+        prisma: { $queryRawUnsafe: ReturnType<typeof vi.fn> },
+        expectedMigrations: string[]
+      ) => Promise<string | null>;
+    };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { migration_name: '20260101000000_initial', finished_at: new Date(), rolled_back_at: null },
+      ])
+      .mockResolvedValueOnce(readiness.REQUIRED_INDEXES.map(name => ({ name, valid: true })))
+      .mockResolvedValueOnce([{ pending: 3 }]);
+
+    await expect(
+      readiness.readinessProblem({ $queryRawUnsafe: query }, ['20260101000000_initial'])
+    ).resolves.toContain('3 incident(s) await automation source classification');
   });
 
   it('blocks migration-skipping replicas until diagnostic indexes and historical projections are complete', async () => {
@@ -226,6 +248,7 @@ describe('deployment configuration invariants', () => {
       .fn()
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(indexes)
+      .mockResolvedValueOnce([{ pending: 0 }])
       .mockResolvedValueOnce([{ pending: true }]);
     await expect(readiness.readinessProblem({ $queryRawUnsafe: query }, [])).resolves.toContain(
       'projection is not complete'

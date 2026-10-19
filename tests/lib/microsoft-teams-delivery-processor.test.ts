@@ -330,6 +330,61 @@ describe('processMicrosoftTeamsOperation admission & concurrency classification'
     );
   });
 
+  it.each(['SERVICE', 'AUTOMATION'] as const)(
+    'applies disabled service notification switches only to %s origin',
+    async origin => {
+      prismaMock.externalOperation.findUnique.mockImplementationOnce(async () => ({
+        id: 'op-origin',
+        provider: 'MICROSOFT_TEAMS',
+        operation: 'TEAMS_SEND_CARD',
+        status: 'PROCESSING',
+        attempts: 1,
+        incidentId: 'inc-1',
+        requestPayload: {
+          destinationId: 'dest-1',
+          eventType: 'triggered',
+          origin,
+          incidentUpdatedAt: incident.createdAt.toISOString(),
+          escalationGeneration: 0,
+        },
+        resultPayload: null,
+      }));
+      prismaMock.incident.findUnique.mockImplementationOnce(async () => ({
+        ...incident,
+        status: 'OPEN',
+        urgency: 'HIGH',
+        priority: 'P1',
+      }));
+      prismaMock.service.findUnique.mockResolvedValueOnce({
+        serviceNotificationChannels: [],
+        serviceNotifyOnTriggered: false,
+        serviceNotifyOnAck: false,
+        serviceNotifyOnResolved: false,
+      });
+      Object.assign(ledger, {
+        createState: 'NONE',
+        createOperationId: null,
+        messageId: 'msg-1',
+        conversationId: 'conv-1',
+      });
+      const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+      await processMicrosoftTeamsOperation('op-origin').catch(() => undefined);
+      if (origin === 'AUTOMATION') {
+        expect(acquireProviderAdmission).toHaveBeenCalled();
+        expect(prismaMock.service.findUnique).not.toHaveBeenCalled();
+      } else {
+        expect(acquireProviderAdmission).not.toHaveBeenCalled();
+        expect(prismaMock.service.findUnique).toHaveBeenCalled();
+      }
+      prismaMock.service.findUnique.mockReset().mockResolvedValue({
+        serviceNotificationChannels: ['MICROSOFT_TEAMS'],
+        serviceNotifyOnTriggered: true,
+        serviceNotifyOnAck: true,
+        serviceNotifyOnResolved: true,
+      });
+    }
+  );
+
   it('preserves CONTROL_PLANE_UNAVAILABLE failureCode on admission rejection', async () => {
     Object.assign(ledger, {
       createState: 'NONE',

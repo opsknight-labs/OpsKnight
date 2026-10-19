@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { enqueueEventSideEffects } from '@/lib/event-outbox';
+import {
+  enqueueEventSideEffects,
+  enqueueIncidentCreatedRunbookEvaluation,
+} from '@/lib/event-outbox';
 
 type BackgroundJobData = {
   type: string;
@@ -33,29 +36,38 @@ describe('enqueueEventSideEffects Runbook Trigger Regression', () => {
     return { mockTx, createdJobs, createdManyJobs };
   }
 
-  it('enqueues a RUNBOOK EVALUATE_TRIGGER background job when an incoming event action is triggered', async () => {
+  it('leaves runbook evaluation to enqueueIncidentCreatedRunbookEvaluation for triggered events', async () => {
     const { mockTx, createdJobs, createdManyJobs } = createMockTx();
 
     await enqueueEventSideEffects(mockTx, 'triggered', 'inc-test-123');
 
-    // Verify RUNBOOK job is enqueued with kind: 'EVALUATE_TRIGGER'
-    const runbookJob = createdJobs.find(j => j.type === 'RUNBOOK');
-    expect(runbookJob).toBeDefined();
-    expect(runbookJob).toMatchObject({
-      type: 'RUNBOOK',
+    expect(createdJobs.filter(j => j.type === 'RUNBOOK')).toHaveLength(0);
+    expect(createdManyJobs.length).toBeGreaterThan(0);
+    expect(createdManyJobs.every(j => j.type === 'SCHEDULED_TASK')).toBe(true);
+  });
+
+  it('queues exactly one EVALUATE_TRIGGER job for an open incident', async () => {
+    const { mockTx, createdJobs } = createMockTx();
+
+    await expect(
+      enqueueIncidentCreatedRunbookEvaluation(mockTx, {
+        incidentId: 'inc-test-123',
+        status: 'OPEN',
+        source: 'MONITORING',
+      })
+    ).resolves.toBe(true);
+
+    const runbookJobs = createdJobs.filter(j => j.type === 'RUNBOOK');
+    expect(runbookJobs).toHaveLength(1);
+    expect(runbookJobs[0]).toMatchObject({
       status: 'PENDING',
       maxAttempts: 8,
       payload: expect.objectContaining({
         kind: 'EVALUATE_TRIGGER',
         incidentId: 'inc-test-123',
-        sourceEventId: expect.any(String),
+        source: 'MONITORING',
       }),
     });
-
-    // Verify standard event side effects were also queued as SCHEDULED_TASK
-    expect(mockTx.backgroundJob.createMany).toHaveBeenCalled();
-    expect(createdManyJobs.length).toBeGreaterThan(0);
-    expect(createdManyJobs.every(j => j.type === 'SCHEDULED_TASK')).toBe(true);
   });
 
   it('does not enqueue a RUNBOOK background job when action is resolved or acknowledged', async () => {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RUNBOOK_CONDITION_OPERATORS } from './types';
+import { isAutomationConditionField } from './automation-binding';
 
 export const CONDITION_CONTEXT_FIELDS = [
   'incident.id',
@@ -23,6 +24,17 @@ export function canonicalConditionField(field: string): string {
 
 export const conditionOperatorSchema = z.enum(RUNBOOK_CONDITION_OPERATORS);
 export const conditionContextFieldSchema = z.enum(CONDITION_CONTEXT_FIELDS);
+
+export { isAutomationConditionField };
+/** Context-state operators exist only for `automation.<key>` trigger conditions. */
+export const isAutomationOnlyOperator = (operator: string) =>
+  operator === 'IS_MISSING' || operator === 'IS_UNMAPPED';
+export const triggerConditionFieldSchema = z
+  .string()
+  .refine(
+    field => conditionContextFieldSchema.safeParse(field).success || isAutomationConditionField(field),
+    'Unsupported trigger condition field'
+  );
 export const workflowConditionSchema = z.object({
   field: z
     .string()
@@ -32,7 +44,9 @@ export const workflowConditionSchema = z.object({
         conditionContextFieldSchema.safeParse(field).success || /^input\.[a-z0-9_]+$/.test(field),
       'Unsupported CONDITION field'
     ),
-  operator: conditionOperatorSchema.default('EQUALS'),
+  operator: conditionOperatorSchema
+    .refine(operator => !isAutomationOnlyOperator(operator), 'Unsupported CONDITION operator')
+    .default('EQUALS'),
   value: z.unknown().optional(),
 });
 
@@ -40,9 +54,16 @@ export type ConditionValueType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'TAGS';
 
 export function conditionValueType(
   field: string,
-  inputs: ReadonlyArray<{ key: string; type: string }>
+  inputs: ReadonlyArray<{ key: string; type: string }>,
+  contextFields: ReadonlyArray<{ key: string; type: string }> = []
 ): ConditionValueType {
   if (field === 'incident.tags') return 'TAGS';
+  if (isAutomationConditionField(field)) {
+    const contextField = contextFields.find(candidate => field === `automation.${candidate.key}`);
+    return contextField?.type === 'NUMBER' || contextField?.type === 'BOOLEAN'
+      ? contextField.type
+      : 'STRING';
+  }
   const input = inputs.find(
     input => field === `input.${input.key}` || field === `inputs.${input.key}`
   );

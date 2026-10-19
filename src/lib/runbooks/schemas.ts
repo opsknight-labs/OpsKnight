@@ -11,7 +11,8 @@ import { parseInputDefault } from './input-values';
 import { MAX_SELECT_OPTIONS, selectOptionsIssue } from './input-options';
 import { runbookEvidenceSchema } from './evidence';
 import { schedulingLabelsSchema } from './labels';
-import { conditionContextFieldSchema } from './conditions';
+import { triggerConditionFieldSchema } from './conditions';
+import { contextInputMappingsSchema, contextTargetMappingSchema } from './automation-binding';
 import {
   RUNBOOK_BINDING_MODES,
   RUNBOOK_CONDITION_LOGICS,
@@ -304,6 +305,10 @@ export const createServiceRunbookBindingSchema = z
     defaultAgentId: z.string().cuid().optional(),
     agentSelector: schedulingLabelsSchema.optional(),
     inputValues: z.record(z.string(), z.unknown()).default({}),
+    resolveOnVerifiedRecovery: z.boolean().optional(),
+    runOnMonitoringIncidents: z.boolean().optional(),
+    contextInputMappings: contextInputMappingsSchema.optional(),
+    contextTargetMappings: contextTargetMappingSchema.optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -340,10 +345,21 @@ export const updateServiceRunbookBindingSchema = z
     defaultAgentId: z.string().cuid().optional().nullable(),
     agentSelector: schedulingLabelsSchema.optional(),
     inputValues: z.record(z.string(), z.unknown()).optional(),
+    resolveOnVerifiedRecovery: z.boolean().optional(),
+    runOnMonitoringIncidents: z.boolean().optional(),
+    contextInputMappings: contextInputMappingsSchema.optional(),
+    contextTargetMappings: contextTargetMappingSchema.optional(),
   })
   .strict();
 
 export type UpdateServiceRunbookBindingInput = z.infer<typeof updateServiceRunbookBindingSchema>;
+
+/** Unattended-write authorization is bound to the exact pinned version the admin reviewed. */
+export const authorizeUnattendedWritesSchema = z
+  .object({ expectedVersionId: z.string().cuid() })
+  .strict();
+
+export type AuthorizeUnattendedWritesInput = z.infer<typeof authorizeUnattendedWritesSchema>;
 
 // ---------------------------------------------------------------------------
 // Trigger configuration
@@ -354,7 +370,7 @@ export const runbookTriggerConditionSchema = z
     field: z
       .string()
       .refine(
-        field => conditionContextFieldSchema.safeParse(field).success,
+        field => triggerConditionFieldSchema.safeParse(field).success,
         'Unsupported trigger condition field'
       ),
     operator: z.enum(RUNBOOK_CONDITION_OPERATORS),

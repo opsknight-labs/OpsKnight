@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformGitHubToEvent, GitHubEvent } from '@/lib/integrations/github';
 
 import { verifyGitHubSignature } from '@/lib/integrations/signature-verification';
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       const event = transformGitHubToEvent(validation.data as GitHubEvent);
 
       // Process the event
-      const result = await processEvent(event, integration.serviceId, integration.id);
+      const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'GITHUB', providerPayload: validation.data, receivedAt: new Date() });
       if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       logger.info('api.integration.github_success', {

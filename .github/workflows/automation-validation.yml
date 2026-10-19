@@ -1,0 +1,94 @@
+name: Service automation validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/service-automation]
+  pull_request:
+    paths:
+      - 'src/lib/automation/**'
+      - 'src/components/automation/**'
+      - 'src/components/incident/IncidentDetailScreen.tsx'
+      - 'src/app/api/incidents/**'
+      - 'src/app/(app)/services/*/automation/**'
+      - 'src/app/(app)/services/actions.ts'
+      - 'src/app/(app)/settings/system/automation-actions.ts'
+      - 'src/app/(app)/policies/actions.ts'
+      - 'src/lib/event-outbox.ts'
+      - 'src/lib/event-side-effects.ts'
+      - 'src/lib/events.ts'
+      - 'src/lib/events/**'
+      - 'src/lib/incidents/**'
+      - 'src/lib/escalation.ts'
+      - 'src/lib/escalation/**'
+      - 'src/lib/jobs/**'
+      - 'src/lib/notification*.ts'
+      - 'src/lib/user-notifications.ts'
+      - 'src/lib/service-notifications.ts'
+      - 'src/lib/notifications/**'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+      - 'tests/**/automation*'
+      - 'playwright.automation.config.ts'
+      - '.github/workflows/automation-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automation-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: automation_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d automation_test"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/automation_test?schema=public
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/automation_test?schema=public
+      NEXTAUTH_URL: http://127.0.0.1:3193
+      NEXTAUTH_SECRET: automation-ci-session-signing-independent-secret
+      API_KEY_SECRET: automation-ci-api-key-independent-secret
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - name: Apply additive migrations
+        run: npx prisma migrate deploy
+      - name: Typecheck and automation unit contracts
+        run: |
+          npx tsc --noEmit
+          npx vitest run -c vitest.unit.config.ts tests/lib/automation-*.test.ts tests/components/automation-*.test.tsx tests/unit/automation-*.test.ts tests/components/incident-automation-card.test.tsx tests/api/incident-detail-errors.test.ts tests/lib/microsoft-teams-delivery.test.ts tests/lib/microsoft-teams-delivery-processor.test.ts tests/api/sla-stream.test.ts tests/lib/realtime-cache.test.ts tests/lib/widget-data-cache.test.ts tests/lib/runbooks/unattended-scope.test.ts tests/lib/runbooks/evaluation-source.test.ts tests/components/incident/IncidentRunbooksResponseSummary.test.tsx tests/actions/service-runbook-actions.test.ts
+      - name: PostgreSQL automation and queue certification
+        run: npx vitest run -c vitest.int.config.ts tests/integration/automation-certification.test.ts tests/integration/automation-settings.test.ts tests/integration/automation-load-certification.test.ts tests/integration/notification-claim-race.test.ts tests/integration/notification-claim-recovery.test.ts tests/integration/escalation-job-lookup.test.ts tests/integration/escalation-commit-concurrency.test.ts tests/integration/provider-quota-reservation.test.ts tests/integration/automation-operational-recovery.test.ts tests/integration/automation-policy-mutations.test.ts tests/integration/automation-service-policy.test.ts tests/integration/automation-policy-archive.test.ts tests/integration/automation-policy-dependencies.test.tsx tests/integration/automation-incident-presentation.test.tsx tests/integration/automation-concurrency.test.ts tests/integration/automation-history-guard.test.ts tests/integration/job-queue.test.ts tests/integration/runbook-resolve-race.test.ts tests/integration/runbook-monitoring-trigger.test.ts tests/integration/runbook-automation-safety.test.ts tests/integration/runbook-automation-context.test.ts tests/integration/runbook-automation-e2e.test.ts tests/integration/runbook-legacy-compat.test.ts tests/integration/runbook-recovery.test.ts tests/integration/automation-response-context.test.ts tests/integration/incident-response-timeline.test.ts --no-file-parallelism --maxWorkers=1
+      - name: Production build
+        run: npm run build
+      - name: Install browser
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Desktop and mobile authoring
+        env:
+          PLAYWRIGHT_PRODUCTION_SERVER: 'true'
+        run: npx playwright test --config playwright.automation.config.ts
+      - name: Preserve browser and load evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-automation-validation
+          path: |
+            test-results/
+            artifacts/automation-ui/
+            docs/automation/load-results.json

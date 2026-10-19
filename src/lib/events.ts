@@ -1,9 +1,20 @@
+/* eslint-disable security/detect-object-injection -- Urgency keys are constrained by IncidentUrgency. */
+import {
+  prepareAutomation,
+  persistAutomation,
+  recordAutomationMetrics,
+  type IntegrationEventEnvelope,
+} from './automation/runtime';
 import { Prisma, IncidentUrgency } from '@prisma/client';
 import { logger } from './logger';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import { createHash } from 'crypto';
 import { runReadCommittedTransaction } from './db-utils';
-import { enqueueEventSideEffects, enqueueLifecycleSideEffects } from './event-outbox';
+import {
+  enqueueEventSideEffects,
+  enqueueLifecycleSideEffects,
+  enqueueIncidentCreatedRunbookEvaluation,
+} from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
@@ -11,7 +22,7 @@ import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
 import { resolveSupportHours } from './incidents/support-hours';
 import { resolveIncidentEngagement } from './incidents/engagement';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
-import { addOperationalMetric } from './metrics/operational/registry';
+import { addOperationalMetric, observeOperationalHistogram } from './metrics/operational/registry';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -141,8 +152,17 @@ async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) 
 export async function processEvent(
   payload: EventPayload,
   serviceId: string,
-  integrationId: string
+  integrationId: string,
+  envelopeInput?: IntegrationEventEnvelope
 ) {
+  const envelope: IntegrationEventEnvelope = envelopeInput ?? {
+    serviceId,
+    integrationId,
+    integrationType: 'EVENTS_API',
+    event: payload,
+    providerPayload: payload,
+    receivedAt: new Date(),
+  };
   const { event_action, dedup_key: rawDedupKey, payload: eventData } = payload;
   const dedupKeys = normalizeDedupKeys(rawDedupKey, integrationId, eventData);
   const dedup_key = dedupKeys.primary;
@@ -163,6 +183,7 @@ export async function processEvent(
 
   const normalizedSource = truncateString(normalizeText(eventData.source.trim()), 500);
 
+  const transactionStarted = performance.now();
   const result = await runReadCommittedTransaction(async tx => {
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
@@ -336,6 +357,8 @@ export async function processEvent(
         alertSeverity: eventData.severity,
       });
       const urgency = classification.urgency;
+      const automation = await prepareAutomation(tx, envelope, classification);
+      const finalPriority = automation?.finalPriority ?? classification.priority;
 
       // Keep canonical text in persistence. React/email/API boundaries are
       // responsible for context-appropriate output escaping.
@@ -354,19 +377,20 @@ export async function processEvent(
         const resolutionAt = new Date();
         const resolvedSla = await resolveNewIncidentSlaContract(tx, {
           serviceId,
-          priority: classification.priority,
+          priority: finalPriority,
           now: resolutionAt,
         });
         const resolvedIncident = await tx.incident.create({
           data: {
             title: sanitizedTitle,
+            automationSourceRestricted: !!automation,
             description: truncatedDescription,
             status: 'RESOLVED',
             createdAt: resolutionAt,
             resolvedAt: resolutionAt,
             resolutionKind: 'SOURCE_RECOVERY',
             urgency,
-            priority: classification.priority,
+            priority: finalPriority,
             dedupKey: dedup_key,
             serviceId,
             visibility: service.defaultIncidentVisibility ?? 'PUBLIC',
@@ -377,7 +401,7 @@ export async function processEvent(
             slaPolicyId: resolvedSla.policyId,
             slaPolicyVersion: resolvedSla.policyVersion,
             slaPolicyRule: resolvedSla.policyRule,
-            slaPriorityAtCapture: classification.priority,
+            slaPriorityAtCapture: finalPriority,
             classificationPrioritySource: classification.prioritySource,
             classificationUrgencySource: classification.urgencySource,
             classificationPolicyId: classification.policyId,
@@ -397,6 +421,12 @@ export async function processEvent(
           },
         });
 
+        await persistAutomation(tx, resolvedIncident.id, envelope, automation, false);
+        await enqueueIncidentCreatedRunbookEvaluation(tx, {
+          incidentId: resolvedIncident.id,
+          status: resolvedIncident.status,
+          source: 'MONITORING',
+        });
         await tx.alert.updateMany({
           where: { id: { in: [alert.id, recentResolveAlert.id] } },
           data: { incidentId: resolvedIncident.id },
@@ -430,6 +460,7 @@ export async function processEvent(
         return {
           action: 'resolved',
           incident: resolvedIncident,
+          automationTelemetry: automation,
           telemetry: {
             prioritySource: classification.priorityProvenance.source,
             urgencySource: classification.urgencyProvenance.source,
@@ -452,7 +483,7 @@ export async function processEvent(
       const incidentCreatedAt = new Date();
       const newSla = await resolveNewIncidentSlaContract(tx, {
         serviceId,
-        priority: classification.priority,
+        priority: finalPriority,
         now: incidentCreatedAt,
       });
       const engagement = resolveIncidentEngagement({
@@ -463,10 +494,11 @@ export async function processEvent(
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
+          automationSourceRestricted: !!automation,
           description: truncatedDescription,
           status: isFlapping ? 'SUPPRESSED' : 'OPEN',
           urgency,
-          priority: classification.priority,
+          priority: finalPriority,
           dedupKey: dedupKeys.primary,
           serviceId,
           visibility: service.defaultIncidentVisibility ?? 'PUBLIC',
@@ -477,7 +509,7 @@ export async function processEvent(
           slaPolicyId: newSla.policyId,
           slaPolicyVersion: newSla.policyVersion,
           slaPolicyRule: newSla.policyRule,
-          slaPriorityAtCapture: classification.priority,
+          slaPriorityAtCapture: finalPriority,
           classificationPrioritySource: classification.prioritySource,
           classificationUrgencySource: classification.urgencySource,
           classificationPolicyId: classification.policyId,
@@ -524,6 +556,7 @@ export async function processEvent(
         }
       );
 
+      await persistAutomation(tx, newIncident.id, envelope, automation, !isFlapping);
       // Connect alert to incident
       await tx.alert.update({
         where: { id: alert.id },
@@ -557,10 +590,17 @@ export async function processEvent(
           engagement.earliestDeliveryAt
         );
       }
+      // Same transaction as persistAutomation, so evaluation always sees the committed decision.
+      await enqueueIncidentCreatedRunbookEvaluation(tx, {
+        incidentId: newIncident.id,
+        status: newIncident.status,
+        source: 'MONITORING',
+      });
 
       return {
         action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
         incident: newIncident,
+        automationTelemetry: automation,
         telemetry: {
           prioritySource: classification.priorityProvenance.source,
           urgencySource: classification.urgencyProvenance.source,
@@ -638,6 +678,11 @@ export async function processEvent(
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
   }, EVENT_TRANSACTION_MAX_ATTEMPTS);
+  observeOperationalHistogram(
+    'opsknight_event_transaction_duration_ms',
+    performance.now() - transactionStarted,
+    { action: result.action }
+  );
 
   const telemetry = 'telemetry' in result ? result.telemetry : undefined;
   if (telemetry) {
@@ -655,7 +700,15 @@ export async function processEvent(
   // External side-effects are persisted above in the same transaction and are
   // executed by the durable PostgreSQL job worker. The API no longer waits for
   // webhook, notification, Slack, or ChatOps network calls before returning.
+  recordAutomationMetrics(
+    'automationTelemetry' in result ? (result.automationTelemetry ?? null) : null
+  );
+  if ('automationTelemetry' in result) delete result.automationTelemetry;
   return result;
 }
 
 export { escalationNotificationRoute } from './event-side-effects';
+
+export async function processIntegrationEvent(envelope: IntegrationEventEnvelope) {
+  return processEvent(envelope.event, envelope.serviceId, envelope.integrationId, envelope);
+}

@@ -21,6 +21,7 @@ import { notificationEndpointAddressHash } from '@/lib/user-notification-endpoin
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
+  sendWebhook: vi.fn(),
   sendIncidentEmail: vi.fn(),
   sendSlackMessageToChannel: vi.fn(),
   encrypt: vi.fn(async (value: string) => `encrypted:${value}`),
@@ -38,11 +39,12 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       updateMany: vi.fn(),
+      update: vi.fn(),
     },
     incident: { findUnique: vi.fn() },
     service: { findUnique: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
-    notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
+    notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
     userNotificationEndpoint: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(async (operation: unknown) =>
@@ -55,6 +57,9 @@ vi.mock('@/lib/prisma', () => ({
     ),
   },
 }));
+vi.mock('@/lib/notification-dispatch-recovery', () => ({
+  recoverAbandonedNotificationDispatches: vi.fn().mockResolvedValue(0),
+}));
 vi.mock('@/lib/encryption', () => ({
   encrypt: mocks.encrypt,
   decrypt: mocks.decrypt,
@@ -64,6 +69,7 @@ vi.mock('@/lib/email', () => ({
   sendEmail: mocks.sendEmail,
   sendIncidentEmail: mocks.sendIncidentEmail,
 }));
+vi.mock('@/lib/webhooks', () => ({ sendWebhook: mocks.sendWebhook }));
 vi.mock('@/lib/slack', () => ({
   sendSlackMessageToChannel: mocks.sendSlackMessageToChannel,
   sendSlackNotification: vi.fn(),
@@ -125,6 +131,8 @@ describe('central notification control plane', () => {
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.notificationDeliveryAttempt.count).mockResolvedValue(0);
+    vi.mocked(prisma.notificationDeliveryAttempt.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.notification.update).mockResolvedValue({ id: 'claimed' } as never);
     vi.mocked(prisma.systemConfig.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
     mocks.isBulkPaused.mockResolvedValue(false);
@@ -270,6 +278,41 @@ describe('central notification control plane', () => {
       id: 'notification_existing',
       created: false,
     });
+  });
+
+  it('identifies webhook deliveries by durable intent, preserving identity across retries', async () => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = {
+      kind: 'WEBHOOK',
+      url: 'https://example.com/events',
+      payload: { event: 'alert' },
+    };
+    vi.mocked(prisma.notification.findUnique).mockImplementation((async (
+      id: Parameters<typeof prisma.notification.findUnique>[0]
+    ) => ({
+      id: id.where.id,
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    })) as never);
+    vi.mocked(prisma.notificationDeliveryAttempt.create).mockResolvedValue({} as never);
+    mocks.sendWebhook.mockResolvedValue({ success: true });
+
+    await deliverCentralNotification('webhook-first');
+    await deliverCentralNotification('webhook-second');
+    await deliverCentralNotification('webhook-first');
+
+    expect(mocks.sendWebhook.mock.calls.map(([options]) => options.deliveryId)).toEqual([
+      'webhook-first',
+      'webhook-second',
+      'webhook-first',
+    ]);
   });
 
   it('uses one atomic claim when two workers race for the same delivery', async () => {
@@ -499,6 +542,9 @@ describe('central notification control plane', () => {
         data: expect.objectContaining({ status: 'PENDING', attempts: 1, failedAt: null }),
       })
     );
+    expect(prisma.notificationDeliveryAttempt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ outcome: 'NOT_DISPATCHED' }) })
+    );
     expect(prisma.notificationDeliveryAttempt.create).not.toHaveBeenCalled();
   });
 
@@ -524,7 +570,10 @@ describe('central notification control plane', () => {
           take: 100,
           where: expect.objectContaining({
             OR: expect.arrayContaining([
-              expect.objectContaining({ status: 'PENDING', lastAttemptAt: null }),
+              expect.objectContaining({
+                status: 'PENDING',
+                OR: expect.arrayContaining([{ lastAttemptAt: null }]),
+              }),
             ]),
           }),
         })

@@ -1,3 +1,5 @@
+import MobileAutomationPanel from '@/components/automation/MobileAutomationPanel';
+import { hasCapability } from '@/lib/authorization';
 import type { ReactNode } from 'react';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
@@ -20,9 +22,10 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tab?: string }>;
 };
 
-export default async function MobileServiceDetailPage({ params }: PageProps) {
+export default async function MobileServiceDetailPage({ params, searchParams }: PageProps) {
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 
@@ -32,6 +35,9 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
     where: { AND: [serviceReadWhere(context.actor), { id }] },
     include: {
       policy: true,
+      automationConfig: {
+        select: { mode: true, activeVersion: { select: { versionNumber: true } } },
+      },
       incidents: {
         where: {
           AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }],
@@ -59,6 +65,7 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
   });
 
   if (!service) notFound();
+  if ((await searchParams)?.tab === 'automation') redirect(`/m/services/${service.id}/automation`);
   const isOperational = service._count.incidents === 0;
 
   return (
@@ -110,6 +117,13 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
           <Detail label="Escalation policy" value={service.policy?.name || 'None'} />
         </div>
       </section>
+      {hasCapability(context.actor.role, 'automation.read') && (
+        <MobileAutomationPanel
+          serviceId={service.id}
+          mode={service.automationConfig?.mode ?? 'DISABLED'}
+          version={service.automationConfig?.activeVersion?.versionNumber ?? null}
+        />
+      )}
 
       <Button asChild className="h-11 w-full rounded-xl">
         <Link href={`/m/incidents/create?serviceId=${service.id}`}>

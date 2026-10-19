@@ -100,15 +100,15 @@ async function main() {
     await seed(db.service, {
       data: { id: 'upgrade-service', name: 'Existing upgrade service', teamId: 'upgrade-team' },
     });
-    await seed(db.incident, {
-      data: {
-        id: 'upgrade-incident',
-        title: 'Existing incident history',
-        serviceId: 'upgrade-service',
-        assigneeId: 'upgrade-admin',
-        teamId: null,
-      },
-    });
+    // The generated client also writes columns added after v2.0.0 (for example
+    // automationSourceRestricted), so insert only the published-schema columns.
+    await db.$executeRaw`
+      INSERT INTO "Incident" ("id", "title", "status", "urgency", "visibility", "serviceId", "assigneeId",
+        "escalationGeneration", "slaPausedMs", "warRoomProvisioningStatus", "createdAt", "updatedAt")
+      VALUES ('upgrade-incident', 'Existing incident history', 'OPEN'::"IncidentStatus",
+        'HIGH'::"IncidentUrgency", 'PUBLIC'::"IncidentVisibility", 'upgrade-service', 'upgrade-admin',
+        0, 0, 'NONE'::"WarRoomProvisioningStatus", NOW(), NOW())
+      ON CONFLICT ("id") DO NOTHING`;
     await seed(db.oidcConfig, {
       data: {
         id: 'default',

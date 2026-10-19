@@ -58,4 +58,16 @@ describe('voice attempt index migration safety', () => {
     );
     expect(helmJob).toContain('create-voice-attempt-online-indexes.cjs');
   });
+
+  it('runs the automation source-classification backfill wherever schema management runs', () => {
+    const script = 'backfill-automation-source-classification.cjs';
+    for (const file of [
+      'docker-entrypoint.sh',
+      'deploy/kubernetes/helm/opsknight/templates/migration-job.yaml',
+      'package.json',
+    ]) {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed repository paths
+      expect(fs.readFileSync(file, 'utf8'), file).toContain(script);
+    }
+  });
 });

@@ -75,20 +75,20 @@ export function runInteractiveUserSession() {
     opsknightMetrics.userWorkloadSuccessRate.add(detailOk);
     sleep(0.1 + Math.random() * 0.15);
 
-    // Step 3: Add an internal responder note or update urgency
+    // Step 3: Update urgency through the supported incident API
     if (__ITER % 3 === 0) {
       const mutateStart = Date.now();
-      const noteRes = http.post(
-        `${baseUrl}/api/incidents/${targetIncidentId}/notes`,
-        JSON.stringify({ content: `[VU-${__VU}] Routine operator triage verification` }),
+      const urgencyRes = http.patch(
+        `${baseUrl}/api/incidents/${targetIncidentId}`,
+        JSON.stringify({ urgency: __ITER % 2 === 0 ? 'HIGH' : 'MEDIUM' }),
         {
           headers,
-          tags: { endpoint: 'user_add_note' },
+          tags: { endpoint: 'user_update_urgency' },
         }
       );
-      opsknightMetrics.userWorkloadLatencyMs.add(Date.now() - mutateStart, { action: 'note' });
+      opsknightMetrics.userWorkloadLatencyMs.add(Date.now() - mutateStart, { action: 'urgency' });
       opsknightMetrics.userWorkloadSuccessRate.add(
-        noteRes.status === 200 || noteRes.status === 201 || noteRes.status === 404 || noteRes.status === 429
+        urgencyRes.status === 200 || urgencyRes.status === 409 || urgencyRes.status === 429
       );
     }
   }

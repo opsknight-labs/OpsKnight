@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parse, parseAllDocuments } from 'yaml';
 
 /* eslint-disable security/detect-non-literal-fs-filename -- Deployment matrix tests inspect a fixed repository-local file set. */
+/* eslint-disable security/detect-object-injection -- Deployment fixture keys come from the fixed repository-local manifests under test. */
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -25,6 +26,7 @@ const runtimeSecretFiles = [
   'ALLOW_INSECURE_SECRETS',
 ] as const;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Parsed YAML manifests are untyped.
 type AnyMap = Record<string, any>;
 
 function yaml(file: string): AnyMap {
@@ -77,9 +79,10 @@ function expectSwarmRole(service: AnyMap) {
 }
 
 function expectKubernetesRole(doc: AnyMap) {
-  const container = doc.kind === 'Job'
-    ? doc.spec.template.spec.containers[0]
-    : doc.spec.template.spec.containers[0];
+  const container =
+    doc.kind === 'Job'
+      ? doc.spec.template.spec.containers[0]
+      : doc.spec.template.spec.containers[0];
   const envFrom = container.envFrom ?? [];
   expect(envFrom).toEqual(
     expect.arrayContaining([
@@ -112,10 +115,14 @@ function expectHelmRenderedRole(doc: AnyMap) {
 }
 
 function helmTemplate(args: string[]) {
-  const result = spawnSync('helm', ['template', 'secret-matrix', 'deploy/kubernetes/helm/opsknight', ...args], {
-    cwd: root,
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    'helm',
+    ['template', 'secret-matrix', 'deploy/kubernetes/helm/opsknight', ...args],
+    {
+      cwd: root,
+      encoding: 'utf8',
+    }
+  );
   if (result.error && (result.error as NodeJS.ErrnoException).code === 'ENOENT') {
     return null;
   }
@@ -185,7 +192,9 @@ describe('deployment secret matrix', () => {
     }
 
     const pgbouncer = yaml('deploy/compose/docker-compose.pgbouncer.yml');
-    expect(objectEnv(pgbouncer.services['opsknight-web']).DATABASE_URL).toContain('opsknight-pgbouncer');
+    expect(objectEnv(pgbouncer.services['opsknight-web']).DATABASE_URL).toContain(
+      'opsknight-pgbouncer'
+    );
   });
 
   it('wires every Swarm runtime role and migration runner through secret files', () => {
@@ -215,6 +224,75 @@ describe('deployment secret matrix', () => {
     }
   });
 
+  it('keeps Prisma compatibility selectable without changing worker database routing', () => {
+    const args = [
+      '--set',
+      'runtime.mode=split',
+      '--set',
+      'image.tag=2.0.0',
+      '--set',
+      'pgbouncer.enabled=true',
+      '--set-string',
+      'postgresql.password=isolated-pool-test',
+    ];
+    const native = helmTemplate([...args, '--set', 'pgbouncer.prismaCompatibilityMode=false']);
+    const legacy = helmTemplate(args);
+    if (!native || !legacy) {
+      expect(read('deploy/kubernetes/helm/opsknight/templates/_helpers.tpl')).toContain(
+        'if .Values.pgbouncer.prismaCompatibilityMode'
+      );
+      expect(
+        yaml('deploy/kubernetes/helm/opsknight/values.yaml').pgbouncer.prismaCompatibilityMode
+      ).toBe(true);
+      return;
+    }
+    for (const [docs, compatibility] of [
+      [native, false],
+      [legacy, true],
+    ] as const) {
+      const secret = docs.find(doc => doc.kind === 'Secret' && doc.data?.WEB_DATABASE_URL);
+      if (!secret) throw new Error('Rendered Helm chart is missing pooled application credentials');
+      const url = new URL(Buffer.from(secret.data.WEB_DATABASE_URL, 'base64').toString());
+      expect(url.hostname).toBe('secret-matrix-opsknight-pgbouncer');
+      expect(url.searchParams.get('pgbouncer')).toBe(compatibility ? 'true' : null);
+      const direct = new URL(Buffer.from(secret.data.DIRECT_DATABASE_URL, 'base64').toString());
+      expect(direct.hostname).toBe('secret-matrix-opsknight-postgresql');
+      expect(direct.searchParams.has('pgbouncer')).toBe(false);
+    }
+  });
+
+  it('rejects native pooled Prisma connections when prepared-statement tracking is disabled', () => {
+    const result = spawnSync(
+      'helm',
+      [
+        'template',
+        'native-pool',
+        'deploy/kubernetes/helm/opsknight',
+        '--set',
+        'runtime.mode=split',
+        '--set',
+        'image.tag=2.0.0',
+        '--set',
+        'pgbouncer.enabled=true',
+        '--set-string',
+        'postgresql.password=isolated-pool-test',
+        '--set',
+        'pgbouncer.prismaCompatibilityMode=false',
+        '--set',
+        'pgbouncer.maxPreparedStatements=0',
+      ],
+      { cwd: root, encoding: 'utf8' }
+    );
+    if (result.error && (result.error as NodeJS.ErrnoException).code === 'ENOENT') {
+      expect(read('deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml')).toContain(
+        'requires maxPreparedStatements>0'
+      );
+      return;
+    }
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('requires maxPreparedStatements>0');
+  });
+
   it('renders or statically verifies Helm integrated, split, and migration secret delivery', () => {
     const helmRotation = `k2:${newKey}\\,k1:${oldKey}`;
     const integrated = helmTemplate([
@@ -241,7 +319,8 @@ describe('deployment secret matrix', () => {
     if (integrated && split) {
       for (const docs of [integrated, split]) {
         for (const doc of docs.filter(doc => ['Deployment', 'Job'].includes(doc.kind))) {
-          if (doc.metadata.name.includes('postgres') || doc.metadata.name.includes('pgbouncer')) continue;
+          if (doc.metadata.name.includes('postgres') || doc.metadata.name.includes('pgbouncer'))
+            continue;
           expectHelmRenderedRole(doc);
         }
       }
@@ -254,13 +333,22 @@ describe('deployment secret matrix', () => {
       'deploy/kubernetes/helm/opsknight/templates/migration-job.yaml',
     ]) {
       const source = read(file);
-      for (const token of ['NEXTAUTH_SECRET', 'API_KEY_SECRET', 'ENCRYPTION_KEY', 'ENCRYPTION_KEYS']) {
+      for (const token of [
+        'NEXTAUTH_SECRET',
+        'API_KEY_SECRET',
+        'ENCRYPTION_KEY',
+        'ENCRYPTION_KEYS',
+      ]) {
         expect(source).toContain(token);
       }
       expect(source).toContain('optional: true');
     }
-    expect(read('deploy/kubernetes/helm/opsknight/templates/configmap.yaml')).toContain('ALLOW_INSECURE_SECRETS');
-    const schema = JSON.parse(read('deploy/kubernetes/helm/opsknight/values.schema.json')) as AnyMap;
+    expect(read('deploy/kubernetes/helm/opsknight/templates/configmap.yaml')).toContain(
+      'ALLOW_INSECURE_SECRETS'
+    );
+    const schema = JSON.parse(
+      read('deploy/kubernetes/helm/opsknight/values.schema.json')
+    ) as AnyMap;
     expect(schema.properties.secrets.properties.apiKeySecret).toBeTruthy();
     expect(schema.properties.secrets.properties.encryptionKeys.pattern).toContain('64');
   });
@@ -271,15 +359,26 @@ describe('deployment secret matrix', () => {
 
     // The split migration Job is operator-applied (see the Kustomize install guide)
     // because Jobs are immutable under `kubectl apply -k` upgrades.
-    const splitDocs = yamlDocs('deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml');
+    const splitDocs = yamlDocs(
+      'deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml'
+    );
     for (const doc of splitDocs.filter(doc => doc.kind === 'Deployment')) {
       expectKubernetesRole(doc);
     }
 
-    const splitPgbouncer = read('deploy/kubernetes/kustomize/profiles/split-pgbouncer/kustomization.yaml');
+    const splitPgbouncer = read(
+      'deploy/kubernetes/kustomize/profiles/split-pgbouncer/kustomization.yaml'
+    );
     expect(splitPgbouncer).toContain('../split');
-    expect(read('deploy/kubernetes/kustomize/base/configmap.yaml')).toContain('ALLOW_INSECURE_SECRETS');
-    for (const token of ['NEXTAUTH_SECRET', 'API_KEY_SECRET', 'ENCRYPTION_KEY', 'ENCRYPTION_KEYS']) {
+    expect(read('deploy/kubernetes/kustomize/base/configmap.yaml')).toContain(
+      'ALLOW_INSECURE_SECRETS'
+    );
+    for (const token of [
+      'NEXTAUTH_SECRET',
+      'API_KEY_SECRET',
+      'ENCRYPTION_KEY',
+      'ENCRYPTION_KEYS',
+    ]) {
       expect(read('deploy/kubernetes/kustomize/base/secret.yaml')).toContain(token);
     }
   });
@@ -317,6 +416,8 @@ describe('deployment secret matrix', () => {
       ENCRYPTION_KEY: oldKey,
     });
     expect(invalidApi.result.status).not.toBe(0);
-    expect(`${invalidApi.result.stderr ?? ''}${invalidApi.result.stdout ?? ''}`).toContain('API_KEY_SECRET');
+    expect(`${invalidApi.result.stderr ?? ''}${invalidApi.result.stdout ?? ''}`).toContain(
+      'API_KEY_SECRET'
+    );
   });
 });

@@ -9,6 +9,8 @@
  * - Graceful degradation on DB failures
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- Prisma mock return values are partial fixtures. */
+
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getCronSchedulerStatus,
@@ -29,6 +31,8 @@ vi.mock('@/lib/prisma', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    automationTrace: { findFirst: vi.fn().mockResolvedValue(null) },
+    automationContextObservation: { findFirst: vi.fn().mockResolvedValue(null) },
     incident: {
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),

@@ -9,6 +9,12 @@ import { OperationalMetricSnapshot } from '@/lib/metrics/operational/registry';
 import { getRunbookWorkerEvidence } from '@/lib/runbooks/worker-heartbeats';
 
 type MetricsSnapshot = {
+  automationJobs: {
+    observations: number;
+    oldestAge: number;
+    rollupLag: number;
+    retention: number;
+  } | null;
   jobStats: Array<{ status: string; count: number }> | null;
   jobTypeStats: Array<{
     type: string;
@@ -110,6 +116,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       runbookCircuitsOpen,
       providerFeedback,
       runbookWorkers,
+      automationJobs,
     ] = await Promise.allSettled([
       collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
         prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
@@ -251,6 +258,25 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       collectWithTimeout('runbook-workers', DB_COLLECTOR_TIMEOUT_MS, () =>
         getRunbookWorkerEvidence(new Date())
       ),
+      collectWithTimeout(
+        'automation-jobs',
+        DB_COLLECTOR_TIMEOUT_MS,
+        () => prisma.$queryRaw<
+          Array<{
+            observations: bigint;
+            oldestAge: number;
+            rollupLag: number;
+            retention: bigint;
+          }>
+        >`
+        SELECT
+          COUNT(*) FILTER (WHERE payload->>'task' = 'AUTOMATION_OBSERVE')::bigint AS observations,
+          COALESCE(GREATEST(0, EXTRACT(EPOCH FROM NOW() - MIN("createdAt") FILTER (WHERE payload->>'task' = 'AUTOMATION_OBSERVE'))), 0)::double precision AS "oldestAge",
+          COALESCE(GREATEST(0, EXTRACT(EPOCH FROM NOW() - MIN("createdAt") FILTER (WHERE payload->>'task' = 'AUTOMATION_OBSERVE' AND payload ? 'shadow'))), 0)::double precision AS "rollupLag",
+          COUNT(*) FILTER (WHERE payload->>'task' = 'AUTOMATION_RETENTION')::bigint AS retention
+        FROM "BackgroundJob" WHERE type = 'SCHEDULED_TASK' AND status IN ('PENDING', 'PROCESSING')
+      `
+      ),
       collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
         const { collectIncidentCollaborationMetricsFromDB } =
           await import('@/lib/incident-collaboration/meeting-metrics');
@@ -323,8 +349,17 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       providerFeedback: providerFeedback.status === 'fulfilled' ? providerFeedback.value : null,
       runbookWorkers: runbookWorkers.status === 'fulfilled' ? runbookWorkers.value : null,
       collectedAt: Date.now(),
+      automationJobs:
+        automationJobs.status === 'fulfilled' && automationJobs.value[0]
+          ? {
+              ...automationJobs.value[0],
+              observations: Number(automationJobs.value[0].observations),
+              retention: Number(automationJobs.value[0].retention),
+            }
+          : null,
     };
     const degraded =
+      value.automationJobs === null ||
       value.providerFeedback === null ||
       value.jobStats === null ||
       value.jobTypeStats === null ||
@@ -382,6 +417,21 @@ async function getMetrics(req: Request) {
   const snapshot = await collectMetricsCached();
 
   const metrics = new OperationalMetricSnapshot();
+  if (snapshot.automationJobs) {
+    metrics.set(
+      'opsknight_automation_observation_queue_depth',
+      snapshot.automationJobs.observations
+    );
+    metrics.set(
+      'opsknight_automation_observation_oldest_age_seconds',
+      snapshot.automationJobs.oldestAge
+    );
+    metrics.set(
+      'opsknight_automation_shadow_rollup_lag_seconds',
+      snapshot.automationJobs.rollupLag
+    );
+    metrics.set('opsknight_automation_retention_pending', snapshot.automationJobs.retention);
+  }
   metrics.set('opsknight_build_info', 1, {
     version: process.env.npm_package_version ?? 'unknown',
   });
@@ -513,6 +563,7 @@ async function getMetrics(req: Request) {
   }
 
   const collectionErrors =
+    Number(snapshot.automationJobs === null) +
     Number(snapshot.incidentCount === null) +
     Number(snapshot.activeUsers === null) +
     Number(snapshot.jobStats === null) +

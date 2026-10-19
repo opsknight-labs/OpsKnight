@@ -12,6 +12,8 @@ vi.mock('@/app/(app)/services/[id]/runbook-actions', () => ({
   detachRunbookAction: vi.fn(),
   updateRunbookBindingAction: vi.fn(),
   configureRunbookTriggerAction: vi.fn(),
+  authorizeUnattendedWritesAction: vi.fn(),
+  revokeUnattendedWritesAction: vi.fn(),
 }));
 afterEach(cleanup);
 function fixture() {
@@ -152,4 +154,66 @@ it('keeps loaded bindings visible when only Agent inventory fails', () => {
   expect(screen.getByRole('link', { name: 'Recovery' })).toBeVisible();
   expect(screen.getByRole('alert')).toHaveTextContent('Agent inventory unavailable');
   expect(screen.queryByText(/Failed to load attached workflows/)).not.toBeInTheDocument();
+});
+
+it('shows the unattended-write panel with eligibility only to administrators', () => {
+  const binding = {
+    ...fixture(),
+    mode: 'AUTOMATIC',
+    enabled: false,
+    versionStrategy: 'PINNED',
+    runbookVersionId: 'version-3',
+    unattendedWritesVersionId: null,
+    unattendedWritesAuthorizedAt: null,
+    runbookVersion: { version: 3, inputs: [] },
+  } as unknown as ComponentProps<typeof ServiceRunbooks>['bindings'][number];
+  const details = {
+    binding: {
+      authorizedAtLabel: null,
+      eligibility: {
+        eligible: true,
+        reasons: [],
+        writeActions: [
+          {
+            key: 'restart',
+            name: 'Restart pod',
+            type: 'KUBERNETES' as const,
+            riskClass: 'IDEMPOTENT_WRITE' as const,
+            hasVerification: true,
+            alwaysRequiresApproval: false,
+          },
+        ],
+      },
+    },
+  };
+  const { rerender } = render(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[binding]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={true}
+      canAuthorizeUnattendedWrites={true}
+      unattendedWriteDetails={details}
+    />
+  );
+  fireEvent.click(screen.getByText('Manage rule'));
+  expect(screen.getByRole('region', { name: 'Unattended write steps' })).toBeVisible();
+  expect(screen.getByText('Restart pod')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Authorize v3' })).toBeVisible();
+
+  rerender(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[binding]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={true}
+      canAuthorizeUnattendedWrites={false}
+      unattendedWriteDetails={{ binding: { authorizedAtLabel: null, eligibility: null } }}
+    />
+  );
+  expect(screen.queryByRole('button', { name: 'Authorize v3' })).not.toBeInTheDocument();
 });
