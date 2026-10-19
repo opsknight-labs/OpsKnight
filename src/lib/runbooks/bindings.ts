@@ -463,6 +463,8 @@ export async function updateServiceBinding(
         contextTargetMappings: automationConfig.targetMapping,
         runOnMonitoringIncidents:
           input.runOnMonitoringIncidents ?? current.runOnMonitoringIncidents,
+        resolveOnVerifiedRecovery:
+          input.resolveOnVerifiedRecovery ?? current.resolveOnVerifiedRecovery,
       },
       await loadScopeTriggers(tx, bindingId)
     );

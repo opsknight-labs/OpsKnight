@@ -16,6 +16,7 @@ const rule: UnattendedScopeRule = {
   contextInputMappings: [{ inputKey: 'cluster', contextKey: 'cluster' }],
   contextTargetMappings: { contextKey: null, entries: [] },
   runOnMonitoringIncidents: false,
+  resolveOnVerifiedRecovery: false,
 };
 
 const trigger: UnattendedScopeTrigger = {
@@ -56,6 +57,7 @@ describe('computeUnattendedWriteScope', () => {
       { contextTargetMappings: { contextKey: 'cluster', entries: [{ value: 'x', agentId: 'a' }] } },
     ],
     ['monitoring opt-in', { runOnMonitoringIncidents: true }],
+    ['automatic incident resolution', { resolveOnVerifiedRecovery: true }],
   ])('changes when the %s changes', (_name, change) => {
     expect(computeUnattendedWriteScope({ ...rule, ...change }, [trigger])).not.toBe(base);
   });

@@ -324,13 +324,10 @@ describeIfRealDB(
         const unchanged = await updateServiceBinding(
           fixture.service.id,
           fixture.binding.id,
-          { resolveOnVerifiedRecovery: true },
+          { name: 'Renamed rule' },
           fixture.admin.id
         );
-        expect(unchanged).toMatchObject({
-          resolveOnVerifiedRecovery: true,
-          unattendedWritesVersionId: fixture.version.id,
-        });
+        expect(unchanged).toMatchObject({ unattendedWritesVersionId: fixture.version.id });
         const repinned = await updateServiceBinding(
           fixture.service.id,
           fixture.binding.id,
@@ -447,6 +444,20 @@ describeIfRealDB(
             fixture.service.id,
             fixture.binding.id,
             { agentSelector: { zone: 'eu' } },
+            fixture.admin.id
+          );
+          expect(updated).toMatchObject({
+            unattendedWritesAuthorizedAt: null,
+            unattendedWritesScopeHash: null,
+          });
+        });
+
+        it('revokes authorization when automatic incident resolution is switched on', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          const updated = await updateServiceBinding(
+            fixture.service.id,
+            fixture.binding.id,
+            { resolveOnVerifiedRecovery: !fixture.binding.resolveOnVerifiedRecovery },
             fixture.admin.id
           );
           expect(updated).toMatchObject({

@@ -11,6 +11,7 @@ export type UnattendedScopeRule = {
   contextInputMappings: unknown;
   contextTargetMappings: unknown;
   runOnMonitoringIncidents: boolean;
+  resolveOnVerifiedRecovery: boolean;
 };
 
 export type UnattendedScopeTrigger = {
@@ -56,6 +57,8 @@ export function computeUnattendedWriteScope(
     contextInputMappings: rule.contextInputMappings,
     contextTargetMappings: rule.contextTargetMappings,
     runOnMonitoringIncidents: rule.runOnMonitoringIncidents,
+    // Auto-resolving an incident after unattended writes needs the same administrator approval.
+    resolveOnVerifiedRecovery: rule.resolveOnVerifiedRecovery,
     // A disabled trigger cannot fire, so only enabled triggers are part of the scope.
     triggers: triggers
       .filter(trigger => trigger.enabled)
