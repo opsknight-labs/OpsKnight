@@ -1,52 +1,60 @@
 {
-  "timestamp": "2026-10-19T03:02:58.813Z",
+  "timestamp": "2026-10-19T03:33:06.238Z",
   "viewports": {
     "320px_small_mobile": {
       "passed": true,
       "scrollWidth": 320,
       "innerWidth": 320,
+      "zoom": "1",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_320px_small_mobile.png"
     },
     "375px_standard_mobile": {
       "passed": true,
       "scrollWidth": 375,
       "innerWidth": 375,
+      "zoom": "1",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_375px_standard_mobile.png"
     },
     "390px_modern_iphone": {
       "passed": true,
       "scrollWidth": 390,
       "innerWidth": 390,
+      "zoom": "1",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_390px_modern_iphone.png"
     },
     "768px_tablet": {
       "passed": true,
       "scrollWidth": 768,
       "innerWidth": 768,
+      "zoom": "1",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_768px_tablet.png"
     },
     "1024px_small_laptop": {
       "passed": true,
       "scrollWidth": 1024,
       "innerWidth": 1024,
+      "zoom": "1",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_1024px_small_laptop.png"
     },
     "1440px_desktop": {
       "passed": true,
       "scrollWidth": 1440,
       "innerWidth": 1440,
+      "zoom": "1",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_1440px_desktop.png"
     },
     "1920px_large_monitor": {
       "passed": true,
       "scrollWidth": 1920,
       "innerWidth": 1920,
+      "zoom": "1",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_1920px_large_monitor.png"
     },
     "200_percent_zoom": {
       "passed": true,
       "scrollWidth": 1440,
       "innerWidth": 1440,
+      "zoom": "2",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_200_percent_zoom.png"
     }
   },
@@ -135,8 +143,12 @@
     "scope8_scoped_secrets": {
       "passed": true,
       "details": {
-        "hasSecretsHeading": true,
-        "hasCreateSecretControl": false
+        "hasCreateSecretControl": true,
+        "drawerOpenBeforeEscape": true,
+        "hasDrawerTitle": true,
+        "hasNameInput": true,
+        "hasValueInput": true,
+        "drawerClosedAfterEscape": true
       },
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_08_scoped_secrets.png"
     },
@@ -200,10 +212,18 @@
   "themes": {
     "light_theme": {
       "passed": true,
+      "details": {
+        "isDark": false,
+        "bodyBg": "rgb(226, 232, 240)"
+      },
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_theme_light.png"
     },
     "dark_theme": {
       "passed": true,
+      "details": {
+        "isDark": true,
+        "bodyBg": "rgb(9, 9, 11)"
+      },
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_theme_dark.png"
     }
   },

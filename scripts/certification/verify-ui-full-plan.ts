@@ -54,6 +54,9 @@ class CdpSession {
       returnByValue: true,
       awaitPromise: true,
     });
+    if (res?.exceptionDetails) {
+      console.error('[CDP Evaluate Error]', JSON.stringify(res.exceptionDetails));
+    }
     return res?.result?.value;
   }
 
@@ -128,9 +131,18 @@ async function getStagingCdpPage(): Promise<{ wsUrl: string; pageUrl: string } |
       res.on('end', () => {
         try {
           const list = JSON.parse(data);
-          const page = list.find(
-            (p: any) => p.type === 'page' && p.url.includes('opssentinal.com')
-          );
+          const page = list.find((p: any) => {
+            if (p.type !== 'page' || !p.url) return false;
+            try {
+              const parsed = new URL(p.url);
+              return (
+                parsed.hostname === 'opssentinal.com' ||
+                parsed.hostname.endsWith('.opssentinal.com')
+              );
+            } catch {
+              return false;
+            }
+          });
           if (page) resolve({ wsUrl: page.webSocketDebuggerUrl, pageUrl: page.url });
           else {
             const fallback = list.find((p: any) => p.type === 'page');
@@ -270,22 +282,36 @@ export async function runFullPlanUiCertification() {
       console.log(`Testing Viewport: ${vp.name} (${vp.width}x${vp.height}, scale ${vp.scale})...`);
       await session.navigate(vp.url);
       await session.setViewport(vp.width, vp.height, vp.scale, vp.mobile);
-      const metrics = await session.evaluate<{ scrollWidth: number; innerWidth: number }>(`({
+      if (vp.name === '200_percent_zoom') {
+        await session.evaluate(`document.body.style.zoom = '200%'`);
+        await new Promise(r => setTimeout(r, 400));
+      }
+      const metrics = await session.evaluate<{
+        scrollWidth: number;
+        innerWidth: number;
+        zoom?: string;
+      }>(`({
         scrollWidth: document.documentElement.scrollWidth,
-        innerWidth: window.innerWidth
+        innerWidth: window.innerWidth,
+        zoom: window.getComputedStyle(document.body).zoom || '1'
       })`);
       const zeroOverflow = metrics.scrollWidth <= metrics.innerWidth + 1;
+      const zoomPass = vp.name !== '200_percent_zoom' || metrics.zoom === '2';
       const shotPath = path.join(screenshotsDir, `ui_plan_viewport_${vp.name}.png`);
       await session.captureScreenshot(shotPath);
+      if (vp.name === '200_percent_zoom') {
+        await session.evaluate(`document.body.style.zoom = ''`);
+      }
       const relShot = `plans/runbook-engine/enterprise-physical-certification/screenshots/ui_plan_viewport_${vp.name}.png`;
       recordResult('viewports', vp.name, {
-        passed: zeroOverflow,
+        passed: zeroOverflow && zoomPass,
         scrollWidth: metrics.scrollWidth,
         innerWidth: metrics.innerWidth,
+        zoom: metrics.zoom,
         screenshot: relShot,
       });
       console.log(
-        `  ${vp.name}: ${zeroOverflow ? '[PASS]' : '[FAIL]'} (scroll: ${metrics.scrollWidth}, inner: ${metrics.innerWidth})`
+        `  ${vp.name}: ${zeroOverflow && zoomPass ? '[PASS]' : '[FAIL]'} (scroll: ${metrics.scrollWidth}, inner: ${metrics.innerWidth}, zoom: ${metrics.zoom})`
       );
     }
 
@@ -565,20 +591,67 @@ export async function runFullPlanUiCertification() {
     // Scope 8: Scoped Secrets
     console.log('Testing Scope 8: Scoped Secrets...');
     await session.navigate('https://opssentinal.com/runbooks/agents/secrets');
-    const scope8Data = await session.evaluate<any>(`(() => {
-      const text = document.body.innerText;
+    const secretBtnFound = await session.evaluate<boolean>(`(() => {
+      const btn = Array.from(document.querySelectorAll('button')).find(
+        b => b.innerText.trim().toLowerCase() === 'create secret'
+      );
+      return Boolean(btn);
+    })()`);
+
+    // Click "Create secret" to open interactive drawer
+    await session.evaluate(`(() => {
+      const btn = Array.from(document.querySelectorAll('button')).find(
+        b => b.innerText.trim().toLowerCase() === 'create secret'
+      );
+      if (btn) btn.click();
+    })()`);
+    await new Promise(r => setTimeout(r, 600));
+
+    const drawerInspect = await session.evaluate<any>(`(() => {
+      const dialog = document.querySelector('[role="dialog"]:not([data-state="closed"])');
+      const text = dialog ? dialog.innerText : '';
+      const nameInput = document.querySelector('input[name="name"]');
+      const valueInput = document.querySelector('input[name="value"]');
       return {
-        hasSecretsHeading: text.includes('Scoped Secrets') || text.includes('Secret'),
-        hasCreateSecretControl: Array.from(document.querySelectorAll('button')).some(b => b.innerText.includes('Secret') || b.innerText.includes('Add')),
+        drawerOpen: Boolean(dialog),
+        hasDrawerTitle: text.includes('Create scoped secret'),
+        hasNameInput: Boolean(nameInput),
+        hasValueInput: Boolean(valueInput),
       };
     })()`);
+    await session.captureScreenshot(shotPath('ui_plan_08_scoped_secrets_drawer.png'));
+
+    // Dismiss drawer via Escape key
+    await session.dispatchKey('Escape', 'Escape', 27);
+    await new Promise(r => setTimeout(r, 600));
+
+    const drawerClosed = await session.evaluate<boolean>(
+      `!document.querySelector('[role="dialog"]:not([data-state="closed"])')`
+    );
     await session.captureScreenshot(shotPath('ui_plan_08_scoped_secrets.png'));
+
+    const scope8Pass =
+      secretBtnFound &&
+      drawerInspect.drawerOpen &&
+      drawerInspect.hasNameInput &&
+      drawerInspect.hasValueInput &&
+      drawerClosed;
+
     recordResult('scopes', 'scope8_scoped_secrets', {
-      passed: scope8Data.hasSecretsHeading,
-      details: scope8Data,
+      passed: scope8Pass,
+      details: {
+        hasCreateSecretControl: secretBtnFound,
+        drawerOpenBeforeEscape: drawerInspect.drawerOpen,
+        hasDrawerTitle: drawerInspect.hasDrawerTitle,
+        hasNameInput: drawerInspect.hasNameInput,
+        hasValueInput: drawerInspect.hasValueInput,
+        drawerClosedAfterEscape: drawerClosed,
+      },
       screenshot: relPath('ui_plan_08_scoped_secrets.png'),
     });
-    console.log(`  Scope 8 (Scoped Secrets): [PASS] (secrets: ${scope8Data.hasSecretsHeading})`);
+    console.log(
+      `  Scope 8 (Scoped Secrets): ${scope8Pass ? '[PASS]' : '[FAIL]'} (control: ${secretBtnFound}, drawer: ${drawerInspect.drawerOpen}, inputs: ${drawerInspect.hasNameInput && drawerInspect.hasValueInput}, escapeClose: ${drawerClosed})`
+    );
 
     // Scope 9: Automatic Remediation Budgets & Safety Controls
     console.log('Testing Scope 9: Automatic Remediation Budgets & Safety Controls...');
@@ -728,22 +801,40 @@ export async function runFullPlanUiCertification() {
     // Light theme
     await session.evaluate(`document.documentElement.classList.remove('dark')`);
     await new Promise(r => setTimeout(r, 400));
+    const lightCheck = await session.evaluate<any>(`(() => {
+      const isDark = document.documentElement.classList.contains('dark');
+      const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+      return { isDark, bodyBg };
+    })()`);
     await session.captureScreenshot(shotPath('ui_plan_theme_light.png'));
+    const lightPass = !lightCheck.isDark;
     recordResult('themes', 'light_theme', {
-      passed: true,
+      passed: lightPass,
+      details: lightCheck,
       screenshot: relPath('ui_plan_theme_light.png'),
     });
-    console.log('  Light Theme: [PASS]');
+    console.log(
+      `  Light Theme: ${lightPass ? '[PASS]' : '[FAIL]'} (isDark: ${lightCheck.isDark}, bodyBg: ${lightCheck.bodyBg})`
+    );
 
     // Dark theme
     await session.evaluate(`document.documentElement.classList.add('dark')`);
     await new Promise(r => setTimeout(r, 400));
+    const darkCheck = await session.evaluate<any>(`(() => {
+      const isDark = document.documentElement.classList.contains('dark');
+      const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+      return { isDark, bodyBg };
+    })()`);
     await session.captureScreenshot(shotPath('ui_plan_theme_dark.png'));
+    const darkPass = darkCheck.isDark;
     recordResult('themes', 'dark_theme', {
-      passed: true,
+      passed: darkPass,
+      details: darkCheck,
       screenshot: relPath('ui_plan_theme_dark.png'),
     });
-    console.log('  Dark Theme: [PASS]');
+    console.log(
+      `  Dark Theme: ${darkPass ? '[PASS]' : '[FAIL]'} (isDark: ${darkCheck.isDark}, bodyBg: ${darkCheck.bodyBg})`
+    );
 
     // Output JSON results
     const outJsonPath = path.resolve(

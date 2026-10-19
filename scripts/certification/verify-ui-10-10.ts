@@ -129,9 +129,18 @@ async function getStagingCdpPage(): Promise<{ wsUrl: string; pageUrl: string } |
       res.on('end', () => {
         try {
           const list = JSON.parse(data);
-          const page = list.find(
-            (p: any) => p.type === 'page' && p.url.includes('opssentinal.com')
-          );
+          const page = list.find((p: any) => {
+            if (p.type !== 'page' || !p.url) return false;
+            try {
+              const parsed = new URL(p.url);
+              return (
+                parsed.hostname === 'opssentinal.com' ||
+                parsed.hostname.endsWith('.opssentinal.com')
+              );
+            } catch {
+              return false;
+            }
+          });
           if (page) resolve({ wsUrl: page.webSocketDebuggerUrl, pageUrl: page.url });
           else {
             const fallback = list.find((p: any) => p.type === 'page');
