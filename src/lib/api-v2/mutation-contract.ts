@@ -51,6 +51,31 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/runbooks/signing-identities/[id]/retire': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Reviewed active identity in the body and state compare-and-set fence rotation. Canonical attributed audit and public-metadata replay commit together under the signing lock. All Agent pin acknowledgements and 24-hour grace remain mandatory.',
+  },
+  'POST /api/v2/runbooks/signing-identities/[id]/activate': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Reviewed active identity in the body and state compare-and-set fence rotation. Canonical attributed audit and public-metadata replay commit together under the signing lock. All Agent pin acknowledgements and 24-hour grace remain mandatory.',
+  },
+  'POST /api/v2/runbooks/signing-identities': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Reviewed active identity in the body and state compare-and-set fence rotation. Canonical attributed audit and public-metadata replay commit together under the signing lock. All Agent pin acknowledgements and 24-hour grace remain mandatory.',
+  },
+  'POST /api/v2/runbooks/agent-pools/[id]/retire': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Retirement, disabled bindings, canonical audit and retry receipt commit together. History is preserved; database guards reject new assignments by older writers too.',
+  },
   'POST /api/v2/runbooks/agent-pools': {
     idempotency: 'required',
     concurrency: 'none',

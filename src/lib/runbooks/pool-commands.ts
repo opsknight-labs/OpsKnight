@@ -7,6 +7,7 @@ import {
   schedulingLabelsSchema,
   lockFleetConfiguration,
   synchronizeLabelMemberships,
+  synchronizeAgentLabelMemberships,
 } from './pool-labels';
 import { createRunbookAgentPoolSchema } from './schemas';
 import {
@@ -47,8 +48,8 @@ const stableLabels = (labels: unknown) =>
   JSON.stringify(
     Object.entries(schedulingLabelsSchema.parse(labels)).sort(([a], [b]) => a.localeCompare(b))
   );
-const canExpandSecrets = (actor: RunbookCommandActor, options: FleetMutationOptions) =>
-  typeof actor === 'string' || options.allowSecretScopeExpansion === true;
+const canExpandSecrets = (options: FleetMutationOptions) =>
+  options.allowSecretScopeExpansion === true;
 
 export async function lockRunbookPool(
   tx: Prisma.TransactionClient,
@@ -65,11 +66,10 @@ export async function lockRunbookPool(
 async function guardPoolSecretExpansion(
   tx: Prisma.TransactionClient,
   poolId: string,
-  actor: RunbookCommandActor,
   options: FleetMutationOptions
 ) {
   if (
-    !canExpandSecrets(actor, options) &&
+    !canExpandSecrets(options) &&
     (await tx.runbookSecretGrant.findFirst({
       where: { agentPoolId: poolId },
       select: { id: true },
@@ -133,10 +133,18 @@ export async function updateRunbookAgentPool(
   return runRunbookCommand(options.client, async tx => {
     await lockFleetConfiguration(tx);
     const pool = await lockRunbookPool(tx, id, options.expectedRevision);
+    if (pool.lifecycle !== 'ACTIVE') throw conflict('Retired pools cannot be reconfigured.');
     const selectorChanged =
       input.matchLabels !== undefined &&
       stableLabels(input.matchLabels) !== stableLabels(pool.matchLabels);
-    if (selectorChanged) await guardPoolSecretExpansion(tx, id, actor, options);
+    if (selectorChanged && Object.keys(input.matchLabels!).length > 0) {
+      const added = await tx.$queryRaw<Array<{ expansion: boolean }>>`SELECT EXISTS (
+        SELECT 1 FROM "RunbookAgent" a
+        WHERE a.status <> 'REVOKED' AND a.labels @> ${JSON.stringify(input.matchLabels)}::jsonb
+          AND NOT EXISTS (SELECT 1 FROM "RunbookAgentPoolMember" m WHERE m."poolId" = ${id} AND m."agentId" = a.id)
+      ) AS expansion`;
+      if (added[0]?.expansion) await guardPoolSecretExpansion(tx, id, options);
+    }
     if (input.mode !== undefined && input.mode !== pool.mode) {
       const dependencies = await getRunbookPoolDependencies(tx, id);
       if (Object.values(dependencies).some(Boolean))
@@ -205,9 +213,11 @@ export async function setRunbookPoolMember(
   return runRunbookCommand(options.client, async tx => {
     await lockFleetConfiguration(tx);
     const pool = await lockRunbookPool(tx, poolId, options.expectedRevision);
+    if (present && pool.lifecycle !== 'ACTIVE')
+      throw conflict('Retired pools cannot receive members.');
     const agent = await tx.runbookAgent.findUnique({
       where: { id: agentId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, labels: true },
     });
     if (!agent) throw notFound();
     const existing = await tx.runbookAgentPoolMember.findUnique({
@@ -216,7 +226,7 @@ export async function setRunbookPoolMember(
     if (present) {
       if (agent.status === 'REVOKED') throw conflict('A revoked Agent cannot join a pool.');
       if (existing?.source === 'EXPLICIT') return { pool, membership: existing };
-      await guardPoolSecretExpansion(tx, poolId, actor, options);
+      await guardPoolSecretExpansion(tx, poolId, options);
       const membership = await tx.runbookAgentPoolMember.upsert({
         where: { poolId_agentId: { poolId, agentId } },
         create: { poolId, agentId },
@@ -237,6 +247,18 @@ export async function setRunbookPoolMember(
       if (!existing) return { pool, membership: null };
       if (existing.source === 'DYNAMIC')
         throw conflict('Change the pool selector or Agent labels to remove dynamic membership.');
+      const selector = schedulingLabelsSchema.parse(pool.matchLabels);
+      const labels = schedulingLabelsSchema.parse(agent.labels);
+      if (
+        pool.lifecycle === 'ACTIVE' &&
+        agent.status !== 'REVOKED' &&
+        Object.keys(selector).length > 0 &&
+        Object.entries(selector).every(([key, value]) => Reflect.get(labels, key) === value)
+      ) {
+        throw conflict(
+          'Agent still matches the pool selector. Change the selector or Agent labels before removing membership.'
+        );
+      }
       await tx.runbookAgentPoolMember.delete({ where: { id: existing.id } });
       await synchronizeLabelMemberships(tx, pool.id);
       await logRunbookCommandAudit(
@@ -279,10 +301,10 @@ export async function updateRunbookAgentMetadata(
     if (agent.status === 'REVOKED') throw conflict('A revoked Agent cannot be reconfigured.');
     const labelsChanged =
       input.labels !== undefined && stableLabels(input.labels) !== stableLabels(agent.labels);
-    if (labelsChanged && !canExpandSecrets(actor, options)) {
+    if (labelsChanged && !canExpandSecrets(options)) {
       const expansion = await tx.$queryRaw<Array<{ expansion: boolean }>>`SELECT EXISTS (
         SELECT 1 FROM "RunbookAgentPool" p
-        WHERE p."matchLabels" <> '{}'::jsonb AND ${JSON.stringify(input.labels)}::jsonb @> p."matchLabels"
+        WHERE p.lifecycle = 'ACTIVE' AND p."matchLabels" <> '{}'::jsonb AND ${JSON.stringify(input.labels)}::jsonb @> p."matchLabels"
           AND EXISTS (SELECT 1 FROM "RunbookSecretGrant" g WHERE g."agentPoolId" = p.id)
           AND NOT EXISTS (SELECT 1 FROM "RunbookAgentPoolMember" m WHERE m."poolId" = p.id AND m."agentId" = ${id})
       ) AS expansion`;
@@ -295,7 +317,7 @@ export async function updateRunbookAgentMetadata(
     }
     if (!labelsChanged && (input.name === undefined || input.name === agent.name)) return agent;
     await tx.runbookAgent.update({ where: { id }, data: input });
-    await synchronizeLabelMemberships(tx);
+    await synchronizeAgentLabelMemberships(tx, id);
     await logRunbookCommandAudit(
       actor,
       {
@@ -318,5 +340,37 @@ export async function removeRunbookPoolMemberById(memberId: string, actor: Runbo
     const member = await tx.runbookAgentPoolMember.findUnique({ where: { id: memberId } });
     if (!member) throw notFound();
     return setRunbookPoolMember(member.poolId, member.agentId, false, actor, { client: tx });
+  });
+}
+
+export async function retireRunbookAgentPool(
+  id: string,
+  actor: RunbookCommandActor,
+  options: FleetMutationOptions = {}
+) {
+  return runRunbookCommand(options.client, async tx => {
+    await lockFleetConfiguration(tx);
+    const pool = await lockRunbookPool(tx, id, options.expectedRevision);
+    if (pool.lifecycle === 'RETIRED') return pool;
+    const updated = await tx.runbookAgentPool.update({
+      where: { id },
+      data: { lifecycle: 'RETIRED', retiredAt: new Date() },
+    });
+    const disabled = await tx.serviceAutomationRule.updateMany({
+      where: { defaultAgentPoolId: id, enabled: true },
+      data: { enabled: false },
+    });
+    await logRunbookCommandAudit(
+      actor,
+      {
+        action: 'runbook.agent_pool.retired',
+        entityType: 'RUNBOOK_AGENT_POOL',
+        entityId: id,
+        actorId: actorId(actor),
+        details: { disabledBindings: disabled.count },
+      },
+      tx
+    );
+    return updated;
   });
 }

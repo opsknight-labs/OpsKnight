@@ -79,12 +79,16 @@ async function requireSecretGrantTarget(tx: Prisma.TransactionClient, target: Se
       });
   } else {
     await tx.$queryRaw`SELECT id FROM "RunbookAgentPool" WHERE id = ${target.agentPoolId!} FOR SHARE`;
-    if (
-      !(await tx.runbookAgentPool.findUnique({
-        where: { id: target.agentPoolId! },
-        select: { id: true },
-      }))
-    )
+    const pool = await tx.runbookAgentPool.findUnique({
+      where: { id: target.agentPoolId! },
+      select: { lifecycle: true },
+    });
+    if (pool?.lifecycle === 'RETIRED')
+      throw new AppError({
+        code: 'RESOURCE_CONFLICT',
+        userMessage: 'Retired pools cannot receive secret grants.',
+      });
+    if (!pool)
       throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Agent pool not found.' });
   }
 }

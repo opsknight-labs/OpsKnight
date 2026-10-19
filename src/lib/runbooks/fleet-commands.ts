@@ -1,6 +1,6 @@
 import 'server-only';
 import { AppError } from '@/lib/errors';
-import { synchronizeLabelMemberships, lockFleetConfiguration } from './pool-labels';
+import { synchronizeAgentLabelMemberships, lockFleetConfiguration } from './pool-labels';
 import {
   runRunbookCommand,
   logRunbookCommandAudit,
@@ -31,7 +31,7 @@ export async function revokeRunbookAgent(
       },
     });
     if (changed.count) {
-      await synchronizeLabelMemberships(tx);
+      await synchronizeAgentLabelMemberships(tx, id);
       await logRunbookCommandAudit(
         actor,
         {

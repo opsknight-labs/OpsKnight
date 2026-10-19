@@ -1044,14 +1044,19 @@ test('server pagination, administrator labels, effective capabilities and budget
     .getByRole('textbox', { name: `Labels for ${agent.name}` })
     .fill('{"env":"prod","host":"node-a"}');
   await page.getByRole('button', { name: 'Save scheduling labels' }).click();
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' })
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save scheduling labels' })).toBeEnabled();
   await expect
     .poll(
       async () => (await prisma.runbookAgent.findUniqueOrThrow({ where: { id: agent.id } })).labels
     )
     .toEqual({ env: 'prod', host: 'node-a' });
-  await page.keyboard.press('Escape');
-  // Initialize signing through the real setup page; this case must also run in isolation.
-  await page.goto(`/runbooks/agents/${agent.id}/setup`);
+  // Use the real application navigation after action completion. A raw page.goto
+  // can race the action's router.refresh and interrupt WebKit's navigation.
+  await page.getByRole('link', { name: 'Upgrade installed Agent · preserve identity' }).click();
+  await page.waitForURL(`**/runbooks/agents/${agent.id}/setup`);
   await expect
     .poll(() => prisma.runbookExecutionSigningKey.count({ where: { state: 'ACTIVE' } }))
     .toBe(1);

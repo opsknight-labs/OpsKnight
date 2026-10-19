@@ -231,3 +231,94 @@ it('binds grant deletion to its parent secret and does not repeat grant side eff
   expect(revoked.status).toBe(204);
   expect(await db.runbookSecretGrant.count()).toBe(0);
 });
+it('reports exact secret references with bounded stable pagination and no submitted input values', async () => {
+  const { GET } = await import('@/app/api/v2/runbooks/secrets/[id]/usage/route');
+  const { createTestService } = await import('../helpers/test-db');
+  const credential = await createV2Credential(scopes);
+  const created = await invokeV2(
+    createSecret,
+    credential.token,
+    'POST',
+    '/runbooks/secrets',
+    {},
+    { name: 'usage-secret', value },
+    { 'Idempotency-Key': 'usage-create' }
+  );
+  const secret = (await created.json()).data;
+  const runbook = await db.runbook.create({ data: { name: 'Usage', slug: 'usage' } });
+  const version = await db.runbookVersion.create({
+    data: {
+      runbookId: runbook.id,
+      version: 1,
+      state: 'DRAFT',
+      definition: { steps: [] },
+      checksum: 'usage-checksum',
+      inputs: {
+        create: {
+          key: 'token',
+          label: 'Token',
+          type: 'SECRET_REF',
+          defaultValue: 'secret://usage-secret',
+        },
+      },
+    },
+  });
+  const service = await createTestService('Usage service');
+  await db.serviceAutomationRule.create({
+    data: {
+      serviceId: service.id,
+      runbookId: runbook.id,
+      inputValues: { token: 'secret://usage-secret', opaque: 'private-unrelated-input' },
+    },
+  });
+  await db.runbookExecution.create({
+    data: {
+      runbookId: runbook.id,
+      runbookVersionId: version.id,
+      inputValues: { token: 'secret://usage-secret' },
+      definitionChecksum: version.checksum,
+      deadlineAt: new Date(),
+    },
+  });
+  await db.serviceAutomationRule.create({
+    data: {
+      serviceId: service.id,
+      runbookId: runbook.id,
+      inputValues: { token: 'secret://usage-secret-other' },
+    },
+  });
+  const ids: string[] = [];
+  const sources: string[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 4; page++) {
+    const response = await invokeV2(
+      GET,
+      credential.token,
+      'GET',
+      `/runbooks/secrets/${secret.id}/usage?limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      { id: secret.id }
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.length).toBeLessThanOrEqual(1);
+    expect(JSON.stringify(body)).not.toContain('private-unrelated-input');
+    expect(JSON.stringify(body)).not.toContain(value);
+    for (const row of body.data) {
+      ids.push(row.id);
+      sources.push(row.sourceType);
+    }
+    cursor = body.pagination.nextCursor;
+    if (!cursor) break;
+  }
+  expect(ids).toHaveLength(3);
+  expect(new Set(ids).size).toBe(3);
+  expect(sources.sort()).toEqual(['EXECUTION', 'INPUT_DEFAULT', 'SERVICE_RULE']);
+  const invalid = await invokeV2(
+    GET,
+    credential.token,
+    'GET',
+    `/runbooks/secrets/${secret.id}/usage?cursor=invalid`,
+    { id: secret.id }
+  );
+  expect(invalid.status).toBe(400);
+});

@@ -419,7 +419,7 @@ async function prepareRunbookExecution(
             select: { id: true },
           })
         : await tx.runbookAgentPool.findUnique({
-            where: { id: input.targetAgentPoolId },
+            where: { id: input.targetAgentPoolId, lifecycle: 'ACTIVE' },
             select: { id: true },
           });
       if (!target)

@@ -27,6 +27,8 @@ export function projectRunbookPool(pool: RunbookAgentPool) {
     name: redactRunbookDisplayName(pool.name),
     description: pool.description,
     mode: pool.mode,
+    lifecycle: pool.lifecycle,
+    retiredAt: pool.retiredAt,
     matchLabels: schedulingLabelsSchema.parse(pool.matchLabels),
     revision: pool.revision,
     createdAt: pool.createdAt,

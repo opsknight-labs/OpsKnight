@@ -19,7 +19,9 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
-export type RunbookAgentPool = { "id": string; "name": string; "description": string; "mode": "LOCAL_HOSTS" | "SHARED_TARGET"; "matchLabels": Record<string, string>; "revision": number; "createdAt": string; "updatedAt": string };
+export type RunbookSigningIdentity = { "id": string; "publicKey": string; "state": "ACTIVE" | "NEXT" | "RETIRING" | "RETIRED"; "createdAt": string; "activatedAt": string | null; "retiredAt": string | null };
+export type RunbookSecretUsage = { "id": string; "sourceType": "SERVICE_RULE" | "EXECUTION" | "INPUT_DEFAULT"; "sourceId": string; "runbookId": string; "runbookVersionId": string | null; "serviceId": string | null; "createdAt": string };
+export type RunbookAgentPool = { "id": string; "name": string; "description": string; "mode": "LOCAL_HOSTS" | "SHARED_TARGET"; "lifecycle": "ACTIVE" | "RETIRED"; "retiredAt": string | null; "matchLabels": Record<string, string>; "revision": number; "createdAt": string; "updatedAt": string };
 export type RunbookAgentPoolMember = { "id": string; "poolId": string; "agentId": string; "source": "EXPLICIT" | "DYNAMIC"; "createdAt": string; "agent": { "id": string; "name": string; "status": string } };
 export type RunbookAgentPoolMembership = { "poolId": string; "agentId": string; "revision": number; "membership": null | { "id": string; "source": string } };
 export type RunbookAgentConfiguration = { "id": string; "name": string; "labels": Record<string, string>; "revision": number };
@@ -108,6 +110,12 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listRunbookSigningIdentities: { "query"?: { "limit"?: number; "cursor"?: string } };
+  stageRunbookSigningIdentity: { "headers": { "Idempotency-Key": string }; "body": { "expectedActiveKeyId": string | null } };
+  activateRunbookSigningIdentity: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedActiveKeyId": string } };
+  retireRunbookSigningIdentity: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedState": "RETIRING" } };
+  listRunbookSecretUsage: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  retireRunbookAgentPool: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
   listRunbookAgentPools: { "query"?: { "limit"?: number; "cursor"?: string } };
   createRunbookAgentPool: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "description"?: string; "mode"?: "LOCAL_HOSTS" | "SHARED_TARGET"; "matchLabels"?: Record<string, string> } };
   getRunbookAgentPool: { "params": { "id": string } };
@@ -294,6 +302,12 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listRunbookSigningIdentities: { "data": Array<RunbookSigningIdentity>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  stageRunbookSigningIdentity: { "data": RunbookSigningIdentity; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  activateRunbookSigningIdentity: { "data": RunbookSigningIdentity; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  retireRunbookSigningIdentity: { "data": RunbookSigningIdentity; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookSecretUsage: { "data": Array<RunbookSecretUsage>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  retireRunbookAgentPool: { "data": RunbookAgentPool; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookAgentPools: { "data": Array<RunbookAgentPool>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createRunbookAgentPool: { "data": RunbookAgentPool; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getRunbookAgentPool: { "data": RunbookAgentPool; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -480,6 +494,63 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listRunbookSigningIdentities": {
+    "method": "GET",
+    "path": "/runbooks/signing-identities",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "stageRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "activateRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities/{id}/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "retireRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities/{id}/retire",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecretUsage": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}/usage",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "retireRunbookAgentPool": {
+    "method": "POST",
+    "path": "/runbooks/agent-pools/{id}/retire",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listRunbookAgentPools": {
     "method": "GET",
     "path": "/runbooks/agent-pools",

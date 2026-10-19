@@ -94,6 +94,20 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Grant or revoke Agent/pool secret access and authorize transitive pool-access expansion.',
     { issuableBy: ADMINS, write: true }
   ),
+  [S.RUNBOOK_SIGNING_READ]: def(
+    S.RUNBOOK_SIGNING_READ,
+    'Signing identity metadata',
+    'Runbooks',
+    'Read execution-signing public identity and state metadata only.',
+    { issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_SIGNING_WRITE]: def(
+    S.RUNBOOK_SIGNING_WRITE,
+    'Signing identity rotation',
+    'Runbooks',
+    'Stage, activate and retire identities with Agent pin acknowledgement and grace-period guards.',
+    { issuableBy: ADMINS, write: true }
+  ),
   [S.RUNBOOK_SETTINGS_READ]: def(
     S.RUNBOOK_SETTINGS_READ,
     'Runbook settings read',

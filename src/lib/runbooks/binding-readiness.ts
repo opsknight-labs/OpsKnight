@@ -162,9 +162,15 @@ export async function getBindingReadiness(
       const pool = binding.defaultAgentPoolId
         ? await db.runbookAgentPool.findUnique({
             where: { id: binding.defaultAgentPoolId },
-            select: { mode: true },
+            select: { mode: true, lifecycle: true },
           })
         : null;
+      if (pool?.lifecycle === 'RETIRED')
+        checks.push({
+          code: 'TARGET_NOT_FOUND',
+          state: 'blocked',
+          message: 'The selected Agent pool is retired.',
+        });
       if (
         pool?.mode === 'LOCAL_HOSTS' &&
         eligibleAgents !== 1 &&

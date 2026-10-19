@@ -3908,7 +3908,14 @@ model RunbookAgentRequestNonce {
   @@index([createdAt])
 }
 
+model RunbookFleetAuthority {
+  id String @id @default("default")
+  revision BigInt @default(0)
+}
+
 model RunbookAgentPool {
+  lifecycle String @default("ACTIVE")
+  retiredAt DateTime?
   revision    Int                  @default(0)
   id          String               @id @default(cuid())
   name        String
