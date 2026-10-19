@@ -184,6 +184,13 @@ if ! install_voice_attempt_indexes; then
 fi
 
 echo "✅ Voice attempt indexes are ready."
+
+echo "🔄 Backfilling automation source classification..."
+if ! node scripts/backfill-automation-source-classification.cjs; then
+    echo "❌ Automation source classification backfill failed. Refusing to start with unclassified incidents."
+    exit 1
+fi
+
 echo "✅ Database is ready."
 
 if [ -n "${DIRECT_DATABASE_URL:-}" ]; then

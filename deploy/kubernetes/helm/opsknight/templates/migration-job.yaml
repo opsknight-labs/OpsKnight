@@ -65,6 +65,7 @@ spec:
               node scripts/create-status-platform-online-indexes.cjs
               node scripts/create-sla-scheduler-online-index.cjs
               node scripts/create-voice-attempt-online-indexes.cjs
+              node scripts/backfill-automation-source-classification.cjs
               echo "Migration Job completed successfully."
           env:
             - name: DATABASE_URL

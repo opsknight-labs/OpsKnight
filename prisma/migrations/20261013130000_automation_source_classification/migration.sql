@@ -1,10 +1,6 @@
 BEGIN;
+-- Expand only: the historical backfill is a separate migration so Incident is not locked while it runs.
 ALTER TABLE "Incident" ADD COLUMN "automationSourceRestricted" BOOLEAN NOT NULL DEFAULT false;
--- Preserve source classification independently of diagnostic trace retention.
-UPDATE "Incident" SET "automationSourceRestricted" = true
-WHERE EXISTS (SELECT 1 FROM "IncidentAutomationDecision" decision WHERE decision."incidentId" = "Incident".id)
-   OR EXISTS (SELECT 1 FROM "AutomationTrace" trace WHERE trace."incidentId" = "Incident".id);
-
 -- Writers from the previous release may still create traces during a rolling upgrade.
 CREATE FUNCTION automation_capture_source_classification() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
