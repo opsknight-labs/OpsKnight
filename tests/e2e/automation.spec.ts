@@ -8,6 +8,8 @@ import { compileAutomation } from '@/lib/automation/compiler';
 import { checksum } from '@/lib/automation/cache';
 import { randomUUID } from 'node:crypto';
 const db = new PrismaClient();
+// Desktop browsers (Chromium, Firefox, WebKit) use desktop routes; device emulations use /m.
+const isDesktop = (info: { project: { use: { isMobile?: boolean } } }) => !info.project.use.isMobile;
 let email: string;
 const password = 'Automation-Local-Test-938!';
 let serviceId: string;
@@ -171,7 +173,7 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
         where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
       })
     ).toBe(0);
-    await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+    await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
     await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
     await expect(
       page.getByText('production', { exact: true }).filter({ visible: true })
@@ -227,7 +229,7 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
     expect((await (await page.request.get('/api/auth/session')).json()).user.email).toBe(
       auditorEmail
     );
-    await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+    await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
     await expect(
       page.getByText('Alert context is restricted.', { exact: true }).filter({ visible: true })
     ).toBeVisible();
@@ -417,7 +419,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
     })
   ).toBe(0);
   await page.goto(
-    `${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${missing.data.result.incident.id}`
+    `${isDesktop(testInfo) ? '' : '/m'}/incidents/${missing.data.result.incident.id}`
   );
   await expect(
     page.getByText('Not provided', { exact: true }).filter({ visible: true })
@@ -450,14 +452,14 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await page.goto(`/policies/${policy.id}?tab=dependencies`);
   await page.getByRole('button', { name: 'Archive policy', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Policy Dependencies · Archived' })).toBeVisible();
-  await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+  await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
   await expect(
     page.getByText('production', { exact: true }).filter({ visible: true })
   ).toBeVisible();
   await expect(
     page.getByText('Responder route:', { exact: false }).filter({ visible: true })
   ).toContainText(policy.name);
-  if (testInfo.project.name !== 'desktop') {
+  if (!isDesktop(testInfo)) {
     await page
       .locator('summary')
       .filter({ hasText: 'Incident details & assignment' })
@@ -539,7 +541,7 @@ test('operator authors, tests, publishes, and enables shadow on desktop and mobi
   await expect(settings.getByLabel('Enable service automation globally')).toBeChecked();
   await expect(settings.getByLabel('Trace and observation retention (days)')).toHaveValue('120');
   await page.goto(
-    testInfo.project.name === 'desktop'
+    isDesktop(testInfo)
       ? `/services/${serviceId}?tab=automation`
       : `/m/services/${serviceId}/automation`
   );
@@ -588,7 +590,7 @@ test('operator authors, tests, publishes, and enables shadow on desktop and mobi
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2))
     .toBe(true);
-  if (testInfo.project.name === 'desktop') {
+  if (isDesktop(testInfo)) {
     const sidebar = await page.locator('#app-sidebar').boundingBox();
     const automation = await workspace.boundingBox();
     expect(automation!.x).toBeGreaterThanOrEqual(sidebar!.x + sidebar!.width);
@@ -618,7 +620,7 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
   const timing: Record<string, number | null> = {};
   let start = Date.now();
   await page.goto(
-    testInfo.project.name === 'desktop'
+    isDesktop(testInfo)
       ? `/services/${serviceId}?tab=automation`
       : `/m/services/${serviceId}/automation`
   );
