@@ -65,7 +65,7 @@ export default function IncidentDetailTabs({
           <TabsList className="h-8 max-w-full justify-start overflow-x-auto p-0.5 bg-muted/80 border border-border/70 rounded-lg">
             <TabsTrigger
               value="overview"
-              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
             >
               <Settings2 className="h-4 w-4" />
               <span>Overview</span>
@@ -73,7 +73,7 @@ export default function IncidentDetailTabs({
             {responseContent && (
               <TabsTrigger
                 value="response"
-                className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
               >
                 <Route className="h-4 w-4" />
                 <span>Response activity</span>
@@ -82,7 +82,7 @@ export default function IncidentDetailTabs({
             {runbooksContent && (
               <TabsTrigger
                 value="runbooks"
-                className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+                className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
               >
                 <Workflow className="h-4 w-4" />
                 <span>Runbooks</span>
@@ -90,14 +90,14 @@ export default function IncidentDetailTabs({
             )}
             <TabsTrigger
               value="timeline"
-              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
             >
               <History className="h-4 w-4" />
               <span>Timeline</span>
             </TabsTrigger>
             <TabsTrigger
               value="postmortem"
-              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+              className="shrink-0 gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
             >
               <FileText className="h-4 w-4" />
               <span>Postmortem</span>

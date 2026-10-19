@@ -148,6 +148,8 @@ export default function AutomationWorkspace({
     [serviceId, activityPage, receiveServerDraft]
   );
   useEffect(() => {
+    // Fetches the selected area from the server; state is set when the request resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(area);
   }, [area, load]);
 

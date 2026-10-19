@@ -149,7 +149,10 @@ const RUNBOOK_AVATAR: Record<ResponseTone, { bg: string; text: string }> = {
     text: 'text-emerald-600 dark:text-emerald-400',
   },
   info: { bg: 'bg-blue-100 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400' },
-  oncall: { bg: 'bg-violet-100 dark:bg-violet-950/40', text: 'text-violet-600 dark:text-violet-400' },
+  oncall: {
+    bg: 'bg-violet-100 dark:bg-violet-950/40',
+    text: 'text-violet-600 dark:text-violet-400',
+  },
   neutral: { bg: 'bg-gray-100', text: 'text-gray-600' },
 };
 
@@ -211,6 +214,8 @@ export default function IncidentTimeline({
   const [hasExhaustedOlder, setHasExhaustedOlder] = useState(false);
 
   useEffect(() => {
+    // Server props replace the locally paginated list when the incident data refreshes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedEvents(prev => {
       if (prev === events) return prev;
       if (prev.length === 0 && events.length === 0) return prev;
@@ -219,6 +224,8 @@ export default function IncidentTimeline({
   }, [events]);
 
   useEffect(() => {
+    // Server props replace the locally paginated list when the incident data refreshes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedNotes(prev => {
       if (prev === notes) return prev;
       if (prev.length === 0 && notes.length === 0) return prev;
@@ -227,6 +234,8 @@ export default function IncidentTimeline({
   }, [notes]);
 
   useEffect(() => {
+    // Server props replace the locally paginated list when the incident data refreshes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedNotifications(prev => {
       if (prev === notifications) return prev;
       if (prev.length === 0 && notifications.length === 0) return prev;
@@ -236,9 +245,8 @@ export default function IncidentTimeline({
 
   const totalItemsCount =
     totalActivityCount ??
-    ((totalEventsCount ?? 0) + (totalNotesCount ?? 0) + (totalNotificationsCount ?? 0));
-  const currentItemsCount =
-    loadedEvents.length + loadedNotes.length + loadedNotifications.length;
+    (totalEventsCount ?? 0) + (totalNotesCount ?? 0) + (totalNotificationsCount ?? 0);
+  const currentItemsCount = loadedEvents.length + loadedNotes.length + loadedNotifications.length;
   const hasMoreActivity =
     Boolean(incidentId) &&
     !hasExhaustedOlder &&
@@ -513,7 +521,10 @@ export default function IncidentTimeline({
         }
 
         // Suppress synthesized entry when an equivalent persisted voice call connected event exists for this responder
-        if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
+        if (
+          notif.channel?.toUpperCase() === 'VOICE' &&
+          notif.status?.toUpperCase() === 'DELIVERED'
+        ) {
           const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
           const recipientName = notif.user?.name?.trim().toLowerCase();
           const recipientEmail = notif.user?.email?.trim().toLowerCase();
