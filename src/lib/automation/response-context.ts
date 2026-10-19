@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
-import { builtinFields, type Context, type Field, type FieldState } from './contract';
+import { builtinFields, LIMITS, type Context, type Field, type FieldState } from './contract';
 
 export const RESPONSE_CONTEXT_SCHEMA_VERSION = 1;
-export const RESPONSE_CONTEXT_MAX_FIELDS = 64;
+// Built-ins plus every field authoring allows; a lower cap would silently drop declared fields.
+export const RESPONSE_CONTEXT_MAX_FIELDS = builtinFields.length + LIMITS.fields;
 export const RESPONSE_CONTEXT_FIELD_TYPES = ['STRING', 'ENUM', 'NUMBER', 'BOOLEAN'] as const;
 export const RESPONSE_CONTEXT_STATES = ['RECOGNIZED', 'MISSING', 'UNMAPPED'] as const;
 
@@ -24,7 +25,7 @@ export const responseContextSchema = z
     schemaVersion: z.literal(RESPONSE_CONTEXT_SCHEMA_VERSION),
     versionId: z.string().min(1),
     versionNumber: z.number().int().nonnegative(),
-    fields: z.array(fieldSchema).max(64),
+    fields: z.array(fieldSchema).max(RESPONSE_CONTEXT_MAX_FIELDS),
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict();
@@ -63,7 +64,7 @@ function stateValue(state: FieldState | undefined): Pick<ResponseContextField, '
   return { state: 'RECOGNIZED', value: state.value };
 }
 
-/** Builtins first, then the version's declared fields; deduplicated by key and capped at 64. */
+/** Builtins first, then the version's declared fields, deduplicated by key. */
 export function responseContextFieldDefinitions(version: {
   fields: ReadonlyArray<Pick<Field, 'fieldId' | 'key' | 'type'>>;
 }): ResponseContextFieldDefinition[] {
@@ -74,7 +75,8 @@ export function responseContextFieldDefinitions(version: {
     seen.add(field.key);
     definitions.push({ fieldId: field.fieldId, key: field.key, type: field.type });
   }
-  return definitions.slice(0, RESPONSE_CONTEXT_MAX_FIELDS);
+  if (definitions.length > RESPONSE_CONTEXT_MAX_FIELDS) throw new Error('CONTEXT_FIELD_LIMIT');
+  return definitions;
 }
 
 /** Only declared schema fields are captured, so raw payload content can never enter the context. */
@@ -85,7 +87,7 @@ export function buildResponseContext(input: {
   inputContext: Context;
   enrichedContext: Context;
 }): IncidentResponseContext {
-  const fields = input.fields.slice(0, 64).map<ResponseContextField>(definition => {
+  const fields = input.fields.map<ResponseContextField>(definition => {
     const final = stateValue(input.enrichedContext[definition.key]);
     const received = stateValue(input.inputContext[definition.key]);
     const source =

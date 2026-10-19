@@ -12,7 +12,7 @@ vi.mock('@/lib/automation/jobs', () => ({ enqueueAutomationNotification: vi.fn()
 
 import { compileAutomation } from '@/lib/automation/compiler';
 import { checksum } from '@/lib/automation/cache';
-import { builtinFields, type Snapshot } from '@/lib/automation/contract';
+import { builtinFields, LIMITS, type Snapshot } from '@/lib/automation/contract';
 import {
   buildResponseContext,
   parseResponseContext,
@@ -168,13 +168,44 @@ describe('automation response context capture', () => {
     ).toEqual([{ fieldId: 'priority', key: 'priority', type: 'ENUM' }]);
     expect(
       responseContextFieldDefinitions({
-        fields: Array.from({ length: 80 }, (_, i) => ({
+        fields: Array.from({ length: LIMITS.fields }, (_, i) => ({
           fieldId: `f${i}`,
           key: `f${i}`,
           type: 'STRING' as const,
         })),
       })
-    ).toHaveLength(64);
+    ).toHaveLength(builtinFields.length + LIMITS.fields);
+  });
+
+  it('captures every built-in and all authorable custom fields without truncation', () => {
+    const fields = Array.from({ length: LIMITS.fields }, (_, i) => ({
+      fieldId: `f${i}`,
+      key: `f${i}`,
+      type: 'STRING' as const,
+    }));
+    const definitions = responseContextFieldDefinitions({ fields });
+    const context = buildResponseContext({
+      versionId: 'version',
+      versionNumber: 1,
+      fields: definitions,
+      inputContext: {},
+      enrichedContext: {},
+    });
+    expect(context.fields).toHaveLength(builtinFields.length + LIMITS.fields);
+    expect(parseResponseContext(context)).not.toBeNull();
+    expect(context.fields.at(-1)?.key).toBe(`f${LIMITS.fields - 1}`);
+  });
+
+  it('fails instead of silently dropping fields beyond the shared limit', () => {
+    expect(() =>
+      responseContextFieldDefinitions({
+        fields: Array.from({ length: LIMITS.fields + 1 }, (_, i) => ({
+          fieldId: `f${i}`,
+          key: `f${i}`,
+          type: 'STRING' as const,
+        })),
+      })
+    ).toThrow('CONTEXT_FIELD_LIMIT');
   });
 
   it('stores a checksum-valid context of declared fields only for LIVE decisions', async () => {

@@ -3578,6 +3578,8 @@ model ServiceAutomationRule {
   unattendedWritesVersionId     String?
   unattendedWritesAuthorizedById String?
   unattendedWritesAuthorizedAt  DateTime?
+  /// Digest of the version, inputs, targets and triggers the administrator approved.
+  unattendedWritesScopeHash     String?
   /// Monitoring-sourced trigger evaluations only consider bindings that opt in.
   runOnMonitoringIncidents      Boolean   @default(false)
   /// [{ inputKey, contextKey }]: runbook input <- automation.<contextKey>.

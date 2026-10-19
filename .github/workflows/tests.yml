@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Node & dependencies
         uses: ./.github/actions/setup-node
@@ -34,6 +36,14 @@ jobs:
       - name: Source ESLint check (visible, non-blocking until lint debt cleanup)
         run: npm run lint:check
         continue-on-error: true
+
+      - name: Changed-source ESLint gate (blocking)
+        run: |
+          base="$(git merge-base origin/main HEAD)"
+          git diff --name-only --diff-filter=d "$base" HEAD -- '*.ts' '*.tsx' '*.mjs' '*.cjs' > changed-source.txt
+          if [ -s changed-source.txt ]; then
+            xargs -a changed-source.txt npx eslint --max-warnings 0 --no-warn-ignored
+          fi
 
       - name: TypeScript typecheck
         run: npx tsc --noEmit

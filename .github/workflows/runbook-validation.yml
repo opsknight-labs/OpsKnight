@@ -162,6 +162,13 @@ jobs:
           tests/integration/runbook-policy-checks-database.test.ts
           tests/integration/runbook-worker-evidence-database.test.ts
           tests/integration/runbook-review-regressions-database.test.ts
+          tests/integration/runbook-resolve-race.test.ts
+          tests/integration/runbook-monitoring-trigger.test.ts
+          tests/integration/runbook-automation-safety.test.ts
+          tests/integration/runbook-automation-context.test.ts
+          tests/integration/runbook-recovery.test.ts
+          tests/integration/automation-response-context.test.ts
+          tests/integration/incident-response-timeline.test.ts
           tests/integration/encryption-migration.test.ts
 
   physical-targets:

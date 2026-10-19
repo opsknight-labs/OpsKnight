@@ -121,26 +121,23 @@ describe('bindingAuthorizesUnattendedWrites', () => {
     runbookVersionId: 'v1',
     unattendedWritesVersionId: 'v1',
     unattendedWritesAuthorizedAt: new Date(),
+    unattendedWritesScopeHash: 'scope-a',
   };
+  const allows = (binding: Partial<typeof authorized>, version = 'v1', scope = 'scope-a') =>
+    bindingAuthorizesUnattendedWrites({ ...authorized, ...binding }, version, scope);
 
   it('requires an AUTOMATIC binding authorized for the exact pinned version', () => {
-    expect(bindingAuthorizesUnattendedWrites(authorized, 'v1')).toBe(true);
-    expect(bindingAuthorizesUnattendedWrites(authorized, 'v2')).toBe(false);
-    expect(bindingAuthorizesUnattendedWrites({ ...authorized, mode: 'SUGGESTED' }, 'v1')).toBe(
-      false
-    );
-    expect(
-      bindingAuthorizesUnattendedWrites(
-        { ...authorized, versionStrategy: 'LATEST_PUBLISHED' },
-        'v1'
-      )
-    ).toBe(false);
-    expect(
-      bindingAuthorizesUnattendedWrites({ ...authorized, unattendedWritesAuthorizedAt: null }, 'v1')
-    ).toBe(false);
-    expect(bindingAuthorizesUnattendedWrites({ ...authorized, runbookVersionId: 'v2' }, 'v1')).toBe(
-      false
-    );
+    expect(allows({})).toBe(true);
+    expect(allows({}, 'v2')).toBe(false);
+    expect(allows({ mode: 'SUGGESTED' as never })).toBe(false);
+    expect(allows({ versionStrategy: 'LATEST_PUBLISHED' as never })).toBe(false);
+    expect(allows({ unattendedWritesAuthorizedAt: null as never })).toBe(false);
+    expect(allows({ runbookVersionId: 'v2' })).toBe(false);
+  });
+
+  it('fails closed when the rule no longer matches the approved scope', () => {
+    expect(allows({}, 'v1', 'scope-b')).toBe(false);
+    expect(allows({ unattendedWritesScopeHash: null as never })).toBe(false);
   });
 });
 

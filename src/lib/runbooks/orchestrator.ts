@@ -36,9 +36,11 @@ import { finalizeExecutionDeadline } from './deadline';
 import { enqueueVerificationEvidence, finalizeVerificationEvidence } from './verification-evidence';
 import { processVerifiedResolution, recordRecoveryVerification } from './recovery';
 import { workflowConditionSchema } from './conditions';
+import { fenceAutomaticRemediation } from './remediation-fence';
 import {
   applyRunbookInputDefaults,
   bindingAuthorizesUnattendedWrites,
+  computeRuleUnattendedScope,
   validateBindingInputValues,
 } from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
@@ -924,7 +926,12 @@ async function prepareRunbookExecution(
       automaticExecution &&
       hasWriteAction &&
       binding !== null &&
-      bindingAuthorizesUnattendedWrites(binding, version.id);
+      binding.unattendedWritesAuthorizedAt !== null &&
+      bindingAuthorizesUnattendedWrites(
+        binding,
+        version.id,
+        await computeRuleUnattendedScope(tx, binding)
+      );
     const pinnedContext = await readVerifiedResponseContext();
     const executionPlan = {
       schemaVersion: 1,
@@ -1629,6 +1636,24 @@ export async function advanceExecution(executionId: string): Promise<void> {
   }
   if (['WAITING_AGENT', 'WAITING_APPROVAL'].includes(current.status)) return;
   if (current.status === 'RUNNING' && current.type !== 'WAIT') return;
+  // Resolution cancels automatic work in the same transaction; this catches any other resolve path.
+  if (
+    current.riskClass !== 'READ_ONLY' &&
+    execution.triggeredByType === 'TRIGGER' &&
+    execution.incidentId
+  ) {
+    const incidentId = execution.incidentId;
+    const incident = await prisma.incident.findUnique({
+      where: { id: incidentId },
+      select: { status: true },
+    });
+    if (incident?.status === 'RESOLVED') {
+      await prisma.$transaction(tx =>
+        fenceAutomaticRemediation(tx, { incidentId }, 'Stopped: the incident was resolved.')
+      );
+      return;
+    }
+  }
   let owned = current;
   if (current.status === 'PENDING') {
     const claimed = await prisma.runbookExecutionStep.updateMany({

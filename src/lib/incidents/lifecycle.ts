@@ -12,6 +12,7 @@ import { AppError } from '@/lib/errors';
 import { enqueueLifecycleSideEffects } from '@/lib/event-outbox';
 import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
+import { fenceAutomaticRemediation } from '@/lib/runbooks/remediation-fence';
 
 export const INCIDENT_LIFECYCLE_COMMANDS = [
   'ACKNOWLEDGE',
@@ -27,14 +28,7 @@ export const INCIDENT_LIFECYCLE_COMMANDS = [
 export type IncidentLifecycleCommand = (typeof INCIDENT_LIFECYCLE_COMMANDS)[number];
 
 export type IncidentLifecycleSource =
-  | 'WEB'
-  | 'MOBILE'
-  | 'REST_API'
-  | 'BULK'
-  | 'CHATOPS'
-  | 'VOICE'
-  | 'EVENT'
-  | 'SYSTEM';
+  'WEB' | 'MOBILE' | 'REST_API' | 'BULK' | 'CHATOPS' | 'VOICE' | 'EVENT' | 'SYSTEM';
 
 export interface IncidentLifecycleActor {
   id?: string;
@@ -303,7 +297,9 @@ function atDelay(now: Date, delayMinutes: number): Date {
 }
 
 function resolutionEventType(input: IncidentLifecycleInput): IncidentEventType {
-  return input.source === 'EVENT' || input.source === 'SYSTEM' ? 'AUTO_RESOLVED' : 'MANUAL_RESOLVED';
+  return input.source === 'EVENT' || input.source === 'SYSTEM'
+    ? 'AUTO_RESOLVED'
+    : 'MANUAL_RESOLVED';
 }
 
 function resolutionKind(input: IncidentLifecycleInput): IncidentResolutionKind {
@@ -631,6 +627,13 @@ export async function applyIncidentLifecycleCommand(
       events: { create: lifecycleEvent },
     },
   });
+  if (targetStatus === 'RESOLVED') {
+    await fenceAutomaticRemediation(
+      tx,
+      { incidentId: input.incidentId },
+      'Stopped: the incident was resolved.'
+    );
+  }
   if (updated?.slaAckTargetMs != null && updated.slaResolveTargetMs != null) {
     const next = deriveNextSlaTransition(updated, now);
     await tx.incident.update({

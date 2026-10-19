@@ -31,6 +31,8 @@ import {
 } from './automation-binding';
 import { getServiceAutomationContextFields } from '@/lib/automation/context-fields';
 import { stepRequiresApproval } from './safety';
+import { computeUnattendedWriteScope } from './unattended-scope';
+import { fenceAutomaticRemediation } from './remediation-fence';
 import {
   requiresAgent,
   type RunbookDefinition,
@@ -444,12 +446,31 @@ export async function updateServiceBinding(
       input.contextTargetMappings ?? current.contextTargetMappings
     );
     const nextRunbookVersionId = strategy === 'PINNED' ? version.id : null;
-    // `current` was read under the rule lock, so its authorization is authoritative.
-    const revokeReason = unattendedWriteInvalidationReason(current, {
+    const nextTarget = {
       mode: input.mode ?? current.mode,
       versionStrategy: strategy,
       runbookVersionId: nextRunbookVersionId,
-    });
+    };
+    // `current` was read under the rule lock, so its authorization is authoritative.
+    const nextScope = computeUnattendedWriteScope(
+      {
+        ...nextTarget,
+        defaultAgentId: agentId ?? null,
+        defaultAgentPoolId: agentPoolId ?? null,
+        agentSelector: input.agentSelector ?? current.agentSelector,
+        inputValues: values,
+        contextInputMappings: automationConfig.inputMappings,
+        contextTargetMappings: automationConfig.targetMapping,
+        runOnMonitoringIncidents:
+          input.runOnMonitoringIncidents ?? current.runOnMonitoringIncidents,
+      },
+      await loadScopeTriggers(tx, bindingId)
+    );
+    const revokeReason =
+      unattendedWriteInvalidationReason(current, nextTarget) ??
+      (current.unattendedWritesAuthorizedAt && current.unattendedWritesScopeHash !== nextScope
+        ? 'SCOPE_CHANGED'
+        : null);
     const changed = await tx.serviceAutomationRule.updateMany({
       where: { id: bindingId, serviceId, detachedAt: null },
       data: {
@@ -467,6 +488,11 @@ export async function updateServiceBinding(
       where: { id: bindingId, serviceId, detachedAt: null },
     });
     if (revokeReason) {
+      await fenceAutomaticRemediation(
+        tx,
+        { bindingId, unattendedWritesOnly: true },
+        `Stopped: unattended-write authorization was revoked (${revokeReason}).`
+      );
       await logAudit(
         {
           action: 'runbook.binding.unattended_writes.revoked',
@@ -519,9 +545,23 @@ const CLEARED_UNATTENDED_WRITE_AUTHORIZATION = {
   unattendedWritesVersionId: null,
   unattendedWritesAuthorizedById: null,
   unattendedWritesAuthorizedAt: null,
+  unattendedWritesScopeHash: null,
 } as const;
 
-type UnattendedWriteInvalidationReason = 'MODE_CHANGED' | 'STRATEGY_CHANGED' | 'VERSION_CHANGED';
+type UnattendedWriteInvalidationReason =
+  'MODE_CHANGED' | 'STRATEGY_CHANGED' | 'VERSION_CHANGED' | 'SCOPE_CHANGED';
+
+async function loadScopeTriggers(tx: Prisma.TransactionClient, ruleId: string) {
+  return tx.runbookTrigger.findMany({
+    where: { bindingId: ruleId },
+    select: {
+      event: true,
+      conditionLogic: true,
+      enabled: true,
+      conditions: { select: { field: true, operator: true, value: true, sequence: true } },
+    },
+  });
+}
 
 function unattendedWriteInvalidationReason(
   authorization: {
@@ -542,7 +582,15 @@ function unattendedWriteInvalidationReason(
   return null;
 }
 
-/** True only when an AUTOMATIC rule carries an authorization for the exact pinned version. */
+/** Current approved-scope digest of a stored rule, including all of its enabled triggers. */
+export async function computeRuleUnattendedScope(
+  tx: Prisma.TransactionClient,
+  rule: Parameters<typeof computeUnattendedWriteScope>[0] & { id: string }
+) {
+  return computeUnattendedWriteScope(rule, await loadScopeTriggers(tx, rule.id));
+}
+
+/** True only when an AUTOMATIC rule is still exactly what an administrator authorized. */
 export function bindingAuthorizesUnattendedWrites(
   binding: Pick<
     ServiceAutomationRule,
@@ -551,15 +599,19 @@ export function bindingAuthorizesUnattendedWrites(
     | 'runbookVersionId'
     | 'unattendedWritesVersionId'
     | 'unattendedWritesAuthorizedAt'
+    | 'unattendedWritesScopeHash'
   >,
-  versionId: string
+  versionId: string,
+  currentScopeHash: string
 ): boolean {
   return (
     binding.mode === 'AUTOMATIC' &&
     binding.versionStrategy === 'PINNED' &&
     binding.unattendedWritesAuthorizedAt !== null &&
     binding.unattendedWritesVersionId === versionId &&
-    binding.runbookVersionId === versionId
+    binding.runbookVersionId === versionId &&
+    binding.unattendedWritesScopeHash !== null &&
+    binding.unattendedWritesScopeHash === currentScopeHash
   );
 }
 
@@ -668,6 +720,7 @@ export async function authorizeUnattendedWrites(
       );
     }
     const authorizedAt = new Date();
+    const scopeHash = computeUnattendedWriteScope(binding, await loadScopeTriggers(tx, bindingId));
     const changed = await tx.serviceAutomationRule.updateMany({
       where: {
         id: bindingId,
@@ -681,6 +734,7 @@ export async function authorizeUnattendedWrites(
         unattendedWritesVersionId: version.id,
         unattendedWritesAuthorizedById: actorId,
         unattendedWritesAuthorizedAt: authorizedAt,
+        unattendedWritesScopeHash: scopeHash,
         configurationRevision: { increment: 1 },
       },
     });
@@ -724,6 +778,12 @@ export async function revokeUnattendedWrites(
         configurationRevision: { increment: 1 },
       },
     });
+    // Emergency stop: revoking authority also stops executions already running under it.
+    await fenceAutomaticRemediation(
+      tx,
+      { bindingId, unattendedWritesOnly: true },
+      'Stopped: unattended-write authorization was revoked.'
+    );
     await logAudit(
       {
         action: 'runbook.binding.unattended_writes.revoked',
@@ -827,6 +887,38 @@ export async function replaceBindingTrigger(
           },
           include: { conditions: { orderBy: { sequence: 'asc' } } },
         });
+    if (binding.unattendedWritesAuthorizedAt) {
+      const stale =
+        binding.unattendedWritesScopeHash !==
+        computeUnattendedWriteScope(binding, await loadScopeTriggers(tx, bindingId));
+      if (stale) {
+        await tx.serviceAutomationRule.update({
+          where: { id: bindingId },
+          data: CLEARED_UNATTENDED_WRITE_AUTHORIZATION,
+        });
+        await fenceAutomaticRemediation(
+          tx,
+          { bindingId, unattendedWritesOnly: true },
+          'Stopped: unattended-write authorization was revoked (SCOPE_CHANGED).'
+        );
+        await logAudit(
+          {
+            action: 'runbook.binding.unattended_writes.revoked',
+            entityType: 'RUNBOOK',
+            entityId: binding.runbookId,
+            actorId,
+            details: {
+              serviceId,
+              bindingId,
+              reason: 'SCOPE_CHANGED',
+              previousVersionId: binding.unattendedWritesVersionId,
+              automatic: true,
+            },
+          },
+          tx
+        );
+      }
+    }
     await logAudit(
       {
         action: 'runbook.trigger.configured',

@@ -8,9 +8,11 @@ import {
 import {
   authorizeUnattendedWrites,
   createServiceBinding,
+  replaceBindingTrigger,
   revokeUnattendedWrites,
   updateServiceBinding,
 } from '@/lib/runbooks/bindings';
+import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import {
   advanceExecution,
   previewRunbookExecution,
@@ -191,6 +193,17 @@ async function settleVerification(executionId: string) {
     await processRunbookJob(job.payload);
     await testPrisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'COMPLETED' } });
   }
+}
+
+async function resolveIncidentViaLifecycle(incidentId: string) {
+  await testPrisma.$transaction(
+    tx => applyIncidentLifecycleCommand(tx, { incidentId, command: 'RESOLVE', source: 'SYSTEM' }),
+    { isolationLevel: 'Serializable' }
+  );
+}
+
+async function attemptCount(executionId: string) {
+  return testPrisma.runbookStepAttempt.count({ where: { executionStep: { executionId } } });
 }
 
 type Evidence = { serviceState?: string } | null;
@@ -392,6 +405,162 @@ describeIfRealDB(
             where: { executionId: execution.id, stepKey: 'start' },
           })
         ).toMatchObject({ requiresApproval: true });
+      });
+
+      describe('authorization scope', () => {
+        it('keeps authorization across edits outside the approved scope', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          const renamed = await updateServiceBinding(
+            fixture.service.id,
+            fixture.binding.id,
+            { name: 'Renamed rule' },
+            fixture.admin.id
+          );
+          expect(renamed.unattendedWritesAuthorizedAt).not.toBeNull();
+        });
+
+        it('revokes authorization when the trigger conditions change', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          await replaceBindingTrigger(
+            fixture.service.id,
+            fixture.binding.id,
+            {
+              event: 'INCIDENT_CREATED',
+              conditionLogic: 'AND',
+              enabled: true,
+              conditions: [
+                { field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH', sequence: 0 },
+              ],
+            },
+            fixture.admin.id
+          );
+          expect(
+            await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+              where: { id: fixture.binding.id },
+            })
+          ).toMatchObject({ unattendedWritesAuthorizedAt: null, unattendedWritesScopeHash: null });
+        });
+
+        it('revokes authorization when the approved target changes', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          const updated = await updateServiceBinding(
+            fixture.service.id,
+            fixture.binding.id,
+            { agentSelector: { zone: 'eu' } },
+            fixture.admin.id
+          );
+          expect(updated).toMatchObject({
+            unattendedWritesAuthorizedAt: null,
+            unattendedWritesScopeHash: null,
+          });
+        });
+
+        it('does not run unattended when the stored rule no longer matches its approval', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          fixture.binding = await testPrisma.serviceAutomationRule.update({
+            where: { id: fixture.binding.id },
+            data: { runOnMonitoringIncidents: true },
+          });
+          const incident = await createEscalatingIncident(fixture.service.id);
+          const execution = await startAutomatic(fixture, incident.id);
+          expect(execution.unattendedWritesAuthorized).toBe(false);
+        });
+      });
+
+      describe('emergency stop and incident fencing', () => {
+        it('stops executions already running under an authorization when it is revoked', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          const incident = await createEscalatingIncident(fixture.service.id);
+          const execution = await startAutomatic(fixture, incident.id);
+          expect(execution.unattendedWritesAuthorized).toBe(true);
+
+          await revokeUnattendedWrites(fixture.service.id, fixture.binding.id, fixture.admin.id);
+          expect(
+            await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
+          ).toMatchObject({ status: 'CANCEL_REQUESTED' });
+
+          await advanceExecution(execution.id);
+          expect(
+            await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
+          ).toMatchObject({ status: 'CANCELLED' });
+          expect(await attemptCount(execution.id)).toBe(0);
+        });
+
+        it('leaves responder-started executions alone when authorization is revoked', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          const incident = await createEscalatingIncident(fixture.service.id);
+          const execution = await startAutomatic(fixture, incident.id);
+          await testPrisma.runbookExecution.update({
+            where: { id: execution.id },
+            data: { triggeredByType: 'USER' },
+          });
+          await revokeUnattendedWrites(fixture.service.id, fixture.binding.id, fixture.admin.id);
+          expect(
+            (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } }))
+              .status
+          ).not.toBe('CANCEL_REQUESTED');
+        });
+
+        it('cancels automatic remediation waiting for approval when the incident resolves', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY);
+          const incident = await createEscalatingIncident(fixture.service.id);
+          const execution = await startAutomatic(fixture, incident.id);
+          await advanceExecution(execution.id);
+
+          await resolveIncidentViaLifecycle(incident.id);
+          expect(
+            await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
+          ).toMatchObject({ status: 'CANCEL_REQUESTED' });
+
+          await advanceExecution(execution.id);
+          expect(
+            await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
+          ).toMatchObject({ status: 'CANCELLED' });
+          expect(await attemptCount(execution.id)).toBe(0);
+        });
+
+        it('does not dispatch a pending automatic write after a resolve outside the lifecycle path', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          const incident = await createEscalatingIncident(fixture.service.id);
+          const execution = await startAutomatic(fixture, incident.id);
+          await testPrisma.incident.update({
+            where: { id: incident.id },
+            data: { status: 'RESOLVED' },
+          });
+
+          await advanceExecution(execution.id);
+          expect(await attemptCount(execution.id)).toBe(0);
+          expect(
+            (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } }))
+              .status
+          ).toBe('CANCEL_REQUESTED');
+        });
+
+        it('lets a write already in flight finish with its outcome intact after the incident resolves', async () => {
+          const fixture = await createFixture(VERIFIED_RECOVERY, { authorize: true });
+          const incident = await createEscalatingIncident(fixture.service.id);
+          const execution = await startAutomatic(fixture, incident.id);
+          await advanceExecution(execution.id);
+          const claim = await claimAgentAttempt(fixture.agent.id);
+          expect(claim).not.toBeNull();
+          await fenceAgentAttempt({
+            attemptId: claim!.attemptId,
+            agentId: fixture.agent.id,
+            leaseToken: claim!.leaseToken,
+          });
+
+          await resolveIncidentViaLifecycle(incident.id);
+          await advanceExecution(execution.id);
+          const stillRunning = await testPrisma.runbookExecution.findUniqueOrThrow({
+            where: { id: execution.id },
+          });
+          expect(stillRunning.status).toBe('CANCEL_REQUESTED');
+          expect(
+            await testPrisma.runbookStepAttempt.count({
+              where: { executionStep: { executionId: execution.id }, status: 'RUNNING' },
+            })
+          ).toBe(1);
+        });
       });
 
       it('rejects authorization when a write action has no verification', async () => {

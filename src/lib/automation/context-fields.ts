@@ -2,7 +2,6 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { builtinFields, snapshotSchema, type Field } from './contract';
-import { RESPONSE_CONTEXT_MAX_FIELDS } from './response-context';
 import { getAutomationSettings } from './settings';
 
 export type ServiceAutomationContextField = {
@@ -65,6 +64,6 @@ export async function getServiceAutomationContextFields(
   return {
     mode: settings.automationEnabled ? (config?.mode ?? 'DISABLED') : 'DISABLED',
     versionNumber: config?.activeVersion?.versionNumber ?? null,
-    fields: fields.slice(0, RESPONSE_CONTEXT_MAX_FIELDS),
+    fields,
   };
 }

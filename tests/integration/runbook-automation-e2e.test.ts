@@ -272,6 +272,11 @@ async function createFixture(options: FixtureOptions = {}) {
       { expectedVersionId: version.id },
       admin.id
     );
+  // Saving an Automatic rule or its trigger pauses it; activate once configured and authorized.
+  binding = await db.serviceAutomationRule.update({
+    where: { id: binding.id },
+    data: { enabled: true },
+  });
   return {
     admin,
     responder,
@@ -879,7 +884,43 @@ describeIfRealDB(
         ).toMatchObject({ recoveryOutcome: 'RESOLVED' });
       });
 
-      it('reports ALREADY_CLOSED when a responder resolves before verification finishes', async () => {
+      it('reports ALREADY_CLOSED when a responder resolves before the automatic resolution is applied', async () => {
+        const fixture = await createFixture();
+        const incidentId = await ingestIncident(fixture);
+        await drainRunbookJobs(incidentId);
+        const execution = await onlyExecution(incidentId);
+        await agentReports(incidentId, fixture.euAgent.id, { pre: DEGRADED, post: HEALTHY });
+        await agentReports(incidentId, fixture.euAgent.id, { pre: HEALTHY, post: HEALTHY });
+        expect(
+          (await db.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })).status
+        ).toBe('SUCCEEDED');
+        await db.$transaction(tx =>
+          applyIncidentLifecycleCommand(tx, {
+            incidentId,
+            command: 'RESOLVE',
+            source: 'WEB',
+            actor: { id: fixture.responder.id, name: fixture.responder.name ?? undefined },
+            resolutionNote: 'Rolled back the bad deploy by hand',
+          })
+        );
+        const manual = await db.incident.findUniqueOrThrow({ where: { id: incidentId } });
+        expect(manual.status).toBe('RESOLVED');
+
+        await drainRunbookJobs(incidentId, { includeResolution: true });
+        for (const job of await verifiedResolutionJobs(execution.id))
+          await processRunbookJob(job.payload);
+        expect(
+          await db.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
+        ).toMatchObject({ status: 'SUCCEEDED', recoveryOutcome: 'ALREADY_CLOSED' });
+        const final = await db.incident.findUniqueOrThrow({ where: { id: incidentId } });
+        expect(final).toMatchObject({ status: 'RESOLVED', resolutionKind: manual.resolutionKind });
+        expect(final.resolvedAt).toEqual(manual.resolvedAt);
+        expect(await db.incidentEvent.count({ where: { incidentId, type: 'AUTO_RESOLVED' } })).toBe(
+          0
+        );
+      });
+
+      it('stops remaining automatic remediation when a responder resolves mid-run', async () => {
         const fixture = await createFixture();
         const incidentId = await ingestIncident(fixture);
         await drainRunbookJobs(incidentId);
@@ -894,19 +935,12 @@ describeIfRealDB(
             resolutionNote: 'Rolled back the bad deploy by hand',
           })
         );
-        const manual = await db.incident.findUniqueOrThrow({ where: { id: incidentId } });
-        expect(manual.status).toBe('RESOLVED');
 
-        await agentReports(incidentId, fixture.euAgent.id, { pre: HEALTHY, post: HEALTHY });
         await drainRunbookJobs(incidentId, { includeResolution: true });
-        for (const job of await verifiedResolutionJobs(execution.id))
-          await processRunbookJob(job.payload);
         expect(
           await db.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
-        ).toMatchObject({ status: 'SUCCEEDED', recoveryOutcome: 'ALREADY_CLOSED' });
-        const final = await db.incident.findUniqueOrThrow({ where: { id: incidentId } });
-        expect(final).toMatchObject({ status: 'RESOLVED', resolutionKind: manual.resolutionKind });
-        expect(final.resolvedAt).toEqual(manual.resolvedAt);
+        ).toMatchObject({ status: 'CANCELLED' });
+        expect(await claimAgentAttempt(fixture.euAgent.id)).toBeNull();
         expect(await db.incidentEvent.count({ where: { incidentId, type: 'AUTO_RESOLVED' } })).toBe(
           0
         );
