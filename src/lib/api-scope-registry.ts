@@ -59,6 +59,56 @@ function def(
 const S = API_SCOPES;
 
 export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
+  [S.RUNBOOK_AGENTS_WRITE]: def(
+    S.RUNBOOK_AGENTS_WRITE,
+    'Agent metadata',
+    'Runbooks',
+    'Edit administrator-owned Agent names and scheduling labels.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_AGENT_POOLS_WRITE]: def(
+    S.RUNBOOK_AGENT_POOLS_WRITE,
+    'Agent pools',
+    'Runbooks',
+    'Manage Agent pools, selectors and explicit membership with revision fences.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_SECRETS_READ]: def(
+    S.RUNBOOK_SECRETS_READ,
+    'Secret metadata',
+    'Runbooks',
+    'Read references, grants and bounded usage metadata; never plaintext values.',
+    { issuableBy: ADMINS, write: false }
+  ),
+  [S.RUNBOOK_SECRETS_WRITE]: def(
+    S.RUNBOOK_SECRETS_WRITE,
+    'Secret rotation',
+    'Runbooks',
+    'Create and rotate encrypted Runbook secret values; never retrieve plaintext.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_SECRETS_GRANT]: def(
+    S.RUNBOOK_SECRETS_GRANT,
+    'Secret grants',
+    'Runbooks',
+    'Grant or revoke Agent/pool secret access and authorize transitive pool-access expansion.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_SETTINGS_READ]: def(
+    S.RUNBOOK_SETTINGS_READ,
+    'Runbook settings read',
+    'Runbooks',
+    'Read safe Runbook retention and incident execution budgets.',
+    { issuableBy: ADMINS, write: false }
+  ),
+  [S.RUNBOOK_SETTINGS_WRITE]: def(
+    S.RUNBOOK_SETTINGS_WRITE,
+    'Runbook settings change',
+    'Runbooks',
+    'Change safe Runbook settings with revision checks and explicit retention confirmation.',
+    { issuableBy: ADMINS, write: true }
+  ),
+
   [S.RUNBOOK_AGENTS_READ]: def(
     S.RUNBOOK_AGENTS_READ,
     'Agent fleet read',

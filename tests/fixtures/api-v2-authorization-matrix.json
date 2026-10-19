@@ -317,6 +317,108 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /runbooks/agent-enrollments/{id} [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/agent-enrollments [runbook-agents:enroll]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agent-pools/{id}/deletion-check [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /runbooks/agent-pools/{id}/members/{agentId} [runbook-agent-pools:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /runbooks/agent-pools/{id}/members/{agentId} [runbook-agent-pools:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agent-pools/{id}/members [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agent-pools/{id} [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /runbooks/agent-pools/{id} [runbook-agent-pools:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /runbooks/agent-pools/{id} [runbook-agent-pools:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agent-pools [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/agent-pools [runbook-agent-pools:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agents/{id}/configuration [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /runbooks/agents/{id}/configuration [runbook-agents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agents/{id}/policy-status [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/agents/{id}/revoke [runbook-agents:revoke]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agents/{id} [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/agents [runbook-agents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "POST /runbooks/executions/{id}/cancel [runbooks:execute]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -378,6 +480,48 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "POST /runbooks [runbooks:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /runbooks/secrets/{id}/grants/{grantId} [runbook-secrets:grant]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/secrets/{id}/grants [runbook-secrets:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/secrets/{id}/grants [runbook-secrets:grant]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/secrets/{id}/rotate [runbook-secrets:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/secrets/{id} [runbook-secrets:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/secrets [runbook-secrets:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/secrets [runbook-secrets:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",
@@ -750,6 +894,18 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "PATCH /settings/automation [automation-settings:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /settings/runbooks [runbook-settings:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PATCH /settings/runbooks [runbook-settings:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",

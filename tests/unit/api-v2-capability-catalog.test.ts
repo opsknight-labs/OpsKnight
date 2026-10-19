@@ -22,18 +22,26 @@ describe('truthful capability inventory', () => {
     }
   });
   it('retains explicit security and product decisions for unfinished plan areas', () => {
-    for (const id of [
-      'identity-lifecycle',
-      'runbook-agents',
-      'runbook-secrets',
-      'report-exports',
-      'operational-settings',
-    ]) {
+    for (const id of ['identity-lifecycle', 'report-exports', 'operational-settings']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
         'not-supported'
       );
     }
-    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'slo-management')).toMatchObject({status:'partial',operationIds:expect.arrayContaining(['createServiceObjective','evaluateServiceObjective','getServiceObjectiveHistory'])});
+    for (const id of ['runbook-agents', 'runbook-secrets']) {
+      expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
+        'partial'
+      );
+    }
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'slo-management')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining([
+        'createServiceObjective',
+        'evaluateServiceObjective',
+        'getServiceObjectiveHistory',
+      ]),
+    });
     expect(
       API_CAPABILITY_CATALOG.find(capability => capability.id === 'service-automation')
     ).toMatchObject({

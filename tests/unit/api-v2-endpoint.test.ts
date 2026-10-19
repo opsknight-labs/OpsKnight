@@ -69,6 +69,8 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
 });
 
 import { defineV2Route } from '@/lib/api-v2/endpoint';
+import { fingerprintV2SensitiveValue } from '@/lib/api-v2/auth';
+import { executeIdempotentOperation } from '@/lib/idempotency';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 
 describe('defineV2Route Endpoint Factory', () => {
@@ -270,5 +272,58 @@ describe('defineV2Route Endpoint Factory', () => {
         body: {},
       })
     );
+  });
+});
+
+describe('sensitive idempotency input projections', () => {
+  it('keys stable fingerprints to the authenticated credential', () => {
+    const request = (token: string) =>
+      new NextRequest('http://localhost/api/v2/runbooks/secrets', {
+        headers: { authorization: `Bearer ${token}` },
+      });
+    const digest = fingerprintV2SensitiveValue(request('credential-one'), 'low-entropy-value');
+    expect(digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(fingerprintV2SensitiveValue(request('credential-one'), 'low-entropy-value')).toBe(
+      digest
+    );
+    expect(fingerprintV2SensitiveValue(request('credential-two'), 'low-entropy-value')).not.toBe(
+      digest
+    );
+    expect(fingerprintV2SensitiveValue(request('credential-one'), 'different-value')).not.toBe(
+      digest
+    );
+    expect(() => fingerprintV2SensitiveValue(request(''), 'value')).toThrow();
+  });
+  it('passes only the projected input into the journal while preserving the validated handler body', async () => {
+    const secret = 'private-submitted-material';
+    const handler = vi.fn().mockResolvedValue({ data: { id: 'metadata-only' } });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
+      bodySchema: z.object({ value: z.string() }).strict(),
+      idempotent: true,
+      idempotencyRequired: true,
+      idempotencyPayload: ({ req, body }) => ({
+        valueFingerprint: fingerprintV2SensitiveValue(req, body.value),
+      }),
+      handler,
+    });
+    const response = await route(
+      new NextRequest('http://localhost/api/v2/runbooks/secrets', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'projection-test',
+        },
+        body: JSON.stringify({ value: secret }),
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ body: { value: secret } }));
+    const journalCall = vi.mocked(executeIdempotentOperation).mock.calls.at(-1)!;
+    expect(journalCall[1].payload).toEqual({
+      valueFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(JSON.stringify(journalCall[1].payload)).not.toContain(secret);
   });
 });

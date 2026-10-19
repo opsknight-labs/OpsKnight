@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashLegacyTokenCandidates, hashTokenV2, isLegacy1xTokenShape } from '@/lib/api-keys';
@@ -53,6 +54,18 @@ function extractToken(req: NextRequest): string | null {
     return directHeader.trim();
   }
   return null;
+}
+
+/** A journal must not become an offline oracle for low-entropy submitted secrets.
+ * Key the input digest with the already-authenticated bearer credential, which is
+ * never stored in the database. Stable across API hashing-key rotation. */
+export function fingerprintV2SensitiveValue(req: NextRequest, value: string): string {
+  const token = extractToken(req);
+  if (!token) throw new AppError({ code: 'AUTHENTICATION_REQUIRED' });
+  return createHmac('sha256', token)
+    .update('opsknight:v2:sensitive-input:v1\0')
+    .update(value)
+    .digest('hex');
 }
 
 // Every token OpsKnight issues is `ok_` followed by URL-safe base64. Anything

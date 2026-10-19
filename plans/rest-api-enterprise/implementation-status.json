@@ -84,11 +84,13 @@
         "Serializable binding enablement and deterministic archive snapshot race coverage",
         "Eight metadata/lifecycle operations with canonical audit and revision fencing",
         "Twelve service-rule, policy-check, discovery and readiness operations with trigger invariants",
-        "Seven execution intervention operations: scoped step/evidence/event reads, exact-plan approval/rejection and preview-authorized rerun, with canonical transactional audit and replay"
+        "Seven execution intervention operations: scoped step/evidence/event reads, exact-plan approval/rejection and preview-authorized rerun, with canonical transactional audit and replay",
+        "Six explicit-scope fleet, policy, one-time enrollment and terminal revocation operations",
+        "Twenty pool/configuration, write-only secret/grant and Runbook settings operations with configuration revisions, durable replay and canonical audit"
       ],
       "remaining": [
-        "Agents, pools, enrollment, secret grants and combined intervention/Agent certification",
-        "Docker and Kubernetes target-isolation/recovery certification"
+        "Physical Agent execution, target-isolation, recovery and combined deployed certification",
+        "Secret usage reporting and remaining signing identity administration policy review"
       ]
     },
     {
@@ -189,7 +191,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 164,
+    "registeredOperationCount": 184,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -245,7 +247,7 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 164,
+  "registeredOperationCount": 184,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,

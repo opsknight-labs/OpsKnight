@@ -1,4 +1,195 @@
 {
+  "listRunbookAgentPools": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookAgentPool": {
+    "method": "POST",
+    "path": "/runbooks/agent-pools",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookAgentPool": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookAgentPool": {
+    "method": "PATCH",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteRunbookAgentPool": {
+    "method": "DELETE",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "checkRunbookAgentPoolDeletion": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}/deletion-check",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookAgentPoolMembers": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}/members",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setRunbookAgentPoolMember": {
+    "method": "PUT",
+    "path": "/runbooks/agent-pools/{id}/members/{agentId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "removeRunbookAgentPoolMember": {
+    "method": "DELETE",
+    "path": "/runbooks/agent-pools/{id}/members/{agentId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getRunbookAgentConfiguration": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}/configuration",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookAgentConfiguration": {
+    "method": "PATCH",
+    "path": "/runbooks/agents/{id}/configuration",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecrets": {
+    "method": "GET",
+    "path": "/runbooks/secrets",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookSecret": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "rotateRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets/{id}/rotate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecretGrants": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}/grants",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "grantRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets/{id}/grants",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "revokeRunbookSecretGrant": {
+    "method": "DELETE",
+    "path": "/runbooks/secrets/{id}/grants/{grantId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getRunbookSettings": {
+    "method": "GET",
+    "path": "/settings/runbooks",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookSettings": {
+    "method": "PATCH",
+    "path": "/settings/runbooks",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listRunbookAgents": {
     "method": "GET",
     "path": "/runbooks/agents",

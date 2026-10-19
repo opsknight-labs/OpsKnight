@@ -51,6 +51,84 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/runbooks/agent-pools': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'PATCH /api/v2/runbooks/agent-pools/[id]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'DELETE /api/v2/runbooks/agent-pools/[id]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'PUT /api/v2/runbooks/agent-pools/[id]/members/[agentId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'DELETE /api/v2/runbooks/agent-pools/[id]/members/[agentId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'PATCH /api/v2/runbooks/agents/[id]/configuration': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'POST /api/v2/runbooks/secrets': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'POST /api/v2/runbooks/secrets/[id]/rotate': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'POST /api/v2/runbooks/secrets/[id]/grants': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'DELETE /api/v2/runbooks/secrets/[id]/grants/[grantId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+  'PATCH /api/v2/settings/runbooks': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical audit and mutation commit with durable credential-scoped replay. Concrete configuration revision fences updates; secret input fingerprints are keyed by the authenticated credential and responses contain metadata only.',
+  },
+
   'POST /api/v2/runbooks/agent-enrollments': {
     idempotency: 'required',
     concurrency: 'none',

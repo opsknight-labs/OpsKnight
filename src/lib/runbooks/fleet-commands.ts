@@ -1,6 +1,6 @@
 import 'server-only';
 import { AppError } from '@/lib/errors';
-import { synchronizeLabelMemberships } from './pool-labels';
+import { synchronizeLabelMemberships, lockFleetConfiguration } from './pool-labels';
 import {
   runRunbookCommand,
   logRunbookCommandAudit,
@@ -16,6 +16,7 @@ export async function revokeRunbookAgent(
 ) {
   const actorId = typeof actor === 'string' ? actor : actor.id;
   return runRunbookCommand(client, async tx => {
+    await lockFleetConfiguration(tx);
     const existing = await tx.runbookAgent.findUnique({ where: { id } });
     if (!existing)
       throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Agent not found.' });

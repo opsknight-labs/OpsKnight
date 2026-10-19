@@ -56,8 +56,12 @@ build path. The manual build has its own concurrency group.
 
 Download `arm64-certification-<full SHA>` from that exact workflow run. Verify
 `SHA256SUMS` before `docker load -i application.tar`, then verify the loaded
-image ID, ARM64 architecture and OCI revision against `image-metadata.json` and
-the requested commit. Load that image into Kind only after those checks pass.
+config digest, ARM64 architecture and OCI revision against `image-metadata.json`
+and the requested commit. Docker's containerd image store can report the OCI
+manifest digest as the local image ID while CI reports the config digest. In
+that case, verify the archive manifest blob hash, its referenced config blob
+hash, and the loaded image configuration and root filesystem layer digests;
+do not compare those two different digest types as if they were equivalent. Load that image into Kind only after those checks pass.
 Update the namespace source label, Helm image tag and certification source
 revision together. Record the workflow run URL and archive checksum alongside
 the deployment evidence. A built image is not a passing runtime certification.
