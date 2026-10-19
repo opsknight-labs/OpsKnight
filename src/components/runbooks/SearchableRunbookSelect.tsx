@@ -83,7 +83,7 @@ export function SearchableRunbookSelect({
         if (!response.ok) throw new Error('Search failed');
         const json = await response.json();
         const opts = json.options ?? json.data?.options ?? [];
-        setOptions(opts);
+        if (!controller.signal.aborted) setOptions(opts);
       } catch {
         if (!controller.signal.aborted) setError(true);
       } finally {
@@ -202,7 +202,11 @@ export function SearchableRunbookSelect({
                       : 'Search…'
                 }
                 value={search}
-                onValueChange={setSearch}
+                onValueChange={nextSearch => {
+                  if (nextSearch === search) return;
+                  setLoading(true);
+                  setSearch(nextSearch);
+                }}
                 className="h-8 text-xs rounded-lg"
               />
               {loading && (
@@ -241,6 +245,7 @@ export function SearchableRunbookSelect({
                     <CommandItem
                       key={option.value}
                       value={option.value}
+                      disabled={loading}
                       onSelect={() => handleSelect(option.value)}
                       className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors duration-150 hover:bg-muted/70 aria-selected:bg-primary/10 aria-selected:text-primary flex items-center gap-2"
                     >
