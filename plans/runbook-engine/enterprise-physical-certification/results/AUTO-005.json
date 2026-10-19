@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-005",
   "test_run_id": "run-1792322890513",
-  "candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
+  "candidate_commit": "6983d61e9a514b062615b7fb7c4bc8ebbb355316",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -43,7 +43,5 @@
     "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-005_cmvdpp7jv2ue94qmq9sxnqlrc.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/systemd_podman_execution_succeeded.png"
   ],
-  "notes": "Precheck failure diagnostic: Execution cmvdpp7jv2ue94qmq9sxnqlrc stopped at step 2 because inactive service returned LSB exit code 3 (COMMAND_FAILED) prior to the executor active/inactive assertion patch. Executor now patched; historical run record truthfully classified as FAILED_PRECHECK_DIAGNOSTIC.",
-  "release_candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
-  "verified_branch": "feat/runbook-physical-enterprise-certification"
+  "notes": "Precheck failure diagnostic: Execution cmvdpp7jv2ue94qmq9sxnqlrc stopped at step 2 because inactive service returned LSB exit code 3 (COMMAND_FAILED) prior to the executor active/inactive assertion patch. Executor now patched; historical run record truthfully classified as FAILED_PRECHECK_DIAGNOSTIC."
 }

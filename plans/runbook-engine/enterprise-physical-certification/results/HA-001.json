@@ -1,7 +1,7 @@
 {
   "test_id": "HA-001",
   "test_run_id": "run-1792323503214",
-  "candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
+  "candidate_commit": "6983d61e9a514b062615b7fb7c4bc8ebbb355316",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -45,7 +45,5 @@
     "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_HA-001_cmvdr7xco2ydw4qmqxxp0jizv.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/ha_failover_execution_receipt.png"
   ],
-  "notes": "Shared-target pool queue takeover verified: Primary agent 9c30a68ed4c9 stopped before dispatch -> Surviving secondary agent 938c51ae901c claimed queued execution cmvdr7xco2ydw4qmqxxp0jizv from pool backlog -> start_docker_container and verify_docker_health executed successfully -> Container healthy on port 8095. (In-flight mid-mutation chaos failover staged).",
-  "release_candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
-  "verified_branch": "feat/runbook-physical-enterprise-certification"
+  "notes": "Shared-target pool queue takeover verified: Primary agent 9c30a68ed4c9 stopped before dispatch -> Surviving secondary agent 938c51ae901c claimed queued execution cmvdr7xco2ydw4qmqxxp0jizv from pool backlog -> start_docker_container and verify_docker_health executed successfully -> Container healthy on port 8095. (In-flight mid-mutation chaos failover staged)."
 }

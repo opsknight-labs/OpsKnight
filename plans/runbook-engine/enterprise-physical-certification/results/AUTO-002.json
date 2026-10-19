@@ -1,7 +1,7 @@
 {
   "test_id": "AUTO-002",
   "test_run_id": "run-1792323503215",
-  "candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
+  "candidate_commit": "6983d61e9a514b062615b7fb7c4bc8ebbb355316",
   "server_image_digest": "sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62",
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
@@ -41,7 +41,5 @@
     "plans/runbook-engine/enterprise-physical-certification/screenshots/verified_exec_AUTO-002_cmvdsgt9s31if4qmqbx6mcms6.png",
     "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_certified_execution_receipt_final.png"
   ],
-  "notes": "Operator-dispatched physical execution on staging: Direct Docker host container recovery executed and verified healthy on port 8098. (Operational journey verified; unattended monitoring-incident alert dispatch staged).",
-  "release_candidate_commit": "9cb255994017fbb8e3d81b835a0df869a84a6b29",
-  "verified_branch": "feat/runbook-physical-enterprise-certification"
+  "notes": "Operator-dispatched physical execution on staging: Direct Docker host container recovery executed and verified healthy on port 8098. (Operational journey verified; unattended monitoring-incident alert dispatch staged)."
 }
