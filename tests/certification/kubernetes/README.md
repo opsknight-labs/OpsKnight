@@ -43,3 +43,21 @@ never replace them with passing labels. A one-node Kind run measures replica/pod
 recovery and local capacity; physical node/database HA and mixed-version upgrades
 require their own explicit evidence. This runner does not certify missing APIs or
 the real Agent approval/rerun path by itself.
+
+## Native CI image fallback
+
+If the shared local Docker VM cannot complete a production build, dispatch the
+existing Docker workflow on the pushed feature branch with
+`gh workflow run docker-image.yml --ref <branch> -f certification_archive=true`.
+This selects a separate native ARM64 runner, read-only repository permissions,
+and the official production Dockerfile. It publishes no registry tags and keeps
+the image archive for one day. Standard PR/release checks retain their existing
+build path. The manual build has its own concurrency group.
+
+Download `arm64-certification-<full SHA>` from that exact workflow run. Verify
+`SHA256SUMS` before `docker load -i application.tar`, then verify the loaded
+image ID, ARM64 architecture and OCI revision against `image-metadata.json` and
+the requested commit. Load that image into Kind only after those checks pass.
+Update the namespace source label, Helm image tag and certification source
+revision together. Record the workflow run URL and archive checksum alongside
+the deployment evidence. A built image is not a passing runtime certification.
