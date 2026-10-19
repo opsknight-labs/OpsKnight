@@ -63,7 +63,13 @@ const report = {
   scope:
     'Whole enrichment evaluation; isolated no-op deadline guard, not HTTP capacity certification',
   node: process.version,
+  platform: process.platform,
+  architecture: process.arch,
+  sourceRevision: process.env.AUTOMATION_BENCHMARK_SOURCE_REVISION ?? null,
   results,
 };
-writeFileSync('docs/automation/enrichment-benchmark-results.json', JSON.stringify(report, null, 2));
+writeFileSync(
+  process.env.AUTOMATION_BENCHMARK_OUTPUT ?? 'docs/automation/enrichment-benchmark-results.json',
+  JSON.stringify(report, null, 2)
+);
 console.log(JSON.stringify(report));

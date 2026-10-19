@@ -57,7 +57,7 @@ type CertificationResult = {
 };
 
 const exec = promisify(execFile);
-const db = new PrismaClient();
+const db = new PrismaClient({ transactionOptions: { maxWait: 30_000, timeout: 30_000 } });
 const composeArgs = [
   'compose',
   '-p',
