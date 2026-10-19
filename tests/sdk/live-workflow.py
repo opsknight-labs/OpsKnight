@@ -23,9 +23,14 @@ published = client.call("publishRunbookDraft", {
     "headers": {"If-Match": '"0"', "Idempotency-Key": "publish-" + suffix},
 })
 assert published["data"]["state"] == "PUBLISHED"
-rows = list(client.paginate("listRunbooks", {"query": {"limit": 1}}, max_pages=100))
-assert created["id"] in [row["id"] for row in rows]
-assert configuration["typescriptRunbookId"] in [row["id"] for row in rows]
+# Exercise cursor traversal without scanning historical fixtures on every run.
+expected_ids = {created["id"], configuration["typescriptRunbookId"]}
+seen_ids = set()
+for row in client.paginate("listRunbooks", {"query": {"limit": 1}}, max_pages=20):
+    seen_ids.add(row["id"])
+    if expected_ids <= seen_ids:
+        break
+assert expected_ids <= seen_ids
 print("Python live create/validate/publish/cursor workflows passed.")
 
 lifecycle = client.call("createRunbook", {"body": {"name": "Python lifecycle", "slug": "python-lifecycle-" + suffix}, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
@@ -163,16 +168,41 @@ for operation in ["listServiceObjectiveVersions", "listServiceObjectiveSnapshots
     client.call(operation, {"params": objective_params})
 evaluation = client.call("evaluateServiceObjective", {"params": objective_params,
     "body": {"expectedVersionId": changed["versionId"]}, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
+evaluation_deadline = time.monotonic() + 50
 for attempt in range(100):
+    if time.monotonic() >= evaluation_deadline:
+        raise AssertionError("Python objective evaluation exceeded its 50-second completion budget")
     result = client.call("getServiceObjectiveEvaluation", {"params": {**objective_params, "evaluationId": evaluation["id"]}})["data"]
     if result["status"] == "COMPLETED":
         assert result["result"]["outcome"] == "EVALUATED"
         assert result["result"]["evaluation"]["definitionVersion"] == 2
         break
     assert result["status"] != "FAILED"
-    time.sleep(0.5)
+    time.sleep(min(0.5 * 1.3 ** attempt, 2))
 else:
     raise AssertionError("Python objective evaluation did not complete")
 client.call("archiveServiceObjective", {"params": objective_params, "body": {},
     "headers": {"If-Match": '"%s"' % changed["revision"], "Idempotency-Key": uuid.uuid4().hex}})
 print("Python objective lifecycle and real general-worker evaluation passed.")
+
+for source_id, operation in [(configuration["approvalExecutionId"], "approveRunbookExecutionStep"),
+                              (configuration["rejectionExecutionId"], "rejectRunbookExecutionStep")]:
+    reviewed = client.call("listRunbookExecutionSteps", {"params": {"id": source_id}})["data"][0]
+    assert "config" not in reviewed and reviewed["pendingApproval"]["planDigest"]
+    body = {"planDigest": reviewed["pendingApproval"]["planDigest"]}
+    if operation == "rejectRunbookExecutionStep":
+        body["reason"] = "Python reviewed rejection"
+    request = {"params": {"id": source_id, "stepId": reviewed["id"]}, "body": body,
+               "headers": {"Idempotency-Key": uuid.uuid4().hex}}
+    client.call(operation, request)
+    client.call(operation, request)
+    for read in ["listRunbookExecutionEvidence", "listRunbookExecutionEvents"]:
+        client.call(read, {"params": {"id": source_id}})
+rerun_params = {"id": configuration["rerunSourceId"]}
+reviewed = client.call("previewRunbookExecutionRerun", {"params": rerun_params, "body": {}})["data"]
+assert "inputs" not in reviewed and all("config" not in step for step in reviewed["steps"])
+request = {"params": rerun_params, "body": {"expectedPlanDigest": reviewed["digest"],
+    "previewAuthorizationToken": reviewed["authorizationToken"]}, "headers": {"Idempotency-Key": uuid.uuid4().hex}}
+accepted = client.call("rerunRunbookExecution", request)["data"]
+assert client.call("rerunRunbookExecution", request)["data"]["executionId"] == accepted["executionId"]
+print("Python reviewed runbook decisions, evidence/events and exact-preview rerun passed.")

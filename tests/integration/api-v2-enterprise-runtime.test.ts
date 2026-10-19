@@ -1107,8 +1107,8 @@ describe('automation draft REST transaction certification', () => {
       key,
       '"999"'
     );
-    expect(changedValidatorReplay.status).toBe(200);
-    expect(changedValidatorReplay.headers.get('idempotency-replayed')).toBe('true');
+    expect(changedValidatorReplay.status).toBe(409);
+    expect(changedValidatorReplay.headers.get('idempotency-replayed')).toBeNull();
 
     expect(
       (await call(saveAutomationDraft, admin.token, 'PUT', path, params, body, randomUUID(), '"0"'))

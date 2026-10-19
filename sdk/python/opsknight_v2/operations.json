@@ -1,4 +1,66 @@
 {
+  "listRunbookExecutionSteps": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/steps",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutionEvidence": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/evidence",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutionEvents": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "approveRunbookExecutionStep": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/steps/{stepId}/approve",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "rejectRunbookExecutionStep": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/steps/{stepId}/reject",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "previewRunbookExecutionRerun": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/rerun-preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "rerunRunbookExecution": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/rerun",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
   "getServiceObjectiveCatalog": {
     "method": "GET",
     "path": "/service-objectives/catalog",

@@ -46,6 +46,7 @@ export const AUTHORIZATION_ACTIONS = {
   RUNBOOK_RULE_ACTIVATE: 'runbook_rule.activate',
   RUNBOOK_READ: 'runbook.read',
   RUNBOOK_EXECUTE: 'runbook.execute',
+  RUNBOOK_APPROVE: 'runbook.approve',
   RUNBOOK_MANAGE: 'runbook.manage',
   RUNBOOK_PUBLISH: 'runbook.publish',
   AUDIT_READ: 'audit.read',
@@ -126,6 +127,7 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.RUNBOOK_RULE_ACTIVATE]?: ServiceResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.RUNBOOK_APPROVE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_PUBLISH]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.AUDIT_READ]?: AuthorizationResource;
@@ -396,6 +398,10 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
       global: CAPABILITIES.RUNBOOK_EXECUTE,
       apiScope: API_SCOPES.RUNBOOKS_EXECUTE,
     },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.RUNBOOK_APPROVE,
+    { global: CAPABILITIES.RUNBOOK_APPROVE, apiScope: API_SCOPES.RUNBOOKS_APPROVE },
   ],
   [
     AUTHORIZATION_ACTIONS.RUNBOOK_MANAGE,

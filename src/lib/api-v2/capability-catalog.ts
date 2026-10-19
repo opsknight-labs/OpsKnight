@@ -49,15 +49,22 @@ const decisions: readonly ApiCapability[] = [
   {
     id: 'runbook-control',
     area: 'Runbooks',
-    title: 'Execution preview and cancellation',
+    title: 'Execution preview, decisions, evidence and reruns',
     status: 'available',
     explanation:
-      'Explicit execution privilege. Previews create no execution jobs. Cancellation is asynchronous and returns CANCEL_REQUESTED.',
+      'Execution previews, step/evidence/event reads, plan-bound approvals and rejections, reviewed terminal reruns and asynchronous cancellation use explicit scopes. Approval decisions and reruns require owner/team control or ADMIN; shared domain commands preserve current state, exact plan review and audit/replay atomicity. Combined certification remains pending.',
     operationIds: [
       'previewRunbookExecution',
       'executeRunbook',
       'cancelRunbookExecution',
       'getRunbookExecution',
+      'listRunbookExecutionSteps',
+      'listRunbookExecutionEvidence',
+      'listRunbookExecutionEvents',
+      'approveRunbookExecutionStep',
+      'rejectRunbookExecutionStep',
+      'previewRunbookExecutionRerun',
+      'rerunRunbookExecution',
     ],
   },
   {

@@ -1,3 +1,4 @@
+import { projectExecutionPreview } from '@/lib/api-v2/runbook-preview';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
@@ -11,32 +12,13 @@ export const POST = defineV2Route({
   paramsSchema: z.object({ id: z.string().trim().min(1).max(100) }).strict(),
   querySchema: z.object({}).strict(),
   bodySchema: RunbookExecuteV2Schema.omit({ expectedPlanDigest: true }).strict(),
-  handler: async ({ params, body, actor }) => {
+  rateLimitTier: 'SEARCH_EXPORT',
+  handler: async ({ params, body, actor, apiKey }) => {
     const resolved = await resolveV2RunbookExecution(prisma, params, body, actor);
-    const preview = await previewRunbookExecution(resolved);
+    const preview = await previewRunbookExecution(resolved, undefined, { apiClientId: apiKey.id });
     return {
-      data: {
-        digest: preview.digest,
-        expiresAt: preview.expiresAt,
-        versionId: preview.versionId,
-        version: preview.version,
-        checksum: preview.checksum,
-        agentId: preview.agentId,
-        agentPoolId: preview.agentPoolId,
-        timeoutSeconds: preview.timeoutSeconds,
-        readiness: preview.readiness,
-        steps: preview.steps.map(
-          ({ key, name, type, risk, purpose, requiresApproval, timeoutSeconds }) => ({
-            key,
-            name,
-            type,
-            risk,
-            purpose,
-            requiresApproval,
-            timeoutSeconds,
-          })
-        ),
-      },
+      data: projectExecutionPreview(preview),
+      headers: { 'Cache-Control': 'no-store' },
     };
   },
 });

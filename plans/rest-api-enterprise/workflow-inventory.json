@@ -74,7 +74,22 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Final shared UI/REST approval/rerun, authorization and real-Agent combined certification pending"
+      ],
+      "implementedOperations": [
+        "previewRunbookExecution",
+        "executeRunbook",
+        "cancelRunbookExecution",
+        "getRunbookExecution",
+        "listRunbookExecutionSteps",
+        "listRunbookExecutionEvidence",
+        "listRunbookExecutionEvents",
+        "approveRunbookExecutionStep",
+        "rejectRunbookExecutionStep",
+        "previewRunbookExecutionRerun",
+        "rerunRunbookExecution"
+      ]
     },
     {
       "capabilityId": "incident-lifecycle",

@@ -1,0 +1,78 @@
+{
+  "sourceParent": "a551279dad017155b411d5b5665e45b424ac8543",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Seven execution intervention operations; this does not complete runbook administration or enterprise API certification.",
+  "addedOperations": 7,
+  "registeredOperationCount": 158,
+  "authorization": {
+    "reviewScope": "runbooks:approve plus runbooks:read; ADMIN or RESPONDER capability required",
+    "reviewControl": "ADMIN, triggering user, or service-team member; foreign readers receive no pending plan",
+    "rerun": "runbooks:execute plus runbooks:read, source ownership/team access and current canonical execution policy",
+    "browserDifference": "Existing browser approval uses its existing capability/scope rules; REST deliberately applies the stricter execution ownership/team control boundary."
+  },
+  "postgres": {
+    "newCases": 18,
+    "existingRegressionPassed": 105,
+    "coverage": [
+      "Exact reviewed-plan digest and nested execution/step binding",
+      "Canonical API credential attribution and transactional audit failure rollback",
+      "Concurrent approval/rejection has one winner",
+      "Scope and ownership revocation before cached replay",
+      "Expired rerun authorization and archived source rejection",
+      "Redacted bounded evidence checked against OpenAPI schema",
+      "Real queue handler reconciles rejected parent without assigning Agent work"
+    ],
+    "teamMembershipCase": "passed: service-team review allowed; cached replay denied after membership removal",
+    "latestRun": {
+      "passed": 55,
+      "files": 2,
+      "scope": "All 18 new intervention cases and 37 existing preview authorization cases"
+    }
+  },
+  "unitContract": {
+    "passed": 229,
+    "files": 8
+  },
+  "scopeAuthorization": {
+    "passed": 116,
+    "files": 3
+  },
+  "pythonSdkUnit": {
+    "passed": 9
+  },
+  "productionBuild": "passed, including full build TypeScript stage",
+  "liveSdk": {
+    "result": "passed TypeScript and Python against the production build and PostgreSQL, with a real separate general-worker process",
+    "coverage": "All seven new operations and full existing workflow regression; waiting approval states are seeded fixtures, not real Agent execution certification.",
+    "rateSafety": "Pagination stops after finding both isolated fixtures; evaluation polling backs off within the existing 50-second completion budget. SDK bounded Retry-After handling and production limits remain unchanged."
+  },
+  "remaining": [
+    "Complete latest commit CI",
+    "Real Agent approval/rerun and combined browser/worker journey certification",
+    "Agent/pool/enrollment/secret administration",
+    "Remaining integration, identity, notification, incident/schedule, status-page and reporting workflows",
+    "Approved load, HA, recovery and rolling-upgrade certification"
+  ],
+  "docsContractRegression": {
+    "passed": 174,
+    "files": 3,
+    "note": "Includes overlap with the 229 unit/contract cases; not an additive total."
+  },
+  "ciRemediation": {
+    "reviewedCommit": "c9df92b4c128f75d11d9a2e5c80b2850c8c25d17",
+    "cause": "Two automation PostgreSQL fixtures still expected changed required If-Match validators to replay successfully. Production now correctly rejects them with 409.",
+    "status": "Both PostgreSQL suites passed: 35 cases across enterprise runtime and automation lifecycle.",
+    "documentation": "OpenAPI, command standard and automation reference now consistently describe revision-bound retries and candidate staging while LIVE."
+  },
+  "changedSourceLint": "passed with zero warnings",
+  "measuredAt": "2026-10-19T05:00:34.938232+00:00",
+  "cleanTypecheck": "passed npx tsc --noEmit on final source",
+  "generatedClientDrift": "passed",
+  "typescriptSdkBuild": "passed",
+  "requestedClusterCertification": {
+    "status": "pending code push before namespace creation",
+    "context": "kind-opsknight-cluster",
+    "nodeCount": 1,
+    "scope": "Namespaced replica/load/recovery reference measurements; not physical node or database HA certification."
+  }
+}

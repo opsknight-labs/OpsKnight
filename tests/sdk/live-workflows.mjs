@@ -93,6 +93,7 @@ try {
         'runbooks:write',
         'runbooks:publish',
         'runbooks:execute',
+        'runbooks:approve',
         'automation:read',
         'automation:write',
         'automation:publish',
@@ -488,6 +489,83 @@ try {
     },
     stdio: 'ignore',
   });
+  async function interventionFixture(status = 'WAITING_APPROVAL') {
+    return prisma.runbookExecution.create({
+      data: {
+        runbookId: created.data.id,
+        runbookVersionId: published.data.id,
+        definitionChecksum: published.data.checksum,
+        triggeredByUserId: user.id,
+        status,
+        deadlineAt: new Date(Date.now() + 10 * 60_000),
+        ...(status === 'WAITING_APPROVAL'
+          ? {
+              steps: {
+                create: {
+                  stepKey: 'review',
+                  name: 'Review SDK action',
+                  sequence: 0,
+                  type: 'APPROVAL',
+                  riskClass: 'READ_ONLY',
+                  config: {},
+                  status: 'WAITING_APPROVAL',
+                  requiresApproval: true,
+                },
+              },
+            }
+          : { completedAt: new Date() }),
+      },
+    });
+  }
+  const approveSource = await interventionFixture();
+  const rejectSource = await interventionFixture();
+  const rerunSource = await interventionFixture('SUCCEEDED');
+  for (const [source, operation] of [
+    [approveSource, 'approveRunbookExecutionStep'],
+    [rejectSource, 'rejectRunbookExecutionStep'],
+  ]) {
+    const reviewed = await client.call('listRunbookExecutionSteps', { params: { id: source.id } });
+    const step = reviewed.data[0];
+    if (!step.pendingApproval?.planDigest || 'config' in step)
+      throw new Error('Invalid SDK approval projection.');
+    const request = {
+      params: { id: source.id, stepId: step.id },
+      body: {
+        planDigest: step.pendingApproval.planDigest,
+        ...(operation === 'rejectRunbookExecutionStep' ? { reason: 'Reviewed SDK rejection' } : {}),
+      },
+      headers: { 'Idempotency-Key': randomUUID() },
+    };
+    await client.call(operation, request);
+    await client.call(operation, request);
+    await client.call('listRunbookExecutionEvidence', { params: { id: source.id } });
+    await client.call('listRunbookExecutionEvents', { params: { id: source.id } });
+  }
+  const rerunPreview = await client.call('previewRunbookExecutionRerun', {
+    params: { id: rerunSource.id },
+    body: {},
+  });
+  if ('inputs' in rerunPreview.data || rerunPreview.data.steps.some(step => 'config' in step))
+    throw new Error('Rerun preview disclosed private inputs/configuration.');
+  const rerunRequest = {
+    params: { id: rerunSource.id },
+    body: {
+      expectedPlanDigest: rerunPreview.data.digest,
+      previewAuthorizationToken: rerunPreview.data.authorizationToken,
+    },
+    headers: { 'Idempotency-Key': randomUUID() },
+  };
+  const rerunAccepted = await client.call('rerunRunbookExecution', rerunRequest);
+  if (
+    (await client.call('rerunRunbookExecution', rerunRequest)).data.executionId !==
+    rerunAccepted.data.executionId
+  )
+    throw new Error('Rerun retry created a duplicate execution.');
+  const pythonApproveSource = await interventionFixture();
+  const pythonRejectSource = await interventionFixture();
+  console.log(
+    'TypeScript reviewed runbook decisions, evidence/events and exact-preview rerun passed.'
+  );
   const objectiveCatalog = await client.call('getServiceObjectiveCatalog', {});
   if (objectiveCatalog.data.metrics.length !== 4) throw new Error('Objective catalog mismatch.');
   const objectiveRequest = {
@@ -527,7 +605,10 @@ try {
     headers: { 'Idempotency-Key': randomUUID() },
   });
   let completed = false;
+  const evaluationDeadline = Date.now() + 50_000;
   for (let attempt = 0; attempt < 100; attempt++) {
+    if (Date.now() >= evaluationDeadline)
+      throw new Error('Objective evaluation exceeded its 50-second completion budget.');
     if (worker.exitCode !== null) throw new Error('Objective worker exited.');
     const result = await client.call('getServiceObjectiveEvaluation', {
       params: { ...objectiveParams, evaluationId: evaluation.data.id },
@@ -542,7 +623,7 @@ try {
       break;
     }
     if (result.data.status === 'FAILED') throw new Error('Objective evaluation failed.');
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, Math.min(500 * 1.3 ** attempt, 2000)));
   }
   if (!completed) throw new Error('Objective evaluation did not complete.');
   await client.call('archiveServiceObjective', {
@@ -586,6 +667,9 @@ try {
         baseUrl: `http://host.docker.internal:${port}/api/v2`,
         token: pythonToken,
         typescriptRunbookId: created.data.id,
+        approvalExecutionId: pythonApproveSource.id,
+        rejectionExecutionId: pythonRejectSource.id,
+        rerunSourceId: rerunSource.id,
         automationServiceId: automationService.id,
         runbookRuleServiceId: ruleService.id,
         runbookRuleAgentId: ruleAgent.id,

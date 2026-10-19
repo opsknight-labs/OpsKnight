@@ -100,24 +100,27 @@ introduced. Local unit tests do not establish production capacity or HA.
 ## Conditional mutation and replay semantics
 
 Authentication, current actor capability/scope checks and required strong If-Match
-syntax checks run on every request, including replay. The replay fingerprint covers
-the validated body; If-Match is not part of that fingerprint. A matching credential,
-operation, idempotency key and body returns the original committed response with
-`Idempotency-Replayed: true`, even when the caller supplies a different concrete
-revision. That response confirms the original operation; it does not apply a new
-conditional write or re-evaluate the current resource revision. Use a new key for a
-new write, and read the resource again to obtain its current ETag. Resource-specific
-checks inside the mutation are not rerun on a cached response. Revoked credentials
-and revoked actor privileges cannot retrieve a replay through this contract.
+syntax checks run on every request, including replay. For factory routes requiring
+If-Match, the replay fingerprint binds the validated body and normalized revision.
+An exact retry returns the original committed result with
+`Idempotency-Replayed: true`, even after the resource advances. A different body or
+normalized required revision returns `409 IDEMPOTENCY_KEY_CONFLICT`. Legacy generic
+receipts cannot attest the original revision and fail closed; reconcile the resource
+and audit history before considering a new write. Optional-precondition legacy
+handwritten routes retain their separately documented contracts.
 
-Automation publication accepts the draft resource's ETag. Its response contains
+An exact replay confirms the original operation; it does not reapply the write.
+Resource-specific replay guards recheck current access where configured. Revoked
+credentials and revoked actor privileges cannot retrieve a cached result. Read the
+current ETag and use a new key only when deliberately performing a new operation.
+
+Automation publication accepts the draft resource ETag. Its response contains
 immutable `id`, `versionNumber` and `checksum`, and deliberately returns no ETag:
 version numbers are not draft revisions. GET the draft again before another edit.
-Publication while LIVE returns 409 without creating a version or audit event.
-Switch to SHADOW or DISABLED first; subsequent LIVE activation runs the existing
-revision-specific reference validation and shadow acknowledgment checks. Publication
-and mode logs use staged-event names because caller-owned transactions can still
-abort; committed database audit remains authoritative.
+Publication while LIVE stages a candidate evaluated in parallel shadow mode without
+interrupting current routing. Activation remains a separate reviewed operation.
+Publication and mode logs use staged-event names because caller-owned transactions
+can still abort; committed database audit remains authoritative.
 
 Service runbook rule commands accept the caller's transaction and server-derived
 API actor context through the shared runbook command boundary. Create/update,

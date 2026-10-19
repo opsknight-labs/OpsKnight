@@ -1,4 +1,8 @@
 import {
+  RUNBOOK_INTERVENTION_SCHEMAS,
+  RUNBOOK_INTERVENTION_OPERATIONS,
+} from './runbook-intervention-openapi';
+import {
   SERVICE_OBJECTIVE_SCHEMAS,
   SERVICE_OBJECTIVE_OPERATIONS,
 } from './service-objective-openapi';
@@ -168,6 +172,7 @@ const statusPageSectionRepresentations = Object.fromEntries(
 );
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  ...RUNBOOK_INTERVENTION_SCHEMAS,
   ...SERVICE_OBJECTIVE_SCHEMAS,
   StatusPagePublicationState: object(
     {
@@ -707,6 +712,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ),
   RunbookExecutionPreview: object(
     {
+      authorizationToken: { type: 'string', pattern: '^[a-f0-9]{64}$' },
       digest: string(),
       expiresAt: date,
       versionId: id,
@@ -1112,6 +1118,7 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  ...RUNBOOK_INTERVENTION_OPERATIONS,
   ...SERVICE_OBJECTIVE_OPERATIONS,
   {
     method: 'get',
@@ -1558,7 +1565,7 @@ const operations: Operation[] = [
     path: '/services/{id}/automation/publish',
     summary: 'Publish a validated immutable service automation version',
     description:
-      'Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE stages a candidate version evaluated in parallel shadow mode without interrupting current routing. Replayed requests return the original committed result, even with a different concrete If-Match value; use a new idempotency key for a new conditional write.',
+      'Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE stages a candidate version evaluated in parallel shadow mode without interrupting current routing. Exact retries with the original required If-Match value return the committed result. Reusing an idempotency key with a different normalized revision returns 409; read current state and use a new key for a new conditional write.',
     body: object(
       {
         expectedActiveVersionId: { type: ['string', 'null'] },
