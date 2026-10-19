@@ -189,7 +189,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 158,
+    "registeredOperationCount": 164,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -245,12 +245,36 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 158,
+  "registeredOperationCount": 164,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,
     "remaining": "Domain ownership, validated assets, preview, and remaining enterprise families and combined certification.",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; accepted queue job, request audit and replay commit together. Worker canonical outcome audit and receipt commit together. Completion does not imply LIVE publication.",
     "evidence": "plans/rest-api-enterprise/status-page-publication-certification.json"
+  },
+  "runbookFleet": {
+    "status": "partial",
+    "operations": [
+      "listRunbookAgents",
+      "getRunbookAgent",
+      "getRunbookAgentPolicyStatus",
+      "createRunbookAgentEnrollment",
+      "getRunbookAgentEnrollment",
+      "revokeRunbookAgent"
+    ],
+    "safety": [
+      "Explicit administrator fleet/enroll/revoke scopes, not implied by admin:manage",
+      "One-time token never stored or redisclosed by idempotency replay",
+      "Canonical shared UI/REST enrollment and revocation audits",
+      "Agent row lock serializes claims against terminal revocation",
+      "Fleet keyset pagination index"
+    ],
+    "remaining": [
+      "Agent pools and membership",
+      "Operational settings",
+      "Secret lifecycle and grants",
+      "Real Docker/Kubernetes Agent execution and recovery certification"
+    ]
   }
 }

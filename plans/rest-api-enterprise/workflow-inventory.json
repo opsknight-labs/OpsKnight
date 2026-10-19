@@ -456,16 +456,30 @@
         {
           "path": "src/app/(app)/runbooks/actions.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/runbooks/fleet-commands.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/runbooks/agent-auth.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/api-v2/runbook-fleet.ts",
+          "branch": "baseline"
         }
       ],
-      "reviewStatus": "pending-domain-review",
+      "reviewStatus": "partial-implementation-verification-pending",
       "requiredEvidence": [
         "authorization-negative",
         "business-parity",
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Pools, membership, operational settings and full Agent administration certification remain in progress."
+      ]
     },
     {
       "capabilityId": "runbook-secrets",

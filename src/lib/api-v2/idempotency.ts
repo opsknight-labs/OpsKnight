@@ -3,10 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { runV2AuditedMutation, type V2AuditParams } from './audit';
 import { recordIdempotency } from './observability';
-import {
-  executeIdempotentOperation,
-  type IdempotentExecution,
-} from '@/lib/idempotency';
+import { executeIdempotentOperation, type IdempotentExecution } from '@/lib/idempotency';
 
 export async function runV2IdempotentMutation<T>(
   req: NextRequest,
@@ -14,7 +11,8 @@ export async function runV2IdempotentMutation<T>(
   scope: string,
   payload: unknown,
   execute: (tx: Prisma.TransactionClient) => Promise<T>,
-  onReplay?: (tx: Prisma.TransactionClient) => Promise<void>
+  onReplay?: (tx: Prisma.TransactionClient) => Promise<void>,
+  persistResult?: (value: T) => T
 ): Promise<IdempotentExecution<T>> {
   const idempotencyKey = req.headers.get('idempotency-key')?.trim();
 
@@ -35,6 +33,7 @@ export async function runV2IdempotentMutation<T>(
       payload,
       execute: () => execute(tx),
       onReplay,
+      persistResult,
     });
   });
 }

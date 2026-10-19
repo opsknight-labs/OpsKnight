@@ -1,4 +1,56 @@
 {
+  "listRunbookAgents": {
+    "method": "GET",
+    "path": "/runbooks/agents",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookAgent": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookAgentPolicyStatus": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}/policy-status",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookAgentEnrollment": {
+    "method": "POST",
+    "path": "/runbooks/agent-enrollments",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookAgentEnrollment": {
+    "method": "GET",
+    "path": "/runbooks/agent-enrollments/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "revokeRunbookAgent": {
+    "method": "POST",
+    "path": "/runbooks/agents/{id}/revoke",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
   "listRunbookExecutionSteps": {
     "method": "GET",
     "path": "/runbooks/executions/{id}/steps",

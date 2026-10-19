@@ -44,6 +44,9 @@ export const AUTHORIZATION_ACTIONS = {
   RUNBOOK_RULE_READ: 'runbook_rule.read',
   RUNBOOK_RULE_MANAGE: 'runbook_rule.manage',
   RUNBOOK_RULE_ACTIVATE: 'runbook_rule.activate',
+  RUNBOOK_AGENT_READ: 'runbook_agent.read',
+  RUNBOOK_AGENT_ENROLL: 'runbook_agent.enroll',
+  RUNBOOK_AGENT_REVOKE: 'runbook_agent.revoke',
   RUNBOOK_READ: 'runbook.read',
   RUNBOOK_EXECUTE: 'runbook.execute',
   RUNBOOK_APPROVE: 'runbook.approve',
@@ -125,6 +128,9 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.RUNBOOK_RULE_READ]?: ServiceResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_RULE_MANAGE]?: ServiceResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_RULE_ACTIVATE]?: ServiceResource;
+  [AUTHORIZATION_ACTIONS.RUNBOOK_AGENT_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.RUNBOOK_AGENT_ENROLL]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.RUNBOOK_AGENT_REVOKE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.RUNBOOK_APPROVE]?: AuthorizationResource;
@@ -163,6 +169,19 @@ type ActionPolicy = {
 };
 
 const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
+  [
+    AUTHORIZATION_ACTIONS.RUNBOOK_AGENT_READ,
+    { global: CAPABILITIES.RUNBOOK_AGENT_MANAGE, apiScope: API_SCOPES.RUNBOOK_AGENTS_READ },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.RUNBOOK_AGENT_ENROLL,
+    { global: CAPABILITIES.RUNBOOK_AGENT_MANAGE, apiScope: API_SCOPES.RUNBOOK_AGENTS_ENROLL },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.RUNBOOK_AGENT_REVOKE,
+    { global: CAPABILITIES.RUNBOOK_AGENT_MANAGE, apiScope: API_SCOPES.RUNBOOK_AGENTS_REVOKE },
+  ],
+
   [
     AUTHORIZATION_ACTIONS.RUNBOOK_RULE_READ,
     { global: CAPABILITIES.RUNBOOK_MANAGE, apiScope: API_SCOPES.RUNBOOK_RULES_READ },

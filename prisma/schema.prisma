@@ -3851,6 +3851,7 @@ model RunbookAgent {
   @@index([status])
   @@index([lastHeartbeatAt])
   @@index([enrollmentTokenHash])
+  @@index([createdAt, id])
 }
 
 model RunbookAgentRequestNonce {

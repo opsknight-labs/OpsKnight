@@ -51,6 +51,19 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/runbooks/agent-enrollments': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Enrollment and canonical audit commit with a metadata-only replay receipt. Only the initial committed response discloses the token; every replay returns token null. No plaintext enrollment token is stored in the journal.',
+  },
+  'POST /api/v2/runbooks/agents/[id]/revoke': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Terminal conditional revocation, canonical audit and replay commit atomically. Requests with different keys do not repeat the business event. Existing lease reconciliation remains authoritative.',
+  },
+
   'POST /api/v2/runbooks/executions/[id]/rerun-preview': natural(
     'Preview revalidates the current source/rule/target policy without starting execution.'
   ),

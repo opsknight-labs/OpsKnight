@@ -1,5 +1,7 @@
 'use server';
 
+import { revokeRunbookAgent } from '@/lib/runbooks/fleet-commands';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -287,16 +289,6 @@ export async function createAgentEnrollmentAction(
         hostname: readString(formData, 'hostname') || undefined,
       });
     const enrollment = await createAgentEnrollment({ ...input, actorId: actor.id });
-    await logAudit({
-      action: 'runbook.agent.enrollment.created',
-      entityType: 'RUNBOOK_AGENT',
-      entityId: enrollment.agent.id,
-      actorId: actor.id,
-      details: {
-        name: enrollment.agent.name,
-        expiresAt: enrollment.enrollmentExpiresAt.toISOString(),
-      },
-    });
     revalidateAgentFleet();
     return {
       token: enrollment.token,
@@ -312,29 +304,7 @@ export async function createAgentEnrollmentAction(
 export async function revokeAgentAction(agentId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const id = idSchema.parse(agentId);
-  await prisma.$transaction(async tx => {
-    const updated = await tx.runbookAgent.update({
-      where: { id },
-      data: {
-        status: 'REVOKED',
-        revokedAt: new Date(),
-        revokedById: actor.id,
-        enrollmentTokenHash: null,
-        enrollmentExpiresAt: null,
-      },
-    });
-    await synchronizeLabelMemberships(tx);
-    await logAudit(
-      {
-        action: 'runbook.agent.revoked',
-        entityType: 'RUNBOOK_AGENT',
-        entityId: id,
-        actorId: actor.id,
-        details: { name: updated.name },
-      },
-      tx
-    );
-  });
+  await revokeRunbookAgent(id, actor.id);
   revalidateAgentFleet();
 }
 

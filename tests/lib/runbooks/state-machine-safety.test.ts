@@ -106,7 +106,9 @@ describe('Runbooks State Machine Safety and Invariants', () => {
   it('accepts an existing cancellation without repeating queue or audit work', async () => {
     vi.clearAllMocks();
     vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 0 });
-    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'CANCEL_REQUESTED' } as never);
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({
+      status: 'CANCEL_REQUESTED',
+    } as never);
     await expect(cancelExecution('exec_1', 'user_1', 'repeat')).resolves.toBeUndefined();
     expect(prisma.backgroundJob.create).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
@@ -182,8 +184,10 @@ describe('Runbooks State Machine Safety and Invariants', () => {
       { poolId: 'pool_1' },
     ] as never);
 
-    // Locked candidate returned by SKIP LOCKED is candidate2 directly
-    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ id: 'att_valid' }] as never);
+    // Identity fence precedes the candidate locked with SKIP LOCKED.
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ id: agentId }] as never)
+      .mockResolvedValueOnce([{ id: 'att_valid' }] as never);
 
     // Attempt claim on candidate2 succeeds
     vi.mocked(prisma.runbookStepAttempt.updateMany).mockResolvedValueOnce({ count: 1 });
