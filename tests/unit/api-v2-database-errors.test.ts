@@ -56,4 +56,21 @@ describe('REST v2 database error mapping', () => {
   it('does not classify unrelated raw SQL errors as retryable overload', () => {
     expect(apiV2Error(known('P2010'), req()).status).toBe(500);
   });
+
+  it.each(['40001', '40P01'])(
+    'maps exhausted raw SQL conflict %s to a retryable 409',
+    async sqlState => {
+      const error = new Prisma.PrismaClientKnownRequestError('secret=abc', {
+        code: 'P2010',
+        clientVersion: 'test',
+        meta: { code: sqlState },
+      });
+      const response = apiV2Error(error, req());
+      const body = await response.json();
+      expect(response.status).toBe(409);
+      expect(body.code).toBe('TRANSIENT_CONFLICT');
+      expect(body.retryable).toBe(true);
+      expect(JSON.stringify(body)).not.toContain('secret=abc');
+    }
+  );
 });

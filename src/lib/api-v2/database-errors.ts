@@ -20,6 +20,9 @@ export function mapDatabaseError(error: unknown): unknown {
   if (isAppError(error)) return error;
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2010' && (error.meta?.code === '40001' || error.meta?.code === '40P01')) {
+      return new AppError({ code: 'TRANSIENT_CONFLICT', cause: error });
+    }
     // Raw queries preserve PostgreSQL's SQLSTATE in metadata. A bounded
     // statement cancellation is temporary overload, not an internal defect.
     // Never infer this from message text, which can contain submitted values.

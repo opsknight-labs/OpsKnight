@@ -6,6 +6,7 @@ import { writeFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateRunbookAgentMetadata } from '../../src/lib/runbooks/pool-commands';
+import prisma from '../../src/lib/prisma';
 
 async function main() {
   const url = new URL(process.env.DATABASE_URL ?? '');
@@ -105,13 +106,76 @@ async function main() {
           membershipCount,
         });
       }
-      runs.push({ agents: size, pools: poolCount, samples });
+      const concurrentWaves: object[] = [];
+      // Materialize the eight managed identities before timing contention.
+      // Otherwise a failed first edit followed by a successful no-op can
+      // legitimately leave an untouched fixture without dynamic memberships.
+      for (let writer = 0; writer < 8; writer++)
+        await updateRunbookAgentMetadata(
+          `${tag}-${writer + 1}`,
+          { labels: { benchmarkEnv: 'production', benchmarkScope: tag } },
+          actor.id
+        );
+      for (let wave = 0; wave < 3; wave++) {
+        const started = performance.now();
+        // Use the real command-owned Serializable transaction and production
+        // retry budget. Do not hide contention by extending transaction limits.
+        const writers = await Promise.all(
+          Array.from({ length: 8 }, async (_, writer) => {
+            const writerStarted = performance.now();
+            try {
+              await updateRunbookAgentMetadata(
+                `${tag}-${writer + 1}`,
+                {
+                  labels: {
+                    benchmarkEnv: wave % 2 ? 'production' : 'staging',
+                    benchmarkScope: tag,
+                  },
+                },
+                actor.id
+              );
+              return { writer, elapsedMs: performance.now() - writerStarted, success: true };
+            } catch (error) {
+              return {
+                writer,
+                elapsedMs: performance.now() - writerStarted,
+                success: false,
+                code: error instanceof Error && 'code' in error ? String(error.code) : 'UNKNOWN',
+              };
+            }
+          })
+        );
+        for (let writer = 0; writer < 8; writer++) {
+          const id = `${tag}-${writer + 1}`;
+          const agent = await db.runbookAgent.findUniqueOrThrow({ where: { id } });
+          const labels = agent.labels as { benchmarkEnv: string };
+          const memberships = await db.runbookAgentPoolMember.findMany({
+            where: { agentId: id },
+            select: { pool: { select: { matchLabels: true } } },
+          });
+          if (
+            memberships.length !== poolCount / 2 ||
+            memberships.some(
+              member =>
+                (member.pool.matchLabels as { benchmarkEnv: string }).benchmarkEnv !==
+                labels.benchmarkEnv
+            )
+          )
+            throw new Error('Concurrent writer membership invariant failed.');
+        }
+        concurrentWaves.push({
+          writers: 8,
+          elapsedMs: performance.now() - started,
+          results: writers,
+        });
+      }
+      runs.push({ agents: size, pools: poolCount, samples, concurrentWaves });
       await db.runbookAgentPool.deleteMany({ where: { name: tag } });
       await db.runbookAgent.deleteMany({ where: { name: tag } });
     }
     await db.user.delete({ where: { id: actor.id } });
     const report = {
-      sourceParent: '1a7d0e06aeb7c499120c7912118e907afec96fc7',
+      sourceParent: '22e554be2',
       createdAt: new Date().toISOString(),
       environment: 'Shared local PostgreSQL 16/Docker VM; reference performance only',
       measurementNotes: [
@@ -119,6 +183,7 @@ async function main() {
         'WAL positions are cluster-wide and may include co-resident writes.',
         'Every iteration changes one Agent and checks membership in half the configured pools; unrelated Agent membership remains untouched.',
         'Advisory-lock statement duration includes execution and waiting at millisecond resolution; it is not isolated lock-wait attribution. Production load/HA remain pending.',
+        'Concurrent waves use eight command-owned Serializable writers, including the unchanged production retry budget. Per-writer failures are retained, not retried by the harness.',
       ],
       runs,
     };
@@ -135,6 +200,7 @@ async function main() {
     await db.runbookAgent.deleteMany({ where: { name: { startsWith: prefix } } });
     await db.user.deleteMany({ where: { name: prefix } });
     await db.$disconnect();
+    await prisma.$disconnect();
   }
 }
 void main().catch(error => {
