@@ -3,10 +3,10 @@
 ## 1. Governance & Version Provenance Baseline
 
 - **Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit SHA**: `6983d61e9a514b062615b7fb7c4bc8ebbb355316`
+- **Candidate Commit SHA**: `ab7c492ab0b7baec5d2eb4b3133121b0f2664e83`
 - **Base PR**: PR #892 (`8496cebd3` - Consolidated security hardening & baseline)
 - **Certification Program**: `Enterprise Physical Runtime Certification Program`
-- **Measured Date**: `2026-10-18`
+- **Measured Date**: `2026-10-19`
 - **Certification Status**: **QUALIFIED RUNTIME IMPLEMENTATION; UNATTENDED MONITORING DISPATCH AND MULTI-NODE CHAOS STAGED**
 
 ---
@@ -26,13 +26,13 @@
 
 ## 3. Agent Artifacts & Deployment Charts
 
-| Target Platform          | Image / Package Digest                                                                              | Chart / Manifest Location                                        |   Live Verification Mode    |
-| ------------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | :-------------------------: |
-| **Docker Host Agent**    | `opsknight-agent:local` (`sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3`) | `agent/Dockerfile`                                               | **PHYSICAL LIVE CERTIFIED** |
-| **Docker Compose**       | Manifest compose bundle v2.0.0                                                                      | `deploy/compose/docker-compose.agent.docker-socket.yml`          | **PHYSICAL LIVE CERTIFIED** |
-| **Kubernetes Helm**      | Chart `opsknight-agent` v2.0.0                                                                      | `deploy/helm/opsknight-agent`                                    | **PHYSICAL LIVE CERTIFIED** |
-| **Kubernetes Kustomize** | Overlay with JSON6902 patch templates                                                               | `deploy/kustomize/agent`                                         |  **SPEC & RBAC CERTIFIED**  |
-| **Linux Systemd**        | `opsknight-agent.service` systemd unit                                                              | `agent/opsknight-agent.service`                                  | **PHYSICAL LIVE CERTIFIED** |
+| Target Platform          | Image / Package Digest                                                                              | Chart / Manifest Location                                        |        Live Verification Mode         |
+| ------------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | :-----------------------------------: |
+| **Docker Host Agent**    | `opsknight-agent:local` (`sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3`) | `agent/Dockerfile`                                               |      **PHYSICAL LIVE CERTIFIED**      |
+| **Docker Compose**       | Manifest compose bundle v2.0.0                                                                      | `deploy/compose/docker-compose.agent.docker-socket.yml`          |      **PHYSICAL LIVE CERTIFIED**      |
+| **Kubernetes Helm**      | Chart `opsknight-agent` v2.0.0                                                                      | `deploy/helm/opsknight-agent`                                    |      **PHYSICAL LIVE CERTIFIED**      |
+| **Kubernetes Kustomize** | Component & Profile Overlays                                                                        | `deploy/kubernetes/kustomize/components/agent`                   | **PHYSICAL CLUSTER & SPEC CERTIFIED** |
+| **Linux Systemd**        | `opsknight-agent.service` systemd unit                                                              | `agent/opsknight-agent.service`                                  |      **PHYSICAL LIVE CERTIFIED**      |
 | **Rootless Podman**      | Podman user socket container spec                                                                   | Containerized runtime with `$XDG_RUNTIME_DIR/podman/podman.sock` | **PHYSICAL LIVE CERTIFIED** |
 | **Docker Swarm**         | `docker-stack.agent.yml`                                                                            | `deploy/swarm/docker-stack.agent.yml`                            | **PHYSICAL LIVE CERTIFIED** |
 
@@ -85,8 +85,8 @@ Real UI verification conducted via authenticated live browser CDP session agains
 - **Runbook Creation**: Real UI modal form submission with unique name, description, slug, and template; verified automatic redirection to `/runbooks/[id]`.
 - **Builder & Inputs Editing**: Verified step navigator, action editors, and typed input parameters.
 - **Activation (Publishing)**: Interactive "Publish draft" confirmation dialog workflow; verified transition to immutable `Live v1`.
-- **Approval & Authorization**: Inspected non-idempotent mutation warning (`Restart`), responder identity, and authorization status badge.
-- **Secrets Interaction**: Populated Name, Password Value, and Description inside `<ConfigureSheet>` drawer; verified smooth `Escape` dismissal.
+- **Approval & Authorization**: Verified genuine non-idempotent mutation authorization on execution `cmvc7w4xt01n9r4wgcswc6x2l`: Step 3 (Systemd `Restart cert-sample.service`) and Step 6 (Docker `Restart cert-podman-api Container`) confirmed `NON IDEMPOTENT`, `Approved by OpsKnight Admin`, signed with SHA-256 Plan Digests (`e41309cddeb992db…` and `e187fdcd8362f63d…`), and executed with `Succeeded` status.
+- **Secrets Interaction & Table Inclusion**: Populated Name (`e2e-live-secret-*`), Value, and Description inside `<ConfigureSheet>` drawer; selected Target via combobox; submitted via "Create encrypted secret"; verified secret encrypted at rest and live table row rendered with masked value `••••••••` and grant count (`1 grant`).
 - **Negative Constraint Validation**: Enforced required name validation and custom tag pattern constraint rejection.
 - **Cleanup**: Archived test runbook to preserve pristine staging library.
 

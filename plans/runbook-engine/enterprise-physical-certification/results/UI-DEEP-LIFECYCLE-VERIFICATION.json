@@ -1,12 +1,12 @@
 {
   "suite": "OpsKnight Deep UI Functional Lifecycle Certification",
-  "timestamp": "2026-10-19T03:41:31.277Z",
-  "candidateCommit": "776202de8",
+  "timestamp": "2026-10-19T04:16:16.657Z",
+  "candidateCommit": "ab7c492ab0b7baec5d2eb4b3133121b0f2664e83",
   "lifecycleJourneys": {
     "runbook_creation": {
       "passed": true,
-      "createdRunbookId": "cmvepjo2o1ohhd9pakxygd947",
-      "url": "https://opssentinal.com/runbooks/cmvepjo2o1ohhd9pakxygd947",
+      "createdRunbookId": "cmveqsctc1sc1d9pa0s0x1723",
+      "url": "https://opssentinal.com/runbooks/cmveqsctc1sc1d9pa0s0x1723",
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_deep_01_creation_redirect.png"
     },
     "runbook_editing_builder": {
@@ -31,17 +31,37 @@
     },
     "runbook_approval_authorization": {
       "passed": true,
+      "executionId": "cmvc7w4xt01n9r4wgcswc6x2l",
       "details": {
         "hasExecutionDetail": true,
         "hasStatus": true,
-        "hasNonIdempotentContext": false
+        "step3Details": {
+          "hasNonIdempotent": true,
+          "hasApproval": true,
+          "hasPlanDigest": true,
+          "hasSuccess": true
+        },
+        "step6Details": {
+          "hasNonIdempotent": true,
+          "hasApproval": true,
+          "hasPlanDigest": true,
+          "hasSuccess": true
+        }
       },
       "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_deep_04_approval_authorization_gate.png"
     },
-    "runbook_secrets_drawer": {
+    "runbook_secrets_lifecycle": {
       "passed": true,
-      "drawerClosed": true,
-      "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_deep_05_secret_drawer_filled.png"
+      "secretName": "e2e-live-secret-08659o",
+      "details": {
+        "foundSecret": true,
+        "matchingRow": "e2e-live-secret-08659o\n\tE2E Certified secret credential for runner fleet\t••••••••\t\n1\ngrant\tOct 19, 2026\tManage grants / Rotate",
+        "hasMaskedValue": true,
+        "hasGrant": true,
+        "hasManageButton": true
+      },
+      "drawerScreenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_deep_05_secret_drawer_filled.png",
+      "tableScreenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_deep_05_secret_table_rendered.png"
     },
     "negative_constraints": {
       "passed": true,

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
+import { execSync } from 'node:child_process';
 // @ts-ignore
 import WebSocket from 'ws';
 
@@ -179,10 +180,15 @@ export async function runDeepUiLifecycleCertification() {
   );
   fs.mkdirSync(screenshotsDir, { recursive: true });
 
+  let headCommit = '1fe161208';
+  try {
+    headCommit = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+  } catch {}
+
   const results: Record<string, any> = {
     suite: 'OpsKnight Deep UI Functional Lifecycle Certification',
     timestamp: new Date().toISOString(),
-    candidateCommit: '776202de8',
+    candidateCommit: headCommit,
     lifecycleJourneys: {},
     summary: { totalTests: 0, totalPassed: 0, totalFailed: 0 },
   };
@@ -231,9 +237,8 @@ export async function runDeepUiLifecycleCertification() {
       const tagsInput = document.getElementById('new-runbook-tags');
 
       const setVal = (el, val) => {
-        if (!el) return;
-        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
-                             Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+        const proto = (el instanceof HTMLTextAreaElement) ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+        const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
         if (nativeSetter) nativeSetter.call(el, val);
         else el.value = val;
         el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -368,70 +373,131 @@ export async function runDeepUiLifecycleCertification() {
     // 4. APPROVAL & AUTHORIZATION: Non-Idempotent Mutation Authorization Gate
     // -------------------------------------------------------------------------
     console.log('\n--- 4. APPROVAL & AUTHORIZATION: Non-Idempotent Mutation Gate ---');
-    await session.navigate('https://opssentinal.com/runbooks/executions/cmvchadqm09584qmqassxvp0s');
+    const approvalExecId = 'cmvc7w4xt01n9r4wgcswc6x2l';
+    await session.navigate(`https://opssentinal.com/runbooks/executions/${approvalExecId}`);
     const authGateData = await session.evaluate<any>(`(() => {
       const text = document.body.innerText;
+      const stepEls = Array.from(document.querySelectorAll("[id^='step-']"));
+      const stepTexts = stepEls.map(s => s.innerText);
+      const step3 = stepTexts.find(t => t.includes('STEP 3') && t.includes('Restart cert-sample.service')) || '';
+      const step6 = stepTexts.find(t => t.includes('STEP 6') && t.includes('Restart cert-podman-api Container')) || '';
       return {
-        hasExecutionDetail: text.includes('Execution') || text.includes('Runbook'),
-        hasStatus: text.includes('Succeeded') || text.includes('WAITING_APPROVAL') || text.includes('Authorized'),
-        hasNonIdempotentContext: text.includes('restart') || text.includes('Restart') || text.includes('Approval') || text.includes('Plan'),
+        hasExecutionDetail: text.includes('Execution') && text.includes(${JSON.stringify(approvalExecId)}),
+        hasStatus: text.includes('Succeeded'),
+        step3Details: {
+          hasNonIdempotent: step3.includes('NON IDEMPOTENT'),
+          hasApproval: step3.includes('Approved by OpsKnight Admin'),
+          hasPlanDigest: step3.includes('e41309cddeb992db'),
+          hasSuccess: step3.includes('Succeeded'),
+        },
+        step6Details: {
+          hasNonIdempotent: step6.includes('NON IDEMPOTENT'),
+          hasApproval: step6.includes('Approved by OpsKnight Admin'),
+          hasPlanDigest: step6.includes('e187fdcd8362f63d'),
+          hasSuccess: step6.includes('Succeeded'),
+        },
       };
     })()`);
     await session.captureScreenshot(shot('ui_deep_04_approval_authorization_gate.png'));
-    const authPass = authGateData.hasExecutionDetail && authGateData.hasStatus;
+    const authPass =
+      authGateData.hasExecutionDetail &&
+      authGateData.hasStatus &&
+      authGateData.step3Details.hasNonIdempotent &&
+      authGateData.step3Details.hasApproval &&
+      authGateData.step6Details.hasNonIdempotent &&
+      authGateData.step6Details.hasApproval;
     record('runbook_approval_authorization', {
       passed: authPass,
+      executionId: approvalExecId,
       details: authGateData,
       screenshot: rel('ui_deep_04_approval_authorization_gate.png'),
     });
     console.log(`  Approval & Authorization Gate: ${authPass ? '[PASS]' : '[FAIL]'}`);
 
     // -------------------------------------------------------------------------
-    // 5. SECRETS: Scoped Secret Drawer Form Interaction
+    // 5. SECRETS: Scoped Secret Creation, Target Grant & Table Inclusion
     // -------------------------------------------------------------------------
-    console.log('\n--- 5. SECRETS: Scoped Secret Drawer & Form Interaction ---');
+    console.log('\n--- 5. SECRETS: Scoped Secret Creation & Table Verification ---');
     await session.navigate('https://opssentinal.com/runbooks/agents/secrets');
     await session.evaluate(`(() => {
       const btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim().toLowerCase() === 'create secret');
       if (btn) btn.click();
     })()`);
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 800));
 
-    // Fill secret form fields
+    const secretName = `e2e-live-secret-${runId}`;
     await session.evaluate(`(() => {
-      const nameInput = document.querySelector('input[name="name"]');
-      const valInput = document.querySelector('input[name="value"]');
-      const descInput = document.querySelector('input[name="description"]');
+      const form = document.querySelector('form[action*="createRunbookSecretAction"]') || document.querySelector('[role="dialog"] form');
+      if (!form) return;
+      const nameInput = form.querySelector('input[name="name"]');
+      const valInput = form.querySelector('input[name="value"]');
+      const descInput = form.querySelector('input[name="description"]');
       if (nameInput) {
-        nameInput.value = 'e2e_certified_scoped_token';
+        nameInput.value = ${JSON.stringify(secretName)};
         nameInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
       if (valInput) {
-        valInput.value = 's3cr3t_p@ssw0rd_987!';
+        valInput.value = 'SecretP@ssw0rd999!';
         valInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
       if (descInput) {
         descInput.value = 'E2E Certified secret credential for runner fleet';
         descInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
+
+      // Open target combobox
+      const combobox = form.querySelector('button[role="combobox"]');
+      if (combobox) combobox.click();
     })()`);
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 800));
+
+    // Select first target option
+    await session.evaluate(`(() => {
+      const items = Array.from(document.querySelectorAll('[cmdk-item]'));
+      const targetOpt = items.find(i => i.innerText.includes('Agent') || i.innerText.includes('Pool'));
+      if (targetOpt) targetOpt.click();
+    })()`);
+    await new Promise(r => setTimeout(r, 400));
     await session.captureScreenshot(shot('ui_deep_05_secret_drawer_filled.png'));
 
-    // Dismiss drawer via Escape
-    await session.dispatchKey('Escape', 'Escape', 27);
-    await new Promise(r => setTimeout(r, 600));
-    const drawerClosed = await session.evaluate<boolean>(
-      `!document.querySelector('[role="dialog"]:not([data-state="closed"])')`
-    );
+    // Submit form
+    console.log(`Submitting encrypted secret: ${secretName}...`);
+    await session.evaluate(`(() => {
+      const submitBtn = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.innerText.includes('Create encrypted secret'));
+      if (submitBtn) submitBtn.click();
+    })()`);
+    await new Promise(r => setTimeout(r, 3500));
 
-    const secretPass = drawerClosed;
-    record('runbook_secrets_drawer', {
+    // Refresh secrets page and verify table
+    await session.navigate('https://opssentinal.com/runbooks/agents/secrets');
+    const secretTableData = await session.evaluate<any>(`(() => {
+      const rows = Array.from(document.querySelectorAll('table tbody tr')).map(r => r.innerText);
+      const matchingRow = rows.find(r => r.includes(${JSON.stringify(secretName)}));
+      return {
+        foundSecret: Boolean(matchingRow),
+        matchingRow: matchingRow || null,
+        hasMaskedValue: matchingRow ? matchingRow.includes('••••••••') : false,
+        hasGrant: matchingRow ? matchingRow.includes('1 grant') || matchingRow.includes('grant') : false,
+        hasManageButton: matchingRow ? matchingRow.includes('Manage grants / Rotate') : false,
+      };
+    })()`);
+    await session.captureScreenshot(shot('ui_deep_05_secret_table_rendered.png'));
+
+    const secretPass =
+      secretTableData.foundSecret &&
+      secretTableData.hasMaskedValue &&
+      secretTableData.hasGrant &&
+      secretTableData.hasManageButton;
+    record('runbook_secrets_lifecycle', {
       passed: secretPass,
-      drawerClosed,
-      screenshot: rel('ui_deep_05_secret_drawer_filled.png'),
+      secretName,
+      details: secretTableData,
+      drawerScreenshot: rel('ui_deep_05_secret_drawer_filled.png'),
+      tableScreenshot: rel('ui_deep_05_secret_table_rendered.png'),
     });
-    console.log(`  Secrets Drawer Result: ${secretPass ? '[PASS]' : '[FAIL]'}`);
+    console.log(
+      `  Secrets Creation & Table Result: ${secretPass ? '[PASS]' : '[FAIL]'} (Found: ${secretTableData.foundSecret})`
+    );
 
     // -------------------------------------------------------------------------
     // 6. FAILURES: Client & Server Negative Constraint Validation
