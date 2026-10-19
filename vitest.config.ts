@@ -28,6 +28,7 @@ export default defineConfig({
       'tests/e2e/**',
       'tests/docs/journeys/**',
       'tests/readme/**',
+      'tests/certification/phase2-*.test.ts',
     ],
     coverage: {
       provider: 'v8',

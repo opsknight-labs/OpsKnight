@@ -152,3 +152,10 @@ Under Phase 2 physical certification, unattended zero-touch remediation was cert
   ]
 }
 ```
+
+> [!NOTE]
+> **Component-Level Orchestration vs. Full Unattended Production Boundary**:
+>
+> - Execution `cmvezw1c5000evheis789l6y1` verifies the core orchestrator contracts: `triggeredByType: 'TRIGGER'`, `triggeredByUserId: null`, UI badge `Trigger: Automation trigger`, and physical target container restoration (`HTTP 200 OK`).
+> - However, in this qualification run, trigger evaluation and claim progression were driven via local orchestrator APIs rather than a fully decoupled black-box background worker pod.
+> - Therefore, while the core runtime contracts and schema boundaries are verified, fully autonomous zero-touch remediation remains designated as an operational roadmap item requiring dedicated worker daemon deployment (`OPSKNIGHT_PROCESS_ROLE=runbook-worker`), rather than being claimed as fully certified for initial GA.

@@ -37,5 +37,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Stale lease revival: Zombie agent A attempted late result delivery after lease expiration -> Server rejected late submission with pre-execution fence error (execution cmvezwb47003vvheicgmi13d0)."
+  "notes": "Stale lease fencing safety: Attempt reassigned to secondary agent -> Late submission from original expired lease token rejected by server with HTTP 409 Conflict / Expired recovery fence (execution cmvezwb47003vvheicgmi13d0)."
 }

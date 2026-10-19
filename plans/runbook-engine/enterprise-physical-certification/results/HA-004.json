@@ -40,5 +40,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Pre-mutation crash: Agent A lease expired pre-mutation -> Reconciler reset attempt to PENDING -> Survivor Agent B claimed and executed cleanly (execution cmvezw94i001bvheic10z0bav)."
+  "notes": "Reconciler lease expiration safety: In-flight attempt lease expired pre-mutation in PostgreSQL -> Reconciler reset attempt from CLAIMED to PENDING -> Survivor Agent B claimed and executed cleanly (execution cmvezw94i001bvheic10z0bav)."
 }

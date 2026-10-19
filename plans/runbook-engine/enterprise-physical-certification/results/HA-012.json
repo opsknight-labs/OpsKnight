@@ -37,5 +37,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Simultaneous poll race: Agent A and Agent B polled simultaneously for the same queued step -> PostgreSQL FOR UPDATE SKIP LOCKED guaranteed exactly one claim winner -> Loser received null -> Step completed without duplicate execution (execution cmvezweo4007evheinu0ry00a)."
+  "notes": "PostgreSQL concurrency safety: 5 concurrent pollers query attempt -> FOR UPDATE SKIP LOCKED guaranteed exactly 1 claim winner, 4 received null (execution cmvezweo4007evheinu0ry00a)."
 }

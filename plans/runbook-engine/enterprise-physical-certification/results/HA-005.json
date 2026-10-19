@@ -39,5 +39,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Mid-write crash: Agent A crashed during non-idempotent write -> Reconciler detected lease expiration and quarantined step to UNKNOWN (errorCode=UNKNOWN_OUTCOME) -> Execution safely marked FAILED without unsafe retry (execution cmvezw9g1002dvheiogjelcwf)."
+  "notes": "Quarantine fencing safety: Mid-write non-idempotent attempt lease expired -> Reconciler marked attempt FAILED with errorCode UNKNOWN_OUTCOME -> Verified non-idempotent retry guard prevents unsafe retry (execution cmvezw9g1002dvheiogjelcwf)."
 }

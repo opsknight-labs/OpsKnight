@@ -39,5 +39,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Post-write crash: Physical container mutation completed -> Primary agent crashed before receipt -> Independent probe verified port 8095 HTTP 200 -> Workload confirmed healthy (execution cmvezwa4z0035vhei8c0syp50)."
+  "notes": "Post-write re-verification probe gate: Container mutation verified healthy (port 8095 HTTP 200) -> Verified step completion check succeeds without redundant destructive retry (execution cmvezwa4z0035vhei8c0syp50)."
 }

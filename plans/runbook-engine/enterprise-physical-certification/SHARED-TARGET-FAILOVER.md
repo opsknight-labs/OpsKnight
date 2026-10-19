@@ -55,6 +55,12 @@ Scenarios HA-004 through HA-012 test mid-mutation failures, stale lease fencing,
 > - For non-idempotent operations, the execution halts safely at `UNKNOWN_OUTCOME` to prevent catastrophic duplicate mutations on surviving agents.
 > - Any late attempt by the original agent to submit output is blocked with HTTP `409 Conflict`.
 
+> [!IMPORTANT]
+> **Pre-Dispatch Staging Failover vs. Orchestrator Concurrency Qualification**:
+>
+> - **HA-001 through HA-003 (Physically Certified on Staging Pool)**: Real agent container shutdown (`docker stop`), survivor agent claim, and target container recovery on port 8095.
+> - **HA-004 through HA-012 (Qualified at Reconciler & Concurrency Layer)**: Validated against PostgreSQL row locking (`FOR UPDATE SKIP LOCKED`), reconciler lease expiration watchdog, token fencing (`409 Conflict`), and capability routing. Physical process-kill chaos injection during live socket writes remains an operational roadmap item.
+
 ---
 
 ## 3. Physical HA Execution Receipts
