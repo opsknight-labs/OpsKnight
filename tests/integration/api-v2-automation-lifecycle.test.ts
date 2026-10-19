@@ -91,9 +91,10 @@ it('uses the configuration validator and fences UI/database writes and replay', 
   const changed = await f.mode('SHADOW', etag, key);
   expect(changed.status).toBe(200);
   expect(changed.headers.get('etag')).toBe('"3"');
-  const replay = await f.mode('SHADOW', '"0"', key);
+  const replay = await f.mode('SHADOW', etag, key);
   expect(replay.status).toBe(200);
   expect(replay.headers.get('idempotency-replayed')).toBe('true');
+  expect((await f.mode('SHADOW', '"0"', key)).status).toBe(409);
   expect((await f.mode('LIVE', etag)).status).toBe(412);
   // The trigger advances the same validator even when the API is bypassed by a UI/domain writer.
   await db.serviceAutomationConfig.update({
