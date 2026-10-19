@@ -1,0 +1,46 @@
+{
+  "sourceParent": "20f762a10da40d07c17cd17672ad2b302d1e8f18",
+  "updatedAt": "2026-10-19T07:57:17.125566+00:00",
+  "status": "image_build_pending",
+  "context": "kind-opsknight-cluster",
+  "namespace": "opsknight-api-886-072b69f",
+  "topology": {
+    "nodes": 1,
+    "allocatableCpu": 12,
+    "allocatableMemoryKi": 8124256,
+    "coResidentWorkloads": "Existing namespaces and a separate automation Kind cluster share the Docker VM; no unrelated workload was stopped or changed."
+  },
+  "completed": [
+    "Code pushed before namespace creation",
+    "Namespace created with owner and source labels",
+    "Random credentials created in namespace-only Secrets; local copies are private temporary files",
+    "Helm fixture lint and server-side dry run passed after cluster recovered",
+    "Namespace-owned SDK forwarding harness with image/readiness preflight",
+    "11 external-mode guard tests and 4 package-installer tests passed",
+    "Changed-source lint and typecheck passed",
+    "Both SDKs passed the unchanged default local workflow mode against the prior local production artifact; this is harness regression evidence, not current-image certification."
+  ],
+  "failedAttempts": [
+    {
+      "source": "072b69f8df627312684aaec9184ad75f3e82f822",
+      "result": "Unbounded image compilation saturated the shared VM and Kubernetes TLS handshakes timed out. Own build cancelled; validation was not disabled."
+    },
+    {
+      "source": "20f762a10da40d07c17cd17672ad2b302d1e8f18",
+      "result": "Docker build failed with cannot allocate memory at the 4 GiB build-container limit. No application deployment or timed test had started."
+    }
+  ],
+  "next": [
+    "Push configurable build heap and namespace SDK harness",
+    "Build exact pushed source with 2 GiB Node heap and 3 GiB container limit/four CPUs",
+    "Load and deploy the image into the owned namespace",
+    "Run both SDKs and real worker functional paths",
+    "Run measured 1/2/4-replica load, quota/revocation and pod/database recovery checks",
+    "Record limitations and failures without marking unsupported enterprise gates passed"
+  ],
+  "limitations": [
+    "Single-node Kind does not prove physical node or database HA",
+    "Kindnet NetworkPolicy enforcement and production TLS are not established by this run",
+    "Real Agent approval/rerun, missing API families and mixed-version/combined certification remain open"
+  ]
+}

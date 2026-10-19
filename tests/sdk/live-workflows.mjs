@@ -7,10 +7,36 @@ const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || !new URL(databaseUrl).pathname.slice(1).endsWith('_test')) {
   throw new Error('Live SDK certification requires a dedicated database whose name ends in _test.');
 }
+const externalBase = process.env.API_SDK_EXTERNAL_BASE_URL;
+if (externalBase) {
+  const endpoint = new URL(externalBase);
+  if (
+    endpoint.protocol !== 'http:' ||
+    endpoint.hostname !== '127.0.0.1' ||
+    endpoint.username ||
+    endpoint.password ||
+    endpoint.pathname !== '/api/v2' ||
+    endpoint.search ||
+    endpoint.hash ||
+    !process.env.API_KEY_SECRET
+  )
+    throw new Error(
+      'External SDK certification requires a loopback /api/v2 forward and matching API_KEY_SECRET.'
+    );
+}
 const port = Number(process.env.API_SDK_TEST_PORT ?? 3159);
 if (!Number.isInteger(port) || port < 1024 || port > 65534)
   throw new Error('Invalid API_SDK_TEST_PORT.');
-const secret = randomBytes(32).toString('hex');
+if (
+  externalBase &&
+  (new URL(externalBase).port !== String(port) ||
+    !/^opsknight-api-[0-9]+-[a-f0-9]{7}$/.test(process.env.API_SDK_KUBERNETES_NAMESPACE ?? '') ||
+    process.env.API_SDK_KUBERNETES_CONTEXT !== 'kind-opsknight-cluster')
+)
+  throw new Error(
+    'External SDK certification requires the explicit owned Kind namespace/context and matching forwarded port.'
+  );
+const secret = externalBase ? process.env.API_KEY_SECRET : randomBytes(32).toString('hex');
 const token = `ok_test_${randomBytes(32).toString('base64url')}`;
 const prisma = new PrismaClient();
 async function stopProcess(child) {
@@ -39,18 +65,24 @@ const runtimeEnvironment = {
   NEXTAUTH_URL: `http://127.0.0.1:${port}`,
   NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${port}`,
 };
-const server = spawn(process.execPath, ['.next/standalone/server.js'], {
-  env: { ...runtimeEnvironment, OPSKNIGHT_PROCESS_ROLE: 'web' },
-  stdio: 'ignore',
-});
+const server = externalBase
+  ? null
+  : spawn(process.execPath, ['.next/standalone/server.js'], {
+      env: { ...runtimeEnvironment, OPSKNIGHT_PROCESS_ROLE: 'web' },
+      stdio: 'ignore',
+    });
 try {
   let ready = false;
   for (let attempt = 0; attempt < 40; attempt++) {
-    if (server.exitCode !== null) throw new Error('Built application exited before readiness.');
+    if (server && server.exitCode !== null)
+      throw new Error('Built application exited before readiness.');
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/v2/openapi.json`, {
-        signal: AbortSignal.timeout(1000),
-      });
+      const response = await fetch(
+        `${externalBase ?? `http://127.0.0.1:${port}/api/v2`}/openapi.json`,
+        {
+          signal: AbortSignal.timeout(1000),
+        }
+      );
       if (response.ok) {
         await response.body?.cancel();
         ready = true;
@@ -106,7 +138,7 @@ try {
   });
   keyId = key.id;
   const client = new Client({
-    baseUrl: `http://127.0.0.1:${port}/api/v2`,
+    baseUrl: externalBase ?? `http://127.0.0.1:${port}/api/v2`,
     token,
     allowInsecureHttp: true,
   });
@@ -481,14 +513,16 @@ try {
   )
     throw new Error('Subscriber revocation missing.');
   console.log('TypeScript live status-page subscriber administration passed.');
-  worker = spawn(process.execPath, ['.next/standalone/server.js'], {
-    env: {
-      ...runtimeEnvironment,
-      PORT: String(port + 1),
-      OPSKNIGHT_PROCESS_ROLE: 'general-worker',
-    },
-    stdio: 'ignore',
-  });
+  worker = externalBase
+    ? null
+    : spawn(process.execPath, ['.next/standalone/server.js'], {
+        env: {
+          ...runtimeEnvironment,
+          PORT: String(port + 1),
+          OPSKNIGHT_PROCESS_ROLE: 'general-worker',
+        },
+        stdio: 'ignore',
+      });
   async function interventionFixture(status = 'WAITING_APPROVAL') {
     return prisma.runbookExecution.create({
       data: {
@@ -609,7 +643,7 @@ try {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (Date.now() >= evaluationDeadline)
       throw new Error('Objective evaluation exceeded its 50-second completion budget.');
-    if (worker.exitCode !== null) throw new Error('Objective worker exited.');
+    if (worker && worker.exitCode !== null) throw new Error('Objective worker exited.');
     const result = await client.call('getServiceObjectiveEvaluation', {
       params: { ...objectiveParams, evaluationId: evaluation.data.id },
     });
