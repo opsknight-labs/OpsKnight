@@ -3,11 +3,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/shadcn/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import {
   Command,
   CommandEmpty,
@@ -16,7 +12,17 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/shadcn/command';
-import { Check, ChevronsUpDown, Loader2, X } from 'lucide-react';
+import {
+  Check,
+  ChevronsUpDown,
+  Cpu,
+  Crosshair,
+  Layers,
+  Loader2,
+  Server,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type SearchableRunbookSelectProps = {
@@ -32,6 +38,15 @@ export type SearchableRunbookSelectProps = {
 };
 
 type Option = { value: string; label: string };
+
+const KIND_ICONS = {
+  service: Server,
+  runbook: Workflow,
+  agent: Cpu,
+  'agent-history': Cpu,
+  pool: Layers,
+  target: Crosshair,
+} as const;
 
 export function SearchableRunbookSelect({
   kind,
@@ -88,7 +103,17 @@ export function SearchableRunbookSelect({
     ? selectedOption.label
     : selectedValue
       ? selectedValue
-      : (placeholder ?? (required ? (label ? `Select ${fallbackLabel}…` : 'Select…') : (label ? `All ${fallbackLabel}` : 'All')));
+      : (placeholder ??
+        (required
+          ? label
+            ? `Select ${fallbackLabel}…`
+            : 'Select…'
+          : label
+            ? `All ${fallbackLabel}`
+            : 'All'));
+
+  // eslint-disable-next-line security/detect-object-injection -- kind is a closed union of known select types
+  const KindIcon = KIND_ICONS[kind] ?? Server;
 
   const handleSelect = (val: string) => {
     const nextVal = val === selectedValue ? '' : val;
@@ -120,15 +145,28 @@ export function SearchableRunbookSelect({
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              aria-label={ariaLabel ?? (label ? `Select ${fallbackLabel}` : placeholder ?? 'Select option')}
+              aria-label={
+                ariaLabel ?? (label ? `Select ${fallbackLabel}` : (placeholder ?? 'Select option'))
+              }
               className={cn(
-                'h-9 w-full justify-between text-xs font-normal px-2.5',
+                'h-9 w-full justify-between rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium px-2.5 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-primary/50 data-[state=open]:ring-2 data-[state=open]:ring-primary/20',
                 !required && selectedValue ? 'pr-12' : 'pr-2.5',
                 !selectedValue && 'text-muted-foreground'
               )}
             >
-              <span className="truncate">{displayLabel}</span>
-              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50 shrink-0 ml-1.5" />
+              <div className="flex items-center gap-2 min-w-0 truncate">
+                <KindIcon
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0 transition-colors',
+                    selectedValue ? 'text-primary' : 'text-muted-foreground/70'
+                  )}
+                  aria-hidden="true"
+                />
+                <span className={cn('truncate', !selectedValue && 'font-normal')}>
+                  {displayLabel}
+                </span>
+              </div>
+              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50 shrink-0 ml-1.5 transition-transform" />
             </Button>
           </PopoverTrigger>
           {!required && selectedValue && (
@@ -136,26 +174,35 @@ export function SearchableRunbookSelect({
               type="button"
               onClick={handleClear}
               aria-label={label ? `Clear ${fallbackLabel} selection` : 'Clear selection'}
-              className="absolute right-7 top-1/2 -translate-y-1/2 rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground z-10"
+              className="absolute right-7 top-1/2 -translate-y-1/2 rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground z-10 transition-colors"
             >
               <X className="h-3 w-3" />
             </button>
           )}
         </div>
-        <PopoverContent className="w-[280px] sm:w-[320px] p-0" align="start">
-          <Command shouldFilter={false}>
-            <div className="relative border-b">
+        <PopoverContent
+          className="w-[280px] sm:w-[320px] p-1.5 rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl overflow-hidden"
+          align="start"
+        >
+          <Command shouldFilter={false} className="bg-transparent">
+            <div className="relative border-b border-border/60 pb-1.5 mb-1 px-1">
               <CommandInput
-                placeholder={label ? `Search ${fallbackLabel}…` : placeholder ? `Search ${placeholder.toLowerCase()}…` : 'Search…'}
+                placeholder={
+                  label
+                    ? `Search ${fallbackLabel}…`
+                    : placeholder
+                      ? `Search ${placeholder.toLowerCase()}…`
+                      : 'Search…'
+                }
                 value={search}
                 onValueChange={setSearch}
-                className="h-9 text-xs"
+                className="h-8 text-xs rounded-lg"
               />
               {loading && (
-                <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2 className="absolute right-2.5 top-2 h-4 w-4 animate-spin text-muted-foreground" />
               )}
             </div>
-            <CommandList className="max-h-60 overflow-y-auto">
+            <CommandList className="max-h-60 overflow-y-auto space-y-0.5">
               {error ? (
                 <div className="p-3 text-xs text-destructive text-center">
                   Search unavailable. Try again.
@@ -170,12 +217,12 @@ export function SearchableRunbookSelect({
                     <CommandItem
                       value="__clear__"
                       onSelect={() => handleSelect('')}
-                      className="text-xs cursor-pointer"
+                      className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors duration-150 hover:bg-muted/70 aria-selected:bg-primary/10 aria-selected:text-primary flex items-center gap-2"
                     >
                       <Check
                         className={cn(
-                          'mr-2 h-3.5 w-3.5',
-                          !selectedValue ? 'opacity-100' : 'opacity-0'
+                          'h-3.5 w-3.5 shrink-0 transition-opacity',
+                          !selectedValue ? 'opacity-100 text-primary' : 'opacity-0'
                         )}
                       />
                       <span className="text-muted-foreground font-medium">
@@ -188,12 +235,12 @@ export function SearchableRunbookSelect({
                       key={option.value}
                       value={option.value}
                       onSelect={() => handleSelect(option.value)}
-                      className="text-xs cursor-pointer"
+                      className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors duration-150 hover:bg-muted/70 aria-selected:bg-primary/10 aria-selected:text-primary flex items-center gap-2"
                     >
                       <Check
                         className={cn(
-                          'mr-2 h-3.5 w-3.5 shrink-0',
-                          selectedValue === option.value ? 'opacity-100' : 'opacity-0'
+                          'h-3.5 w-3.5 shrink-0 transition-opacity',
+                          selectedValue === option.value ? 'opacity-100 text-primary' : 'opacity-0'
                         )}
                       />
                       <span className="truncate">{option.label}</span>

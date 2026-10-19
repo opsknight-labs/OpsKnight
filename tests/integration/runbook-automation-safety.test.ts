@@ -121,6 +121,10 @@ async function createFixture(
       { expectedVersionId: version.id },
       admin.id
     );
+  binding = await testPrisma.serviceAutomationRule.update({
+    where: { id: binding.id },
+    data: { enabled: true },
+  });
   return { runbook, version, service, admin, agent, pool, binding, trigger };
 }
 
@@ -150,7 +154,11 @@ async function startAutomatic(
   sourceEventId = crypto.randomUUID()
 ) {
   const runbookVersionId = fixture.binding.runbookVersionId!;
+  const { configurationRevision } = await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+    where: { id: fixture.binding.id },
+  });
   return startTriggeredRunbookExecution({
+    expectedRuleRevision: configurationRevision,
     runbookId: fixture.runbook.id,
     runbookVersionId,
     incidentId,
@@ -164,6 +172,25 @@ async function startAutomatic(
       runbookVersionId,
     }),
   });
+}
+
+/** Runs the durable evidence-finalization job that records recovery after a terminal state. */
+async function settleVerification(executionId: string) {
+  const jobs = await testPrisma.backgroundJob.findMany({
+    where: {
+      type: 'RUNBOOK',
+      status: 'PENDING',
+      AND: [
+        { payload: { path: ['kind'], equals: 'FINALIZE_VERIFICATION' } },
+        { payload: { path: ['executionId'], equals: executionId } },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  for (const job of jobs) {
+    await processRunbookJob(job.payload);
+    await testPrisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'COMPLETED' } });
+  }
 }
 
 type Evidence = { serviceState?: string } | null;
@@ -187,6 +214,7 @@ async function runAgentStep(
     ...(result.pre ? { preState: { capturedAt, ...result.pre } } : {}),
     ...(result.post ? { postState: { capturedAt, ...result.post } } : {}),
   });
+  await settleVerification(executionId);
 }
 
 /** Restart action recovered the unit and the authored check proved it. */
@@ -200,6 +228,7 @@ async function runVerifiedRecovery(executionId: string, agentId: string) {
     post: { serviceState: 'active' },
   });
   await advanceExecution(executionId);
+  await settleVerification(executionId);
 }
 
 async function verifiedResolutionJobs(executionId: string) {
@@ -377,7 +406,7 @@ describeIfRealDB(
         ).rejects.toThrow('UNATTENDED_WRITE_VERIFICATION_REQUIRED');
         expect(
           (
-            await testPrisma.serviceRunbookBinding.findUniqueOrThrow({
+            await testPrisma.serviceAutomationRule.findUniqueOrThrow({
               where: { id: fixture.binding.id },
             })
           ).unattendedWritesAuthorizedAt
@@ -460,7 +489,7 @@ describeIfRealDB(
           ).rejects.toThrow();
         }
         expect(
-          await testPrisma.serviceRunbookBinding.findUniqueOrThrow({
+          await testPrisma.serviceAutomationRule.findUniqueOrThrow({
             where: { id: fixture.binding.id },
           })
         ).toMatchObject({ unattendedWritesVersionId: null, unattendedWritesAuthorizedAt: null });
@@ -561,6 +590,7 @@ describeIfRealDB(
         // The check "succeeds" but reports no post-state evidence.
         await runAgentStep(execution.id, fixture.agent.id);
         await advanceExecution(execution.id);
+        await settleVerification(execution.id);
         expect(
           await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
         ).toMatchObject({ status: 'SUCCEEDED', recoveryOutcome: 'NOT_VERIFIED' });
@@ -581,6 +611,7 @@ describeIfRealDB(
         const execution = await startAutomatic(fixture, incident.id);
         await runAgentStep(execution.id, fixture.agent.id, { post: { serviceState: 'active' } });
         await advanceExecution(execution.id);
+        await settleVerification(execution.id);
         expect(
           await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
         ).toMatchObject({ status: 'SUCCEEDED', recoveryOutcome: 'NOT_REQUESTED' });
@@ -605,6 +636,7 @@ describeIfRealDB(
           post: { serviceState: 'failed' },
         });
         await advanceExecution(execution.id);
+        await settleVerification(execution.id);
         expect(
           await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
         ).toMatchObject({ status: 'FAILED', recoveryOutcome: 'NOT_VERIFIED' });

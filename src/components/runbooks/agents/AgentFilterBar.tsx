@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { SearchableRunbookSelect } from '../SearchableRunbookSelect';
 import { Input } from '@/components/ui/shadcn/input';
+import { SearchField } from '../ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
@@ -17,7 +18,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/shadcn/collapsible';
-import { Filter, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Activity, Filter, Monitor, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Label } from '@/components/ui/shadcn/label';
 
@@ -58,12 +59,10 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
       platform,
       capability,
       label,
-      tab: query.tab || 'agents',
       ...(isAttention ? { attention: '1' } : {}),
       ...overrides,
     };
 
-    if (merged.tab && merged.tab !== 'agents') params.set('tab', merged.tab);
     if (merged.q?.trim()) params.set('q', merged.q.trim());
     if (merged.status && merged.status !== 'all') params.set('status', merged.status);
     if (merged.pool && merged.pool !== 'all') params.set('pool', merged.pool);
@@ -83,26 +82,25 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
     setPlatform('all');
     setCapability('');
     setLabel('');
-    const baseParams = query.tab && query.tab !== 'agents' ? `?tab=${query.tab}` : '';
-    router.push(`${pathname}${baseParams}`);
+    router.push(pathname);
   };
 
   return (
-    <div className="space-y-3 rounded-xl border bg-card/60 p-3.5 shadow-2xs backdrop-blur-xs">
+    <div className="space-y-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 shadow-xs">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <form
           onSubmit={e => {
             e.preventDefault();
             applyFilters();
           }}
-          className="relative flex-1"
+          className="min-w-0 flex-1"
         >
-          <Input
+          <SearchField
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search agents by name or hostname…"
             aria-label="Search agents"
-            className="h-9 w-full bg-background text-xs pl-3 pr-8"
+            className="w-full rounded-xl"
           />
         </form>
 
@@ -115,16 +113,55 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               applyFilters({ status: val });
             }}
           >
-            <SelectTrigger className="h-9 w-[130px] text-xs bg-background" aria-label="Filter by status">
-              <SelectValue placeholder="Status" />
+            <SelectTrigger
+              className="h-9 w-[135px] rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors"
+              aria-label="Filter by status"
+            >
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Activity
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <SelectValue placeholder="Status" />
+              </div>
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All active</SelectItem>
-              <SelectItem value="ONLINE" className="text-xs">Online</SelectItem>
-              <SelectItem value="DEGRADED" className="text-xs">Degraded</SelectItem>
-              <SelectItem value="OFFLINE" className="text-xs">Offline</SelectItem>
-              <SelectItem value="ENROLLING" className="text-xs">Enrolling</SelectItem>
-              <SelectItem value="REVOKED" className="text-xs">Revoked</SelectItem>
+            <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+              <SelectItem
+                value="all"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                All active
+              </SelectItem>
+              <SelectItem
+                value="ONLINE"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                Online
+              </SelectItem>
+              <SelectItem
+                value="DEGRADED"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                Degraded
+              </SelectItem>
+              <SelectItem
+                value="OFFLINE"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                Offline
+              </SelectItem>
+              <SelectItem
+                value="ENROLLING"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                Enrolling
+              </SelectItem>
+              <SelectItem
+                value="REVOKED"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                Revoked
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -151,14 +188,43 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               applyFilters({ platform: val });
             }}
           >
-            <SelectTrigger className="h-9 w-[130px] text-xs bg-background" aria-label="Filter by platform">
-              <SelectValue placeholder="Platform" />
+            <SelectTrigger
+              className="h-9 w-[140px] rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors"
+              aria-label="Filter by platform"
+            >
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Monitor
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <SelectValue placeholder="Platform" />
+              </div>
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All platforms</SelectItem>
-              <SelectItem value="linux" className="text-xs">Linux</SelectItem>
-              <SelectItem value="darwin" className="text-xs">macOS (Darwin)</SelectItem>
-              <SelectItem value="win32" className="text-xs">Windows</SelectItem>
+            <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+              <SelectItem
+                value="all"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                All platforms
+              </SelectItem>
+              <SelectItem
+                value="linux"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                Linux
+              </SelectItem>
+              <SelectItem
+                value="darwin"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                macOS (Darwin)
+              </SelectItem>
+              <SelectItem
+                value="win32"
+                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+              >
+                Windows
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -168,9 +234,9 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               <Button
                 variant={advancedOpen ? 'secondary' : 'outline'}
                 size="sm"
-                className="h-9 text-xs gap-1.5"
+                className="h-9 text-xs gap-1.5 rounded-xl border-input/80 shadow-2xs"
               >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Advanced</span>
                 {(Boolean(capability) || Boolean(label)) && (
                   <Badge variant="default" className="ml-1 px-1 py-0 text-[10px] h-4">
@@ -186,9 +252,9 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               variant="ghost"
               size="sm"
               onClick={resetFilters}
-              className="h-9 text-xs gap-1 text-muted-foreground hover:text-foreground"
+              className="h-9 text-xs gap-1 rounded-xl text-muted-foreground hover:text-foreground"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Reset</span>
             </Button>
           )}
@@ -199,7 +265,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             onClick={() => applyFilters()}
             className="h-9 text-xs gap-1.5"
           >
-            <Filter className="h-3.5 w-3.5" />
+            <Filter className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Apply filters</span>
           </Button>
         </div>

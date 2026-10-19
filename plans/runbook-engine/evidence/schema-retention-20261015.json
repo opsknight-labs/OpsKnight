@@ -1,0 +1,23 @@
+{
+  "measuredAt": "2026-10-15T04:36:40.726Z",
+  "previousIdentityUpgradeProof": "schema-upgrade-20261015.json",
+  "results": [
+    {
+      "topology": "upgrade",
+      "migrations": "219",
+      "retention": true,
+      "revision": true,
+      "sso": true,
+      "status": "PASS"
+    },
+    {
+      "topology": "fresh",
+      "migrations": "219",
+      "retention": true,
+      "revision": true,
+      "sso": true,
+      "status": "PASS"
+    }
+  ],
+  "limitation": "Schema compatibility; not a physical production runtime upgrade or rollback certification"
+}

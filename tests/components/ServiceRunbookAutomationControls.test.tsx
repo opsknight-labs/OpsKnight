@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import TriggerConditionEditor from '@/components/service/runbooks/TriggerConditionEditor';
-import AgentSelectorEditor from '@/components/service/runbooks/AgentSelectorEditor';
 import ResolveOnVerifiedRecoveryToggle from '@/components/service/runbooks/ResolveOnVerifiedRecoveryToggle';
 import UnattendedWritesPanel from '@/components/service/runbooks/UnattendedWritesPanel';
 import MonitoringIncidentsToggle from '@/components/service/runbooks/MonitoringIncidentsToggle';
@@ -149,17 +148,6 @@ describe('operator helpers', () => {
       'IS_UNMAPPED',
     ]);
     expect(operatorsForContextField(undefined)).toContain('NOT_EXISTS');
-  });
-});
-
-describe('AgentSelectorEditor', () => {
-  it('rejects context templates and invalid JSON', () => {
-    render(<AgentSelectorEditor defaultValue={'{"zone":"${{ automation.zone }}"}'} />);
-    expect(screen.getByRole('alert')).toHaveTextContent('approved target mapping table');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Agent selector' }), {
-      target: { value: '{' },
-    });
-    expect(screen.getByRole('alert')).toHaveTextContent('Agent selector must be valid JSON.');
   });
 });
 

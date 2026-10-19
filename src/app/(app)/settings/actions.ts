@@ -1,10 +1,12 @@
 'use server';
 
+import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
+
 import prisma from '@/lib/prisma';
-import { revokeUserSessions } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
+import { disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
 import {
   getEmailConfig,
@@ -18,13 +20,18 @@ import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
 import {
-  API_SCOPES,
   CAPABILITIES,
   hasCapability,
   isApiScope,
-  isWriteApiScope,
 } from '@/lib/authorization';
 import { getCurrentUser } from '@/lib/rbac';
+import {
+  createServiceAccount,
+  issueServiceAccountToken,
+  revokeServiceAccountToken,
+  deleteServiceAccount,
+} from '@/lib/api-v2/service-accounts';
+import { invalidateV2AuthCache } from '@/lib/api-v2/auth';
 
 type ActionState = {
   error?: string | null;
@@ -553,6 +560,7 @@ export async function updatePassword(
 ): Promise<ActionState> {
   try {
     const user = await getCurrentUser();
+    await assertPasswordOperationAllowed();
     const currentPassword = (formData.get('currentPassword') as string | null) ?? '';
     const newPassword = (formData.get('newPassword') as string | null) ?? '';
     const confirmPassword = (formData.get('confirmPassword') as string | null) ?? '';
@@ -580,19 +588,39 @@ export async function updatePassword(
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash },
+    await prisma.$transaction(async tx => {
+      await assertPasswordOperationAllowed(tx);
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${user.id} FOR UPDATE`;
+      const current = await tx.user.findUnique({
+        where: { id: user.id },
+        select: { passwordHash: true, tokenVersion: true, status: true },
+      });
+      if (
+        !current ||
+        current.status !== 'ACTIVE' ||
+        current.tokenVersion !== user.tokenVersion ||
+        current.passwordHash !== credentials.passwordHash
+      )
+        throw new Error(
+          'Credentials or account security state changed. Sign in again before changing your password.'
+        );
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      });
+      await logAudit(
+        {
+          action: 'user.password.updated',
+          entityType: 'USER',
+          actorId: user.id,
+          entityId: user.id,
+        },
+        tx
+      );
     });
-    await revokeUserSessions(user.id);
-
-    await logAudit({
-      action: 'user.password.updated',
-      entityType: 'USER',
-      entityId: user.id,
-      actorId: user.id,
-      details: { method: 'settings' },
-    });
+    const { invalidateSessionSecurityProjection } =
+      await import('@/lib/session-security-projection');
+    invalidateSessionSecurityProjection(user.id);
 
     revalidatePath('/settings/security');
     return { success: true };
@@ -611,20 +639,20 @@ export async function createApiKey(
     const scopes = formData.getAll('scopes').filter(Boolean) as string[];
     const expirationDays = Number(formData.get('expirationDays') || 90);
     const requestedScopes = scopes.filter(isApiScope);
-    const canWrite = hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE);
-    if (!canWrite && requestedScopes.some(isWriteApiScope)) {
-      return { error: 'Write scopes require Responder or Admin access.' };
-    }
-    const finalScopes =
-      requestedScopes.length > 0
-        ? requestedScopes
-        : canWrite
-          ? [API_SCOPES.EVENTS_WRITE]
-          : [API_SCOPES.INCIDENTS_READ];
-
     if (!name) {
       return { error: 'Name is required.' };
     }
+    if (requestedScopes.length === 0) {
+      return { error: 'At least one valid permission scope must be selected.' };
+    }
+    // Issuance rules come from the shared scope registry, not a list local to this action.
+    const disallowed = disallowedScopesForRole(user.role, requestedScopes);
+    if (disallowed.length > 0) {
+      return {
+        error: `Your role cannot issue these scopes: ${disallowed.join(', ')}.`,
+      };
+    }
+    const finalScopes = requestedScopes;
     if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 365) {
       return { error: 'API keys must expire between 1 and 365 days.' };
     }
@@ -672,7 +700,7 @@ export async function revokeApiKey(formData: FormData) {
   const user = await getCurrentUser();
   const key = await prisma.apiKey.findUnique({
     where: { id: keyId },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, tokenHash: true },
   });
   if (!key || (user.role !== 'ADMIN' && key.userId !== user.id)) {
     throw new Error('API key not found or you do not have permission to revoke it.');
@@ -703,5 +731,116 @@ export async function revokeApiKey(formData: FormData) {
     );
   });
 
+  if (key.tokenHash) {
+    invalidateV2AuthCache(key.tokenHash);
+  }
+
+  revalidatePath('/settings/api-keys');
+}
+
+export async function createServiceAccountAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    const user = await getCurrentUser();
+    if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+      return { error: 'Only administrators can create service accounts.' };
+    }
+
+    const name = (formData.get('name') as string | null)?.trim() ?? '';
+    const role = (formData.get('role') as string | null)?.trim() ?? 'RESPONDER';
+    const description = (formData.get('description') as string | null)?.trim() || undefined;
+    const teamIds = formData.getAll('teamIds').filter(Boolean) as string[];
+
+    if (!name) {
+      return { error: 'Service account name is required.' };
+    }
+
+    await createServiceAccount({
+      name,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing
+      role: role as any,
+      description,
+      teamIds: teamIds.length > 0 ? teamIds : undefined,
+      actorId: user.id,
+    });
+
+    revalidatePath('/settings/api-keys');
+    return { success: true, token: null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to create service account.' };
+  }
+}
+
+export async function issueServiceAccountTokenAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    const user = await getCurrentUser();
+    if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+      return { error: 'Only administrators can issue service account tokens.' };
+    }
+
+    const serviceAccountId = (formData.get('serviceAccountId') as string | null)?.trim() ?? '';
+    const name = (formData.get('name') as string | null)?.trim() ?? '';
+    const scopes = formData.getAll('scopes').filter(Boolean) as string[];
+    const expirationDaysParam = formData.get('expirationDays');
+    // "0" is the form's explicit "never expires" choice; an absent value is not a choice.
+    const neverExpires = expirationDaysParam === '0';
+    const expiresInDays =
+      expirationDaysParam && !neverExpires ? Number(expirationDaysParam) : undefined;
+
+    if (!serviceAccountId) {
+      return { error: 'Service account ID is required.' };
+    }
+    if (!name) {
+      return { error: 'Token name is required.' };
+    }
+    if (scopes.length === 0) {
+      return { error: 'At least one scope must be selected.' };
+    }
+
+    const result = await issueServiceAccountToken({
+      serviceAccountId,
+      name,
+      scopes,
+      expiresInDays: expiresInDays && expiresInDays > 0 ? expiresInDays : undefined,
+      neverExpires,
+      actorId: user.id,
+    });
+
+    revalidatePath('/settings/api-keys');
+    return { success: true, token: result.token };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to issue token.' };
+  }
+}
+
+export async function revokeServiceAccountTokenAction(formData: FormData) {
+  const serviceAccountId = formData.get('serviceAccountId') as string | null;
+  const tokenId = formData.get('tokenId') as string | null;
+  if (!serviceAccountId || !tokenId) return;
+
+  const user = await getCurrentUser();
+  if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+    throw new Error('Only administrators can revoke service account tokens.');
+  }
+
+  await revokeServiceAccountToken(serviceAccountId, tokenId, user.id);
+  revalidatePath('/settings/api-keys');
+}
+
+export async function deleteServiceAccountAction(formData: FormData) {
+  const serviceAccountId = formData.get('serviceAccountId') as string | null;
+  if (!serviceAccountId) return;
+
+  const user = await getCurrentUser();
+  if (user.role !== 'ADMIN' && !hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE)) {
+    throw new Error('Only administrators can delete service accounts.');
+  }
+
+  await deleteServiceAccount(serviceAccountId, user.id);
   revalidatePath('/settings/api-keys');
 }

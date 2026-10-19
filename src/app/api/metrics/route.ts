@@ -1,10 +1,12 @@
 import prisma from '@/lib/prisma';
+import { collectProviderFeedbackMetrics } from '@/lib/provider-feedback-metrics';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { withRequestContext } from '@/lib/logger';
 import { timingSafeEqual } from 'crypto';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { OperationalMetricSnapshot } from '@/lib/metrics/operational/registry';
+import { getRunbookWorkerEvidence } from '@/lib/runbooks/worker-heartbeats';
 
 type MetricsSnapshot = {
   automationJobs: {
@@ -22,6 +24,7 @@ type MetricsSnapshot = {
   }> | null;
   incidentCount: number | null;
   activeUsers: number | null;
+  providerFeedback: { pending: number; retried: number; quarantined: number } | null;
   notificationBacklog: { count: number; oldestAt: Date | null } | null;
   escalationBacklog: { count: number; oldestDueAt: Date | null } | null;
   rollupUpdatedAt: Date | null | undefined;
@@ -36,6 +39,7 @@ type MetricsSnapshot = {
   runbookArtifactStorage: { count: number; bytes: number } | null;
   runbookOldestPendingAt: Date | null | undefined;
   runbookCircuitsOpen: number | null;
+  runbookWorkers: Awaited<ReturnType<typeof getRunbookWorkerEvidence>> | null;
   collectedAt: number;
 };
 
@@ -110,6 +114,8 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       runbookArtifactStorage,
       runbookOldestPending,
       runbookCircuitsOpen,
+      providerFeedback,
+      runbookWorkers,
       automationJobs,
     ] = await Promise.allSettled([
       collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
@@ -245,6 +251,14 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         `
       ),
       collectWithTimeout(
+        'provider-feedback',
+        DB_COLLECTOR_TIMEOUT_MS,
+        collectProviderFeedbackMetrics
+      ),
+      collectWithTimeout('runbook-workers', DB_COLLECTOR_TIMEOUT_MS, () =>
+        getRunbookWorkerEvidence(new Date())
+      ),
+      collectWithTimeout(
         'automation-jobs',
         DB_COLLECTOR_TIMEOUT_MS,
         () => prisma.$queryRaw<
@@ -332,6 +346,8 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         runbookCircuitsOpen.status === 'fulfilled'
           ? Number(runbookCircuitsOpen.value[0]?.count ?? 0)
           : null,
+      providerFeedback: providerFeedback.status === 'fulfilled' ? providerFeedback.value : null,
+      runbookWorkers: runbookWorkers.status === 'fulfilled' ? runbookWorkers.value : null,
       collectedAt: Date.now(),
       automationJobs:
         automationJobs.status === 'fulfilled' && automationJobs.value[0]
@@ -344,6 +360,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
     };
     const degraded =
       value.automationJobs === null ||
+      value.providerFeedback === null ||
       value.jobStats === null ||
       value.jobTypeStats === null ||
       value.incidentCount === null ||
@@ -361,7 +378,8 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       value.runbookAgentWork === null ||
       value.runbookArtifactStorage === null ||
       value.runbookOldestPendingAt === undefined ||
-      value.runbookCircuitsOpen === null;
+      value.runbookCircuitsOpen === null ||
+      value.runbookWorkers === null;
     // A JS timeout cannot cancel every Prisma operation. Back off degraded
     // collectors so repeated scrapes cannot create an unbounded query storm.
     metricsCache = { value, expiresAt: Date.now() + (degraded ? 60_000 : 10_000) };
@@ -442,6 +460,11 @@ async function getMetrics(req: Request) {
   }
   const ageSeconds = (date: Date | null) =>
     date ? Math.max(0, (Date.now() - date.getTime()) / 1000) : 0;
+  if (snapshot.providerFeedback) {
+    metrics.set('opsknight_provider_feedback_pending', snapshot.providerFeedback.pending);
+    metrics.set('opsknight_provider_feedback_retried', snapshot.providerFeedback.retried);
+    metrics.set('opsknight_provider_feedback_quarantined', snapshot.providerFeedback.quarantined);
+  }
   if (snapshot.notificationBacklog) {
     metrics.set('opsknight_notifications_undelivered', snapshot.notificationBacklog.count);
     metrics.set(
@@ -525,6 +548,19 @@ async function getMetrics(req: Request) {
   if (snapshot.runbookCircuitsOpen !== null) {
     metrics.set('opsknight_runbook_service_circuits_open', snapshot.runbookCircuitsOpen);
   }
+  for (const status of ['HEALTHY', 'DEGRADED', 'UNKNOWN'])
+    metrics.set(
+      'opsknight_runbook_worker_health',
+      (snapshot.runbookWorkers?.status ?? 'UNKNOWN') === status ? 1 : 0,
+      { status: status.toLowerCase() }
+    );
+  if (snapshot.runbookWorkers) {
+    metrics.set('opsknight_runbook_worker_instances', snapshot.runbookWorkers.instances);
+    metrics.set(
+      'opsknight_runbook_worker_healthy_instances',
+      snapshot.runbookWorkers.healthyInstances
+    );
+  }
 
   const collectionErrors =
     Number(snapshot.automationJobs === null) +
@@ -532,6 +568,7 @@ async function getMetrics(req: Request) {
     Number(snapshot.activeUsers === null) +
     Number(snapshot.jobStats === null) +
     Number(snapshot.jobTypeStats === null) +
+    Number(snapshot.providerFeedback === null) +
     Number(snapshot.notificationBacklog === null) +
     Number(snapshot.escalationBacklog === null) +
     Number(snapshot.rollupUpdatedAt === undefined) +
@@ -545,7 +582,8 @@ async function getMetrics(req: Request) {
     Number(snapshot.runbookAgentWork === null) +
     Number(snapshot.runbookArtifactStorage === null) +
     Number(snapshot.runbookOldestPendingAt === undefined) +
-    Number(snapshot.runbookCircuitsOpen === null);
+    Number(snapshot.runbookCircuitsOpen === null) +
+    Number(snapshot.runbookWorkers === null);
   metrics.set('opsknight_metrics_collection_errors', collectionErrors);
   metrics.set('opsknight_metrics_cache_hits_total', metricsCacheHits);
   metrics.set('opsknight_metrics_cache_misses_total', metricsCacheMisses);

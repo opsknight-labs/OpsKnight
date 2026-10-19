@@ -89,6 +89,7 @@ export default function ServiceDetailTabs({
       layout="auto"
       tabs={tabItems}
       defaultTab={defaultTab}
+      navigationMode="server"
       actions={actions}
       className="space-y-6"
     >

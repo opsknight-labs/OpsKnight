@@ -105,6 +105,7 @@ export function formatDateTime(
           minute: '2-digit',
           hour12,
           timeZone,
+          ...(includeTimeZone ? { timeZoneName: 'short' } : {}),
         }).format(d);
 
       case 'short':
@@ -115,6 +116,7 @@ export function formatDateTime(
           minute: '2-digit',
           hour12,
           timeZone,
+          ...(includeTimeZone ? { timeZoneName: 'short' } : {}),
         }).format(d);
 
       case 'datetime':

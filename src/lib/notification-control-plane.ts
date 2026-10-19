@@ -10,6 +10,10 @@ import {
   LEGACY_NOTIFICATION_CLAIM_MS,
 } from './notification-claim-lease';
 import {
+  cleanNotificationProviderFeedback,
+  reconcileNotificationProviderFeedback,
+} from './notification-provider-feedback';
+import {
   Prisma,
   type NotificationCategory,
   type NotificationTrafficClass,
@@ -216,11 +220,7 @@ type IncidentCentralPayload = Extract<
   CentralNotificationPayload,
   {
     kind:
-      | 'INCIDENT_EMAIL'
-      | 'INCIDENT_SMS'
-      | 'INCIDENT_VOICE'
-      | 'INCIDENT_PUSH'
-      | 'INCIDENT_WHATSAPP';
+      'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_VOICE' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP';
   }
 >;
 
@@ -961,10 +961,48 @@ function executeProvider<T extends DeliveryResult>(
   });
 }
 
+type AuthenticationDeliveryMetadata = {
+  sourceType: string | null;
+  templateKey: string | null;
+  recipientId: string | null;
+  userId: string | null;
+};
+
+/** Recheck queued security mail at dispatch, including address changes after enqueue. */
+async function authenticationSecurityDeliveryRevoked(
+  payload: CentralNotificationPayload,
+  candidate: AuthenticationDeliveryMetadata
+): Promise<string | null> {
+  if (
+    candidate.sourceType !== 'AUTHENTICATION' ||
+    candidate.templateKey !== 'authentication-security-alert'
+  )
+    return null;
+  if (
+    payload.kind !== 'EMAIL' ||
+    !candidate.recipientId ||
+    candidate.userId !== candidate.recipientId
+  )
+    return 'Authentication security delivery has invalid recipient metadata.';
+  const recipient = await prisma.user.findUnique({
+    where: { id: candidate.recipientId },
+    select: { role: true, status: true, email: true },
+  });
+  if (
+    !recipient ||
+    recipient.role !== 'ADMIN' ||
+    recipient.status !== 'ACTIVE' ||
+    recipient.email.trim().toLowerCase() !== payload.to.trim().toLowerCase()
+  )
+    return 'Authentication security recipient is no longer authorized or the address changed.';
+  return null;
+}
+
 async function dispatchPayload(
   payload: CentralNotificationPayload,
   notificationId: string,
-  preCreatedAttemptId?: string
+  preCreatedAttemptId?: string,
+  authenticationMetadata?: AuthenticationDeliveryMetadata
 ): Promise<DeliveryResult> {
   switch (payload.kind) {
     case 'INCIDENT_EMAIL': {
@@ -1140,8 +1178,23 @@ async function dispatchPayload(
           errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
           error: `Pinned Email provider ${payload.providerKey} is unavailable`,
         };
-      return executeProvider(CircuitBreakers.email(payload.providerKey), () =>
-        sendEmail(
+      return executeProvider(CircuitBreakers.email(payload.providerKey), async () => {
+        if (authenticationMetadata) {
+          try {
+            const revoked = await authenticationSecurityDeliveryRevoked(
+              payload,
+              authenticationMetadata
+            );
+            if (revoked) return { success: true, skipped: true, error: revoked };
+          } catch {
+            return {
+              success: false,
+              errorCode: 'AUTH_SECURITY_POLICY_UNAVAILABLE',
+              error: 'Authentication recipient policy unavailable.',
+            };
+          }
+        }
+        return sendEmail(
           {
             to: payload.to,
             subject: payload.subject,
@@ -1150,8 +1203,8 @@ async function dispatchPayload(
             idempotencyKey: notificationId,
           },
           config
-        )
-      );
+        );
+      });
     }
     case 'SMS': {
       const { sendSMS } = await import('./sms');
@@ -1981,6 +2034,7 @@ async function deliverCentralNotificationOwned(
       sourceType: true,
       sourceId: true,
       recipientId: true,
+      userId: true,
       templateKey: true,
       claimToken: true,
       fanoutId: true,
@@ -2109,6 +2163,7 @@ async function deliverCentralNotificationOwned(
   let supersededReason: string | null;
   try {
     supersededReason =
+      (await authenticationSecurityDeliveryRevoked(payload, candidate)) ??
       (await statusSubscriberDeliveryRevoked(payload)) ??
       (await statusWebhookDeliveryRevoked(payload)) ??
       (await serviceSlackDeliveryRevoked(payload, candidate)) ??
@@ -2462,7 +2517,8 @@ async function deliverCentralNotificationOwned(
       result = await dispatchPayload(
         payloadForProvider as CentralNotificationPayload,
         candidate.id,
-        preCreatedAttemptId
+        preCreatedAttemptId,
+        candidate
       );
     } catch (dispatchError) {
       if (dispatchError instanceof CircuitBreakerTimeoutError) {
@@ -2482,14 +2538,34 @@ async function deliverCentralNotificationOwned(
       }
     }
 
+    if (result.errorCode === 'AUTH_SECURITY_POLICY_UNAVAILABLE') {
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'PENDING',
+          attempts: { decrement: 1 },
+          lastAttemptAt: null,
+          nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+          errorMsg: 'Authentication recipient policy unavailable; delivery deferred.',
+        },
+      });
+      return {
+        success: false,
+        claimed: true,
+        error: 'Authentication recipient policy unavailable.',
+      };
+    }
     if (result.success) {
       const finishedAt = new Date();
       const acceptedState = {
         status: result.skipped ? ('SKIPPED' as const) : ('SENT' as const),
         sentAt: result.skipped ? null : finishedAt,
         failedAt: null,
-        errorMsg: null,
-        providerMessageId: result.providerMessageId,
+        errorMsg: result.skipped ? (result.error ?? null) : null,
+        providerMessageId: result.providerMessageId ?? null,
+        feedbackPending: Boolean(result.providerMessageId),
+        deliveryProvider:
+          (result as { selectedProvider?: string }).selectedProvider || currentProvider,
         ...terminalPayload(candidate.category),
       };
       let committed: { count: number };
@@ -2601,6 +2677,11 @@ async function deliverCentralNotificationOwned(
         return { success: false, claimed: false };
       }
       await recordFanoutTerminal(candidate.fanoutId, result.skipped ? 'skipped' : 'completed');
+      try {
+        await reconcileNotificationProviderFeedback(candidate.id);
+      } catch {
+        logger.warn('notification.feedback_post_send_deferred', { notificationId: candidate.id });
+      }
       return { success: true, claimed: true };
     }
 
@@ -3154,10 +3235,21 @@ export async function processCentralNotificationQueue(
           failed++;
       }
     }
-    return { processed: succeeded + failed, succeeded, failed };
   } finally {
     stopHeartbeat();
   }
+  // Receipt maintenance runs after dispatch and never changes its success accounting.
+  try {
+    await reconcileNotificationProviderFeedback(undefined, now);
+  } catch {
+    logger.warn('notification.feedback_queue_replay_deferred');
+  }
+  try {
+    await cleanNotificationProviderFeedback(now);
+  } catch {
+    logger.warn('notification.feedback_retention_deferred');
+  }
+  return { processed: succeeded + failed, succeeded, failed };
 }
 
 export async function getNextCentralNotificationAt(
@@ -3225,14 +3317,18 @@ export async function getNextCentralNotificationAt(
   return deliveryAt <= reconciliationAt ? deliveryAt : reconciliationAt;
 }
 
-export async function requeueCentralNotification(notificationId: string): Promise<boolean> {
+export async function requeueCentralNotification(
+  notificationId: string,
+  /** Runs in the same transaction as the requeue, only when the requeue succeeded. */
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>
+): Promise<boolean> {
   const probe = await prisma.notification.findUnique({
     where: { id: notificationId },
     select: { channel: true },
   });
   if (probe?.channel === 'MICROSOFT_TEAMS') {
     const { requeueMicrosoftTeamsNotification } = await import('./microsoft-teams/delivery');
-    return requeueMicrosoftTeamsNotification(notificationId);
+    return requeueMicrosoftTeamsNotification(notificationId, inTx);
   }
 
   const notification = await prisma.notification.findFirst({
@@ -3246,24 +3342,28 @@ export async function requeueCentralNotification(notificationId: string): Promis
   });
   if (!notification || notification.attempts >= 20) return false;
   const maxAttempts = Math.min(20, Math.max(notification.maxAttempts, notification.attempts + 1));
-  const updated = await prisma.notification.updateMany({
-    where: {
-      id: notificationId,
-      payloadEncrypted: { not: null },
-      status: 'FAILED',
-      attempts: notification.attempts,
-      maxAttempts: notification.maxAttempts,
-    },
-    data: {
-      status: 'PENDING',
-      maxAttempts,
-      failedAt: null,
-      errorMsg: null,
-      lastAttemptAt: null,
-      nextAttemptAt: new Date(),
-    },
+  return prisma.$transaction(async tx => {
+    const updated = await tx.notification.updateMany({
+      where: {
+        id: notificationId,
+        payloadEncrypted: { not: null },
+        status: 'FAILED',
+        attempts: notification.attempts,
+        maxAttempts: notification.maxAttempts,
+      },
+      data: {
+        status: 'PENDING',
+        maxAttempts,
+        failedAt: null,
+        errorMsg: null,
+        lastAttemptAt: null,
+        nextAttemptAt: new Date(),
+      },
+    });
+    if (updated.count === 0) return false;
+    if (inTx) await inTx(tx);
+    return true;
   });
-  return updated.count > 0;
 }
 
 export async function cancelCentralNotification(

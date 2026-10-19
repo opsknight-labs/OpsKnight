@@ -45,6 +45,7 @@ export type RegisteredSession = {
   lastActive: string;
   expiresAt: string | null;
   isCurrent: boolean;
+  issuedUnderPolicyVersion: number | null;
 };
 
 export type RegisteredSessionPage = {
@@ -59,6 +60,7 @@ type SessionMetadata = {
   digest: string;
   expiresAt: string | null;
   userAgent?: string | null;
+  issuedUnderPolicyVersion?: number | null;
 };
 
 // ─── Two-tier activity throttle cache ────────────────────────────────────────
@@ -148,10 +150,12 @@ function isRevokedPlatform(platform: string) {
 function metadataValue(
   sessionId: string,
   expiresAtSeconds?: number | null,
-  userAgent?: string | null
+  userAgent?: string | null,
+  issuedUnderPolicyVersion?: number | null
 ): string {
   const metadata: SessionMetadata = {
     v: 2,
+    issuedUnderPolicyVersion: issuedUnderPolicyVersion ?? null,
     digest: digestSessionId(sessionId),
     expiresAt:
       typeof expiresAtSeconds === 'number' && Number.isFinite(expiresAtSeconds)
@@ -168,6 +172,10 @@ function parseMetadata(value: string): SessionMetadata | null {
     if ((parsed.v !== 1 && parsed.v !== 2) || typeof parsed.digest !== 'string') return null;
     return {
       v: parsed.v,
+      issuedUnderPolicyVersion:
+        typeof parsed.issuedUnderPolicyVersion === 'number'
+          ? parsed.issuedUnderPolicyVersion
+          : null,
       digest: parsed.digest,
       expiresAt: typeof parsed.expiresAt === 'string' ? parsed.expiresAt : null,
       userAgent: parsed.v === 2 && typeof parsed.userAgent === 'string' ? parsed.userAgent : null,
@@ -258,6 +266,7 @@ export async function ensureRegisteredSession(input: {
   sessionId: string;
   userId: string;
   policy: RegisteredSessionPolicy;
+  issuedUnderPolicyVersion?: number | null;
   expiresAtSeconds?: number | null;
   userAgent?: string | null;
 }): Promise<RegistryCheckResult> {
@@ -290,8 +299,12 @@ export async function ensureRegisteredSession(input: {
                 token: metadataValue(
                   input.sessionId,
                   input.expiresAtSeconds,
-                  input.userAgent ?? metadata.userAgent
+                  input.userAgent ?? metadata.userAgent,
+                  metadata.issuedUnderPolicyVersion
                 ),
+                sessionExpiresAt: new Date(input.expiresAtSeconds * 1000),
+                sessionPolicyVersion: metadata.issuedUnderPolicyVersion ?? null,
+                sessionDiagnosticProjectedAt: new Date(),
               },
             });
           } catch (err) {
@@ -314,8 +327,19 @@ export async function ensureRegisteredSession(input: {
         data: {
           userId: input.userId,
           deviceId,
-          token: metadataValue(input.sessionId, input.expiresAtSeconds, input.userAgent),
+          token: metadataValue(
+            input.sessionId,
+            input.expiresAtSeconds,
+            input.userAgent,
+            input.issuedUnderPolicyVersion
+          ),
           platform: activePlatform(input.policy),
+          sessionPolicyVersion: input.issuedUnderPolicyVersion ?? null,
+          sessionDiagnosticProjectedAt: new Date(),
+          sessionExpiresAt:
+            typeof input.expiresAtSeconds === 'number' && Number.isFinite(input.expiresAtSeconds)
+              ? new Date(input.expiresAtSeconds * 1000)
+              : null,
           lastUsed: new Date(),
           ...(input.userAgent ? { userAgent: input.userAgent.slice(0, 500) } : {}),
         },
@@ -546,6 +570,7 @@ export async function listRegisteredSessions(
         createdAt: row.createdAt.toISOString(),
         lastActive: row.lastUsed.toISOString(),
         expiresAt: metadata.expiresAt,
+        issuedUnderPolicyVersion: metadata.issuedUnderPolicyVersion ?? null,
         isCurrent: Boolean(currentSessionId && jti === currentSessionId),
       } satisfies RegisteredSession,
     ];

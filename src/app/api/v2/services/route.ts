@@ -1,0 +1,203 @@
+import { NextRequest } from 'next/server';
+import prisma from '@/lib/prisma';
+import {
+  apiV2Created,
+  apiV2Error,
+  apiV2Success,
+  authenticateV2Request,
+  buildCursorWhere,
+  enforceV2Authorization,
+  enforceV2RateLimit,
+  formatCursorPagination,
+  idempotencyResponseHeaders,
+  runV2IdempotentAuditedMutation,
+  parsePaginationParams,
+  ServiceCreateV2Schema,
+  ServiceListQuerySchema,
+} from '@/lib/api-v2';
+import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { serviceReadWhere } from '@/lib/authorization-filters';
+import { AppError } from '@/lib/errors';
+import type { Prisma } from '@prisma/client';
+import { withV2Observability } from '@/lib/api-v2/observability';
+
+export const GET = withV2Observability(async function GET(req: NextRequest) {
+  try {
+    const { apiKey, actor } = await authenticateV2Request(req);
+    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'READ');
+    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SERVICE_READ);
+
+    const { searchParams } = new URL(req.url);
+    const query = ServiceListQuerySchema.parse(Object.fromEntries(searchParams.entries()));
+    const { limit, cursor } = parsePaginationParams(searchParams);
+
+    const accessWhere = serviceReadWhere(actor);
+    const filters: Prisma.ServiceWhereInput[] = [accessWhere];
+
+    if (query.teamId) filters.push({ teamId: query.teamId });
+    if (query.status) filters.push({ status: query.status });
+    if (query.search) {
+      filters.push({
+        OR: [
+          { name: { contains: query.search, mode: 'insensitive' } },
+          { description: { contains: query.search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    const cursorWhere = buildCursorWhere(cursor);
+    if (cursorWhere.OR) {
+      filters.push(cursorWhere as Prisma.ServiceWhereInput);
+    }
+
+    const where: Prisma.ServiceWhereInput = { AND: filters };
+
+    const services = await prisma.service.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        status: true,
+        teamId: true,
+        escalationPolicyId: true,
+        createdAt: true,
+        updatedAt: true,
+        team: { select: { id: true, name: true } },
+        policy: { select: { id: true, name: true } },
+        _count: {
+          select: {
+            incidents: {
+              where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+            },
+          },
+        },
+      },
+    });
+
+    const mapped = services.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      status: s.status,
+      teamId: s.teamId,
+      team: s.team,
+      escalationPolicyId: s.escalationPolicyId,
+      escalationPolicy: s.policy,
+      openIncidentsCount: s._count.incidents,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
+
+    const result = formatCursorPagination(mapped, limit);
+
+    return apiV2Success(result.data, {
+      pagination: result.pagination,
+      headers: rlHeaders,
+    });
+  } catch (error) {
+    return apiV2Error(error, req);
+  }
+});
+
+export const POST = withV2Observability(async function POST(req: NextRequest) {
+  try {
+    const { apiKey, actor } = await authenticateV2Request(req);
+    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
+    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SERVICE_CREATE);
+
+    const body = await req.json().catch(() => {
+      throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
+    });
+
+    const validated = ServiceCreateV2Schema.parse(body);
+
+    // Verify team exists
+    const team = await prisma.team.findUnique({
+      where: { id: validated.teamId },
+      select: { id: true, name: true },
+    });
+    if (!team) {
+      throw new AppError({
+        code: 'TEAM_NOT_FOUND',
+        userMessage: `Team with id '${validated.teamId}' not found.`,
+      });
+    }
+
+    // Verify escalation policy exists
+    const policy = await prisma.escalationPolicy.findUnique({
+      where: { id: validated.escalationPolicyId },
+      select: { id: true, name: true },
+    });
+    if (!policy) {
+      throw new AppError({
+        code: 'ESCALATION_POLICY_NOT_FOUND',
+        userMessage: `Escalation policy with id '${validated.escalationPolicyId}' not found.`,
+      });
+    }
+
+    const execution = await runV2IdempotentAuditedMutation(
+      req,
+      apiKey.id,
+      'service:create',
+      validated,
+      tx =>
+        tx.service.create({
+          data: {
+            name: validated.name,
+            description: validated.description ?? null,
+            teamId: validated.teamId,
+            escalationPolicyId: validated.escalationPolicyId,
+            status: validated.status,
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            status: true,
+            teamId: true,
+            escalationPolicyId: true,
+            createdAt: true,
+            updatedAt: true,
+            team: { select: { id: true, name: true } },
+            policy: { select: { id: true, name: true } },
+          },
+        }),
+      created => ({
+        action: 'service.created',
+        entityType: 'SERVICE',
+        entityId: created.id,
+        actorId: actor.id,
+        apiKeyId: apiKey.id,
+        details: {
+          name: created.name,
+          teamId: created.teamId,
+          escalationPolicyId: created.escalationPolicyId,
+        },
+      })
+    );
+
+    const created = execution.value;
+
+    const dto = {
+      id: created.id,
+      name: created.name,
+      description: created.description,
+      status: created.status,
+      teamId: created.teamId,
+      escalationPolicyId: created.escalationPolicyId,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt,
+      team: created.team,
+      escalationPolicy: created.policy,
+    };
+
+    return apiV2Created(dto, {
+      headers: { ...rlHeaders, ...idempotencyResponseHeaders(execution.replayed) },
+    });
+  } catch (error) {
+    return apiV2Error(error, req);
+  }
+});

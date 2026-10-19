@@ -15,6 +15,8 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     $queryRaw: vi.fn(),
+    $executeRaw: vi.fn(),
+    $transaction: vi.fn(),
     backgroundJob: {
       groupBy: vi.fn(),
     },
@@ -33,6 +35,9 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMetricsCache();
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async operation => (operation as (tx: typeof prisma) => Promise<unknown>)(prisma) as never
+    );
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
     process.env = { ...originalEnv };
   });
@@ -89,6 +94,42 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
     expect(text).toContain('opsknight_job_queue{status="processing"} 2');
   });
 
+  it('exports receipt lifecycle counts without recipient or provider-event labels', async () => {
+    process.env.PROMETHEUS_SCRAPE_TOKEN = 'receipt-metric-test';
+    vi.mocked(prisma.$queryRaw).mockImplementation((async (query: unknown) => {
+      if (JSON.stringify(query).includes('NotificationProviderFeedback'))
+        return [{ pending: BigInt(7), retried: BigInt(3), quarantined: BigInt(2) }];
+      return [];
+    }) as never);
+    const response = await GET(
+      new Request('http://localhost/api/metrics', {
+        headers: { authorization: 'Bearer receipt-metric-test' },
+      })
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain('opsknight_provider_feedback_pending 7');
+    expect(body).toContain('opsknight_provider_feedback_retried 3');
+    expect(body).toContain('opsknight_provider_feedback_quarantined 2');
+    expect(body).not.toMatch(/opsknight_provider_feedback_\w+\{/);
+  });
+  it('omits receipt gauges when their collector fails instead of reporting a false zero', async () => {
+    process.env.PROMETHEUS_SCRAPE_TOKEN = 'receipt-metric-test';
+    vi.mocked(prisma.$queryRaw).mockImplementation((async (query: unknown) => {
+      if (JSON.stringify(query).includes('NotificationProviderFeedback'))
+        throw new Error('receipt collector unavailable');
+      return [];
+    }) as never);
+    const response = await GET(
+      new Request('http://localhost/api/metrics', {
+        headers: { authorization: 'Bearer receipt-metric-test' },
+      })
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).not.toMatch(/opsknight_provider_feedback_pending \d/);
+    expect(Number(body.match(/opsknight_metrics_collection_errors (\d+)/)?.[1])).toBeGreaterThan(0);
+  });
   it('allows access with authenticated user session', async () => {
     vi.mocked(getServerSession).mockResolvedValue({
       user: { email: 'admin@example.com', role: 'ADMIN' },

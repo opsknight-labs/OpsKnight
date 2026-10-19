@@ -1,3 +1,8 @@
+import {
+  startRunbookArtifactCleanup,
+  stopRunbookArtifactCleanup,
+} from './runbooks/artifact-cleanup';
+import { startRunbookWatchdog, stopRunbookWatchdog } from './runbooks/watchdog';
 import { processPendingEscalations } from './escalation';
 import { processPendingJobs, cleanupOldJobs, runQueueMaintenance } from './jobs/queue';
 import { logger } from './logger';
@@ -167,7 +172,10 @@ async function assertLease(epoch: number): Promise<void> {
 /**
  * Release the distributed lock
  */
-async function releaseLock(nextRunAt: Date, epoch: number | null = activeLeaseEpoch): Promise<void> {
+async function releaseLock(
+  nextRunAt: Date,
+  epoch: number | null = activeLeaseEpoch
+): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
   try {
@@ -227,9 +235,7 @@ export async function updateSchedulerState(
  * Non-authoritative scheduling hint update.
  * Used only for informational scheduling hints like nextRunAt.
  */
-export async function updateSchedulerHint(data: {
-  nextRunAt?: Date | null;
-}): Promise<void> {
+export async function updateSchedulerHint(data: { nextRunAt?: Date | null }): Promise<void> {
   const { default: prisma } = await import('./prisma');
   try {
     await prisma.cronSchedulerState.update({
@@ -260,10 +266,7 @@ export async function updateSchedulerHint(data: {
   }
 }
 
-export async function updateState(
-  data: SchedulerStateData,
-  leaseEpoch?: number
-): Promise<void> {
+export async function updateState(data: SchedulerStateData, leaseEpoch?: number): Promise<void> {
   if (leaseEpoch !== undefined) {
     return updateSchedulerState(data, leaseEpoch);
   }
@@ -577,6 +580,12 @@ async function runOnce() {
     await assertLease(leaseEpoch);
 
     // Group 3: Maintenance tasks (low priority, run last)
+    const { processAuthenticationAlerts } = await import('./auth-control/security-events');
+    await processAuthenticationAlerts();
+    const { cleanAuthenticationCeremonies } = await import('./auth-control/sessions');
+    await cleanAuthenticationCeremonies();
+    const { observeAuthenticationReplica } = await import('./auth-control/replicas');
+    if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
     const tokenCleanup = await cleanupUserTokens();
     const rateLimitCleanup = await cleanupExpiredRateLimits();
     const { cleanupExpiredNotificationCapacityData } = await import('./notification-fanout');
@@ -738,13 +747,16 @@ async function runOnce() {
           const { processServiceObjectiveSnapshots } =
             await import('@/jobs/service-objective-scheduler');
           serviceObjectiveSnapshots = await processServiceObjectiveSnapshots(now);
-          await updateSchedulerState({
-            lastObjectiveSnapshotAt: now,
-            lastObjectiveSnapshotSuccessAt:
-              serviceObjectiveSnapshots.failed === 0 ? now : undefined,
-            lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
-            lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
-          }, leaseEpoch);
+          await updateSchedulerState(
+            {
+              lastObjectiveSnapshotAt: now,
+              lastObjectiveSnapshotSuccessAt:
+                serviceObjectiveSnapshots.failed === 0 ? now : undefined,
+              lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
+              lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
+            },
+            leaseEpoch
+          );
           if (serviceObjectiveSnapshots.failed > 0) {
             throw new Error(
               `${serviceObjectiveSnapshots.failed} service objective snapshot(s) failed; retrying the daily run`
@@ -755,7 +767,10 @@ async function runOnce() {
         // Only advance lastRollupDate when the backlog is fully
         // drained. Otherwise the next tick will pick up the rest.
         if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
-          await updateSchedulerState({ lastRollupDate: todayKey, lastRollupRefreshAt: now }, leaseEpoch);
+          await updateSchedulerState(
+            { lastRollupDate: todayKey, lastRollupRefreshAt: now },
+            leaseEpoch
+          );
         } else {
           await updateSchedulerState({ lastRollupRefreshAt: now }, leaseEpoch);
         }
@@ -778,10 +793,13 @@ async function runOnce() {
 
     const duration = Date.now() - startTime;
     await assertLease(leaseEpoch);
-    await updateSchedulerState({
-      lastSuccessAt: new Date(),
-      lastError: null,
-    }, leaseEpoch);
+    await updateSchedulerState(
+      {
+        lastSuccessAt: new Date(),
+        lastError: null,
+      },
+      leaseEpoch
+    );
 
     logger.info('[Cron] Worker tick completed', {
       workerId: WORKER_ID,
@@ -844,6 +862,8 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
   initialized = true;
   logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID, profile: schedulerProfile });
 
+  startRunbookWatchdog();
+  startRunbookArtifactCleanup();
   // Schedule first run immediately
   scheduleNextRun(new Date());
 }
@@ -853,6 +873,8 @@ export function startCronScheduler(options: CronSchedulerOptions = {}) {
  */
 export async function stopCronScheduler() {
   initialized = false;
+  await stopRunbookWatchdog();
+  await stopRunbookArtifactCleanup();
   if (timer) {
     clearTimeout(timer);
     timer = null;

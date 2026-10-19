@@ -2,7 +2,13 @@
 
 import { useEffect } from 'react';
 
-export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function GlobalError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
   useEffect(() => {
     console.error('OpsKnight client runtime error', error);
   }, [error]);
@@ -14,10 +20,25 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           <section role="alert" aria-live="assertive" style={{ width: 'min(100%, 460px)' }}>
             <h1>OpsKnight needs to recover this view.</h1>
             <p>The current UI state could not be reconciled safely. Retry the render first.</p>
-            <button type="button" onClick={reset} style={{ minHeight: 44, padding: '0 16px' }}>
-              Retry
-            </button>
-            {error.digest ? <p>Correlation ID: {error.digest}</p> : null}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') window.location.reload();
+                }}
+                style={{ minHeight: 44, padding: '0 16px', cursor: 'pointer' }}
+              >
+                Reload page
+              </button>
+              <button
+                type="button"
+                onClick={reset}
+                style={{ minHeight: 44, padding: '0 16px', cursor: 'pointer' }}
+              >
+                Retry
+              </button>
+            </div>
+            {error.digest ? <p style={{ marginTop: 12 }}>Correlation ID: {error.digest}</p> : null}
           </section>
         </main>
       </body>

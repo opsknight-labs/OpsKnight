@@ -1,7 +1,14 @@
+import { coerceBooleanClaim } from '@/lib/oidc/claims';
+import {
+  assertCurrentOidcRegistration,
+  OidcRegistrationChangedError,
+} from '@/lib/oidc/registration';
+import { createHash } from 'node:crypto';
 import type { NextAuthOptions, User } from 'next-auth';
 import OIDCProvider from '@/lib/oidc';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
+import { isServiceAccountIdentity } from '@/lib/service-account-identity';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getOidcConfig } from '@/lib/oidc-config';
@@ -20,11 +27,12 @@ import {
 } from '@/lib/auth-cookies';
 import type { JWT } from 'next-auth/jwt';
 import { customJwtEncode, customJwtDecode } from '@/lib/auth-jwt-encoder';
+import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 import {
-  getEnterpriseSessionPolicy,
-  getLocalAuthPolicy,
-  isLocalCredentialAllowed,
-} from '@/lib/local-auth-policy';
+  checkAuthenticationPolicy,
+  getDatabaseLocalAuthPolicy,
+  getAuthenticationPolicy,
+} from '@/lib/authentication-policy';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
@@ -56,13 +64,17 @@ type AugmentedJWT = JWT & {
   /** Trust-version of the provider configuration that issued this session. */
   oidcConfigVersion?: number;
   /** Authentication provider that established this session. */
-  authProvider?: 'oidc' | 'credentials';
+  authProvider?: 'oidc' | 'credentials' | 'legacy-emergency';
+  authenticationPolicyVersion?: number;
+  issuedUnderPolicyVersion?: number;
+  authenticatedAt?: number;
 };
 
 type AugmentedUser = User & {
   tokenVersion?: number;
   role?: string;
   rememberMe?: boolean;
+  legacyEmergency?: boolean;
 };
 
 type OidcProfileClaims = Record<string, unknown>;
@@ -97,21 +109,6 @@ function normalizeIssuer(issuer: string) {
   return normalizeOidcIssuer(issuer);
 }
 
-function coerceBooleanClaim(value: unknown): boolean | undefined {
-  if (value === true) return true;
-  if (value === false) return false;
-  if (typeof value === 'string') {
-    const v = value.trim().toLowerCase();
-    if (v === 'true') return true;
-    if (v === 'false') return false;
-  }
-  if (typeof value === 'number') {
-    if (value === 1) return true;
-    if (value === 0) return false;
-  }
-  return undefined;
-}
-
 function clearSessionToken(token: AugmentedJWT, reason: string) {
   token.error = reason;
   delete token.sub;
@@ -130,29 +127,43 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
 let authOptionsCache:
   | {
       value: NextAuthOptions;
+      key: string;
       expiresAt: number;
     }
   | undefined;
-let authOptionsInFlight: Promise<NextAuthOptions> | undefined;
+let authOptionsInFlight: { key: string; promise: Promise<NextAuthOptions> } | undefined;
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 12);
 }
 
 export async function getAuthOptions(): Promise<NextAuthOptions> {
+  let localAuthPolicy: Awaited<ReturnType<typeof getDatabaseLocalAuthPolicy>>;
+  try {
+    localAuthPolicy = await getDatabaseLocalAuthPolicy();
+  } catch (error) {
+    // Retain decoding options during a brief DB outage. Every authorize/signIn/JWT
+    // callback still performs its own policy check and fails protected access closed.
+    if (authOptionsCache && authOptionsCache.expiresAt > Date.now()) return authOptionsCache.value;
+    throw error;
+  }
+  const oidcConfig = localAuthPolicy.oidcLoginEnabled ? await getOidcConfig() : null;
+  const registrationKey = createHash('sha256').update(JSON.stringify(oidcConfig)).digest('hex');
+  const key = createHash('sha256')
+    .update(JSON.stringify([localAuthPolicy, registrationKey]))
+    .digest('hex');
   const now = Date.now();
   // Module-level cache to avoid repeatedly constructing options (and reloading OIDC config)
   // across multiple server component renders / API calls within a short window.
-  if (authOptionsCache && authOptionsCache.expiresAt > now) {
+  if (authOptionsCache && authOptionsCache.key === key && authOptionsCache.expiresAt > now) {
     return authOptionsCache.value;
   }
 
-  if (authOptionsInFlight) {
-    return authOptionsInFlight;
+  if (authOptionsInFlight?.key === key) {
+    return authOptionsInFlight.promise;
   }
 
-  authOptionsInFlight = (async () => {
-    const oidcConfig = await getOidcConfig();
+  const promise: Promise<NextAuthOptions> = (async () => {
     const oidcValidation = oidcConfig
       ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer, {
           tokenEndpointAuthMethod: oidcConfig.tokenEndpointAuthMethod,
@@ -171,8 +182,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     const credentialSessionMaxAgeSeconds = 60 * 60 * 24 * 7;
     const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 90;
     const sessionUpdateAgeSeconds = enterpriseSession.updateAgeSeconds;
-    const localAuthPolicy = getLocalAuthPolicy();
-
     if (activeOidcConfig) {
       logger.info('[Auth] OIDC provider will be enabled', {
         component: 'auth',
@@ -304,12 +313,37 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const userAgentHeader = (req?.headers?.['user-agent'] as string) || '';
                   // Session trust is an explicit user choice. Form factor/user-agent
                   // must never silently turn a browser into a long-lived trusted device.
-                  const rememberMe = credentials?.rememberMe === 'true';
+                  const currentPolicy = await getAuthenticationPolicy();
+                  const legacyEmergency =
+                    currentPolicy.mode === 'SSO_REQUIRED' &&
+                    currentPolicy.legacyEmergencyEmail === email;
+                  const rememberMe =
+                    !legacyEmergency &&
+                    !currentPolicy.passwordRecoveryUserId &&
+                    credentials?.rememberMe === 'true';
+                  if (legacyEmergency) {
+                    const { recordEmergencyFailure } = await import('@/lib/auth-control/emergency');
+                    await recordEmergencyFailure(
+                      'legacy',
+                      'NORMAL_LOGIN_REJECTED_USE_RECOVERY_PAGE'
+                    );
+                    return null;
+                  }
                   const { getClientIp } = await import('@/lib/client-ip');
                   const ip = getClientIp(req?.headers);
                   const userAgent = userAgentHeader || 'Unknown';
 
-                  if (!isLocalCredentialAllowed(email)) {
+                  const passwordPrincipal = currentPolicy.passwordRecoveryUserId
+                    ? await prisma.user.findUnique({ where: { email }, select: { id: true } })
+                    : null;
+                  if (
+                    !(
+                      await checkAuthenticationPolicy('PASSWORD_LOGIN', {
+                        email,
+                        id: passwordPrincipal?.id,
+                      })
+                    ).allowed
+                  ) {
                     await logLoginBlocked(email || 'unknown', ip, userAgent, 'LOCAL_AUTH_DISABLED');
                     return null;
                   }
@@ -373,6 +407,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   }
 
                   const user = await prisma.user.findUnique({ where: { email } });
+                  // Machine identities authenticate with API tokens only, never a browser session.
+                  if (user && isServiceAccountIdentity(user)) {
+                    await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
+                    return null;
+                  }
                   if (!user || !user.passwordHash) {
                     recordFailedAttempt(email, ip);
                     await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
@@ -387,6 +426,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     await logLoginFailed(email, ip, userAgent, 'USER_DISABLED');
                     return null;
                   }
+                  if (
+                    currentPolicy.passwordRecoveryUserId &&
+                    (user.role !== 'ADMIN' || user.status !== 'ACTIVE')
+                  )
+                    return null;
 
                   const isValid = await bcrypt.compare(password, user.passwordHash);
                   if (!isValid) {
@@ -444,6 +488,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     role: user.role,
                     tokenVersion: user.tokenVersion,
                     rememberMe,
+                    legacyEmergency,
                   } as User & { rememberMe: boolean };
                 },
               }),
@@ -463,10 +508,25 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             trigger: trigger || 'none',
           });
 
+          if (user) {
+            try {
+              (token as AugmentedJWT).issuedUnderPolicyVersion = (
+                await getAuthenticationPolicy()
+              ).version;
+            } catch {
+              return clearSessionToken(token as AugmentedJWT, 'AUTHENTICATION_POLICY_UNAVAILABLE');
+            }
+          }
+
           if (user && account) {
             delete (token as AugmentedJWT).error;
             (token as AugmentedJWT).authProvider =
-              account.provider === 'oidc' ? 'oidc' : 'credentials';
+              account.provider === 'oidc'
+                ? 'oidc'
+                : (user as AugmentedUser).legacyEmergency
+                  ? 'legacy-emergency'
+                  : 'credentials';
+            (token as AugmentedJWT).authenticatedAt = Date.now();
             if (!token.jti || typeof token.jti !== 'string') {
               token.jti = uuidv4();
             }
@@ -479,7 +539,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             if (account.provider === 'oidc') {
               try {
                 const activeConfig = await getOidcConfig();
-                if (!activeConfig) {
+                if (
+                  !activeConfig ||
+                  createHash('sha256').update(JSON.stringify(activeConfig)).digest('hex') !==
+                    registrationKey
+                ) {
                   return clearSessionToken(token as AugmentedJWT, 'OIDC_CONFIGURATION_UNAVAILABLE');
                 }
                 const issuer = activeConfig?.issuer ? normalizeIssuer(activeConfig.issuer) : null;
@@ -496,7 +560,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   ? await prisma.user.findUnique({ where: { id: identity.userId } })
                   : null;
 
-                if (!dbUser || dbUser.status === 'DISABLED') {
+                if (!dbUser || dbUser.status === 'DISABLED' || isServiceAccountIdentity(dbUser)) {
                   logger.error('[Auth] JWT callback - stable OIDC identity not resolvable', {
                     component: 'auth:jwt',
                     issuer,
@@ -531,6 +595,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               (token as AugmentedJWT).rememberMe = (user as AugmentedUser).rememberMe === true;
             }
 
+            (token as AugmentedJWT).lastActivityAt = Date.now();
             const remember = (token as AugmentedJWT).rememberMe === true;
             const isOidc = account.provider === 'oidc';
             const nowSec = Math.floor(Date.now() / 1000);
@@ -541,17 +606,22 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               oidcRenewalWindowSeconds * 2
             );
 
-            const sessionTtlSeconds = isOidc
-              ? oidcRenewalWindowSeconds
-              : remember
-                ? rememberMeMaxAgeSeconds
-                : credentialSessionMaxAgeSeconds;
+            const isLegacyEmergency = (token as AugmentedJWT).authProvider === 'legacy-emergency';
+            const sessionTtlSeconds = isLegacyEmergency
+              ? 3600
+              : isOidc
+                ? oidcRenewalWindowSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds;
 
-            const absoluteTtlSeconds = isOidc
-              ? oidcAbsoluteMaxAgeSeconds
-              : remember
-                ? rememberMeMaxAgeSeconds
-                : credentialSessionMaxAgeSeconds * 4;
+            const absoluteTtlSeconds = isLegacyEmergency
+              ? 3600
+              : isOidc
+                ? oidcAbsoluteMaxAgeSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds * 4;
 
             const sessionExpiresAt = nowSec + sessionTtlSeconds;
             const absoluteExpiresAt = nowSec + absoluteTtlSeconds;
@@ -581,6 +651,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           const augmentedToken = token as AugmentedJWT;
+          if (augmentedToken.authProvider === 'legacy-emergency')
+            return clearSessionToken(augmentedToken, 'EMERGENCY_RECOVERY_ONLY');
           let isProfileRefresh = false;
 
           if (trigger === 'update') {
@@ -647,6 +719,26 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return clearSessionToken(augmentedToken, 'SESSION_EXPIRED');
           }
 
+          if (token.sub) {
+            try {
+              const decision = await checkAuthenticationPolicy(
+                'SESSION',
+                { id: token.sub, email: token.email },
+                {
+                  method:
+                    augmentedToken.authProvider ??
+                    (augmentedToken.oidcAuthenticatedAt ? 'oidc' : 'credentials'),
+                  policyVersion: augmentedToken.issuedUnderPolicyVersion,
+                }
+              );
+              if (!decision.allowed) return clearSessionToken(augmentedToken, decision.reason);
+              augmentedToken.authenticationPolicyVersion = decision.version;
+            } catch {
+              augmentedToken.error = 'AUTHENTICATION_POLICY_UNAVAILABLE';
+              return augmentedToken;
+            }
+          }
+
           if (!user && augmentedToken.oidcAuthenticatedAt) {
             const currentTime = Date.now();
             const currentConfig = await getOidcConfig();
@@ -679,6 +771,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               if (isProfileRefresh) {
                 const profileUser = await getSessionProfileProjection(token.sub);
                 if (profileUser) {
+                  if (
+                    typeof currentTokenVersion === 'number' &&
+                    profileUser.tokenVersion !== currentTokenVersion
+                  ) {
+                    return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
+                  }
                   delete (token as AugmentedJWT).error;
                   token.name = profileUser.name;
                   token.email = profileUser.email;
@@ -779,6 +877,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.user.sessionId = sessionJti;
           }
           session.sessionId = sessionJti;
+          session.authenticationMethod = (token as AugmentedJWT).authProvider;
+          session.authenticationPolicyVersion = (token as AugmentedJWT).authenticationPolicyVersion;
+          session.issuedUnderPolicyVersion = (token as AugmentedJWT).issuedUnderPolicyVersion;
+          session.authenticatedAt = (token as AugmentedJWT).authenticatedAt;
 
           if (typeof (token as AugmentedJWT)?.sessionExpiresAt === 'number') {
             session.expires = new Date(
@@ -804,6 +906,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return true;
           }
 
+          if (!(await checkAuthenticationPolicy('OIDC_LOGIN')).allowed) return false;
           const activeConfig = await getOidcConfig();
           if (!activeConfig) {
             logger.warn('[Auth] OIDC sign-in rejected: configuration missing or invalid', {
@@ -812,6 +915,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return false;
           }
 
+          if (
+            createHash('sha256').update(JSON.stringify(activeConfig)).digest('hex') !==
+            registrationKey
+          )
+            return '/login?error=OIDC_CONFIGURATION_CHANGED';
           const claims = profileClaims(profile);
           const email =
             typeof user.email === 'string' && user.email.trim()
@@ -879,6 +987,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               allowedDomains: activeConfig.allowedDomains,
               claims,
               providerConfigId: 'default',
+              requireCurrentRegistration: true,
               clientId: activeConfig.clientId,
               configVersion: activeConfig.configVersion,
               organizationId: activeConfig.organizationId,
@@ -894,6 +1003,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           if (!resolution.ok) {
+            if (resolution.reason === 'OIDC_CONFIGURATION_CHANGED')
+              return '/login?error=OIDC_CONFIGURATION_CHANGED';
             logger.warn('[Auth] OIDC sign-in rejected by identity policy', {
               component: 'auth:signIn',
               issuer,
@@ -1015,22 +1126,37 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           if (Object.keys(updateData).length > 0) {
-            if (updateData.role && updateData.role !== targetUser.role) {
+            try {
               const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
-              const mappedRole = updateData.role as 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+              const mappedRole = updateData.role as
+                | 'ADMIN'
+                | 'RESPONDER'
+                | 'AUDITOR'
+                | 'USER'
+                | undefined;
               const mappedRoleSource = updateData.roleSource as 'OIDC' | undefined;
+              const mappedStatus = updateData.status as 'ACTIVE' | undefined;
               delete updateData.role;
               delete updateData.roleSource;
+              delete updateData.status;
               await updateUserSecurityState(
                 targetUser.id,
-                { role: mappedRole, ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}) },
-                updateData
+                {
+                  ...(mappedRole ? { role: mappedRole } : {}),
+                  ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}),
+                  ...(mappedStatus ? { status: mappedStatus } : {}),
+                },
+                updateData,
+                undefined,
+                tx => assertCurrentOidcRegistration(tx, activeConfig),
+                targetUser.tokenVersion
               );
-            } else {
-              await prisma.user.update({
-                where: { id: targetUser.id },
-                data: updateData,
-              });
+            } catch (error) {
+              if (error instanceof OidcRegistrationChangedError)
+                return '/login?error=OIDC_CONFIGURATION_CHANGED';
+              if (error instanceof Error && error.message === 'USER_SECURITY_CHANGED')
+                return '/login?error=SessionExpired';
+              throw error;
             }
             logger.info('[Auth] Updated user from OIDC data', {
               component: 'auth:signIn',
@@ -1064,15 +1190,17 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       },
     };
   })();
+  authOptionsInFlight = { key, promise };
   try {
-    const value = await authOptionsInFlight;
+    const value = await promise;
     authOptionsCache = {
       value,
+      key,
       expiresAt: Date.now() + AUTH_TTL_MS,
     };
     return value;
   } finally {
-    authOptionsInFlight = undefined;
+    if (authOptionsInFlight?.promise === promise) authOptionsInFlight = undefined;
   }
 }
 

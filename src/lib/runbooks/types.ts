@@ -256,6 +256,7 @@ export const RUNBOOK_INPUT_TYPES = [
   'URL',
   'DURATION',
   'SECRET_REF',
+  'SELECT',
 ] as const;
 export type RunbookInputType = (typeof RUNBOOK_INPUT_TYPES)[number];
 
@@ -282,6 +283,7 @@ export const RUNBOOK_JOB_KINDS = [
   'ADVANCE_EXECUTION',
   'RECONCILE_EXECUTION',
   'VERIFIED_RESOLUTION',
+  'FINALIZE_VERIFICATION',
 ] as const;
 export type RunbookJobKind = (typeof RUNBOOK_JOB_KINDS)[number];
 

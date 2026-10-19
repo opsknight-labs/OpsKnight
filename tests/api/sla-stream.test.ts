@@ -23,6 +23,10 @@ vi.mock('@/lib/rbac', () => ({
   getUserPermissions: vi.fn(async () => ({ capabilities: [] })),
 }));
 
+vi.mock('@/lib/authentication-policy', () => ({
+  checkAuthenticationPolicy: vi.fn(async () => ({ allowed: true })),
+}));
+
 // Mock prisma
 vi.mock('@/lib/prisma', () => ({
   default: {

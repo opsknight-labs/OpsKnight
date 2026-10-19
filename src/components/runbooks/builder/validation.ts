@@ -465,6 +465,8 @@ export function validateRunbook(
           current.key = issue.message;
         } else if (field === 'label') {
           current.label = issue.message;
+        } else if (field === 'options') {
+          current.options = issue.message;
         } else {
           current.general = issue.message;
         }

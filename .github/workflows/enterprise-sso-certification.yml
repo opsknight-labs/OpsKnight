@@ -1,0 +1,152 @@
+name: Enterprise SSO certification
+
+on:
+  push:
+    branches: [main, 'feat/enterprise-sso-*', 'feat/enterprise-authentication-*']
+  pull_request:
+    paths:
+      - 'src/lib/notification-provider-feedback.ts'
+      - 'src/lib/notification-control-plane.ts'
+      - 'src/app/api/webhooks/notifications/provider-feedback/**'
+      - 'src/lib/auth*'
+      - 'src/lib/auth-control/**'
+      - 'src/lib/oidc*/**'
+      - 'src/lib/oidc*'
+      - 'src/app/api/auth/**'
+      - 'src/components/settings/Authentication*'
+      - 'src/components/settings/authentication/**'
+      - 'src/components/ui/DetailTabs.tsx'
+      - 'prisma/**'
+      - 'tests/integration/*authentication*'
+      - 'tests/integration/sso-upgrade*'
+      - 'tests/integration/emergency-password-database.test.ts'
+      - 'tests/integration/provider-feedback-isolation-database.test.ts'
+      - '.github/workflows/tests.yml'
+      - 'scripts/certify-sso-upgrade.cjs'
+      - 'scripts/prepare-authentication-diagnostics.cjs'
+      - '.github/workflows/enterprise-sso-certification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-sso-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: enterprise_sso_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/enterprise_sso_test?connection_limit=10
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/enterprise_sso_test
+      NEXTAUTH_SECRET: isolated-ci-authentication-certification-only
+      LOG_LEVEL: error
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: '22'
+          generate-prisma: 'true'
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Authentication and provider unit regressions
+        run: npx vitest run -c vitest.unit.config.ts tests/lib/auth tests/lib/oidc tests/actions/authentication-policy-actions.test.ts tests/components/authentication tests/api/authentication-diagnostics.test.ts tests/components/emergency-password-login.test.tsx tests/lib/providers/email-control-plane-failover.test.ts tests/api/provider-feedback-webhook.test.ts tests/lib/notification-control-plane.test.ts tests/api/metrics.test.ts tests/api/recovery-stream-policy.test.ts tests/lib/metrics-domain.test.ts
+      - name: Apply additive migrations
+        run: |
+          npx prisma migrate deploy
+          node scripts/prepare-authentication-diagnostics.cjs
+      - name: Signed OIDC, WebAuthn, abuse availability and notification fan-out
+        run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-diagnostics-database.test.ts tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts tests/integration/provider-feedback-isolation-database.test.ts tests/integration/emergency-password-database.test.ts
+
+      - name: Emergency edge admission fixture
+        run: python3 scripts/certify-sso-edge.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-sso-resilience
+          path: |
+            plans/certification/enterprise-sso-2.1-resilience.json
+            plans/certification/enterprise-sso-2.1-edge.json
+            plans/certification/enterprise-sso-2.1-password-admission.json
+            plans/certification/enterprise-sso-2.1-password-hashing.json
+            plans/certification/enterprise-sso-2.1-receipt-metrics.json
+            plans/certification/authentication-experience-online-deployment.json
+          if-no-files-found: ignore
+
+  published-release-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: enterprise_sso_upgrade_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/enterprise_sso_upgrade_test?application_name=sso-auth-certification&connection_limit=5
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/enterprise_sso_upgrade_test
+      DATABASE_POOL_SIZE_INTEGRATED: '5'
+      SSO_CERT_AUTH_LOAD: '1'
+      LOG_LEVEL: error
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: '22'
+          generate-prisma: 'true'
+      - name: Upgrade published v2.0.0 and verify preserved sessions, races and bounded reads
+        run: node scripts/certify-sso-upgrade.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-sso-authentication-load
+          path: plans/certification/enterprise-sso-2.1-authentication-load.json
+
+  browser:
+    name: Emergency recovery browser certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://certifier:unused-setup-fixture@127.0.0.1:1/enterprise_sso_test
+      DIRECT_URL: postgresql://certifier:unused-setup-fixture@127.0.0.1:1/enterprise_sso_test
+      LOG_LEVEL: error
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: '22'
+          generate-prisma: 'true'
+      - name: Install certification browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Production HTTPS recovery, password rotation and database restart
+        env:
+          SSO_CERT_CAPTURE_DIR: ${{ runner.temp }}/enterprise-authentication-captures
+        run: python3 scripts/certify-enterprise-authentication-browser.py --build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-authentication-browser-captures
+          path: |
+            ${{ runner.temp }}/enterprise-authentication-captures
+            plans/certification/enterprise-sso-2.1-password-browser.json
+          if-no-files-found: ignore

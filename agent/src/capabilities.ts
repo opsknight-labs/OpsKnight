@@ -34,7 +34,7 @@ export async function probeCapabilities(
       name: 'Kubernetes',
       command: 'kubectl',
       // cluster-info requires broad kube-system reads that a namespaced Agent may not have.
-      args: ['get', '--raw=/version', '--request-timeout=2s'],
+      args: ['get', '--raw=/version'],
     },
     { type: 'BASH', name: 'Bash', command: 'bash', args: ['--version'] },
   ];

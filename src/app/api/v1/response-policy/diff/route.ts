@@ -1,12 +1,12 @@
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
-import { authorizeResponsePolicyApi } from '@/lib/response-policy-api-auth';
+import { authorizeResponsePolicyApi, responsePolicyAuthError } from '@/lib/response-policy-api-auth';
 import { diffClassificationPolicies } from '@/lib/incidents/response-policy';
 
 export async function GET(request: NextRequest) {
   const auth = await authorizeResponsePolicyApi(request, 'read');
-  if (!auth.ok) return jsonError(auth.message, auth.status);
+  if (!auth.ok) return responsePolicyAuthError(auth);
   const scopeKey = request.nextUrl.searchParams.get('scopeKey') ?? 'workspace';
   const resource = request.nextUrl.searchParams.get('resource') ?? 'classification';
   const from = Number(request.nextUrl.searchParams.get('from'));

@@ -74,28 +74,6 @@ export function isValuelessOperator(operator: string): boolean {
   return VALUELESS_OPERATORS.has(operator);
 }
 
-export type ParsedSelector =
-  | { ok: true; selector: Record<string, string> }
-  | { ok: false; error: string };
-
-export function parseAgentSelector(raw: string): ParsedSelector {
-  const text = raw.trim() === '' ? '{}' : raw;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return { ok: false, error: 'Agent selector must be valid JSON.' };
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { ok: false, error: 'Agent selector must be a JSON object of label → value pairs.' };
-  }
-  const entries = Object.entries(parsed as Record<string, unknown>);
-  if (entries.some(([, value]) => typeof value !== 'string')) {
-    return { ok: false, error: 'Agent selector values must be strings.' };
-  }
-  return { ok: true, selector: Object.fromEntries(entries) as Record<string, string> };
-}
-
 type ConditionScalar = string | number | boolean;
 type CoercionResult = { value: ConditionScalar | ConditionScalar[] | null } | { error: string };
 

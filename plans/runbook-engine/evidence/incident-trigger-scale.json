@@ -1,0 +1,27 @@
+{
+  "measuredAt": "2026-10-14T17:23:08.447Z",
+  "topology": "Local PostgreSQL; real trigger matcher and suggestion writes; three concurrent duplicate deliveries; no physical Agent execution",
+  "samples": [
+    {
+      "rules": 100,
+      "deliveries": 3,
+      "matchingRules": 5,
+      "largestBatch": 100,
+      "elapsedMs": 89.67624999999998
+    },
+    {
+      "rules": 1000,
+      "deliveries": 3,
+      "matchingRules": 5,
+      "largestBatch": 100,
+      "elapsedMs": 142.56645800000024
+    },
+    {
+      "rules": 10000,
+      "deliveries": 3,
+      "matchingRules": 5,
+      "largestBatch": 100,
+      "elapsedMs": 3301.0979589999997
+    }
+  ]
+}

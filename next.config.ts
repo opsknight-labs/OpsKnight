@@ -1,8 +1,10 @@
 import path from 'path';
 
+import withPWAInit from '@ducanh2912/next-pwa';
+
 import type { NextConfig } from 'next';
 
-const withPWA = require('@ducanh2912/next-pwa').default({
+const withPWA = withPWAInit({
   dest: 'public',
   // Disable in dev to avoid caching issues; allow explicit override.
   disable: process.env.NODE_ENV === 'development' || process.env.DISABLE_PWA === 'true',
@@ -35,14 +37,8 @@ const withPWA = require('@ducanh2912/next-pwa').default({
       },
       {
         urlPattern: ({ request, url }: { request: Request; url: URL }) =>
-          request.headers.get('RSC') === '1' ||
-          url.searchParams.has('_rsc') ||
-          request.headers.get('Next-Router-Prefetch') === '1',
-        handler: 'NetworkOnly',
-        options: { cacheName: 'no-cache-rsc' },
-      },
-      {
-        urlPattern: ({ url }: { url: URL }) =>
+          request.mode === 'navigate' ||
+          request.destination === 'document' ||
           url.pathname === '/' ||
           url.pathname === '/m' ||
           url.pathname.startsWith('/login') ||
@@ -54,7 +50,17 @@ const withPWA = require('@ducanh2912/next-pwa').default({
           url.pathname.startsWith('/teams') ||
           url.pathname.startsWith('/users') ||
           url.pathname.startsWith('/schedules') ||
-          url.pathname.startsWith('/policies'),
+          url.pathname.startsWith('/policies') ||
+          url.pathname.startsWith('/analytics') ||
+          url.pathname.startsWith('/reports') ||
+          url.pathname.startsWith('/runbooks') ||
+          url.pathname.startsWith('/postmortems') ||
+          url.pathname.startsWith('/action-items') ||
+          url.pathname.startsWith('/events') ||
+          url.pathname.startsWith('/status') ||
+          url.pathname.startsWith('/system-logs') ||
+          url.pathname.startsWith('/help') ||
+          url.pathname.startsWith('/shortcuts'),
         handler: 'NetworkOnly',
         options: { cacheName: 'no-cache-pages' },
       },
@@ -80,6 +86,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
         options: {
           cacheName: 'next-static-assets',
           expiration: { maxEntries: 500, maxAgeSeconds: 7 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [0, 200] },
         },
       },
       {
@@ -98,7 +105,6 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   aggressiveFrontEndNavCaching: false,
   // Reconnection syncs data/actions; it must not destroy an in-progress form.
   reloadOnOnline: false,
-  swcMinify: true,
   fallbacks: {},
   cacheStartUrl: false,
   dynamicStartUrl: false,
@@ -108,6 +114,9 @@ const nextConfig: NextConfig = {
   distDir: process.env.BUILD_DIR || '.next',
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname),
+  // Instrumentation reads authentication policy before any request. Ensure the
+  // generated Prisma client and native engine exist in the standalone artifact.
+  outputFileTracingIncludes: { '/*': ['./node_modules/.prisma/client/**/*'] },
   experimental: {
     optimizePackageImports: ['@prisma/client', 'react-icons'],
     serverActions: { bodySizeLimit: '2mb' },

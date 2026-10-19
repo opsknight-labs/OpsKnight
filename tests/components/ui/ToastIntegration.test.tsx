@@ -1,41 +1,49 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import React from 'react';
+import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import { notify } from '@/lib/toast';
+
+function mockMatchMedia(prefersDark: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: prefersDark && query.includes('prefers-color-scheme: dark'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function toasterTheme() {
+  return document.querySelector('[data-sonner-toaster]')?.getAttribute('data-sonner-theme');
+}
 
 describe('Toast and Toaster Component Contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      value: vi.fn().mockImplementation((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
+    act(() => notify.dismiss());
+    document.body.innerHTML = '';
+    localStorage.clear();
+    mockMatchMedia(false);
   });
 
   it('renders a success toast with stable id and closes when close button is clicked', async () => {
     render(<Toaster />);
 
-    // Trigger success toast
-    notify.success('Service settings saved', { id: 'service:1:save' });
+    act(() => {
+      notify.success('Service settings saved', { id: 'service:1:save' });
+    });
 
-    // Toast title is rendered
     expect(await screen.findByText('Service settings saved')).toBeDefined();
 
-    // Close button affordance exists and has accessible label
-    const closeBtn = screen.getByRole('button', { name: /close/i });
-    expect(closeBtn).toBeDefined();
-
-    // Clicking close button dismisses the toast
+    const closeBtn = screen.getByRole('button', { name: 'Close notification' });
     fireEvent.click(closeBtn);
 
     await waitFor(() => {
@@ -46,95 +54,186 @@ describe('Toast and Toaster Component Contract', () => {
   it('deduplicates rapid notifications sharing the same id', async () => {
     render(<Toaster />);
 
-    // Fire multiple toasts with the same dedup ID
-    notify.success('Service settings saved', { id: 'service:dedup:save' });
-    notify.success('Service settings saved', { id: 'service:dedup:save' });
+    act(() => {
+      notify.success('Service settings saved', { id: 'service:dedup:save' });
+      notify.success('Service settings saved', { id: 'service:dedup:save' });
+    });
 
     await screen.findByText('Service settings saved');
-
-    // Only one toast with this text should exist
-    const toasts = screen.getAllByText('Service settings saved');
-    expect(toasts.length).toBe(1);
+    expect(screen.getAllByText('Service settings saved')).toHaveLength(1);
   });
 
   it('renders different toasts for independent actions', async () => {
     render(<Toaster />);
 
-    notify.success('Settings saved', { id: 'settings:1:save' });
-    notify.info('Informational notice', { id: 'info:1' });
+    act(() => {
+      notify.success('Settings saved', { id: 'settings:1:save' });
+      notify.info('Informational notice', { id: 'info:1' });
+    });
 
     expect(await screen.findByText('Settings saved')).toBeDefined();
     expect(await screen.findByText('Informational notice')).toBeDefined();
   });
 
-  it('provides a 28x28 visual close button with expanded touch target', async () => {
+  it('renders title, description and a tone-specific icon for each notification', async () => {
     render(<Toaster />);
 
-    notify.success('Touch target test', { id: 'touch:1' });
-    await screen.findByText('Touch target test');
+    act(() => {
+      notify.warning('Rate limit approaching', {
+        id: 'warn:1',
+        description: '80% of the hourly quota used.',
+      });
+    });
 
-    const closeBtn = screen.getByRole('button', { name: /close/i });
-    expect(closeBtn.className).toContain('!h-7');
-    expect(closeBtn.className).toContain('!w-7');
-    expect(closeBtn.className).toContain('after:-inset-1.5');
+    const title = await screen.findByTestId('toast-title');
+    expect(title.textContent).toBe('Rate limit approaching');
+    expect(screen.getByTestId('toast-description').textContent).toBe(
+      '80% of the hourly quota used.'
+    );
+    expect(title.closest('[data-tone]')?.getAttribute('data-tone')).toBe('warning');
+    expect(screen.getByTestId('toast-icon').querySelector('svg')).not.toBeNull();
   });
 
-  it('renders semantic icon badge and neutral card surface with status rail', async () => {
+  it('renders errors as an error-toned toast with the error surface class', async () => {
     render(<Toaster />);
 
-    notify.success('Card styling test', { id: 'style:1' });
-    const toastTitle = await screen.findByText('Card styling test');
+    act(() => {
+      notify.error(new Error('Could not save schedule.'), { id: 'error:1' });
+    });
 
-    // Semantic icon badge container is rendered
-    const badge = screen.getByTestId('toast-icon-badge');
-    expect(badge).toBeDefined();
-    expect(badge.className).toContain('h-7');
-    expect(badge.className).toContain('w-7');
+    const title = await screen.findByTestId('toast-title');
+    const toast = title.closest('[data-sonner-toast]');
+    expect(title.closest('[data-tone]')?.getAttribute('data-tone')).toBe('error');
+    expect(toast?.className).toContain('ok-toast-item--error');
+  });
 
-    // Toast container contains neutral surface and status rail classes
-    const toastCard = toastTitle.closest('li');
-    expect(toastCard).toBeDefined();
-    expect(toastCard?.className).toContain('data-[styled=true]:!bg-[var(--toast-bg)]');
-    expect(toastCard?.className).toContain('before:!bg-[var(--toast-success-accent)]');
+  it('runs the action callback and dismisses the toast', async () => {
+    render(<Toaster />);
+    const onUndo = vi.fn();
+
+    act(() => {
+      notify.info('Incident archived', {
+        id: 'undo:1',
+        action: { label: 'Undo', onClick: onUndo },
+      });
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.queryByText('Incident archived')).toBeNull();
+    });
+  });
+
+  it('replaces a loading toast in place when the result reuses its id', async () => {
+    render(<Toaster />);
+
+    act(() => {
+      notify.loading('Saving changes…', { id: 'save:1' });
+    });
+    const loadingTitle = await screen.findByText('Saving changes…');
+    expect(loadingTitle.closest('[data-tone]')?.getAttribute('data-tone')).toBe('loading');
+
+    act(() => {
+      notify.success('Changes saved', { id: 'save:1' });
+    });
+
+    const doneTitle = await screen.findByText('Changes saved');
+    expect(doneTitle.closest('[data-tone]')?.getAttribute('data-tone')).toBe('success');
+    expect(screen.queryByText('Saving changes…')).toBeNull();
+    expect(document.querySelectorAll('[data-sonner-toast]')).toHaveLength(1);
   });
 
   it('allows programmatic dismiss via notify.dismiss', async () => {
     render(<Toaster />);
 
-    notify.success('Dismiss me', { id: 'dismiss:target' });
+    act(() => {
+      notify.success('Dismiss me', { id: 'dismiss:target' });
+    });
     expect(await screen.findByText('Dismiss me')).toBeDefined();
 
-    notify.dismiss('dismiss:target');
+    act(() => notify.dismiss('dismiss:target'));
 
     await waitFor(() => {
       expect(screen.queryByText('Dismiss me')).toBeNull();
     });
   });
 
-  it('renders a visible cross icon inside the close button with high-contrast stroke', async () => {
-    render(<Toaster />);
-
-    notify.success('Visible cross test', { id: 'cross:1' });
-    await screen.findByText('Visible cross test');
-
-    const closeBtn = screen.getByRole('button', { name: /close/i });
-    expect(closeBtn).toBeDefined();
-
-    const closeIcon = screen.getByTestId('toast-close-icon');
-    expect(closeIcon).toBeDefined();
-    expect(closeIcon.getAttribute('class')).toContain('stroke-[2.25]');
-    expect(closeBtn.contains(closeIcon)).toBe(true);
-  });
-
-  it('supports dark mode theme configuration on the toaster', async () => {
+  it('keeps an explicit theme override on the toaster', async () => {
     render(<Toaster theme="dark" />);
 
-    notify.info('Dark mode toast', { id: 'dark:1' });
+    act(() => {
+      notify.info('Dark mode toast', { id: 'dark:1' });
+    });
     await screen.findByText('Dark mode toast');
 
-    const toaster = document.querySelector('[data-sonner-toaster]');
-    expect(toaster).toBeDefined();
-    expect(toaster?.getAttribute('data-sonner-theme')).toBe('dark');
+    expect(toasterTheme()).toBe('dark');
+  });
+
+  describe('theme follows the painted page, not the OS or stored preference', () => {
+    it('stays light on the forced-light desktop when the OS and stored preference are dark', async () => {
+      // The reported bug: browser dark mode plus a stored mobile preference
+      // rendered dark toasts with an invisible close button on a light page.
+      mockMatchMedia(true);
+      localStorage.setItem('theme', 'system');
+
+      render(
+        <ThemeProvider
+          attribute="class"
+          forcedTheme="light"
+          defaultTheme="light"
+          enableSystem={false}
+        >
+          <Toaster />
+        </ThemeProvider>
+      );
+
+      act(() => {
+        notify.success('Saved', { id: 'forced:1' });
+      });
+      await screen.findByText('Saved');
+
+      expect(toasterTheme()).toBe('light');
+    });
+
+    it('stays light on the forced-light desktop when dark is stored explicitly', async () => {
+      localStorage.setItem('theme', 'dark');
+
+      render(
+        <ThemeProvider
+          attribute="class"
+          forcedTheme="light"
+          defaultTheme="light"
+          enableSystem={false}
+        >
+          <Toaster />
+        </ThemeProvider>
+      );
+
+      act(() => {
+        notify.success('Saved', { id: 'forced:2' });
+      });
+      await screen.findByText('Saved');
+
+      expect(toasterTheme()).toBe('light');
+    });
+
+    it('follows the OS on system-themed (mobile) routes', async () => {
+      mockMatchMedia(true);
+
+      render(
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <Toaster />
+        </ThemeProvider>
+      );
+
+      act(() => {
+        notify.success('Saved', { id: 'system:1' });
+      });
+      await screen.findByText('Saved');
+
+      await waitFor(() => expect(toasterTheme()).toBe('dark'));
+    });
   });
 });
-

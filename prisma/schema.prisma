@@ -300,6 +300,7 @@ enum InAppNotificationType {
   TEAM
   SERVICE
   ACTION_ITEM
+  SECURITY
 }
 
 enum IncidentUrgency {
@@ -467,6 +468,7 @@ model ProviderWorkerLease {
 }
 
 model User {
+  policyChecks RunbookPolicyCheck[]
   id                           String     @id @default(cuid())
   name                         String
   email                        String     @unique
@@ -517,8 +519,8 @@ model User {
   runbooksCreated             Runbook[]                    @relation("RunbookCreatedBy")
   runbookVersionsCreated      RunbookVersion[]             @relation("RunbookVersionCreatedBy")
   runbookVersionsPublished    RunbookVersion[]             @relation("RunbookVersionPublishedBy")
-  runbookBindingsCreated      ServiceRunbookBinding[]      @relation("ServiceRunbookBindingCreatedBy")
-  runbookUnattendedWritesAuthorized ServiceRunbookBinding[]  @relation("ServiceRunbookBindingUnattendedWritesAuthorizedBy")
+  runbookBindingsCreated      ServiceAutomationRule[]      @relation("ServiceRunbookBindingCreatedBy")
+  runbookUnattendedWritesAuthorized ServiceAutomationRule[]  @relation("ServiceRunbookBindingUnattendedWritesAuthorizedBy")
   runbookTriggersCreated      RunbookTrigger[]             @relation("RunbookTriggerCreatedBy")
   runbookExecutionsTriggered  RunbookExecution[]           @relation("RunbookExecutionTriggeredBy")
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
@@ -590,6 +592,9 @@ model OidcIdentity {
 }
 
 model Team {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  /// The default is database-side so clients never write the column (safe during rolling upgrades).
+  revision Int @default(dbgenerated("1"))
   id                String             @id @default(cuid())
   name              String             @unique
   description       String?
@@ -602,6 +607,7 @@ model Team {
   incidentTemplates IncidentTemplate[]
   incidents         Incident[]
   dashboards        Dashboard[]
+  runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
 }
@@ -627,6 +633,9 @@ model Service {
   automationTraces                AutomationTrace[]
   automationObservations          AutomationContextObservation[]
   automationAggregates            AutomationShadowAggregate[]
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  /// The default is database-side so clients never write the column (safe during rolling upgrades).
+  revision Int @default(dbgenerated("1"))
   id                              String                          @id @default(cuid())
   name                            String                          @unique
   description                     String?
@@ -654,7 +663,7 @@ model Service {
   warRoomCustomBridgeUrl          String?
   slaDefinitions                  SLADefinition[]
   serviceObjectives               ServiceObjective[]
-  runbookBindings                 ServiceRunbookBinding[]
+  runbookBindings                 ServiceAutomationRule[]
   runbookExecutions               RunbookExecution[]
   createdAt                       DateTime                        @default(now())
   updatedAt                       DateTime                        @updatedAt
@@ -680,6 +689,9 @@ model Service {
 model EscalationPolicy {
   archivedAt DateTime?
   archivedBy String?
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  /// The default is database-side so clients never write the column (safe during rolling upgrades).
+  revision Int @default(dbgenerated("1"))
   id          String           @id @default(cuid())
   name        String           @unique
   description String?
@@ -726,6 +738,9 @@ model EscalationRuleCondition {
 }
 
 model Integration {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  /// The default is database-side so clients never write the column (safe during rolling upgrades).
+  revision Int @default(dbgenerated("1"))
   id              String   @id @default(cuid())
   name            String
   type            String   @default("EVENTS_API_V2")
@@ -790,6 +805,38 @@ model SlackOAuthConfig {
   updater       User?    @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([id])
+}
+
+enum AuthenticationMode {
+  PASSWORD_ONLY
+  SSO_OPTIONAL
+  SSO_REQUIRED
+}
+
+// Singleton. Never derive live policy from replica-local environment variables.
+model AuthenticationPolicyImport {
+  id         String   @id @default("default")
+  importedAt DateTime @default(now())
+}
+
+model AuthenticationPolicy {
+  id                        String             @id @default("default")
+  mode                      AuthenticationMode
+  version                   Int                @default(1)
+  oidcConfigVersion         Int?
+  activeRevisionId          String?
+  passwordSessionMinVersion Int                @default(0)
+  oidcSessionMinVersion     Int                @default(0)
+  enforcedAt                DateTime?
+  lastVerifiedAt            DateTime?
+  updatedBy                 String?
+  updatedAt                 DateTime           @updatedAt
+  migratedAt                DateTime           @default(now())
+  legacyEmergencyEmail      String?
+  passwordRecoveryUserId    String?
+  passwordRecoveryExpiresAt DateTime?
+  recoveryDegradedAt        DateTime?
+  legacySnapshot            Json
 }
 
 model OidcConfig {
@@ -1615,6 +1662,9 @@ model ExternalIssueLink {
 }
 
 model OnCallSchedule {
+  /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
+  /// The default is database-side so clients never write the column (safe during rolling upgrades).
+  revision Int @default(dbgenerated("1"))
   id              String           @id @default(cuid())
   name            String           @unique
   timeZone        String           @default("UTC")
@@ -1722,6 +1772,8 @@ model Notification {
   failedAt               DateTime?
   reconciliationDeadline DateTime?
   errorMsg               String?
+  feedbackPending        Boolean @default(false)
+  deliveryProvider       String?
   providerMessageId      String?                       @unique
   attempts               Int                           @default(0)
   createdAt              DateTime                      @default(now())
@@ -1731,6 +1783,8 @@ model Notification {
   content                NotificationContent?          @relation(fields: [contentId], references: [id], onDelete: SetNull)
   fanout                 NotificationFanout?           @relation(fields: [fanoutId], references: [id], onDelete: SetNull)
 
+  // idx_notification_feedback_pending is a managed partial index (WHERE feedbackPending=true)
+  // in migration 20261014193000; Prisma 5 cannot express its predicate.
   @@index([incidentId])
   @@index([userId])
   @@index([userId, createdAt])
@@ -1841,11 +1895,22 @@ model NotificationProviderFeedback {
   providerMessageId String?
   eventType         String
   recipientHash     String?
+  reconciliationAttempts Int @default(0)
+  quarantinedAt DateTime?
+  reconciliationReason String?
+  processedAt       DateTime?
+  nextReconcileAt   DateTime @default(now())
   occurredAt        DateTime
   createdAt         DateTime @default(now())
 
   @@unique([provider, providerEventId])
   @@index([providerMessageId])
+  @@index([provider, providerMessageId, processedAt], map: "idx_feedback_provider_message_pending")
+  @@index([processedAt, nextReconcileAt])
+  @@index([processedAt, quarantinedAt, nextReconcileAt], map: "idx_feedback_replay_due")
+  @@index([processedAt, id], map: "idx_feedback_processed_retention")
+  @@index([quarantinedAt, id], map: "idx_feedback_quarantine_retention")
+  @@index([providerMessageId, provider, reconciliationReason, quarantinedAt], map: "idx_feedback_quarantined_message")
   @@index([eventType, occurredAt])
 }
 
@@ -1869,20 +1934,27 @@ model InAppNotification {
 }
 
 model UserDevice {
-  id        String   @id @default(cuid())
-  userId    String
-  deviceId  String
-  token     String
-  platform  String
-  userAgent String?
-  lastUsed  DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  userId           String
+  deviceId         String
+  token            String
+  platform         String
+  userAgent        String?
+  lastUsed         DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sessionExpiresAt DateTime?
+  sessionPolicyVersion Int?
+  sessionDiagnosticProjectedAt DateTime?
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@index([userId])
   @@index([token])
+  @@index([platform, sessionExpiresAt])
+  @@index([lastUsed, id], map: "UserDevice_diagnostic_activity_idx")
+  @@index([createdAt, id], map: "UserDevice_diagnostic_created_idx")
+  @@index([sessionExpiresAt, id], map: "UserDevice_diagnostic_expiry_idx")
 }
 
 model AuditLog {
@@ -2476,6 +2548,7 @@ model SystemSettings {
   automationEnabled                    Boolean  @default(false)
   automationTraceRetentionDays         Int      @default(90)
   automationSettingsRevision           Int      @default(0)
+  runbookArtifactRetentionDays Int?
   id                                   String   @id @default("default")
   runbookAutoExecutionsPerIncident     Int      @default(3)
   runbookAutoWritesPerIncident         Int      @default(3)
@@ -3411,19 +3484,26 @@ model Runbook {
   publishedVersionId String?   @unique
   archivedAt         DateTime?
   createdById        String?
+  ownerTeamId        String?
+  tags               String[]  @default([])
 
   createdBy        User?                   @relation("RunbookCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  ownerTeam        Team?                   @relation("RunbookOwnerTeam", fields: [ownerTeamId], references: [id], onDelete: SetNull)
   draftVersion     RunbookVersion?         @relation("RunbookDraft", fields: [draftVersionId], references: [id], onDelete: SetNull)
   publishedVersion RunbookVersion?         @relation("RunbookPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
   versions         RunbookVersion[]        @relation("RunbookVersions")
-  bindings         ServiceRunbookBinding[]
+  bindings         ServiceAutomationRule[]
   executions       RunbookExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ownerTeamId])
+  @@index([tags], type: Gin)
 }
 
 model RunbookVersion {
+  policyChecks RunbookPolicyCheck[]
   id            String              @id @default(cuid())
   runbookId     String
   version       Int
@@ -3442,7 +3522,7 @@ model RunbookVersion {
   createdBy          User?                   @relation("RunbookVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   publishedBy        User?                   @relation("RunbookVersionPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
   inputs             RunbookInput[]
-  bindings           ServiceRunbookBinding[]
+  bindings           ServiceAutomationRule[]
   executions         RunbookExecution[]
   suggestions        RunbookSuggestion[]
 
@@ -3464,6 +3544,7 @@ model RunbookInput {
   defaultValue     String?
   description      String           @default("")
   sequence         Int              @default(0)
+  options          String[]         @default([])
 
   runbookVersion RunbookVersion @relation(fields: [runbookVersionId], references: [id], onDelete: Cascade)
 
@@ -3474,7 +3555,11 @@ model RunbookInput {
   @@index([runbookVersionId])
 }
 
-model ServiceRunbookBinding {
+model ServiceAutomationRule {
+  configurationRevision Int @default(1)
+  detachedAt DateTime?
+  policyChecks RunbookPolicyCheck[]
+  name               String                 @default("")
   id                 String                 @id @default(cuid())
   serviceId          String
   runbookId          String
@@ -3483,7 +3568,7 @@ model ServiceRunbookBinding {
   mode               RunbookBindingMode     @default(MANUAL)
   versionStrategy    RunbookVersionStrategy @default(LATEST_PUBLISHED)
   defaultAgentPoolId String?
-  agentSelector      Json @default("{}")
+  agentSelector      Json                   @default("{}")
   defaultAgentId     String?
   inputValues        Json                   @default("{}")
   createdById        String?
@@ -3499,8 +3584,6 @@ model ServiceRunbookBinding {
   contextInputMappings          Json      @default("[]")
   /// { contextKey, entries: [{ value, agentPoolId | agentId }] }: admin-approved targets.
   contextTargetMappings         Json      @default("{}")
-  /// Incremented on every binding or trigger configuration change; pinned on executions.
-  configRevision                Int       @default(1)
 
   service          Service             @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   runbook          Runbook             @relation(fields: [runbookId], references: [id], onDelete: Cascade)
@@ -3516,12 +3599,17 @@ model ServiceRunbookBinding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([serviceId, runbookId])
+  @@index([serviceId, runbookId])
+  @@index([serviceId, createdAt, id])
+  @@index([serviceId, id])
+  // Retain the existing physical table and foreign keys; IDs are stable rule IDs.
+  @@map("ServiceRunbookBinding")
   @@index([serviceId])
   @@index([runbookId])
 }
 
 model RunbookTrigger {
+  revision       Int                   @default(1)
   id             String                @id @default(cuid())
   bindingId      String
   event          RunbookTriggerEvent
@@ -3529,7 +3617,7 @@ model RunbookTrigger {
   enabled        Boolean               @default(true)
   createdById    String?
 
-  binding     ServiceRunbookBinding     @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  binding     ServiceAutomationRule     @relation(fields: [bindingId], references: [id], onDelete: Cascade)
   createdBy   User?                     @relation("RunbookTriggerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   conditions  RunbookTriggerCondition[]
   executions  RunbookExecution[]
@@ -3559,16 +3647,17 @@ model RunbookTriggerCondition {
 }
 
 model RunbookExecutionSigningKey {
-  id                  String   @id
+  id                  String    @id
   publicKey           String
   privateKeyEncrypted String
-  createdAt           DateTime @default(now())
-  state               String   @default("ACTIVE")
+  createdAt           DateTime  @default(now())
+  state               String    @default("ACTIVE")
   activatedAt         DateTime?
   retiredAt           DateTime?
 }
 
 model RunbookSuggestion {
+  triggerRevision Int?
   id               String                 @id @default(cuid())
   incidentId       String
   bindingId        String
@@ -3582,7 +3671,7 @@ model RunbookSuggestion {
   planSnapshot     Json?
 
   incident       Incident              @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  binding        ServiceRunbookBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  binding        ServiceAutomationRule @relation(fields: [bindingId], references: [id], onDelete: Cascade)
   runbookVersion RunbookVersion        @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
   trigger        RunbookTrigger        @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
@@ -3595,6 +3684,8 @@ model RunbookSuggestion {
 }
 
 model RunbookExecution {
+  verificationRevision Int @default(0)
+  triggerRevision Int?
   id                        String                 @id @default(cuid())
   runbookId                 String
   runbookVersionId          String
@@ -3632,7 +3723,7 @@ model RunbookExecution {
   runbookVersion          RunbookVersion         @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
   incident                Incident?              @relation(fields: [incidentId], references: [id], onDelete: SetNull)
   service                 Service?               @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  binding                 ServiceRunbookBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
+  binding                 ServiceAutomationRule? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
   trigger                 RunbookTrigger?        @relation(fields: [triggerId], references: [id], onDelete: SetNull)
   resolvedTargetAgent     RunbookAgent?          @relation("RunbookExecutionTargetAgent", fields: [resolvedTargetAgentId], references: [id], onDelete: Restrict)
   resolvedTargetAgentPool RunbookAgentPool?      @relation("RunbookExecutionTargetAgentPool", fields: [resolvedTargetAgentPoolId], references: [id], onDelete: Restrict)
@@ -3658,7 +3749,7 @@ model RunbookExecutionStep {
   id                 String            @id @default(cuid())
   executionId        String
   stepKey            String
-  containerRuntime   String @default("docker")
+  containerRuntime   String            @default("docker")
   verificationResult Json?
   sequence           Int
   name               String
@@ -3693,30 +3784,30 @@ model RunbookExecutionStep {
 }
 
 model RunbookStepAttempt {
-  id                String               @id @default(cuid())
-  executionStepId   String
-  attemptNumber     Int
-  status            RunbookAttemptStatus @default(PENDING)
-  requiresConfidentialTransport Boolean @default(false)
-  targetAgentId     String?
-  targetAgentPoolId String?
-  claimedAgentId    String?
-  claimedAt         DateTime?
-  leaseToken        String?
-  leaseExpiresAt    DateTime?
-  availableAt       DateTime             @default(now())
-  claimDeadlineAt   DateTime?
-  idempotencyKey    String?
-  planDigest        String?
-  startedAt         DateTime?
-  completedAt       DateTime?
-  exitCode          Int?
-  outputPreview     String?
-  outputArtifactId  String?
-  errorCode         String?
-  errorMessage      String?
-  preState          Json?
-  postState         Json?
+  id                            String               @id @default(cuid())
+  executionStepId               String
+  attemptNumber                 Int
+  status                        RunbookAttemptStatus @default(PENDING)
+  requiresConfidentialTransport Boolean              @default(false)
+  targetAgentId                 String?
+  targetAgentPoolId             String?
+  claimedAgentId                String?
+  claimedAt                     DateTime?
+  leaseToken                    String?
+  leaseExpiresAt                DateTime?
+  availableAt                   DateTime             @default(now())
+  claimDeadlineAt               DateTime?
+  idempotencyKey                String?
+  planDigest                    String?
+  startedAt                     DateTime?
+  completedAt                   DateTime?
+  exitCode                      Int?
+  outputPreview                 String?
+  outputArtifactId              String?
+  errorCode                     String?
+  errorMessage                  String?
+  preState                      Json?
+  postState                     Json?
 
   executionStep   RunbookExecutionStep @relation(fields: [executionStepId], references: [id], onDelete: Cascade)
   targetAgent     RunbookAgent?        @relation("RunbookAttemptTargetAgent", fields: [targetAgentId], references: [id], onDelete: Restrict)
@@ -3736,10 +3827,12 @@ model RunbookStepAttempt {
   @@index([targetAgentId])
   @@index([targetAgentPoolId])
   @@index([claimedAgentId])
+  @@index([outputArtifactId])
   @@index([leaseExpiresAt])
 }
 
 model RunbookAgent {
+  policyChecks RunbookPolicyCheck[]
   id                  String             @id @default(cuid())
   name                String
   hostname            String?
@@ -3767,7 +3860,7 @@ model RunbookAgent {
   createdBy          User?                      @relation("RunbookAgentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   revokedBy          User?                      @relation("RunbookAgentRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
   poolMemberships    RunbookAgentPoolMember[]
-  bindings           ServiceRunbookBinding[]
+  bindings           ServiceAutomationRule[]
   targetedExecutions RunbookExecution[]         @relation("RunbookExecutionTargetAgent")
   targetedAttempts   RunbookStepAttempt[]       @relation("RunbookAttemptTargetAgent")
   claimedAttempts    RunbookStepAttempt[]       @relation("RunbookAttemptClaimedAgent")
@@ -3803,7 +3896,7 @@ model RunbookAgentPool {
 
   createdBy          User?                    @relation("RunbookAgentPoolCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   members            RunbookAgentPoolMember[]
-  bindings           ServiceRunbookBinding[]
+  bindings           ServiceAutomationRule[]
   targetedExecutions RunbookExecution[]       @relation("RunbookExecutionTargetAgentPool")
   targetedAttempts   RunbookStepAttempt[]     @relation("RunbookAttemptTargetAgentPool")
   secretGrants       RunbookSecretGrant[]
@@ -3877,7 +3970,7 @@ model RunbookArtifact {
   createdAt DateTime @default(now())
 
   @@index([attemptId, createdAt])
-  @@index([createdAt])
+  @@index([createdAt, id])
 }
 
 // Opaque preview capabilities: only the token hash is stored. Scope IDs are retained for audit.
@@ -4050,4 +4143,233 @@ model AutomationContextObservation {
 
   @@unique([serviceId, integrationId, fieldKey, normalizedRawValueHash])
   @@index([serviceId, lastSeenAt])
+}
+
+// Recovery principals deliberately have no relation to User, teams or SCIM.
+model EmergencyAccount {
+  id                        String                @id @default(cuid())
+  displayName               String
+  authenticationMethod      String @default("WEBAUTHN")
+  passwordHash              String?
+  status                    String                @default("ENROLLING")
+  enrolledAt                DateTime              @default(now())
+  verifiedAt                DateTime?
+  lastUsedAt                DateTime?
+  credentialVersion         Int                   @default(1)
+  verifiedCredentialVersion Int?
+  verifiedOrigin            String?
+  independenceConfirmedAt   DateTime
+  credentials               EmergencyCredential[]
+  sessions                  EmergencySession[]
+}
+
+model EmergencyCredential {
+  id                 String           @id @default(cuid())
+  emergencyAccountId String
+  credentialId       String           @unique
+  publicKey          Bytes
+  counter            BigInt           @default(0)
+  transports         String[]         @default([])
+  deviceType         String
+  backedUp           Boolean
+  displayName        String
+  createdAt          DateTime         @default(now())
+  revokedAt          DateTime?
+  account            EmergencyAccount @relation(fields: [emergencyAccountId], references: [id], onDelete: Restrict)
+
+  @@index([emergencyAccountId, revokedAt])
+}
+
+model EmergencySession {
+  id                 String            @id @default(cuid())
+  tokenHash          String            @unique
+  emergencyAccountId String?
+  legacyUserId       String?
+  credentialVersion  Int
+  createdAt          DateTime          @default(now())
+  expiresAt          DateTime
+  lastActivityAt     DateTime          @default(now())
+  authenticatedAt    DateTime          @default(now())
+  revokedAt          DateTime?
+  account            EmergencyAccount? @relation(fields: [emergencyAccountId], references: [id], onDelete: Restrict)
+
+  @@index([emergencyAccountId, revokedAt])
+  @@index([expiresAt])
+}
+
+model EmergencyChallenge {
+  id                 String    @id @default(cuid())
+  challenge          String    @unique
+  browserHash        String
+  kind               String
+  emergencyAccountId String
+  credentialVersion  Int
+  authorizedBy       String?
+  sessionId          String?
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model EmergencyAccessEvent {
+  id                 String   @id @default(cuid())
+  emergencyAccountId String?
+  eventType          String
+  outcome            String
+  context            Json
+  createdAt          DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([emergencyAccountId, createdAt])
+  @@index([createdAt, id], map: "EmergencyAccessEvent_page_idx")
+  @@index([eventType, createdAt, id], map: "EmergencyAccessEvent_type_page_idx")
+  @@index([outcome, createdAt, id], map: "EmergencyAccessEvent_outcome_page_idx")
+}
+
+model AuthenticationAlert {
+  id                 String    @id @default(cuid())
+  eventId            String
+  recipientId        String
+  title              String
+  message            String
+  createdAt          DateTime  @default(now())
+  nextAttemptAt      DateTime  @default(now())
+  attempts           Int       @default(0)
+  leaseUntil         DateTime?
+  leaseToken         String?
+  acceptedAt         DateTime?
+  notificationId     String?
+  deliveredAt        DateTime?
+  cancelledAt        DateTime?
+  failedAt           DateTime?
+  deliveryGeneration Int       @default(0)
+  lastError          String?
+
+  @@unique([eventId, recipientId])
+  @@index([createdAt, id])
+  @@index([acceptedAt, deliveredAt, cancelledAt, failedAt, nextAttemptAt])
+  @@index([notificationId])
+  @@index([deliveredAt])
+  @@index([cancelledAt])
+  @@index([failedAt])
+}
+
+// Durable remainder of a security alert's bounded administrator fan-out.
+model AuthenticationAlertFanout {
+  eventId     String   @id
+  title       String
+  message     String
+  cursor      String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// Global aggregate windows prevent anonymous failures from amplifying administrator alerts.
+model AuthenticationFailureWindow {
+  id        String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model OidcRevision {
+  id                  String             @id @default(cuid())
+  configuration       Json
+  baseConfigVersion   Int
+  createdBy           String
+  createdAt           DateTime           @default(now())
+  discoveryVerifiedAt DateTime?
+  activatedAt         DateTime?
+  previousRevisionId  String?
+  tests               OidcRevisionTest[]
+}
+
+model OidcRevisionTest {
+  id                  String       @id @default(cuid())
+  revisionId          String
+  adminUserId         String
+  adminTokenVersion   Int
+  testedConfigVersion Int          @default(0)
+  verifiedOrigin      String?
+  issuer              String
+  subject             String
+  email               String
+  effectiveRole       String
+  linkApproved        Boolean
+  verifiedAt          DateTime     @default(now())
+  revision            OidcRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@index([revisionId, verifiedAt])
+}
+
+model OidcTestFlow {
+  id                  String    @id @default(cuid())
+  stateHash           String    @unique
+  browserHash         String
+  revisionId          String
+  adminUserId         String
+  adminTokenVersion   Int
+  testedConfigVersion Int       @default(0)
+  authorizedBy        String
+  linkApproved        Boolean
+  secrets             String
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model AuthenticationReplicaObservation {
+  id          String   @id
+  snapshot    Json
+  differs     Boolean
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  @@index([lastSeenAt, id], map: "AuthenticationReplicaObservation_page_idx")
+}
+
+// Internal process evidence: a heartbeat is not a guarantee of target authorization.
+model RuntimeWorkerHeartbeat {
+  instanceId       String   @id
+  lane             String
+  role             String
+  runbookEnabled   Boolean  @default(false)
+  running          Boolean  @default(true)
+  lastSeenAt       DateTime @default(now())
+  lastSuccessAt    DateTime?
+  lastReconciledAt DateTime?
+  lastError        String?
+  startedAt        DateTime @default(now())
+
+  @@index([runbookEnabled, running, lastSeenAt])
+}
+
+model RunbookPolicyCheck {
+  id          String   @id @default(cuid())
+  ruleId      String
+  agentId     String
+  versionId   String
+  checksum    String
+  steps       Json
+  status      String   @default("PENDING")
+  policyHash  String?
+  results     Json     @default("[]")
+  expiresAt   DateTime
+  checkedAt   DateTime?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  rule      ServiceAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  agent     RunbookAgent           @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  version   RunbookVersion         @relation(fields: [versionId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  createdBy User?                  @relation(fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([agentId, status, expiresAt])
+  @@index([ruleId, createdAt])
 }

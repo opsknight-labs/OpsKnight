@@ -1,9 +1,9 @@
+import { boundOutput } from './output-limits';
 import { spawn } from 'node:child_process';
 import type { AgentPolicy, ClaimedAttempt } from './types';
 import { executeNetworkDiagnostic } from './network-diagnostics';
-import { captureEvidence } from './evidence';
+import { captureEvidence, containerEvidenceFormat } from './evidence';
 import { assertPolicyAllows } from './policy';
-
 
 export interface ExecutionResult {
   status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
@@ -24,8 +24,7 @@ export function containerHealthPassed(output: string): boolean {
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const state = parsed as Record<string, unknown>;
       const healthObj = (state.Health ?? state.Healthcheck ?? state.health ?? state.healthcheck) as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       if (healthObj && typeof healthObj === 'object') {
         const status = String(healthObj.Status ?? healthObj.status ?? '');
         return status.toLowerCase() === 'healthy';
@@ -39,30 +38,30 @@ export function containerHealthPassed(output: string): boolean {
   }
 }
 
-export function sliceUtf8Safe(str: string, maxBytes: number): string {
-  if (Buffer.byteLength(str, 'utf8') <= maxBytes) return str;
-  let low = 0;
-  let high = Math.min(str.length, maxBytes);
-  let best = 0;
-  while (low <= high) {
-    const mid = (low + high) >> 1;
-    let sliceEnd = mid;
-    if (sliceEnd > 0 && sliceEnd < str.length) {
-      const code = str.charCodeAt(sliceEnd - 1);
-      if (code >= 0xd800 && code <= 0xdbff) {
-        sliceEnd -= 1;
+export function isContainerStarting(output: string): boolean {
+  try {
+    const trimmed = output.trim();
+    if (!trimmed) return false;
+    const parsed: unknown = JSON.parse(trimmed);
+    if (typeof parsed === 'string') return parsed.toLowerCase() === 'starting';
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const state = parsed as Record<string, unknown>;
+      const healthObj = (state.Health ?? state.Healthcheck ?? state.health ?? state.healthcheck) as
+        Record<string, unknown> | undefined;
+      if (healthObj && typeof healthObj === 'object') {
+        const status = String(healthObj.Status ?? healthObj.status ?? '');
+        return status.toLowerCase() === 'starting';
       }
+      if (typeof state.Status === 'string') return state.Status.toLowerCase() === 'starting';
+      if (typeof state.status === 'string') return state.status.toLowerCase() === 'starting';
     }
-    const bytes = Buffer.byteLength(str.slice(0, sliceEnd), 'utf8');
-    if (bytes <= maxBytes) {
-      best = Math.max(best, sliceEnd);
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
+    return false;
+  } catch {
+    return false;
   }
-  return str.slice(0, best);
 }
+
+export { sliceUtf8Safe } from './output-limits';
 
 function resourceToKind(res: string): string {
   const normalized = res.toLowerCase().replace(/s$/, '');
@@ -152,14 +151,23 @@ export function commandFor(
       const args =
         action === 'logs'
           ? ['logs', '--tail', '500', String(config.container)]
-          : action === 'health'
+          : action === 'inspect'
             ? [
                 'inspect',
                 '--format',
-                '{{json .State}}',
+                config.runtime === 'podman'
+                  ? '{{json .ID}} {{json .Name}} {{json .State.Status}} {{json .State.Running}} {{json .State.ExitCode}}'
+                  : '{{json .Id}} {{json .Name}} {{json .State.Status}} {{json .State.Running}} {{json .State.ExitCode}}',
                 String(config.container),
               ]
-            : [action, String(config.container)];
+            : action === 'health'
+              ? [
+                  'inspect',
+                  '--format',
+                  containerEvidenceFormat(config.runtime),
+                  String(config.container),
+                ]
+              : [action, String(config.container)];
       return { command: config.runtime === 'podman' ? 'podman' : 'docker', args };
     }
     case 'KUBERNETES': {
@@ -203,17 +211,12 @@ export function commandFor(
       }
       if (action === 'logs') {
         if (!name) throw new Error('Kubernetes logs requires a target resource name.');
-        const target = ['pod', 'pods'].includes(resource.toLowerCase()) ? name : `${resource}/${name}`;
+        const target = ['pod', 'pods'].includes(resource.toLowerCase())
+          ? name
+          : `${resource}/${name}`;
         return {
           command: 'kubectl',
-          args: [
-            '-n',
-            namespace,
-            'logs',
-            target,
-            '--tail=500',
-            '--limit-bytes=262144',
-          ],
+          args: ['-n', namespace, 'logs', target, '--tail=500', '--limit-bytes=262144'],
         };
       }
       if (!['get', 'describe'].includes(action)) {
@@ -221,12 +224,15 @@ export function commandFor(
       }
       return {
         command: 'kubectl',
+        // Describe includes literal environment values. Return only operational status fields.
         args: [
           '-n',
           namespace,
-          action,
+          'get',
           resource,
           ...(name ? [name] : []),
+          '-o',
+          'jsonpath={.metadata.name} {.status.phase} {.status.replicas} {.status.readyReplicas} {.status.availableReplicas} {.status.conditions[*].type} {.status.conditions[*].status} {.items[*].metadata.name} {.items[*].status.phase}',
         ],
       };
     }
@@ -245,7 +251,12 @@ export function commandFor(
 export async function executeAttempt(
   attempt: ClaimedAttempt,
   policy: AgentPolicy,
-  signal: AbortSignal
+  signal: AbortSignal,
+  runner: (
+    attempt: ClaimedAttempt,
+    policy: AgentPolicy,
+    signal: AbortSignal
+  ) => Promise<ExecutionResult> = executeCommand
 ): Promise<ExecutionResult> {
   assertPolicyAllows(attempt, policy);
   if (
@@ -253,17 +264,55 @@ export async function executeAttempt(
     ['LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES'].includes(attempt.step.type)
   ) {
     const preState = await captureEvidence(attempt, signal);
-    const result = await executeCommand(attempt, policy, signal);
+    const result = await runner(attempt, policy, signal);
     if (
       result.status === 'SUCCEEDED' &&
       attempt.step.type === 'DOCKER' &&
-      attempt.step.config.action === 'health' &&
-      !containerHealthPassed(result.output)
+      attempt.step.config.action === 'health'
     ) {
-      result.status = 'FAILED';
-      result.errorCode = 'CONTAINER_UNHEALTHY';
-      result.errorMessage =
-        'Container healthcheck is unhealthy, starting, unavailable or not configured.';
+      const stepTimeout = attempt.step.timeoutSeconds ?? attempt.step.config.timeoutSeconds;
+      const startCheckTime = Date.now();
+      // Reconcile effective deadline: respect stepTimeout strictly without an artificial 5-second floor.
+      const effectiveTimeoutSeconds =
+        stepTimeout !== undefined ? Math.max(1, Number(stepTimeout)) : 15;
+      const maxWaitMs = Math.min(effectiveTimeoutSeconds * 1000, 60000);
+      while (
+        !containerHealthPassed(result.output) &&
+        isContainerStarting(result.output) &&
+        Date.now() - startCheckTime < maxWaitMs &&
+        !signal.aborted
+      ) {
+        await new Promise(r => setTimeout(r, 100));
+        if (signal.aborted) {
+          const isShutdown = signal.reason === 'AGENT_SHUTDOWN';
+          const isLeaseLost = signal.reason === 'LEASE_LOST';
+          result.status = isLeaseLost ? 'UNKNOWN' : 'CANCELLED';
+          result.errorCode = isShutdown
+            ? 'AGENT_SHUTDOWN'
+            : isLeaseLost
+              ? 'LEASE_LOST'
+              : 'CANCELLED';
+          result.errorMessage = isLeaseLost
+            ? 'Local execution authority expired during healthcheck polling.'
+            : 'Healthcheck polling cancelled.';
+          break;
+        }
+        const retry = await runner(attempt, policy, signal);
+        result.output = retry.output;
+        result.exitCode = retry.exitCode;
+        if (retry.status !== 'SUCCEEDED') {
+          result.status = retry.status;
+          result.errorCode = retry.errorCode;
+          result.errorMessage = retry.errorMessage;
+          break;
+        }
+      }
+      if (!containerHealthPassed(result.output) && result.status === 'SUCCEEDED') {
+        result.status = 'FAILED';
+        result.errorCode = 'CONTAINER_UNHEALTHY';
+        result.errorMessage =
+          'Container healthcheck is unhealthy, starting, unavailable or not configured.';
+      }
     }
     const postState = { ...(await captureEvidence(attempt, signal)), ...result.postState };
     const diagnostic = attempt.step.config.diagnostic;
@@ -382,8 +431,10 @@ async function executeCommand(
     child.once('close', code => {
       clearTimeout(timeout);
       signal.removeEventListener('abort', killGroup);
-      const output =
-        Buffer.concat(chunks).toString('utf8') + (truncated ? '\n[output truncated]' : '');
+      const output = boundOutput(
+        Buffer.concat(chunks).toString('utf8') + (truncated ? '\n[output truncated]' : ''),
+        policy.maxOutputBytes
+      ).text;
       if (signal.aborted) {
         const isShutdown = signal.reason === 'AGENT_SHUTDOWN';
         const isLeaseLost = signal.reason === 'LEASE_LOST';

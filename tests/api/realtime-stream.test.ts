@@ -22,8 +22,20 @@ vi.mock('@/lib/realtime-stream-authorization', async importOriginal => {
   return {
     ...actual,
     getRequestSessionJti: vi.fn().mockResolvedValue('test-jti'),
+    getRequestStreamAuthentication: vi
+      .fn()
+      .mockResolvedValue({
+        sessionJti: 'test-jti',
+        method: 'credentials',
+        policyVersion: 1,
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      }),
   };
 });
+
+vi.mock('@/lib/authentication-policy', () => ({
+  checkAuthenticationPolicy: vi.fn().mockResolvedValue({ allowed: true }),
+}));
 
 vi.mock('@/lib/session-registry', () => ({
   isSessionActive: vi.fn().mockResolvedValue(true),

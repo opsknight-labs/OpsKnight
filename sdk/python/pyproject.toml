@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opsknight-v2"
+version = "0.1.0"
+description = "Typed OpsKnight public REST API v2 client"
+requires-python = ">=3.11"
+license = {text = "AGPL-3.0-only"}
+
+[tool.setuptools.package-data]
+opsknight_v2 = ["py.typed", "*.pyi", "operations.json"]

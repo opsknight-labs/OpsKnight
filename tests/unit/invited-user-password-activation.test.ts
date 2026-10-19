@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockPrisma = vi.hoisted(() => ({
+  authenticationPolicy: {
+    findUnique: vi
+      .fn()
+      .mockResolvedValue({ mode: 'SSO_OPTIONAL', version: 1, legacyEmergencyEmail: null }),
+  },
+  $queryRaw: vi
+    .fn()
+    .mockResolvedValue([{ mode: 'SSO_OPTIONAL', version: 1, legacyEmergencyEmail: null }]),
   user: {
     findFirst: vi.fn(),
     findUnique: vi.fn(),

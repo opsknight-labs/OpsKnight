@@ -45,6 +45,7 @@ type RegisteredSession = {
   lastActive: string;
   expiresAt: string | null;
   isCurrent: boolean;
+  issuedUnderPolicyVersion?: number | null;
 };
 
 type SessionsApiResponse = {
@@ -279,7 +280,7 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
                           ? 'Trusted PWA'
                           : session.policy === 'OIDC'
                             ? 'Enterprise SSO'
-                            : 'Standard'}
+                            : 'Password'}
                       </Badge>
                       {revoked ? (
                         <Badge variant="destructive" className="text-[10px]">
@@ -288,7 +289,8 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
                       ) : null}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {formatRelativeTime(session.lastActive)} · {formatExpiry(session.expiresAt)}
+                      {formatRelativeTime(session.lastActive)} · {formatExpiry(session.expiresAt)} ·
+                      Issuing policy {session.issuedUnderPolicyVersion ?? 'legacy unknown'}
                     </p>
                     <p className="mt-0.5 text-[10px] text-muted-foreground font-mono">
                       Session •••• {session.displayId} · token v{tokenVersion}

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { initiatePasswordReset } from '@/lib/password-reset';
 import { logger } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
-import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
+import { getDatabaseLocalAuthPolicy } from '@/lib/authentication-policy';
 import { readJsonBodyWithLimit } from '@/lib/request-body';
 
 const GENERIC_MESSAGE =
@@ -28,13 +28,13 @@ function response() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!getLocalAuthPolicy().localLoginEnabled) {
-    return NextResponse.json(
-      { message: 'Local password authentication is disabled.' },
-      { status: 403 }
-    );
-  }
   try {
+    if (!(await getDatabaseLocalAuthPolicy()).localLoginEnabled) {
+      return NextResponse.json(
+        { message: 'Local password authentication is disabled.' },
+        { status: 403 }
+      );
+    }
     const parsed = schema.safeParse(await readJsonBodyWithLimit(req, 4096));
     if (!parsed.success) return response();
     await initiatePasswordReset(parsed.data.email, getClientIp(req.headers));

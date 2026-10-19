@@ -25,6 +25,8 @@ Supported general-purpose contracts are documented separately:
 - [Events API v2](./events)
 - [Incidents API](./incidents)
 - [Responses and errors](./errors)
+- [Public REST API v2](./v2)
+
 
 ## Runtime proof scope
 

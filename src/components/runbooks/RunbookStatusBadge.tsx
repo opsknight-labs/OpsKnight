@@ -1,17 +1,5 @@
-import React from 'react';
-import {
-  AlertTriangle,
-  Ban,
-  CheckCircle2,
-  Clock,
-  Hourglass,
-  Loader2,
-  ShieldAlert,
-  ShieldX,
-  XCircle,
-} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { TONE_SURFACE, type Tone } from './ui/primitives';
 
 export type RunbookStatusBadgeProps = {
   status: string;
@@ -21,6 +9,70 @@ export type RunbookStatusBadgeProps = {
   context?: 'execution' | 'agent' | 'health' | 'lifecycle' | 'default';
 };
 
+type StatusStyle = { label: string; tone: Tone; pulse?: boolean };
+
+const STATUS_STYLES: Record<string, StatusStyle> = {
+  // Executions and step attempts
+  SUCCEEDED: { label: 'Succeeded', tone: 'success' },
+  RUNNING: { label: 'Running', tone: 'info', pulse: true },
+  QUEUED: { label: 'Queued', tone: 'neutral' },
+  PENDING: { label: 'Pending', tone: 'neutral' },
+  CLAIMED: { label: 'Claimed', tone: 'info', pulse: true },
+  WAITING_APPROVAL: { label: 'Waiting approval', tone: 'warning', pulse: true },
+  WAITING_AGENT: { label: 'Waiting agent', tone: 'warning', pulse: true },
+  FAILED: { label: 'Failed', tone: 'danger' },
+  CANCELLED: { label: 'Cancelled', tone: 'neutral' },
+  CANCEL_REQUESTED: { label: 'Cancel requested', tone: 'neutral', pulse: true },
+  TIMED_OUT: { label: 'Timed out', tone: 'danger' },
+  SKIPPED: { label: 'Skipped', tone: 'neutral' },
+  PAUSED: { label: 'Paused', tone: 'warning' },
+  // Agent fleet
+  ONLINE: { label: 'Online', tone: 'success' },
+  DEGRADED: { label: 'Degraded', tone: 'warning' },
+  OFFLINE: { label: 'Offline', tone: 'danger' },
+  ENROLLING: { label: 'Enrolling', tone: 'info', pulse: true },
+  REVOKED: { label: 'Revoked', tone: 'neutral' },
+  // Runbook lifecycle
+  PUBLISHED: { label: 'Published', tone: 'success' },
+  DRAFT: { label: 'Draft', tone: 'warning' },
+  ARCHIVED: { label: 'Archived', tone: 'neutral' },
+  RETIRED: { label: 'Retired', tone: 'neutral' },
+  // Signing identities
+  ACTIVE: { label: 'Active', tone: 'success' },
+  NEXT: { label: 'Next', tone: 'info' },
+  RETIRING: { label: 'Retiring', tone: 'warning' },
+  // Health
+  HEALTHY: { label: 'Healthy', tone: 'success' },
+};
+const STATUS_MAP = new Map(Object.entries(STATUS_STYLES));
+
+const SURFACE = new Map(Object.entries(TONE_SURFACE) as Array<[Tone, string]>);
+const DOT = new Map<Tone, string>([
+  ['neutral', 'bg-muted-foreground/60'],
+  ['success', 'bg-emerald-500'],
+  ['warning', 'bg-amber-500'],
+  ['danger', 'bg-rose-500'],
+  ['info', 'bg-sky-500'],
+  ['brand', 'bg-primary'],
+]);
+
+function sentenceCase(value: string) {
+  const words = value.replaceAll('_', ' ').toLowerCase().trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : 'Unknown';
+}
+
+function resolveStatus(
+  normalized: string,
+  context: RunbookStatusBadgeProps['context']
+): StatusStyle {
+  if (normalized === 'UNKNOWN') {
+    return context === 'health'
+      ? { label: 'Health unknown', tone: 'neutral' }
+      : { label: 'Unknown outcome', tone: 'danger' };
+  }
+  return STATUS_MAP.get(normalized) ?? { label: sentenceCase(normalized), tone: 'neutral' };
+}
+
 export function RunbookStatusBadge({
   status,
   className,
@@ -29,158 +81,33 @@ export function RunbookStatusBadge({
   context = 'default',
 }: RunbookStatusBadgeProps) {
   const normalized = (status || '').toUpperCase();
-
-  // Pick semantic visual configuration
-  let label = normalized.replaceAll('_', ' ');
-  let icon: React.ReactNode = null;
-  let variant: 'success' | 'danger' | 'warning' | 'info' | 'secondary' = 'secondary';
-  let customStyle = '';
-
-  switch (normalized) {
-    // Executions
-    case 'SUCCEEDED':
-      variant = 'success';
-      label = 'Succeeded';
-      icon = <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />;
-      break;
-    case 'RUNNING':
-      variant = 'info';
-      label = 'Running';
-      icon = (
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-        </span>
-      );
-      customStyle = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
-      break;
-    case 'QUEUED':
-      variant = 'secondary';
-      label = 'Queued';
-      icon = <Clock className="h-3 w-3 text-muted-foreground shrink-0" />;
-      break;
-    case 'CLAIMED':
-      variant = 'info';
-      label = 'Claimed';
-      icon = <Loader2 className="h-3 w-3 animate-spin text-blue-500 shrink-0" />;
-      break;
-    case 'WAITING_APPROVAL':
-      variant = 'warning';
-      label = 'Waiting Approval';
-      icon = <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />;
-      customStyle = 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
-      break;
-    case 'WAITING_AGENT':
-      variant = 'warning';
-      label = 'Waiting Agent';
-      icon = <Clock className="h-3 w-3 text-amber-500 shrink-0" />;
-      customStyle = 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
-      break;
-    case 'FAILED':
-      variant = 'danger';
-      label = 'Failed';
-      icon = <XCircle className="h-3 w-3 text-rose-500 shrink-0" />;
-      break;
-    case 'UNKNOWN':
-      if (context === 'health') {
-        variant = 'secondary';
-        label = 'Health Unknown';
-        icon = <Clock className="h-3 w-3 text-muted-foreground shrink-0" />;
-        customStyle = 'bg-muted text-muted-foreground border-border';
-      } else {
-        variant = 'danger';
-        label = 'Unknown Outcome';
-        icon = <AlertTriangle className="h-3 w-3 text-orange-500 shrink-0" />;
-        customStyle = 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30';
-      }
-      break;
-    case 'CANCELLED':
-    case 'CANCEL_REQUESTED':
-      variant = 'secondary';
-      label = normalized === 'CANCEL_REQUESTED' ? 'Cancel Requested' : 'Cancelled';
-      icon = <Ban className="h-3 w-3 text-muted-foreground shrink-0" />;
-      break;
-    case 'TIMED_OUT':
-      variant = 'danger';
-      label = 'Timed Out';
-      icon = <Hourglass className="h-3 w-3 text-rose-500 shrink-0" />;
-      break;
-
-    case 'PAUSED':
-      variant = 'warning'; label = 'Paused'; icon = <Clock className="h-3 w-3 shrink-0" />; break;
-
-    // Agent Fleet
-    case 'ONLINE':
-      variant = 'success';
-      label = 'Online';
-      icon = (
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-        </span>
-      );
-      break;
-    case 'DEGRADED':
-      variant = 'warning';
-      label = 'Degraded';
-      icon = <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />;
-      break;
-    case 'OFFLINE':
-      variant = 'danger';
-      label = 'Offline';
-      icon = <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />;
-      break;
-    case 'REVOKED':
-      variant = 'secondary';
-      label = 'Revoked';
-      icon = <ShieldX className="h-3 w-3 text-muted-foreground shrink-0" />;
-      break;
-    case 'ENROLLING':
-      variant = 'info';
-      label = 'Enrolling';
-      icon = <Loader2 className="h-3 w-3 animate-spin text-blue-500 shrink-0" />;
-      break;
-
-    // Runbook Lifecycle
-    case 'PUBLISHED':
-      variant = 'success';
-      label = 'Published';
-      icon = <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />;
-      break;
-    case 'DRAFT':
-      variant = 'warning';
-      label = 'Draft';
-      customStyle = 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20';
-      break;
-    case 'ARCHIVED':
-      variant = 'secondary';
-      label = 'Archived';
-      customStyle = 'bg-muted text-muted-foreground border-border';
-      break;
-
-    // Health states
-    case 'HEALTHY':
-      variant = 'success';
-      label = 'Healthy';
-      icon = <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />;
-      break;
-    default:
-      variant = 'secondary';
-      break;
-  }
+  const { label, tone, pulse } = resolveStatus(normalized, context);
+  const dot = DOT.get(tone);
 
   return (
-    <Badge
-      variant={variant}
+    <span
+      data-status={normalized || undefined}
       className={cn(
-        'inline-flex items-center gap-1.5 font-medium tracking-wide transition-colors',
+        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full font-medium ring-1 ring-inset transition-colors',
         size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-0.5 text-xs',
-        customStyle,
+        SURFACE.get(tone),
         className
       )}
     >
-      {showIcon && icon}
+      {showIcon && (
+        <span aria-hidden="true" className="relative flex h-1.5 w-1.5 shrink-0">
+          {pulse && (
+            <span
+              className={cn(
+                'absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 motion-reduce:hidden',
+                dot
+              )}
+            />
+          )}
+          <span className={cn('relative inline-flex h-1.5 w-1.5 rounded-full', dot)} />
+        </span>
+      )}
       <span>{label}</span>
-    </Badge>
+    </span>
   );
 }

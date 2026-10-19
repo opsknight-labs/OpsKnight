@@ -1,5 +1,14 @@
 // Paths stay inside the operator-configured spool; attempt IDs and enumerated filenames are validated.
-import { mkdir, readdir, readFile, rename, unlink, open, stat, type FileHandle } from 'node:fs/promises';
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  unlink,
+  open,
+  stat,
+  type FileHandle,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { SpoolRecord } from './types';
@@ -128,7 +137,16 @@ export class ResultSpool {
     const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
     for (const name of names.filter(name => /^[a-z0-9]+\.started$/i.test(name))) {
       const path = join(directory, name);
-      if ((await stat(path)).mtimeMs < cutoff) await unlink(path);
+      try {
+        const fileStat = await stat(path);
+        if (fileStat.mtimeMs < cutoff) {
+          await unlink(path).catch(error => {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          });
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
     }
   }
 

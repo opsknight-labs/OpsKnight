@@ -6,8 +6,14 @@ product_area: runbooks
 audience: [administrator, operator, developer]
 verification:
   level: source
-  verified_at: 2026-10-11
-  evidence: [src/lib/runbooks/types.ts, src/lib/runbooks/definition.ts, src/lib/runbooks/schemas.ts, src/lib/authorization.ts]
+  verified_at: 2026-10-15
+  evidence:
+    [
+      src/lib/runbooks/types.ts,
+      src/lib/runbooks/definition.ts,
+      src/lib/runbooks/schemas.ts,
+      src/lib/authorization.ts,
+    ]
 ---
 
 # Runbook reference
@@ -26,10 +32,10 @@ controls and remain compatible with Advanced JSON. See the
 
 ## Inputs and risk
 
-Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, and `SECRET_REF`.
-Unconstrained `SELECT` is not accepted for new input definitions; use `STRING`
-until option-aware selection is implemented. The database retains its legacy
-enum value for compatibility, not as a constrained dropdown contract.
+Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, `SECRET_REF`
+and `SELECT`. SELECT definitions require explicit unique options; saved defaults,
+binding values and execution inputs must match an allowed option. See the
+[authoring guide](../guides/runbooks/author) for the current Builder controls.
 Input keys are unique and definitions specify required/default
 behavior. Values are validated when configuring and executing a binding.
 Secret references identify encrypted credentials and require a scoped grant.
@@ -69,7 +75,7 @@ namespace/action/`kubernetesMaxReplicas` authorization. Restart remains
 Attempts persist bounded structured `preState` and `postState` snapshots. They
 include CPU load/cores (not CPU percentage), memory, load, and relevant service,
 container, Kubernetes, network, disk, process or log evidence when available.
-Incident step details show changes and retain downloadable raw output artifacts.
+Incident step details show changes and retain downloadable sanitized output artifacts for authorized administrators.
 Secret input values are redacted from evidence and output.
 
 `Verified recovery` is a persisted verification result, not an execution status.
@@ -176,9 +182,131 @@ not an exemption from control-plane SSRF rules.
 Service and incident authorization checks apply in addition to these capabilities.
 See [permissions](./permissions) for the broader authorization model.
 
+## Rule and readiness contracts
+
+`ServiceAutomationRule` is an independent configuration identity. Multiple rules may share a service and workflow; existing database table/IDs and history references are preserved. Readiness states are PAUSED, BLOCKED, CHECKS_REQUIRED, CONFIGURATION_VALID and UNKNOWN. Online/capable Agents cannot alone produce a target-permission guarantee. Agent policy checks are signed, scoped, one-time results with an exact frozen action list; a matching fresh policy hash is required before using their evidence.
+
+Worker health states are HEALTHY, DEGRADED and UNKNOWN. Shared PostgreSQL evidence, rather than the web process's local worker state, establishes dispatch and reconciliation freshness. The scheduler watchdog only reconciles durable work and preserves unknown-write fences.
+
+## Bounded nonce maintenance
+
+Replay nonces are purged independently of execution recovery, using the same
+isolated one-connection maintenance pool as artifact retention. A nonce batch
+selects at most 1,000 expired IDs through the `createdAt` index and uses
+`FOR UPDATE SKIP LOCKED`, its own advisory lock, a one-second statement deadline,
+a 100 ms lock deadline and a 2.5-second transaction deadline. Slow batches skip
+scheduler ticks; they do not overlap or run an unbounded backlog-draining loop.
+Nonce batches run at most once per second; artifact batches retain their
+one-minute cadence. These limits bound work, rather than certify fleet capacity.
+
+Nonce retention covers both sides of the five-minute signature window plus
+one minute of margin. Purging uses the database clock and preserves recent
+nonces, including accepted future-dated requests. Signed requests outside the
+window remain invalid after their stored nonce expires.
+
+Monitor `opsknight_runbook_nonce_purge_rows_total`,
+`opsknight_runbook_nonce_purge_batches_total{result="failed"}`,
+`opsknight_runbook_nonce_purge_duration_seconds` and
+`opsknight_runbook_nonce_purge_oldest_expired_age_seconds`. The age gauge records
+the oldest expired candidate before the last successful batch; skipped or
+failed batches preserve its previous observation. Growing age or failure counts
+need investigation of maintenance throughput and database health. They do not
+mean that valid nonce replay protection has been disabled.
+
+## Maintenance alerts
+
+The bundled [Prometheus rules](https://github.com/opsknight-labs/OpsKnight/blob/main/monitoring/prometheus/opsknight-alerts.yaml)
+include nonce and artifact maintenance alerts for:
+
+- **Stalled:** no successful batch in the last five minutes while execution
+  workers report healthy, sustained for five minutes (nonces) or ten minutes
+  (artifacts). Missing maintenance samples also trigger this check.
+- **Lagging:** oldest expired data observed by an active maintenance process
+  exceeds five minutes (nonces) or one hour (artifacts), sustained for five minutes.
+- **Failing:** at least three failed transactions over ten minutes, sustained
+  for two minutes. Advisory-lock skips are separate from transaction failures.
+
+Scrape each scheduler process's authenticated `/api/metrics` endpoint as well as
+the web endpoint (or every integrated replica when using the integrated role):
+maintenance counters and age observations are process-local. Keep the
+Prometheus `job` and `instance` labels for matching. Load these rules per
+OpsKnight deployment; aggregate the workers of that deployment together, without
+combining unrelated deployments. Backlog alerts require recent successful batches
+from the same process, so a former leader's stale age gauge does not keep them
+firing. Existing worker-health alerts cover missing or degraded execution workers.
+
+`opsknight_runbook_artifact_purge_oldest_expired_age_seconds` measures age beyond
+the configured retention cutoff before the last successful batch, matching the
+nonce observation semantics. Empty successful batches reset age to zero; skipped
+and failed batches preserve it. An empty backlog is healthy even if no rows are
+deleted. Investigate database latency, locks and maintenance logs before changing
+cadence or capacity. Never clear replay protection by truncating recent nonces.
+The rule tests cover healthy idle maintenance, missing/stopped cleanup, backlog,
+repeated failures, a stale former leader and recovery after the backlog drains.
+
 ## Current boundaries
 
-First-class nested-check builder controls, paginated library/history views,
-execution-signing identity rotation, and fleet/load certification are not
-documented as completed features. Existing encryption-key migration preserves
-the execution-signing identity; it is not signing-identity rotation.
+Nested-check builder controls, signing rotation, structured selectors, independent rules and static version comparison are implemented. Version comparisons mask credential fields and list effects on latest-publication rules while pinned rules retain their versions. These features do not certify all deployment topologies or fleet capacity. The measured 10/100/1000 Agent simulation is direct-library idle claim load; it is not authenticated production network capacity or physical recovery proof. Promote only released server/Agent pairs with completed topology evidence.
+
+
+Runbooks remains **Beta** in v2.1. Configuration checks, policy evidence, browser
+journeys and candidate deployment tests each establish a limited property.
+Release qualification still requires the published server/Agent pair, physical
+write and recovery evidence on the intended Systemd/container/Kubernetes targets,
+HA and fault scenarios, sustained authenticated workload measurements, and human
+accessibility review. Candidate builds, simulations and a successful preview
+cannot substitute for those environment-specific results. Follow
+[Agent operations](../operate/deploy/agent-operations) for deployment prerequisites.
+
+## Enterprise safety and output access
+
+Service rule creation, edits, trigger changes, activation, pause, duplication,
+detachment and policy-check requests require **both** service modification
+authority and `runbook.manage`. A service-team responder's read/execute/approve
+permissions do not grant rule administration. UI controls follow the same rule;
+server actions enforce it independently.
+
+Deadline handling is shared by worker advancement and recovery. Once the deadline
+passes, pending/claimed attempts lose authority. A running Agent attempt stays
+fenced and nonterminal while its result or lease expiry is reconciled. A result
+produced before deadline may still be recorded with its valid lease. A write
+reported after deadline is recorded as UNKNOWN, rather than successful or
+silently discarded. UNKNOWN writes require independent target verification;
+recovery never schedules a deadline-expired retry.
+
+Agent output passes through shared credential sanitization before local spooling.
+Docker inspect/health and Kubernetes diagnostics project operational state rather
+than dumping environment/configuration payloads. Agent policy rejects Secret and
+ConfigMap resource capture. The control plane independently validates gzip/UTF-8,
+limits decompression to 10 MiB, sanitizes text and retains at most 1 MiB plus a
+truncation marker before recompressing and persisting. Stored checksums and byte
+quotas describe this sanitized payload. Repeated normalized uploads remain
+idempotent. These limits complement the existing per-attempt/execution quotas.
+
+Artifact downloads require `runbook.artifact.download` in addition to Runbook read
+and resource access. The built-in ADMIN role holds this capability; RESPONDER and
+AUDITOR do not. Downloads are audited and sanitized again, including artifacts
+stored before this change. The `x-content-sha256` header describes the returned
+sanitized gzip. A historical artifact's stored hash may describe its older payload.
+Invalid or oversized legacy gzip cannot be downloaded through this endpoint.
+
+Pattern matching cannot identify every credential in arbitrary application logs.
+Treat output as sensitive operational data, avoid collecting credentials, use
+encrypted PostgreSQL storage/backups and restrict database/spool access. Existing
+historical database rows and backups require an operator's data-protection review
+and retention process; download sanitization does not rewrite old backups.
+
+## Idle Agent claim behavior
+
+A process-local negative queue hint coalesces concurrent availability probes and
+expires after one second. It caches no Agent authority, lease or eligible result.
+Every actual claim still checks live Agent status, policy, permissions and lease
+fences. Newly available work can incur the one-second hint delay plus the existing
+2–5 second polling cadence. Long polls respect their remaining wait budget and
+abort when the client disconnects.
+
+`opsknight_runbook_claim_availability_probes_total{result="empty"}` measures
+coalesced database probes; `result="work"` reports a nonempty hint. A pending but
+ineligible backlog still requires Agent-specific eligibility checks. This reduces
+idle repeated-query cost; it does not establish fleet capacity. See the
+[enterprise qualification guide](../operate/deploy/runbook-qualification).

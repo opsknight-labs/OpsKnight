@@ -2,27 +2,31 @@
 
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
+import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 import { FormSelect } from '../../RunbookControls';
+import InputReferenceChips from '../InputReferenceChips';
 
 interface SystemdActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
+  inputs?: RunbookInputInput[];
   editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
 
 const SYSTEMD_ACTIONS = [
-  { value: 'status', label: 'Status (Inspect service health - Read Only)' },
-  { value: 'start', label: 'Start (Start stopped service - Idempotent Write)' },
-  { value: 'stop', label: 'Stop (Halt service - Idempotent Write)' },
-  { value: 'restart', label: 'Restart (Full restart - Non-Idempotent / Approval Required)' },
-  { value: 'logs', label: 'Logs (Recent journal entries - Read Only)' },
+  { value: 'status', label: 'Status · inspect health (read-only)' },
+  { value: 'logs', label: 'Logs · recent journal entries (read-only)' },
+  { value: 'start', label: 'Start · start a stopped unit (safe write)' },
+  { value: 'stop', label: 'Stop · halt the unit (safe write)' },
+  { value: 'restart', label: 'Restart · full restart (needs approval)' },
 ];
 
 export default function SystemdActionEditor({
   config,
   errors = {},
+  inputs = [],
   editorId = 'systemd',
   readOnly = false,
   onChange,
@@ -55,62 +59,69 @@ export default function SystemdActionEditor({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label htmlFor={`systemd-action-${editorId}`}>Systemd Action</Label>
-          <div className="mt-1.5">
-            <FormSelect
-              name={`systemd-action-${editorId}`}
-              label="Action"
-              value={action}
-              disabled={readOnly}
-              onValueChange={(nextAction: string) => handleActionChange(nextAction)}
-              options={SYSTEMD_ACTIONS}
-            />
-          </div>
-          {errors.action && <p className="mt-1 text-xs text-destructive">{errors.action}</p>}
+        <div className="space-y-1.5">
+          <Label htmlFor={`systemd-action-${editorId}`} className="text-xs">
+            Action
+          </Label>
+          <FormSelect
+            name={`systemd-action-${editorId}`}
+            label="Action"
+            value={action}
+            disabled={readOnly}
+            onValueChange={(nextAction: string) => handleActionChange(nextAction)}
+            options={SYSTEMD_ACTIONS}
+          />
+          {errors.action && <p className="text-xs text-destructive">{errors.action}</p>}
         </div>
 
-        <div>
-          <Label htmlFor={`systemd-unit-${editorId}`}>Service Unit</Label>
-          <div className="mt-1.5">
-            <Input
-              id={`systemd-unit-${editorId}`}
-              aria-label="Service unit or input reference"
-              placeholder="e.g. nginx.service or ${{ inputs.unit }}"
-              value={unit}
-              disabled={readOnly}
-              onChange={e => onChange({ ...config, unit: e.target.value })}
-              className={errors.unit ? 'border-destructive' : ''}
-            />
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`systemd-unit-${editorId}`} className="text-xs">
+            Service unit
+          </Label>
+          <Input
+            id={`systemd-unit-${editorId}`}
+            aria-label="Service unit or input reference"
+            placeholder="e.g. nginx.service"
+            value={unit}
+            disabled={readOnly}
+            onChange={e => onChange({ ...config, unit: e.target.value })}
+            className={`font-mono text-xs ${errors.unit ? 'border-destructive' : ''}`}
+          />
           {errors.unit ? (
-            <p className="mt-1 text-xs text-destructive">{errors.unit}</p>
+            <p className="text-xs text-destructive">{errors.unit}</p>
           ) : (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Must end with valid systemd extension: .service, .socket, .timer, etc.
+            <p className="text-xs text-muted-foreground">
+              Include the unit suffix: .service, .socket, .timer…
             </p>
           )}
         </div>
       </div>
 
+      <InputReferenceChips
+        inputs={inputs.filter(input => input.type === 'STRING' || input.type === 'SELECT')}
+        current={unit}
+        readOnly={readOnly}
+        onInsert={reference => onChange({ ...config, unit: reference })}
+      />
+
       {isLogs && (
-        <div className="max-w-xs">
-          <Label htmlFor={`systemd-lines-${editorId}`}>Recent Log Lines</Label>
-          <div className="mt-1.5">
-            <Input
-              id={`systemd-lines-${editorId}`}
-              aria-label="Recent log lines (maximum 500)"
-              type="number"
-              min={1}
-              max={500}
-              placeholder="e.g. 50 (max 500)"
-              value={rawLines === undefined || rawLines === null ? '' : String(rawLines)}
-              disabled={readOnly}
-              onChange={e => handleLinesChange(e.target.value)}
-              className={errors.lines ? 'border-destructive' : ''}
-            />
-          </div>
-          {errors.lines && <p className="mt-1 text-xs text-destructive">{errors.lines}</p>}
+        <div className="max-w-xs space-y-1.5">
+          <Label htmlFor={`systemd-lines-${editorId}`} className="text-xs">
+            Recent log lines
+          </Label>
+          <Input
+            id={`systemd-lines-${editorId}`}
+            aria-label="Recent log lines (maximum 500)"
+            type="number"
+            min={1}
+            max={500}
+            placeholder="e.g. 50 (max 500)"
+            value={rawLines === undefined || rawLines === null ? '' : String(rawLines)}
+            disabled={readOnly}
+            onChange={e => handleLinesChange(e.target.value)}
+            className={errors.lines ? 'border-destructive' : ''}
+          />
+          {errors.lines && <p className="text-xs text-destructive">{errors.lines}</p>}
         </div>
       )}
     </div>

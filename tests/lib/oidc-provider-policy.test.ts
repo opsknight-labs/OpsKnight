@@ -61,10 +61,10 @@ describe('OIDC provider security policy registry', () => {
       ok: true,
     });
     expect(
-      policy.validateOrganizationBoundary(
-        { email: 'user@external.com' },
-        ['acme.com', 'subsidiary.acme.com']
-      )
+      policy.validateOrganizationBoundary({ email: 'user@external.com' }, [
+        'acme.com',
+        'subsidiary.acme.com',
+      ])
     ).toEqual({ ok: true });
     expect(policy.validateOrganizationBoundary({}, ['acme.com'])).toEqual({
       ok: true,

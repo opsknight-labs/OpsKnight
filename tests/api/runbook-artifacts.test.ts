@@ -1,3 +1,4 @@
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -6,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   service: vi.fn(),
   find: vi.fn(),
 }));
+vi.mock('@/lib/audit', () => ({ emitAuditEvent: vi.fn() }));
 vi.mock('@/lib/rbac', () => ({
   getUserPermissions: mocks.permissions,
   assertCanViewIncident: mocks.incident,
@@ -24,23 +26,37 @@ describe('Runbook artifact read boundary', () => {
     expect(response.status).toBe(403);
     expect(mocks.find).not.toHaveBeenCalled();
   });
+  it('rejects ordinary global readers before querying sensitive output', async () => {
+    mocks.permissions.mockResolvedValue({ capabilities: ['runbook.read.all'] });
+    expect((await GET(new Request('http://localhost'), context)).status).toBe(403);
+    expect(mocks.find).not.toHaveBeenCalled();
+  });
   it('permits scoped artifact access only after checking its incident', async () => {
-    mocks.permissions.mockResolvedValue({ capabilities: ['runbook.read.scoped'] });
+    mocks.permissions.mockResolvedValue({
+      capabilities: ['runbook.read.scoped', 'runbook.artifact.download'],
+    });
     mocks.find
       .mockResolvedValueOnce({
         attempt: {
           executionStep: { execution: { incidentId: 'incident1', serviceId: 'service1' } },
         },
       })
-      .mockResolvedValueOnce({ attemptId: 'attempt1', content: Buffer.from('artifact') });
+      .mockResolvedValueOnce({
+        attemptId: 'attempt1',
+        content: gzipSync(Buffer.from('password=hidden-value\nhealthy')),
+      });
     mocks.incident.mockResolvedValue({});
     const response = await GET(new Request('http://localhost'), context);
     expect(response.status).toBe(200);
     expect(mocks.incident).toHaveBeenCalledWith('incident1');
-    expect(await response.text()).toBe('artifact');
+    const text = gunzipSync(Buffer.from(await response.arrayBuffer())).toString();
+    expect(text).not.toContain('hidden-value');
+    expect(text).toContain('healthy');
   });
   it('never loads artifact content after a failed scoped access check', async () => {
-    mocks.permissions.mockResolvedValue({ capabilities: ['runbook.read.scoped'] });
+    mocks.permissions.mockResolvedValue({
+      capabilities: ['runbook.read.scoped', 'runbook.artifact.download'],
+    });
     mocks.find.mockResolvedValueOnce({
       attempt: { executionStep: { execution: { incidentId: 'incident1', serviceId: 'service1' } } },
     });

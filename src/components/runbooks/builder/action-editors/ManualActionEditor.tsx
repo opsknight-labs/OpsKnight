@@ -20,27 +20,24 @@ export default function ManualActionEditor({
   const instructions = String(config.instructions ?? '');
 
   return (
-    <div className="space-y-4">
-      <div>
-        <div className="flex items-center justify-between">
-          <Label htmlFor={`manual-instructions-${editorId}`}>Manual Task Instructions</Label>
-          <span className="text-xs text-muted-foreground">Shown to on-call responder</span>
-        </div>
-        <div className="mt-1.5">
-          <Textarea
-            id={`manual-instructions-${editorId}`}
-            aria-label="Manual instructions"
-            placeholder="Describe the physical or manual verification task the responder must perform before marking this step complete..."
-            value={instructions}
-            disabled={readOnly}
-            onChange={e => onChange({ ...config, instructions: e.target.value })}
-            className="text-xs min-h-24"
-          />
-        </div>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={`manual-instructions-${editorId}`} className="text-xs">
+          Instructions
+        </Label>
+        <span className="text-xs text-muted-foreground">Shown to the on-call responder</span>
       </div>
+      <Textarea
+        id={`manual-instructions-${editorId}`}
+        aria-label="Manual instructions"
+        placeholder="What should the responder check or do before marking this step complete?"
+        value={instructions}
+        disabled={readOnly}
+        onChange={e => onChange({ ...config, instructions: e.target.value })}
+        className="min-h-24 text-sm"
+      />
       <p className="text-xs text-muted-foreground">
-        Manual steps pause execution until a responder with runbook approval permission acknowledges
-        and marks completion in the web console or incident war room.
+        The run pauses here until a responder with approval permission marks it complete.
       </p>
     </div>
   );

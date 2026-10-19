@@ -76,7 +76,7 @@ async function createFixture(
     },
   });
   const service = await createTestService('Runbook recovery');
-  const binding = await testPrisma.serviceRunbookBinding.create({
+  const binding = await testPrisma.serviceAutomationRule.create({
     data: {
       serviceId: service.id,
       runbookId: runbook.id,

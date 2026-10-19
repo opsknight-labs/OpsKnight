@@ -14,12 +14,14 @@ import {
   escapeHtml,
 } from '@/lib/email-components';
 import { getBaseUrl } from '@/lib/env-validation';
+import { getSsoInvitationEmailTemplate } from '@/lib/authentication-email-template';
 
 export interface UserInviteEmailData {
   userName: string;
   inviteUrl: string;
   invitedBy?: string;
   expiresInDays?: number;
+  ssoOnly?: boolean;
 }
 
 export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
@@ -27,6 +29,7 @@ export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
   html: string;
   text: string;
 } {
+  if (data.ssoOnly) return getSsoInvitationEmailTemplate(data);
   const subject = "[OpsKnight] You're invited to join";
   const expiresText = data.expiresInDays ? `${data.expiresInDays} days` : '7 days';
   const greetingName = data.userName || 'there';
@@ -70,14 +73,18 @@ export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
 
             <div style="background: linear-gradient(135deg, #0b0b0f 0%, #111827 100%); border: 1px solid #1f2937; border-radius: 14px; padding: 24px 20px; margin: 24px 0; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);">
                 <p style="margin: 0 0 20px 0; color: #e2e8f0 !important; font-size: 15px; line-height: 1.6; text-align: center;">
-                    Click the button below to set your password and access your account.
+                    ${data.ssoOnly ? 'Use your organization’s SSO connection to sign in. Your first verified sign-in links this invitation; no password setup is required.' : 'Click the button below to set your password and access your account.'}
                 </p>
-                ${EmailButton('Set up your account \u2192', rawInviteUrl, {
-                  buttonBackground: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
-                  buttonShadow: '0 10px 24px rgba(37, 99, 235, 0.35)',
-                })}
+                ${EmailButton(
+                  data.ssoOnly ? 'Sign in with SSO \u2192' : 'Set up your account \u2192',
+                  rawInviteUrl,
+                  {
+                    buttonBackground: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+                    buttonShadow: '0 10px 24px rgba(37, 99, 235, 0.35)',
+                  }
+                )}
                 <p style="margin: 20px 0 0 0; padding-top: 20px; border-top: 1px solid rgba(148, 163, 184, 0.2); color: #94a3b8 !important; font-size: 13px; text-align: center;">
-                    This invite link expires in ${expiresText}
+                    ${data.ssoOnly ? 'Your first-link approval expires' : 'This invite link expires'} in ${expiresText}
                 </p>
             </div>
 
@@ -108,10 +115,10 @@ Hi ${greetingName},
 
 You have been invited${data.invitedBy ? ` by ${data.invitedBy}` : ''} to join OpsKnight.
 
-Set your password to access your account:
+${data.ssoOnly ? 'Sign in using your organization’s SSO connection. Your first verified sign-in links this invitation; no password setup is required:' : 'Set your password to access your account:'}
 ${data.inviteUrl}
 
-This invite link expires in ${expiresText}.
+${data.ssoOnly ? 'Your first-link approval expires' : 'This invite link expires'} in ${expiresText}.
 
 If you did not expect this invitation, you can safely ignore this email.
     `.trim();

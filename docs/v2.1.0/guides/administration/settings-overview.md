@@ -7,7 +7,7 @@ audience: [responder, administrator, operator]
 reader: { status: READER_COMPLETE, task: "Find the correct Settings area for an account, workspace, integration, notification, or system change." }
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-12
   evidence: [src/app/(app)/settings/page.tsx, src/components/settings/navConfig.ts]
 ---
 
@@ -40,7 +40,12 @@ opening it.
 
 - **Profile & Preferences:** personal name, timezone, delivery preferences,
   quiet hours, and current membership/on-call context.
-- **Security & Sessions:** password and signed-in session review/revocation.
+- **Security & Sessions:** personal password and signed-in session review/revocation.
+  Password controls are unavailable when the system policy requires SSO.
+- **System → SSO / Authentication:** administrator-only provider configuration and
+  database-backed sign-in policy. See [authentication modes](../identity/authentication-modes/).
+  New Required activation and dedicated Emergency Access administration are not
+  available until independent recovery readiness is implemented and tested.
 - **OIDC and SCIM:** use the identity guides when deploying centralized login or
   lifecycle provisioning; configuration visibility depends on administration.
 

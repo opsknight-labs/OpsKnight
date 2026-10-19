@@ -1,0 +1,76 @@
+{
+  "auditDate": "2026-10-16",
+  "baseRevision": "d8e67ae96",
+  "releaseState": "BETA",
+  "scope": "Enterprise readiness audit remediation from main; implementation and measured evidence are distinct from production certification",
+  "correctnessAndSecurity": {
+    "deadlineStateMachine": "Shared deadline finalizer for advancement/reconciliation; retain running attempts, stop queued work, accept fenced pre-deadline results, classify post-deadline writes UNKNOWN and prevent deadline retries",
+    "configurationAuthority": "All eight service-rule mutation/policy boundaries require service modification plus runbook.manage; UI follows the same capability",
+    "outputPipeline": "Shaped Docker/Kubernetes commands, rejected Secret/ConfigMap capture, shared Agent sanitization before spooling, bounded gzip/UTF-8 validation and sanitization before server storage, separate download capability, download audit, legacy download sanitization and explicit bounded historical rewrite",
+    "idleClaims": "One-second negative-only availability hint with coalesced database probes, no cached authority, existing live claim fences, wait-budget and disconnect handling",
+    "serviceCount": "Independent active-rule count across cursors/search; hidden when not loaded",
+    "uiAssurance": "Rule overview distinguishes configuration, Agent policy, preview and target verification; UNKNOWN details include an investigation checklist"
+  },
+  "repeatableQualification": {
+    "functional": "Existing version/rule/trigger/approval/cancel/secret/key/pool/outbox suites plus new adversarial authorization, artifacts, deadline races and pagination regressions",
+    "physicalDockerKind": "New disposable executor test and dedicated CI job: Docker stop/start/restart and Kubernetes scale/rollout restart, with independently observed target state and uploaded evidence",
+    "authenticatedHttp": "New signed actual-HTTP 10/100/500/1000-Agent idle workload, two 25-second rounds per size, shared incident-read sentinel, connections, query counts, p50/p95/p99, CPU/memory and artifact bytes",
+    "faultSafety": "Existing lease/spool/start-marker/recovery/cancel/revocation tests retained; deadline race/expiry proof expanded",
+    "operations": "Existing backlog/lease/maintenance alerts retained; v2.1 qualification guide includes observability, data protection, privilege boundaries, upgrade/rollback and operator review"
+  },
+  "unqualifiedReleaseGates": [
+    "Native Systemd and Podman physical actions on supported hosts",
+    "Physical failure phases before/after claim/start/write/result upload across deployment topologies",
+    "Multi-node Agent placement and persistent storage movement, PostgreSQL primary failover, network partitions and full-disk recovery",
+    "Sustained authenticated active execution/trigger bursts, concurrent policy changes at the 100-Agent boundary, fairness and shared notification/escalation workloads",
+    "Published x64/arm64 release asset fresh install, compatibility, upgrade, rollback and key rotation",
+    "Independent human keyboard/screen-reader/mobile/error-recovery review",
+    "Enterprise data-protection approval for historical artifacts, backups and output collection"
+  ],
+  "evidencePolicy": "CI artifacts record their actual source revision/topology/limitations. No planned or skipped physical test counts as passing evidence. Never infer production throughput from idle HTTP or direct-library claims.",
+  "localVerification": {
+    "runbookUnit": "341 passed, 3 skipped, 44 files (before final focused API error/Unicode additions)",
+    "postgresql": "94 passed, 3 files after rebase, using a fresh tmpfs-backed disposable PostgreSQL 15 fixture with all 225 migrations. The initial disk-backed run hit fixture hook timeouts and cascading SLA seed errors; no test assertions or timeouts were relaxed. This is transaction/state-machine coverage, not disk/HA durability certification.",
+    "authenticatedHttp": "One measured workload passed at all four sizes; see evidence/authenticated-http-local-20261016.json. Pre-commit modified source, not exact-head hosted CI",
+    "physicalTargets": "PASS: real Docker stop/start/restart and Kind Deployment scale 2/1 plus rollout restart, independent state observations; see evidence/physical-targets-local-20261016.json. Platform-specific image archive export avoids dangling multi-platform digest imports.",
+    "releaseClaims": "Beta; no assertion that planned CI or physical qualification already passed",
+    "fullUnit": "7019 passed, 4 skipped, 852 files after rebasing onto main with the latest UI, SELECT inputs and dependency upgrades",
+    "typecheck": "pass",
+    "documentation": "342 v2.1 files have valid relative links; frontmatter and workflow YAML parsed",
+    "sourceProvenance": "Historical HTTP measurement predates the rebase and records that limitation. New physical evidence records its local source provenance. Hosted final-head CI is still required.",
+    "productionBuild": "pass after rebase (Next.js 16.4.1); upstream Next/PWA/Edge warnings retained",
+    "browser": "3 Chromium production journeys pass: publish/attach/trigger/approval/cancel; independent rules and evidence desktop/mobile; 100/1000/10000-rule rendering and true total counts. Full cross-browser matrix remains a hosted CI gate.",
+    "focusedUiAndAuthority": "19 focused component/authorization/download/disconnect tests pass after integrating the latest main UI"
+  },
+  "reviewRemediation": {
+    "reviewedHead": "3a1dd6f21184d6d73cf65b09bf1041d231935641",
+    "deadlineRecovery": "Terminal transitions enqueue deterministic FINALIZE_VERIFICATION jobs. Parsing and evidence persistence run after state commit; malformed/missing definitions fail only the evidence job with safe error codes. Cancellation and repeated/concurrent recovery retain terminal state and one incident event.",
+    "outputContract": "Shared 10 MiB decoded cap; marker bytes included; re-bound after sanitization with gzip headroom. Artifact upload errors persist a bounded sanitized explanation and never suppress execution-result submission; transient interrupted deliveries recover from the spool. Results have a bounded 1 MiB request allowance for JSON escaping of the maximum valid preview/error/evidence schema. Metadata fsync failures cannot block already-durable outcomes; successful artifact retries remove obsolete failure notices.",
+    "evidenceProtection": "Signed pre/post-state evidence sanitized independently at server persistence; UTF-8 previews remain inside the byte budget.",
+    "claimLatency": "Disable JIT compilation only in the short Agent claim transaction. The 10,000-ineligible-write backlog regression passes with the original 2-second statement timeout and 1-second lock timeout.",
+    "browserAssertions": "Scope signing error to main and SSO revocation confirmation to the authentication component, preserving inline feedback and toast. Signing-key case initializes its real setup prerequisite and supports isolated execution. Configurable validated RUNBOOK_UI_PORT prevents concurrent fixture conflicts.",
+    "capacityWorkflow": "Explicit VITEST_USE_REAL_DB environment flag added for clarity; the existing integration configuration already supplied it and both original hosted capacity runs passed.",
+    "localVerification": {
+      "runtime": "381 passed across 48 files; final 16 focused result transport, spool and route checks passed after output/storage/body-budget refinements; Agent esbuild bundle passed.",
+      "postgresql": "105 passed across enterprise readiness, nonce maintenance, operational backlog, execution safety and review regressions. Disposable PostgreSQL 15 with all migrations, including real result/artifact persistence and durable verification-worker error reporting.",
+      "build": "Production build passed; upstream framework/PWA warnings remain.",
+      "browsers": "Signing-key workflow: 3 passed across Chromium, Firefox and WebKit. Production HTTPS authentication/recovery certification: 10 passed, 2 existing Chromium-only hardware-key skips across the same browsers. Fresh owned fixtures removed after checks.",
+      "qualification": "Source/fixture regressions only; no additional physical, sustained active-load, multi-node HA or published-distribution certification claimed.",
+      "documentation": "v2.1 frontmatter passed; all 342 files have resolving relative links; workflow YAML and explicit real-database flag validated.",
+      "hostedCi": "Pending the follow-up commit; no exact-head hosted pass claimed."
+    }
+  },
+  "verificationRevisionFollowUp": {
+    "reviewedHead": "e3803968ff6dbb055de5421eca3be42de92e046b",
+    "implementation": "Add verificationRevision (default zero) and increment it atomically with each successful terminal transition. Each revision owns a new durable job. Obsolete workers skip before parsing or updating evidence; parent row locks serialize proof with late-result recovery. Clear stale proof on accepted late evidence. Terminal late failures also enqueue fresh proof; duplicate deliveries do not.",
+    "compatibility": "Additive migration; existing unversioned verification payloads remain supported. No existing processing/completed job is reset or overwritten.",
+    "regressions": "Real PostgreSQL FAILED \u2192 RUNNING \u2192 SUCCEEDED with authored Agent verification, both COMPLETED and PROCESSING prior jobs, true final evidence, unchanged old jobs, ignored old workers, no duplicate physical attempt, and repeated reconciliation; terminal late failure and duplicate result delivery.",
+    "qualification": "Beta hardening only; no new HA, sustained active workload or production distribution certification claimed.",
+    "localVerification": {
+      "postgresql": "108 passed across enterprise readiness (16), execution safety, review regressions, nonce maintenance and operational backlog (92). All migrations applied to a fresh disposable PostgreSQL 15 database.",
+      "runtime": "378 passed across 47 runtime/worker files; final focused verification/state-machine/route tests pass.",
+      "checks": "TypeScript, zero-warning modified-source ESLint, v2.1 frontmatter and all 342 relative-link files passed.",
+      "hostedCi": "A fresh exact-head CI run is required after this follow-up; earlier green CI belongs to e3803968."
+    }
+  }
+}

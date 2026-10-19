@@ -1,0 +1,38 @@
+{
+  "measuredAt": "2026-10-14T10:13:30.658980+00:00",
+  "scope": "Optimized local HTTPS web process, isolated PostgreSQL schema and dedicated database role; no scheduler, live IdP or outbound email provider.",
+  "passed": 4,
+  "skipped": 2,
+  "intentionalSkips": "Virtual hardware authenticator requires Chromium.",
+  "browsers": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "viewportWidths": [
+    1440,
+    390
+  ],
+  "historyPagination": true,
+  "realStaleGenerationRejected": true,
+  "failedConfirmationPreserved": true,
+  "virtualHardwareRecovery": true,
+  "serviceWorkers": "blocked for deterministic authentication network interception; PWA acceptance belongs to its separate suite",
+  "sourceFilesSha256": {
+    "playwright.enterprise-sso.config.ts": "48b7d0edd29910cfebf0f3751ee5908ed1228a08ea252337b6f7d7ee5af29847",
+    "prisma/migrations/20261014120000_authentication_alert_receipts/migration.sql": "d39deab277f26670b234897ecc72d8ce08edf9a3753ac3aaafb69638ab8d87fb",
+    "src/app/api/auth/control/route.ts": "bb2637d120d4b8a5151a1ba9ba7791c382235e198fc57a45eb9aa01b11e49233",
+    "src/components/settings/AuthenticationConsole.tsx": "96d5a0e702396bc1c045bcabcac272662d0dd9e4fd8c4f9fdc5ac8dae096e5dd",
+    "src/components/settings/AuthenticationDiagnostics.tsx": "033069d364e799765a1eb5c39f6efe95e2d6b3456db4c0c080ec2c5fac97b8cc",
+    "src/lib/auth-control/dashboard.ts": "639f6c2dabaff3d3f1823d220bd6fbbd27959be7e093bb513f690a91ab1e45c0",
+    "src/lib/auth-control/security-events.ts": "09734b24aac6d38116168d1e8eb35c3e5cf8cc6ad3c021bd7186f4d612bd8f16",
+    "src/lib/auth-control/sessions.ts": "1955e2cc219792e9e5e86dd664f99ce98b13976507d16db0ced998ba92cbe63d",
+    "src/lib/notification-control-plane.ts": "7d47ee5f8b569cfbecd51f39ef342bbb5005f94486cde7a7c1a6ba9525dcd494",
+    "src/lib/notification-provider-feedback.ts": "85a5931ea2ca5906f9169222b88b3d0868dd11a3bba8c6b1597afe486ff10165",
+    "tests/e2e/enterprise-authentication.spec.ts": "9b38aa2bf180c9bde21ede225ecc3dcaa288696f31a0e10d9446b27efbcf4eb0"
+  },
+  "identityRecognitionSeparateFromAdministratorReadiness": true,
+  "overageReadinessBlocked": true,
+  "editedClaimsInvalidatePreview": true,
+  "providerAcceptanceDistinctFromConfirmedDelivery": true
+}

@@ -23,6 +23,8 @@ export function generateApiKey() {
  */
 export function hashTokenV1(token: string) {
   const secret = getDefaultSecret();
+  // codeql[js/insufficient-password-hash] API keys are cryptographically random 256-bit tokens, not passwords
+  // lgtm[js/insufficient-password-hash]
   return createHmac('sha256', secret).update(`opsknight:api-key:v1:${token}`).digest('hex');
 }
 
@@ -30,6 +32,7 @@ function hmacTokenV2(token: string, secret: string) {
   // API keys contain 256 random bits and are not user passwords. A keyed,
   // domain-separated lookup hash prevents offline guessing without imposing a
   // password-KDF cost on every authenticated API request.
+  // codeql[js/insufficient-password-hash] API keys are cryptographically random 256-bit tokens, not passwords
   // lgtm[js/insufficient-password-hash]
   return createHmac('sha256', secret).update(`opsknight:api-key:v2:${token}`).digest('hex');
 }

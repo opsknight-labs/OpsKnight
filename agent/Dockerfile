@@ -25,5 +25,7 @@ COPY --from=build /out/VERSION /usr/local/bin/VERSION
 COPY agent/policy.container.json /etc/opsknight-agent/policy.json
 COPY agent/healthcheck.mjs /usr/local/bin/opsknight-agent-healthcheck.mjs
 USER opsknight-agent
-HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 CMD ["node", "/usr/local/bin/opsknight-agent-healthcheck.mjs"]
+ENV OPSKNIGHT_AGENT_HEALTH_FILE=/tmp/opsknight-agent-health.json
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 CMD ["node", "/usr/local/bin/opsknight-agent-healthcheck.mjs", "liveness"]
 ENTRYPOINT ["/sbin/tini", "--", "node", "/usr/local/bin/opsknight-agent.mjs"]

@@ -9,11 +9,19 @@ product_area: identity
 audience: [administrator, operator]
 verification:
   level: source
-  verified_at: 2026-09-27
+  verified_at: 2026-10-12
   evidence: [src/lib/oidc.ts, src/lib/auth.ts]
 ---
 
 # OIDC login succeeds but access is wrong
+
+Check [authentication mode](../../guides/identity/authentication-modes/) before
+changing identity claims. Password Only intentionally rejects OIDC login and
+existing OIDC sessions. Database-policy lookup failure rejects protected access
+without enabling password fallback. A policy change can permanently revoke a
+session's method even when the mode later becomes Optional; complete a new sign-in.
+An imported emergency password session requires reauthentication to receive its
+one-hour/15-minute limits. Discovery success alone does not prove a real login.
 
 Inspect the linked user, issuer and subject, controlled role claim, role source,
 active status, and team scope. Compare the current provider claims with the stored

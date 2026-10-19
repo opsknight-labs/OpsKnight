@@ -203,7 +203,11 @@ async function releaseFailedOperation(
   }
 }
 
-export async function requeueMicrosoftTeamsNotification(notificationId: string): Promise<boolean> {
+export async function requeueMicrosoftTeamsNotification(
+  notificationId: string,
+  /** Runs in the same transaction as the requeue, only when the requeue succeeded. */
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>
+): Promise<boolean> {
   const notif = await prisma.notification.findFirst({
     where: {
       id: notificationId,
@@ -283,6 +287,7 @@ export async function requeueMicrosoftTeamsNotification(notificationId: string):
         },
       });
 
+      if (inTx) await inTx(tx);
       return true;
     })
     .catch(() => false);

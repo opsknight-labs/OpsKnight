@@ -1,5 +1,11 @@
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
+import { getBindingReadiness, type BindingReadiness } from '@/lib/runbooks/binding-readiness';
+import {
+  describeBinding,
+  type RunbookResource,
+} from '@/lib/runbooks/presentation/binding-contract';
 import prisma from '@/lib/prisma';
-import AutomationShell from '@/components/automation/AutomationShell';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
 type ClassificationPolicyWithRules = Prisma.IncidentClassificationPolicyGetPayload<{
@@ -11,8 +17,9 @@ import {
   assertCanModifyService,
   assertCanViewService,
   getCurrentAuthorizationActor,
+  getCurrentUser,
 } from '@/lib/rbac';
-import { hasCapability, CAPABILITIES } from '@/lib/authorization';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { deleteService, updateService, deleteIntegration } from '../actions';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
@@ -79,9 +86,9 @@ import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicy
 import ServiceRunbooks, {
   type ServiceRunbookUnattendedWriteDetails,
 } from '@/components/service/ServiceRunbooks';
+import AutomationShell from '@/components/automation/AutomationShell';
 import { getServiceAutomationContextFields } from '@/lib/automation/context-fields';
 import { summarizeUnattendedWriteEligibility } from '@/lib/runbooks/bindings';
-import { formatDateTime } from '@/lib/timezone';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import {
   getGlobalWarRoomPolicy,
@@ -97,7 +104,18 @@ const INCIDENTS_PER_PAGE = 20;
 
 type ServiceDetailPageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ page?: string; tab?: string; error?: string; saved?: string }>;
+  searchParams?: Promise<{
+    page?: string;
+    tab?: string;
+    error?: string;
+    saved?: string;
+    rulesAfter?: string;
+    rulesState?: string;
+    rulesSearch?: string;
+    ruleCatalog?: string;
+    ruleTargets?: string;
+    rulesCheck?: string;
+  }>;
 };
 
 function getWebhookUrl(
@@ -176,6 +194,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);
+  const rulesState = resolvedSearchParams?.rulesState === 'archived' ? 'archived' : 'active';
+  const rulesSearch = (resolvedSearchParams?.rulesSearch ?? '').slice(0, 100);
+  const rulesAfter = resolvedSearchParams?.rulesAfter?.slice(0, 512);
+  const catalogQuery = (resolvedSearchParams?.ruleCatalog ?? '').slice(0, 100);
+  const targetQuery = (resolvedSearchParams?.ruleTargets ?? '').slice(0, 100);
   const activeTab = resolvedSearchParams?.tab || 'incidents';
   const errorCode = resolvedSearchParams?.error;
   const isSaved = resolvedSearchParams?.saved === '1';
@@ -186,7 +209,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   } catch {
     notFound();
   }
-  const actor = await getCurrentAuthorizationActor();
+  const [actor, user] = await Promise.all([getCurrentAuthorizationActor(), getCurrentUser()]);
+  const userTimeZone = getUserTimeZone(user);
+  const canReadRunbooks = hasCapability(actor.role, CAPABILITIES.RUNBOOK_READ_ALL);
+  const loadRunbookView = canReadRunbooks && activeTab === 'runbooks';
   const incidentAccess = incidentReadWhere(actor);
 
   let canManageService = false;
@@ -432,94 +458,75 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const canDeleteService = currentUser.role === 'ADMIN';
 
   const [
-    serviceRunbookBindingsResult,
+    serviceAutomationRulesResult,
     availableRunbooksResult,
     availableRunbookAgentsResult,
     availableRunbookAgentPoolsResult,
     automationContextResult,
   ] = await Promise.allSettled([
-    prisma.serviceRunbookBinding.findMany({
-      where: { serviceId: id },
-      include: {
-        runbook: {
-          include: { publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } } },
-        },
-        runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
-        unattendedWritesAuthorizedBy: { select: { name: true } },
-        executions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+    loadRunbookView
+      ? getServiceRulePage(id, rulesAfter, prisma, { state: rulesState, search: rulesSearch })
+      : Promise.resolve({ rules: [], hasNext: false, nextCursor: undefined, total: 0 }),
+    loadRunbookView
+      ? prisma.runbook.findMany({
+          where: {
+            archivedAt: null,
+            publishedVersionId: { not: null },
+            name: { contains: catalogQuery, mode: 'insensitive' },
+          },
+          take: 50,
           select: {
             id: true,
-            status: true,
-            startedAt: true,
-            completedAt: true,
-            createdAt: true,
+            name: true,
+            description: true,
+            publishedVersionId: true,
+            publishedVersion: { select: { id: true, version: true, state: true } },
+            versions: {
+              take: 20,
+              where: { state: { in: ['PUBLISHED', 'RETIRED'] } },
+              select: { id: true, version: true, state: true },
+              orderBy: { version: 'desc' },
+            },
           },
-        },
-        _count: {
-          select: { executions: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.runbook.findMany({
-      where: { archivedAt: null, publishedVersionId: { not: null } },
-      include: {
-        publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        versions: {
-          include: { inputs: { orderBy: { sequence: 'asc' } } },
-          orderBy: { version: 'desc' },
-        },
-      },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.runbookAgent.findMany({
-      where: { status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] } },
-      select: { id: true, name: true, hostname: true, status: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.runbookAgentPool.findMany({
-      select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
-      orderBy: { name: 'asc' },
-    }),
-    canManageService ? getServiceAutomationContextFields(id) : Promise.resolve(null),
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    loadRunbookView
+      ? prisma.runbookAgent.findMany({
+          where: {
+            status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] },
+            name: { contains: targetQuery, mode: 'insensitive' },
+          },
+          take: 100,
+          select: { id: true, name: true, hostname: true, status: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    loadRunbookView
+      ? prisma.runbookAgentPool.findMany({
+          where: { name: { contains: targetQuery, mode: 'insensitive' } },
+          take: 100,
+          select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    loadRunbookView && canManageService
+      ? getServiceAutomationContextFields(id)
+      : Promise.resolve(null),
   ]);
 
-  const serviceRunbookBindings =
-    serviceRunbookBindingsResult.status === 'fulfilled'
-      ? serviceRunbookBindingsResult.value
+  const serviceAutomationRules =
+    serviceAutomationRulesResult.status === 'fulfilled'
+      ? serviceAutomationRulesResult.value.rules
       : [];
   const availableRunbooks =
-    availableRunbooksResult.status === 'fulfilled'
-      ? availableRunbooksResult.value
-      : [];
+    availableRunbooksResult.status === 'fulfilled' ? availableRunbooksResult.value : [];
   const availableRunbookAgents =
-    availableRunbookAgentsResult.status === 'fulfilled'
-      ? availableRunbookAgentsResult.value
-      : [];
+    availableRunbookAgentsResult.status === 'fulfilled' ? availableRunbookAgentsResult.value : [];
   const availableRunbookAgentPools =
     availableRunbookAgentPoolsResult.status === 'fulfilled'
       ? availableRunbookAgentPoolsResult.value
       : [];
-
-  const runbooksLoadError =
-    serviceRunbookBindingsResult.status === 'rejected' ||
-    availableRunbooksResult.status === 'rejected' ||
-    availableRunbookAgentsResult.status === 'rejected' ||
-    availableRunbookAgentPoolsResult.status === 'rejected';
-
-  if (serviceRunbookBindingsResult.status === 'rejected') {
-    logger.warn('[Service Detail] Failed to load service runbook bindings', {
-      error: serviceRunbookBindingsResult.reason,
-    });
-  }
-  if (availableRunbooksResult.status === 'rejected') {
-    logger.warn('[Service Detail] Failed to load available runbooks', {
-      error: availableRunbooksResult.reason,
-    });
-  }
   if (automationContextResult.status === 'rejected') {
     logger.warn('[Service Detail] Failed to load automation context fields', {
       error: automationContextResult.reason,
@@ -532,23 +539,53 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     hasCapability(actor.role, CAPABILITIES.AUTOMATION_PUBLISH) &&
     hasCapability(actor.role, CAPABILITIES.RUNBOOK_READ_ALL);
   const unattendedWriteDetails: ServiceRunbookUnattendedWriteDetails = {};
-  for (const binding of serviceRunbookBindings) {
-    if (binding.mode !== 'AUTOMATIC' || binding.versionStrategy !== 'PINNED') continue;
-    unattendedWriteDetails[binding.id] = {
+  for (const rule of serviceAutomationRules) {
+    if (rule.mode !== 'AUTOMATIC' || rule.versionStrategy !== 'PINNED') continue;
+    unattendedWriteDetails[rule.id] = {
       eligibility:
-        canAuthorizeUnattendedWrites && binding.runbookVersion
+        canAuthorizeUnattendedWrites && rule.runbookVersion
           ? summarizeUnattendedWriteEligibility(
-              binding.runbookVersion.definition,
-              binding.runbookVersion.inputs
+              rule.runbookVersion.definition,
+              rule.runbookVersion.inputs
             )
           : null,
-      authorizedAtLabel: binding.unattendedWritesAuthorizedAt
-        ? formatDateTime(binding.unattendedWritesAuthorizedAt, currentUser.timeZone || 'UTC', {
+      authorizedAtLabel: rule.unattendedWritesAuthorizedAt
+        ? formatDateTime(rule.unattendedWritesAuthorizedAt, userTimeZone, {
             format: 'datetime',
             includeTimeZone: true,
           })
         : null,
     };
+  }
+
+  const runbooksLoadErrors: RunbookResource[] = [];
+  if (serviceAutomationRulesResult.status === 'rejected') runbooksLoadErrors.push('bindings');
+  if (availableRunbooksResult.status === 'rejected') runbooksLoadErrors.push('library');
+  if (availableRunbookAgentsResult.status === 'rejected') runbooksLoadErrors.push('agents');
+  if (availableRunbookAgentPoolsResult.status === 'rejected') runbooksLoadErrors.push('pools');
+
+  if (serviceAutomationRulesResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load service runbook bindings', {
+      error: serviceAutomationRulesResult.reason,
+    });
+  }
+  if (availableRunbooksResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load available runbooks', {
+      error: availableRunbooksResult.reason,
+    });
+  }
+
+  // Deep target/policy assessment is explicit and bounded to the visible page.
+  const runbookReadiness = new Map<string, BindingReadiness>();
+  if (loadRunbookView && resolvedSearchParams?.rulesCheck === '1') {
+    for (let offset = 0; offset < serviceAutomationRules.length; offset += 8) {
+      const batch = await Promise.all(
+        serviceAutomationRules
+          .slice(offset, offset + 8)
+          .map(async binding => [binding.id, await getBindingReadiness(binding)] as const)
+      );
+      for (const [ruleId, readiness] of batch) runbookReadiness.set(ruleId, readiness);
+    }
   }
 
   // SLA and Health Computations with truthful failure degradation
@@ -777,11 +814,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           <span className="font-mono font-medium">{typeInfo.label}</span>
                           <span>•</span>
                           <span>
-                            {new Date(integration.createdAt).toLocaleDateString('en-US', {
-                              timeZone: 'UTC',
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
+                            {formatDateTime(integration.createdAt, userTimeZone, {
+                              format: 'date',
                             })}
                           </span>
                         </div>
@@ -948,32 +982,17 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                                       version: policy.version,
                                       derivePriorityFromUrgency: policy.derivePriorityFromUrgency,
                                       priorityFallbackMode: policy.priorityFallbackMode as
-                                        | 'INHERIT'
-                                        | 'ENABLED'
-                                        | 'DISABLED',
+                                        'INHERIT' | 'ENABLED' | 'DISABLED',
                                       rules: policy.rules.map(
                                         (rule: ClassificationPolicyWithRules['rules'][number]) => ({
                                           matchValue: rule.matchValue as
-                                            | 'critical'
-                                            | 'error'
-                                            | 'warning'
-                                            | 'info',
+                                            'critical' | 'error' | 'warning' | 'info',
                                           priorityMode: rule.priorityMode as
-                                            | 'INHERIT'
-                                            | 'FALLBACK'
-                                            | 'SET'
-                                            | 'CLEAR',
+                                            'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR',
                                           priority: rule.priority as
-                                            | 'P1'
-                                            | 'P2'
-                                            | 'P3'
-                                            | 'P4'
-                                            | 'P5'
-                                            | null,
+                                            'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
                                           urgencyMode: rule.urgencyMode as
-                                            | 'INHERIT'
-                                            | 'SET'
-                                            | 'DEFAULT',
+                                            'INHERIT' | 'SET' | 'DEFAULT',
                                           urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
                                         })
                                       ),
@@ -1334,7 +1353,13 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         defaultTab={activeTab}
         activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
-        runbooksCount={runbooksLoadError ? undefined : serviceRunbookBindings.length}
+        runbooksCount={
+          !loadRunbookView || runbooksLoadErrors.includes('bindings')
+            ? undefined
+            : serviceAutomationRulesResult.status === 'fulfilled'
+              ? serviceAutomationRulesResult.value.total
+              : undefined
+        }
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
         automationContent={
@@ -1344,18 +1369,54 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         }
         escalationContent={escalationContent}
         runbooksContent={
-          <ServiceRunbooks
-            serviceId={service.id}
-            bindings={serviceRunbookBindings}
-            availableRunbooks={availableRunbooks}
-            availableAgents={availableRunbookAgents}
-            availableAgentPools={availableRunbookAgentPools}
-            canManage={canManageService}
-            loadError={runbooksLoadError}
-            automationContext={runbookAutomationContext}
-            unattendedWriteDetails={unattendedWriteDetails}
-            canAuthorizeUnattendedWrites={canAuthorizeUnattendedWrites}
-          />
+          !canReadRunbooks ? (
+            <p className="p-4 text-sm">Runbook access requires additional permission.</p>
+          ) : !loadRunbookView ? (
+            <Link href={`/services/${id}?tab=runbooks`}>Load service Runbooks</Link>
+          ) : (
+            <ServiceRunbooks
+              serviceId={service.id}
+              rulesState={rulesState}
+              rulesSearch={rulesSearch}
+              pagination={{
+                after: rulesAfter,
+                hasNext:
+                  serviceAutomationRulesResult.status === 'fulfilled' &&
+                  serviceAutomationRulesResult.value.hasNext,
+                nextCursor:
+                  serviceAutomationRulesResult.status === 'fulfilled'
+                    ? serviceAutomationRulesResult.value.nextCursor
+                    : undefined,
+              }}
+              catalogQuery={catalogQuery}
+              targetQuery={targetQuery}
+              bindings={serviceAutomationRules.map(binding => ({
+                ...binding,
+                presentation: describeBinding(
+                  binding,
+                  availableRunbookAgents,
+                  availableRunbookAgentPools,
+                  runbooksLoadErrors
+                ),
+                readiness: runbookReadiness.get(binding.id),
+              }))}
+              availableRunbooks={availableRunbooks.map(workflow => ({
+                ...workflow,
+                versions: workflow.versions.map(version => ({ ...version, metadataOnly: true })),
+                publishedVersion: workflow.publishedVersion
+                  ? { ...workflow.publishedVersion, metadataOnly: true }
+                  : null,
+              }))}
+              availableAgents={availableRunbookAgents}
+              availableAgentPools={availableRunbookAgentPools}
+              canManage={canManageService && hasCapability(actor.role, CAPABILITIES.RUNBOOK_MANAGE)}
+              loadErrors={runbooksLoadErrors}
+              userTimeZone={userTimeZone}
+              automationContext={runbookAutomationContext}
+              unattendedWriteDetails={unattendedWriteDetails}
+              canAuthorizeUnattendedWrites={canAuthorizeUnattendedWrites}
+            />
+          )
         }
         integrationsContent={integrationsContent}
         notificationsContent={notificationsContent}

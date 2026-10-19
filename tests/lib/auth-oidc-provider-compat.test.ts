@@ -22,6 +22,14 @@ vi.mock('@/lib/oidc-validation', () => ({
 
 vi.mock('@/lib/prisma', () => {
   const mockPrisma = {
+    authenticationPolicy: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'default',
+        mode: 'SSO_OPTIONAL',
+        version: 1,
+        legacyEmergencyEmail: null,
+      }),
+    },
     user: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -39,7 +47,9 @@ vi.mock('@/lib/prisma', () => {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL' }]),
     oidcConfig: {
+      findUnique: vi.fn().mockImplementation(() => getOidcConfigMock()),
       findFirst: vi.fn(),
       upsert: vi.fn(),
     },
@@ -57,6 +67,7 @@ import { getAuthOptions, resetAuthOptionsCache } from '@/lib/auth';
 
 const baseConfig = {
   enabled: true,
+  configVersion: 1,
   issuer: 'https://login.microsoftonline.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/v2.0',
   clientId: 'client-id',
   clientSecret: 'secret',

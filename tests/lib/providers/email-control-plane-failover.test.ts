@@ -44,6 +44,7 @@ vi.mock('@/lib/prisma', () => ({
       updateMany: prismaMocks.notificationUpdateMany,
       update: prismaMocks.notificationUpdate,
     },
+    user: { findUnique: vi.fn() },
     incident: { findUnique: vi.fn() },
     service: { findUnique: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
@@ -109,6 +110,92 @@ describe('Control Plane Email Provider Failover', () => {
     });
     vi.spyOn(providerAdmission, 'releaseProviderConcurrency').mockResolvedValue(undefined);
     vi.spyOn(providerAdmission, 'deferProviderAdmission').mockResolvedValue(undefined);
+  });
+
+  describe('Authentication security authorization at provider dispatch', () => {
+    const active = { role: 'ADMIN', status: 'ACTIVE', email: 'alerts@example.com' };
+    const payload = {
+      kind: 'EMAIL' as const,
+      to: active.email,
+      subject: 'Security',
+      html: '<p>Private</p>',
+      emailRoute: ['resend', 'ses'],
+    };
+    function candidate() {
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'security-queued',
+        status: 'PENDING',
+        category: 'SECURITY',
+        trafficClass: 'CRITICAL',
+        attempts: 0,
+        maxAttempts: 3,
+        scheduledAt: new Date(Date.now() - 1000),
+        nextAttemptAt: new Date(Date.now() - 1000),
+        expiresAt: new Date(Date.now() + 60000),
+        createdAt: new Date(),
+        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+        sourceType: 'AUTHENTICATION',
+        sourceId: 'security-event',
+        recipientId: 'admin-1',
+        userId: 'admin-1',
+        templateKey: 'authentication-security-alert',
+        claimToken: null,
+        fanoutId: null,
+      } as never);
+      vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
+        { provider: 'resend', enabled: true, apiKey: 'fixture', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'fixture',
+          host: 'us-east-1',
+          fromEmail: 'ops@example.com',
+        },
+      ]);
+    }
+    it('blocks demotion during provider admission before any provider receives the payload', async () => {
+      candidate();
+      vi.mocked(prisma.user.findUnique)
+        .mockResolvedValueOnce(active as never)
+        .mockResolvedValue({ ...active, role: 'USER' } as never);
+      const result = await deliverCentralNotification('security-queued');
+      expect(result.success).toBe(true);
+      expect(mocks.sendEmail).not.toHaveBeenCalled();
+      expect(prismaMocks.notificationUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'SKIPPED' }) })
+      );
+    });
+    it('rechecks authority before a fallback provider after a safely failed first attempt', async () => {
+      candidate();
+      vi.mocked(prisma.user.findUnique)
+        .mockResolvedValueOnce(active as never)
+        .mockResolvedValueOnce(active as never)
+        .mockResolvedValue({ ...active, status: 'DISABLED' } as never);
+      mocks.sendEmail.mockResolvedValueOnce({
+        success: false,
+        statusCode: 409,
+        errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+        error: 'Pinned provider unavailable before submission',
+      });
+      await deliverCentralNotification('security-queued');
+      expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+      expect(prismaMocks.notificationUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'SKIPPED' }) })
+      );
+    });
+    it('defers without sending when the final authority read is unavailable', async () => {
+      candidate();
+      vi.mocked(prisma.user.findUnique)
+        .mockResolvedValueOnce(active as never)
+        .mockRejectedValueOnce(new Error('Database unavailable'));
+      await deliverCentralNotification('security-queued');
+      expect(mocks.sendEmail).not.toHaveBeenCalled();
+      expect(prismaMocks.notificationUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
+        })
+      );
+    });
   });
 
   describe('Ambiguous timeout never causes second provider send', () => {

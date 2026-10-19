@@ -215,7 +215,7 @@ agent:
     enabled: false
   image:
     repository: ghcr.io/opsknight-labs/opsknight-agent
-    tag: '2.0.0'
+    tag: ''
     digest: ''
     pullPolicy: IfNotPresent
   # Empty uses the in-cluster OpsKnight Service URL.
@@ -305,7 +305,9 @@ secrets:
   setupSecret: ''
 
 # Migration owner. The initial install uses a one-shot Job; upgrades use a
-# pre-upgrade hook. Keep this enabled for every multi-replica deployment.
+# pre-upgrade hook, after the stopped-runtime authentication cutover gate.
+# Application Deployments use Recreate; upgrades require a maintenance window.
+# Keep this enabled for every multi-replica deployment.
 # Disable it only when an external release process supplies the one-shot owner;
 # chart-managed runtime Pods always skip in-process migrations.
 migrations:
@@ -325,6 +327,8 @@ networkPolicy:
 
 config:
   nodeEnv: production
+  # Optional exact HTTPS origin for independently enrolled recovery keys.
+  authRecoveryOrigin: ''
   nextauthUrl: 'http://localhost:3000'
   nextPublicAppUrl: 'http://localhost:3000'
   trustProxyHeaders: 'false'

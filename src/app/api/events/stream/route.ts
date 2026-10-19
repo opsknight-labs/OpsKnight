@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
-  getRequestSessionJti,
+  getRequestStreamAuthentication,
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
   type StreamAuthorization,
@@ -55,11 +55,13 @@ export async function GET(req: NextRequest) {
   const incidentId = searchParams.get('incidentId');
   const serviceId = searchParams.get('serviceId');
 
-  const sessionJti = await getRequestSessionJti(req);
+  const streamAuthentication = await getRequestStreamAuthentication(req);
+  const sessionJti = streamAuthentication?.sessionJti;
   const initialAuthorization = await resolveStreamAuthorization(
     user.id,
     sessionTokenVersion,
-    sessionJti
+    sessionJti,
+    streamAuthentication
   );
   if (!initialAuthorization) {
     return new Response('Unauthorized', { status: 401 });
@@ -152,7 +154,8 @@ export async function GET(req: NextRequest) {
               const nextAuthorization = await resolveStreamAuthorization(
                 user.id,
                 sessionTokenVersion,
-                sessionJti
+                sessionJti,
+                streamAuthentication
               );
               if (
                 !nextAuthorization ||

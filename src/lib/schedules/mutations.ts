@@ -5,6 +5,13 @@ import { logAudit } from '@/lib/audit';
 
 type TransactionClient = Prisma.TransactionClient;
 
+function inScheduleTransaction<T>(
+  tx: TransactionClient | undefined,
+  command: (client: TransactionClient) => Promise<T>
+): Promise<T> {
+  return tx ? command(tx) : runSerializableTransaction(command);
+}
+
 type LayerPosition = {
   id: string;
   userId: string;
@@ -96,9 +103,13 @@ async function normalizeLayerPositions(
   return normalized;
 }
 
-export async function addScheduleLayerUser(layerId: string, userId: string) {
+export async function addScheduleLayerUser(
+  layerId: string,
+  userId: string,
+  client?: TransactionClient
+) {
   try {
-    return await runSerializableTransaction(async tx => {
+    return await inScheduleTransaction(client, async tx => {
       const layer = await tx.onCallLayer.findUnique({
         where: { id: layerId },
         select: { id: true, name: true, scheduleId: true },
@@ -160,6 +171,8 @@ export async function addScheduleLayerUser(layerId: string, userId: string) {
       };
     });
   } catch (error) {
+    // The outer transaction owns serialization retries when a client is supplied.
+    if (client) throw error;
     if (isScheduleConflictError(error)) {
       throw new AppError({
         code: 'SCHEDULE_LAYER_USER_DUPLICATE',
@@ -174,9 +187,10 @@ export async function addScheduleLayerUser(layerId: string, userId: string) {
 export async function moveScheduleLayerUser(
   layerId: string,
   userId: string,
-  direction: 'up' | 'down'
+  direction: 'up' | 'down',
+  client?: TransactionClient
 ) {
-  return runSerializableTransaction(async tx => {
+  return inScheduleTransaction(client, async tx => {
     const layer = await tx.onCallLayer.findUnique({
       where: { id: layerId },
       select: { scheduleId: true },
@@ -223,8 +237,12 @@ export async function moveScheduleLayerUser(
   });
 }
 
-export async function removeScheduleLayerUser(layerId: string, userId: string) {
-  return runSerializableTransaction(async tx => {
+export async function removeScheduleLayerUser(
+  layerId: string,
+  userId: string,
+  client?: TransactionClient
+) {
+  return inScheduleTransaction(client, async tx => {
     const layer = await tx.onCallLayer.findUnique({
       where: { id: layerId },
       select: { scheduleId: true },
@@ -263,7 +281,14 @@ export type CreateScheduleOverrideInput = {
   end: Date;
 };
 
-export async function createScheduleOverrideMutation(input: CreateScheduleOverrideInput) {
+export async function createScheduleOverrideMutation(
+  input: CreateScheduleOverrideInput,
+  /** Runs inside the same serializable transaction, e.g. to write a mandatory audit record. */
+  afterCreate?: (
+    tx: Prisma.TransactionClient,
+    created: Awaited<ReturnType<Prisma.TransactionClient['onCallOverride']['create']>>
+  ) => Promise<void>
+) {
   if (input.end <= input.start) {
     throw new AppError({
       code: 'VALIDATION_FAILED',
@@ -367,7 +392,7 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
         }
       }
 
-      return tx.onCallOverride.create({
+      const created = await tx.onCallOverride.create({
         data: {
           scheduleId: input.scheduleId,
           userId: input.userId,
@@ -376,6 +401,8 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
           end: input.end,
         },
       });
+      if (afterCreate) await afterCreate(tx, created);
+      return created;
     });
   } catch (error) {
     if (isScheduleConflictError(error)) {

@@ -1,0 +1,525 @@
+# OpsKnight Runbook Engine — Physical Infrastructure Recovery Evidence
+
+This document establishes concrete, independent, physical evidence of infrastructure changes performed during the End-to-End Enterprise Certification. OpsKnight marked executions are correlated directly with raw operating system, Docker daemon, and Kubernetes API statuses.
+
+---
+
+## 1. Journey A: Fully Automatic Unattended Recovery (Docker Target)
+
+### 1.1 Objective & Test Scope
+
+- **Workload Target**: `ag-e2e-docker-api` (Port 8095:8080, custom HTTP JSON server with healthcheck)
+- **Remediation Action**: `DOCKER` `start` (`IDEMPOTENT_WRITE`)
+- **Verification Action**: `DOCKER` `health` (`READ_ONLY`)
+- **Execution Mode**: `AUTOMATIC` (0 approval gates, fully unattended)
+- **Incident Under Test**: `#cmvbgip3` (`CRITICAL: ag-e2e-docker-api container outage`)
+
+### 1.2 Failure Injection & Initial State
+
+1. **Container Stoppage Injected**:
+   ```bash
+   docker stop ag-e2e-docker-api
+   ```
+2. **Pre-Remediation Verification**:
+   - `docker inspect ag-e2e-docker-api --format '{{.State.Status}} {{.State.Running}}'`:
+     ```text
+     exited false
+     ```
+   - HTTP Endpoint Probe:
+     ```bash
+     curl -s http://127.0.0.1:8095/health
+     # Failed: curl: (7) Failed to connect to 127.0.0.1 port 8095: Connection refused
+     ```
+
+### 1.3 OpsKnight Trigger & Execution Receipts
+
+- **Automation Rule**: `Auto Remediation Docker API` (`cmvbggld301silnzi9b329eey`) attached to `E2E Docker Service` (`cmvbffoig07q614marj783x7f`).
+- **Policy Certification**: Preflight signed policy check validated and transitioned to `PASSED`.
+- **Live Ingested Alert**: Prometheus Alertmanager firing webhook alert `DockerContainerDown` to integration endpoint.
+- **Incident Created**: `cmvc19s4s0ak311uzuzzvkgex` (`CRITICAL: Container ag-e2e-docker-api is down`).
+- **Execution Started**: `cmvc1ez320aun11uz40bb7im6` dispatched to `docker-host-agent` (`cmvbcv9lr02hz14mah9j953nm`).
+- **Approval Gates**: 0 (Idempotent write ran without human intervention).
+
+### 1.4 Post-Remediation Physical Proof
+
+1. **Container State**:
+   ```bash
+   docker inspect ag-e2e-docker-api --format 'Status: {{.State.Status}}, Health: {{.State.Health.Status}}, Running: {{.State.Running}}'
+   ```
+   **Output**:
+   ```text
+   Status: running, Health: healthy, Running: true
+   ```
+2. **HTTP Live Health Response**:
+   ```bash
+   curl -i http://127.0.0.1:8095/health
+   ```
+   **Output**:
+   ```http
+   HTTP/1.1 200 OK
+   Content-Type: application/json
+   Date: Sat, 17 Oct 2026 06:14:48 GMT
+   Connection: keep-alive
+   Keep-Alive: timeout=5
+   Content-Length: 15
+
+   {"status":"ok"}
+   ```
+3. **OpsKnight Recorded Execution**:
+   - Execution ID: `cmvc1ez320aun11uz40bb7im6`
+   - Status: `Succeeded` (100% complete, 2/2 steps, completed in 9.2s).
+   - Step 1 Output: `Started container ag-e2e-docker-api`.
+   - Step 2 Output: `Container ag-e2e-docker-api is healthy`.
+4. **Alertmanager Invariant**:
+   - Upon container recovery, Alertmanager auto-emitted resolved payload, transitioning Incident `cmvc19s4s0ak311uzuzzvkgex` to `RESOLVED`.
+
+---
+
+## 2. Journey B & F: Human-Approved Rolling Restart (Kubernetes Target)
+
+### 2.1 Objective & Test Scope
+
+- **Workload Target**: `ag-e2e-k8s-api` Deployment in `opsknight-cert` namespace on Kind cluster (`opsknight-cluster`).
+- **Remediation Action**: `KUBERNETES` `rollout-restart` (`NON_IDEMPOTENT`, Approval required).
+- **Verification Action**: `KUBERNETES` `rollout-status` (`READ_ONLY`).
+- **Execution Mode**: `SUGGESTED` (Triggered on incident, halted for human responder approval).
+- **Incident Under Test**: `cmvc1jmy90b5311uz86vclkdr` (`CRITICAL: Kubernetes ag-e2e-k8s-api degraded pod outage`).
+
+### 2.2 Pre-Remediation Physical Failure Baseline
+
+1. **Initial Active ReplicaSet Baseline**:
+
+   ```bash
+   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api -o wide
+   ```
+
+   **Output**:
+
+   ```text
+   NAME                              READY   STATUS    RESTARTS   AGE   IP            NODE
+   ag-e2e-k8s-api-844c84d7b6-lhx4h   1/1     Running   0          52m   10.244.0.12   opsknight-cluster-control-plane
+   ag-e2e-k8s-api-844c84d7b6-z8547   1/1     Running   0          52m   10.244.0.13   opsknight-cluster-control-plane
+   ```
+   - Active ReplicaSet Hash: `844c84d7b6`.
+   - Pod Instances: `10.244.0.12`, `10.244.0.13`.
+
+2. **Degraded Workload State Injected**:
+   - Workload simulated transient deadlock / stale configuration.
+   - Prometheus Alertmanager triggered webhook `K8sDeploymentDegraded` to integration endpoint.
+   - Incident `cmvc1jmy90b5311uz86vclkdr` created in OpsKnight control plane.
+
+### 2.3 OpsKnight Governance & Approval Gate
+
+- **Trigger**: Incident created `cmvc1jmy90b5311uz86vclkdr` on `E2E Kubernetes Service`.
+- **Safety Rule Enforced**: Automatic non-idempotent budget = 0. OpsKnight evaluated trigger and matched `E2E K8s Restart Recovery` (v2 pinned) under **Suggested**.
+- **Execution Started**: `cmvc1kgro0b7211uzueewpqtr`.
+- **Approval Gate Enforced**:
+  - Execution paused at `Waiting approval`.
+  - Step 1 (`Restart Kubernetes deployment`) status transitioned to `WAITING_APPROVAL`.
+  - Step parameters displayed: Deployment `ag-e2e-k8s-api`, namespace `opsknight-cert`, target `test-cert-agent-ui`.
+- **Human Approval Interaction**:
+  - Responder approved exact plan in OpsKnight UI.
+  - Cryptographic approval recorded: `Approved by OpsKnight Admin · Oct 17, 2026 · cmvc1kgro...`.
+
+### 2.4 Agent Dispatch & In-Cluster Execution
+
+- In-cluster agent `test-cert-agent-ui` (`cmvbc66tm01c414mafgksn6zk`) inside pod `opsknight-agent-agent-575ccbc878-czdfc` received dispatch.
+- Agent executed `kubectl rollout restart deployment/ag-e2e-k8s-api -n opsknight-cert`.
+
+### 2.5 Post-Remediation Physical Proof
+
+1. **Fresh Pods & ReplicaSet Replacement**:
+
+   ```bash
+   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api -o wide
+   ```
+
+   **Output**:
+
+   ```text
+   NAME                              READY   STATUS    RESTARTS   AGE   IP            NODE
+   ag-e2e-k8s-api-677cf4dfc5-2h8sk   1/1     Running   0          38s   10.244.0.18   opsknight-cluster-control-plane
+   ag-e2e-k8s-api-677cf4dfc5-m4z9l   1/1     Running   0          38s   10.244.0.19   opsknight-cluster-control-plane
+   ```
+   - **ReplicaSet Hash**: `844c84d7b6` → **`677cf4dfc5`** (Physical proof of rolling restart: new pods scheduled, old terminated).
+   - **Pod IPs Reallocated**: `10.244.0.12`/`13` → **`10.244.0.18`/`19`**.
+   - **Ready Count**: 2/2 pods ready.
+
+2. **Rollout Status Verification**:
+
+   ```bash
+   kubectl rollout status deployment/ag-e2e-k8s-api -n opsknight-cert
+   ```
+
+   **Output**:
+
+   ```text
+   deployment "ag-e2e-k8s-api" successfully rolled out
+   ```
+
+3. **OpsKnight UI Evidence**:
+   - Execution ID: `cmvc1kgro0b7211uzueewpqtr`.
+   - Execution status: `Succeeded` (100% complete, 2/2 steps).
+   - Step 1 Output: `deployment.apps/ag-e2e-k8s-api restarted`.
+   - Step 2 Output: `deployment "ag-e2e-k8s-api" successfully rolled out`.
+   - Incident `cmvc1jmy90b5311uz86vclkdr` resolved.
+
+---
+
+## 3. Kubernetes Orchestration Mechanics: Restart vs Scale
+
+To ensure strict causal integrity in certification audits:
+
+1. **Rolling Restart (`rollout-restart`)**:
+   - Modifies pod template annotation `kubectl.kubernetes.io/restartedAt`.
+   - Causes Kubernetes Deployment controller to perform a zero-downtime rolling update across existing configured replicas (`.spec.replicas`).
+   - Does **not** change `.spec.replicas`. Used for refreshing hung workloads, applying configuration updates, or clearing transient in-memory faults.
+
+2. **Replica Scaling (`scale`)**:
+   - Directly mutates `.spec.replicas` (e.g. `0` → `2`).
+   - Governed by `kubernetesMaxReplicas` local agent policy limits (`agent/src/policy.ts`).
+   - Used for horizontal autoscaling recovery or bringing drained deployments back online.
+
+---
+
+## 4. Journey F: Unattended Kubernetes Scale Recovery (Scaling 0 → 2 Replicas)
+
+### 4.1 Objective & Test Scope
+
+- **Audit Finding Resolved**: P0 Audit finding regarding rollout-restart vs scaling. A rollout-restart does not change `.spec.replicas` from 0 to 2; an explicit `scale` operation is required.
+- **Workload Target**: `ag-e2e-k8s-api` Deployment in `opsknight-cert` namespace on Kind cluster (`opsknight-cluster`).
+- **Remediation Action**: `KUBERNETES` `scale` with `replicas: 2` (`riskClass: IDEMPOTENT_WRITE`, `requiresApproval: false`).
+- **Verification Action**: `KUBERNETES` `rollout-status` (`riskClass: READ_ONLY`).
+- **Execution Mode**: `AUTOMATIC` (0 approval gates, fully unattended execution).
+- **Runbook**: `E2E K8s Scale Recovery` v2 (`cmvc66rxh0l4o11uz36ro5ugx`).
+
+### 4.2 Failure Injection & Zero-Replica Outage State
+
+1. **Physical Scale-to-Zero Outage Injected**:
+   ```bash
+   kubectl scale deployment/ag-e2e-k8s-api --replicas=0 -n opsknight-cert
+   ```
+2. **Pre-Remediation Verification**:
+   ```bash
+   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api
+   # No resources found in opsknight-cert namespace.
+   kubectl get deployment/ag-e2e-k8s-api -n opsknight-cert -o jsonpath='{.spec.replicas}'
+   # 0
+   ```
+
+### 4.3 OpsKnight Unattended Execution & Recovery
+
+- **Execution ID**: `cmvc6dcet0`
+- **Target**: `test-cert-agent-ui` (`cmvbc66tm01c414mafgksn6zk`) inside pod `opsknight-agent-agent-575ccbc878-czdfc`.
+- **Duration**: 6 seconds (completed 2/2 steps, 100% complete).
+- **Approval Gate**: 0 approvals required (`IDEMPOTENT_WRITE` scale operation executed without human interruption).
+
+### 4.4 Post-Remediation Physical Proof
+
+1. **Replica Count & Pod Allocation**:
+   ```bash
+   kubectl get pods -n opsknight-cert -l app=ag-e2e-k8s-api -o wide
+   ```
+   **Output**:
+   ```text
+   NAME                              READY   STATUS    RESTARTS   AGE   IP            NODE
+   ag-e2e-k8s-api-677cf4dfc5-5p2ql   1/1     Running   0          42s   10.244.0.33   opsknight-cluster-control-plane
+   ag-e2e-k8s-api-677cf4dfc5-k98jx   1/1     Running   0          42s   10.244.0.34   opsknight-cluster-control-plane
+   ```
+2. **Rollout Status**:
+   ```bash
+   kubectl rollout status deployment/ag-e2e-k8s-api -n opsknight-cert
+   # deployment "ag-e2e-k8s-api" successfully rolled out
+   ```
+   - Ready Pods: **2/2**.
+   - Pod IPs: `10.244.0.33`, `10.244.0.34`.
+
+---
+
+## 5. Journey G: Native Linux Systemd & Rootless Podman Remediation
+
+### 5.1 Objective & Test Scope
+
+- **Host Target**: `opsknight-cluster-control-plane` (Linux host with systemd PID 1 and rootless Podman runtime).
+- **Outbound Agent**: `linux-native-host-agent` (`cmvc6jewu00cs16noj7104weo`), native systemd service unit `opsknight-agent.service` (PID 184364).
+- **Verified Capabilities**: `SYSTEMD`, `PODMAN` (rootless container runtime), `BASH`, `LINUX_DIAGNOSTICS`.
+- **Published Runbook**: `E2E Native Systemd and Podman Suite` v1 (`cmvc74yhq01vh16nohq6nn1ym`).
+- **Incident Under Test**: `cmvc7o4jj00yor4wg9y2evtzl` (`E2E Native Systemd and Podman Outage`).
+
+### 5.2 Pre-Remediation Physical Failure Baseline
+
+1. **Systemd Service Baseline**:
+   - `cert-sample.service` running PID **170592** (active for 45min).
+2. **Podman Container Baseline**:
+   - Container `6bd48e7de9e8` (`cert-podman-api`) in stopped state:
+     ```text
+     CONTAINER ID  IMAGE                            STATUS
+     6bd48e7de9e8  docker.io/library/alpine:latest  Exited (0) 51 minutes ago
+     ```
+
+### 5.3 OpsKnight Governance & 7-Step Execution Receipts
+
+- **Execution ID**: `cmvc7w4xt01n9r4wgcswc6x2l`
+- **Target**: `linux-native-host-agent` (`cmvc6jewu00cs16noj7104weo`)
+- **Status**: `Succeeded` (1m 10s, 7/7 steps complete, 100%)
+- **Timeline & Physical Proof**:
+  1. `STEP 1` **Capture Host Diagnostics** (`LINUX_DIAGNOSTICS`, `READ_ONLY`): Succeeded in 3s, collected 3 host diagnostic evidence artifacts.
+  2. `STEP 2` **Precheck systemd status** (`SYSTEMD`, `READ_ONLY`): Succeeded in 4s, captured service state prior to mutation.
+  3. `STEP 3` **Restart cert-sample.service** (`SYSTEMD`, `NON_IDEMPOTENT`, Approval Gate):
+     - Execution halted at approval gate.
+     - Responder approved exact plan in UI (`Approved by OpsKnight Admin · Oct 17, 2026, 3:22 PM GMT+5:30 · e41309cddeb992db…`).
+     - Succeeded in 1s.
+     - **Physical proof**: `systemctl status cert-sample.service` confirmed service restarted; Main PID changed from `170592` → `184782` (`active since Sat 09:52:27 UTC`).
+  4. `STEP 4` **Verify systemd status** (`SYSTEMD`, `READ_ONLY`): Succeeded in 1s, verified service is active and running.
+  5. `STEP 5` **Precheck podman container inspect** (`DOCKER` runtime podman, `READ_ONLY`): Succeeded in 4s (using resolved `.ID` format template).
+  6. `STEP 6` **Restart cert-podman-api Container** (`DOCKER` runtime podman, `NON_IDEMPOTENT`, Approval Gate):
+     - Execution halted at approval gate.
+     - Responder approved exact plan in UI (`Approved by OpsKnight Admin · Oct 17, 2026, 3:22 PM GMT+5:30 · e187fdcd8362f63d…`).
+     - Succeeded in 1s.
+     - **Physical proof**: `podman ps -a` confirmed container `cert-podman-api` transitioned from `Exited (0) 51 minutes ago` → **`Up 26 seconds`**!
+  7. `STEP 7` **Verify podman container inspect** (`DOCKER` runtime podman, `READ_ONLY`): Succeeded in 4s, verified container is up and healthy.
+
+---
+
+## 6. Journey H: Multi-Agent Fleet Pool Execution
+
+### 6.1 Objective & Test Scope
+
+- **Target**: `Pool · E2E Fleet Pool` (`cmvbde37o03hf14malayilfy6`, mode: `SHARED_TARGET`, 2 Agents: `docker-host-agent` and `test-cert-agent-ui`).
+- **Published Runbook**: `Automated Docker Container Recovery` v2.
+- **Incident Under Test**: `cmvc7o4jj00yor4wg9y2evtzl` (`E2E Native Systemd and Podman Outage`).
+
+### 6.2 Execution Receipts
+
+- **Execution ID**: `cmvc81xvo025ar4wgxkp2hbc0`
+- **Target**: `Pool · E2E Fleet Pool (SHARED_TARGET)`
+- **Dispatched Agent**: `docker-host-agent` (`cmvbcv9lr02hz14mah9j953nm`) selected dynamically based on matching `DOCKER` runtime capability.
+- **Status**: `Succeeded` (8s duration, 2/2 steps complete, 100%).
+- **Steps**:
+  - `STEP 1` `start_docker_container` (`DOCKER`, `IDEMPOTENT_WRITE`): Succeeded in 3s.
+  - `STEP 2` `verify_docker_health` (`DOCKER`, `READ_ONLY`): Succeeded in 4s.
+
+---
+
+## 7. UI-Driven Scoped Secrets Lifecycle Receipts
+
+### 7.1 Scope & Verification
+
+All Scoped Secret operations were driven 100% through the real UI at `https://opssentinal.com/runbooks/agents/secrets`:
+
+1. **Secret Creation**:
+   - Modal opened: `Create scoped secret`.
+   - Name: `cert-api-token` (validated against lowercase slug regex `^[a-z0-9-]+$`).
+   - Value: `OpsKnight_Super_Secret_2026!`.
+   - Initial grant: `Agent · docker-host-agent`.
+   - Value masked immediately as `••••••••`.
+2. **Grant Management**:
+   - Secondary grant added via UI: `Pool · E2E Fleet Pool`.
+   - Both grants active and reflected in grants table.
+3. **Secret Rotation**:
+   - Rotated value in UI: `OpsKnight_Rotated_Secret_Value_999!`.
+   - Checked mandatory `confirmRotation` acknowledgment.
+   - Version incremented and confirmed.
+4. **Grant Revocation**:
+   - Revocation clicked for `docker-host-agent`.
+   - Confirmation alertdialog approved.
+   - Grant removed cleanly; remaining grant count: 1.
+
+---
+
+## 8. Journey I: Approval Gate Rejection & Execution Cancellation Lifecycle
+
+### 8.1 Objective & Test Scope
+
+- **Target**: `linux-native-host-agent` (`cmvc6jewu00cs16noj7104weo`) on `opsknight-cluster-control-plane`.
+- **Target Service**: `cert-sample.service` (Systemd unit running PID `184782`).
+- **Remediation Action**: `SYSTEMD` `restart` (`NON_IDEMPOTENT`, Approval required).
+- **Execution Mode**: `SUGGESTED` / Ad-hoc run with human governance.
+- **Objective**: Prove physical non-mutation when an operator cancels an execution at an approval gate.
+
+### 8.2 Execution & Cancellation Receipts
+
+1. **Pre-Execution Baseline**:
+   - `cert-sample.service` running PID `184782`.
+2. **Execution Dispatched**:
+   - Execution reached Step 3 (`Restart cert-sample.service`).
+   - State transitioned to `Waiting approval`.
+   - Mutating action was safely paused pending human authorization.
+3. **UI Operator Action**:
+   - Responder clicked **Cancel execution** in UI.
+   - Confirmed cancellation in `[role="alertdialog"]`.
+   - Execution status transitioned to `Cancelled`.
+4. **Post-Cancellation Physical Proof**:
+   ```bash
+   docker exec opsknight-cluster-control-plane systemctl status cert-sample.service
+   ```
+   - **Main PID**: Remained strictly **`184782`** (active for 34+ minutes).
+   - **Conclusion**: Rejection / cancellation halts execution immediately; zero mutating commands were dispatched or executed against the host.
+
+---
+
+## 9. Journey J: Blast-Radius Precheck Failure Guard (Safe Failure & PID Invariance)
+
+### 9.1 Objective & Test Scope
+
+- **Workload Target**: `cert-sample.service` on `opsknight-cluster-control-plane`.
+- **Runbook**: `E2E Blast Radius Guard 3026` v4 (`cmvc8rni10415r4wgqbw2zjsh`).
+- **Target Host Agent**: `linux-native-host-agent` (`cmvc6jewu00cs16noj7104weo`).
+- **Safety Mechanism**: Nested Precheck step preceding a mutating restart step.
+  - Step 1 (Precheck): `precheck_non_existent_service` (`SYSTEMD`, `READ_ONLY`, unit: `this-service-definitely-does-not-exist.service`, action: `status`).
+  - Step 2 (Mutation): `guarded_systemd_restart` (`SYSTEMD`, `NON_IDEMPOTENT`, unit: `cert-sample.service`, action: `restart`).
+- **Objective**: Prove that a precheck failure immediately aborts the runbook, completely preventing execution of the mutating step and leaving production workloads untouched.
+
+### 9.2 Initial State & UI Launch
+
+1. **Initial PID**:
+   ```bash
+   docker exec opsknight-cluster-control-plane systemctl status cert-sample.service
+   # Main PID: 184782
+   ```
+2. **UI Launch**:
+   - Navigated to Incident `cmvc7o4jj00yor4wg9y2evtzl` in Chrome.
+   - Switched to Runbooks tab; opened **Run another runbook**.
+   - Selected `E2E Blast Radius Guard 3026` v4 and target `linux-native-host-agent`.
+   - Previewed plan, checked write authorization confirmation checkbox, and clicked **Execute this plan**.
+
+### 9.3 Execution Outcome & Physical Proof
+
+1. **Execution Outcome (`cmvc9ghp805sxr4wg5onxjl4c`)**:
+   - Status: `Failed` (0 of 3 complete, duration 7s).
+   - Failure Reason: `LOCAL_POLICY_DENIED: systemd unit this-service-definitely-does-not-exist.service is not allowlisted.`
+   - Step 1 (`precheck_non_existent_service`): `Failed`.
+   - Step 2 (`guarded_systemd_restart`): **NEVER RUN / HALTED**.
+2. **Physical Receipt**:
+   ```bash
+   docker exec opsknight-cluster-control-plane systemctl status cert-sample.service
+   ```
+   **Output**:
+   ```text
+   ● cert-sample.service - OpsKnight Certification Sample Service
+        Active: active (running) since Sat 2026-10-17 09:52:27 UTC
+      Main PID: 184782 (sleep)
+   ```
+   - **Initial PID**: `184782`
+   - **Final PID**: `184782`
+   - **Result**: Blast-radius protection certified. Precheck failure prevented mutating action; service experienced zero downtime.
+
+---
+
+## 10. Enterprise Versioning, Visual Diffing (Compare UI), & Health Surveillance
+
+### 10.1 Version Comparison Receipts
+
+- **URL**: `https://opssentinal.com/runbooks/cmvc8rni10415r4wgqbw2zjsh/compare?base=cmvc8rni60417r4wghmqt4clr&next=cmvc921ao04t7r4wguawqbfmm`
+- **Scope**: Static step-by-step diff between v1 and v4 of `E2E Blast Radius Guard 3026`.
+- **Evidence**:
+  - Diffs displayed: `3 added, 1 removed, 0 changed`.
+  - Removed step: `first_step` (Manual, READ_ONLY).
+  - Added steps: `precheck_non_existent_service` and `guarded_systemd_restart` with nested verification.
+  - Interactive version selectors allowing comparison across any historical revision.
+
+### 10.2 Automation Health Surveillance Receipts
+
+- **URL**: `https://opssentinal.com/runbooks/health`
+- **Scope**: Continuous surveillance across execution plane, worker runners, queue latency, and agent fleet.
+- **Evidence**:
+  - Execution plane: Local worker active on lane `all`.
+  - Fleet state: 4 healthy agents, 2 offline agents, 1 enrolling agent.
+  - Queue latency: 0 pending step attempts, 0s oldest pending attempt.
+  - Circuit breakers: 0 dead-letter results, 0 services at circuit threshold.
+
+---
+
+## 11. Runbook Library Lifecycle: Duplication, Archival, Search Filtering, & Restoration
+
+### 11.1 Objective & Test Scope
+
+- **Target View**: Runbook Library at `https://opssentinal.com/runbooks` and Detail view at `/runbooks/[id]`.
+- **Scope**: Validate the complete operational lifecycle of a runbook from the UI:
+  1. Card Action Menu Duplication.
+  2. Archival and state transition out of active library.
+  3. Status tab filtering (`All active`, `Published`, `Draft`, `Archived`).
+  4. Search query filtering (`?q=...`) and empty state rendering.
+  5. Restoration from archived state back into editable draft.
+  6. Dialog-driven Runbook Creation and publishing v1.
+
+### 11.2 Execution & UI Receipts
+
+1. **Card Action Duplication**:
+   - On `https://opssentinal.com/runbooks/cmvc8rni10415r4wgqbw2zjsh`, opened "More runbook actions" menu and selected `Duplicate…`.
+   - Confirmed duplicate in `[role="alertdialog"]`: _"Creates a new draft copy based on the published version (v4)."_
+   - Redirected to new runbook `https://opssentinal.com/runbooks/cmvcadj1h08chr4wg5tm4f5i3` titled `E2E Blast Radius Guard 3026 (Copy)`.
+2. **Archival Lifecycle**:
+   - On `cmvcadj1h08chr4wg5tm4f5i3`, clicked **Archive Runbook**.
+   - Confirmed in modal: _"This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."_
+   - Redirected to `/runbooks`. Runbook count under `All active` shifted from 16 to 15.
+3. **Filter Tab & Restoration Receipts**:
+   - Clicked `Archived` tab: displayed 3 archived runbooks including `E2E Blast Radius Guard 3026 (Copy)`.
+   - Clicked on `cmvcadj1h08chr4wg5tm4f5i3`; clicked **Restore Runbook** and confirmed in modal.
+   - Status badge immediately returned to active `Draft`.
+   - Clicked `Draft` tab on library: displayed `Draft runbooks (1): [ 'E2E Blast Radius Guard 3026 (Copy)' ]`.
+   - Clicked `Published` tab on library: displayed `Published runbooks count: 14`.
+4. **Search Query & Empty State Receipts**:
+   - Query `?q=Docker`: filtered library to 5 matching runbooks (`Automated Docker Container Recovery`, `E2E Docker Start Recovery`, etc.).
+   - Query `?q=Systemd`: filtered library to 1 matching runbook (`E2E Native Systemd and Podman Suite`).
+   - Query `?q=NonExistentQuery999`: 0 article cards rendered; clean empty state message displayed.
+5. **Create Runbook Dialog & Publishing v1**:
+   - Clicked **New Runbook** in library header; verified form validation on empty submit.
+   - Entered Name: `Cert Suite UI Created 9056` (auto-derived slug: `cert-suite-ui-created-9056`).
+   - Submitted form; redirected to `https://opssentinal.com/runbooks/cmvcahida08mmr4wg3vt9o2i1`.
+   - Switched to Workflow tab; used JSON editor to configure HTTP endpoint health check; saved draft and published v1.
+
+---
+
+## 12. Docker Swarm Cluster Fleet Deployment Receipts
+
+### 12.1 Objective & Test Scope
+
+- **Target Swarm Node**: `docker-desktop` (Manager Leader, node ID `idg8c9tvq85axrp1avm3q7gbn`, Swarm engine 29.7.2).
+- **Scope**: Validate end-to-end Swarm agent enrollment command generation and security contracts:
+  1. Enrollment token staging via standard input.
+  2. Overlay network binding (`SWARM_NETWORK_NAME`).
+  3. Interactive Swarm node ID prompt preservation.
+  4. Stack deployment contract via `deploy/swarm/docker-stack.agent.yml`.
+
+### 12.2 Physical UI Receipts
+
+1. **Enrollment Sheet Interaction**:
+   - Navigated to `https://opssentinal.com/runbooks/agents`.
+   - Clicked **Enroll agent** to open enrollment sheet.
+   - Created enrollment token for agent `swarm-cert-agent-0316`.
+   - Switched to the **Swarm** runtime tab.
+2. **Generated Setup Script Receipt**:
+   ```bash
+   # Run in Bash. Paste the one-time token at the hidden prompt.
+   set +x
+   set -euo pipefail
+   umask 077
+   agent_credential_dir=$(mktemp -d)
+   IFS= read -r -s -p 'Enrollment token: ' agent_enrollment_token
+   printf '\n'
+   printf '%s' "$agent_enrollment_token" > "$agent_credential_dir/enrollment-token"
+   unset agent_enrollment_token
+   chmod 0644 "$agent_credential_dir/enrollment-token"
+   curl --fail --silent --show-error --max-time 10 'https://opssentinal.com/api/runbook-agent/v1/time'
+   trap 'rm -rf "$agent_credential_dir"' EXIT
+   docker secret create opsknight-agent-enrollment-cmvcakr2j08vur4wgx7tas20z - < "$agent_credential_dir/enrollment-token"
+   export OPSKNIGHT_AGENT_IMAGE='ghcr.io/opsknight-labs/opsknight-agent:latest'
+   export OPSKNIGHT_AGENT_ENROLLMENT_SECRET='opsknight-agent-enrollment-cmvcakr2j08vur4wgx7tas20z'
+   export OPSKNIGHT_AGENT_URL='https://opssentinal.com'
+   export OPSKNIGHT_EXECUTION_PUBLIC_KEY='MCowBQYDK2VwAyEA4rh6gfeViqX14caPZnYHySvy7kxxXk1Y+HDMsacwNOk='
+
+   # Use an existing overlay network reachable from this Agent.
+   export SWARM_NETWORK_NAME="${SWARM_NETWORK_NAME:-opsknight}"
+   IFS= read -r -p 'Swarm node ID for this Agent identity: ' OPSKNIGHT_AGENT_NODE_ID
+   export OPSKNIGHT_AGENT_NODE_ID
+   docker stack deploy --with-registry-auth \
+     -c deploy/swarm/docker-stack.agent.yml opsknight-agent-cmvcakr2j08vur4wgx7tas20z
+   rm -rf "$agent_credential_dir"
+   trap - EXIT
+   ```
+3. **Verification**:
+   - `hasSwarmNetwork`: **Verified** (`export SWARM_NETWORK_NAME="${SWARM_NETWORK_NAME:-opsknight}"`).
+   - `hasNodePrompt`: **Verified** (`IFS= read -r -p 'Swarm node ID for this Agent identity: ' OPSKNIGHT_AGENT_NODE_ID`).
+   - `hasStackDeploy`: **Verified** (`docker stack deploy -c deploy/swarm/docker-stack.agent.yml`).
+   - `hasSecretDelivery`: **Verified** (`docker secret create ... - < ...`).

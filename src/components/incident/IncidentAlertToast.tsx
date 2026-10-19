@@ -124,12 +124,9 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
     const isAcked = primaryIncident.status === 'ACKNOWLEDGED';
 
     return (
-      <div
-        className={cn(
-          'relative w-[min(380px,calc(100vw-24px))] rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
-          'shadow-[0_12px_32px_-8px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)] overflow-hidden transition-all duration-200'
-        )}
-      >
+      // The Sonner <li> paints the card surface (toasts.css); this only clips the
+      // priority stripe to its rounded corners.
+      <div className="relative w-full overflow-hidden rounded-[inherit] text-[var(--toast-fg)]">
         {/* Left priority accent stripe */}
         <div className={cn('absolute left-0 top-0 bottom-0 w-1', theme.bar)} />
 
@@ -210,7 +207,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-6 w-6 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-6 w-6 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss incident alert"
           >
             <X size={14} className="shrink-0 stroke-[2.5]" />
@@ -234,12 +231,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
 
   // Compact Multiple Incidents Alert Card
   return (
-    <div
-      className={cn(
-        'relative w-[min(380px,calc(100vw-24px))] rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
-        'shadow-[0_12px_32px_-8px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)] overflow-hidden transition-all duration-200'
-      )}
-    >
+    <div className="relative w-full overflow-hidden rounded-[inherit] text-[var(--toast-fg)]">
       {/* Left accent bar */}
       <div className={cn('absolute left-0 top-0 bottom-0 w-1', multiTheme.bar)} />
 
@@ -272,7 +264,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-5 w-5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-5 w-5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss all incident alerts"
           >
             <X size={13} className="shrink-0 stroke-[2.5]" />

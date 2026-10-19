@@ -38,6 +38,17 @@ jobs:
       - name: TypeScript typecheck
         run: npx tsc --noEmit
 
+      - name: Verify generated REST clients and OpenAPI
+        run: npm run api:clients:check
+
+      - name: Set up Python SDK runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Python REST client workflows
+        run: python -m unittest discover -s tests/sdk -p 'test_*.py'
+
       - name: Unit tests
         run: |
           mkdir -p reports
@@ -127,7 +138,17 @@ jobs:
         # Enable real database for integration and resilience tests
         env:
           VITEST_USE_REAL_DB: '1'
-        run: npm run test:ci:db
+        # These five certification suites require enterprise_sso_test and run in
+        # enterprise-sso-certification.yml against their own migrated database.
+        # Keep their guards: never run recovery/failure-injection fixtures on this
+        # general opsknight_test database. No assertions or dedicated gates are skipped.
+        run: >-
+          npm run test:ci:db --
+          --exclude tests/integration/authentication-policy-database.test.ts
+          --exclude tests/integration/emergency-authentication-database.test.ts
+          --exclude tests/integration/oidc-staged-authentication-database.test.ts
+          --exclude tests/integration/provider-feedback-isolation-database.test.ts
+          --exclude tests/integration/emergency-password-database.test.ts
 
       - name: Upload db test report artifact
         if: always()

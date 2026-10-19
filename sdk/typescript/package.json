@@ -1,0 +1,19 @@
+{
+  "name": "@opsknight/api-v2",
+  "version": "0.1.0",
+  "description": "Generated typed OpsKnight REST API v2 client",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": { "typescript": "^5" }
+}

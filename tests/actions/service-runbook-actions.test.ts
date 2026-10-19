@@ -32,7 +32,7 @@ vi.mock('@/lib/runbooks/bindings', () => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    serviceRunbookBinding: { findFirst: mocks.bindingFindFirst },
+    serviceAutomationRule: { findFirst: mocks.bindingFindFirst },
     runbookVersion: { findFirst: mocks.versionFindFirst },
   },
 }));
@@ -67,6 +67,7 @@ function triggerForm(
   const form = new FormData();
   form.set('event', 'INCIDENT_CREATED');
   form.set('conditionLogic', 'AND');
+  form.set('expectedConfigurationRevision', '3');
   for (const [field, operator, value] of conditions) {
     form.append('conditionField', field);
     form.append('conditionOperator', operator);
@@ -190,7 +191,8 @@ describe('configureRunbookTriggerAction with automation context', () => {
           { field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH', sequence: 5 },
         ],
       },
-      'user-1'
+      'user-1',
+      3
     );
   });
 
@@ -257,6 +259,7 @@ describe('updateRunbookBindingAction', () => {
     form.set('versionStrategy', 'PINNED');
     form.set('runbookVersionId', VERSION);
     form.set('enabled', 'true');
+    form.set('expectedConfigurationRevision', '4');
     form.set('executionTarget', `pool:${VERSION}`);
     form.set('agentSelector', '{"role":"db"}');
     form.set('resolveOnVerifiedRecovery', 'true');
@@ -297,7 +300,9 @@ describe('updateRunbookBindingAction', () => {
         agentSelector: { role: 'db' },
         defaultAgentPoolId: VERSION,
       }),
-      'user-1'
+      'user-1',
+      VERSION,
+      4
     );
     const update = mocks.updateServiceBinding.mock.calls[0][2];
     expect(update).not.toHaveProperty('unattendedWritesVersionId');
@@ -336,14 +341,17 @@ describe('updateRunbookBindingAction', () => {
   it('returns validation errors for malformed selectors and toggle values', async () => {
     expect(
       await updateRunbookBindingAction(SERVICE, BINDING, bindingForm({ agentSelector: '[1]' }))
-    ).toEqual({ error: expect.stringContaining('JSON object') });
+    ).toEqual({
+      error: expect.stringContaining('Selector must contain'),
+      field: 'agentSelector',
+    });
     expect(
       await updateRunbookBindingAction(
         SERVICE,
         BINDING,
         bindingForm({ resolveOnVerifiedRecovery: 'yes' })
       )
-    ).toEqual({ error: expect.any(String) });
+    ).toEqual({ error: expect.any(String), field: 'automationConfiguration' });
     expect(mocks.updateServiceBinding).not.toHaveBeenCalled();
   });
 });

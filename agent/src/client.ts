@@ -25,15 +25,21 @@ export class AgentClient {
     private readonly executionPublicKey?: string | Record<string, string>
   ) {}
 
-  private async request<T>(pathname: string, body: unknown): Promise<T | null> {
+  private async request<T>(
+    pathname: string,
+    body: unknown,
+    signal?: AbortSignal
+  ): Promise<T | null> {
     const raw = JSON.stringify(body);
     const timestamp = new Date().toISOString();
     const nonce = randomBytes(24).toString('base64url');
     const targetUrl = new URL(pathname, this.baseUrl);
-    const sortedParams = Array.from(targetUrl.searchParams.entries()).sort(([aKey, aVal], [bKey, bVal]) => {
-      const cmp = aKey.localeCompare(bKey);
-      return cmp !== 0 ? cmp : aVal.localeCompare(bVal);
-    });
+    const sortedParams = Array.from(targetUrl.searchParams.entries()).sort(
+      ([aKey, aVal], [bKey, bVal]) => {
+        const cmp = aKey.localeCompare(bKey);
+        return cmp !== 0 ? cmp : aVal.localeCompare(bVal);
+      }
+    );
     const canonicalTarget =
       sortedParams.length > 0
         ? `${targetUrl.pathname}?${sortedParams
@@ -58,7 +64,9 @@ export class AgentClient {
         'x-opsknight-signature': signature,
       },
       body: raw,
-      signal: AbortSignal.timeout(35_000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(35_000)])
+        : AbortSignal.timeout(35_000),
     });
     if (response.status === 204) return null;
     const json = (await response.json()) as JsonObject;
@@ -94,11 +102,26 @@ export class AgentClient {
     });
   }
 
-  async claim(options?: { readOnlyOnly?: boolean }): Promise<ClaimedAttempt | null> {
+  async policyChecks(result?: {
+    id: string;
+    policyHash: string;
+    results: Array<{ key: string; allowed: boolean | null; reason?: 'REDACTED_INPUT' }>;
+  }) {
+    return this.request<{
+      checks?: import('./policy-checks').PolicyCheckEnvelope[];
+      accepted?: boolean;
+    }>('/api/runbook-agent/v1/policy-checks', result ? { result } : {}, AbortSignal.timeout(5_000));
+  }
+
+  async claim(options?: {
+    readOnlyOnly?: boolean;
+    signal?: AbortSignal;
+  }): Promise<ClaimedAttempt | null> {
     const modeParam = options?.readOnlyOnly ? '&mode=READ_ONLY_ONLY' : '';
     const result = await this.request<{ attempt: ClaimedAttempt }>(
       `/api/runbook-agent/v1/claim?waitSeconds=25${modeParam}`,
-      {}
+      {},
+      options?.signal
     );
     return result?.attempt ?? null;
   }
@@ -185,7 +208,8 @@ export class AgentClient {
       epochMs?: number;
     };
     const epochMs = json.data?.epochMs ?? json.epochMs;
-    const serverTime = json.data?.serverTime ?? json.serverTime ?? new Date(epochMs || Date.now()).toISOString();
+    const serverTime =
+      json.data?.serverTime ?? json.serverTime ?? new Date(epochMs || Date.now()).toISOString();
     if (!epochMs) throw new Error('Invalid clock check response');
     const localMs = Date.now();
     const skewSeconds = Math.round(Math.abs(localMs - epochMs) / 1000);
@@ -242,6 +266,7 @@ export async function enrollAgent(baseUrl: string, token: string): Promise<Agent
   const response = await fetch(new URL('/api/runbook-agent/v1/enroll', baseUrl), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({
       token,
       publicKey,
@@ -255,7 +280,8 @@ export async function enrollAgent(baseUrl: string, token: string): Promise<Agent
     agent?: { id: string };
     error?: string;
   };
-  if (!response.ok) throw new Error(json.error ?? 'Agent enrollment failed.');
+  if (!response.ok)
+    throw new AgentApiError(`Agent enrollment rejected: HTTP ${response.status}`, response.status);
   const agent = json.data?.agent ?? json.agent;
   if (!agent) throw new Error('Agent enrollment response did not include an identity.');
   return { agentId: agent.id, privateKey, publicKey };

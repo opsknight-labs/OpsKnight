@@ -37,7 +37,7 @@ async function resolveEvaluationSource(
   return classifyEvaluationSource(raw, alerts > 0);
 }
 
-/** Actionable audit: at most one skip event per binding, reason and incident, across retries. */
+/** Actionable audit: at most one skip event per rule, reason and incident, across retries. */
 async function recordRunbookSkip(input: {
   incidentId: string;
   bindingId: string;
@@ -65,6 +65,81 @@ const isAlreadyHandled = (error: unknown) =>
   (error as { code?: string })?.code === 'P2002' ||
   (error instanceof RunbookDefinitionError && error.message.includes('TRIGGER_ALREADY_HANDLED'));
 
+async function* incidentRuleBatches(serviceId: string, source: TriggerEvaluationSource) {
+  let after: string | undefined;
+  while (true) {
+    const bindings = await prisma.serviceAutomationRule.findMany({
+      where: {
+        ...(after ? { id: { gt: after } } : {}),
+        serviceId: serviceId,
+        enabled: true,
+        detachedAt: null,
+        mode: { in: ['SUGGESTED', 'AUTOMATIC'] },
+        runbook: { archivedAt: null },
+        triggers: { some: { enabled: true, event: 'INCIDENT_CREATED' } },
+        // Monitoring-sourced incidents only consider rules that explicitly opt in.
+        ...(source === 'MONITORING' ? { runOnMonitoringIncidents: true } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take: 100,
+      include: {
+        runbook: { select: { name: true, publishedVersionId: true } },
+        triggers: {
+          where: { enabled: true, event: 'INCIDENT_CREATED' },
+          include: { conditions: { orderBy: { sequence: 'asc' } } },
+        },
+      },
+    });
+    if (!bindings.length) return;
+    yield bindings;
+    after = bindings[bindings.length - 1].id;
+    if (bindings.length < 100) return;
+  }
+}
+
+type CurrentRuleFence = {
+  id: string;
+  runbookId: string;
+  configurationRevision: number;
+  mode: Prisma.ServiceAutomationRuleGetPayload<object>['mode'];
+  versionStrategy: Prisma.ServiceAutomationRuleGetPayload<object>['versionStrategy'];
+  runbook: { publishedVersionId: string | null };
+};
+
+/** A paused, detached, edited or re-pinned rule may have been read before its change committed. */
+async function ruleStillCurrent(
+  tx: Prisma.TransactionClient,
+  binding: CurrentRuleFence,
+  trigger: { id: string; revision: number }
+) {
+  await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${binding.id} AND "runbookId" = ${binding.runbookId} FOR SHARE`;
+  const rule = await tx.serviceAutomationRule.findFirst({
+    where: {
+      id: binding.id,
+      enabled: true,
+      detachedAt: null,
+      configurationRevision: binding.configurationRevision,
+      mode: binding.mode,
+      ...(binding.versionStrategy === 'LATEST_PUBLISHED'
+        ? { runbook: { publishedVersionId: binding.runbook.publishedVersionId } }
+        : {}),
+    },
+    select: { id: true },
+  });
+  if (!rule) return false;
+  const current = await tx.runbookTrigger.findFirst({
+    where: {
+      id: trigger.id,
+      bindingId: binding.id,
+      revision: trigger.revision,
+      enabled: true,
+      event: 'INCIDENT_CREATED',
+    },
+    select: { id: true },
+  });
+  return !!current;
+}
+
 export async function evaluateIncidentTriggers(
   incidentId: string,
   sourceEventId: string,
@@ -75,23 +150,6 @@ export async function evaluateIncidentTriggers(
   const context = loaded.trigger;
   const serviceId = context.service.id;
   const evaluationSource = await resolveEvaluationSource(incidentId, options.source);
-  const bindings = await prisma.serviceRunbookBinding.findMany({
-    where: {
-      serviceId,
-      enabled: true,
-      mode: { in: ['SUGGESTED', 'AUTOMATIC'] },
-      runbook: { archivedAt: null },
-      triggers: { some: { enabled: true, event: 'INCIDENT_CREATED' } },
-      ...(evaluationSource === 'MONITORING' ? { runOnMonitoringIncidents: true } : {}),
-    },
-    include: {
-      runbook: { select: { name: true, publishedVersionId: true } },
-      triggers: {
-        where: { enabled: true, event: 'INCIDENT_CREATED' },
-        include: { conditions: { orderBy: { sequence: 'asc' } } },
-      },
-    },
-  });
   let matched = 0;
   let started = 0;
   let suggested = 0;
@@ -99,268 +157,289 @@ export async function evaluateIncidentTriggers(
   let skipped = 0;
   // The job runs after commit; an incident closed in between must not start remediation.
   if (context.incident.status !== 'OPEN') {
-    for (const binding of bindings) {
-      skipped++;
-      await recordRunbookSkip({
-        incidentId,
-        bindingId: binding.id,
-        runbookName: binding.runbook.name,
-        reason: `${INCIDENT_NOT_OPEN}: incident is ${context.incident.status}`,
-      });
-    }
-    return { matched, started, suggested, suppressed, skipped };
-  }
-  const transientFailures: unknown[] = [];
-  for (const binding of bindings) {
-    let matchedTrigger: { id: string; reason: string } | null = null;
-    let planSnapshot: Prisma.InputJsonValue | null = null;
-    const versionId =
-      binding.versionStrategy === 'PINNED'
-        ? binding.runbookVersionId
-        : binding.runbook.publishedVersionId;
-    try {
-      let blocker: string | null = null;
-      for (const candidate of binding.triggers) {
-        const evaluation = evaluateTrigger(context, candidate.conditions, candidate.conditionLogic);
-        if (evaluation.status === 'MATCHED') {
-          matchedTrigger = { id: candidate.id, reason: evaluation.reason };
-          break;
-        }
-        if (evaluation.status !== 'NOT_MATCHED') blocker ??= evaluation.reason;
-      }
-      if (!matchedTrigger) {
-        if (blocker) {
-          skipped++;
-          await recordRunbookSkip({
-            incidentId,
-            bindingId: binding.id,
-            runbookName: binding.runbook.name,
-            reason: blocker,
-          });
-        }
-        continue;
-      }
-      matched++;
-      if (!versionId) continue;
-      const version = await prisma.runbookVersion.findUniqueOrThrow({
-        where: { id: versionId },
-        include: { inputs: true },
-      });
-      const plan = resolveBindingAutomationPlan({
-        definitions: version.inputs,
-        binding,
-        context: context.automation.fields,
-      });
-      let blockReason = plan.ok ? null : plan.reason;
-      if (plan.ok) {
-        try {
-          validateBindingInputValues(
-            version.inputs,
-            applyRunbookInputDefaults(version.inputs, plan.inputValues)
-          );
-        } catch (error) {
-          if (!(error instanceof RunbookDefinitionError)) throw error;
-          blockReason = `INPUT_INVALID: ${error.message}`;
-        }
-      }
-      if (!plan.ok || blockReason) {
+    for await (const bindings of incidentRuleBatches(serviceId, evaluationSource)) {
+      for (const binding of bindings) {
         skipped++;
         await recordRunbookSkip({
           incidentId,
           bindingId: binding.id,
           runbookName: binding.runbook.name,
-          reason: blockReason!,
+          reason: `${INCIDENT_NOT_OPEN}: incident is ${context.incident.status}`,
         });
-        continue;
       }
-      planSnapshot = {
-        inputValues: applyRunbookInputDefaults(version.inputs, plan.inputValues),
-        agentId: plan.agentId,
-        agentPoolId: plan.agentPoolId,
-        agentSelector: binding.agentSelector,
-        definitionChecksum: version.checksum,
-        matchReason: matchedTrigger.reason,
-        configRevision: binding.configRevision,
-        contextChecksum: loaded.responseContext?.checksum ?? null,
-        evaluationSource,
-        inputProvenance: plan.inputProvenance,
-        targetProvenance: plan.targetProvenance,
-      } as Prisma.InputJsonValue;
-      const fingerprint = computeTriggerFingerprint({
-        sourceEventId,
-        bindingId: binding.id,
-        runbookVersionId: versionId,
-      });
-      if (binding.mode === 'SUGGESTED') {
-        try {
-          const created = await prisma.$transaction(async tx => {
-            const incidentLock = await lockOpenIncidentForAutomation(tx, incidentId);
-            if (!incidentLock.open) return incidentLock.reason;
-            await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-trigger:${incidentId}:${binding.id}`}))`;
-            if (
-              await tx.runbookSuggestion.findFirst({
-                where: { incidentId, bindingId: binding.id },
-                select: { id: true },
-              })
-            )
-              return false;
-            await tx.runbookSuggestion.create({
-              data: {
-                incidentId,
-                bindingId: binding.id,
-                runbookVersionId: versionId,
-                triggerId: matchedTrigger!.id,
-                sourceEventId,
-                fingerprint,
-                planSnapshot: planSnapshot!,
-              },
-            });
-            await tx.incidentEvent.create({
-              data: {
-                incidentId,
-                type: 'RUNBOOK_SUGGESTED',
-                message: `Runbook suggested: ${binding.runbook.name}`,
-              },
-            });
-            return true;
-          });
-          if (typeof created === 'string') {
+    }
+    return { matched, started, suggested, suppressed, skipped };
+  }
+  const transientFailures: unknown[] = [];
+  for await (const bindings of incidentRuleBatches(serviceId, evaluationSource)) {
+    for (const binding of bindings) {
+      let matchedTrigger: { id: string; revision: number; reason: string } | null = null;
+      let planSnapshot: Prisma.InputJsonValue | null = null;
+      const versionId =
+        binding.versionStrategy === 'PINNED'
+          ? binding.runbookVersionId
+          : binding.runbook.publishedVersionId;
+      try {
+        let blocker: string | null = null;
+        for (const candidate of binding.triggers) {
+          const evaluation = evaluateTrigger(
+            context,
+            candidate.conditions,
+            candidate.conditionLogic
+          );
+          if (evaluation.status === 'MATCHED') {
+            matchedTrigger = {
+              id: candidate.id,
+              revision: candidate.revision,
+              reason: evaluation.reason,
+            };
+            break;
+          }
+          if (evaluation.status !== 'NOT_MATCHED') blocker ??= evaluation.reason;
+        }
+        if (!matchedTrigger) {
+          if (blocker) {
             skipped++;
             await recordRunbookSkip({
               incidentId,
               bindingId: binding.id,
               runbookName: binding.runbook.name,
-              reason: created,
+              reason: blocker,
             });
-          } else if (created) suggested++;
-        } catch (error) {
-          if (error instanceof RunbookArchivedError) continue;
-          if (!isAlreadyHandled(error)) throw error;
+          }
+          continue;
         }
-        continue;
-      }
-      try {
-        await startTriggeredRunbookExecution({
-          runbookId: binding.runbookId,
-          runbookVersionId: versionId,
-          serviceId,
-          incidentId,
-          bindingId: binding.id,
-          triggerId: matchedTrigger.id,
-          inputValues: binding.inputValues as Record<string, unknown>,
-          triggerFingerprint: fingerprint,
-          sourceEventId,
-          evaluationSource,
+        const trigger = matchedTrigger;
+        matched++;
+        if (!versionId) continue;
+        const version = await prisma.runbookVersion.findUniqueOrThrow({
+          where: { id: versionId },
+          include: { inputs: true },
         });
-        started++;
-      } catch (error) {
-        if (isIncidentNotOpen(error)) {
+        const plan = resolveBindingAutomationPlan({
+          definitions: version.inputs,
+          binding,
+          context: context.automation.fields,
+        });
+        let blockReason = plan.ok ? null : plan.reason;
+        if (plan.ok) {
+          try {
+            validateBindingInputValues(
+              version.inputs,
+              applyRunbookInputDefaults(version.inputs, plan.inputValues)
+            );
+          } catch (error) {
+            if (!(error instanceof RunbookDefinitionError)) throw error;
+            blockReason = `INPUT_INVALID: ${error.message}`;
+          }
+        }
+        if (!plan.ok || blockReason) {
           skipped++;
           await recordRunbookSkip({
             incidentId,
             bindingId: binding.id,
             runbookName: binding.runbook.name,
-            reason: (error as Error).message,
+            reason: blockReason!,
           });
           continue;
         }
-        if (!isAlreadyHandled(error)) throw error;
-      }
-    } catch (error) {
-      if (
-        error instanceof RunbookDefinitionError &&
-        error.message.includes('AUTO_REMEDIATION_BUDGET_EXHAUSTED') &&
-        versionId &&
-        matchedTrigger &&
-        planSnapshot
-      ) {
+        planSnapshot = {
+          inputValues: applyRunbookInputDefaults(version.inputs, plan.inputValues),
+          agentId: plan.agentId,
+          agentPoolId: plan.agentPoolId,
+          agentSelector: binding.agentSelector,
+          definitionChecksum: version.checksum,
+          matchReason: trigger.reason,
+          configRevision: binding.configurationRevision,
+          contextChecksum: loaded.responseContext?.checksum ?? null,
+          evaluationSource,
+          inputProvenance: plan.inputProvenance,
+          targetProvenance: plan.targetProvenance,
+        } as Prisma.InputJsonValue;
+        const snapshot = planSnapshot;
         const fingerprint = computeTriggerFingerprint({
           sourceEventId,
           bindingId: binding.id,
           runbookVersionId: versionId,
         });
-        try {
-          const createdSuggestion = await prisma.$transaction(async tx => {
-            const incidentLock = await lockOpenIncidentForAutomation(tx, incidentId);
-            if (!incidentLock.open) return incidentLock.reason;
-            await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-incident-budget:${incidentId}`}))`;
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
-            if (
-              await tx.runbookExecution.findFirst({
-                where: {
-                  OR: [
-                    { triggerFingerprint: fingerprint },
-                    { incidentId, bindingId: binding.id, triggerId: { not: null } },
-                  ],
+        if (binding.mode === 'SUGGESTED') {
+          try {
+            const created = await prisma.$transaction(async tx => {
+              const incidentLock = await lockOpenIncidentForAutomation(tx, incidentId);
+              if (!incidentLock.open) return incidentLock.reason;
+              await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
+              if (!(await ruleStillCurrent(tx, binding, trigger))) return false;
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-trigger:${incidentId}:${binding.id}`}))`;
+              if (
+                await tx.runbookSuggestion.findFirst({
+                  where: { incidentId, bindingId: binding.id },
+                  select: { id: true },
+                })
+              )
+                return false;
+              await tx.runbookSuggestion.create({
+                data: {
+                  incidentId,
+                  bindingId: binding.id,
+                  runbookVersionId: versionId,
+                  triggerId: trigger.id,
+                  triggerRevision: trigger.revision,
+                  sourceEventId,
+                  fingerprint,
+                  planSnapshot: snapshot,
                 },
-                select: { id: true },
-              })
-            )
-              return false;
-            const existing = await tx.runbookSuggestion.findUnique({
-              where: { fingerprint },
-              select: { id: true },
+              });
+              await tx.incidentEvent.create({
+                data: {
+                  incidentId,
+                  type: 'RUNBOOK_SUGGESTED',
+                  message: `Runbook suggested: ${binding.runbook.name}`,
+                },
+              });
+              return true;
             });
-            if (existing) return false;
-            await tx.runbookSuggestion.upsert({
-              where: { fingerprint },
-              update: {},
-              create: {
+            if (typeof created === 'string') {
+              skipped++;
+              await recordRunbookSkip({
                 incidentId,
                 bindingId: binding.id,
-                runbookVersionId: versionId,
-                triggerId: matchedTrigger!.id,
-                sourceEventId,
-                fingerprint,
-                planSnapshot: planSnapshot!,
-              },
-            });
-            await tx.incidentEvent.create({
-              data: {
-                incidentId,
-                type: 'RUNBOOK_SUGGESTED',
-                message:
-                  'AUTO_REMEDIATION_BUDGET_EXHAUSTED: remaining remediation requires responder approval.',
-              },
-            });
-            return true;
+                runbookName: binding.runbook.name,
+                reason: created,
+              });
+            } else if (created) suggested++;
+          } catch (error) {
+            if (error instanceof RunbookArchivedError) continue;
+            if (!isAlreadyHandled(error)) throw error;
+          }
+          continue;
+        }
+        try {
+          await startTriggeredRunbookExecution({
+            runbookId: binding.runbookId,
+            runbookVersionId: versionId,
+            serviceId,
+            incidentId,
+            bindingId: binding.id,
+            triggerId: trigger.id,
+            expectedRuleRevision: binding.configurationRevision,
+            inputValues: binding.inputValues as Record<string, unknown>,
+            triggerFingerprint: fingerprint,
+            sourceEventId,
+            evaluationSource,
           });
-          if (typeof createdSuggestion === 'string') {
+          started++;
+        } catch (error) {
+          if (isIncidentNotOpen(error)) {
             skipped++;
             await recordRunbookSkip({
               incidentId,
               bindingId: binding.id,
               runbookName: binding.runbook.name,
-              reason: createdSuggestion,
+              reason: (error as Error).message,
             });
-          } else if (createdSuggestion) suggested++;
-        } catch (failure) {
-          if (failure instanceof RunbookArchivedError) continue;
-          throw failure;
+            continue;
+          }
+          if (!isAlreadyHandled(error)) throw error;
         }
-        continue;
+      } catch (error) {
+        if (
+          error instanceof RunbookDefinitionError &&
+          error.message.includes('AUTO_REMEDIATION_BUDGET_EXHAUSTED') &&
+          versionId &&
+          matchedTrigger &&
+          planSnapshot
+        ) {
+          const trigger = matchedTrigger;
+          const snapshot = planSnapshot;
+          const fingerprint = computeTriggerFingerprint({
+            sourceEventId,
+            bindingId: binding.id,
+            runbookVersionId: versionId,
+          });
+          try {
+            const createdSuggestion = await prisma.$transaction(async tx => {
+              const incidentLock = await lockOpenIncidentForAutomation(tx, incidentId);
+              if (!incidentLock.open) return incidentLock.reason;
+              await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
+              if (!(await ruleStillCurrent(tx, binding, trigger))) return false;
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-incident-budget:${incidentId}`}))`;
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
+              if (
+                await tx.runbookExecution.findFirst({
+                  where: {
+                    OR: [
+                      { triggerFingerprint: fingerprint },
+                      { incidentId, bindingId: binding.id, triggerId: { not: null } },
+                    ],
+                  },
+                  select: { id: true },
+                })
+              )
+                return false;
+              const existing = await tx.runbookSuggestion.findUnique({
+                where: { fingerprint },
+                select: { id: true },
+              });
+              if (existing) return false;
+              await tx.runbookSuggestion.upsert({
+                where: { fingerprint },
+                update: {},
+                create: {
+                  incidentId,
+                  bindingId: binding.id,
+                  runbookVersionId: versionId,
+                  triggerId: trigger.id,
+                  triggerRevision: trigger.revision,
+                  sourceEventId,
+                  fingerprint,
+                  planSnapshot: snapshot,
+                },
+              });
+              await tx.incidentEvent.create({
+                data: {
+                  incidentId,
+                  type: 'RUNBOOK_SUGGESTED',
+                  message:
+                    'AUTO_REMEDIATION_BUDGET_EXHAUSTED: remaining remediation requires responder approval.',
+                },
+              });
+              return true;
+            });
+            if (typeof createdSuggestion === 'string') {
+              skipped++;
+              await recordRunbookSkip({
+                incidentId,
+                bindingId: binding.id,
+                runbookName: binding.runbook.name,
+                reason: createdSuggestion,
+              });
+            } else if (createdSuggestion) suggested++;
+          } catch (failure) {
+            if (failure instanceof RunbookArchivedError) continue;
+            throw failure;
+          }
+          continue;
+        }
+        suppressed++;
+        if (!(error instanceof RunbookError)) {
+          transientFailures.push(error);
+          continue;
+        }
+        await prisma.incidentEvent
+          .create({
+            data: {
+              incidentId,
+              type: 'RUNBOOK_FAILED',
+              message: `Runbook trigger suppressed for binding ${binding.id}: ${error.code}`,
+            },
+          })
+          .catch(failure => {
+            transientFailures.push(failure);
+          });
       }
-      suppressed++;
-      if (!(error instanceof RunbookError)) {
-        transientFailures.push(error);
-        continue;
-      }
-      await prisma.incidentEvent
-        .create({
-          data: {
-            incidentId,
-            type: 'RUNBOOK_FAILED',
-            message: `Runbook trigger suppressed for binding ${binding.id}: ${error.code}`,
-          },
-        })
-        .catch(failure => {
-          transientFailures.push(failure);
-        });
     }
   }
-  // Retry infrastructure failures only after every unrelated binding has had a chance.
+  // Retry infrastructure failures only after every unrelated rule has had a chance.
   if (transientFailures.length)
     throw new AggregateError(transientFailures, 'Some runbook triggers could not be evaluated.');
   return { matched, started, suggested, suppressed, skipped };

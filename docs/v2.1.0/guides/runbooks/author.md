@@ -6,8 +6,13 @@ product_area: runbooks
 audience: [administrator, operator]
 verification:
   level: test
-  verified_at: 2026-10-11
-  evidence: [src/components/runbooks/RunbookBuilder.tsx, src/components/runbooks/RunbookLibrary.tsx, tests/e2e/runbooks-ui.spec.ts]
+  verified_at: 2026-10-14
+  evidence:
+    [
+      src/components/runbooks/RunbookBuilder.tsx,
+      src/components/runbooks/RunbookLibrary.tsx,
+      tests/e2e/runbooks-ui.spec.ts,
+    ]
 ---
 
 # Author and publish a Runbook
@@ -75,22 +80,38 @@ For example, a restart step can contain a read-only Systemd precheck and verific
 
 ```json
 {
-  "steps": [{
-    "key": "restart",
-    "name": "Restart API",
-    "type": "SYSTEMD",
-    "riskClass": "NON_IDEMPOTENT",
-    "requiresApproval": true,
-    "config": { "action": "restart", "unit": "api.service" },
-    "precheck": { "steps": [{
-      "key": "before", "name": "Inspect API", "type": "SYSTEMD",
-      "riskClass": "READ_ONLY", "config": { "action": "status", "unit": "api.service" }
-    }] },
-    "verification": { "steps": [{
-      "key": "after", "name": "Verify API", "type": "SYSTEMD",
-      "riskClass": "READ_ONLY", "config": { "action": "status", "unit": "api.service" }
-    }] }
-  }]
+  "steps": [
+    {
+      "key": "restart",
+      "name": "Restart API",
+      "type": "SYSTEMD",
+      "riskClass": "NON_IDEMPOTENT",
+      "requiresApproval": true,
+      "config": { "action": "restart", "unit": "api.service" },
+      "precheck": {
+        "steps": [
+          {
+            "key": "before",
+            "name": "Inspect API",
+            "type": "SYSTEMD",
+            "riskClass": "READ_ONLY",
+            "config": { "action": "status", "unit": "api.service" }
+          }
+        ]
+      },
+      "verification": {
+        "steps": [
+          {
+            "key": "after",
+            "name": "Verify API",
+            "type": "SYSTEMD",
+            "riskClass": "READ_ONLY",
+            "config": { "action": "status", "unit": "api.service" }
+          }
+        ]
+      }
+    }
+  ]
 }
 ```
 
@@ -130,3 +151,57 @@ labels come from `key=value` tags. Local write selectors must select exactly one
 healthy capable host, which is pinned for the execution. Review automatic
 budgets with your administrator; exhaustion produces a suggestion for responder
 approval. See the [reference](../../reference/runbooks) for limits and semantics.
+
+## Compare publication impact
+
+Open **Compare versions and rule impact** before publishing or changing a rule's pin. Review added/removed/changed actions, derived risk, masked configuration, prechecks, verification and input changes side by side. Rules using latest publication track future publications; pinned rules and existing executions retain their frozen versions. Comparison performs no action and cannot establish platform permission.
+
+## Service rule pages and version selection
+
+Service automation lists show 20 rules per page. **Next rules** uses a stable creation-time/ID cursor; **First rules** returns to the newest page. Readiness checks and displayed counts apply to that visible page. Workflow and Agent/pool searches keep configuration inventories bounded; narrow the search when an option is absent. Existing pinned and current published versions remain available when configuring an attached rule.
+
+For a new pinned rule, the selected version determines the input fields, target restrictions, review and saved version. If latest publication changes while a form is open, saving fails with a reload instruction before creating a rule. Invalid selector JSON, duplicate keys and invalid labels disable saving until corrected. Cards show the rule's state, target, blockers and last run; **Rule evidence** opens detailed checks/history, and **Manage rule** reveals editing, duplication and detach controls.
+
+Version comparison authorizes both requested versions independently of the selector page. **Older versions** and **Newer versions** paginate the selector without losing the selected comparison.
+
+## Automatic activation and scoped configuration
+
+Viewing a service does not grant Runbook-library access. The Runbooks view requires `runbook.read.all`; other service views do not load the catalog, rules or Agent inventory. Catalog entries contain metadata, and selected version input/risk details are fetched through a separately authorized endpoint. Target/policy checks are requested from Rule evidence or **Check visible rule readiness**, rather than running for every ordinary page view.
+
+Automatic rules always save paused, including configuration changes to an active rule. Open **Rule evidence**, validate configuration, request fresh Agent policy checks, and use **Activate Automatic rule**. Each selected Agent must have current successful policy evidence for the frozen version and inputs. A trigger with no conditions requires explicit confirmation that it may match every new incident for the service. Activation does not execute a workflow or bypass step approval, frozen-plan preview, target permission or unknown-outcome fences. Incident-context selectors and secret-dependent policy fields cannot be fully verified for activation in advance.
+
+### Automatic target support and edits
+
+Automatic activation supports a specific Agent (with static label restrictions) or a fixed pool without a label selector. Every currently eligible Agent must return a fresh successful policy check. Incident-dependent selectors and selector-only fleet targeting require Suggested mode; they cannot be activated as Automatic rules. Runtime dispatch still checks target eligibility, permissions, capabilities, secret grants and the frozen execution plan.
+
+Saving an Automatic rule's configuration or trigger pauses it immediately. The configuration sheet warns before saving and links to **Rule evidence**. After each save, request local policy checks, review readiness, and explicitly reactivate. A zero-condition trigger requires confirmation that it may match every new incident for the service.
+
+Trigger edits retain the trigger ID, pending and started suggestions, and historical execution associations. Each edit increments the condition revision and records the previous and new conditions in the audit. Existing suggestions retain their frozen execution plans.
+
+For secret-backed Bash commands, use a static, exactly allowlisted command that reads the runtime `OPSKNIGHT_INPUT_<KEY>` environment variable. The Agent injects resolved input values at execution; never interpolate a secret into shell command source. Policy certification does not require the secret value when the command is static. Redacted executable commands or targets remain indeterminate and cannot certify Automatic activation. The `config.env` field does not configure the execution environment; use workflow inputs and their runtime environment variables.
+
+Suggestions and triggered executions store the evaluated trigger revision separately from the current trigger. Editing conditions does not change that historical revision. Existing pre-migration records retain an unknown (`NULL`) revision; use their audit evidence rather than assume the current condition set matched.
+
+Detaching a service rule archives and disables it. It disappears from the active service rule list; its evidence URL, original configuration, suggestions and execution associations remain available. Pending suggestions cannot start after detachment. Archived rules cannot be edited or reactivated.
+
+Incident-trigger evaluation reads rules in ordered batches of at most 100, instead of loading the full inventory into memory. Every enabled rule is evaluated; duplicate event delivery retains existing fingerprint fences. Total processing time still grows with rule count and matching actions. The 100/1,000/10,000-rule regression measures concurrent duplicate deliveries and real suggestion writes; it does not certify sustained production incident throughput.
+
+Automatic policy certification supports **1–100 eligible online Agents per target**, using durable per-Agent requests inserted in batches of 25. Activation requires fresh accepted evidence for every currently eligible Agent, with the same version, configuration and current policy hash. Membership, configuration or policy changes and expiry invalidate incomplete evidence; partial completion cannot activate the rule. Larger targets remain blocked.
+
+Rule configuration saves increment a monotonic configuration revision. Incident evaluation verifies that revision, mode, selected publication and trigger revision under the workflow lock before recording a suggestion. A change to mode, version, inputs or target invalidates a match read before the edit committed.
+
+Use **Rule history → Archived rules** on the service Runbooks tab to search detached rules by rule or workflow name. Historical configuration and execution links remain readable; archived rules have no dispatch controls. The rule detail page shows Configure → Validate → Activate → Monitor, including the number of Agents still awaiting valid policy evidence.
+
+## Concurrent rule changes and pausing
+
+Configuration and trigger forms carry the rule revision displayed when the form opened.
+If another administrator saves, pauses, detaches or activates the rule first, a stale
+save is rejected. Reload the page, review the current configuration, and apply your
+changes again. A stale save does not overwrite the other administrator's work.
+
+Pause and execution preparation serialize at the database transaction boundary.
+If Pause obtains the lock first, a waiting start rechecks the disabled rule and
+creates no execution. If execution preparation obtains the lock first, that
+execution may commit before Pause completes. Pause prevents subsequent starts;
+it does not cancel an execution already created. Cancel that execution separately
+when appropriate. Trigger suggestions use the same rule boundary and revision checks.

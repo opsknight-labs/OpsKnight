@@ -32,7 +32,8 @@ import {
   type IncidentResponseContext,
 } from '@/lib/automation/response-context';
 import { redactRunbookDisplayName } from './display-name';
-import { finalizeVerificationEvidence } from './verification-evidence';
+import { finalizeExecutionDeadline } from './deadline';
+import { enqueueVerificationEvidence, finalizeVerificationEvidence } from './verification-evidence';
 import { processVerifiedResolution, recordRecoveryVerification } from './recovery';
 import { workflowConditionSchema } from './conditions';
 import {
@@ -67,6 +68,13 @@ import {
 import { lockRunbookForShare } from './locking';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('FINALIZE_VERIFICATION'),
+      executionId: z.string().cuid(),
+      revision: z.number().int().positive().optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('ADVANCE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('RECONCILE_EXECUTION'), executionId: z.string().cuid() }).strict(),
   z.object({ kind: z.literal('VERIFIED_RESOLUTION'), executionId: z.string().cuid() }).strict(),
@@ -114,6 +122,11 @@ function executionSteps(definition: ReturnType<typeof parseRunbookDefinition>) {
   return flattenSteps(definition).map((step, sequence) => ({ ...step, sequence }));
 }
 
+/** Server-supplied provenance; never part of the executable request or preview digest. */
+export interface RunbookExecutionAuditContext {
+  apiClientId: string;
+}
+
 export interface RunbookExecutionRequest {
   runbookId: string;
   runbookVersionId?: string;
@@ -124,21 +137,29 @@ export interface RunbookExecutionRequest {
   inputValues?: Record<string, unknown>;
   triggeredByUserId?: string;
   triggerFingerprint?: string;
+  expectedRuleRevision?: number;
   triggerId?: string;
   sourceEventId?: string;
   expectedPlanDigest?: string;
   previewAuthorizationToken?: string;
   evaluationSource?: 'MONITORING' | 'MANUAL';
+  /** Responder-selected target; only accepted for manual runs without a rule or suggestion. */
+  targetAgentId?: string;
+  targetAgentPoolId?: string;
 }
 
 /** Responder entry point. Absence of an actor never authorizes an automatic execution. */
-export async function startRunbookExecution(input: RunbookExecutionRequest) {
+export async function startRunbookExecution(
+  input: RunbookExecutionRequest,
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
+) {
   if (!input.triggeredByUserId || !input.expectedPlanDigest || !input.previewAuthorizationToken) {
     throw new RunbookDefinitionError(
       'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder and preview are required.'
     );
   }
-  const result = await prepareRunbookExecution(input, false, 'MANUAL');
+  const result = await prepareRunbookExecution(input, false, 'MANUAL', externalTx, auditContext);
   if (!('id' in result)) throw new Error('Execution was not created.');
   return result;
 }
@@ -151,6 +172,7 @@ const automaticExecutionSchema = z
     serviceId: z.string().cuid(),
     bindingId: z.string().cuid(),
     triggerId: z.string().cuid(),
+    expectedRuleRevision: z.number().int().positive(),
     triggerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     sourceEventId: z.string().min(1).max(200),
     inputValues: z.record(z.string(), z.unknown()).optional(),
@@ -178,12 +200,15 @@ export async function startTriggeredRunbookExecution(
 }
 
 /** Resolves the execution preflight and issues a responder-bound preview capability. */
-export async function previewRunbookExecution(input: RunbookExecutionRequest) {
+export async function previewRunbookExecution(
+  input: RunbookExecutionRequest,
+  externalTx?: Prisma.TransactionClient
+) {
   if (!input.triggeredByUserId)
     throw new RunbookDefinitionError(
       'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder is required.'
     );
-  const result = await prepareRunbookExecution(input, true, 'MANUAL');
+  const result = await prepareRunbookExecution(input, true, 'MANUAL', externalTx);
   if (!('digest' in result)) throw new Error('Preview was not generated.');
   return result;
 }
@@ -209,9 +234,11 @@ export async function lockOpenIncidentForAutomation(
 async function prepareRunbookExecution(
   input: RunbookExecutionRequest,
   previewOnly: boolean,
-  mode: 'MANUAL' | 'AUTOMATIC'
+  mode: 'MANUAL' | 'AUTOMATIC',
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
 ) {
-  return prisma.$transaction(async tx => {
+  const runner = async (tx: Prisma.TransactionClient) => {
     if (mode === 'AUTOMATIC') {
       if (!input.incidentId)
         throw new RunbookDefinitionError(
@@ -226,12 +253,16 @@ async function prepareRunbookExecution(
       include: { publishedVersion: true },
     });
     if (!runbook) throw new RunbookDefinitionError('Runbook not found or archived.');
+    // Retain the rule lock through execution creation, fencing pause/edit/detach.
+    if (input.bindingId)
+      await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${input.bindingId} AND "runbookId" = ${input.runbookId} FOR SHARE`;
     const binding = input.bindingId
-      ? await tx.serviceRunbookBinding.findFirst({
+      ? await tx.serviceAutomationRule.findFirst({
           where: {
             id: input.bindingId,
             runbookId: runbook.id,
             enabled: true,
+            detachedAt: null,
             ...(input.serviceId ? { serviceId: input.serviceId } : {}),
             ...(input.triggerId
               ? { triggers: { some: { id: input.triggerId, enabled: true } } }
@@ -259,12 +290,14 @@ async function prepareRunbookExecution(
       return verifiedResponseContext;
     };
     let matchReason: string | null = null;
+    let evaluatedTriggerRevision: number | null = null;
     if (mode === 'AUTOMATIC') {
       if (
         !binding ||
         binding.mode !== 'AUTOMATIC' ||
         binding.versionStrategy !== 'PINNED' ||
         binding.runbookVersionId !== input.runbookVersionId ||
+        binding.configurationRevision !== input.expectedRuleRevision ||
         (input.evaluationSource === 'MONITORING' && !binding.runOnMonitoringIncidents)
       ) {
         throw new RunbookDefinitionError(
@@ -289,12 +322,13 @@ async function prepareRunbookExecution(
         trigger && loaded && loaded.trigger.service.id === binding.serviceId
           ? evaluateTrigger(loaded.trigger, trigger.conditions, trigger.conditionLogic)
           : null;
-      if (evaluation?.status !== 'MATCHED') {
+      if (!trigger || evaluation?.status !== 'MATCHED') {
         throw new RunbookDefinitionError(
           'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
         );
       }
       matchReason = evaluation.reason;
+      evaluatedTriggerRevision = trigger.revision;
     }
     const suggestion = input.suggestionId
       ? await tx.runbookSuggestion.findFirst({
@@ -366,6 +400,30 @@ async function prepareRunbookExecution(
     const steps = executionSteps(definition);
     // AUTOMATIC executions resolve context-mapped inputs and approved targets from the
     // verified context inside this transaction; suggestions reuse their frozen plan.
+    const targetOverride = Boolean(input.targetAgentId || input.targetAgentPoolId);
+    if (targetOverride) {
+      if (mode !== 'MANUAL' || binding || planSnapshot || !input.triggeredByUserId)
+        throw new RunbookDefinitionError(
+          'TARGET_OVERRIDE_NOT_ALLOWED: service rules and suggestions use their reviewed target.'
+        );
+      if (input.targetAgentId && input.targetAgentPoolId)
+        throw new RunbookDefinitionError(
+          'Select either a specific Agent or an Agent pool, not both.'
+        );
+      const target = input.targetAgentId
+        ? await tx.runbookAgent.findFirst({
+            where: { id: input.targetAgentId, status: { not: 'REVOKED' } },
+            select: { id: true },
+          })
+        : await tx.runbookAgentPool.findUnique({
+            where: { id: input.targetAgentPoolId },
+            select: { id: true },
+          });
+      if (!target)
+        throw new RunbookDefinitionError(
+          'TARGET_NOT_FOUND: the selected Agent or Agent pool is unavailable.'
+        );
+    }
     const automationPlan =
       mode === 'AUTOMATIC' && binding
         ? resolveBindingAutomationPlan({
@@ -381,21 +439,23 @@ async function prepareRunbookExecution(
       ? automaticPlan.agentId
       : planSnapshot
         ? planSnapshot.agentId
-        : (binding?.defaultAgentId ?? null);
+        : (binding?.defaultAgentId ?? input.targetAgentId ?? null);
     const resolvedTargetAgentPoolId = automaticPlan
       ? automaticPlan.agentPoolId
       : planSnapshot
         ? planSnapshot.agentPoolId
-        : (binding?.defaultAgentPoolId ?? null);
+        : (binding?.defaultAgentPoolId ?? input.targetAgentPoolId ?? null);
     const targetProvenance: TargetProvenance = automaticPlan
       ? automaticPlan.targetProvenance
       : planSnapshot
         ? ((planSnapshot.targetProvenance as TargetProvenance | undefined) ?? {
             kind: 'SUGGESTION_PLAN',
           })
-        : resolvedTargetAgentId || resolvedTargetAgentPoolId
-          ? { kind: 'BINDING_DEFAULT' }
-          : { kind: 'NONE' };
+        : targetOverride
+          ? { kind: 'RESPONDER_SELECTED' }
+          : resolvedTargetAgentId || resolvedTargetAgentPoolId
+            ? { kind: 'BINDING_DEFAULT' }
+            : { kind: 'NONE' };
     if (binding && targetProvenance.kind === 'CONTEXT_MAPPING') {
       // A context-selected target must still be approved by this service's binding.
       const approved = approvedBindingTargets(binding);
@@ -438,8 +498,8 @@ async function prepareRunbookExecution(
         Object.keys(resolvedInputs).map(key => [
           key,
           (Object.getOwnPropertyDescriptor(plannedProvenance, key)?.value as
-            | InputProvenance
-            | undefined) ?? (binding ? { source: 'BINDING' } : { source: 'VERSION_DEFAULT' }),
+            InputProvenance | undefined) ??
+            (binding ? { source: 'BINDING' } : { source: 'VERSION_DEFAULT' }),
         ])
       );
     if (targetProvenance.kind === 'CONTEXT_MAPPING') {
@@ -873,7 +933,7 @@ async function prepareRunbookExecution(
       trigger: binding
         ? {
             bindingId: binding.id,
-            configRevision: planSnapshot?.configRevision ?? binding.configRevision,
+            configRevision: planSnapshot?.configRevision ?? binding.configurationRevision,
             triggerId: input.triggerId ?? suggestion?.triggerId ?? null,
             triggerFingerprint: input.triggerFingerprint ?? suggestion?.fingerprint ?? null,
             suggestionId: suggestion?.id ?? null,
@@ -910,6 +970,7 @@ async function prepareRunbookExecution(
         bindingId: input.bindingId,
         triggerFingerprint: input.triggerFingerprint ?? suggestion?.fingerprint,
         triggerId: input.triggerId ?? suggestion?.triggerId,
+        triggerRevision: evaluatedTriggerRevision ?? suggestion?.triggerRevision,
         triggeredByType: input.triggeredByUserId ? 'USER' : 'TRIGGER',
         triggeredByUserId: input.triggeredByUserId,
         unattendedWritesAuthorized,
@@ -982,10 +1043,12 @@ async function prepareRunbookExecution(
     await logAudit(
       {
         action: 'runbook.execution.started',
+        ...(auditContext ? { source: 'API' as const } : {}),
         entityType: 'RUNBOOK_EXECUTION',
         entityId: execution.id,
         actorId: input.triggeredByUserId,
         details: {
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
           runbookId: runbook.id,
           versionId: version.id,
           previewGrant: authorization
@@ -1006,7 +1069,12 @@ async function prepareRunbookExecution(
       tx
     );
     return execution;
-  });
+  };
+
+  if (externalTx) {
+    return runner(externalTx);
+  }
+  return prisma.$transaction(runner);
 }
 
 function resolvedPlanDigest(
@@ -1482,8 +1550,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_FAILED',
               'Runbook execution failed due to an unknown step outcome during cancellation.'
             );
-            await finalizeVerificationEvidence(tx, executionId);
-            await recordRecoveryVerification(tx, executionId);
+            await enqueueVerificationEvidence(tx, executionId);
           }
         } else {
           const cancelled = await tx.runbookExecution.updateMany({
@@ -1497,8 +1564,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
               'RUNBOOK_CANCELLED',
               'Runbook execution cancelled.'
             );
-            await finalizeVerificationEvidence(tx, executionId);
-            await recordRecoveryVerification(tx, executionId);
+            await enqueueVerificationEvidence(tx, executionId);
           }
         }
       }
@@ -1506,124 +1572,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
     return;
   }
   if (execution.deadlineAt <= new Date()) {
-    await prisma.$transaction(async tx => {
-      await tx.runbookStepAttempt.updateMany({
-        where: {
-          executionStep: { executionId },
-          status: { in: ['PENDING', 'CLAIMED'] },
-        },
-        data: {
-          status: 'TIMED_OUT',
-          completedAt: new Date(),
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          status: { in: ['PENDING', 'READY', 'WAITING_APPROVAL', 'WAITING_AGENT'] },
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'WAIT',
-          status: 'RUNNING',
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'HTTP',
-          status: 'RUNNING',
-          riskClass: 'READ_ONLY',
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          type: 'HTTP',
-          status: 'RUNNING',
-          riskClass: { not: 'READ_ONLY' },
-        },
-        data: {
-          status: 'UNKNOWN',
-          completedAt: new Date(),
-          errorCode: 'TIMED_OUT_WITH_UNKNOWN_OUTCOME',
-          outputPreview:
-            'Execution timed out while HTTP write operation was in flight; outcome is unknown.',
-        },
-      });
-      await tx.runbookExecutionStep.updateMany({
-        where: {
-          executionId,
-          status: 'RUNNING',
-          type: {
-            notIn: ['HTTP', 'WAIT', 'LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'],
-          },
-        },
-        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
-      });
-      const active = await tx.runbookStepAttempt.count({
-        where: { executionStep: { executionId }, status: 'RUNNING' },
-      });
-      if (active === 0) {
-        const hasUnknown = await tx.runbookExecutionStep.count({
-          where: { executionId, status: 'UNKNOWN' },
-        });
-        if (hasUnknown > 0) {
-          const failed = await tx.runbookExecution.updateMany({
-            where: {
-              id: executionId,
-              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-            },
-            data: {
-              status: 'FAILED',
-              completedAt: new Date(),
-              failureCode: 'UNKNOWN_OUTCOME',
-              failureMessage:
-                'Execution timed out while one or more write steps had unverified outcomes.',
-            },
-          });
-          if (failed.count === 1) {
-            await addIncidentRunbookEvent(
-              tx,
-              execution.incidentId,
-              'RUNBOOK_FAILED',
-              'Runbook execution timed out with an unverified write outcome.'
-            );
-            await finalizeVerificationEvidence(tx, executionId);
-            await recordRecoveryVerification(tx, executionId);
-          }
-        } else {
-          const timedOut = await tx.runbookExecution.updateMany({
-            where: {
-              id: executionId,
-              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-            },
-            data: {
-              status: 'TIMED_OUT',
-              completedAt: new Date(),
-              failureCode: 'EXECUTION_TIMEOUT',
-            },
-          });
-          if (timedOut.count === 1) {
-            await addIncidentRunbookEvent(
-              tx,
-              execution.incidentId,
-              'RUNBOOK_FAILED',
-              'Runbook execution timed out.'
-            );
-            await finalizeVerificationEvidence(tx, executionId);
-            await recordRecoveryVerification(tx, executionId);
-          }
-        }
-      }
-    });
+    await prisma.$transaction(tx => finalizeExecutionDeadline(tx, executionId));
     return;
   }
   const failed = execution.steps.find(
@@ -1651,8 +1600,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_FAILED',
           `Runbook failed at step: ${failed.name}`
         );
-        await finalizeVerificationEvidence(tx, executionId);
-        await recordRecoveryVerification(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1674,8 +1622,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_COMPLETED',
           'Runbook execution completed.'
         );
-        await finalizeVerificationEvidence(tx, executionId);
-        await recordRecoveryVerification(tx, executionId);
+        await enqueueVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -1819,29 +1766,48 @@ export async function approveExecutionStep(input: {
   });
 }
 
-export async function cancelExecution(executionId: string, actorId: string, reason?: string) {
-  await prisma.$transaction(async tx => {
+export async function cancelExecution(
+  executionId: string,
+  actorId: string,
+  reason?: string,
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
+) {
+  const command = async (tx: Prisma.TransactionClient) => {
     const result = await tx.runbookExecution.updateMany({
       where: {
         id: executionId,
-        status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+        status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'PAUSED'] },
       },
       data: { status: 'CANCEL_REQUESTED', cancelRequestedAt: new Date(), failureMessage: reason },
     });
-    if (result.count !== 1)
+    if (result.count !== 1) {
+      const existing = await tx.runbookExecution.findUnique({
+        where: { id: executionId },
+        select: { status: true },
+      });
+      // Natural idempotence applies across different HTTP retry keys and UI/API callers.
+      if (existing?.status === 'CANCEL_REQUESTED') return;
       throw new RunbookExecutionInvalidTransitionError(executionId, 'TERMINAL', 'CANCEL_REQUESTED');
+    }
     await enqueueAdvance(tx, executionId);
     await logAudit(
       {
         action: 'runbook.execution.cancel.requested',
+        ...(auditContext ? { source: 'API' as const } : {}),
         entityType: 'RUNBOOK_EXECUTION',
         entityId: executionId,
         actorId,
-        details: { reason: reason ?? null },
+        details: {
+          reason: reason ?? null,
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
+        },
       },
       tx
     );
-  });
+  };
+  if (externalTx) return command(externalTx);
+  return prisma.$transaction(command);
 }
 
 export async function processRunbookJob(raw: unknown): Promise<void> {
@@ -1852,6 +1818,22 @@ export async function processRunbookJob(raw: unknown): Promise<void> {
   }
   if (payload.kind === 'VERIFIED_RESOLUTION') {
     await processVerifiedResolution(payload.executionId);
+    return;
+  }
+  if (payload.kind === 'FINALIZE_VERIFICATION') {
+    await prisma.$transaction(async tx => {
+      await finalizeVerificationEvidence(tx, payload.executionId, payload.revision);
+      // Recovery is decided from finalized evidence of the current revision only.
+      const current = await tx.runbookExecution.findUnique({
+        where: { id: payload.executionId },
+        select: { verificationRevision: true },
+      });
+      if (
+        current &&
+        (payload.revision === undefined || current.verificationRevision === payload.revision)
+      )
+        await recordRecoveryVerification(tx, payload.executionId);
+    });
     return;
   }
   const { evaluateIncidentTriggers } = await import('./triggers');

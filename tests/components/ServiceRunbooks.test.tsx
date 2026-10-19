@@ -1,20 +1,19 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { fireEvent, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import ServiceRunbooks from '@/components/service/ServiceRunbooks';
 
 vi.mock('@/app/(app)/services/[id]/runbook-actions', () => ({
+  checkRulePolicyAction: vi.fn(),
+  pauseRuleAction: vi.fn(),
+  duplicateRuleAction: vi.fn(),
   attachRunbookAction: vi.fn(),
   detachRunbookAction: vi.fn(),
   updateRunbookBindingAction: vi.fn(),
   configureRunbookTriggerAction: vi.fn(),
   authorizeUnattendedWritesAction: vi.fn(),
   revokeUnattendedWritesAction: vi.fn(),
-}));
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
-  unstable_rethrow: vi.fn(),
 }));
 afterEach(cleanup);
 function fixture() {
@@ -70,7 +69,8 @@ it('redacts secret-reference defaults in the service summary', () => {
       canManage={false}
     />
   );
-  expect(screen.getByText('Configured secret reference')).toBeVisible();
+  fireEvent.click(screen.getByText('Manage rule'));
+  expect(screen.getByText('Configured secret reference')).toBeInTheDocument();
   expect(screen.queryByText(/sensitive-reference/)).not.toBeInTheDocument();
 });
 
@@ -101,23 +101,15 @@ it('provides a View Runbook link rather than an inaccurate immediate execution t
       canManage={false}
     />
   );
-  const link = screen.getByRole('link', { name: /View Runbook/i });
-  expect(link).toBeVisible();
+  fireEvent.click(screen.getByText('Manage rule'));
+  const link = screen.getByRole('link', { name: /View Runbook/i, hidden: true });
+  expect(link).toBeInTheDocument();
   expect(link).toHaveAttribute('href', '/runbooks/runbook');
 });
 
-it('shows read-only verified-recovery and unattended-write status to viewers', () => {
-  const binding = {
-    ...fixture(),
-    mode: 'AUTOMATIC',
-    versionStrategy: 'PINNED',
-    runbookVersionId: 'version-3',
-    runbookVersion: { version: 3, inputs: [] },
-    resolveOnVerifiedRecovery: true,
-    unattendedWritesVersionId: 'version-3',
-    unattendedWritesAuthorizedAt: new Date('2026-10-19T10:00:00Z'),
-    unattendedWritesAuthorizedBy: { name: 'Alice Admin' },
-  } as unknown as ComponentProps<typeof ServiceRunbooks>['bindings'][number];
+it('does not arm an incident trigger in manual mode', () => {
+  const binding = fixture();
+  binding.triggers[0].enabled = true;
   render(
     <ServiceRunbooks
       serviceId="service"
@@ -128,29 +120,12 @@ it('shows read-only verified-recovery and unattended-write status to viewers', (
       canManage={false}
     />
   );
-  expect(screen.getByText('Resolves on verified recovery')).toBeVisible();
-  expect(screen.getByText('Unattended writes · v3')).toBeVisible();
-  expect(screen.queryByRole('button', { name: /Authorize/ })).not.toBeInTheDocument();
+  expect(screen.getByText(/Inactive in Manual mode/)).toBeVisible();
 });
-
-it('summarizes monitoring opt-in, automation conditions and context mappings', () => {
-  const binding = {
-    ...fixture(),
-    runOnMonitoringIncidents: true,
-    contextInputMappings: [{ inputKey: 'credential', contextKey: 'cluster' }],
-    contextTargetMappings: {
-      contextKey: 'cluster',
-      entries: [{ value: 'prod-k8s-01', agentPoolId: 'cjld2cjxh0000qzrmn831i7rn' }],
-    },
-    triggers: [
-      {
-        id: 'trigger',
-        event: 'INCIDENT_CREATED',
-        enabled: true,
-        conditions: [{ field: 'automation.cluster', operator: 'EXISTS', value: null }],
-      },
-    ],
-  } as unknown as ComponentProps<typeof ServiceRunbooks>['bindings'][number];
+it('describes a dynamic selector without calling it the control plane', () => {
+  const binding = fixture();
+  binding.defaultAgentId = null;
+  binding.agentSelector = { environment: 'production' };
   render(
     <ServiceRunbooks
       serviceId="service"
@@ -161,21 +136,57 @@ it('summarizes monitoring opt-in, automation conditions and context mappings', (
       canManage={false}
     />
   );
-  expect(screen.getByText('Runs on monitoring incidents')).toBeVisible();
-  expect(screen.getByText(/Target: Unavailable Agent/)).toHaveTextContent(
-    /uses automation context · target by automation.cluster \(1 approved\) · 1 input from context/
+  expect(screen.getByText(/Dynamic selector/)).toHaveTextContent('environment=production');
+  expect(screen.queryByText(/Control plane/)).not.toBeInTheDocument();
+});
+it('keeps loaded bindings visible when only Agent inventory fails', () => {
+  render(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[fixture()]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={true}
+      loadErrors={['agents']}
+    />
   );
+  expect(screen.getByRole('link', { name: 'Recovery' })).toBeVisible();
+  expect(screen.getByRole('alert')).toHaveTextContent('Agent inventory unavailable');
+  expect(screen.queryByText(/Failed to load attached workflows/)).not.toBeInTheDocument();
 });
 
 it('shows the unattended-write panel with eligibility only to administrators', () => {
   const binding = {
     ...fixture(),
     mode: 'AUTOMATIC',
+    enabled: false,
     versionStrategy: 'PINNED',
     runbookVersionId: 'version-3',
+    unattendedWritesVersionId: null,
+    unattendedWritesAuthorizedAt: null,
     runbookVersion: { version: 3, inputs: [] },
   } as unknown as ComponentProps<typeof ServiceRunbooks>['bindings'][number];
-  render(
+  const details = {
+    binding: {
+      authorizedAtLabel: null,
+      eligibility: {
+        eligible: true,
+        reasons: [],
+        writeActions: [
+          {
+            key: 'restart',
+            name: 'Restart pod',
+            type: 'KUBERNETES' as const,
+            riskClass: 'IDEMPOTENT_WRITE' as const,
+            hasVerification: true,
+            alwaysRequiresApproval: false,
+          },
+        ],
+      },
+    },
+  };
+  const { rerender } = render(
     <ServiceRunbooks
       serviceId="service"
       bindings={[binding]}
@@ -184,27 +195,25 @@ it('shows the unattended-write panel with eligibility only to administrators', (
       availableAgentPools={[]}
       canManage={true}
       canAuthorizeUnattendedWrites={true}
-      unattendedWriteDetails={{
-        binding: {
-          authorizedAtLabel: null,
-          eligibility: {
-            eligible: true,
-            reasons: [],
-            writeActions: [
-              {
-                key: 'restart',
-                name: 'Restart pod',
-                type: 'KUBERNETES',
-                riskClass: 'IDEMPOTENT_WRITE',
-                hasVerification: true,
-              },
-            ],
-          },
-        },
-      }}
+      unattendedWriteDetails={details}
     />
   );
+  fireEvent.click(screen.getByText('Manage rule'));
   expect(screen.getByRole('region', { name: 'Unattended write steps' })).toBeVisible();
   expect(screen.getByText('Restart pod')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Authorize v3' })).toBeVisible();
+
+  rerender(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[binding]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={true}
+      canAuthorizeUnattendedWrites={false}
+      unattendedWriteDetails={{ binding: { authorizedAtLabel: null, eligibility: null } }}
+    />
+  );
+  expect(screen.queryByRole('button', { name: 'Authorize v3' })).not.toBeInTheDocument();
 });

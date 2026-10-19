@@ -87,7 +87,8 @@ export function canonicalAutomationValue(
 export function validateAutomationCondition(
   condition: { field: string; operator: string; value?: unknown },
   fields: ReadonlyArray<AutomationFieldDefinition>
-): { ok: true; value: AutomationScalar | AutomationScalar[] | null } | { ok: false; error: string } {
+):
+  { ok: true; value: AutomationScalar | AutomationScalar[] | null } | { ok: false; error: string } {
   const key = automationFieldKey(condition.field);
   if (!key) return { ok: false, error: `Unsupported automation field "${condition.field}".` };
   const field = fields.find(candidate => candidate.key === key);
@@ -123,8 +124,7 @@ export function validateAutomationCondition(
 }
 
 export type AutomationConditionOutcome =
-  | { kind: 'RESULT'; matched: boolean }
-  | { kind: 'INVALID'; reason: string };
+  { kind: 'RESULT'; matched: boolean } | { kind: 'INVALID'; reason: string };
 
 /**
  * Runtime evaluation against the verified context. MISSING / UNMAPPED never satisfy value
@@ -302,7 +302,8 @@ export function resolveContextInputs(input: {
     let problem: string | null = null;
     if (!input.context) problem = 'UNAVAILABLE';
     else if (!field) problem = 'REMOVED';
-    else if (!contextTypeCompatibleWithInput(field.type, definition.type)) problem = 'TYPE_MISMATCH';
+    else if (!contextTypeCompatibleWithInput(field.type, definition.type))
+      problem = 'TYPE_MISMATCH';
     else if (field.state !== 'RECOGNIZED') problem = field.state;
     else if (!isValidInputValue(definition.type, field.value)) problem = 'INVALID';
     if (!problem) {
@@ -417,6 +418,7 @@ export function canonicalizeContextTargetMapping(
 export type TargetProvenance =
   | { kind: 'CONTEXT_MAPPING'; contextKey: string; value: AutomationScalar }
   | { kind: 'BINDING_DEFAULT' }
+  | { kind: 'RESPONDER_SELECTED' }
   | { kind: 'SUGGESTION_PLAN' }
   | { kind: 'NONE' };
 

@@ -6,13 +6,48 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-03
+  verified_at: 2026-10-12
   evidence:
     - src/
     - deploy/
 ---
 
 # Configuration reference
+
+## Authentication policy migration
+
+In 2.1 the singleton PostgreSQL AuthenticationPolicy is authoritative for login
+mode. `AUTH_LOCAL_LOGIN_ENABLED` defaults to enabled and the legacy emergency
+exception defaults to disabled. On the first policy read after schema migration,
+an advisory-locked transaction imports those effective controls once, records the
+snapshot and import marker, and emits `auth.policy.migrated`. The warning must be
+reviewed before enforcing or downgrading an installation. Replicas must have
+consistent legacy controls during that first import.
+
+An empty installation with no users starts in Password Only so the first
+administrator can complete setup, even if deprecated environment controls request
+Required. The import snapshot records this bootstrap decision. Existing
+installations retain their effective policy during import.
+
+After import, changing `AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED`, or
+`AUTH_BREAK_GLASS_EMAIL` and restarting does not change the policy. Use
+**Settings → System → SSO / Authentication → Sessions & Policies** for supported
+mode changes. SSO Required activation needs a verified staged administrator login
+and two independently held hardware-key emergency identities with current drills. An already-disabled local-login installation
+is preserved as Required, including its explicitly configured legacy exception;
+this is not a statement that its recovery is certified.
+
+Do not delete policy/import records or use environment edits as lockout recovery.
+A missing imported policy or database outage fails authentication closed. Restore
+PostgreSQL using external database administration. Application rollback to older
+code needs a coordinated rollback of application, database and deployment settings.
+Older versions do not understand the database policy, independent emergency
+principals or the new SECURITY notification enum. Do not run older and newer web
+replicas together. Preserve a tested pre-upgrade database backup and explicitly
+review older login environment controls; restoring a backup can restore revoked
+security state and requires credential/session rotation. See
+[authentication modes](../../guides/identity/authentication-modes/) for the import
+contract, defaults, session effects and operator verification.
 
 This operator reference contains settings exposed by deployment manifests or
 the supported environment template. Required and default values are conservative
@@ -195,7 +230,6 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Sensitivity: non-secret
 
-
 ## Supported production inventory
 
 ## `ALLOW_INSECURE_SECRETS`
@@ -262,39 +296,39 @@ Sets the polling interval while the general queue is idle.
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
+- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
+- Deprecated: legacy primary policy control; retained only for one-time migration
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
 
 ## `AUTH_BREAK_GLASS_ENABLED`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
+- Allowed values: `true` or `false`; legacy parsing trims whitespace and compares case-insensitively
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
+- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
+- Deprecated: legacy primary policy control; retained only for one-time migration
 - Extraction confidence: incomplete
-- Static default: none discovered
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`
+- Static default: `false` (one-time legacy import)
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
 
 ## `AUTH_LOCAL_LOGIN_ENABLED`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
+- Allowed values: `true` or `false`; legacy parsing trims whitespace and compares case-insensitively
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
+- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
+- Deprecated: legacy primary policy control; retained only for one-time migration
 - Extraction confidence: incomplete
-- Static default: none discovered
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`
+- Static default: `true` (one-time legacy import)
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
 
 ## `AUTH_SSO_REAUTH_AFTER_SECONDS`
 
@@ -1444,3 +1478,29 @@ Sets the polling interval while the general queue is idle.
 - Static default: not displayed
 - Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `src/lib/prisma-datasource.ts`
 
+## AUTH_RECOVERY_ORIGIN
+
+Optional deployment-managed exact HTTPS origin for independent recovery. Default:
+unset, using the conflict-free canonical authentication origin. The value must have
+no path other than `/`, credentials, query or fragment. Plain HTTP is accepted only
+for local development on localhost/127.0.0.1. Set the same value on all web replicas
+and enroll/drill keys on that origin before relying on it during an outage.
+
+Compose exposes `AUTH_RECOVERY_ORIGIN`; Helm exposes `config.authRecoveryOrigin`.
+The pin opens only recovery endpoints and required assets in host routing. Request
+Origin and WebAuthn RP/UV checks remain enforced. It never trusts arbitrary incoming
+Host/X-Forwarded-Host values or enables normal incident access. Database App URL
+repair requires fresh independent-key authorization and agreement between the pin,
+NEXTAUTH_URL and NEXT_PUBLIC_APP_URL. See
+[recovery procedure](../../guides/identity/sso-lockout-recovery/).
+
+## Existing SSO upgrade and rollout
+
+2.1 uses a stopped-runtime cutover with downtime. Integrated and split application
+Deployments use `Recreate`; a mandatory pre-upgrade Helm gate verifies desired
+replicas zero and complete application-pod shutdown before migration. This is not a
+rolling-upgrade compatibility certificate. HPA-managed web replicas require explicit
+reactivation after the new template is applied. See [Upgrade existing SSO](../../guides/identity/upgrade-existing-sso.md)
+for the stop/drain sequence, HPA handling, historical configuration, acceptance
+checks and database-aware rollback. Do not resume older binaries on a migrated
+database or use automatic Helm rollback as database rollback.

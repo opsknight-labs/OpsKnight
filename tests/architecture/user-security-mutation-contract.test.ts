@@ -24,7 +24,8 @@ const ALLOWED_SECURITY_MUTATION_FILES = new Set([
   'src/lib/auth.ts',
   'src/lib/password-reset.ts',
   'src/app/set-password/actions.ts',
-  'src/app/(app)/settings/security/actions.ts',
+  'src/app/(app)/settings/actions.ts',
+  'src/lib/auth-control/recovery.ts',
   'src/app/(app)/teams/actions.ts',
   'src/lib/teams/membership-commands.ts',
 ]);

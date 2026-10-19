@@ -121,7 +121,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
 
     // Concurrently attach a service binding and attempt delete
     const [bindResult, deleteResult] = await Promise.allSettled([
-      testPrisma.serviceRunbookBinding.create({
+      testPrisma.serviceAutomationRule.create({
         data: {
           runbookId: runbook.id,
           serviceId: service.id,
@@ -138,7 +138,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
       expect(bindResult.status).toBe('rejected');
       const record = await testPrisma.runbook.findUnique({ where: { id: runbook.id } });
       expect(record).toBeNull();
-      const binding = await testPrisma.serviceRunbookBinding.findFirst({
+      const binding = await testPrisma.serviceAutomationRule.findFirst({
         where: { runbookId: runbook.id },
       });
       expect(binding).toBeNull();
@@ -251,45 +251,58 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     }
   });
 
-  it('certifies concurrent archive-vs-binding-create race protection', async () => {
+  it('serializes archive against a binding committed after the archive snapshot starts', async () => {
     const actor = await createTestUser();
-    const service = await createTestService('Archive Race Service');
-    const slug = `race-arch-bind-${crypto.randomUUID().slice(0, 8)}`;
+    const service = await createTestService('Archive snapshot race');
     const runbook = await createRunbook(
-      {
-        name: 'Archive vs Binding Race',
-        slug,
-        description: 'Testing archive vs service binding serialization',
-      },
+      { name: 'Snapshot race', slug: `snapshot-${crypto.randomUUID()}`, description: '' },
       actor.id
     );
-
-    // Publish first so runbook has an active published version
     await publishDraftVersion(runbook.draftVersionId!, actor.id);
-
-    // Concurrently trigger archive and createServiceBinding
-    const [archiveResult] = await Promise.allSettled([
-      archiveRunbook(runbook.id, actor.id),
-      createServiceBinding(
-        service.id,
-        {
-          runbookId: runbook.id,
-          mode: 'MANUAL',
-          versionStrategy: 'LATEST_PUBLISHED',
-          enabled: true,
-          inputValues: {},
-        },
-        actor.id
-      ),
-    ]);
-
-    expect(archiveResult.status).toBe('fulfilled');
-
-    // Invariant: An active binding MUST NEVER be left enabled on an archived runbook!
-    const bindings = await testPrisma.serviceRunbookBinding.findMany({
+    let pending: Promise<PromiseSettledResult<unknown>[]> | undefined;
+    const waiting = async () => {
+      const rows = await testPrisma.$queryRaw<{ count: bigint }[]>`
+        SELECT count(*) FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'
+          AND query LIKE '%FROM "Runbook"%'
+      `;
+      return Number(rows[0].count);
+    };
+    // Hold the parent without changing it. Queue binding first and archive second:
+    // the archive takes its serializable snapshot before the binding can insert.
+    // With a read-committed binding transaction, archive misses that new row.
+    await testPrisma.$transaction(
+      async holder => {
+        await holder.$queryRaw`SELECT id FROM "Runbook" WHERE id = ${runbook.id} FOR UPDATE`;
+        const binding = createServiceBinding(
+          service.id,
+          {
+            runbookId: runbook.id,
+            mode: 'MANUAL',
+            versionStrategy: 'LATEST_PUBLISHED',
+            enabled: true,
+            inputValues: {},
+          },
+          actor.id
+        );
+        await expect.poll(waiting, { timeout: 5_000, interval: 20 }).toBe(1);
+        const archive = archiveRunbook(runbook.id, actor.id);
+        pending = Promise.allSettled([archive, binding]);
+        await expect.poll(waiting, { timeout: 5_000, interval: 20 }).toBe(2);
+      },
+      { timeout: 15_000 }
+    );
+    expect(pending).toBeDefined();
+    const outcomes = await pending!;
+    expect(outcomes.map(result => result.status)).toEqual(['fulfilled', 'fulfilled']);
+    expect(
+      (await testPrisma.runbook.findUniqueOrThrow({ where: { id: runbook.id } })).archivedAt
+    ).not.toBeNull();
+    const bindings = await testPrisma.serviceAutomationRule.findMany({
       where: { runbookId: runbook.id },
     });
-    expect(bindings.every(b => !b.enabled)).toBe(true);
+    expect(bindings).toHaveLength(1);
+    expect(bindings[0].enabled).toBe(false);
   });
 
   it('certifies replaceBindingTrigger rejects on archived runbook', async () => {
@@ -640,7 +653,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     );
 
     // Create MANUAL and AUTOMATIC bindings that are enabled
-    await testPrisma.serviceRunbookBinding.createMany({
+    await testPrisma.serviceAutomationRule.createMany({
       data: [
         {
           runbookId: runbook.id,
@@ -663,7 +676,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     await archiveRunbook(runbook.id, actor.id);
 
     // Invariant 1: Archive disables ALL bindings
-    const bindingsAfterArchive = await testPrisma.serviceRunbookBinding.findMany({
+    const bindingsAfterArchive = await testPrisma.serviceAutomationRule.findMany({
       where: { runbookId: runbook.id },
     });
     expect(bindingsAfterArchive.every(b => !b.enabled)).toBe(true);
@@ -672,7 +685,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     await restoreRunbook(runbook.id, actor.id);
 
     // Invariant 2: Restoration leaves ALL bindings disabled for safety
-    const bindingsAfterRestore = await testPrisma.serviceRunbookBinding.findMany({
+    const bindingsAfterRestore = await testPrisma.serviceAutomationRule.findMany({
       where: { runbookId: runbook.id },
     });
     expect(bindingsAfterRestore.length).toBe(2);

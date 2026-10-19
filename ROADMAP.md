@@ -15,12 +15,18 @@ This roadmap communicates direction, not a delivery date or support commitment. 
 - [x] Integrated and split runtime deployment through Compose, Swarm, Helm, and Kustomize
 - [x] Source-verified 2.0 documentation, runtime journeys, public API checks, and release certification
 
-## Future direction
+## OpsKnight 2.1 — planned milestone
 
-No 2.1 date is committed. Candidate work will be scoped and scheduled before it becomes a release milestone.
+No delivery date is committed. Items will be scoped and scheduled before they become a release gate.
 
-- [ ] In-product webhook payload simulation and delivery verification
-- [ ] Additional status-page isolation and custom-domain options
+- [ ] Richer enterprise REST API v2 — complete automation, runbook-rule, approval and lifecycle operations with revision-safe authoring, generated OpenAPI spec, and updated TypeScript and Python SDKs
+- [ ] Interactive runbooks and automated remediation — visual step builder, draft authoring and publication, version comparison, execution previews, and service-bound trigger rules
+- [ ] Streamlined OIDC setup — guided provider configuration, claim-to-role mapping preview, and diagnostic test-login flow
+- [ ] Emergency access — break-glass admin recovery path, bootstrap-code regeneration, and session-override controls for lockout scenarios
+
+## OpsKnight 2.2 — planned milestone
+
+- [ ] Official MCP (Model Context Protocol) server — expose OpsKnight operations as MCP tools, resources, and prompts so AI assistants (Claude, Cursor, VS Code Copilot, and other MCP-compatible clients) can query incidents, manage on-call, preview and execute runbooks, draft postmortems, and update status pages through natural conversation
 - [ ] Alert correlation and assisted incident learning
 - [ ] Configurable workflow triggers and response automation
 

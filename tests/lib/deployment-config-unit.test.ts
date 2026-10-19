@@ -204,7 +204,8 @@ describe('deployment configuration invariants', () => {
         },
       ])
       .mockResolvedValueOnce(readiness.REQUIRED_INDEXES.map(name => ({ name, valid: true })))
-      .mockResolvedValueOnce([{ pending: 0 }]);
+      .mockResolvedValueOnce([{ pending: 0 }])
+      .mockResolvedValueOnce([{ pending: false }]);
 
     expect(readiness.REQUIRED_INDEXES).not.toContain('idx_incident_next_sla_transition');
     await expect(
@@ -231,6 +232,90 @@ describe('deployment configuration invariants', () => {
     await expect(
       readiness.readinessProblem({ $queryRawUnsafe: query }, ['20260101000000_initial'])
     ).resolves.toContain('3 incident(s) await automation source classification');
+  });
+
+  it('blocks migration-skipping replicas until diagnostic indexes and historical projections are complete', async () => {
+    const readiness = require('../../scripts/wait-for-database-ready.cjs') as {
+      REQUIRED_INDEXES: string[];
+      readinessProblem: (
+        prisma: { $queryRawUnsafe: ReturnType<typeof vi.fn> },
+        expected: string[]
+      ) => Promise<string | null>;
+    };
+    expect(readiness.REQUIRED_INDEXES).toContain('UserDevice_diagnostic_projection_pending_idx');
+    const indexes = readiness.REQUIRED_INDEXES.map(name => ({ name, valid: true }));
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(indexes)
+      .mockResolvedValueOnce([{ pending: 0 }])
+      .mockResolvedValueOnce([{ pending: true }]);
+    await expect(readiness.readinessProblem({ $queryRawUnsafe: query }, [])).resolves.toContain(
+      'projection is not complete'
+    );
+    const missing = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(
+        indexes.filter(index => index.name !== 'UserDevice_diagnostic_activity_idx')
+      );
+    await expect(readiness.readinessProblem({ $queryRawUnsafe: missing }, [])).resolves.toContain(
+      'UserDevice_diagnostic_activity_idx'
+    );
+  });
+
+  it('preserves every CodeQL finding while reconciling the legacy scan identity', () => {
+    const workflow = YAML.parse(read('.github/workflows/security.yml')) as {
+      jobs: { sast: { steps: Array<{ name: string; run?: string }> } };
+    };
+    const step = workflow.jobs.sast.steps.find(
+      item => item.name === 'Map complete results to the legacy analysis identity'
+    );
+    expect(step?.run).toBeTruthy();
+    const script = step!.run!.split("node - <<'NODE'\n")[1].split('\nNODE')[0];
+    const directory = fs.mkdtempSync(
+      path.join(require('node:os').tmpdir(), 'opsknight-codeql-identity-')
+    );
+    const report = {
+      version: '2.1.0',
+      runs: [
+        {
+          tool: { driver: { name: 'CodeQL' } },
+          automationDetails: { id: '.github/workflows/security.yml:codeql/' },
+          results: [
+            {
+              ruleId: 'security/high-fixture',
+              level: 'error',
+              message: { text: 'Retain the full finding' },
+              locations: [
+                {
+                  physicalLocation: {
+                    artifactLocation: { uri: 'src/example.ts' },
+                    region: { startLine: 1 },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    try {
+      fs.mkdirSync(path.join(directory, 'codeql-results'));
+      const file = path.join(directory, 'codeql-results/javascript.sarif');
+      fs.writeFileSync(file, JSON.stringify(report));
+      const result = spawnSync(process.execPath, ['-e', script], {
+        cwd: directory,
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(0);
+      const legacy = JSON.parse(fs.readFileSync(file, 'utf8')) as typeof report;
+      expect(legacy.runs[0].results).toEqual(report.runs[0].results);
+      expect(legacy.runs[0].tool).toEqual(report.runs[0].tool);
+      expect(legacy.runs[0].automationDetails.id).toBe('.github/workflows/security.yml:sast/');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('does not allocate an unused standalone postgres PVC', () => {
@@ -417,7 +502,7 @@ describe('deployment configuration invariants', () => {
     const restore = read('deploy/scripts/drills/verify-backup-restore.sh');
 
     expect(values).toContain('topologySpreadConstraints:');
-    expect(deployment).toContain('maxUnavailable: 0');
+    expect(deployment).toContain('type: Recreate');
     expect(deployment).toContain('terminationGracePeriodSeconds:');
     expect(enterprise).toContain('replicaCount: 3');
     expect(enterprise).toContain('minAvailable: 2');
@@ -603,8 +688,10 @@ describe('deployment configuration invariants', () => {
     expect(workflow).toContain('incident-meeting-concurrency.test.ts');
     expect(compose).toContain('migration:');
     expect(compose).toContain("OPSKNIGHT_MIGRATION_ONLY: 'true'");
-    expect(compose.match(/OPSKNIGHT_SKIP_MIGRATIONS: 'true'/g)).toHaveLength(2);
-    expect(compose.match(/condition: service_completed_successfully/g)).toHaveLength(2);
+    // web, web-direct (REST v2 unproxied topology) and worker: every app service waits for the
+    // single migration owner and skips migrations itself.
+    expect(compose.match(/OPSKNIGHT_SKIP_MIGRATIONS: 'true'/g)).toHaveLength(3);
+    expect(compose.match(/condition: service_completed_successfully/g)).toHaveLength(3);
   });
 
   it('accepts matching release tags while keeping only stable tags latest-eligible', () => {
@@ -765,14 +852,14 @@ describe('deployment configuration invariants', () => {
     // Default split capacity within budget
     const defaultSplit = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'split' });
     expect(defaultSplit.safe).toBe(true);
-    expect(defaultSplit.totalDemand).toBe(32);
-    expect(defaultSplit.headroom).toBe(48);
+    expect(defaultSplit.totalDemand).toBe(33);
+    expect(defaultSplit.headroom).toBe(47);
 
     // Integrated mode accounts for webReplicas * webPool
     const singleIntegrated = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'integrated' });
     expect(singleIntegrated.safe).toBe(true);
-    expect(singleIntegrated.totalDemand).toBe(10);
-    expect(singleIntegrated.headroom).toBe(70);
+    expect(singleIntegrated.totalDemand).toBe(11);
+    expect(singleIntegrated.headroom).toBe(69);
 
     const multiIntegrated = calculateRuntimeCapacity({
       OPSKNIGHT_RUNTIME_MODE: 'integrated',
@@ -780,8 +867,8 @@ describe('deployment configuration invariants', () => {
       DATABASE_POOL_SIZE_WEB: '10',
     });
     expect(multiIntegrated.safe).toBe(true);
-    expect(multiIntegrated.totalDemand).toBe(30);
-    expect(multiIntegrated.headroom).toBe(50);
+    expect(multiIntegrated.totalDemand).toBe(33);
+    expect(multiIntegrated.headroom).toBe(47);
 
     // Overflow budget triggers failure
     const overflow = calculateRuntimeCapacity({
@@ -789,7 +876,7 @@ describe('deployment configuration invariants', () => {
       DATABASE_MAX_CONNECTIONS: '25',
     });
     expect(overflow.safe).toBe(false);
-    expect(overflow.headroom).toBe(-7);
+    expect(overflow.headroom).toBe(-8);
 
     // PgBouncer bounds web connection demand
     const pgbouncerBounded = calculateRuntimeCapacity({
@@ -802,7 +889,7 @@ describe('deployment configuration invariants', () => {
     });
     expect(pgbouncerBounded.safe).toBe(true);
     expect(pgbouncerBounded.webConnections).toBe(15);
-    expect(pgbouncerBounded.totalDemand).toBe(37);
+    expect(pgbouncerBounded.totalDemand).toBe(38);
 
     // Fail-closed input handling: reject malformed numbers, booleans, negative counts
     expect(() => calculateRuntimeCapacity({ WEB_REPLICAS: '100foo' })).toThrow(
@@ -860,8 +947,8 @@ describe('deployment configuration invariants', () => {
       SWARM_REPLICAS_STATUS_PROJECTOR: '2',
     });
     expect(swarmHa.safe).toBe(true);
-    expect(swarmHa.totalDemand).toBe(64);
-    expect(swarmHa.headroom).toBe(16);
+    expect(swarmHa.totalDemand).toBe(66);
+    expect(swarmHa.headroom).toBe(14);
 
     // HA Swarm capacity preflight with PgBouncer (2 replicas each)
     const swarmHaPgBouncer = calculateRuntimeCapacity({
@@ -877,8 +964,8 @@ describe('deployment configuration invariants', () => {
       SWARM_REPLICAS_STATUS_PROJECTOR: '2',
     });
     expect(swarmHaPgBouncer.safe).toBe(true);
-    expect(swarmHaPgBouncer.totalDemand).toBe(74);
-    expect(swarmHaPgBouncer.headroom).toBe(6);
+    expect(swarmHaPgBouncer.totalDemand).toBe(76);
+    expect(swarmHaPgBouncer.headroom).toBe(4);
 
     // Swarm deploy.sh enforces fail-closed split image contract
     const deployScript = read('deploy/swarm/scripts/deploy.sh');
@@ -927,11 +1014,15 @@ describe('deployment configuration invariants', () => {
       'port: 443'
     );
     const setupUi = read('src/components/runbooks/AgentSetupInstructions.tsx');
-    for (const method of ['Compose', 'Swarm', 'Helm', 'Kustomize', 'Linux']) {
+    for (const method of ['Compose', 'Docker', 'Podman', 'Swarm', 'Helm', 'Kustomize', 'Linux']) {
       expect(setupUi).toContain(`>${method}<`);
     }
-    expect(setupUi).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
-    expect(setupUi).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
+    expect(setupUi).toContain('agentSetupCommands');
+    const setupCommands = read('src/lib/runbooks/agent-setup-commands.ts');
+    expect(setupCommands).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
+    expect(setupCommands).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
+    expect(setupCommands).toContain('docker volume create');
+    expect(setupCommands).toContain('podman volume create');
     expect(read('agent/Dockerfile')).toContain('USER opsknight-agent');
     expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bbash\b/);
     expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bpodman\b/);
@@ -948,7 +1039,7 @@ describe('deployment configuration invariants', () => {
     const agentK8sParsed = YAML.parse(agentK8sKustomization) as {
       patches?: Array<{ target?: { kind?: string }; patch?: string }>;
     };
-    const npPatch = agentK8sParsed.patches?.find((p) => p.target?.kind === 'NetworkPolicy')?.patch;
+    const npPatch = agentK8sParsed.patches?.find(p => p.target?.kind === 'NetworkPolicy')?.patch;
     expect(npPatch).toBeDefined();
     const np = YAML.parse(npPatch!) as {
       spec?: {
@@ -958,8 +1049,8 @@ describe('deployment configuration invariants', () => {
         }>;
       };
     };
-    const k8sApiEgress = np.spec?.egress?.find((e) =>
-      e.ports?.some((p) => p.port === 443 || p.port === 6443)
+    const k8sApiEgress = np.spec?.egress?.find(e =>
+      e.ports?.some(p => p.port === 443 || p.port === 6443)
     );
     expect(k8sApiEgress?.to).toBeDefined();
     expect(k8sApiEgress?.to?.[0]?.ipBlock?.cidr).toBe('10.96.0.0/12');

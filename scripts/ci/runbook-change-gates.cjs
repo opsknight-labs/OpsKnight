@@ -14,6 +14,9 @@ const SHARED_FILES = new Set([
   'vitest.setup.ts',
   'Dockerfile',
   'docker-entrypoint.sh',
+  'scripts/wait-for-runtime-database.cjs',
+  'scripts/wait-for-database-ready.cjs',
+  'tests/ci/runtime-database-readiness.test.cjs',
   'env.example',
   'scripts/ci/runbook-change-gates.cjs',
   'tests/ci/runbook-change-gates.test.cjs',
@@ -32,6 +35,7 @@ function classifyChanges(paths) {
     }
     // Shared libraries include authorization, encryption, Prisma, and worker dependencies.
     if (
+      path.startsWith('monitoring/prometheus/') ||
       path.startsWith('agent/') ||
       path.startsWith('src/lib/') ||
       path.startsWith('src/components/runbooks/') ||

@@ -1,0 +1,27 @@
+{
+  "measuredAt": "2026-10-14T03:55:01.820Z",
+  "context": "kind-rbe-engine-cert",
+  "evidence": [
+    {
+      "topology": "helm",
+      "enrollment": "PASS",
+      "readiness": "PASS",
+      "drainBlocksReadiness": "PASS",
+      "drainPreservesLiveness": "PASS",
+      "restartIdentity": "PASS"
+    },
+    {
+      "topology": "kustomize",
+      "enrollment": "PASS",
+      "readiness": "PASS",
+      "drainBlocksReadiness": "PASS",
+      "drainPreservesLiveness": "PASS",
+      "restartIdentity": "PASS"
+    }
+  ],
+  "limitations": [
+    "Locally built arm64 candidate",
+    "No published image pull, real ingress, application HA or physical host certification"
+  ],
+  "candidateImageId": "sha256:bbc6d31608dfdae280e7461d5ab2a5b5940617b01c7d53333e8e6673512ed26b"
+}

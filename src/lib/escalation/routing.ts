@@ -48,6 +48,8 @@ export async function resolveIncidentResponderRouting(
           // A pinned definition remains usable independently of today's archive state.
           archivedAt: null,
           archivedBy: null,
+          // Synthetic in-memory policy: REST resource revisions apply only to stored rows.
+          revision: 0,
           createdAt: decision.createdAt,
           updatedAt: decision.createdAt,
           steps: snapshot.steps.map(({ conditions: _conditions, ...step }) => ({

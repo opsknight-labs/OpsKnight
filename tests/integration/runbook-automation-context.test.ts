@@ -266,6 +266,9 @@ async function bind(serviceId: string, actorId: string, options: BindOptions) {
     },
     actorId
   );
+  // Saving an Automatic rule or its trigger pauses it; execution tests need it active.
+  if (options.mode === 'AUTOMATIC')
+    await db.serviceAutomationRule.update({ where: { id: binding.id }, data: { enabled: true } });
   return { runbook, version, binding, trigger };
 }
 
@@ -669,7 +672,7 @@ describeIfRealDB('runbook automation context (real PostgreSQL)', () => {
       })
     ).toMatchObject({ resolvedTargetAgentPoolId: prodPool.id });
 
-    await db.serviceRunbookBinding.update({
+    await db.serviceAutomationRule.update({
       where: { id: byCluster.binding.id },
       data: { enabled: false },
     });
@@ -798,7 +801,7 @@ describeIfRealDB('runbook automation context (real PostgreSQL)', () => {
       where: { incidentId },
     });
     const context = parseResponseContext(decision.responseContext)!;
-    const current = await db.serviceRunbookBinding.findUniqueOrThrow({
+    const current = await db.serviceAutomationRule.findUniqueOrThrow({
       where: { id: binding.id },
     });
     expect(execution.responseContext).toEqual(decision.responseContext);
@@ -806,7 +809,7 @@ describeIfRealDB('runbook automation context (real PostgreSQL)', () => {
       evaluationSource: 'MONITORING',
       trigger: {
         bindingId: binding.id,
-        configRevision: current.configRevision,
+        configRevision: current.configurationRevision,
         triggerId: trigger.id,
         triggerFingerprint: execution.triggerFingerprint,
       },
@@ -828,7 +831,7 @@ describeIfRealDB('runbook automation context (real PostgreSQL)', () => {
       { contextInputMappings: [], inputValues: { cluster: 'static' } },
       actor.id
     );
-    expect(edited.configRevision).toBe(current.configRevision + 1);
+    expect(edited.configurationRevision).toBe(current.configurationRevision + 1);
     const after = await db.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } });
     expect(after.executionPlan).toEqual(pinned);
     expect(after.inputValues).toEqual({ cluster: 'eu-1' });
@@ -863,9 +866,13 @@ describeIfRealDB('runbook automation context (real PostgreSQL)', () => {
       mode: 'AUTOMATIC',
       conditions: [{ field: 'automation.cluster', operator: 'EQUALS', value: 'eu-1' }],
     });
-    const start = (incidentId: string, evaluationSource?: 'MONITORING' | 'MANUAL') => {
+    const start = async (incidentId: string, evaluationSource?: 'MONITORING' | 'MANUAL') => {
       const sourceEventId = crypto.randomUUID();
+      const { configurationRevision } = await db.serviceAutomationRule.findUniqueOrThrow({
+        where: { id: binding.id },
+      });
       return startTriggeredRunbookExecution({
+        expectedRuleRevision: configurationRevision,
         runbookId: binding.runbookId,
         runbookVersionId: binding.runbookVersionId!,
         incidentId,
@@ -888,7 +895,7 @@ describeIfRealDB('runbook automation context (real PostgreSQL)', () => {
     });
     await expect(start(noContext.id)).rejects.toThrow('AUTOMATION_NOT_AUTHORIZED');
     const matching = await ingest(live.service.id, { cluster: 'eu-1' });
-    await db.serviceRunbookBinding.update({
+    await db.serviceAutomationRule.update({
       where: { id: binding.id },
       data: { runOnMonitoringIncidents: false },
     });

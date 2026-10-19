@@ -1,3 +1,5 @@
+import { sessionAuthenticationLabel } from '@/lib/session-authentication-label';
+import { getAuthenticationPolicy, checkAuthenticationPolicy } from '@/lib/authentication-policy';
 import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
@@ -40,6 +42,8 @@ export default async function SecuritySettingsPage() {
       })
     : null;
 
+  const passwordOperationsAllowed = (await checkAuthenticationPolicy('PASSWORD_WRITE')).allowed;
+  const systemPolicy = await getAuthenticationPolicy();
   const hasPassword = Boolean(user?.passwordHash);
   const isSsoLinked = Boolean(
     user?.lastOidcSync || (user?.oidcIdentities && user.oidcIdentities.length > 0)
@@ -117,7 +121,7 @@ export default async function SecuritySettingsPage() {
               variant="outline"
               className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-xs"
             >
-              {isSsoLinked ? 'SSO Federated' : 'Direct Password'}
+              {isSsoLinked ? 'Identity Linked' : 'Identity Not Linked'}
             </Badge>
             <Badge
               variant="outline"
@@ -136,9 +140,9 @@ export default async function SecuritySettingsPage() {
           },
           {
             label: 'Auth Method',
-            value: isSsoLinked ? 'SSO Link' : 'Password',
+            value: sessionAuthenticationLabel(session?.authenticationMethod),
             icon: <Fingerprint className="h-3.5 w-3.5" />,
-            subtext: isSsoLinked ? 'OIDC Active' : 'Direct login',
+            subtext: 'Current session method',
           },
           {
             label: 'Protection',
@@ -160,7 +164,14 @@ export default async function SecuritySettingsPage() {
           </p>
         }
       >
-        <SecurityForm hasPassword={hasPassword} />
+        {passwordOperationsAllowed ? (
+          <SecurityForm hasPassword={hasPassword} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Password creation and changes are blocked by the system authentication policy. Use your
+            organization&apos;s identity provider to manage your sign-in credentials.
+          </p>
+        )}
       </SettingsSection>
 
       {/* Section 2: Signed-in Sessions */}
@@ -185,8 +196,8 @@ export default async function SecuritySettingsPage() {
           isAdmin ? (
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                As an administrator, you can configure workspace-wide OIDC / SAML providers in
-                System Settings.
+                As an administrator, you can configure workspace-wide OIDC providers in System
+                Settings.
               </p>
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
                 <Link href="/settings/system?section=sso">
@@ -202,10 +213,14 @@ export default async function SecuritySettingsPage() {
           )
         }
       >
+        <p className="text-sm">
+          System policy: {systemPolicy.mode.replaceAll('_', ' ')}. Current session method:{' '}
+          {sessionAuthenticationLabel(session?.authenticationMethod)}.
+        </p>
         <div className="divide-y text-sm">
           <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <p className="font-medium text-foreground text-sm">Authentication Mode</p>
+              <p className="font-medium text-foreground text-sm">Linked Identity</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {isSsoLinked
                   ? 'Your account is linked to enterprise identity providers (OIDC / OAuth).'
@@ -218,7 +233,7 @@ export default async function SecuritySettingsPage() {
                   variant="outline"
                   className="bg-primary/10 text-primary border-primary/20 text-xs"
                 >
-                  SSO Active
+                  Identity Linked
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-xs text-muted-foreground">

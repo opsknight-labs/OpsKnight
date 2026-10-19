@@ -4,7 +4,7 @@ import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCachedDashboardMetrics, getCachedRecentIncidents } from '@/lib/realtime-cache';
 import {
-  getRequestSessionJti,
+  getRequestStreamAuthentication,
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
   type StreamAuthorization,
@@ -23,11 +23,13 @@ export async function GET(req: NextRequest) {
     // Get current user for authorization
     const user = await getCurrentUser();
     const expectedTokenVersion = user.tokenVersion ?? 0;
-    const sessionJti = await getRequestSessionJti(req);
+    const streamAuthentication = await getRequestStreamAuthentication(req);
+    const sessionJti = streamAuthentication?.sessionJti;
     const initialAuthorization = await resolveStreamAuthorization(
       user.id,
       expectedTokenVersion,
-      sessionJti
+      sessionJti,
+      streamAuthentication
     );
     if (!initialAuthorization) {
       return new Response('Unauthorized', { status: 401 });
@@ -185,7 +187,8 @@ export async function GET(req: NextRequest) {
             const nextAuthorization = await resolveStreamAuthorization(
               user.id,
               expectedTokenVersion,
-              sessionJti
+              sessionJti,
+              streamAuthentication
             );
             if (
               !nextAuthorization ||

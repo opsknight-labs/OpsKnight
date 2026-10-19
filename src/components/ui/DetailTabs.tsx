@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, type ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import React, { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +21,7 @@ export type DetailTabsProps = {
   activeTab?: string;
   onTabChange?: (tabId: string) => void;
   syncWithUrl?: boolean;
+  navigationMode?: 'shallow' | 'server';
   urlParamName?: string;
   layout?: 'grid' | 'auto';
   className?: string;
@@ -36,6 +37,7 @@ export default function DetailTabs({
   activeTab: controlledActiveTab,
   onTabChange,
   syncWithUrl = true,
+  navigationMode = 'shallow',
   urlParamName = 'tab',
   layout = 'grid',
   className,
@@ -66,10 +68,16 @@ export default function DetailTabs({
 
   // Optimistic local state for instantaneous 0ms tab switching & zero lag
   const [selectedTab, setSelectedTab] = useState(resolvedUrlTab);
+  const [previousUrlTab, setPreviousUrlTab] = useState(resolvedUrlTab);
+  const selection = useRef(resolvedUrlTab);
 
-  // Synchronize internal state if controlled tab or external URL query param changes
-  useEffect(() => {
+  // Reset URL-derived state before committing a stale tab on external navigation.
+  if (previousUrlTab !== resolvedUrlTab) {
+    setPreviousUrlTab(resolvedUrlTab);
     setSelectedTab(resolvedUrlTab);
+  }
+  useEffect(() => {
+    selection.current = resolvedUrlTab;
   }, [resolvedUrlTab]);
 
   // Listen to popstate (browser back/forward) to update optimistic state
@@ -81,8 +89,10 @@ export default function DetailTabs({
         const urlParams = new URLSearchParams(window.location.search);
         const urlTab = urlParams.get(urlParamName);
         if (urlTab && validTabIds.has(urlTab)) {
+          selection.current = urlTab;
           setSelectedTab(urlTab);
         } else {
+          selection.current = initialTab;
           setSelectedTab(initialTab);
         }
       }
@@ -93,7 +103,17 @@ export default function DetailTabs({
   }, [syncWithUrl, urlParamName, validTabIds, initialTab]);
 
   const handleTabChange = (nextTabId: string) => {
+    // Mouse/focus activation can arrive before React commits the selected value.
+    if (nextTabId === selection.current) return;
+    if (syncWithUrl && typeof window !== 'undefined') {
+      const change = new CustomEvent('opsknight:settings-navigation', {
+        cancelable: true,
+        detail: { parameter: urlParamName, value: nextTabId },
+      });
+      if (!window.dispatchEvent(change)) return;
+    }
     // 1. Instant 0ms local state update (immediate visual tab highlight & content switch)
+    selection.current = nextTabId;
     setSelectedTab(nextTabId);
 
     if (onTabChange) {
@@ -113,7 +133,8 @@ export default function DetailTabs({
         const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
 
         // Use window.history.replaceState for instant URL bar update without triggering blocking RSC re-fetch
-        window.history.replaceState(null, '', newUrl);
+        if (navigationMode === 'server') router.replace(newUrl, { scroll: false });
+        else window.history.replaceState(null, '', newUrl);
       }
     }
   };
@@ -124,10 +145,10 @@ export default function DetailTabs({
     <Tabs value={currentTab} onValueChange={handleTabChange} className={cn('space-y-6', className)}>
       {/* Centralized Elevated Navigation Header */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="overflow-x-auto pb-1 scrollbar-none">
+        <div className="overflow-x-auto pb-1 scrollbar-none flex-1 min-w-0 w-full">
           <TabsList
             className={cn(
-              'h-auto rounded-xl border border-border/80 bg-muted/40 p-1 backdrop-blur-xs shadow-2xs',
+              'h-auto w-full rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
               layout === 'grid' && [
                 'grid min-w-[540px]',
                 tabs.length === 2 && 'grid-cols-2',
@@ -136,7 +157,7 @@ export default function DetailTabs({
                 tabs.length === 5 && 'grid-cols-5',
                 tabs.length >= 6 && 'grid-cols-6',
               ],
-              layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 gap-1',
+              layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 flex-wrap sm:flex-nowrap',
               listClassName
             )}
           >
@@ -146,13 +167,14 @@ export default function DetailTabs({
                 value={tab.id}
                 disabled={tab.disabled}
                 className={cn(
-                  'group relative flex items-center justify-center gap-2 rounded-lg py-2.5 px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer',
-                  'text-muted-foreground hover:text-foreground hover:bg-background/50',
-                  'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:shadow-xs data-[state=active]:ring-1 data-[state=active]:ring-border/60'
+                  'group relative flex items-center justify-center gap-2 rounded-lg py-2.5 px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
+                  'border border-border/40 bg-background/50 text-muted-foreground/90 shadow-2xs',
+                  'hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]',
+                  'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20'
                 )}
               >
                 {tab.icon && (
-                  <span className="shrink-0 transition-colors group-data-[state=active]:text-primary">
+                  <span className="shrink-0 transition-transform duration-150 group-hover:scale-110 group-data-[state=active]:text-primary group-hover:text-primary">
                     {tab.icon}
                   </span>
                 )}
@@ -162,8 +184,8 @@ export default function DetailTabs({
                 {tab.count !== undefined && tab.count !== null && (
                   <span
                     className={cn(
-                      'ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-semibold transition-colors',
-                      'bg-muted-foreground/10 text-muted-foreground',
+                      'ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition-colors',
+                      'bg-muted-foreground/15 text-muted-foreground',
                       'group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary group-data-[state=active]:font-bold'
                     )}
                   >
@@ -172,7 +194,11 @@ export default function DetailTabs({
                 )}
 
                 {/* Custom Badge Tag */}
-                {tab.badge && <span className="ml-1 shrink-0">{tab.badge}</span>}
+                {tab.badge && (
+                  <span className="ml-0.5 shrink-0 transition-transform duration-150 group-hover:scale-105">
+                    {tab.badge}
+                  </span>
+                )}
               </TabsTrigger>
             ))}
           </TabsList>

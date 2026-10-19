@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/hooks/useHydrated';
+
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -22,6 +24,7 @@ type Props = {
   defaultCallbackUrl?: string;
   errorCode?: string | null;
   passwordSet?: boolean;
+  sessionRevoked?: boolean;
   ssoError?: string | null;
   ssoEnabled: boolean;
   ssoProviderType?: string | null;
@@ -35,6 +38,8 @@ function formatError(message: string | null | undefined) {
   // NextAuth appends ?error=SessionRequired on unauthenticated redirects — not a real error
   if (message === 'SessionRequired') return '';
   if (message === 'CredentialsSignin') return 'Invalid email or password';
+  if (message === 'OIDC_CONFIGURATION_CHANGED')
+    return 'SSO settings changed during sign-in. Please start a new sign-in.';
   if (message === 'AccessDenied') return 'Access denied';
   if (message === 'SessionExpired') return 'Your session has expired. Please sign in again.';
   if (message === 'OAuthSignin' || message === 'OAuthCallback')
@@ -58,6 +63,7 @@ export default function LoginClient({
   defaultCallbackUrl,
   errorCode,
   passwordSet,
+  sessionRevoked,
   ssoError,
   ssoEnabled,
   ssoProviderType,
@@ -66,6 +72,7 @@ export default function LoginClient({
   breakGlassOnly,
 }: Props) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const sessionPolicy = useSyncExternalStore(
@@ -195,6 +202,14 @@ export default function LoginClient({
           </p>
         </div>
 
+        {sessionRevoked && !error && (
+          <div
+            role="status"
+            className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
+          >
+            Your session was revoked successfully. Sign in again to continue.
+          </div>
+        )}
         {/* Password Set Success Alert */}
         {showPasswordSet && !error && (
           <div
@@ -214,12 +229,13 @@ export default function LoginClient({
             </div>
             <button
               type="button"
+              data-icon-button
               onClick={() => setShowPasswordSet(false)}
-              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 transition-colors cursor-pointer"
+              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-slate-300/70 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 dark:border-white/25 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Dismiss message"
               title="Dismiss"
             >
-              <X className="h-3.5 w-3.5 stroke-[2.25]" />
+              <X className="h-3.5 w-3.5 stroke-[2.5]" />
             </button>
           </div>
         )}
@@ -245,12 +261,13 @@ export default function LoginClient({
             </div>
             <button
               type="button"
+              data-icon-button
               onClick={() => setError('')}
-              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 transition-colors cursor-pointer"
+              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
               aria-label="Dismiss error"
               title="Dismiss"
             >
-              <X className="h-3.5 w-3.5 stroke-[2.25]" />
+              <X className="h-3.5 w-3.5 stroke-[2.5]" />
             </button>
           </div>
         )}
@@ -264,7 +281,7 @@ export default function LoginClient({
               providerLabel={ssoProviderLabel}
               onClick={handleSSO}
               loading={isSSOLoading}
-              disabled={isSubmitting || isSuccess}
+              disabled={!hydrated || isSubmitting || isSuccess}
             />
             {localAuthEnabled && (
               <div className="relative my-4 flex items-center justify-center">
@@ -309,6 +326,7 @@ export default function LoginClient({
             {/* Work Email */}
             <div>
               <label
+                htmlFor="login-email"
                 className={cn(
                   'block text-xs font-medium mb-1.5 transition-colors',
                   emailTouched && email && !isEmailValid
@@ -323,6 +341,7 @@ export default function LoginClient({
                   <Mail className="h-4 w-4" />
                 </div>
                 <input
+                  id="login-email"
                   type="email"
                   required
                   value={email}
@@ -333,7 +352,7 @@ export default function LoginClient({
                   onBlur={() => setEmailTouched(true)}
                   className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
                   placeholder="you@company.com"
-                  disabled={isSubmitting || isSuccess}
+                  disabled={!hydrated || isSubmitting || isSuccess}
                 />
                 {emailTouched && email && !isEmailValid && (
                   <div className="absolute right-3 z-10 text-red-500">
@@ -350,7 +369,10 @@ export default function LoginClient({
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+              <label
+                htmlFor="login-password"
+                className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+              >
                 Password
               </label>
               <div className="group relative flex items-center">
@@ -358,6 +380,7 @@ export default function LoginClient({
                   <Lock className="h-4 w-4" />
                 </div>
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
@@ -370,7 +393,7 @@ export default function LoginClient({
                   }}
                   className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
                   placeholder="Enter your password"
-                  disabled={isSubmitting || isSuccess}
+                  disabled={!hydrated || isSubmitting || isSuccess}
                 />
                 <button
                   type="button"
@@ -391,7 +414,7 @@ export default function LoginClient({
                     onClick={() =>
                       !isSubmitting && !isSuccess && setRememberMeOverride(!rememberMe)
                     }
-                    disabled={isSubmitting || isSuccess}
+                    disabled={!hydrated || isSubmitting || isSuccess}
                     className="flex items-center gap-2.5 cursor-pointer select-none group focus:outline-none disabled:opacity-50"
                   >
                     {/* Custom checkbox — focus ring shown on the box itself for keyboard users */}
@@ -493,6 +516,11 @@ export default function LoginClient({
           </form>
         )}
 
+        <p className="text-center text-sm pt-4">
+          <Link href="/login/emergency" className="underline">
+            Emergency Access
+          </Link>
+        </p>
         {/* Setup Guide Link */}
         <div className="text-center text-xs text-slate-500 dark:text-slate-400 font-medium pt-3.5">
           Setting up OpsKnight?{' '}

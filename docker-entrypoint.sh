@@ -82,6 +82,7 @@ if [ "${OPSKNIGHT_SKIP_MIGRATIONS:-}" = "true" ] || [ "${SKIP_MIGRATIONS:-}" = "
     if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
         export DATABASE_URL="${WEB_DATABASE_URL:-$RUNTIME_DATABASE_URL}"
     fi
+    node scripts/wait-for-runtime-database.cjs
     echo "🚀 Starting application..."
     export NEXT_RUNTIME=nodejs
     exec node server.js
@@ -169,6 +170,8 @@ install_voice_attempt_indexes() {
     return 0
 }
 
+node scripts/prepare-authentication-diagnostics.cjs || exit 1
+
 echo "🔄 Enforcing status platform indexes..."
 if ! install_status_platform_indexes; then
     echo "❌ Status platform index enforcement failed. Refusing to start without required indexes."
@@ -202,6 +205,7 @@ if [ "${OPSKNIGHT_MIGRATION_ONLY:-}" = "true" ]; then
     exit 0
 fi
 
+node scripts/wait-for-runtime-database.cjs
 echo "🚀 Starting application..."
 export NEXT_RUNTIME=nodejs
 exec node server.js

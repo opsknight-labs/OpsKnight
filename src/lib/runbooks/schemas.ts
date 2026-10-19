@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { parseInputDefault } from './input-values';
+import { MAX_SELECT_OPTIONS, selectOptionsIssue } from './input-options';
 import { runbookEvidenceSchema } from './evidence';
 import { schedulingLabelsSchema } from './labels';
 import { triggerConditionFieldSchema } from './conditions';
@@ -178,10 +179,28 @@ export type RunbookDefinitionInput = z.infer<typeof runbookDefinitionSchema>;
 // Runbook CRUD
 // ---------------------------------------------------------------------------
 
+export const runbookTagsSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .toLowerCase()
+      .min(1)
+      .max(40)
+      .regex(
+        /^[a-z0-9][a-z0-9._-]*$/,
+        'Tags use lowercase letters, numbers, dot, dash or underscore'
+      )
+  )
+  .max(20)
+  .transform(tags => [...new Set(tags)]);
+
 export const createRunbookSchema = z.object({
   name: runbookNameSchema,
   slug: runbookSlugSchema,
   description: runbookDescriptionSchema,
+  ownerTeamId: z.string().cuid().nullable().optional(),
+  tags: runbookTagsSchema.optional(),
 });
 
 export type CreateRunbookInput = z.infer<typeof createRunbookSchema>;
@@ -190,6 +209,8 @@ export const updateRunbookSchema = z.object({
   name: runbookNameSchema.optional(),
   slug: runbookSlugSchema.optional(),
   description: runbookDescriptionSchema.optional(),
+  ownerTeamId: z.string().cuid().nullable().optional(),
+  tags: runbookTagsSchema.optional(),
 });
 
 export type UpdateRunbookInput = z.infer<typeof updateRunbookSchema>;
@@ -228,9 +249,15 @@ export const runbookInputSchema = z
     defaultValue: z.string().max(2000).optional(),
     description: z.string().trim().max(1000).default(''),
     sequence: z.number().int().min(0).default(0),
+    options: z.array(z.string().trim().min(1).max(200)).max(MAX_SELECT_OPTIONS).optional(),
   })
   .strict()
   .superRefine((input, ctx) => {
+    const optionIssue = selectOptionsIssue(input);
+    if (optionIssue) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['options'], message: optionIssue });
+      return;
+    }
     try {
       parseInputDefault(input);
     } catch (error) {
@@ -269,6 +296,7 @@ export const runbookInputsSchema = z
 export const createServiceRunbookBindingSchema = z
   .object({
     runbookId: z.string().cuid(),
+    name: z.string().trim().max(200).optional(),
     runbookVersionId: z.string().cuid().optional(),
     enabled: z.boolean().default(true),
     mode: z.enum(RUNBOOK_BINDING_MODES).default('MANUAL'),
@@ -304,10 +332,11 @@ export const createServiceRunbookBindingSchema = z
     }
   });
 
-export type CreateServiceRunbookBindingInput = z.infer<typeof createServiceRunbookBindingSchema>;
+export type CreateServiceRunbookBindingInput = z.input<typeof createServiceRunbookBindingSchema>;
 
 export const updateServiceRunbookBindingSchema = z
   .object({
+    name: z.string().trim().max(200).optional(),
     runbookVersionId: z.string().cuid().optional().nullable(),
     enabled: z.boolean().optional(),
     mode: z.enum(RUNBOOK_BINDING_MODES).optional(),
@@ -543,6 +572,8 @@ export const runbookLibraryFilterSchema = z
     status: z.enum(['all', 'published', 'draft', 'archived']).optional(),
     tab: z.enum(['all', 'published', 'drafts', 'archived']).optional(),
     ownerId: z.string().cuid().optional(),
+    teamId: z.string().cuid().optional(),
+    tag: z.string().trim().toLowerCase().max(40).optional(),
     serviceId: z.string().cuid().optional(),
     page: z.coerce.number().int().positive().max(10000).default(1),
     pageSize: z.coerce.number().int().positive().max(100).default(20),

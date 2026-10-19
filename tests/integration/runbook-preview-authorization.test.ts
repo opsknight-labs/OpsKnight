@@ -63,7 +63,7 @@ async function fixture() {
     where: { id: runbook.id },
     data: { publishedVersionId: version.id },
   });
-  const binding = await testPrisma.serviceRunbookBinding.create({
+  const binding = await testPrisma.serviceAutomationRule.create({
     data: { runbookId: runbook.id, serviceId: service.id, versionStrategy: 'LATEST_PUBLISHED' },
   });
   const response = await actions.previewIncidentRunbookAction(incident.id, binding.id);
@@ -142,7 +142,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
         const service = await createTestService('Other binding');
         incidentId = (await createTestIncident('Identical context', service.id)).id;
         bindingId = (
-          await testPrisma.serviceRunbookBinding.create({
+          await testPrisma.serviceAutomationRule.create({
             data: { serviceId: service.id, runbookId: target.runbook.id },
           })
         ).id;
@@ -245,6 +245,9 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
   });
 
   it.each([
+    'missingRevision',
+    'staleRevision',
+    'otherRuleRevision',
     'missingIncident',
     'missingBinding',
     'missingTrigger',
@@ -262,7 +265,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
     'invalidOrCondition',
   ] as const)('rejects automatic execution with %s', async change => {
     const target = await fixture();
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { mode: 'AUTOMATIC', versionStrategy: 'PINNED', runbookVersionId: target.version.id },
     });
@@ -276,6 +279,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       serviceId: target.service.id,
       bindingId: target.binding.id,
       triggerId: trigger.id,
+      expectedRuleRevision: target.binding.configurationRevision,
       sourceEventId: 'automatic-source',
       triggerFingerprint: computeTriggerFingerprint({
         sourceEventId: 'automatic-source',
@@ -283,27 +287,40 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
         runbookVersionId: target.version.id,
       }),
     };
+    if (change === 'missingRevision') delete request.expectedRuleRevision;
+    if (change === 'staleRevision')
+      request.expectedRuleRevision = target.binding.configurationRevision + 1;
+    if (change === 'otherRuleRevision') {
+      const other = await testPrisma.serviceAutomationRule.create({
+        data: {
+          serviceId: target.service.id,
+          runbookId: target.runbook.id,
+          configurationRevision: 7,
+        },
+      });
+      request.expectedRuleRevision = other.configurationRevision;
+    }
     if (change === 'missingIncident') delete request.incidentId;
     if (change === 'missingBinding') delete request.bindingId;
     if (change === 'missingTrigger') delete request.triggerId;
     if (change === 'missingFingerprint') delete request.triggerFingerprint;
     if (change === 'manualBinding')
-      await testPrisma.serviceRunbookBinding.update({
+      await testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: { mode: 'MANUAL' },
       });
     if (change === 'suggestedBinding')
-      await testPrisma.serviceRunbookBinding.update({
+      await testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: { mode: 'SUGGESTED' },
       });
     if (change === 'disabledBinding')
-      await testPrisma.serviceRunbookBinding.update({
+      await testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: { enabled: false },
       });
     if (change === 'latestVersion')
-      await testPrisma.serviceRunbookBinding.update({
+      await testPrisma.serviceAutomationRule.update({
         where: { id: target.binding.id },
         data: { versionStrategy: 'LATEST_PUBLISHED' },
       });
@@ -362,7 +379,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
 
   it('starts a matching enabled automatic trigger and retains its exact fingerprint', async () => {
     const target = await fixture();
-    await testPrisma.serviceRunbookBinding.update({
+    await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { mode: 'AUTOMATIC', versionStrategy: 'PINNED', runbookVersionId: target.version.id },
     });
@@ -381,6 +398,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       incidentId: target.incident.id,
       bindingId: target.binding.id,
       triggerId: trigger.id,
+      expectedRuleRevision: target.binding.configurationRevision,
       sourceEventId: 'valid-event',
       triggerFingerprint,
     };

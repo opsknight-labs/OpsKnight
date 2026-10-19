@@ -5,17 +5,9 @@ import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { lockRunbookForUpdate } from './locking';
-import {
-  RunbookCannotDeleteError,
-  RunbookDefinitionError,
-  RunbookNotFoundError,
-} from './errors';
+import { RunbookCannotDeleteError, RunbookDefinitionError, RunbookNotFoundError } from './errors';
 
-export {
-  RunbookCannotDeleteError,
-  RunbookDefinitionError,
-  RunbookNotFoundError,
-};
+export { RunbookCannotDeleteError, RunbookDefinitionError, RunbookNotFoundError };
 import {
   computeDefinitionChecksum,
   parseRunbookDefinition,
@@ -37,6 +29,7 @@ function toInputCreateMany(inputs: RunbookInputInput[]) {
     defaultValue: input.defaultValue,
     description: input.description,
     sequence: input.sequence ?? index,
+    options: input.type === 'SELECT' ? (input.options ?? []) : [],
   }));
 }
 
@@ -72,10 +65,7 @@ export async function checkRunbookDeleteEligibility(
       },
       versions: {
         where: {
-          OR: [
-            { state: { in: ['PUBLISHED', 'RETIRED'] } },
-            { publishedAt: { not: null } },
-          ],
+          OR: [{ state: { in: ['PUBLISHED', 'RETIRED'] } }, { publishedAt: { not: null } }],
         },
         select: { id: true, version: true },
       },
@@ -115,8 +105,7 @@ export async function checkRunbookDeleteEligibility(
   if (hasBindings) {
     return {
       canDelete: false,
-      reason:
-        'Cannot delete: Runbook is attached to services. Remove all service bindings first.',
+      reason: 'Cannot delete: Runbook is attached to services. Remove all service bindings first.',
       hasExecutions,
       hasBindings,
       hasPublishedVersions,
@@ -158,11 +147,7 @@ export async function checkRunbookDeleteEligibility(
  * - Re-checks all eligibility conditions inside the same serializable transaction
  *   to eliminate any race condition where a draft could be published or bound concurrently.
  */
-export async function deleteRunbook(
-  runbookId: string,
-  actorId: string,
-  confirmationText: string
-) {
+export async function deleteRunbook(runbookId: string, actorId: string, confirmationText: string) {
   const trimmedConfirmation = (confirmationText ?? '').trim();
   if (!trimmedConfirmation) {
     throw new RunbookCannotDeleteError(
@@ -183,10 +168,7 @@ export async function deleteRunbook(
         },
         versions: {
           where: {
-            OR: [
-              { state: { in: ['PUBLISHED', 'RETIRED'] } },
-              { publishedAt: { not: null } },
-            ],
+            OR: [{ state: { in: ['PUBLISHED', 'RETIRED'] } }, { publishedAt: { not: null } }],
           },
           select: { id: true },
         },
@@ -298,7 +280,7 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
 
     // Safety rule: All service bindings are explicitly kept disabled upon restoration.
     // An operator must intentionally review and re-enable each binding.
-    await tx.serviceRunbookBinding.updateMany({
+    await tx.serviceAutomationRule.updateMany({
       where: { runbookId },
       data: { enabled: false },
     });
@@ -325,11 +307,12 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
  * Generates a collision-free slug by suffixing incrementing integers when necessary.
  */
 export async function ensureUniqueSlug(baseSlug: string): Promise<string> {
-  const normalized = baseSlug
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 110) || 'runbook';
+  const normalized =
+    baseSlug
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 110) || 'runbook';
 
   let slug = normalized;
   let counter = 1;
@@ -414,9 +397,7 @@ export async function duplicateRunbook(runbookId: string, actorId: string) {
             definition: definition as unknown as Prisma.InputJsonValue,
             checksum,
             createdById: actorId,
-            inputs: inputs.length
-              ? { createMany: { data: toInputCreateMany(inputs) } }
-              : undefined,
+            inputs: inputs.length ? { createMany: { data: toInputCreateMany(inputs) } } : undefined,
           },
           include: { inputs: { orderBy: { sequence: 'asc' } } },
         });
@@ -464,7 +445,9 @@ export async function duplicateRunbook(runbookId: string, actorId: string) {
     }
   }
 
-  throw new RunbookDefinitionError('Failed to allocate unique slug for runbook duplication after multiple attempts.');
+  throw new RunbookDefinitionError(
+    'Failed to allocate unique slug for runbook duplication after multiple attempts.'
+  );
 }
 
 /**
@@ -472,9 +455,7 @@ export async function duplicateRunbook(runbookId: string, actorId: string) {
  * Correctly distinguishes between active and archived views, ensuring archived
  * runbooks remain discoverable via dedicated query/tab params with unambiguous precedence.
  */
-export function buildRunbookLibraryWhere(
-  filter: RunbookLibraryFilter
-): Prisma.RunbookWhereInput {
+export function buildRunbookLibraryWhere(filter: RunbookLibraryFilter): Prisma.RunbookWhereInput {
   // Precedence: tab specifies primary lifecycle scope.
   // 1. If tab is 'archived' OR (no tab specified and status is 'archived'), query strictly archived runbooks.
   // 2. Otherwise query strictly active (non-archived) runbooks.
@@ -494,9 +475,12 @@ export function buildRunbookLibraryWhere(
 
   // Precedence for status/version filter:
   // Explicit tab takes precedence over status dropdown
-  const effectiveStatus = filter.tab === 'published' || filter.tab === 'drafts'
-    ? (filter.tab === 'published' ? 'published' : 'draft')
-    : filter.status;
+  const effectiveStatus =
+    filter.tab === 'published' || filter.tab === 'drafts'
+      ? filter.tab === 'published'
+        ? 'published'
+        : 'draft'
+      : filter.status;
 
   if (effectiveStatus === 'published') {
     where.publishedVersionId = { not: null };
@@ -506,6 +490,14 @@ export function buildRunbookLibraryWhere(
 
   if (filter.ownerId) {
     where.createdById = filter.ownerId;
+  }
+
+  if (filter.teamId) {
+    where.ownerTeamId = filter.teamId;
+  }
+
+  if (filter.tag) {
+    where.tags = { has: filter.tag };
   }
 
   if (filter.serviceId) {

@@ -71,7 +71,7 @@ async function createFixture() {
   const pool = await testPrisma.runbookAgentPool.create({
     data: { name: `pool-${crypto.randomUUID()}`, members: { create: { agentId: agent.id } } },
   });
-  const binding = await createServiceBinding(
+  const created = await createServiceBinding(
     service.id,
     {
       runbookId: runbook.id,
@@ -84,6 +84,10 @@ async function createFixture() {
     },
     admin.id
   );
+  const binding = await testPrisma.serviceAutomationRule.update({
+    where: { id: created.id },
+    data: { enabled: true },
+  });
   const trigger = await testPrisma.runbookTrigger.create({
     data: { bindingId: binding.id, event: 'INCIDENT_CREATED' },
   });
@@ -92,9 +96,13 @@ async function createFixture() {
 
 type Fixture = Awaited<ReturnType<typeof createFixture>>;
 
-function startAutomatic(fixture: Fixture, incidentId: string) {
+async function startAutomatic(fixture: Fixture, incidentId: string) {
   const sourceEventId = crypto.randomUUID();
+  const { configurationRevision } = await prisma.serviceAutomationRule.findUniqueOrThrow({
+    where: { id: fixture.binding.id },
+  });
   return startTriggeredRunbookExecution({
+    expectedRuleRevision: configurationRevision,
     runbookId: fixture.runbook.id,
     runbookVersionId: fixture.version.id,
     incidentId,

@@ -30,6 +30,7 @@ vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/api-keys', () => ({
   hashTokenV2: () => 'v2-hash',
   hashLegacyTokenCandidates: async () => ['v1-hash'],
+  isLegacy1xTokenShape: () => false,
 }));
 
 import { resolveStatusPage, statusPageSlugMatches } from '@/lib/status-page-resolver';

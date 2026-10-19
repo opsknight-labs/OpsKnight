@@ -6,16 +6,18 @@ import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import ServiceWorkerBootstrap from '@/components/pwa/ServiceWorkerBootstrap';
 
+// Bundle the same typefaces so builds do not depend on Google font downloads.
 const manrope = localFont({
-  src: './fonts/Manrope-variable.ttf',
+  src: './fonts/Manrope-latin.woff2',
   variable: '--font-manrope',
-  weight: '400 800',
+  weight: '200 800',
+  style: 'normal',
   display: 'swap',
 });
 const playfair = localFont({
   src: [
-    { path: './fonts/PlayfairDisplay-variable.ttf', weight: '400 700', style: 'normal' },
-    { path: './fonts/PlayfairDisplay-Italic-variable.ttf', weight: '400 700', style: 'italic' },
+    { path: './fonts/PlayfairDisplay-latin-normal.woff2', weight: '400 900', style: 'normal' },
+    { path: './fonts/PlayfairDisplay-latin-italic.woff2', weight: '400 900', style: 'italic' },
   ],
   variable: '--font-serif',
   display: 'swap',

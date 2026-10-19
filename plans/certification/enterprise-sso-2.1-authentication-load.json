@@ -1,0 +1,121 @@
+{
+  "measuredAt": "2026-10-15T11:50:07.477Z",
+  "node": "v22.23.2",
+  "platform": "darwin",
+  "poolLimit": 5,
+  "peakObservedConnections": 0,
+  "errors": 0,
+  "sourceHashes": {
+    "src/lib/auth.ts": "2f2881e5979a7e38f9a6762b5ebc11d4e5c232e2b2f642e6c938156f0a6d6ee8",
+    "src/lib/authentication-policy.ts": "bef89e19c96e0fca927281a3a3f3ec44e6496405966889f591cb78ecdc072688",
+    "src/lib/oidc-config.ts": "bac12300a7ec4402f2f2ac8d766ebc81e721e04337fe8df1c188541fd89f244f",
+    "src/lib/oidc/registration.ts": "a1b414e96f61cfb6e8277c1d5777513c6dbd0eb40acb1afe7a7484e6201be269"
+  },
+  "results": [
+    {
+      "profile": "policy-provider",
+      "concurrency": 1,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 2958.530042,
+      "operationsPerSecond": 67.60113879553433,
+      "p50Ms": 11.783084000000144,
+      "p95Ms": 38.523457999999664,
+      "p99Ms": 67.20195899999999,
+      "cpuMs": 478.674,
+      "poolConnections": 0
+    },
+    {
+      "profile": "policy-provider",
+      "concurrency": 10,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 615.74125,
+      "operationsPerSecond": 324.8117614338815,
+      "p50Ms": 16.287459000000126,
+      "p95Ms": 123.65812499999993,
+      "p99Ms": 141.79195900000013,
+      "cpuMs": 271.721,
+      "poolConnections": 0
+    },
+    {
+      "profile": "policy-provider",
+      "concurrency": 25,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 335.21387500000037,
+      "operationsPerSecond": 596.634014627228,
+      "p50Ms": 40.57633299999998,
+      "p95Ms": 82.97441600000002,
+      "p99Ms": 89.31245800000033,
+      "cpuMs": 226.991,
+      "poolConnections": 0
+    },
+    {
+      "profile": "policy-provider",
+      "concurrency": 50,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 327.91462500000034,
+      "operationsPerSecond": 609.9148520746819,
+      "p50Ms": 65.28887500000019,
+      "p95Ms": 134.67274999999972,
+      "p99Ms": 136.36275000000023,
+      "cpuMs": 213.968,
+      "poolConnections": 0
+    },
+    {
+      "profile": "protected-session",
+      "concurrency": 1,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 5220.418125,
+      "operationsPerSecond": 38.31110750348182,
+      "p50Ms": 22.902791999998954,
+      "p95Ms": 53.97483300000022,
+      "p99Ms": 80.18916699999863,
+      "cpuMs": 728.354,
+      "poolConnections": 0
+    },
+    {
+      "profile": "protected-session",
+      "concurrency": 10,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 661.0210000000006,
+      "operationsPerSecond": 302.56224840058,
+      "p50Ms": 30.68841699999939,
+      "p95Ms": 61.875207999999475,
+      "p99Ms": 91.21458399999938,
+      "cpuMs": 361.203,
+      "poolConnections": 0
+    },
+    {
+      "profile": "protected-session",
+      "concurrency": 25,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 426.0130420000005,
+      "operationsPerSecond": 469.4691952646834,
+      "p50Ms": 46.188625000000684,
+      "p95Ms": 79.61291700000038,
+      "p99Ms": 82.39025000000038,
+      "cpuMs": 332.06,
+      "poolConnections": 0
+    },
+    {
+      "profile": "protected-session",
+      "concurrency": 50,
+      "operations": 200,
+      "succeeded": 200,
+      "durationMs": 442.16533400000117,
+      "operationsPerSecond": 452.31949368513693,
+      "p50Ms": 76.43816700000025,
+      "p95Ms": 178.80016699999942,
+      "p99Ms": 181.94479200000023,
+      "cpuMs": 294.974,
+      "poolConnections": 0
+    }
+  ],
+  "scope": "Local warmed application callbacks and PostgreSQL reads. Provider metadata is an injected fixture. Does not measure external OAuth, bcrypt login, HTTP/TLS, production capacity or tail latency under production workload."
+}

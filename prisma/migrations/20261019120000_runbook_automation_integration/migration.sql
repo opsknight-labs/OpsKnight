@@ -16,8 +16,7 @@ ALTER TABLE "ServiceRunbookBinding"
   ADD COLUMN "unattendedWritesAuthorizedAt" TIMESTAMP(3),
   ADD COLUMN "runOnMonitoringIncidents" BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN "contextInputMappings" JSONB NOT NULL DEFAULT '[]',
-  ADD COLUMN "contextTargetMappings" JSONB NOT NULL DEFAULT '{}',
-  ADD COLUMN "configRevision" INTEGER NOT NULL DEFAULT 1;
+  ADD COLUMN "contextTargetMappings" JSONB NOT NULL DEFAULT '{}';
 
 ALTER TABLE "ServiceRunbookBinding"
   ADD CONSTRAINT "ServiceRunbookBinding_unattendedWritesAuthorizedById_fkey"

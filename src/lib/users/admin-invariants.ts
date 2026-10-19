@@ -20,15 +20,20 @@ export async function updateUserSecurityState(
   userId: string,
   mutation: UserSecurityMutation,
   additionalData: Prisma.UserUpdateInput = {},
-  sideEffects?: SecurityMutationSideEffects
+  sideEffects?: SecurityMutationSideEffects,
+  beforeWrite?: SecurityMutationSideEffects,
+  expectedTokenVersion?: number
 ) {
   const updated = await runSerializableTransaction(async tx => {
+    await beforeWrite?.(tx);
     await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
     const target = await tx.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, status: true },
+      select: { id: true, role: true, status: true, tokenVersion: true },
     });
     if (!target) throw new Error('User not found.');
+    if (expectedTokenVersion != null && target.tokenVersion !== expectedTokenVersion)
+      throw new Error('USER_SECURITY_CHANGED');
 
     const nextRole = mutation.role ?? target.role;
     const nextStatus = mutation.status ?? target.status;

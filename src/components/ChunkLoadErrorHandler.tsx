@@ -47,8 +47,15 @@ function isValidBudget(val: unknown): val is ChunkRecoveryBudget {
 export function tryConsumeRecoveryBudget(reason: string): boolean {
   if (typeof window === 'undefined') return false;
 
-  // In automated test environments (Playwright/WebDriver), never trigger
-  // background hard reloads that collide with active test navigations.
+  // In development mode or automated test environments, never trigger background
+  // hard reloads that destroy developer DX or collide with active tests.
+  if (process.env.NODE_ENV === 'development') {
+    logger.warn('[ChunkRecovery] Suppressing auto-reload in development mode', {
+      reason,
+    });
+    return false;
+  }
+
   if (navigator.webdriver) {
     logger.warn('[ChunkRecovery] Suppressing auto-reload in automated test environment', {
       reason,
@@ -135,6 +142,45 @@ export function clearRecoveryBudget(): void {
   }
 }
 
+export async function purgeCachesAndReload(options: { clearBudget?: boolean } = {}): Promise<void> {
+  if (options.clearBudget !== false) {
+    clearRecoveryBudget();
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      if ('caches' in window) {
+        const keys = await window.caches.keys();
+        await Promise.all(
+          keys
+            .filter(name => /next-static|static-js|pages/i.test(name))
+            .map(name => window.caches.delete(name))
+        );
+      }
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        await new Promise<void>(resolve => {
+          const channel = new MessageChannel();
+          const timer = setTimeout(resolve, 500);
+          channel.port1.onmessage = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          try {
+            navigator.serviceWorker.controller?.postMessage({ type: 'PURGE_STATIC_CACHES' }, [
+              channel.port2,
+            ]);
+          } catch {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+      }
+    } catch {
+      // Ignore cache clearing errors during reload
+    }
+    window.location.reload();
+  }
+}
+
 export default function ChunkLoadErrorHandler() {
   const [recoveryRequired, setRecoveryRequired] = useState<{
     reason: string;
@@ -153,23 +199,37 @@ export default function ChunkLoadErrorHandler() {
 
       const allowed = tryConsumeRecoveryBudget(reason);
       if (allowed) {
-        window.location.reload();
+        purgeCachesAndReload({ clearBudget: false });
       } else if (!navigator.webdriver) {
         setRecoveryRequired({ reason });
       }
     };
 
     // 1. Listen for unhandled runtime errors & resource loading failures (capturing phase)
-    const handleError = (event: ErrorEvent) => {
+    const handleError = (event: Event) => {
       if (isUnloading) return;
 
-      if (event?.message && isChunkOrStyleError(event.message)) {
-        triggerRecovery(`Runtime Error: ${event.message}`);
+      const errorEvent =
+        typeof ErrorEvent !== 'undefined' && event instanceof ErrorEvent
+          ? event
+          : (event as unknown as Partial<ErrorEvent>);
+
+      if (errorEvent.message && isChunkOrStyleError(errorEvent.message)) {
+        triggerRecovery(`Runtime Error: ${errorEvent.message}`);
         return;
       }
 
-      if (event?.error?.message && isChunkOrStyleError(event.error.message)) {
-        triggerRecovery(`Runtime Error: ${event.error.message}`);
+      if (errorEvent.error?.message && isChunkOrStyleError(errorEvent.error.message)) {
+        triggerRecovery(`Runtime Error: ${errorEvent.error.message}`);
+        return;
+      }
+
+      const eventRecord = event as unknown as Record<string, unknown>;
+      if (
+        (typeof ErrorEvent !== 'undefined' && event instanceof ErrorEvent) ||
+        Boolean(eventRecord.error) ||
+        (typeof eventRecord.message === 'string' && eventRecord.message !== 'Script error.')
+      ) {
         return;
       }
 
@@ -256,8 +316,7 @@ export default function ChunkLoadErrorHandler() {
               variant="default"
               className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-medium cursor-pointer"
               onClick={() => {
-                clearRecoveryBudget();
-                window.location.reload();
+                purgeCachesAndReload();
               }}
             >
               <RefreshCw className="h-3.5 w-3.5" />

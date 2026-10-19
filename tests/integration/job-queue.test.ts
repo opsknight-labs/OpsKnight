@@ -29,9 +29,9 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
 
   describe('Atomic Job Claiming (FOR UPDATE SKIP LOCKED)', () => {
     it('should prevent multiple workers from claiming the same job', async () => {
-      // 1. Create 5 pending jobs
+      // 1. Create due jobs, independent of host/database clock skew.
       for (let i = 0; i < 5; i++) {
-        await scheduleJob('SCHEDULED_TASK', new Date(), { task: `task-${i}` });
+        await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), { task: `task-${i}` });
       }
 
       // 2. Simulate 3 workers claiming simultaneously
@@ -280,7 +280,7 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       // Explicitly enable compliance monitoring for this isolation test
       process.env.COMPLIANCE_MONITORING_ENABLED = 'true';
 
-      // 1. Create 5 pending SCHEDULED_TASK jobs
+      // 1. Create due SCHEDULED_TASK jobs, independent of host/database clock skew.
       const scheduledIds: string[] = [];
       for (let i = 0; i < 5; i++) {
         const id = await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), {

@@ -1,0 +1,139 @@
+{
+  "specificationVersion": 1,
+  "objective": "Complete the eight-phase OpsKnight REST API v2 enterprise plan without duplicating domain logic or overstating certification.",
+  "releaseStatus": "not_certified",
+  "worktree": "opsknight-rest-enterprise",
+  "branch": "feat/rest-api-enterprise-completion",
+  "sources": {
+    "capabilities": "src/lib/api-v2/capability-catalog.ts",
+    "operations": "src/lib/api-v2/openapi-registry.ts",
+    "mutationContracts": "src/lib/api-v2/mutation-contract.ts",
+    "openapi": "sdk/openapi-v2.json"
+  },
+  "phases": [
+    {
+      "phase": 1,
+      "status": "in_progress",
+      "delivered": [
+        "Versioned operation, scope and mutation contracts",
+        "Truthful capability catalog in API Explorer",
+        "OpenAPI/route/scope conformance tests"
+      ],
+      "remaining": [
+        "Complete the per-workflow UI/domain mapping for unsupported capabilities",
+        "Review the approved parity boundary and product/security exceptions"
+      ]
+    },
+    {
+      "phase": 2,
+      "status": "in_progress",
+      "delivered": [
+        "Fail-closed resource authorization in the declarative route factory",
+        "Explicit runbook authoring, publication and execution scopes",
+        "Streaming body size and nesting limits",
+        "Required If-Match for new sensitive draft writes",
+        "Shared domain commands join the outer idempotency/audit transaction",
+        "Concrete strong draft revision preconditions, including before idempotency replay",
+        "Execution cancellation ownership and service-team boundaries",
+        "Credential migration checklist with role and PostgreSQL compatibility tests"
+      ],
+      "remaining": [
+        "Migrate older handwritten routes with equivalent resource contracts",
+        "Dedicated agent, secret, subscriber and rotation policies",
+        "Complete cross-resource and negative authorization matrix for future operations"
+      ]
+    },
+    {
+      "phase": 3,
+      "status": "in_progress",
+      "delivered": [
+        "Six canonical incident lifecycle operations",
+        "Shared UI/REST watcher commands",
+        "Active schedule participant add, move and remove operations"
+      ],
+      "remaining": [
+        "Incident custom-field updates, tags, templates and collaboration",
+        "Layer editing, override cancellation and coverage previews",
+        "Team membership and manual identity administration",
+        "Service settings and escalation usage/validation operations"
+      ]
+    },
+    {
+      "phase": 4,
+      "status": "pending",
+      "remaining": [
+        "Integrate and certify the separate service-automation evaluator before exposing management",
+        "Integration setup/configuration/rotation/test/delete commands",
+        "Notification preference and provider diagnostics contracts"
+      ]
+    },
+    {
+      "phase": 5,
+      "status": "in_progress",
+      "delivered": [
+        "Create runbooks, list versions, clone drafts, edit/validate/publish drafts",
+        "Revision conflicts, required retry keys and credential-attributed audit",
+        "Shared execution boundary for previews and starts",
+        "Optional reviewed-plan digest fence",
+        "Cancellation requests retain CANCEL_REQUESTED semantics",
+        "Privileged editable draft views with revision-bound preservation of hidden configuration and defaults",
+        "Serializable binding enablement and deterministic archive snapshot race coverage"
+      ],
+      "remaining": [
+        "Metadata/lifecycle endpoints",
+        "Service rules and policy checks",
+        "Approvals, agents, pools, enrollment and secret grants",
+        "Docker and Kubernetes target-isolation/recovery certification"
+      ]
+    },
+    {
+      "phase": 6,
+      "status": "pending",
+      "remaining": [
+        "Status components/subscribers/branding and publication reconciliation",
+        "Structured postmortem impact, collaboration and action items",
+        "Durable report/export jobs and result authorization",
+        "Product decision on unfinished SLO management",
+        "Audit exports, dashboards and approved operational configuration"
+      ]
+    },
+    {
+      "phase": 7,
+      "status": "in_progress",
+      "delivered": [
+        "Generated TypeScript and Python request/response types for shipped operations",
+        "SDK retry, redirect, pagination, precondition and secret-handling checks",
+        "OpenAPI/client drift verification in CI",
+        "Explorer snippets include required If-Match and idempotency headers",
+        "Both SDKs passed real HTTP workflows against the locally deployed production build and PostgreSQL"
+      ],
+      "remaining": [
+        "Credential-aware execution and permission diagnostics in Explorer",
+        "Distribution/release of SDK packages"
+      ]
+    },
+    {
+      "phase": 8,
+      "status": "in_progress",
+      "delivered": [
+        "Dedicated PostgreSQL migration and baseline runtime tests",
+        "Real HTTP Python SDK workflows",
+        "Transaction concurrency and replay tests for expanded routes"
+      ],
+      "remaining": [
+        "Full domain parity coverage",
+        "Docker and Kind agent end-to-end tests",
+        "1/2/4 replica, invalid-token flood and failover certification",
+        "Measured database query plans, pool pressure and performance",
+        "Close all critical/high findings before release",
+        "Resolve default-branch Dependabot alerts 43 (braces, runtime high) and 44 (http-cache-semantics, development high); no patched version was listed when verified"
+      ]
+    }
+  ],
+  "certificationLimits": [
+    "Unit and database tests do not establish load, HA or production certification.",
+    "The temporary memory-backed database proves transaction behavior, not crash durability.",
+    "The admin:manage runbook scope change requires the documented credential migration.",
+    "Live SDK tests used a local production build and isolated PostgreSQL, not a customer production deployment."
+  ]
+}

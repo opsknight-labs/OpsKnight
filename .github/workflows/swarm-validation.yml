@@ -8,6 +8,8 @@ on:
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
+      - 'scripts/wait-for-runtime-database.cjs'
+      - 'scripts/wait-for-database-ready.cjs'
       - 'deploy/images/pgbouncer/**'
       - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
@@ -21,6 +23,8 @@ on:
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
+      - 'scripts/wait-for-runtime-database.cjs'
+      - 'scripts/wait-for-database-ready.cjs'
       - 'deploy/images/pgbouncer/**'
       - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
@@ -40,6 +44,8 @@ jobs:
     env:
       OPSKNIGHT_IMAGE: ghcr.io/opsknight-labs/opsknight:ci-test
       OPSKNIGHT_AGENT_IMAGE: ghcr.io/opsknight-labs/opsknight-agent:ci-test
+      OPSKNIGHT_AGENT_NODE_ID: syntax-validation-node
+      OPSKNIGHT_AGENT_URL: https://validation.example.invalid
       OPSKNIGHT_EXECUTION_PUBLIC_KEY: ci-pinned-public-key
     steps:
       - name: Checkout Repository
@@ -174,9 +180,23 @@ jobs:
         with:
           node-version: 20
 
+      # Contains moby/moby#52235: retry transient EBUSY during Swarm secret remounts.
+      # This job has no pre-existing service containers; the action owns its isolated daemon.
+      - name: Set up pinned Docker Engine for Swarm lifecycle certification
+        uses: docker/setup-docker-action@2bf61fb9464cc67f0cbdeabed6aa0380accd1c70 # v5
+        with:
+          # Published release images avoid the toolkit archive index lagging new patches.
+          version: type=image,tag=29.9.1
+          set-host: true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Record Docker runtime versions
+        run: |
+          test "$(docker version --format '{{.Server.Version}}')" = '29.9.1'
+          docker version
+          docker info --format 'Kernel={{.KernelVersion}} OS={{.OperatingSystem}} Driver={{.Driver}}'
       - name: Initialize Docker Swarm Node
         run: |
           docker swarm init --advertise-addr 127.0.0.1
@@ -273,7 +293,7 @@ jobs:
             local actual
             actual="$(service_env_value "${service}" "${key}")"
             if [ "${actual}" != "${expected}" ]; then
-              echo "❌ ${service} expected ${key}=${expected}, got '${actual}'" >&2
+              echo "❌ ${service} environment ${key} mismatch (values masked)" >&2
               exit 1
             fi
           }
@@ -294,7 +314,7 @@ jobs:
             local path="$2"
             local expected="$3"
             local container_id actual
-            local timeout=60
+            local timeout=180
             local elapsed=0
             while [ "${elapsed}" -lt "${timeout}" ]; do
               local all_match=1
@@ -317,12 +337,10 @@ jobs:
               sleep 2
               elapsed=$((elapsed + 2))
             done
-            container_id="$(container_for_service "${service}")"
-            actual="$(docker exec "${container_id}" sh -c "cat '${path}'" 2>/dev/null || true)"
-            if [ "${actual}" != "${expected}" ]; then
-              echo "❌ ${service} secret ${path} did not match expected value (expected '${expected}', got '${actual}')" >&2
-              exit 1
-            fi
+            echo "❌ ${service} secret ${path} mismatch or incomplete replica replacement (values masked)" >&2
+            docker service inspect "${service}" --format '{{json .UpdateStatus}}' >&2
+            docker service ps "${service}" --no-trunc >&2
+            exit 1
           }
 
           assert_runtime_secret_delivery() {

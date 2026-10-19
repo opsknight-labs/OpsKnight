@@ -1,0 +1,131 @@
+---
+rule_files:
+  - opsknight-alerts.yaml
+evaluation_interval: 1m
+tests:
+  - name: healthy and idle maintenance; stale former leader gauges do not page
+    interval: 1m
+    input_series:
+      - series: opsknight_runbook_worker_health{job="opsknight",instance="worker-a",status="healthy"}
+        values: 1+0x30
+      - series: opsknight_runbook_nonce_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+1x30
+      - series: opsknight_runbook_artifact_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+1x30
+      - series: opsknight_runbook_nonce_purge_batches_total{job="opsknight",instance="worker-b",result="success"}
+        values: 0+0x30
+      - series: opsknight_runbook_artifact_purge_batches_total{job="opsknight",instance="worker-b",result="success"}
+        values: 0+0x30
+      - series: opsknight_runbook_nonce_purge_oldest_expired_age_seconds{job="opsknight",instance="worker-b"}
+        values: 9999+0x30
+      - series: opsknight_runbook_artifact_purge_oldest_expired_age_seconds{job="opsknight",instance="worker-b"}
+        values: 9999+0x30
+    promql_expr_test:
+      - expr:
+          count(ALERTS{alertname=~"OpsKnightRunbook(Nonce|Artifact)Maintenance.*",alertstate="firing"})
+          or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: successful batches with persistent backlog and repeated failures
+    interval: 1m
+    input_series:
+      - series: opsknight_runbook_worker_health{job="opsknight",instance="worker-a",status="healthy"}
+        values: 1+0x30
+      - series: opsknight_runbook_nonce_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+1x30
+      - series: opsknight_runbook_artifact_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+1x30
+      - series: opsknight_runbook_nonce_purge_oldest_expired_age_seconds{job="opsknight",instance="worker-a"}
+        values: 9999+0x30
+      - series: opsknight_runbook_artifact_purge_oldest_expired_age_seconds{job="opsknight",instance="worker-a"}
+        values: 9999+0x30
+      - series: opsknight_runbook_nonce_purge_batches_total{job="opsknight",instance="worker-a",result="failed"}
+        values: 0+1x30
+      - series: opsknight_runbook_artifact_purge_batches_total{job="opsknight",instance="worker-a",result="failed"}
+        values: 0+1x30
+    promql_expr_test:
+      - expr:
+          count(ALERTS{alertname=~"OpsKnightRunbook(Nonce|Artifact)Maintenance.*",alertstate="firing"})
+          or vector(0)
+        eval_time: 8m
+        exp_samples:
+          - labels: '{}'
+            value: 4
+  - name: healthy execution workers but maintenance stopped
+    interval: 1m
+    input_series:
+      - series: opsknight_runbook_worker_health{job="opsknight",instance="worker-a",status="healthy"}
+        values: 1+0x30
+      - series: opsknight_runbook_nonce_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+0x30
+      - series: opsknight_runbook_artifact_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+0x30
+    promql_expr_test:
+      - expr:
+          count(ALERTS{alertname=~"OpsKnightRunbook(Nonce|Artifact)Maintenance.*",alertstate="firing"})
+          or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 2
+  - name: missing maintenance metrics are detected with healthy workers
+    interval: 1m
+    input_series:
+      - series: opsknight_runbook_worker_health{job="opsknight",instance="worker-a",status="healthy"}
+        values: 1+0x30
+    promql_expr_test:
+      - expr:
+          count(ALERTS{alertname=~"OpsKnightRunbook(Nonce|Artifact)Maintenance.*",alertstate="firing"})
+          or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 2
+  - name: unknown workers covered by existing worker alert without duplicate maintenance
+      stall
+    interval: 1m
+    input_series:
+      - series: opsknight_runbook_worker_health{job="opsknight",instance="worker-a",status="healthy"}
+        values: 0+0x30
+    promql_expr_test:
+      - expr:
+          count(ALERTS{alertname=~"OpsKnightRunbook(Nonce|Artifact)Maintenance.*",alertstate="firing"})
+          or vector(0)
+        eval_time: 15m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: alerts resolve after backlog drains and transaction errors stop
+    interval: 1m
+    input_series:
+      - series: opsknight_runbook_worker_health{job="opsknight",instance="worker-a",status="healthy"}
+        values: 1+0x30
+      - series: opsknight_runbook_nonce_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+1x30
+      - series: opsknight_runbook_artifact_purge_batches_total{job="opsknight",instance="worker-a",result="success"}
+        values: 0+1x30
+      - series: opsknight_runbook_nonce_purge_oldest_expired_age_seconds{job="opsknight",instance="worker-a"}
+        values: 9999+0x8 0+0x22
+      - series: opsknight_runbook_artifact_purge_oldest_expired_age_seconds{job="opsknight",instance="worker-a"}
+        values: 9999+0x8 0+0x22
+      - series: opsknight_runbook_nonce_purge_batches_total{job="opsknight",instance="worker-a",result="failed"}
+        values: 0+1x8 8+0x22
+      - series: opsknight_runbook_artifact_purge_batches_total{job="opsknight",instance="worker-a",result="failed"}
+        values: 0+1x8 8+0x22
+    promql_expr_test:
+      - expr:
+          count(ALERTS{alertname=~"OpsKnightRunbook(Nonce|Artifact)Maintenance.*",alertstate="firing"})
+          or vector(0)
+        eval_time: 8m
+        exp_samples:
+          - labels: '{}'
+            value: 4
+      - expr:
+          count(ALERTS{alertname=~"OpsKnightRunbook(Nonce|Artifact)Maintenance.*",alertstate="firing"})
+          or vector(0)
+        eval_time: 25m
+        exp_samples:
+          - labels: '{}'
+            value: 0

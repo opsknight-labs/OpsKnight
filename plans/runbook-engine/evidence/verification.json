@@ -1,0 +1,561 @@
+{
+  "verifiedAt": "2026-10-14",
+  "baselineRevision": "a278116a0b03c0dac1f5e94c68f88e3814152a2c",
+  "scope": "Runbook remediation candidate. Suites overlap; counts must not be summed as unique tests.",
+  "checks": {
+    "productionBuild": "PASS: local licensed fonts; no Google Fonts build dependency",
+    "typecheck": "PASS: npx tsc --noEmit",
+    "modifiedFileLint": "PASS: ESLint, zero warnings for configured modified files",
+    "browser": {
+      "status": "PASS",
+      "tests": 33,
+      "browsers": [
+        "Chromium",
+        "Firefox",
+        "WebKit"
+      ],
+      "productionServer": true,
+      "scope": "Complete publish/attach/trigger/approval/cancellation, old pinned versions, pagination/scale, capability isolation, Automatic edit/pause/reactivation guidance and dynamic-target UI guard"
+    },
+    "docsLint": "PASS",
+    "deploymentTemplates": "PASS: both Helm charts, deployment layout, workflow parsing and change classification",
+    "realCompose": "live-compose.json",
+    "realKind": "live-kind.json",
+    "simulatedClaims": "scale-simulation.json",
+    "reviewDatabaseRegressions": {
+      "status": "PASS",
+      "tests": 8,
+      "contracts": [
+        "Exact pinned version and input schema; publication drift rejected under lock",
+        "Bounded visible-page readiness at 100/1000/10000 rules and 1000 Agents",
+        "1000-execution concurrent recovery deduplication and leader election",
+        "Separate Automatic activation, match-all confirmation and fresh local policy evidence",
+        "Two certified dynamic-selector Agents remain explicitly unsupported for Automatic activation",
+        "Three schedulers with one database connection each reconcile through the held-lock transaction",
+        "Pending/started suggestions, completed executions and before/after trigger condition revisions survive edits"
+      ]
+    },
+    "rulePageReadModel": "rule-page-scale.json",
+    "nativeCI": {
+      "status": "PASS",
+      "run": 38560019070,
+      "candidate": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
+      "scope": "Linux x64 CI systemd fixture enrollment, initial readiness, key rotation, upgrade/rollback; not official public release certification"
+    },
+    "rulePageBrowserRendering": [
+      "rule-render-chromium.json",
+      "rule-render-firefox.json",
+      "rule-render-webkit.json"
+    ],
+    "unitComponentRegression": {
+      "status": "PASS",
+      "files": 42,
+      "tests": 327,
+      "scope": "All Runbook library unit tests, selected-version configuration authorization, service rules, version inputs, wizard and selector components"
+    },
+    "database": {
+      "status": "PASS",
+      "files": 4,
+      "tests": 36,
+      "database": "isolated rbe_engine_test",
+      "scope": "Review regressions, Agent policy checks, binding readiness and workflow lifecycle"
+    },
+    "focusedAgentContracts": {
+      "status": "PASS",
+      "files": 4,
+      "tests": 20,
+      "scope": "Executor, policy checks, startup recovery and watchdog; overlaps the unit suite"
+    }
+  },
+  "qualification": "qualification.json",
+  "baselineCandidateRevision": "21700dc4d15625a4d6e7ff5021a649eaa273e649",
+  "reviewFixCandidateRevision": "4c80c1f1ef5031940c35d4ce500913cb7b903dcc",
+  "remoteCI": "Use PR #864 checks for exact-head results; checked-in local evidence does not assert mutable GitHub CI status.",
+  "historicalFullSuite": {
+    "candidateRevision": "c0b428591f373453d56b316f1c97d75d4fb96030",
+    "unitComponentRegression": {
+      "status": "PASS",
+      "files": 760,
+      "tests": 5746,
+      "skipped": 4,
+      "scope": "Full unit configuration"
+    },
+    "database": {
+      "status": "PASS",
+      "fullRunTests": 117,
+      "focusedReadinessPolicyTests": 8,
+      "distinctCases": 118,
+      "database": "isolated rbe_engine_test"
+    },
+    "runtimeStartupRecovery": {
+      "status": "PASS",
+      "tests": 20
+    },
+    "scope": "Previous candidate results retained as historical evidence; not claims about this correction pass."
+  },
+  "correctionPassBaseRevision": "62a36d1d51024680657e93b68bd79c499f9f3673",
+  "followupReview": {
+    "baseRevision": "6761aef4f9a9dbf73236a246e8aa2ecf7a7d363a",
+    "changes": [
+      "Swarm convergence waits for completed task updates and rejects paused/rolled-back states",
+      "Every-replica secret assertions fail closed and mask values",
+      "Suggestions and triggered executions retain evaluated trigger revision; legacy evidence stays NULL"
+    ],
+    "localChecks": {
+      "runbookDeploymentUnit": {
+        "files": 37,
+        "tests": 343,
+        "status": "PASS"
+      },
+      "swarmShellBehavior": {
+        "tests": 4,
+        "status": "PASS"
+      },
+      "databaseExecutionAndReview": {
+        "files": 2,
+        "tests": 65,
+        "status": "PASS"
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "shellSyntax": "PASS",
+      "documentation": "PASS"
+    },
+    "browserEvidence": "Both complete browser CI jobs passed on 6761aef4f; no UI changes in this follow-up. New head is revalidated by CI.",
+    "swarmRootCause": "Replica counts reached desired values while UpdateStatus was updating; deployment returned before keyring-bearing replacement tasks converged.",
+    "remoteCI": "All three Swarm validation jobs passed on 0ab15e610; protocol runs 38601425537 and 38601417564 plus standalone 38601425796. One duplicate browser job failed on a WebKit hard-navigation/server-action refresh race, corrected in the next follow-up."
+  },
+  "ruleLifecycleAndRuntimeFollowup": {
+    "baseRevision": "0ab15e610e9b7ad2c4f7d0d9ca3d31a241b2b5bb",
+    "changes": [
+      "Detach archives/disables rules without deleting suggestions, triggers or execution associations",
+      "Archived rule edits, reactivation and execution are rejected; historical evidence remains readable",
+      "Incident trigger evaluation uses ordered batches of at most 100 rules",
+      "Suggestion transactions recheck that the rule remains enabled and attached after acquiring the workflow lock"
+    ],
+    "localChecks": {
+      "unitAndComponents": {
+        "status": "PASS",
+        "tests": 316,
+        "files": 37
+      },
+      "executionAndReviewDatabase": {
+        "status": "PASS",
+        "tests": 66,
+        "files": 2
+      },
+      "productionBuild": "PASS",
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "documentation": "PASS",
+      "browser": {
+        "status": "PASS",
+        "tests": 33,
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ],
+        "skipped": 0
+      }
+    },
+    "runtimeScale": "incident-trigger-scale.json",
+    "limitation": "Batching bounds loaded rule/condition data, not total processing time. The fixture measures three concurrent duplicate deliveries with five matching suggestions and no physical execution; sustained production throughput remains unqualified.",
+    "remoteCI": "Use exact-head PR checks after the follow-up push."
+  },
+  "suggestionRaceAndControlsFollowup": {
+    "baseRevision": "eb52efd1240b7676ea5a53b43a6f001bbc50fc12",
+    "changes": [
+      "Incident suggestions disclose detached/paused rule state and disable preview/execution while preserving dismissal",
+      "Suggested and budget-fallback suggestion transactions recheck evaluated trigger revision under the workflow lock",
+      "Integration certification concurrency groups are scoped by Git ref to avoid pending-run replacement across unrelated branches"
+    ],
+    "localChecks": {
+      "reviewDatabase": {
+        "status": "PASS",
+        "tests": 10,
+        "scope": "Includes deterministic condition edit between batch read and locked suggestion creation"
+      },
+      "runbookAndPreviewUnits": {
+        "status": "PASS",
+        "files": 37,
+        "tests": 311
+      },
+      "deploymentWorkflowUnits": {
+        "status": "PASS",
+        "tests": 34
+      },
+      "browser": {
+        "status": "PASS",
+        "tests": 36,
+        "skipped": 0,
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ],
+        "scope": "Full production-server matrix including detached suggestion visibility, disabled execution and successful dismissal"
+      },
+      "productionBuild": "PASS",
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "documentation": "PASS"
+    },
+    "remoteCI": "Pending after follow-up push; check exact-head PR results. Previous head eb52efd12 completed without failed checks."
+  },
+  "configurationRevisionAndSsoCompatibility": {
+    "baseRevision": "60521b03fba72c2134cc3c7d02bcdfe70bb05f2a",
+    "integratedMain": "4be1e13bd51e361b52ad97b77dcbcb4343ba4ae8",
+    "changes": [
+      "Rule configuration revision fences mode, version, inputs and target changes in Suggested and budget-fallback suggestion creation",
+      "Automatic evaluator supplies configuration revision to execution preflight",
+      "Automatic activation and readiness explicitly reject pools over 10 online Agents",
+      "Added secret-free live HTTPS execution/job/worker state diagnostics",
+      "Execution claim row locks bind IDs as a primitive text array, fixing production-only SQL-fragment serialization as JSON",
+      "Swarm rollback failures include bounded service logs alongside task generation diagnostics"
+    ],
+    "localChecks": {
+      "fullUnitSuiteAfterSsoRebase": {
+        "status": "PASS",
+        "tests": 5846,
+        "skipped": 4
+      },
+      "targetedUnitSuite": {
+        "status": "PASS",
+        "tests": 356,
+        "skipped": 3
+      },
+      "database": {
+        "status": "PASS",
+        "tests": 104,
+        "files": 5,
+        "postgres": "15.18 isolated local instance",
+        "scope": "Eight deterministic concurrent rule-edit races, trigger-edit regression, 11-Agent policy limit, lifecycle and execution safety"
+      },
+      "schemaFreshAndUpgrade": {
+        "status": "PASS",
+        "evidence": "schema-upgrade-20261015.json"
+      },
+      "productionBuild": "PASS",
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS",
+      "browser": {
+        "status": "PASS",
+        "tests": 36,
+        "skipped": 0,
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ]
+      },
+      "executionSafetyAfterClaimFix": {
+        "status": "PASS",
+        "tests": 57,
+        "scope": "Rerun of the execution suite included in the earlier 104; counts overlap"
+      },
+      "agentApiAndSwarmUnits": {
+        "status": "PASS",
+        "tests": 14
+      },
+      "liveHttpsCompose": {
+        "status": "PASS",
+        "tests": 1,
+        "evidence": "live-compose.json",
+        "scope": "Independent containerized Agent with enrollment, signed manual and Automatic execution, artifact upload, policy checks and restart identity"
+      },
+      "documentation": "PASS"
+    },
+    "remoteCI": "Pending final claim-fix push; use exact-head PR checks. No merge approval or general production certification is implied."
+  },
+  "fleetLifecycleAndMandatoryRevision": {
+    "baseRevision": "6246302034633c2de8f50a9b00a7e0058f7d6c10",
+    "changes": [
+      "Automatic dispatch rejects missing and stale evaluated rule revisions",
+      "Enrollment-scoped projects, stacks, release/Secret names and Kustomize selectors/PVCs; shared UI/live command generator",
+      "Distinct install, upgrade and identity-replacement guidance; upgrade page accepts the original deployment name for legacy installations",
+      "Durable per-Agent policy certification for 1\u2013100 targets in batches of 25; latest evidence selected per eligible Agent",
+      "Searchable archived service rule history and a Configure/Validate/Activate/Monitor lifecycle with missing-certification counts",
+      "Admin-only audited artifact retention with explicit deletion acknowledgement and legacy environment fallback",
+      "Hydration-aware action buttons prevent offering client-dispatched form submission before hydration"
+    ],
+    "localChecks": {
+      "database": {
+        "status": "PASS",
+        "files": 6,
+        "tests": 130,
+        "scope": "Mandatory revision, target/configuration fences, 1/10/50/100 policy certification, partial completion, changed policy/expiry, archive search and retention authority/purge"
+      },
+      "freshAndUpgradeSchema": {
+        "status": "PASS",
+        "migrations": 219,
+        "evidence": "schema-retention-20261015.json"
+      },
+      "generatedKustomizeIsolation": {
+        "status": "PASS",
+        "agents": 2,
+        "scope": "Disjoint selectors, policy, Secrets, SA and PVC references"
+      },
+      "browser": "PENDING_FINAL_BUILD",
+      "typecheck": "PASS",
+      "targetedUnits": {
+        "status": "PASS",
+        "files": 46,
+        "tests": 389,
+        "skipped": 3
+      },
+      "ciContracts": {
+        "status": "PASS",
+        "tests": 11,
+        "runner": "node --test"
+      },
+      "modifiedSourceLint": "PASS",
+      "documentation": "PASS",
+      "productionBuild": "PASS_CANDIDATE_FINAL_HEAD_CI_PENDING"
+    },
+    "liveFleet": "Local Docker command timed out before fleet certification; no pass claimed. Required CI deployment-candidate job now provisions disposable Swarm and Kind to execute the shared UI commands with two Agents per method.",
+    "releaseGates": "Physical multi-node/partition/write fault matrix, sustained authenticated production capacity and official published distribution remain NOT_TESTED. Existing qualification report applies."
+  },
+  "runtimePoolerAndFleetCiFollowup": {
+    "baseRevision": "4356e593dd03d422afff7a6b3becd7ab650540fd",
+    "corrections": [
+      "Deployment invariants follow the extracted shared command generator",
+      "Fleet fixture allows its isolated IP endpoint in app host validation; TLS certificate includes that IP",
+      "Archived history browser journey waits for dismissal refresh to commit before navigation",
+      "Container startup gates runtime SQL connectivity after direct schema readiness, preventing authentication initialization from racing a new PgBouncer endpoint",
+      "Runtime probe queries and client cleanup have explicit deadlines, including an unresolved-query/blackhole regression"
+    ],
+    "localChecks": {
+      "targetedUnits": {
+        "status": "PASS",
+        "tests": 352,
+        "skipped": 3,
+        "files": 40
+      },
+      "nodeCiContracts": {
+        "status": "PASS",
+        "tests": 14
+      },
+      "typecheck": "PASS",
+      "modifiedTypeScriptLint": "PASS",
+      "runtimeScriptSyntax": "PASS",
+      "runtimeWebDatasourceSelection": "PASS_REAL_POSTGRES",
+      "productionBuild": "PASS",
+      "browser": "RETRYING_AFTER_LOCAL_STARTUP_TIMEOUT"
+    },
+    "remoteCI": "Requires fresh exact-head checks after push. Base head has failed unit invariants, fleet host validation, browser navigation and pooler startup checks; those failures are not passes."
+  },
+  "swarmSecretStdinAndArchiveSelectors": {
+    "baseRevision": "7d2eae36e49e403df6f36241af9ad3f94047ff3f",
+    "changes": [
+      "Docker secret creation explicitly selects stdin with a dash; shell regression checks token consumption and preservation of the next node prompt",
+      "Archived history browser assertions target visible controls/text while React retains hidden route copies",
+      "Live fleet waits for capability and policy-hash heartbeat evidence before creating jobs"
+    ],
+    "localChecks": {
+      "focusedUnitSuite": {
+        "status": "PASS",
+        "tests": 45,
+        "files": 3
+      },
+      "webkitArchivedHistory": {
+        "status": "PASS",
+        "repetitions": 3
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS"
+    },
+    "remoteCI": "Pending follow-up push; fleet smoke and exact-head browser/Swarm certification still required."
+  },
+  "operationalBacklogFollowup": {
+    "assessedAt": "2026-10-15",
+    "retention": "Separate 1-connection maintenance pool; 100-row/16-MiB batch each minute; independent advisory lock, 1-second SQL/100-ms lock/2.5-second transaction limits; 10000-artifact concurrent recovery and slow-delete isolation regressions PASS",
+    "claims": "10000 unsafe shared-host writes reproduced a 5-second timeout before the fix. SQL eligibility filtering and explicit bounded transaction now reach a newer safe diagnostic; no physical action performed. See claim-ineligible-backlog-20261015.json",
+    "search": "20000 rules, active/archived selective, broad, missing and workflow-name substring searches measured with actual Prisma SQL EXPLAIN ANALYZE; see rule-search-backlog-20261015.json. No speculative search index added.",
+    "kustomize": "Secret created directly from private temporary file; cleanup trap; retained credential-free overlay outside repository. Plaintext/base64 credential-remnant test PASS.",
+    "fleet": "0df984c8d live Helm and Kustomize: two independent Agents, distinct signed claims, restart, upgrade and removal isolation PASS in both runs. Swarm enrollment/initial jobs PASS but service upgrade stalls after clean exit; restart condition updated to any, pending exact-head CI.",
+    "limits": [
+      "No production fleet capacity assertion",
+      "Physical HA, published native distribution and sustained authenticated permissioned write workloads remain unqualified"
+    ],
+    "validation": {
+      "targetedUnits": "364 passed, 3 skipped; later 44 deployment/registry cases passed (overlapping)",
+      "database": "61 execution/backlog/retention cases plus 58 revision/concurrency/authorization/retention cases, and a final 4-case backlog run with query plans and purge timeout isolation; counts overlap",
+      "schema": "220 applied migrations; upgraded fresh/upgrade fixtures match; schema-cleanup-20261015.json",
+      "ci": "Pending new source commit; previous 0df984c8d has 39 successful checks, two fleet failures and one WebKit navigation-race failure; no approval asserted",
+      "webkit": "Archived suggestion dismissal/search/lifecycle journey: 3 consecutive local WebKit repetitions PASS; uses existing production build for unchanged UI behavior",
+      "node": "14 CI runner contracts and 7 deployment/capacity documentation contracts PASS"
+    }
+  },
+  "authenticationExperienceIntegration": {
+    "base": "7d6e4f006",
+    "result": "Rebased onto authentication workspace #867, PWA fixes #868 and authentication UI #870. Retained main WOFF2 assets and authentication projection preparation; restored router hook for Runbook server tabs.",
+    "validation": "372 targeted units (3 skipped), 62 execution/backlog/retention database cases and 16 navigation/authentication component cases PASS; overlapping suites. All 222 migrations applied on the isolated upgraded database.",
+    "ci": "New rebased head requires full CI; earlier candidate results are historical evidence only."
+  },
+  "confirmedBlockerFollowup": {
+    "base": "c0482d4c6",
+    "migration": "Unpublished PR cleanup migration uses idempotent CREATE INDEX IF NOT EXISTS / DROP INDEX IF EXISTS; fresh+predecessor-upgrade+DDL reapplication PASS. Historical production migration files unchanged. Validator 0 errors.",
+    "kustomize": "Enrollment volume and both signing-key secretKeyRef names explicitly bind the same Agent-specific external Secret; two-enrollment render asserts all three. Clean-namespace live result pending CI.",
+    "authentication": "Empty-state action named Create first emergency identity; persistent action retains Create emergency identity; tests assert unambiguous actions and dialog.",
+    "claimPlan": "Read-only EXPLAIN before claim, preserves ORM timestamp parameter types, requires Actual Rows = 1; separate end-to-end claim timing.",
+    "review": "Nonsecret inputs explicitly marked for review are shown; secret references, sensitive names, password fields and unclassified inputs remain masked.",
+    "credentials": "Swarm, Helm, Kustomize and native token tempfiles removed immediately on success, EXIT trap for failure; Compose token mount retained.",
+    "swarm": "Previous any-exit restart-policy change did not resolve upgrade stall. No new convergence claim. Capture task/container health, signal logs and Docker runtime versions; rollback detection remains strict.",
+    "validation": "391 targeted units (3 skipped), 13 later setup/cleanup checks (overlap), 4 backlog cases and pre-claim plan regression PASS; TypeScript/lint clean. Exact-head CI pending."
+  },
+  "currentAuditFollowup": {
+    "verifiedAt": "2026-10-15",
+    "auditedHead": "33ec9c64e7df4dd8ef35b5d8d4d22a168e59f2d0",
+    "fixes": {
+      "swarmHealth": "Use an explicit type: tmpfs volume at /tmp (16 MiB); the Swarm converter ignores the standalone tmpfs field. Keep liveness enabled and its existing deadlines. Log health-state publication failures.",
+      "liveFleetAssertions": "Inspect the running task mount and require fresh readiness/liveness before and after upgrades/restarts. Bound generated-command process groups, including stuck Bash cleanup children.",
+      "ruleConcurrency": "All configuration mutations acquire Runbook then rule locks; execution preparation and suggestions hold shared locks through creation. Pause cannot commit before an already-locked start finishes; a pause-first start revalidates and rejects.",
+      "optimisticEdits": "UI configuration and trigger actions require the displayed configuration revision. Stale saves return a reload/review conflict. Form instances refresh with the revision.",
+      "navigation": "Synchronously guard the selected/pending destination. Pointer, repeated selection and keyboard interaction regressions pass; shallow navigation and cancellation remain covered.",
+      "apiV2Integration": "Adapt the newly merged execution endpoint to ServiceAutomationRule, exclude detached rules, and require bindingId when multiple enabled rules match. Preserve outer transaction support. Nine focused endpoint tests and the real PostgreSQL/HTTP regressions pass."
+    },
+    "localValidation": {
+      "targetedUnit": {
+        "passed": 317,
+        "skipped": 3,
+        "files": 39
+      },
+      "postgresql": {
+        "passed": 108,
+        "files": 4,
+        "includes": [
+          "Both deterministic pause/start orderings with observed PostgreSQL lock waits",
+          "Concurrent administrator saves and stale configuration/trigger UI actions",
+          "Existing execution safety, lifecycle and trigger revision regressions",
+          "API v2 bearer authentication, idempotent replay and actual HTTP route execution after rebasing onto API modernization"
+        ]
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS: zero errors and warnings",
+      "fullApplicationUnit": {
+        "passed": 6227,
+        "skipped": 7,
+        "files": 815
+      },
+      "migrations": "PASS: 223 migrations applied to isolated PostgreSQL; validator reports zero errors and 40 existing warnings"
+    },
+    "deploymentQualification": "PENDING final-head CI. Local Docker daemon unavailable; static rendering and probe unit coverage do not establish a live Swarm pass. Prior-head evidence passed Compose, Helm and Kustomize and failed Swarm.",
+    "releaseQualification": "Beta. Physical approved writes, physical HA/failover/partition/disk faults, official public installer distribution, sustained authenticated fleet capacity and human accessibility qualification remain NOT_TESTED.",
+    "baseRevision": "e635e31a3"
+  },
+  "freshAuditClosure": {
+    "auditedHead": "19adac7ec7f39f0cf14c07b8540df30acd2b1b54",
+    "verifiedAt": "2026-10-15",
+    "saveFeedback": "Stable ActionForm identities retain feedback while revision-keyed field groups refresh inputs. Browser assertions require persisted trigger conditions/configuration, updated expected revisions and success messages after refresh.",
+    "apiInputContract": "Bound or inferred service rules reject non-empty per-execution parameters with HTTP 400 before preview/start. Saved inputs remain authoritative. Unbound inputs are validated against the published version and frozen into the execution. Real PostgreSQL/TCP HTTP cases cover both paths.",
+    "nonceMaintenance": {
+      "recoveryPath": "Nonce deletion removed from reconciliation",
+      "batchLimit": 1000,
+      "cadenceSeconds": 1,
+      "overlap": "Skipped ticks while a batch is active; no draining loop",
+      "pool": "Shared with artifact maintenance, one isolated connection per scheduler/integrated process",
+      "bounds": "1000ms statement, 100ms lock, 2500ms transaction, 500ms connection wait; createdAt index; SKIP LOCKED; separate advisory lock",
+      "retention": "Both sides of the five-minute request window plus one minute; database UTC clock",
+      "metrics": "Rows, batch outcomes, duration and observed oldest expired age",
+      "proof": "10000 expired nonces; at most 1000 removed. Fresh/future-dated replay rejected concurrently; stale signed requests remain invalid after their record is deleted. Deliberately stalled delete rolls back while new authentication and recovery under a separate deadline succeed."
+    },
+    "swarmRuntime": {
+      "change": "Isolated lifecycle CI job pins Docker Engine 29.9.1 through the commit-pinned official setup action in release-image mode, avoiding archive index lag; asserts actual engine version and preserves strict health/rollback/convergence gates",
+      "reason": "Repeated older-daemon secret remount EBUSY failures; upstream moby/moby#52235",
+      "scope": "Ephemeral GitHub lifecycle job; no local/shared Docker daemon changes; runtime success still requires hosted CI"
+    },
+    "localVerification": {
+      "unit": {
+        "passed": 6230,
+        "skipped": 7,
+        "files": 816
+      },
+      "postgresql": {
+        "passed": 117,
+        "files": 7,
+        "additionalNonceProofRun": "2 passed, overlapping"
+      },
+      "typecheck": "PASS",
+      "modifiedSourceLint": "PASS, zero warnings",
+      "productionBuild": "PASS",
+      "browser": {
+        "passed": 36,
+        "browsers": [
+          "Chromium",
+          "Firefox",
+          "WebKit"
+        ],
+        "server": "Local production build; dedicated runbook_ui_test PostgreSQL database",
+        "durationMinutes": 11.7
+      },
+      "nodeCIContracts": {
+        "passed": 9
+      },
+      "workflowYaml": "PASS"
+    },
+    "priorHeadLiveFleet": {
+      "head": "19adac7ec",
+      "run": "https://github.com/opsknight-labs/OpsKnight/actions/runs/38773082264",
+      "artifact": "runbook-deployment-candidate-evidence/live-agent-fleet.json",
+      "result": {
+        "measuredAt": "2026-10-15T17:11:22.429Z",
+        "evidence": [
+          {
+            "platform": "compose",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          },
+          {
+            "platform": "swarm",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          },
+          {
+            "platform": "helm",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          },
+          {
+            "platform": "kustomize",
+            "independentAgents": 2,
+            "distinctJobClaims": "PASS",
+            "restartIdentity": "PASS",
+            "upgradePreservesIdentity": "PASS",
+            "removalIsolation": "PASS"
+          }
+        ],
+        "limitations": [
+          "Locally built candidate with a test CA",
+          "Single-node disposable Swarm and Kind; physical HA and published distribution remain unqualified"
+        ]
+      }
+    },
+    "hostedCI": "Required checks must pass on the committed candidate head; prior-head passes and local checks are not substituted.",
+    "releaseQualification": "BETA. Physical approved-write/failure/HA tests, public release distribution, sustained authenticated capacity and independent human accessibility/usability qualification remain NOT_TESTED."
+  },
+  "maintenanceAlertClosure": {
+    "auditedHead": "22930f4c245041dd29a6c2b5f892a230e15bb946",
+    "verifiedAt": "2026-10-15",
+    "changes": "Six warning alerts cover nonce/artifact stalled maintenance, expired age backlog and repeated failed transactions. Backlog joins recent successful batch evidence per scrape job/instance to suppress stale former leaders. Added bounded artifact expired-age projection.",
+    "validation": {
+      "promtool": "3.15.0; 18 bundled rules valid; six firing/recovery scenarios pass",
+      "postgresql": "3 tests in nonce maintenance and artifact retention pass, including deliberate deletion contention, replay rejection, separate recovery, artifact age beyond retention and reset after draining",
+      "unit": "15 targeted tests pass",
+      "ciContracts": "9 Node tests pass",
+      "typecheck": "pass",
+      "lint": "zero warnings for modified TypeScript and CommonJS (CommonJS explicitly included with --no-ignore)",
+      "documentation": "v2.1 links and frontmatter pass; scheduler/integrated metrics scraping prerequisites documented"
+    },
+    "limitations": "Hosted checks must complete for the pushed commit. Physical HA, sustained authenticated workload, public release distributions and human UX review remain separate qualification gates; no production certification claimed."
+  }
+}

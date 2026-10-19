@@ -7,7 +7,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
-  default: { user: { findUnique: mocks.findUnique } },
+  default: {
+    user: { findUnique: mocks.findUnique },
+    authenticationPolicy: {
+      findUnique: vi
+        .fn()
+        .mockResolvedValue({ mode: 'SSO_OPTIONAL', version: 1, legacyEmergencyEmail: null }),
+    },
+  },
 }));
 
 vi.mock('@/lib/session-registry', () => ({

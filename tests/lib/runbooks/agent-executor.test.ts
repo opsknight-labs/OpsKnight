@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { executeAttempt, sliceUtf8Safe } from '../../../agent/src/executor';
+import {
+  containerHealthPassed,
+  executeAttempt,
+  isContainerStarting,
+  sliceUtf8Safe,
+} from '../../../agent/src/executor';
 import type { AgentPolicy, ClaimedAttempt } from '../../../agent/src/types';
 
 const policy: AgentPolicy = {
@@ -14,6 +19,8 @@ const policy: AgentPolicy = {
     '[[ "$BASH_ENV" == /dev/null ]]',
     'printf "%s|%s" "$OPSKNIGHT_INPUT_SERVICE" "$OPSKNIGHT_INPUT_REPLICAS"',
     "printf '0123456789'",
+    "printf 'x%.0s' {1..2000}",
+    'head -c 10485800 /dev/zero',
     'exit 99',
     'sleep 30',
     'exit 1',
@@ -87,14 +94,42 @@ describe('runbook Agent executor', () => {
     expect(result.output).toBe('payments|3');
   });
 
+  it('receives a secret as environment data without inserting it into shell source', async () => {
+    const command = 'test -n "$OPSKNIGHT_INPUT_TOKEN" && printf ready';
+    const request = {
+      ...attempt(command, { token: 'literal; $(exit 99) `exit 99`' }),
+      secretInputKeys: ['token'],
+    };
+    const result = await executeAttempt(
+      request,
+      { ...policy, bashCommandPatterns: [command] },
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ status: 'SUCCEEDED', exitCode: 0, output: 'ready' });
+    expect(request.step.config.command).toBe(command);
+  });
+
   it('bounds captured output and marks truncation', async () => {
     const result = await executeAttempt(
-      attempt("printf '0123456789'"),
-      { ...policy, maxOutputBytes: 5 },
+      attempt("printf 'x%.0s' {1..2000}"),
+      { ...policy, maxOutputBytes: 1024 },
       new AbortController().signal
     );
     expect(result.status).toBe('SUCCEEDED');
-    expect(result.output).toBe('01234\n[output truncated]');
+    expect(Buffer.byteLength(result.output)).toBeLessThanOrEqual(1024);
+    expect(result.output.endsWith('\n[output truncated]')).toBe(true);
+    expect(result.output.startsWith('x'.repeat(1000))).toBe(true);
+  });
+
+  it('includes the marker inside the maximum 10 MiB output contract', async () => {
+    const result = await executeAttempt(
+      attempt('head -c 10485800 /dev/zero'),
+      { ...policy, maxOutputBytes: 10 * 1024 * 1024 },
+      new AbortController().signal
+    );
+    expect(result.status).toBe('SUCCEEDED');
+    expect(Buffer.byteLength(result.output)).toBe(10 * 1024 * 1024);
+    expect(result.output.endsWith('\n[output truncated]')).toBe(true);
   });
 
   it('does not start work when cancellation is already requested', async () => {
@@ -150,5 +185,267 @@ describe('runbook Agent executor', () => {
 
     // Full string preserved when limit exceeds byte length
     expect(sliceUtf8Safe(unicodeString, totalBytes + 100)).toBe(unicodeString);
+  });
+
+  it('correctly distinguishes healthy, starting, and unhealthy container states', () => {
+    // Starting states
+    expect(isContainerStarting('{"Health":{"Status":"starting"}}')).toBe(true);
+    expect(isContainerStarting('{"Healthcheck":{"Status":"starting"}}')).toBe(true);
+    expect(isContainerStarting('"starting"')).toBe(true);
+    expect(isContainerStarting('{"status":"starting"}')).toBe(true);
+    expect(isContainerStarting('{"Health":{"Status":"healthy"}}')).toBe(false);
+
+    // Healthy states
+    expect(containerHealthPassed('{"Health":{"Status":"healthy"}}')).toBe(true);
+    expect(containerHealthPassed('{"Healthcheck":{"Status":"healthy"}}')).toBe(true);
+    expect(containerHealthPassed('"healthy"')).toBe(true);
+    expect(containerHealthPassed('{"status":"healthy"}')).toBe(true);
+    expect(containerHealthPassed('{"Health":{"Status":"starting"}}')).toBe(false);
+    expect(containerHealthPassed('{"Health":{"Status":"unhealthy"}}')).toBe(false);
+    expect(containerHealthPassed('')).toBe(false);
+    expect(containerHealthPassed('invalid-json')).toBe(false);
+  });
+
+  it('respects step.timeoutSeconds and abort signals during execution', async () => {
+    const customAttempt: ClaimedAttempt = {
+      attemptId: 'att-timeout',
+      leaseToken: 'lease-tok',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-timeout',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'docker_health_check',
+        name: 'Health check',
+        type: 'DOCKER',
+        riskClass: 'READ_ONLY',
+        config: {
+          action: 'health',
+          container: 'api',
+        },
+        timeoutSeconds: 2,
+      },
+    };
+
+    const dockerPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['DOCKER'],
+      dockerContainers: ['api'],
+    };
+
+    const controller = new AbortController();
+    controller.abort('AGENT_SHUTDOWN');
+    const result = await executeAttempt(customAttempt, dockerPolicy, controller.signal);
+    expect(result.status).toBe('CANCELLED');
+    expect(result.errorCode).toBe('AGENT_INTERRUPTED_BY_SHUTDOWN');
+  });
+
+  it('polls container health transitioning from starting to healthy', async () => {
+    let callCount = 0;
+    const fakeRunner = async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          status: 'SUCCEEDED' as const,
+          output: '{"Health":{"Status":"starting"}}',
+          exitCode: 0,
+        };
+      }
+      return {
+        status: 'SUCCEEDED' as const,
+        output: '{"Health":{"Status":"healthy"}}',
+        exitCode: 0,
+      };
+    };
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-health-poll-1',
+      leaseToken: 'tok-1',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-1',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'health_poll',
+        name: 'Poll health',
+        type: 'DOCKER',
+        riskClass: 'READ_ONLY',
+        config: { action: 'health', container: 'api' },
+        timeoutSeconds: 5,
+      },
+    };
+
+    const dockerPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['DOCKER'],
+      dockerContainers: ['api'],
+    };
+    const result = await executeAttempt(
+      attemptObj,
+      dockerPolicy,
+      new AbortController().signal,
+      fakeRunner
+    );
+    expect(result.status).toBe('SUCCEEDED');
+    expect(callCount).toBe(2);
+    expect(result.output).toContain('"healthy"');
+  });
+
+  it('fails container health when it remains in starting beyond step timeout deadline', async () => {
+    const fakeRunner = async () => ({
+      status: 'SUCCEEDED' as const,
+      output: '{"Health":{"Status":"starting"}}',
+      exitCode: 0,
+    });
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-health-poll-2',
+      leaseToken: 'tok-2',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-2',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'health_poll_timeout',
+        name: 'Poll health timeout',
+        type: 'DOCKER',
+        riskClass: 'READ_ONLY',
+        config: { action: 'health', container: 'api' },
+        timeoutSeconds: 1, // Short deadline: 1s
+      },
+    };
+
+    const dockerPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['DOCKER'],
+      dockerContainers: ['api'],
+    };
+    const startTime = Date.now();
+    const result = await executeAttempt(
+      attemptObj,
+      dockerPolicy,
+      new AbortController().signal,
+      fakeRunner
+    );
+    const duration = Date.now() - startTime;
+
+    expect(result.status).toBe('FAILED');
+    expect(result.errorCode).toBe('CONTAINER_UNHEALTHY');
+    // Ensure timeout happened according to 1s step deadline and didn't wait for 5s artificial floor
+    expect(duration).toBeLessThan(3000);
+  });
+
+  it('propagates retry failures that occur halfway through health polling', async () => {
+    let callCount = 0;
+    const fakeRunner = async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          status: 'SUCCEEDED' as const,
+          output: '{"Health":{"Status":"starting"}}',
+          exitCode: 0,
+        };
+      }
+      return {
+        status: 'FAILED' as const,
+        output: 'Cannot connect to the Docker daemon',
+        exitCode: 1,
+        errorCode: 'DOCKER_DAEMON_DOWN',
+        errorMessage: 'Daemon connection lost',
+      };
+    };
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-health-poll-3',
+      leaseToken: 'tok-3',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-3',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'health_poll_retry_fail',
+        name: 'Poll health retry fail',
+        type: 'DOCKER',
+        riskClass: 'READ_ONLY',
+        config: { action: 'health', container: 'api' },
+        timeoutSeconds: 5,
+      },
+    };
+
+    const dockerPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['DOCKER'],
+      dockerContainers: ['api'],
+    };
+    const result = await executeAttempt(
+      attemptObj,
+      dockerPolicy,
+      new AbortController().signal,
+      fakeRunner
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.errorCode).toBe('DOCKER_DAEMON_DOWN');
+    expect(result.errorMessage).toBe('Daemon connection lost');
+  });
+
+  it('transitions to UNKNOWN when local lease authority is lost during health polling', async () => {
+    const controller = new AbortController();
+    let callCount = 0;
+    const fakeRunner = async () => {
+      callCount++;
+      if (callCount === 1) {
+        // Trigger authority expiration during polling wait
+        setTimeout(() => controller.abort('LEASE_LOST'), 50);
+        return {
+          status: 'SUCCEEDED' as const,
+          output: '{"Health":{"Status":"starting"}}',
+          exitCode: 0,
+        };
+      }
+      return {
+        status: 'SUCCEEDED' as const,
+        output: '{"Health":{"Status":"starting"}}',
+        exitCode: 0,
+      };
+    };
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-health-poll-4',
+      leaseToken: 'tok-4',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-4',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'health_poll_lease_lost',
+        name: 'Poll health authority lost',
+        type: 'DOCKER',
+        riskClass: 'READ_ONLY',
+        config: { action: 'health', container: 'api' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const dockerPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['DOCKER'],
+      dockerContainers: ['api'],
+    };
+    const result = await executeAttempt(attemptObj, dockerPolicy, controller.signal, fakeRunner);
+
+    expect(result.status).toBe('UNKNOWN');
+    expect(result.errorCode).toBe('LEASE_LOST');
+    expect(result.errorMessage).toContain('Local execution authority expired');
   });
 });

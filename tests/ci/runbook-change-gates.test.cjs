@@ -18,6 +18,8 @@ test('Runbook code, Agent code and browser journeys run only Runbook jobs', () =
   for (const path of [
     'src/lib/runbooks/orchestrator.ts',
     'agent/src/executor.ts',
+    'monitoring/prometheus/opsknight-alerts.yaml',
+    'monitoring/prometheus/runbook-maintenance.test.yml',
     'tests/e2e/runbooks-ui.spec.ts',
     'src/components/runbooks/RunbookControls.tsx',
   ]) {
@@ -27,6 +29,9 @@ test('Runbook code, Agent code and browser journeys run only Runbook jobs', () =
 test('shared dependencies retain safety coverage', () => {
   for (const path of [
     'package-lock.json',
+    'scripts/wait-for-runtime-database.cjs',
+    'scripts/wait-for-database-ready.cjs',
+    'tests/ci/runtime-database-readiness.test.cjs',
     'prisma/schema.prisma',
     'prisma/migrations/deleted/migration.sql',
     '.github/actions/setup-node/action.yml',

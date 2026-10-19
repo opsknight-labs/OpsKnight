@@ -59,6 +59,7 @@ export const CAPABILITIES = {
   RUNBOOK_EXECUTE: 'runbook.execute',
   RUNBOOK_APPROVE: 'runbook.approve',
   RUNBOOK_MANAGE: 'runbook.manage',
+  RUNBOOK_ARTIFACT_DOWNLOAD: 'runbook.artifact.download',
   RUNBOOK_PUBLISH: 'runbook.publish',
   RUNBOOK_AGENT_MANAGE: 'runbook.agent.manage',
   RUNBOOK_SECRET_MANAGE: 'runbook.secret.manage',
@@ -71,10 +72,42 @@ export const API_SCOPES = {
   INCIDENTS_READ: 'incidents:read',
   INCIDENTS_WRITE: 'incidents:write',
   SERVICES_READ: 'services:read',
+  SERVICES_WRITE: 'services:write',
   SCHEDULES_READ: 'schedules:read',
+  SCHEDULES_WRITE: 'schedules:write',
+  TEAMS_READ: 'teams:read',
+  TEAMS_WRITE: 'teams:write',
+  USERS_READ: 'users:read',
+  USERS_WRITE: 'users:write',
+  ESCALATION_POLICIES_READ: 'escalation-policies:read',
+  ESCALATION_POLICIES_WRITE: 'escalation-policies:write',
+  INTEGRATIONS_READ: 'integrations:read',
+  INTEGRATIONS_WRITE: 'integrations:write',
+  NOTIFICATIONS_READ: 'notifications:read',
+  NOTIFICATIONS_WRITE: 'notifications:write',
+  STATUS_PAGES_READ: 'status-pages:read',
+  STATUS_PAGES_WRITE: 'status-pages:write',
+  RUNBOOKS_READ: 'runbooks:read',
+  RUNBOOKS_EXECUTE: 'runbooks:execute',
+  RUNBOOKS_WRITE: 'runbooks:write',
+  RUNBOOKS_PUBLISH: 'runbooks:publish',
+  AUDIT_READ: 'audit:read',
+  REPORTS_READ: 'reports:read',
+  POSTMORTEMS_READ: 'postmortems:read',
+  POSTMORTEMS_WRITE: 'postmortems:write',
+  SERVICE_ACCOUNTS_READ: 'service-accounts:read',
+  SERVICE_ACCOUNTS_WRITE: 'service-accounts:write',
   RESPONSE_POLICY_READ: 'response-policy:read',
   RESPONSE_POLICY_WRITE: 'response-policy:write',
+  ADMIN_MANAGE: 'admin:manage',
 } as const;
+
+/** Infrastructure permissions are never implied by a broad administrator credential. */
+export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
+  API_SCOPES.RUNBOOKS_WRITE,
+  API_SCOPES.RUNBOOKS_PUBLISH,
+  API_SCOPES.RUNBOOKS_EXECUTE,
+]);
 
 export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];
 
@@ -83,7 +116,12 @@ export function isApiScope(value: unknown): value is ApiScope {
 }
 
 export function isWriteApiScope(scope: ApiScope): boolean {
-  return scope.endsWith(':write');
+  return (
+    scope.endsWith(':write') ||
+    scope.endsWith(':execute') ||
+    scope.endsWith(':publish') ||
+    scope === 'admin:manage'
+  );
 }
 
 const ADMIN_CAPABILITIES = new Set<Capability>(Object.values(CAPABILITIES));

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import ChunkLoadErrorHandler, {
   MAX_AUTO_RELOADS,
   CHUNK_RECOVERY_STORAGE_KEY,
+  purgeCachesAndReload,
 } from '@/components/ChunkLoadErrorHandler';
 
 describe('ChunkLoadErrorHandler', () => {
@@ -196,5 +197,30 @@ describe('ChunkLoadErrorHandler', () => {
 
     expect(reloadMock).not.toHaveBeenCalled();
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('awaits window.caches deletion before calling reload', async () => {
+    const deletedCaches: string[] = [];
+    const deleteMock = vi.fn().mockImplementation((name: string) => {
+      deletedCaches.push(name);
+      return Promise.resolve(true);
+    });
+    const keysMock = vi.fn().mockResolvedValue(['next-static-assets', 'other-cache']);
+
+    Object.defineProperty(window, 'caches', {
+      configurable: true,
+      value: {
+        keys: keysMock,
+        delete: deleteMock,
+      },
+    });
+
+    await purgeCachesAndReload();
+
+    expect(keysMock).toHaveBeenCalled();
+    expect(deleteMock).toHaveBeenCalledWith('next-static-assets');
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+
+    delete (window as { caches?: unknown }).caches;
   });
 });

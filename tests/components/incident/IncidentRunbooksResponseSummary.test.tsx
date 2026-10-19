@@ -16,7 +16,8 @@ vi.mock('@/lib/rbac', () => ({
 }));
 vi.mock('@/lib/prisma', () => ({
   default: {
-    serviceRunbookBinding: { findMany: mocks.bindings },
+    serviceAutomationRule: { findMany: mocks.bindings },
+    incident: { findUnique: vi.fn().mockResolvedValue({ status: 'OPEN' }) },
     runbookExecution: { findMany: mocks.executions, count: vi.fn().mockResolvedValue(0) },
     runbookSuggestion: { findMany: mocks.suggestions },
     runbookExecutionStep: { count: vi.fn().mockResolvedValue(0) },

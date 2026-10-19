@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   applyIncidentLifecycleTargetStatus: vi.fn(),
   executeIdempotentOperation: vi.fn(),
   enqueueIncidentUpdateSideEffects: vi.fn(),
+  assignIncidentDomainCommand: vi.fn(),
 }));
 
 vi.mock('@/lib/db-utils', () => ({
@@ -23,6 +24,11 @@ vi.mock('@/lib/event-outbox', () => ({
   enqueueIncidentUpdateSideEffects: mocks.enqueueIncidentUpdateSideEffects,
 }));
 
+vi.mock('@/lib/incidents/assignment', () => ({
+  assignIncidentDomainCommand: mocks.assignIncidentDomainCommand,
+}));
+
+import { AppError } from '@/lib/errors';
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
 
 type Tx = {
@@ -117,15 +123,25 @@ describe('REST incident patch transaction', () => {
         actor: { id: 'api-user' },
       })
     );
+    // Assignment goes through the canonical command, not a direct row write.
     expect(tx.incident.update).toHaveBeenCalledWith({
       where: { id: 'inc-1' },
-      data: { urgency: 'HIGH', assigneeId: 'user-2', teamId: null },
+      data: { urgency: 'HIGH' },
     });
+    expect(mocks.assignIncidentDomainCommand).toHaveBeenCalledWith(
+      {
+        incidentId: 'inc-1',
+        assigneeId: 'user-2',
+        teamId: null,
+        actor: { id: 'api-user' },
+      },
+      tx
+    );
     expect(tx.incidentEvent.create).toHaveBeenCalledWith({
       data: { incidentId: 'inc-1', message: 'Urgency updated to HIGH' },
     });
-    expect(tx.incidentEvent.create).toHaveBeenCalledWith({
-      data: { incidentId: 'inc-1', message: 'Incident manually reassigned to Responder Two' },
+    expect(tx.incidentEvent.create).not.toHaveBeenCalledWith({
+      data: expect.objectContaining({ message: expect.stringContaining('reassigned') }),
     });
     expect(result).toMatchObject({
       changed: true,
@@ -265,7 +281,9 @@ describe('REST incident patch transaction', () => {
       urgency: 'LOW',
       assigneeId: null,
     });
-    tx.user.findFirst.mockResolvedValue(null);
+    mocks.assignIncidentDomainCommand.mockRejectedValue(
+      new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'User not found or not eligible.' })
+    );
     mocks.applyIncidentLifecycleTargetStatus.mockResolvedValue({
       incidentId: 'inc-3',
       command: 'ACKNOWLEDGE',
@@ -287,6 +305,50 @@ describe('REST incident patch transaction', () => {
 
     expect(tx.incident.update).not.toHaveBeenCalled();
     expect(tx.incidentEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('does not invoke the assignment command when the assignee is unchanged', async () => {
+    tx.incident.findUnique
+      .mockResolvedValueOnce({ id: 'inc-5', status: 'OPEN', urgency: 'LOW', assigneeId: 'user-9' })
+      .mockResolvedValueOnce({ id: 'inc-5', status: 'OPEN', urgency: 'LOW', assigneeId: 'user-9' });
+
+    await applyRestIncidentPatch({
+      incidentId: 'inc-5',
+      assigneeId: 'user-9',
+      hasAssigneeUpdate: true,
+      actor: { id: 'api-user' },
+    });
+
+    expect(mocks.assignIncidentDomainCommand).not.toHaveBeenCalled();
+  });
+
+  it('runs the in-transaction hook inside the patch transaction', async () => {
+    tx.incident.findUnique
+      .mockResolvedValueOnce({
+        id: 'inc-6',
+        title: 'a',
+        status: 'OPEN',
+        urgency: 'LOW',
+        assigneeId: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'inc-6',
+        title: 'b',
+        status: 'OPEN',
+        urgency: 'LOW',
+        assigneeId: null,
+      });
+    const inTx = vi.fn().mockResolvedValue(undefined);
+
+    await applyRestIncidentPatch({
+      incidentId: 'inc-6',
+      title: 'b',
+      hasAssigneeUpdate: false,
+      actor: { id: 'api-user' },
+      inTx,
+    });
+
+    expect(inTx).toHaveBeenCalledWith(tx);
   });
 
   it('propagates typed lifecycle validation failures unchanged', async () => {

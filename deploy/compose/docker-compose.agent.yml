@@ -1,13 +1,13 @@
 services:
   opsknight-agent:
-    image: ${OPSKNIGHT_AGENT_IMAGE:-ghcr.io/opsknight-labs/opsknight-agent:2.0.0}
+    image: ${OPSKNIGHT_AGENT_IMAGE:?Set OPSKNIGHT_AGENT_IMAGE to a verified release digest}
     pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
-      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:-http://opsknight-app:3000}
+      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:?Set the OpsKnight endpoint reachable by this Agent}
       OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
       OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
-      OPSKNIGHT_AGENT_ENROLLMENT_TOKEN: ${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN:?Create a single-use token in Runbooks > Agents}
+      OPSKNIGHT_AGENT_ENROLLMENT_TOKEN: ${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN:-}
       # To enable Podman actions via socket connection, uncomment:
       # CONTAINER_HOST: ${PODMAN_SOCKET:-unix:///run/podman/podman.sock}
     volumes:

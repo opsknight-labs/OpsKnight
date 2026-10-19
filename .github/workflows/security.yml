@@ -32,7 +32,17 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4.38.2
+        with:
+          output: codeql-results
         continue-on-error: true
+
+      - name: Preserve complete analysis for the legacy report identity
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-complete-analysis
+          path: codeql-results/*.sarif
+          retention-days: 1
+          if-no-files-found: error
 
   eslint:
     name: ESLint Security
@@ -53,6 +63,9 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: ESLint Security Scan (SARIF)
+        env:
+          # Match normal ESLint: documented in-source suppressions are not active findings.
+          SARIF_ESLINT_IGNORE_SUPPRESSED: 'true'
         run: |
           mkdir -p reports
           npx eslint . --format @microsoft/eslint-formatter-sarif --output-file reports/eslint-security.sarif || true
@@ -120,6 +133,38 @@ jobs:
         run: |
           test "$CODEQL_RESULT" = success
           test "$ESLINT_RESULT" = success
+
+      # Main retains a CodeQL baseline from the former sast scan job. Publish the
+      # identical full analysis under that identity as well; never delete history
+      # or suppress findings merely to remove the missing-configuration warning.
+      - name: Checkout repository for legacy analysis source mapping
+        uses: actions/checkout@v7
+
+      - name: Download full CodeQL analysis
+        uses: actions/download-artifact@v4
+        with:
+          name: codeql-complete-analysis
+          path: codeql-results
+
+      - name: Map complete results to the legacy analysis identity
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          for (const name of fs.readdirSync('codeql-results').filter(name => name.endsWith('.sarif'))) {
+            const file = `codeql-results/${name}`;
+            const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+            for (const run of report.runs || []) {
+              run.automationDetails = { ...run.automationDetails, id: '.github/workflows/security.yml:sast/' };
+            }
+            fs.writeFileSync(file, JSON.stringify(report));
+          }
+          NODE
+
+      - name: Publish legacy CodeQL configuration identity
+        uses: github/codeql-action/upload-sarif@v4.38.2
+        with:
+          sarif_file: codeql-results
+          category: .github/workflows/security.yml:sast
 
   sca:
     name: SCA (Dependencies & Containers)

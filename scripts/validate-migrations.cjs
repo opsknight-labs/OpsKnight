@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Standalone CommonJS CLI/test runs before application compilation. */
+/* eslint-disable security/detect-non-literal-fs-filename -- Paths are fixed repository migration/report inventory, never request input. */
 /**
  * Migration Validation Script
  *
@@ -12,6 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { createHash } = require('node:crypto');
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'prisma', 'migrations');
 const REPORTS_DIR = path.join(__dirname, '..', 'reports');
@@ -20,8 +23,47 @@ const DANGEROUS_OPERATIONS = ['DROP TABLE', 'DROP COLUMN', 'TRUNCATE', 'DELETE F
 const ENUM_ALTER_PATTERN = /ALTER\s+TYPE\s+"?\w+"?\s+ADD\s+VALUE/i;
 // Some legacy migrations predate stricter safety checks and are allowed to violate them.
 // Avoid editing historical migrations that may have been applied in production.
-const DROP_WITHOUT_IF_EXISTS_ALLOWLIST = new Set([
-  '20260104135828_remove_nextauth_adapter_tables',
+const DROP_WITHOUT_IF_EXISTS_ALLOWLIST = new Set(['20260104135828_remove_nextauth_adapter_tables']);
+
+// These exact migration bytes have already been applied by SSO preview installations.
+// Preserve Prisma checksums. Exceptions cover only the reviewed rule, never future SQL
+// under the same name or new migrations. Any byte change restores the strict error.
+const REVIEWED_APPLIED_MIGRATIONS = new Map([
+  [
+    '20261012140000_enterprise_authentication',
+    {
+      sha256: '776e112c24d76b573bb589ba2779e4a7a09160aa9126a2f2d7b157bf457c0dcb',
+      rule: 'ENUM_MIXED_OPERATIONS',
+      reason:
+        'Already-applied SSO migration: unrelated table DDL never uses the new SECURITY enum value before commit; clean and published-release PostgreSQL upgrades are certified.',
+    },
+  ],
+  [
+    '20261013180000_authentication_alert_terminal',
+    {
+      sha256: '75aa0d9387c4e4912d765f6e0f6934513fda5a9400949a31c0160150343feffe',
+      rule: 'DROP_WITHOUT_IF_EXISTS',
+      reason:
+        'Already-applied SSO migration drops the exact predecessor index created by the preceding schema.',
+    },
+  ],
+  [
+    '20261013200000_authentication_alert_failure',
+    {
+      sha256: 'db26a10f4e85e93811c90d0681bd2924e98b774c94ad49c4a607b677701d7c5e',
+      rule: 'DROP_WITHOUT_IF_EXISTS',
+      reason: 'Already-applied SSO migration replaces its exact predecessor alert index.',
+    },
+  ],
+  [
+    '20261014120000_authentication_alert_receipts',
+    {
+      sha256: 'd39deab277f26670b234897ecc72d8ce08edf9a3753ac3aaafb69638ab8d87fb',
+      rule: 'DROP_WITHOUT_IF_EXISTS',
+      reason:
+        'Already-applied SSO migration replaces its exact predecessor alert index while preserving receipt history.',
+    },
+  ],
 ]);
 
 function escapeXml(value) {
@@ -46,13 +88,13 @@ function writeJUnitReport({ success, errors, warnings, infos }) {
   const tests = 1;
   const failures = success ? 0 : 1;
   const errorMessages = errors.length
-    ? errors.map((issue) => `[${issue.migration}] ${issue.message}`).join('\n')
+    ? errors.map(issue => `[${issue.migration}] ${issue.message}`).join('\n')
     : '';
   const warningMessages = warnings.length
-    ? warnings.map((issue) => `[${issue.migration}] ${issue.message}`).join('\n')
+    ? warnings.map(issue => `[${issue.migration}] ${issue.message}`).join('\n')
     : '';
   const infoMessages = infos.length
-    ? infos.map((issue) => `[${issue.migration}] ${issue.message}`).join('\n')
+    ? infos.map(issue => `[${issue.migration}] ${issue.message}`).join('\n')
     : '';
 
   const systemOut = [warningMessages, infoMessages].filter(Boolean).join('\n');
@@ -84,8 +126,8 @@ function getAllMigrations() {
 
   const entries = fs.readdirSync(MIGRATIONS_DIR, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isDirectory() && /^\d{14}_/.test(entry.name))
-    .map((entry) => entry.name)
+    .filter(entry => entry.isDirectory() && /^\d{14}_/.test(entry.name))
+    .map(entry => entry.name)
     .sort();
 }
 
@@ -163,13 +205,13 @@ function validateMigrationContent(migrationName, sql) {
   const issues = [];
 
   if (ENUM_ALTER_PATTERN.test(sql)) {
-    const lines = sql.split('\n').filter((line) => {
+    const lines = sql.split('\n').filter(line => {
       const trimmed = line.trim();
       return trimmed && !trimmed.startsWith('--');
     });
 
     if (lines.length > 1) {
-      const hasOtherOperations = lines.some((line) => {
+      const hasOtherOperations = lines.some(line => {
         const trimmed = line.trim();
         return trimmed && !ENUM_ALTER_PATTERN.test(trimmed) && trimmed !== ';';
       });
@@ -177,6 +219,7 @@ function validateMigrationContent(migrationName, sql) {
       if (hasOtherOperations) {
         issues.push({
           severity: 'error',
+          rule: 'ENUM_MIXED_OPERATIONS',
           migration: migrationName,
           message:
             'CRITICAL: Enum ALTER TYPE cannot be mixed with other operations. Split this into separate migrations.',
@@ -187,8 +230,7 @@ function validateMigrationContent(migrationName, sql) {
     issues.push({
       severity: 'warning',
       migration: migrationName,
-      message:
-        'Contains enum value addition. Ensure this migration ONLY contains enum changes.',
+      message: 'Contains enum value addition. Ensure this migration ONLY contains enum changes.',
     });
   }
 
@@ -208,12 +250,21 @@ function validateMigrationContent(migrationName, sql) {
     const severity = DROP_WITHOUT_IF_EXISTS_ALLOWLIST.has(migrationName) ? 'warning' : 'error';
     issues.push({
       severity,
+      rule: 'DROP_WITHOUT_IF_EXISTS',
       migration: migrationName,
       message:
         'DROP operation without IF EXISTS clause. Use IF EXISTS for safer deploys (or add to allowlist only for legacy migrations).',
     });
   }
 
+  const reviewed = REVIEWED_APPLIED_MIGRATIONS.get(migrationName);
+  if (reviewed && createHash('sha256').update(sql).digest('hex') === reviewed.sha256) {
+    return issues.map(issue =>
+      issue.severity === 'error' && issue.rule === reviewed.rule
+        ? { ...issue, severity: 'info', message: `Reviewed applied migration: ${reviewed.reason}` }
+        : issue
+    );
+  }
   return issues;
 }
 
@@ -243,13 +294,13 @@ function validateMigrations() {
     issues.push(...contentIssues);
   }
 
-  const errors = issues.filter((issue) => issue.severity === 'error');
-  const warnings = issues.filter((issue) => issue.severity === 'warning');
-  const infos = issues.filter((issue) => issue.severity === 'info');
+  const errors = issues.filter(issue => issue.severity === 'error');
+  const warnings = issues.filter(issue => issue.severity === 'warning');
+  const infos = issues.filter(issue => issue.severity === 'info');
 
   if (errors.length > 0) {
     console.log('ERRORS:\n');
-    errors.forEach((issue) => {
+    errors.forEach(issue => {
       console.log(`  ${issue.migration}`);
       console.log(`  - ${issue.message}\n`);
     });
@@ -257,7 +308,7 @@ function validateMigrations() {
 
   if (warnings.length > 0) {
     console.log('WARNINGS:\n');
-    warnings.forEach((issue) => {
+    warnings.forEach(issue => {
       console.log(`  ${issue.migration}`);
       console.log(`  - ${issue.message}\n`);
     });
@@ -265,7 +316,7 @@ function validateMigrations() {
 
   if (infos.length > 0) {
     console.log('INFO:\n');
-    infos.forEach((issue) => {
+    infos.forEach(issue => {
       console.log(`  ${issue.migration}`);
       console.log(`  - ${issue.message}\n`);
     });
@@ -277,7 +328,9 @@ function validateMigrations() {
     return true;
   }
 
-  console.log(`\nSummary: ${errors.length} errors, ${warnings.length} warnings, ${infos.length} info`);
+  console.log(
+    `\nSummary: ${errors.length} errors, ${warnings.length} warnings, ${infos.length} info`
+  );
 
   if (errors.length > 0) {
     console.log('\nValidation failed. Fix errors before deploying.');
@@ -290,5 +343,8 @@ function validateMigrations() {
   return true;
 }
 
-const success = validateMigrations();
-process.exit(success ? 0 : 1);
+if (require.main === module) {
+  const success = validateMigrations();
+  process.exit(success ? 0 : 1);
+}
+module.exports = { validateMigrationContent };

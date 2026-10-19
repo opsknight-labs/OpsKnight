@@ -134,7 +134,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (parsed.data.policy === 'TRUSTED_PWA') {
-    if (token?.rememberMe !== true) {
+    if (
+      token?.rememberMe !== true ||
+      (token.authProvider != null && token.authProvider !== 'credentials') ||
+      token.oidcAuthenticatedAt != null
+    ) {
       return NextResponse.json(
         { error: 'Trusted PWA policy requires an extended credential session' },
         { status: 409, headers: noStoreHeaders }

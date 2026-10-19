@@ -1,0 +1,10 @@
+# Overlay for token-file enrollment; keep the protected token file while referenced.
+services:
+  opsknight-agent:
+    environment:
+      OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE: /run/secrets/enrollment-token
+    secrets:
+      - enrollment-token
+secrets:
+  enrollment-token:
+    file: ${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_PATH:?Set the protected enrollment token file}

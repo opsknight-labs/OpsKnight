@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@prisma/client';
-import { RunbookArchivedError, RunbookNotFoundError } from './errors';
+import { RunbookArchivedError, RunbookNotFoundError, RunbookDefinitionError } from './errors';
 
 function isMockTransaction(tx: Prisma.TransactionClient): boolean {
   return (
@@ -145,4 +145,19 @@ export async function lockRunbookForShare(
   }
 
   return runbook;
+}
+
+/** Rule mutations always lock Runbook before rule; executions use the same order. */
+export async function lockServiceRuleForUpdate(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  ruleId: string
+) {
+  const identity = await tx.serviceAutomationRule.findFirst({
+    where: { id: ruleId, serviceId, detachedAt: null },
+    select: { runbookId: true },
+  });
+  if (!identity) throw new RunbookDefinitionError('Service automation rule not found.');
+  await lockRunbookForUpdate(tx, identity.runbookId, { action: 'modify a rule for' });
+  await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${ruleId} AND "serviceId" = ${serviceId} FOR UPDATE`;
 }

@@ -15,7 +15,7 @@ vi.mock('@/lib/rbac', () => ({
 }));
 vi.mock('@/lib/prisma', () => ({
   default: {
-    serviceRunbookBinding: { findMany: mocks.bindings },
+    serviceAutomationRule: { findMany: mocks.bindings },
     runbookExecution: { findMany: mocks.executions },
     runbookSuggestion: { findMany: mocks.suggestions },
   },
@@ -26,6 +26,10 @@ vi.mock('@/components/incident/runbook-actions', () => ({
   dismissIncidentRunbookSuggestionAction: vi.fn(),
   executePreviewedIncidentRunbookAction: vi.fn(),
   previewIncidentRunbookAction: vi.fn(),
+  searchAdhocIncidentRunbooksAction: vi.fn(),
+  loadAdhocIncidentRunbookAction: vi.fn(),
+  previewAdhocIncidentRunbookAction: vi.fn(),
+  executeAdhocIncidentRunbookAction: vi.fn(),
 }));
 import IncidentRunbooks from '@/components/incident/IncidentRunbooks';
 

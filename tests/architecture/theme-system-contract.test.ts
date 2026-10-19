@@ -15,6 +15,7 @@ const sources = {
   dropdowns: readFileSync('src/styles/components/dropdowns.css', 'utf8'),
   tables: readFileSync('src/styles/components/tables.css', 'utf8'),
   badges: readFileSync('src/styles/components/badges.css', 'utf8'),
+  toasts: readFileSync('src/styles/components/toasts.css', 'utf8'),
 } as const;
 
 describe('application theme contract', () => {
@@ -57,9 +58,11 @@ describe('application theme contract', () => {
     expect(shell).toContain('grid-row: 3;');
   });
 
-  it('mirrors the resolved next-themes state for legacy selectors and browser chrome', () => {
+  it('mirrors the painted (forced or resolved) theme for legacy selectors and browser chrome', () => {
     const providers = sources.providers;
-    expect(providers).toContain('const { resolvedTheme } = useTheme()');
+    // resolvedTheme alone ignores forcedTheme and leaked dark onto the forced-light desktop.
+    expect(providers).toContain('const effectiveTheme = useEffectiveTheme()');
+    expect(providers).not.toContain('resolvedTheme');
     expect(providers).toContain('root.dataset.theme = effectiveTheme');
     expect(providers).toContain('root.style.colorScheme = effectiveTheme');
     expect(providers).toContain('meta[name="theme-color"]');
@@ -83,6 +86,7 @@ describe('application theme contract', () => {
       sources.dropdowns,
       sources.tables,
       sources.badges,
+      sources.toasts,
     ];
 
     for (const css of componentStyles) {

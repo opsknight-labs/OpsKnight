@@ -48,6 +48,8 @@ const DIRECT_RESPONSE_ALLOWLIST = new Set([
   'src/app/api/status/handler.ts',
   'src/app/api/system/vapid-public-key/route.ts',
   'src/app/api/users/[id]/avatar/route.ts',
+  // OpenAPI discovery must serve the bare document: validators and SDK generators read `openapi`/`paths` at the root.
+  'src/app/api/v2/openapi.json/route.ts',
   'src/app/api/webhooks/notifications/twilio/route.ts',
   // Bot Framework activity endpoint: Bot Framework protocol response (invoke Adaptive Card) cannot use OpsKnight envelope.
   'src/app/api/microsoft-teams/messages/route.ts',

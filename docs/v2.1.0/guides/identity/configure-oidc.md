@@ -10,7 +10,7 @@ reader:
 keywords: [OIDC login, configure SSO, OpenID Connect, Entra, Google Workspace, Okta, Auth0]
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-12
   evidence:
     - src/components/settings/SsoSettingsForm.tsx
     - src/app/(app)/settings/security/actions.ts
@@ -45,7 +45,7 @@ You need:
 - permission to create its client secret and configure token claims; and
 - a tested local break-glass administrator before changing sign-in policy.
 
-Open **Settings → System → SSO / OIDC** and copy the displayed callback URL. It
+Open **Settings → System → SSO / Authentication** and copy the displayed callback URL. It
 has this exact form:
 
 ```text
@@ -59,7 +59,7 @@ continuing.
 
 ## What OpsKnight validates
 
-**Test Connection** validates discovery and metadata, not a real user login.
+**Stage configuration** validates discovery and metadata, not a real user login.
 OpsKnight requires an HTTPS issuer, exact issuer agreement with discovery,
 usable authorization/token/JWKS endpoints, approved asymmetric signing
 configuration, and safe public endpoint resolution. It rejects unsafe
@@ -262,13 +262,13 @@ boundary.
 
 After finishing the provider registration:
 
-1. Open **Settings → System → SSO / OIDC**.
+1. Open **Settings → System → SSO / Authentication**.
 2. Choose the provider template. For Okta or Auth0 custom domains, this choice
    keeps the appropriate stricter provider policy; it cannot make an arbitrary
    issuer inherit Google or Entra trust.
 3. Enter the issuer, client ID, client secret, and matching token endpoint
    authentication method.
-4. Select **Test Connection**. Continue only when discovery validates.
+4. Select **Stage configuration**. Continue only when discovery validates.
 5. Enter a provider label if the sign-in button needs an organization-specific
    name.
 6. Decide whether **JIT Account Auto-Provisioning** is allowed. When disabled,
@@ -280,8 +280,9 @@ After finishing the provider registration:
    `ADMIN`; use exact, stable claim values and give elevated groups narrow
    membership.
 10. Optionally map bounded claims to department, job title, and avatar fields.
-11. Save the configuration, then test a real sign-in in a private browser with
-   a non-administrator pilot account.
+11. Stage the configuration, run **Test administrator sign-in**, preview impact
+    and activate **SSO Optional**. Then test production sign-in in a private browser
+    with a non-administrator pilot account.
 
 Connection testing does not prove callback, user assignment, consent, claims,
 or account-link behavior. A real pilot login is mandatory.
@@ -324,19 +325,32 @@ Never map a broad all-employees group to `ADMIN`.
 
 ## Roll out safely
 
-1. Preserve and test a local break-glass account.
+1. Create and drill two independently held emergency identities, using generated vault passwords, hardware keys, or one of each.
 2. Assign a small provider-side pilot group.
 3. Test allowed, unassigned, wrong-domain, deactivated, and existing-account
    users.
 4. Verify role and profile mappings, logout, and session expiry.
 5. Deactivate a pilot at the provider and confirm the expected access outcome.
 6. Expand assignments in stages while monitoring authentication audit events.
-7. Disable local login only after break-glass recovery is rehearsed.
+7. Stage the enabled connection, complete a fresh administrator sign-in test,
+   and activate **SSO Optional**. Repeat production sign-in in a separate browser.
 
-Local credential login is controlled by `AUTH_LOCAL_LOGIN_ENABLED`. Emergency
-access uses `AUTH_BREAK_GLASS_ENABLED` and `AUTH_BREAK_GLASS_EMAIL`. Keep its
-credential outside the SSO dependency and protect use through an operational
-runbook.
+The database policy controls local credential login. Staging an OIDC connection
+does not itself switch a Password Only installation to Optional. Follow
+[authentication modes](authentication-modes/) for allowed actions, verification,
+session effects, and rollback. Discovery validation proves provider metadata health,
+not successful browser login or retained administrator access.
+
+The three legacy `AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED` and
+`AUTH_BREAK_GLASS_EMAIL` settings are imported once. PostgreSQL then remains
+authoritative. Imported emergency passwords open only the restricted recovery
+console, with a one-hour hard cap and 15-minute idle timeout.
+
+Provider changes use immutable encrypted staged revisions. Run a real administrator
+login test, preview impact and activate the exact revision. Under Required,
+provider repair preserves Required. Read [test and enforce SSO](test-and-enforce-sso/),
+[Emergency Access](configure-emergency-access/) and
+[credential rotation](rotate-oidc-credentials/) before rollout.
 
 OIDC sessions have independent absolute, idle, renewal, and update-age settings
 under the `AUTH_SSO_*` configuration family. Requiring a new OpsKnight OIDC
@@ -345,16 +359,16 @@ password because the provider can reuse its own SSO session.
 
 ## Configure OIDC session policy
 
-The SSO form can override maximum session lifetime and idle timeout for OIDC
+The staged **Sessions & Policies** form can override maximum session lifetime and idle timeout for OIDC
 sessions. Leaving a field at its default uses the corresponding environment
 policy.
 
-| Control | Supported range | Environment default | Built-in fallback |
-| --- | --- | --- | --- |
-| Maximum session lifetime | 15 minutes to 30 days | `AUTH_SSO_SESSION_MAX_AGE_SECONDS` | 12 hours |
-| Idle inactivity timeout | 5 minutes to 7 days, and no longer than maximum lifetime | `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS` | 4 hours |
-| Reauthentication window | 15 minutes to 30 days | `AUTH_SSO_REAUTH_AFTER_SECONDS` | 12 hours |
-| Session update interval | 1 minute to 24 hours | `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS` | 1 hour |
+| Control                  | Supported range                                          | Environment default                     | Built-in fallback |
+| ------------------------ | -------------------------------------------------------- | --------------------------------------- | ----------------- |
+| Maximum session lifetime | 15 minutes to 30 days                                    | `AUTH_SSO_SESSION_MAX_AGE_SECONDS`      | 12 hours          |
+| Idle inactivity timeout  | 5 minutes to 7 days, and no longer than maximum lifetime | `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS` | 4 hours           |
+| Reauthentication window  | 15 minutes to 30 days                                    | `AUTH_SSO_REAUTH_AFTER_SECONDS`         | 12 hours          |
+| Session update interval  | 1 minute to 24 hours                                     | `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS`   | 1 hour            |
 
 The UI overrides the first two values. When maximum lifetime is overridden, it
 also becomes the effective reauthentication window. Invalid environment values
@@ -372,20 +386,20 @@ without recording tokens or authorization codes.
 ## Change the issuer or rotate the secret
 
 Rotating only the client secret does not change identity ownership. Create the
-replacement at the provider, update OpsKnight, test login, and revoke the old
+replacement at the provider, stage and test it in OpsKnight, explicitly activate, and revoke the old
 secret within the planned overlap.
 
 Changing issuer changes the identity trust boundary—even when it represents the
-same Okta/Auth0 tenant behind a custom domain. OpsKnight requires explicit
-issuer-migration confirmation and invalidates affected sessions and outstanding
-link approvals. Pilot the new issuer, prepare new linking approvals as needed,
+same Okta/Auth0 tenant behind a custom domain. OpsKnight requires a staged revision, a real existing-administrator ownership
+and role verification, and explicit activation. Activation invalidates affected
+sessions and outstanding link approvals. Pilot the new issuer, prepare new linking approvals as needed,
 verify stable subjects and roles, and only then retire the old issuer.
 
 ## Troubleshooting
 
 ### The SSO button is missing
 
-Confirm the configuration is enabled, discovery still validates, and the
+Confirm policy permits SSO, an activated configuration is enabled, discovery still validates, and the
 encrypted client secret can be decrypted with the current encryption key.
 
 ### The provider reports redirect URI mismatch
@@ -395,7 +409,7 @@ for character. Check HTTPS termination, forwarded host/scheme, port, path, and
 trailing slash. Correct public URL settings rather than registering an internal
 callback.
 
-### Test Connection succeeds but login fails
+### Discovery succeeds but administrator login fails
 
 Connection testing does not perform authorization. Check application
 assignment, consent, client authentication method, callback, emitted ID-token
