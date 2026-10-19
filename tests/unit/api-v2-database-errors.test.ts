@@ -37,4 +37,23 @@ describe('REST v2 database error mapping', () => {
     const response = apiV2Error(new Error('boom'), req());
     expect(response.status).toBe(500);
   });
+
+  it('returns a retryable, private response when a bounded SQL query times out', async () => {
+    const error = new Prisma.PrismaClientKnownRequestError('sensitive query detail', {
+      code: 'P2010',
+      clientVersion: 'test',
+      meta: { code: '57014', message: 'secret=abc' },
+    });
+    const response = apiV2Error(error, req());
+    const body = await response.json();
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('2');
+    expect(body.code).toBe('DATABASE_UNAVAILABLE');
+    expect(body.retryable).toBe(true);
+    expect(JSON.stringify(body)).not.toMatch(/secret=abc|sensitive query detail|57014/);
+  });
+
+  it('does not classify unrelated raw SQL errors as retryable overload', () => {
+    expect(apiV2Error(known('P2010'), req()).status).toBe(500);
+  });
 });
