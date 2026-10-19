@@ -1,24 +1,28 @@
-import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, HelpCircle, Siren, XCircle } from 'lucide-react';
 import type {
   EscalationExecutionHealth as Health,
   EscalationStepOutcome,
 } from '@/lib/escalation/execution-health';
+import { toneChipClass, type ResponseTone } from '@/lib/incidents/response-presentation';
+import { cn } from '@/lib/utils';
 
-const OUTCOME_LABEL: Record<EscalationStepOutcome, string> = {
-  COMPLETED: 'Executed',
-  SCHEDULED: 'Scheduled',
-  RUNNING: 'Running',
-  FAILED: 'Failed',
-  UNCERTAIN: 'Outcome uncertain',
+const OUTCOME: Record<
+  EscalationStepOutcome,
+  { label: string; tone: ResponseTone; Icon: typeof CheckCircle2 }
+> = {
+  COMPLETED: { label: 'Executed', tone: 'success', Icon: CheckCircle2 },
+  SCHEDULED: { label: 'Scheduled', tone: 'neutral', Icon: Clock },
+  RUNNING: { label: 'Running', tone: 'info', Icon: Clock },
+  FAILED: { label: 'Failed', tone: 'critical', Icon: XCircle },
+  UNCERTAIN: { label: 'Outcome uncertain', tone: 'warning', Icon: HelpCircle },
 };
 
-const OUTCOME_STYLE: Record<EscalationStepOutcome, string> = {
-  COMPLETED: 'text-emerald-700 dark:text-emerald-300',
-  SCHEDULED: 'text-muted-foreground',
-  RUNNING: 'text-muted-foreground',
-  FAILED: 'font-semibold text-red-700 dark:text-red-300',
-  UNCERTAIN: 'font-semibold text-amber-700 dark:text-amber-300',
-};
+function formatUtc(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
 
 function explanation(step: Health['steps'][number]): string | null {
   if (step.outcome === 'FAILED')
@@ -36,54 +40,90 @@ export default function EscalationExecutionHealth({ health }: { health: Health |
 
   return (
     <section
+      id="escalation-health"
       aria-label="Escalation execution health"
-      className="rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+      className="min-w-0 scroll-mt-24 overflow-hidden rounded-xl border border-border bg-card text-sm text-card-foreground shadow-sm"
     >
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        {health.needsAttention ? (
-          <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
-        ) : (
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-        )}
-        <h3 className="text-sm font-bold">Escalation Execution Health</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <Siren className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          Escalation Execution Health
+        </h2>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+            toneChipClass(health.needsAttention ? 'critical' : 'success')
+          )}
+        >
+          {health.needsAttention ? (
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          {health.needsAttention ? 'Needs review' : 'Healthy'}
+        </span>
       </div>
       <div className="space-y-3 p-4">
         {health.needsAttention && (
           <p
             role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+            className={cn(
+              'flex items-start gap-2 rounded-md border px-3 py-2 text-xs font-medium',
+              toneChipClass('critical')
+            )}
           >
-            {health.incidentEscalationStatus === 'FAILED'
-              ? 'Escalation for this incident has failed. No further steps will run automatically.'
-              : 'One or more escalation steps need operator review. A step that failed is not retried automatically, because a retry could page responders twice.'}
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {health.incidentEscalationStatus === 'FAILED'
+                ? 'Escalation for this incident has failed. No further steps will run automatically.'
+                : 'One or more escalation steps need operator review. A step that failed is not retried automatically, because a retry could page responders twice.'}
+            </span>
           </p>
         )}
-        <ol className="space-y-2">
-          {health.steps.map(step => (
-            <li key={step.stepIndex} className="rounded-lg border border-border/70 px-3 py-2">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="font-semibold">
-                  Step {step.stepNumber}
-                  {step.targetLabel ? ` · ${step.targetLabel}` : ''}
-                </span>
-                <span className={OUTCOME_STYLE[step.outcome]}>
-                  {step.outcome === 'SCHEDULED' || step.outcome === 'RUNNING' ? (
-                    <Clock className="mr-1 inline h-3 w-3" aria-hidden="true" />
-                  ) : null}
-                  {OUTCOME_LABEL[step.outcome]}
-                </span>
-              </div>
-              {step.maxAttempts > 0 && step.outcome !== 'COMPLETED' && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Attempts {step.attempts} of {step.maxAttempts}
-                  {step.failedAt ? ` · failed ${step.failedAt}` : ''}
-                </p>
-              )}
-              {step.error && <p className="mt-1 text-[11px] text-muted-foreground">{step.error}</p>}
-              {explanation(step) && <p className="mt-1 text-xs">{explanation(step)}</p>}
-            </li>
-          ))}
-        </ol>
+        {!!health.steps.length && (
+          <ol className="space-y-2" aria-label="Escalation steps">
+            {health.steps.map(step => {
+              const outcome = OUTCOME[step.outcome];
+              const note = explanation(step);
+              return (
+                <li key={step.stepIndex} className="rounded-lg border border-border/70 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0 break-words font-semibold">
+                      Step {step.stepNumber}
+                      {step.targetLabel ? ` · ${step.targetLabel}` : ''}
+                    </span>
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                        toneChipClass(outcome.tone)
+                      )}
+                    >
+                      <outcome.Icon className="h-3 w-3" aria-hidden="true" />
+                      {outcome.label}
+                    </span>
+                  </div>
+                  {step.maxAttempts > 0 && step.outcome !== 'COMPLETED' && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Attempts {step.attempts} of {step.maxAttempts}
+                      {step.failedAt && (
+                        <>
+                          {' · failed '}
+                          <time dateTime={step.failedAt}>{formatUtc(step.failedAt)}</time>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {step.error && (
+                    <p className="mt-1 break-words text-[11px] text-muted-foreground">
+                      {step.error}
+                    </p>
+                  )}
+                  {note && <p className="mt-1 text-xs">{note}</p>}
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </div>
     </section>
   );

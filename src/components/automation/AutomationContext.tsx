@@ -1,18 +1,33 @@
 'use client';
-import { useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/shadcn/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { useId, useMemo, useState } from 'react';
+import { ChevronDown, Database, Plus, Search, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
+import { cn } from '@/lib/utils';
 import { CanonicalValuesEditor } from './CanonicalValuesEditor';
-import { AliasEditor } from './AliasEditor';
+import {
+  AuthoringFieldset,
+  Hint,
+  InlineError,
+  LimitCounter,
+  NativeSelect,
+  textareaClass,
+} from './authoring/primitives';
+import { useStableCallback } from './authoring/hooks';
+import {
+  deriveFieldKey,
+  FieldCatalogRow,
+  FieldDetail,
+  newFieldProblems,
+} from './authoring/context-fields';
 
 import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
-import type { Snapshot, Field } from '@/lib/automation/contract';
+import { builtinFields, LIMITS, type Snapshot, type Field } from '@/lib/automation/contract';
 import type { Observation } from '@/lib/automation/discovery';
 
 import type { Data, Discovery } from './presentation-types';
-const controlClass = 'rounded-md border border-input bg-background px-3 py-2 text-sm max-w-full';
+const EMPTY_SET = new Set<string>();
 export function AutomationContext({
   data,
   draft,
@@ -73,6 +88,7 @@ export function AutomationContext({
   analyze: () => Promise<void>;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const formId = useId();
   const visibleFields = useMemo(
     () =>
       draft.fields.filter(field =>
@@ -81,285 +97,375 @@ export function AutomationContext({
     [draft.fields, contextSearch]
   );
   const selected = visibleFields.find(field => field.key === selectedKey) ?? visibleFields[0];
+  const stableUpdateField = useStableCallback(updateField);
+  const stableDeleteField = useStableCallback(setDeleteField);
+  const canReadSensitive = data.canReadSensitive !== false;
+
+  const observedOptions = useMemo(
+    () => [
+      ...new Map([
+        ...data.observations
+          .filter(o => integrationType === 'ALL' || o.integrationType === integrationType)
+          .map(o => [o.sourcePath, o.fieldKey] as const),
+        ...discoveries.map(o => [o.path, o.key] as const),
+      ]).entries(),
+    ],
+    [data.observations, discoveries, integrationType]
+  );
+  const integrationTypes = useMemo(
+    () => [...new Set(data.integrations.map(i => i.type))],
+    [data.integrations]
+  );
+  const existingKeys = useMemo(
+    () => new Set([...builtinFields, ...draft.fields].map(field => field.key)),
+    [draft.fields]
+  );
+  const newKey = deriveFieldKey(fieldLabel);
+  const problems = newFieldProblems({
+    label: fieldLabel,
+    key: newKey,
+    existingKeys,
+    observedPath,
+    fieldCount: draft.fields.length,
+    type: fieldType,
+    values,
+  });
+  const problemSummary = [problems.limit, problems.label, problems.source, problems.values]
+    .filter(Boolean)
+    .join(' ');
+
+  const discoverRecent = () => {
+    void (async () => {
+      setBusy(true);
+      try {
+        const response = await automationAction({
+          action: 'discoverRecent',
+          serviceId,
+        });
+        if (!response.ok) setError(response.error);
+        else {
+          setDiscoveries(response.data as Observation[]);
+          if (!(response.data as Observation[]).length)
+            setError('No suitable fields in recent alerts. Use a provider sample to get started.');
+        }
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
   return (
-    <>
-      <p className="text-sm text-muted-foreground">
-        Define canonical context from fields observed in your integrations. Unmapped choices never
-        satisfy negative conditions.
-      </p>
-      <Input
-        aria-label="Search context fields"
-        placeholder="Search context fields…"
-        value={contextSearch}
-        onChange={event => setContextSearch(event.target.value)}
-      />
-      <div aria-label="Context field catalog" className="flex flex-wrap gap-2">
-        {visibleFields.map(field => (
-          <Button
-            key={field.key}
-            variant={selected?.key === field.key ? 'secondary' : 'outline'}
-            aria-pressed={selected?.key === field.key}
-            onClick={() => setSelectedKey(field.key)}
-          >
-            {field.label} · {field.type}
-          </Button>
-        ))}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Define canonical context from fields observed in your integrations. Unmapped choices never
+          satisfy negative conditions.
+        </p>
+        <LimitCounter count={draft.fields.length} limit={LIMITS.fields} noun="fields" />
       </div>
-      {!visibleFields.length && (
-        <p className="text-sm text-muted-foreground">No matching context fields.</p>
-      )}
-      {[...(selected ? [selected] : [])].map(field => (
-        <Card key={field.key}>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {field.label} <Badge>{field.type}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-md bg-muted p-3 text-sm space-y-1">
-              <h4 className="font-medium">Mapping provenance</h4>
-              {field.mappings.map((mapping, index) => (
-                <p key={index}>
-                  {mapping.integrationType ?? 'All integrations'} ·{' '}
-                  {mapping.source === 'EVENT' ? 'Normalized event' : 'Provider payload'} ·{' '}
-                  <code className="break-all">{mapping.path}</code>
-                </p>
-              ))}
+      <div
+        className={cn(
+          'grid min-w-0 gap-4',
+          data.canEdit && 'xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]'
+        )}
+      >
+        <div className="min-w-0 space-y-4">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              aria-label="Search context fields"
+              placeholder="Search context fields…"
+              value={contextSearch}
+              onChange={event => setContextSearch(event.target.value)}
+              className="pl-9"
+            />
+          </div>
+          {draft.fields.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
+              <Database className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
+              <p className="mt-2 text-sm font-medium">No context fields yet</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                {data.canEdit
+                  ? 'Add a field from an observed integration value below, or discover fields from recent alerts or a sample payload.'
+                  : 'An editor can add context fields from observed integration values.'}
+              </p>
             </div>
-            <p className="text-sm">
-              Recognized: {field.allowedValues?.join(', ') || field.type.toLowerCase()}
-            </p>
-            <p className="text-sm">
-              Aliases:{' '}
-              {Object.entries(field.aliases)
-                .map(([from, to]) => `${from} → ${to}`)
-                .join(', ') || 'None'}
-            </p>
-            {data.canEdit && (
-              <>
-                {field.type === 'ENUM' && (
-                  <CanonicalValuesEditor
-                    values={field.allowedValues ?? []}
-                    usedValues={
-                      new Set([
-                        ...Object.values(field.aliases),
-                        ...draft.rules.flatMap(rule => [
-                          ...rule.conditions
-                            .filter(c => c.fieldKey === field.key)
-                            .flatMap(c =>
-                              Array.isArray(c.value)
-                                ? c.value.map(String)
-                                : typeof c.value === 'string'
-                                  ? [c.value]
-                                  : []
-                            ),
-                          ...rule.actions.flatMap(a =>
-                            a.type === 'SET_CONTEXT' && a.fieldKey === field.key
-                              ? [String(a.value)]
-                              : []
-                          ),
-                        ]),
-                      ])
-                    }
-                    onChange={allowedValues => updateField(field.key, { allowedValues })}
-                  />
-                )}
-                <AliasEditor
-                  aliases={field.aliases}
-                  canonicalValues={field.type === 'ENUM' ? field.allowedValues : undefined}
-                  onChange={aliases => updateField(field.key, { aliases })}
-                />
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={field.caseSensitive}
-                    onChange={e => updateField(field.key, { caseSensitive: e.target.checked })}
-                  />
-                  Case sensitive
-                </label>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteField(field)}>
-                  Remove field
-                </Button>
-              </>
-            )}
-            <div>
-              {data.observations
-                .filter(o => o.fieldKey === field.key && o.unmapped)
-                .map(o => (
-                  <div className="flex flex-wrap items-center gap-2 text-sm" key={o.id}>
-                    <Badge variant="outline">Unmapped</Badge>
-                    {o.rawValuePreview} · {o.count} alerts{' '}
-                    {data.canEdit && (
-                      <select
-                        aria-label={`Map ${o.rawValuePreview}`}
-                        className={controlClass}
-                        value=""
-                        onChange={e =>
-                          updateField(field.key, {
-                            aliases: {
-                              ...field.aliases,
-                              [o.rawValuePreview]: e.target.value,
-                            },
-                          })
-                        }
-                      >
-                        <option value="">Map value…</option>
-                        {field.allowedValues?.map(v => (
-                          <option key={v}>{v}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-      {data.canEdit && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Add context field</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <label className="block text-sm">
-              1. Choose source
-              <select
-                className={`${controlClass} block w-full`}
-                value={integrationType}
-                onChange={e => setIntegrationType(e.target.value)}
+          ) : (
+            <div className="overflow-hidden rounded-lg border bg-card">
+              <div
+                aria-hidden="true"
+                className="hidden gap-x-3 border-b bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)]"
               >
-                <option>EVENTS_API</option>
-                <option value="ALL">All providers</option>
-                {[...new Set(data.integrations.map(i => i.type))].map(t => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              2. Choose observed field
-              <select
-                className={`${controlClass} block w-full`}
-                value={observedPath}
-                onChange={e => {
-                  setObservedPath(e.target.value);
-                  const found = [
-                    ...data.observations.map(o => ({ path: o.sourcePath, key: o.fieldKey })),
-                    ...discoveries,
-                  ].find(o => o.path === e.target.value);
-                  if (found) setFieldLabel(found.key.replace(/_/g, ' '));
-                }}
-              >
-                <option value="">Choose field…</option>
-                {[
-                  ...new Map([
-                    ...data.observations
-                      .filter(
-                        o => integrationType === 'ALL' || o.integrationType === integrationType
-                      )
-                      .map(o => [o.sourcePath, o.fieldKey] as const),
-                    ...discoveries.map(o => [o.path, o.key] as const),
-                  ]).entries(),
-                ].map(([path, key]) => (
-                  <option key={path} value={path}>
-                    {key.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              Field label
-              <Input value={fieldLabel} onChange={e => setFieldLabel(e.target.value)} />
-            </label>
-            <label className="block text-sm">
-              3. Treat as
-              <select
-                className={`${controlClass} block w-full`}
-                value={fieldType}
-                onChange={e => setFieldType(e.target.value as Field['type'])}
-              >
-                <option value="STRING">Text</option>
-                <option value="ENUM">Choice</option>
-                <option value="NUMBER">Number</option>
-                <option value="BOOLEAN">True / False</option>
-              </select>
-            </label>
-            {fieldType === 'ENUM' && (
-              <div className="space-y-2">
-                <p className="text-sm">4. Canonical values</p>
-                <CanonicalValuesEditor
-                  values={values}
-                  usedValues={new Set()}
-                  onChange={setValues}
-                />
+                <span>Field</span>
+                <span>Type</span>
+                <span>Mappings &amp; values</span>
+                <span>Source</span>
               </div>
-            )}
-            <Button
-              disabled={
-                draft.fields.length >= 64 ||
-                !fieldLabel.trim() ||
-                (fieldType === 'ENUM' && !values.length)
-              }
-              onClick={addField}
+              <ul aria-label="Context field catalog" className="divide-y divide-border/70">
+                {visibleFields.map(field => (
+                  <FieldCatalogRow
+                    key={field.key}
+                    field={field}
+                    selected={selected?.key === field.key}
+                    onSelect={setSelectedKey}
+                  />
+                ))}
+              </ul>
+              {!visibleFields.length && (
+                <p className="px-3 py-4 text-sm text-muted-foreground">
+                  No matching context fields.
+                </p>
+              )}
+            </div>
+          )}
+          {selected && (
+            <FieldDetail
+              key={selected.key}
+              field={selected}
+              rules={draft.rules}
+              observations={data.observations}
+              canEdit={data.canEdit}
+              canReadSensitive={canReadSensitive}
+              updateField={stableUpdateField}
+              onRemove={stableDeleteField}
+            />
+          )}
+          {data.canEdit && (
+            <section
+              aria-labelledby={`${formId}-title`}
+              className="space-y-4 rounded-lg border bg-card p-4"
             >
-              Add field
-            </Button>
-            <Button variant="ghost" onClick={() => setAdvanced(!advanced)}>
-              Advanced mapping
-            </Button>
-            {advanced && (
-              <label className="block text-sm">
-                Source path
-                <Input value={observedPath} onChange={e => setObservedPath(e.target.value)} />
-              </label>
-            )}
-            <details>
-              <summary className="cursor-pointer text-sm">
+              <div>
+                <h3 id={`${formId}-title`} className="font-semibold tracking-tight">
+                  Add context field
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Pick where the value comes from, name it, then (for choices) list the canonical
+                  values rules will compare against.
+                </p>
+              </div>
+              <AuthoringFieldset legend="1. Source">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`${formId}-integration`}>Integration</Label>
+                    <NativeSelect
+                      id={`${formId}-integration`}
+                      value={integrationType}
+                      onChange={e => setIntegrationType(e.target.value)}
+                    >
+                      <option>EVENTS_API</option>
+                      <option value="ALL">All providers</option>
+                      {integrationTypes.map(t => (
+                        <option key={t}>{t}</option>
+                      ))}
+                    </NativeSelect>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`${formId}-observed`}>Observed field</Label>
+                    <NativeSelect
+                      id={`${formId}-observed`}
+                      value={observedPath}
+                      aria-invalid={!!problems.source || undefined}
+                      aria-describedby={problems.source ? `${formId}-source-error` : undefined}
+                      onChange={e => {
+                        setObservedPath(e.target.value);
+                        const found = [
+                          ...data.observations.map(o => ({ path: o.sourcePath, key: o.fieldKey })),
+                          ...discoveries,
+                        ].find(o => o.path === e.target.value);
+                        if (found) setFieldLabel(found.key.replace(/_/g, ' '));
+                      }}
+                    >
+                      <option value="">Choose field…</option>
+                      {observedPath && !observedOptions.some(([path]) => path === observedPath) && (
+                        <option value={observedPath}>{observedPath}</option>
+                      )}
+                      {observedOptions.map(([path, key]) => (
+                        <option key={path} value={path}>
+                          {key.replace(/_/g, ' ')}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </div>
+                </div>
+                {observedOptions.length === 0 && (
+                  <Hint>
+                    No observed fields for this integration yet. Use discovery to find fields, or
+                    enter a path under Advanced mapping.
+                  </Hint>
+                )}
+                <div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 px-2 sm:h-9"
+                    aria-expanded={advanced}
+                    aria-controls={advanced ? `${formId}-advanced` : undefined}
+                    onClick={() => setAdvanced(!advanced)}
+                  >
+                    <ChevronDown
+                      className={cn('transition-transform', advanced && 'rotate-180')}
+                      aria-hidden="true"
+                    />
+                    Advanced mapping
+                  </Button>
+                  {advanced && (
+                    <div id={`${formId}-advanced`} className="mt-2 space-y-1.5">
+                      <Label htmlFor={`${formId}-path`}>Source path</Label>
+                      <Input
+                        id={`${formId}-path`}
+                        className="font-mono"
+                        placeholder="payload.custom_details.environment"
+                        value={observedPath}
+                        onChange={e => setObservedPath(e.target.value)}
+                      />
+                      <Hint>Dot-separated path into the event or provider payload.</Hint>
+                    </div>
+                  )}
+                </div>
+                {problems.source && (
+                  <InlineError id={`${formId}-source-error`}>{problems.source}</InlineError>
+                )}
+              </AuthoringFieldset>
+              <AuthoringFieldset legend="2. Name and type">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`${formId}-label`}>Field label</Label>
+                    <Input
+                      id={`${formId}-label`}
+                      maxLength={100}
+                      aria-invalid={!!problems.label || undefined}
+                      aria-describedby={`${formId}-label-note`}
+                      value={fieldLabel}
+                      onChange={e => setFieldLabel(e.target.value)}
+                    />
+                    <div id={`${formId}-label-note`}>
+                      {problems.label ? (
+                        <InlineError>{problems.label}</InlineError>
+                      ) : (
+                        newKey && (
+                          <Hint>
+                            Key: <code className="font-mono">automation.{newKey}</code>
+                          </Hint>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`${formId}-type`}>Treat as</Label>
+                    <NativeSelect
+                      id={`${formId}-type`}
+                      value={fieldType}
+                      onChange={e => setFieldType(e.target.value as Field['type'])}
+                    >
+                      <option value="STRING">Text</option>
+                      <option value="ENUM">Choice</option>
+                      <option value="NUMBER">Number</option>
+                      <option value="BOOLEAN">True / False</option>
+                    </NativeSelect>
+                    <Hint>
+                      {fieldType === 'ENUM'
+                        ? 'Values are normalized to a fixed list of choices.'
+                        : fieldType === 'NUMBER'
+                          ? 'Enables less-than / greater-than comparisons.'
+                          : fieldType === 'BOOLEAN'
+                            ? 'Only true and false are recognized.'
+                            : 'Free text, compared case-insensitively by default.'}
+                    </Hint>
+                  </div>
+                </div>
+              </AuthoringFieldset>
+              {fieldType === 'ENUM' && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold tracking-tight">3. Canonical values</p>
+                  <CanonicalValuesEditor
+                    values={values}
+                    usedValues={EMPTY_SET}
+                    onChange={setValues}
+                  />
+                  {problems.values && <InlineError>{problems.values}</InlineError>}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  disabled={
+                    draft.fields.length >= LIMITS.fields ||
+                    !fieldLabel.trim() ||
+                    (fieldType === 'ENUM' && !values.length)
+                  }
+                  onClick={addField}
+                >
+                  <Plus aria-hidden="true" />
+                  Add field
+                </Button>
+                {problems.limit && <InlineError>{problems.limit}</InlineError>}
+              </div>
+              <p aria-live="polite" className="sr-only">
+                {problemSummary}
+              </p>
+            </section>
+          )}
+        </div>
+        {data.canEdit && (
+          <aside
+            aria-labelledby={`${formId}-discover`}
+            className="min-w-0 space-y-4 self-start rounded-lg border bg-card p-4"
+          >
+            <div>
+              <h3
+                id={`${formId}-discover`}
+                className="flex items-center gap-2 font-semibold tracking-tight"
+              >
+                <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
                 Discover fields from recent alerts or a sample
-              </summary>
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Suggestions fill the Add context field form. Nothing is saved until you add the
+                field.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Button
                 size="sm"
                 variant="outline"
-                disabled={busy}
-                onClick={() => {
-                  void (async () => {
-                    setBusy(true);
-                    try {
-                      const response = await automationAction({
-                        action: 'discoverRecent',
-                        serviceId,
-                      });
-                      if (!response.ok) setError(response.error);
-                      else {
-                        setDiscoveries(response.data as Observation[]);
-                        if (!(response.data as Observation[]).length)
-                          setError(
-                            'No suitable fields in recent alerts. Use a provider sample to get started.'
-                          );
-                      }
-                    } finally {
-                      setBusy(false);
-                    }
-                  })();
-                }}
+                className="h-10 w-full sm:h-9"
+                disabled={busy || !canReadSensitive}
+                onClick={discoverRecent}
               >
                 Discover from recent alerts
               </Button>
-              {discoveries.length > 0 && (
-                <div aria-label="Discovered context fields" className="my-3 space-y-2">
-                  {discoveries.map(field => (
-                    <div key={field.path} className="rounded-md border p-3 text-sm space-y-1">
+              {!canReadSensitive && (
+                <Hint>
+                  Recent alert discovery requires sensitive incident access. Paste a sample instead.
+                </Hint>
+              )}
+            </div>
+            {discoveries.length > 0 && (
+              <ul aria-label="Discovered context fields" className="space-y-2">
+                {discoveries.map(field => {
+                  const name = field.path.split('.').at(-1)?.replace(/_/g, ' ');
+                  const chosen = observedPath === field.path;
+                  return (
+                    <li
+                      key={field.path}
+                      className={cn(
+                        'space-y-1 rounded-md border p-3 text-sm',
+                        chosen ? 'border-primary/50 bg-primary/5' : 'border-border/70'
+                      )}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">
-                          {field.path.split('.').at(-1)?.replace(/_/g, ' ')}
-                        </span>
+                        <span className="font-medium">{name}</span>
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant={chosen ? 'secondary' : 'outline'}
+                          aria-pressed={chosen}
+                          className="h-10 sm:h-9"
                           onClick={() => {
                             setObservedPath(field.path);
-                            setFieldLabel(
-                              field.path.split('.').at(-1)?.replace(/_/g, ' ') ?? field.key
-                            );
+                            setFieldLabel(name ?? field.key);
                             setFieldType(
                               field.type === 'NUMBER' || field.type === 'BOOLEAN'
                                 ? field.type
@@ -370,30 +476,42 @@ export function AutomationContext({
                           Choose field
                         </Button>
                       </div>
-                      <p className="break-all text-muted-foreground">
+                      <p className="break-all font-mono text-xs text-muted-foreground">
                         {field.path} · {field.type}
                         {field.frequency ? ` · ${field.frequency} recent alerts` : ''}
                       </p>
-                      <p className="break-words">
+                      <p className="break-words text-xs">
                         Examples: {(field.examples ?? [field.value]).join(', ')}
                       </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div className="space-y-1.5 border-t border-border/70 pt-4">
+              <Label htmlFor={`${formId}-sample`}>Discovery sample</Label>
               <textarea
-                aria-label="Discovery sample"
-                className={`${controlClass} w-full min-h-32`}
+                id={`${formId}-sample`}
+                className={cn(textareaClass, 'min-h-32')}
+                spellCheck={false}
                 value={providerSample}
                 onChange={e => setProviderSample(e.target.value)}
               />
-              <Button size="sm" onClick={() => void analyze()}>
+              <Hint>
+                Paste raw JSON from your provider. Secret-like values are never suggested.
+              </Hint>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-10 sm:h-9"
+                onClick={() => void analyze()}
+              >
                 Analyze sample
               </Button>
-            </details>
-          </CardContent>
-        </Card>
-      )}
-    </>
+            </div>
+          </aside>
+        )}
+      </div>
+    </div>
   );
 }
