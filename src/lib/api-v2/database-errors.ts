@@ -20,6 +20,16 @@ export function mapDatabaseError(error: unknown): unknown {
   if (isAppError(error)) return error;
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    // Raw queries preserve PostgreSQL's SQLSTATE in metadata. A bounded
+    // statement cancellation is temporary overload, not an internal defect.
+    // Never infer this from message text, which can contain submitted values.
+    if (error.code === 'P2010' && error.meta?.code === '57014') {
+      return new AppError({
+        code: 'DATABASE_UNAVAILABLE',
+        cause: error,
+        details: { retryAfter: 2 },
+      });
+    }
     switch (error.code) {
       case 'P2002':
       case 'P2003':
