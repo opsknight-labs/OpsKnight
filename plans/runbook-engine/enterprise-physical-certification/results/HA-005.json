@@ -6,17 +6,17 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (In-Flight Mutation Crash)",
-  "test_start_time": "2026-10-19T08:31:20.613Z",
-  "test_end_time": "2026-10-19T08:31:21.359Z",
-  "service_id": "cmvezw9bq0025vheijr769lv9",
+  "test_start_time": "2026-10-19T11:26:16.695Z",
+  "test_end_time": "2026-10-19T11:26:16.796Z",
+  "service_id": "cmvf658580025humznwefn76d",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-mutation-crash-quarantine",
-  "incident_id": "cmvezw9bw0027vheijszu5ifs",
-  "rule_id": "cmvezw9c00029vhei9nxt8ity",
+  "incident_id": "cmvf6585a0027humz8cw6y02o",
+  "rule_id": "cmvf6585c0029humzsoj34kpp",
   "rule_revision": 1,
-  "runbook_version_id": "cmvezw9bh0024vheif5yz7dxs",
-  "execution_id": "cmvezw9g1002dvheiogjelcwf",
-  "step_attempt_ids": ["cmvezw9ll002pvhei2ek6xa86"],
+  "runbook_version_id": "cmvf658550024humzve479lxh",
+  "execution_id": "cmvf6585z002dhumzrud671gb",
+  "step_attempt_ids": ["cmvf6586m002phumzu64ekr4t"],
   "agent_id": "cmvez3bhv0002w9s7tm5xsege",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
@@ -39,5 +39,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Quarantine fencing safety: Mid-write non-idempotent attempt lease expired -> Reconciler marked attempt FAILED with errorCode UNKNOWN_OUTCOME -> Verified non-idempotent retry guard prevents unsafe retry (execution cmvezw9g1002dvheiogjelcwf)."
+  "notes": "Mid-write crash: Agent A crashed during non-idempotent write -> Reconciler detected lease expiration and quarantined step to UNKNOWN (errorCode=UNKNOWN_OUTCOME) -> Execution safely marked FAILED without unsafe retry (execution cmvf6585z002dhumzrud671gb)."
 }

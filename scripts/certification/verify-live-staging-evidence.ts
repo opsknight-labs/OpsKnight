@@ -165,12 +165,13 @@ async function checkCdpAvailable(): Promise<string | null> {
             if (p.type !== 'page') return false;
             try {
               const u = new URL(p.url);
-              return (
-                u.hostname === 'opssentinal.com' ||
-                u.hostname.endsWith('.opssentinal.com') ||
-                u.hostname === 'localhost' ||
-                u.hostname === '127.0.0.1'
-              );
+              const allowedHosts = new Set([
+                'opssentinal.com',
+                'staging.opssentinal.com',
+                'localhost',
+                '127.0.0.1',
+              ]);
+              return allowedHosts.has(u.hostname);
             } catch {
               return false;
             }

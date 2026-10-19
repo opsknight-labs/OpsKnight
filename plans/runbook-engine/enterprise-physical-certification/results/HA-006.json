@@ -6,17 +6,17 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (Post-Write Report Crash)",
-  "test_start_time": "2026-10-19T08:31:21.372Z",
-  "test_end_time": "2026-10-19T08:31:22.886Z",
-  "service_id": "cmvezw9x8002xvheihrdnbip8",
+  "test_start_time": "2026-10-19T11:26:16.806Z",
+  "test_end_time": "2026-10-19T11:26:16.934Z",
+  "service_id": "cmvf65886002xhumzy5fdgv7h",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-post-write-report-crash",
-  "incident_id": "cmvezw9xf002zvheisoe9l6is",
-  "rule_id": "cmvezw9ym0031vheiumgbt43k",
+  "incident_id": "cmvf65888002zhumzlydf6p9k",
+  "rule_id": "cmvf658890031humzs3fmg4i0",
   "rule_revision": 1,
   "runbook_version_id": "cmvezh3h80007aa92b9rxfq9j",
-  "execution_id": "cmvezwa4z0035vhei8c0syp50",
-  "step_attempt_ids": ["cmvezwab9003fvheijic30jp8"],
+  "execution_id": "cmvf6588w0035humzdjlzmt6a",
+  "step_attempt_ids": ["cmvf65896003fhumzizak3cmd"],
   "agent_id": "cmvez3bhv0002w9s7tm5xsege",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
@@ -27,9 +27,8 @@
   "physical_state_after": {
     "status": "running",
     "running": true,
-    "reverified": true,
-    "redundant_write_skipped": true,
-    "startedAt": "2026-10-19T08:31:22.000Z"
+    "verified_by": "independent_health_probe",
+    "startedAt": "2026-10-19T11:26:16.934Z"
   },
   "independent_health_result": {
     "ok": true,
@@ -39,5 +38,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Post-write re-verification probe gate: Container mutation verified healthy (port 8095 HTTP 200) -> Verified step completion check succeeds without redundant destructive retry (execution cmvezwa4z0035vhei8c0syp50)."
+  "notes": "Post-write crash: Physical container mutation completed -> Primary agent crashed before receipt -> Independent probe verified port 8095 HTTP 200 -> Workload confirmed healthy (execution cmvf6588w0035humzdjlzmt6a)."
 }

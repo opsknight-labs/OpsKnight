@@ -137,10 +137,13 @@ async function findCdpTarget(): Promise<{ wsUrl: string; pageUrl: string } | nul
             if (p.type !== 'page' || !p.url) return false;
             try {
               const parsed = new URL(p.url);
-              return (
-                parsed.hostname === 'opssentinal.com' ||
-                parsed.hostname.endsWith('.opssentinal.com')
-              );
+              const allowedHosts = new Set([
+                'opssentinal.com',
+                'staging.opssentinal.com',
+                'localhost',
+                '127.0.0.1',
+              ]);
+              return allowedHosts.has(parsed.hostname);
             } catch {
               return false;
             }

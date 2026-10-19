@@ -6,17 +6,17 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (Concurrent Poll Claim Race)",
-  "test_start_time": "2026-10-19T08:31:27.375Z",
-  "test_end_time": "2026-10-19T08:31:27.875Z",
-  "service_id": "cmvezwejd0076vheiehx1nhhr",
+  "test_start_time": "2026-10-19T11:26:17.312Z",
+  "test_end_time": "2026-10-19T11:26:17.649Z",
+  "service_id": "cmvf658m90076humz73m9jxdi",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-simultaneous-polling-claim-race",
-  "incident_id": "cmvezwejj0078vheiznp9zkqu",
-  "rule_id": "cmvezwejt007avheitc7xyfkw",
+  "incident_id": "cmvf658me0078humzbiv2fl4f",
+  "rule_id": "cmvf658mg007ahumzkr8k7y0g",
   "rule_revision": 1,
   "runbook_version_id": "cmvezh3h80007aa92b9rxfq9j",
-  "execution_id": "cmvezweo4007evheinu0ry00a",
-  "step_attempt_ids": ["cmvezwepz007ovhei9zva9m4i"],
+  "execution_id": "cmvf658n9007ehumzmmt0p1qn",
+  "step_attempt_ids": ["cmvf658nk007ohumzv6glm60b"],
   "agent_id": "cmvez3bhv0002w9s7tm5xsege",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
@@ -37,5 +37,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "PostgreSQL concurrency safety: 5 concurrent pollers query attempt -> FOR UPDATE SKIP LOCKED guaranteed exactly 1 claim winner, 4 received null (execution cmvezweo4007evheinu0ry00a)."
+  "notes": "Simultaneous poll race: 5 concurrent agents in shared pool polled simultaneously for the same queued step -> PostgreSQL FOR UPDATE SKIP LOCKED guaranteed exactly one claim winner -> 4 remaining pollers received null -> Step completed without duplicate execution (execution cmvf658n9007ehumzmmt0p1qn)."
 }

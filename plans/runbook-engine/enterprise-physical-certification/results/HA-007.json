@@ -6,17 +6,17 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (Lease Fencing)",
-  "test_start_time": "2026-10-19T08:31:22.888Z",
-  "test_end_time": "2026-10-19T08:31:23.086Z",
-  "service_id": "cmvezwb2m003nvhei4l2smynk",
+  "test_start_time": "2026-10-19T11:26:16.942Z",
+  "test_end_time": "2026-10-19T11:26:17.011Z",
+  "service_id": "cmvf658by003nhumzpc2eoh74",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-lease-fencing-validation",
-  "incident_id": "cmvezwb2o003pvheilvax4lg2",
-  "rule_id": "cmvezwb2s003rvheiblnaofym",
+  "incident_id": "cmvf658c0003phumzezz7ui1i",
+  "rule_id": "cmvf658c2003rhumzqefmi2g0",
   "rule_revision": 1,
   "runbook_version_id": "cmvezh3h80007aa92b9rxfq9j",
-  "execution_id": "cmvezwb47003vvheicgmi13d0",
-  "step_attempt_ids": ["cmvezwb4x0045vheizioq2h9n"],
+  "execution_id": "cmvf658cn003vhumz7v0jnna9",
+  "step_attempt_ids": ["cmvf658cw0045humz3pfjlnp6"],
   "agent_id": "cmvez3bhv0002w9s7tm5xsege",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
@@ -37,5 +37,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Stale lease fencing safety: Attempt reassigned to secondary agent -> Late submission from original expired lease token rejected by server with HTTP 409 Conflict / Expired recovery fence (execution cmvezwb47003vvheicgmi13d0)."
+  "notes": "Stale lease revival: Zombie agent A attempted late result delivery after lease expiration -> Server rejected late submission with pre-execution fence error (execution cmvf658cn003vhumz7v0jnna9)."
 }

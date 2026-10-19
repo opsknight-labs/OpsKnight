@@ -6,17 +6,17 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (Pre-mutation failure fence)",
-  "test_start_time": "2026-10-19T08:31:20.281Z",
-  "test_end_time": "2026-10-19T08:31:20.609Z",
-  "service_id": "cmvezw9250013vheidrfbbl4g",
+  "test_start_time": "2026-10-19T11:26:16.360Z",
+  "test_end_time": "2026-10-19T11:26:16.687Z",
+  "service_id": "cmvf657vs0013humz49y1t9yq",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-pre-mutation-failure",
-  "incident_id": "cmvezw9290015vheiuqa4m47v",
-  "rule_id": "cmvezw92m0017vheixgz7d2my",
+  "incident_id": "cmvf657vv0015humz1exmbi57",
+  "rule_id": "cmvf657vz0017humz55o085hl",
   "rule_revision": 1,
   "runbook_version_id": "cmvezh3h80007aa92b9rxfq9j",
-  "execution_id": "cmvezw94i001bvheic10z0bav",
-  "step_attempt_ids": ["cmvezw95j001lvheisd7iz2nb"],
+  "execution_id": "cmvf657zy001bhumz028z9vq6",
+  "step_attempt_ids": ["cmvf6580h001lhumzdbjfgcm0"],
   "agent_id": "cmvez3bib0004w9s7zh0y2hcl",
   "policy_hash": "6ef4d4f0dacf",
   "result": "PASS",
@@ -29,7 +29,7 @@
     "status": "running",
     "running": true,
     "reclaimed_by": "local-docker-host-agent-secondary",
-    "startedAt": "2026-10-19T08:31:20.500Z"
+    "startedAt": "2026-10-19T11:26:16.687Z"
   },
   "independent_health_result": {
     "ok": true,
@@ -40,5 +40,5 @@
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Reconciler lease expiration safety: In-flight attempt lease expired pre-mutation in PostgreSQL -> Reconciler reset attempt from CLAIMED to PENDING -> Survivor Agent B claimed and executed cleanly (execution cmvezw94i001bvheic10z0bav)."
+  "notes": "Pre-mutation crash: Agent A lease expired pre-mutation -> Reconciler reset attempt to PENDING -> Survivor Agent B claimed and executed cleanly (execution cmvf657zy001bhumz028z9vq6)."
 }

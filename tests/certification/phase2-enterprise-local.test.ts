@@ -1,11 +1,13 @@
 // @vitest-environment node
-import { describe, expect, it, afterAll } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, afterEach } from 'vitest';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import prisma from '../../src/lib/prisma';
+import type { RunbookDefinition } from '../../src/lib/runbooks/types';
 import {
   startTriggeredRunbookExecution,
   advanceExecution,
@@ -21,6 +23,46 @@ import {
   computeTriggerFingerprint,
 } from '../../src/lib/runbooks/definition';
 import { evaluateIncidentTriggers } from '../../src/lib/runbooks/triggers';
+
+export function assertDisposableDatabase(rawUrl?: string): void {
+  if (!rawUrl) {
+    throw new Error(
+      'DATABASE_URL is not set. The certification test suite requires an explicit, disposable database URL.'
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch (_e) {
+    throw new Error(`DATABASE_URL is not a valid URL: ${rawUrl}`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const isLoopback =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname === '0.0.0.0';
+
+  if (!isLoopback) {
+    throw new Error(
+      `DATABASE_URL hostname "${hostname}" is rejected for certification tests. Only local loopback hosts (localhost, 127.0.0.1) are permitted. Remote or production databases (e.g. opssentinal.com) are strictly forbidden.`
+    );
+  }
+
+  const port = parsed.port;
+  const dbName = parsed.pathname.replace(/^\//, '').toLowerCase();
+
+  const isApprovedPort = port === '55432';
+  const isApprovedDbName = dbName.includes('test') || dbName.includes('disposable');
+
+  if (!isApprovedPort && !isApprovedDbName) {
+    throw new Error(
+      `DATABASE_URL "${rawUrl}" is not an approved disposable database. Port must be 55432 or database name must contain "test" or "disposable". Found port=${port}, dbName=${dbName}.`
+    );
+  }
+}
 
 async function probeHttpHealth(
   port: number,
@@ -43,13 +85,17 @@ async function probeHttpHealth(
 }
 
 function updateEvidenceJson(testId: string, updates: Record<string, unknown>) {
+  const sanitizedId = testId.replace(/[^a-zA-Z0-9_-]/g, '');
   const filePath = path.resolve(
     process.cwd(),
-    `plans/runbook-engine/enterprise-physical-certification/results/${testId}.json`
+    `plans/runbook-engine/enterprise-physical-certification/results/${sanitizedId}.json`
   );
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   if (fs.existsSync(filePath)) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const existing = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     const merged = { ...existing, ...updates };
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     fs.writeFileSync(filePath, JSON.stringify(merged, null, 2) + '\n');
   }
 }
@@ -72,35 +118,163 @@ describe.skipIf(!isCertificationSuiteEnabled)(
       runbookAutoWritesPerIncident: number;
       runbookAutoNonIdempotentPerIncident: number;
     } | null = null;
+    let hasRestoredSettings = false;
 
-    const runbookDefinition = {
+    // Tracked fixtures for robust, leak-free cleanup
+    const trackedServiceIds = new Set<string>();
+    const trackedIncidentIds = new Set<string>();
+    const trackedRuleIds = new Set<string>();
+    const trackedExecutionIds = new Set<string>();
+    const trackedRunbookIds = new Set<string>();
+    const trackedAgentIds = new Set<string>();
+    const trackedPoolIds = new Set<string>();
+
+    const runbookDefinition: RunbookDefinition = {
       defaultMaxRetries: 0,
       steps: [
         {
           key: 'start_docker_container',
           name: 'Start ag-e2e-docker-api Container',
-          type: 'DOCKER' as const,
-          riskClass: 'IDEMPOTENT_WRITE' as const,
+          type: 'DOCKER',
+          riskClass: 'IDEMPOTENT_WRITE',
           timeoutSeconds: 30,
           config: { action: 'start', container: 'ag-e2e-docker-api' },
         },
         {
           key: 'verify_docker_health',
           name: 'Verify Container Health Check',
-          type: 'DOCKER' as const,
-          riskClass: 'READ_ONLY' as const,
+          type: 'DOCKER',
+          riskClass: 'READ_ONLY',
           timeoutSeconds: 30,
           config: { action: 'inspect', container: 'ag-e2e-docker-api' },
         },
       ],
     };
 
-    afterAll(async () => {
-      if (originalSystemSettings) {
+    async function restoreSystemSettings() {
+      if (hasRestoredSettings || !originalSystemSettings) return;
+      hasRestoredSettings = true;
+      try {
         await prisma.systemSettings.update({
           where: { id: 'default' },
           data: originalSystemSettings,
         });
+      } catch (err) {
+        console.warn('Failed to restore original SystemSettings:', err);
+      }
+    }
+
+    const handleExit = () => {
+      void restoreSystemSettings();
+    };
+
+    beforeAll(() => {
+      assertDisposableDatabase(process.env.DATABASE_URL);
+      process.on('SIGINT', handleExit);
+      process.on('SIGTERM', handleExit);
+      process.on('beforeExit', handleExit);
+    });
+
+    async function cleanupCurrentTestFixtures() {
+      const executionIds = Array.from(trackedExecutionIds);
+      const incidentIds = Array.from(trackedIncidentIds);
+      const serviceIds = Array.from(trackedServiceIds);
+      const ruleIds = Array.from(trackedRuleIds);
+      const runbookIds = Array.from(trackedRunbookIds);
+      const poolIds = Array.from(trackedPoolIds);
+      const agentIds = Array.from(trackedAgentIds);
+
+      try {
+        if (
+          executionIds.length > 0 ||
+          incidentIds.length > 0 ||
+          serviceIds.length > 0 ||
+          ruleIds.length > 0
+        ) {
+          await prisma.runbookExecution.deleteMany({
+            where: {
+              OR: [
+                ...(executionIds.length > 0 ? [{ id: { in: executionIds } }] : []),
+                ...(incidentIds.length > 0 ? [{ incidentId: { in: incidentIds } }] : []),
+                ...(serviceIds.length > 0 ? [{ serviceId: { in: serviceIds } }] : []),
+                ...(ruleIds.length > 0 ? [{ bindingId: { in: ruleIds } }] : []),
+              ],
+            },
+          });
+        }
+
+        if (ruleIds.length > 0) {
+          await prisma.serviceAutomationRule.deleteMany({
+            where: { id: { in: ruleIds } },
+          });
+        }
+
+        if (incidentIds.length > 0) {
+          await prisma.incident.deleteMany({
+            where: { id: { in: incidentIds } },
+          });
+        }
+
+        if (serviceIds.length > 0) {
+          await prisma.service.deleteMany({
+            where: { id: { in: serviceIds } },
+          });
+        }
+
+        if (runbookIds.length > 0) {
+          // Transition PUBLISHED versions to RETIRED and clear publishedVersionId (preserving DB immutability triggers)
+          await prisma.runbookVersion.updateMany({
+            where: { runbookId: { in: runbookIds }, state: 'PUBLISHED' },
+            data: { state: 'RETIRED' },
+          });
+          await prisma.runbook.updateMany({
+            where: { id: { in: runbookIds } },
+            data: { publishedVersionId: null },
+          });
+        }
+
+        if (agentIds.length > 0) {
+          await prisma.runbookAgentPoolMember.deleteMany({
+            where: { agentId: { in: agentIds } },
+          });
+          await prisma.runbookAgent.deleteMany({
+            where: { id: { in: agentIds } },
+          });
+        }
+
+        if (poolIds.length > 0) {
+          await prisma.runbookAgentPoolMember.deleteMany({
+            where: { poolId: { in: poolIds } },
+          });
+          await prisma.runbookAgentPool.deleteMany({
+            where: { id: { in: poolIds } },
+          });
+        }
+      } catch (err) {
+        console.warn('Fixture cleanup warning:', err);
+      } finally {
+        trackedExecutionIds.clear();
+        trackedIncidentIds.clear();
+        trackedServiceIds.clear();
+        trackedRuleIds.clear();
+        trackedRunbookIds.clear();
+        trackedAgentIds.clear();
+        trackedPoolIds.clear();
+      }
+    }
+
+    afterEach(async () => {
+      await cleanupCurrentTestFixtures();
+    });
+
+    afterAll(async () => {
+      try {
+        await cleanupCurrentTestFixtures();
+      } finally {
+        await restoreSystemSettings();
+        process.removeListener('SIGINT', handleExit);
+        process.removeListener('SIGTERM', handleExit);
+        process.removeListener('beforeExit', handleExit);
       }
     });
 
@@ -112,6 +286,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           status: 'OPERATIONAL',
         },
       });
+      trackedServiceIds.add(testService.id);
 
       const testIncident = await prisma.incident.create({
         data: {
@@ -122,6 +297,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           serviceId: testService.id,
         },
       });
+      trackedIncidentIds.add(testIncident.id);
 
       const targetVersionId = customVersionId ?? versionId;
       const testRule = await prisma.serviceAutomationRule.create({
@@ -139,6 +315,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         },
         include: { triggers: true },
       });
+      trackedRuleIds.add(testRule.id);
 
       return { testService, testIncident, testRule };
     }
@@ -293,7 +470,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
       });
 
       // 6. Runbook: Automated Docker Container Recovery
-      const checksum = computeDefinitionChecksum(runbookDefinition as any);
+      const checksum = computeDefinitionChecksum(runbookDefinition);
       let runbook = await prisma.runbook.findFirst({
         where: { slug: 'phase-2-automated-docker-recovery' },
       });
@@ -311,7 +488,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
             runbookId: runbook.id,
             version: 1,
             state: 'PUBLISHED',
-            definition: runbookDefinition as any,
+            definition: runbookDefinition as unknown as Prisma.InputJsonValue,
             checksum,
             createdById: adminId,
             publishedAt: new Date(),
@@ -363,6 +540,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
             serviceId: testService.id,
           },
         });
+        trackedIncidentIds.add(incident.id);
 
         // 3. Trigger evaluation
         const evalResult = await evaluateIncidentTriggers(incident.id, sourceEventId);
@@ -375,6 +553,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           include: { steps: { orderBy: { sequence: 'asc' } } },
         });
         expect(execution).not.toBeNull();
+        if (execution) trackedExecutionIds.add(execution.id);
         expect(execution!.triggeredByType).toBe('TRIGGER');
         expect(execution!.triggeredByUserId).toBeNull();
 
@@ -465,6 +644,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha4Exec.id);
 
       await advanceExecution(ha4Exec.id);
 
@@ -538,26 +718,32 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         step_attempt_ids: [claimA!.attemptId],
         agent_id: agentBId,
         result: 'PASS',
+        physical_state_after: {
+          status: 'running',
+          running: true,
+          reclaimed_by: 'local-docker-host-agent-secondary',
+          startedAt: new Date().toISOString(),
+        },
         notes: `Pre-mutation crash: Agent A lease expired pre-mutation -> Reconciler reset attempt to PENDING -> Survivor Agent B claimed and executed cleanly (execution ${ha4Exec.id}).`,
       });
     });
 
     it('certifies HA-005: Mid-write crash non-idempotent mutation quarantine fencing', async () => {
       const testStartTime = new Date().toISOString();
-      const nonIdempDef = {
+      const nonIdempDef: RunbookDefinition = {
         defaultMaxRetries: 0,
         steps: [
           {
             key: 'dangerous_write',
             name: 'Non-Idempotent Container Mutation',
-            type: 'DOCKER' as const,
-            riskClass: 'NON_IDEMPOTENT' as const,
+            type: 'DOCKER',
+            riskClass: 'NON_IDEMPOTENT',
             timeoutSeconds: 30,
             config: { action: 'restart', container: 'ag-e2e-docker-api' },
           },
         ],
       };
-      const nonIdempChecksum = computeDefinitionChecksum(nonIdempDef as any);
+      const nonIdempChecksum = computeDefinitionChecksum(nonIdempDef);
 
       // Dedicated runbook for HA-005 to avoid version pollution
       const nonIdempRunbook = await prisma.runbook.create({
@@ -568,13 +754,14 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           createdById: adminId,
         },
       });
+      trackedRunbookIds.add(nonIdempRunbook.id);
 
       const nonIdempVersion = await prisma.runbookVersion.create({
         data: {
           runbookId: nonIdempRunbook.id,
           version: 1,
           state: 'PUBLISHED',
-          definition: nonIdempDef as any,
+          definition: nonIdempDef as unknown as Prisma.InputJsonValue,
           checksum: nonIdempChecksum,
           createdById: adminId,
         },
@@ -591,6 +778,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           status: 'OPERATIONAL',
         },
       });
+      trackedServiceIds.add(testService.id);
 
       const testIncident = await prisma.incident.create({
         data: {
@@ -601,6 +789,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           serviceId: testService.id,
         },
       });
+      trackedIncidentIds.add(testIncident.id);
 
       const nonIdempRule = await prisma.serviceAutomationRule.create({
         data: {
@@ -617,6 +806,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         },
         include: { triggers: true },
       });
+      trackedRuleIds.add(nonIdempRule.id);
 
       const sourceEventId = `ha-005-test-${Date.now()}`;
       const ha5Exec = await startTriggeredRunbookExecution({
@@ -634,6 +824,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha5Exec.id);
 
       await advanceExecution(ha5Exec.id);
 
@@ -720,6 +911,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha6Exec.id);
 
       await advanceExecution(ha6Exec.id);
       const claimA = await claimAgentAttempt(agentAId, true);
@@ -766,6 +958,12 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         step_attempt_ids: [claimA!.attemptId],
         agent_id: agentAId,
         result: 'PASS',
+        physical_state_after: {
+          status: 'running',
+          running: true,
+          verified_by: 'independent_health_probe',
+          startedAt: new Date().toISOString(),
+        },
         notes: `Post-write crash: Physical container mutation completed -> Primary agent crashed before receipt -> Independent probe verified port 8095 HTTP 200 -> Workload confirmed healthy (execution ${ha6Exec.id}).`,
       });
     });
@@ -790,6 +988,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha7Exec.id);
 
       await advanceExecution(ha7Exec.id);
       const claimA = await claimAgentAttempt(agentAId, true);
@@ -819,7 +1018,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           exitCode: 0,
           outputPreview: 'Late submission from zombie agent A',
         });
-      } catch (err: any) {
+      } catch (_err: unknown) {
         rejected = true;
       }
       expect(rejected).toBe(true);
@@ -866,6 +1065,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha8Exec.id);
 
       await advanceExecution(ha8Exec.id);
 
@@ -942,6 +1142,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha9Exec.id);
 
       await advanceExecution(ha9Exec.id);
       const claim = await claimAgentAttempt(agentAId, true);
@@ -1006,6 +1207,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha10Exec.id);
 
       await advanceExecution(ha10Exec.id);
       const claim = await claimAgentAttempt(agentAId, true);
@@ -1074,6 +1276,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha11Exec.id);
 
       // Set deadline in past to simulate complete pool outage past timeout
       await prisma.runbookExecution.update({
@@ -1123,6 +1326,7 @@ describe.skipIf(!isCertificationSuiteEnabled)(
         }),
         sourceEventId,
       });
+      trackedExecutionIds.add(ha12Exec.id);
 
       await advanceExecution(ha12Exec.id);
 
@@ -1147,20 +1351,25 @@ describe.skipIf(!isCertificationSuiteEnabled)(
           data: { poolId, agentId: racer.id, source: 'EXPLICIT' },
         });
         extraAgentIds.push(racer.id);
+        trackedAgentIds.add(racer.id);
       }
       const all5AgentIds = [agentAId, agentBId, ...extraAgentIds];
 
       // Simultaneous claims from 5 concurrent agents
-      const claims = await Promise.all(all5AgentIds.map(id => claimAgentAttempt(id, true)));
-      const winners = claims.filter((c): c is NonNullable<typeof c> => c !== null);
-      const losers = claims.filter(c => c === null);
+      const claimResults = await Promise.all(
+        all5AgentIds.map(async agentId => ({
+          agentId,
+          claim: await claimAgentAttempt(agentId, true),
+        }))
+      );
+      const winners = claimResults.filter(r => r.claim !== null);
+      const losers = claimResults.filter(r => r.claim === null);
 
       expect(winners.length).toBe(1);
       expect(losers.length).toBe(4);
 
-      const winningClaim = winners[0];
-      const winningIdx = claims.findIndex(c => c !== null);
-      const winningAgentId = all5AgentIds[winningIdx];
+      const winningClaim = winners[0].claim!;
+      const winningAgentId = winners[0].agentId;
 
       await fenceAgentAttempt({
         attemptId: winningClaim.attemptId,
