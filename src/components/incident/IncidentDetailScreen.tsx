@@ -1,5 +1,7 @@
 import prisma from '@/lib/prisma';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
+import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
+import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { CAPABILITIES } from '@/lib/authorization';
 import Link from 'next/link';
@@ -179,12 +181,14 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
-  const [jiraLinks, collaboration] = await Promise.all([
+  const [jiraLinks, collaboration, escalationHealth] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
     }),
     getIncidentCollaborationView({ incidentId: id, userId: user.id }),
+    // A health read failure must not block the incident page.
+    getEscalationExecutionHealth(id).catch(() => null),
   ]);
 
   const incidentJiraIssues = jiraLinks.map(serializeJiraIssueReference);
@@ -463,6 +467,7 @@ export default async function IncidentDetailScreen({
       )}
 
       {presentation === 'mobile' && <IncidentAutomationCard incidentId={id} />}
+      <EscalationExecutionHealth health={escalationHealth} />
 
       {presentation === 'mobile' && (
         <MobileOperationalContextCard

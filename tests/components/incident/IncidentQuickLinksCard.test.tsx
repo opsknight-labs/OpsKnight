@@ -27,7 +27,7 @@ describe('IncidentQuickLinksCard', () => {
 
     expect(screen.getByText('Quick Links')).toBeInTheDocument();
     expect(screen.getByText('Authentication API')).toBeInTheDocument();
-    expect(screen.getByText('Critical Escalation')).toBeInTheDocument();
+    expect(screen.getByText('Current service default: Critical Escalation')).toBeInTheDocument();
     expect(screen.getByText('Incident Analytics')).toBeInTheDocument();
     expect(screen.getByText('Core Infra')).toBeInTheDocument();
   });
