@@ -30,6 +30,10 @@ Modes:
 
 Context paths are compiled before publication. Scripts, expressions, prototype traversal, credential paths, non-scalar extraction, and unbounded inputs are rejected. The evaluator has no database/network calls. Discovery records bounded scalar previews rather than payloads. Observation workers cap distinct values at 256 per field/integration and 5,000 per service, and update observations in one bounded bulk statement. Detailed traces and observations default to 90-day retention; decisions remain for the incident lifetime.
 
+## Runbook integration
+
+LIVE decisions capture an immutable, checksummed response context containing only the version's declared fields. Runbook bindings can trigger on `automation.<key>` conditions, map context fields to runbook inputs, and select an Agent only through an administrator-approved value → target table. Unavailable context (SHADOW, fallback, missing or tampered) fails closed with a `RUNBOOK_SKIPPED` timeline event. Alert-created incidents only reach bindings with **Run on monitoring incidents** enabled. AUTOMATIC write steps wait for approval until an administrator authorizes unattended writes for the exact pinned version; existing AUTOMATIC bindings are not backfilled. With **Resolve incident on verified recovery**, a run whose every write action is verified resolves the incident through the lifecycle and cancels escalation. Paging is never paused or delayed by remediation. Incident detail → Response activity shows routing, paging, remediation, verification and recovery in one timeline. Configuration is UI-only. See the [runbook integration operator guide](runbook-integration.md).
+
 ## Operator rollout
 
 1. Apply all additive automation migrations. Deploy the same application image to every web, scheduler and worker role with the global Automation setting disabled. The application treats incidents without decisions as legacy service-default incidents.

@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+
+- **Service Automation ↔ Runbook integration:** LIVE automation decisions capture an immutable, checksum-verified response context of declared fields only. Runbook triggers accept `automation.<key>` conditions, bindings can map context fields to inputs and choose targets through an administrator-approved value → Agent/pool table, and alert-created incidents only reach bindings that opt in with **Run on monitoring incidents**. Unavailable context fails closed with a `RUNBOOK_SKIPPED` timeline event.
+- **Unattended-write authorization:** AUTOMATIC write steps run without approval only after an administrator authorizes the exact pinned version and every write action has verification. `NON_IDEMPOTENT` steps always require approval. Changing the pinned version, strategy or mode revokes the authorization.
+- **Verified recovery resolution:** Optional per-binding resolution when every write action of a successful run is verified, applied through the incident lifecycle (`AUTO_RESOLVED`, resolution kind `AUTOMATION`) with escalation cancelled. Outcomes are recorded as `NOT_REQUESTED`, `PENDING`, `RESOLVED`, `NOT_VERIFIED`, `ALREADY_CLOSED` or `BLOCKED`.
+- **Unified response timeline:** Incident detail → Response activity shows routing, paging, remediation, verification and recovery in order, plus an Incident context card, with existing auditor and sensitive-source redaction. See `docs/automation/runbook-integration.md`.
+
+### Changed
+
+- Existing AUTOMATIC runbook bindings are not backfilled with unattended-write authorization: their write steps wait for responder approval until an administrator authorizes the pinned version. Agent selectors can no longer reference automation context; use the approved target table. Paging remains independent of remediation.
 
 ## [2.0.0] - 2026-10-02
 
