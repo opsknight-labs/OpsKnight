@@ -290,4 +290,44 @@ describe('bounded authoring and troubleshooting', () => {
       )
     ).not.toEqual([]);
   });
+
+  it('rejects contradictory Systemd configurations in definition parsing', () => {
+    expect(() =>
+      parseRunbookDefinition({
+        steps: [
+          {
+            key: 'sys_check',
+            name: 'Check',
+            type: 'SYSTEMD',
+            riskClass: 'READ_ONLY',
+            config: {
+              action: 'status',
+              unit: 'cert-sample.service',
+              expectedState: 'inactive',
+              requireActive: true,
+            },
+          },
+        ],
+      })
+    ).toThrow(/contradictory configuration/);
+
+    expect(() =>
+      parseRunbookDefinition({
+        steps: [
+          {
+            key: 'sys_check',
+            name: 'Check',
+            type: 'SYSTEMD',
+            riskClass: 'READ_ONLY',
+            config: {
+              action: 'status',
+              unit: 'cert-sample.service',
+              expectedState: 'active',
+              requireActive: false,
+            },
+          },
+        ],
+      })
+    ).toThrow(/contradictory configuration/);
+  });
 });

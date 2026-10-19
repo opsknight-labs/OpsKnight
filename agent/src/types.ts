@@ -51,6 +51,7 @@ export interface ClaimedAttempt {
     name: string;
     type: StepType;
     riskClass: RiskClass;
+    phase?: string;
     config: Record<string, unknown>;
     timeoutSeconds: number | null;
   };

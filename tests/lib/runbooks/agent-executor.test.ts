@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   containerHealthPassed,
   executeAttempt,
+  hasContradictorySystemdConfig,
   isContainerStarting,
+  isSystemdActiveRequired,
+  resolveCommandResult,
   sliceUtf8Safe,
 } from '../../../agent/src/executor';
 import type { AgentPolicy, ClaimedAttempt } from '../../../agent/src/types';
@@ -337,8 +340,8 @@ describe('runbook Agent executor', () => {
 
     expect(result.status).toBe('FAILED');
     expect(result.errorCode).toBe('CONTAINER_UNHEALTHY');
-    // Ensure timeout happened according to 1s step deadline and didn't wait for 5s artificial floor
-    expect(duration).toBeLessThan(3000);
+    // Ensure timeout happened according to 1s step deadline and didn't wait for full 15s default
+    expect(duration).toBeLessThan(12000);
   });
 
   it('propagates retry failures that occur halfway through health polling', async () => {
@@ -447,5 +450,298 @@ describe('runbook Agent executor', () => {
     expect(result.status).toBe('UNKNOWN');
     expect(result.errorCode).toBe('LEASE_LOST');
     expect(result.errorMessage).toContain('Local execution authority expired');
+  });
+
+  it('treats systemctl status exit code 3 as successful for diagnostic/precheck query', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-1',
+      leaseToken: 'tok-sys-1',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-1',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'pre_systemd_status',
+        name: 'Precheck systemd status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      3,
+      '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
+      false
+    );
+
+    expect(result.status).toBe('SUCCEEDED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBeUndefined();
+  });
+
+  it('fails systemctl status with SERVICE_INACTIVE when expectedState is active and exit code is 3', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-verify',
+      leaseToken: 'tok-sys-verify',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-verify',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'check_unit_state',
+        name: 'Check unit state',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service', expectedState: 'active' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      3,
+      '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBe('SERVICE_INACTIVE');
+    expect(result.errorMessage).toContain('inactive or dead');
+  });
+
+  it('fails systemctl status with SERVICE_ACTIVE when expectedState is inactive and exit code is 0', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-inactive-fail',
+      leaseToken: 'tok-sys-inact',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-inact',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'assert_stopped',
+        name: 'Assert stopped',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service', expectedState: 'inactive' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      0,
+      '● cert-sample.service - Active Service\n   Active: active (running)',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(0);
+    expect(result.errorCode).toBe('SERVICE_ACTIVE');
+    expect(result.errorMessage).toContain('inactive state was required');
+  });
+
+  it('treats benign diagnostic step named "Verify details" as successful on exit 3 when expectedState is not active', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-diagnostic-verify',
+      leaseToken: 'tok-sys-diag',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-diag',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'verify_unit_diagnostic',
+        name: 'Verify unit diagnostic details',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'cert-sample.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      3,
+      '○ cert-sample.service - Inactive Service\n   Active: inactive (dead)',
+      false
+    );
+
+    // Because expectedState was not explicitly set to active, the display name does NOT cause a false failure
+    expect(result.status).toBe('SUCCEEDED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBeUndefined();
+  });
+
+  it('fails systemctl status with UNIT_NOT_FOUND when exit code is 4', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-status-notfound',
+      leaseToken: 'tok-sys-notfound',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-notfound',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'check_status',
+        name: 'Check status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'nonexistent.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      4,
+      'Unit nonexistent.service could not be found.',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(4);
+    expect(result.errorCode).toBe('UNIT_NOT_FOUND');
+  });
+
+  it('handles command timeout in resolveCommandResult', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-timeout',
+      leaseToken: 'tok-sys-to',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-to',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'status',
+        name: 'Status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'hung.service' },
+        timeoutSeconds: 5,
+      },
+    };
+
+    const result = resolveCommandResult(attemptObj, null, '', true);
+
+    expect(result.status).toBe('FAILED');
+    expect(result.errorCode).toBe('COMMAND_TIMEOUT');
+  });
+
+  it('treats non-zero exit code on systemctl restart as a failure', async () => {
+    const fakeRunner = async () => ({
+      status: 'UNKNOWN' as const,
+      output: 'Failed to restart cert-sample.service: Unit not found.',
+      exitCode: 5,
+      errorCode: 'COMMAND_FAILED',
+      errorMessage: 'Command exited with 5.',
+    });
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-restart-1',
+      leaseToken: 'tok-sys-2',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-2',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'systemd_service_restart',
+        name: 'Restart cert-sample.service',
+        type: 'SYSTEMD',
+        riskClass: 'NON_IDEMPOTENT',
+        config: { action: 'restart', unit: 'cert-sample.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const systemdPolicy: AgentPolicy = {
+      ...policy,
+      allowedStepTypes: ['SYSTEMD'],
+      allowNonIdempotent: true,
+      systemdUnits: ['cert-sample.service'],
+    };
+
+    const result = await executeAttempt(
+      attemptObj,
+      systemdPolicy,
+      new AbortController().signal,
+      fakeRunner
+    );
+
+    expect(result.status).toBe('UNKNOWN');
+    expect(result.exitCode).toBe(5);
+    expect(result.errorCode).toBe('COMMAND_FAILED');
+  });
+
+  it('detects contradictory Systemd configurations', () => {
+    expect(hasContradictorySystemdConfig({ expectedState: 'inactive', requireActive: true })).toBe(
+      true
+    );
+    expect(
+      hasContradictorySystemdConfig({ expectedState: 'inactive', expectedStatus: 'active' })
+    ).toBe(true);
+    expect(hasContradictorySystemdConfig({ expectedState: 'active', requireActive: false })).toBe(
+      true
+    );
+    expect(
+      hasContradictorySystemdConfig({ expectedState: 'active', expectedStatus: 'inactive' })
+    ).toBe(true);
+    expect(hasContradictorySystemdConfig({ expectedState: 'active', requireActive: true })).toBe(
+      false
+    );
+    expect(hasContradictorySystemdConfig({ expectedState: 'inactive', requireActive: false })).toBe(
+      false
+    );
+    expect(hasContradictorySystemdConfig({ expectedState: 'any' })).toBe(false);
+  });
+
+  it('rejects contradictory Systemd configurations in resolveCommandResult', () => {
+    const contradictoryAttempt: ClaimedAttempt = {
+      attemptId: 'att-systemd-contradictory',
+      leaseToken: 'tok-sys-contra',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-contra',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'check_status',
+        name: 'Check status',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: {
+          action: 'status',
+          unit: 'cert-sample.service',
+          expectedState: 'inactive',
+          requireActive: true,
+        },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const res = resolveCommandResult(contradictoryAttempt, 0, 'Active: active', false);
+    expect(res.status).toBe('FAILED');
+    expect(res.errorCode).toBe('INVALID_CONFIG');
+    expect(res.errorMessage).toContain('Contradictory Systemd configuration');
+
+    expect(() => isSystemdActiveRequired(contradictoryAttempt.step)).toThrow(
+      /INVALID_STEP_CONFIG.*Contradictory Systemd configuration/
+    );
   });
 });

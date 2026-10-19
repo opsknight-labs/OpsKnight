@@ -1,0 +1,6 @@
+services:
+  opsknight-agent:
+    group_add:
+      - '0'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw

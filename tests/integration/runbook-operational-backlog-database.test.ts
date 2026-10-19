@@ -154,6 +154,8 @@ suite('bounded operational backlog handling', () => {
         })),
       });
     }
+    await testPrisma.$executeRaw`ANALYZE "RunbookExecutionStep"`;
+    await testPrisma.$executeRaw`ANALYZE "RunbookStepAttempt"`;
     const captured: Array<{ query: string; params: string }> = [];
     let capturing = true;
     prisma.$on('query', event => {

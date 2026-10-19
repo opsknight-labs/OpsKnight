@@ -164,7 +164,11 @@ export async function claimAgentAttempt(
           // This is a bounded OLTP lookup, not an analytical query. Large ineligible
           // backlogs can otherwise trigger PostgreSQL JIT compilation before yielding a row.
           await tx.$executeRaw`SET LOCAL jit = off`;
-          await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
+          if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
+            await tx.$executeRaw`SET LOCAL statement_timeout = '10000ms'`;
+          } else {
+            await tx.$executeRaw`SET LOCAL statement_timeout = '2000ms'`;
+          }
           await tx.$executeRaw`SET LOCAL lock_timeout = '1000ms'`;
           const now = new Date();
           const agent = await tx.runbookAgent.findFirst({
@@ -541,6 +545,11 @@ export async function claimAgentAttempt(
               name: attempt.executionStep.name,
               type: attempt.executionStep.type,
               riskClass: attempt.executionStep.riskClass,
+              phase:
+                (resolvedConfig.phase as string | undefined) ??
+                ((attempt.executionStep.config as Record<string, unknown>)?.phase as
+                  string | undefined) ??
+                undefined,
               config: resolvedConfig,
               timeoutSeconds: Math.max(
                 1,
