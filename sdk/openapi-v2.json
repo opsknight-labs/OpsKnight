@@ -65,6 +65,10 @@
       "description": "Status pages, components, and public incident announcements"
     },
     {
+      "name": "Service Objectives",
+      "description": "Versioned measurement contracts, authorized history and bounded asynchronous evaluations"
+    },
+    {
       "name": "Runbooks",
       "description": "Automated remediation workflows and execution tracking"
     },
@@ -1300,6 +1304,717 @@
           "createdAt",
           "updatedAt"
         ]
+      },
+      "ServiceObjective": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metricType": {
+            "type": "string",
+            "enum": [
+              "UPTIME",
+              "AVAILABILITY",
+              "MTTA",
+              "MTTR",
+              "LATENCY_P99",
+              "ERROR_RATE"
+            ]
+          },
+          "target": {
+            "type": "number"
+          },
+          "comparator": {
+            "type": "string",
+            "enum": [
+              "GREATER_THAN_OR_EQUAL",
+              "LESS_THAN_OR_EQUAL"
+            ]
+          },
+          "windowType": {
+            "type": "string",
+            "enum": [
+              "SEVEN_DAYS",
+              "THIRTY_DAYS",
+              "NINETY_DAYS",
+              "QUARTERLY",
+              "YEARLY",
+              "ROLLING_DAYS"
+            ]
+          },
+          "windowValue": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activeFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activeTo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "ARCHIVED"
+            ]
+          },
+          "legacySlaDefinitionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "versionId",
+          "serviceId",
+          "name",
+          "description",
+          "metricType",
+          "target",
+          "comparator",
+          "windowType",
+          "windowValue",
+          "version",
+          "revision",
+          "activeFrom",
+          "activeTo",
+          "status",
+          "legacySlaDefinitionId",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ServiceObjectiveCatalog": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "const": 1
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "UPTIME",
+                    "AVAILABILITY",
+                    "MTTA",
+                    "MTTR"
+                  ]
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "percent",
+                    "minutes"
+                  ]
+                },
+                "serviceRequired": {
+                  "type": "boolean"
+                },
+                "definition": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "unit",
+                "serviceRequired",
+                "definition"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "comparators": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "GREATER_THAN_OR_EQUAL",
+                "LESS_THAN_OR_EQUAL"
+              ]
+            }
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "SEVEN_DAYS",
+                "THIRTY_DAYS",
+                "NINETY_DAYS",
+                "QUARTERLY",
+                "YEARLY",
+                "ROLLING_DAYS"
+              ]
+            }
+          },
+          "windowSemantics": {
+            "type": "string"
+          },
+          "rollingDays": {
+            "type": "object",
+            "properties": {
+              "minimum": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maximum": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "minimum",
+              "maximum"
+            ],
+            "additionalProperties": false
+          },
+          "history": {
+            "type": "string"
+          },
+          "noData": {
+            "type": "string"
+          },
+          "unsupportedCreationMetrics": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "LATENCY_P99",
+                "ERROR_RATE"
+              ]
+            }
+          }
+        },
+        "required": [
+          "version",
+          "metrics",
+          "comparators",
+          "windows",
+          "windowSemantics",
+          "rollingDays",
+          "history",
+          "noData",
+          "unsupportedCreationMetrics"
+        ],
+        "additionalProperties": false
+      },
+      "ServiceObjectiveSnapshot": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "objectiveId": {
+            "type": "string"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "numerator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "denominator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sampleCount": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target": {
+            "type": "number"
+          },
+          "breached": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "dataState": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "NO_DATA",
+              "UNAVAILABLE"
+            ]
+          },
+          "definitionVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "objectiveId",
+          "periodStart",
+          "periodEnd",
+          "value",
+          "numerator",
+          "denominator",
+          "sampleCount",
+          "target",
+          "breached",
+          "dataState",
+          "definitionVersion",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ServiceObjectiveLegacySnapshot": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slaDefinitionId": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totalIncidents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "metAckTime": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "metResolveTime": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evaluatedAckCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evaluatedResolveCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "complianceScore": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "denominatorUnknown": {
+            "type": "boolean"
+          },
+          "targetAckMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "targetResolveMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "definitionVersion": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "targetCapturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "targetSource": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "slaDefinitionId",
+          "date",
+          "totalIncidents",
+          "metAckTime",
+          "metResolveTime",
+          "evaluatedAckCount",
+          "evaluatedResolveCount",
+          "complianceScore",
+          "denominatorUnknown",
+          "targetAckMinutes",
+          "targetResolveMinutes",
+          "definitionVersion",
+          "targetCapturedAt",
+          "targetSource",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ServiceObjectiveHistoryItem": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "source": {
+                "const": "OBJECTIVE"
+              },
+              "id": {
+                "type": "string"
+              },
+              "periodEnd": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "record": {
+                "$ref": "#/components/schemas/ServiceObjectiveSnapshot"
+              }
+            },
+            "required": [
+              "source",
+              "id",
+              "periodEnd",
+              "record"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "source": {
+                "const": "LEGACY_INCIDENT_SLA"
+              },
+              "id": {
+                "type": "string"
+              },
+              "periodEnd": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "record": {
+                "$ref": "#/components/schemas/ServiceObjectiveLegacySnapshot"
+              }
+            },
+            "required": [
+              "source",
+              "id",
+              "periodEnd",
+              "record"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ServiceObjectiveEvaluation": {
+        "type": "object",
+        "properties": {
+          "objectiveId": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "UPTIME",
+              "AVAILABILITY",
+              "MTTA",
+              "MTTR",
+              "LATENCY_P99",
+              "ERROR_RATE"
+            ]
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "target": {
+            "type": "number"
+          },
+          "comparator": {
+            "type": "string",
+            "enum": [
+              "GREATER_THAN_OR_EQUAL",
+              "LESS_THAN_OR_EQUAL"
+            ]
+          },
+          "compliant": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "breached": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "sampleCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "sampleCountExact": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "elapsedSumMs": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dataState": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "NO_DATA",
+              "UNAVAILABLE"
+            ]
+          },
+          "definitionVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "coverage": {
+            "type": "object",
+            "properties": {
+              "effectiveStart": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "effectiveEnd": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "complete": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "effectiveStart",
+              "effectiveEnd",
+              "complete"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "objectiveId",
+          "metric",
+          "value",
+          "target",
+          "comparator",
+          "compliant",
+          "breached",
+          "sampleCount",
+          "periodStart",
+          "periodEnd",
+          "dataState",
+          "definitionVersion"
+        ],
+        "additionalProperties": false
+      },
+      "ServiceObjectiveEvaluationReceipt": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "const": "EVALUATED"
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "evaluation": {
+                "$ref": "#/components/schemas/ServiceObjectiveEvaluation"
+              }
+            },
+            "required": [
+              "outcome",
+              "completedAt",
+              "evaluation"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "const": "ACCESS_REVOKED"
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "outcome",
+              "completedAt"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ServiceObjectiveEvaluationJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "objectiveId": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PROCESSING",
+              "COMPLETED",
+              "FAILED",
+              "CANCELLED"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceObjectiveEvaluationReceipt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "EVALUATION_FAILED",
+              null
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "objectiveId",
+          "versionId",
+          "status",
+          "attempts",
+          "createdAt",
+          "completedAt",
+          "result",
+          "errorCode"
+        ],
+        "additionalProperties": false
       },
       "StatusPagePublicationState": {
         "type": "object",
@@ -12784,6 +13499,1440 @@
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
         "x-idempotency": "natural",
         "x-concurrency": "none"
+      }
+    },
+    "/service-objectives/catalog": {
+      "get": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Inspect the supported measurement, window and immutable-history contract",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjectiveCatalog"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceObjectiveCatalog",
+        "x-required-scope": "service-objectives:read",
+        "description": "Requires API scope `service-objectives:read` (Service objectives read)."
+      }
+    },
+    "/service-objectives": {
+      "get": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "List active authorized objective definitions with bounded keyset pagination",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceObjective"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listServiceObjectives",
+        "x-required-scope": "service-objectives:read",
+        "description": "Requires API scope `service-objectives:read` (Service objectives read)."
+      },
+      "post": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Create an objective after explicitly reviewing the active service/metric slot",
+        "description": "Send null for an empty slot or the exact active immutable version ID to replace that slot. The legacy session-authenticated API retains its existing implicit replacement behavior through the same command. Canonical audit and replay commit with the new immutable definition.\n\nRequires API scope `service-objectives:write` (Service objectives configure).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "definition": {
+                    "type": "object",
+                    "properties": {
+                      "serviceId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "description": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 500
+                      },
+                      "metricType": {
+                        "type": "string",
+                        "enum": [
+                          "UPTIME",
+                          "AVAILABILITY",
+                          "MTTA",
+                          "MTTR"
+                        ]
+                      },
+                      "target": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "comparator": {
+                        "type": "string",
+                        "enum": [
+                          "GREATER_THAN_OR_EQUAL",
+                          "LESS_THAN_OR_EQUAL"
+                        ]
+                      },
+                      "windowType": {
+                        "type": "string",
+                        "enum": [
+                          "SEVEN_DAYS",
+                          "THIRTY_DAYS",
+                          "NINETY_DAYS",
+                          "QUARTERLY",
+                          "YEARLY",
+                          "ROLLING_DAYS"
+                        ]
+                      },
+                      "windowValue": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 1,
+                        "maximum": 3650
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "metricType",
+                      "target",
+                      "comparator",
+                      "windowType"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "expectedActiveVersionId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "definition",
+                  "expectedActiveVersionId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjective"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "createServiceObjective",
+        "x-required-scope": "service-objectives:write",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/service-objectives/{id}": {
+      "get": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Read the latest objective version, including an archived lineage, with a strong ETag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjective"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceObjective",
+        "x-required-scope": "service-objectives:read",
+        "description": "Requires API scope `service-objectives:read` (Service objectives read)."
+      },
+      "patch": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Create a new immutable objective version using a concrete revision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 500
+                  },
+                  "target": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "comparator": {
+                    "type": "string",
+                    "enum": [
+                      "GREATER_THAN_OR_EQUAL",
+                      "LESS_THAN_OR_EQUAL"
+                    ]
+                  },
+                  "windowType": {
+                    "type": "string",
+                    "enum": [
+                      "SEVEN_DAYS",
+                      "THIRTY_DAYS",
+                      "NINETY_DAYS",
+                      "QUARTERLY",
+                      "YEARLY",
+                      "ROLLING_DAYS"
+                    ]
+                  },
+                  "windowValue": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 3650
+                  }
+                },
+                "required": [],
+                "additionalProperties": false,
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjective"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateServiceObjective",
+        "x-required-scope": "service-objectives:write",
+        "description": "Requires API scope `service-objectives:write` (Service objectives configure).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/service-objectives/{id}/archive": {
+      "post": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Retire the active version while retaining all definitions and snapshots",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjective"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "archiveServiceObjective",
+        "x-required-scope": "service-objectives:write",
+        "description": "Requires API scope `service-objectives:write` (Service objectives configure).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/service-objectives/{id}/versions": {
+      "get": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Page through every immutable definition version",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceObjective"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listServiceObjectiveVersions",
+        "x-required-scope": "service-objectives:read",
+        "description": "Requires API scope `service-objectives:read` (Service objectives read)."
+      }
+    },
+    "/service-objectives/{id}/snapshots": {
+      "get": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Read authorized daily scheduler snapshots without precision loss",
+        "description": "Requires global metrics visibility because scheduled snapshots may include private incident contributions. Scoped readers can request actor-filtered evaluations instead.\n\nRequires API scope `service-objectives:read` (Service objectives read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceObjectiveSnapshot"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listServiceObjectiveSnapshots",
+        "x-required-scope": "service-objectives:read"
+      }
+    },
+    "/service-objectives/{id}/history": {
+      "get": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Read separately typed objective or legacy incident-SLA history",
+        "description": "Requires global metrics visibility for both history sources. Scoped readers can request actor-filtered evaluations instead. source=OBJECTIVE (default) or LEGACY_INCIDENT_SLA. Signed cursors bind to the lineage and source; legacy incident-SLA evidence is not reinterpreted as objective measurements.\n\nRequires API scope `service-objectives:read` (Service objectives read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OBJECTIVE",
+                "LEGACY_INCIDENT_SLA"
+              ],
+              "default": "OBJECTIVE"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceObjectiveHistoryItem"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceObjectiveHistory",
+        "x-required-scope": "service-objectives:read"
+      }
+    },
+    "/service-objectives/{id}/evaluate": {
+      "post": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Queue a bounded evaluation of an explicitly reviewed immutable version",
+        "description": "Required idempotency key; at most two active jobs per credential and sixteen globally. Periods must be ordered, not in the future, and at most 3650 elapsed days. The worker checks current scope, role and service access before computation and before storing the result. Ad-hoc actor-scoped results do not overwrite scheduled shared history. Retention-clipped or unsupported telemetry is UNAVAILABLE, never compliant.\n\nRequires API scope `service-objectives:evaluate` (Service objectives evaluate).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "expectedVersionId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjectiveEvaluationJob"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "evaluateServiceObjective",
+        "x-required-scope": "service-objectives:evaluate",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/service-objectives/{id}/evaluations/{evaluationId}": {
+      "get": {
+        "tags": [
+          "Service Objectives"
+        ],
+        "summary": "Inspect an authorized evaluation job and its recorded outcome",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "evaluationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjectiveEvaluationJob"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceObjectiveEvaluation",
+        "x-required-scope": "service-objectives:read",
+        "description": "Requires API scope `service-objectives:read` (Service objectives read)."
       }
     },
     "/status-pages/{id}/publication": {

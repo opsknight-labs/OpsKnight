@@ -50,6 +50,9 @@ export const AUTHORIZATION_ACTIONS = {
   RUNBOOK_PUBLISH: 'runbook.publish',
   AUDIT_READ: 'audit.read',
   REPORT_READ: 'report.read',
+  SERVICE_OBJECTIVE_READ: 'service_objective.read',
+  SERVICE_OBJECTIVE_MANAGE: 'service_objective.manage',
+  SERVICE_OBJECTIVE_EVALUATE: 'service_objective.evaluate',
   POSTMORTEM_READ: 'postmortem.read',
   POSTMORTEM_MANAGE: 'postmortem.manage',
   SERVICE_ACCOUNT_READ: 'service_account.read',
@@ -127,6 +130,9 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.RUNBOOK_PUBLISH]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.AUDIT_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.REPORT_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_EVALUATE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.POSTMORTEM_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_ACCOUNT_READ]?: AuthorizationResource;
@@ -407,6 +413,26 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     {
       global: CAPABILITIES.AUDIT_READ,
       apiScope: API_SCOPES.AUDIT_READ,
+    },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_READ,
+    {
+      global: CAPABILITIES.METRICS_READ_ALL,
+      scoped: CAPABILITIES.METRICS_READ_SCOPED,
+      apiScope: API_SCOPES.SERVICE_OBJECTIVES_READ,
+    },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_MANAGE,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.SERVICE_OBJECTIVES_WRITE },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_EVALUATE,
+    {
+      global: CAPABILITIES.METRICS_READ_ALL,
+      scoped: CAPABILITIES.METRICS_READ_SCOPED,
+      apiScope: API_SCOPES.SERVICE_OBJECTIVES_EVALUATE,
     },
   ],
   [

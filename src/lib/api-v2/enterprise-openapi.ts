@@ -1,3 +1,7 @@
+import {
+  SERVICE_OBJECTIVE_SCHEMAS,
+  SERVICE_OBJECTIVE_OPERATIONS,
+} from './service-objective-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import { MAX_SELECT_OPTIONS } from '@/lib/runbooks/input-options';
@@ -164,6 +168,7 @@ const statusPageSectionRepresentations = Object.fromEntries(
 );
 
 export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
+  ...SERVICE_OBJECTIVE_SCHEMAS,
   StatusPagePublicationState: object(
     {
       status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
@@ -1107,6 +1112,7 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  ...SERVICE_OBJECTIVE_OPERATIONS,
   {
     method: 'get',
     path: '/status-pages/{id}/publication',
@@ -1777,23 +1783,42 @@ export function enterpriseOpenApiPaths() {
     const pathItem = (paths[operation.path] ??= {});
     pathItem[operation.method] = {
       tags: [
-        operation.path.startsWith('/status-pages')
-          ? 'Status Pages'
-          : operation.path.startsWith('/settings')
-            ? 'Settings'
-            : operation.path.startsWith('/runbooks')
-              ? 'Runbooks'
-              : operation.path.startsWith('/services')
-                ? 'Services'
-                : operation.path.startsWith('/schedules')
-                  ? 'Schedules'
-                  : 'Incidents',
+        operation.path.startsWith('/service-objectives')
+          ? 'Service Objectives'
+          : operation.path.startsWith('/status-pages')
+            ? 'Status Pages'
+            : operation.path.startsWith('/settings')
+              ? 'Settings'
+              : operation.path.startsWith('/runbooks')
+                ? 'Runbooks'
+                : operation.path.startsWith('/services')
+                  ? 'Services'
+                  : operation.path.startsWith('/schedules')
+                    ? 'Schedules'
+                    : 'Incidents',
       ],
       summary: operation.summary,
       ...(operation.description ? { description: operation.description } : {}),
       parameters: [
         ...parameters,
         ...queryParameters,
+        ...(operation.method === 'get' && operation.path === '/service-objectives'
+          ? [{ name: 'serviceId', in: 'query', required: false, schema: id }]
+          : []),
+        ...(operation.path === '/service-objectives/{id}/history'
+          ? [
+              {
+                name: 'source',
+                in: 'query',
+                required: false,
+                schema: {
+                  type: 'string',
+                  enum: ['OBJECTIVE', 'LEGACY_INCIDENT_SLA'],
+                  default: 'OBJECTIVE',
+                },
+              },
+            ]
+          : []),
         ...(operation.path === '/runbooks/{id}/versions/{versionId}/diff'
           ? [{ name: 'baseVersionId', in: 'query', required: true, schema: id }]
           : []),
@@ -1825,6 +1850,9 @@ export function enterpriseOpenApiPaths() {
         '403': { $ref: '#/components/responses/ProblemError' },
         '404': { $ref: '#/components/responses/ProblemError' },
         '413': { $ref: '#/components/responses/ProblemError' },
+        ...(operation.method === 'post' && operation.path === '/service-objectives'
+          ? { '412': { $ref: '#/components/responses/PreconditionFailed' } }
+          : {}),
         ...(operation.method === 'get' && operation.path === '/services/{id}/runbook-rules/{ruleId}'
           ? { '409': { $ref: '#/components/responses/ProblemError' } }
           : {}),

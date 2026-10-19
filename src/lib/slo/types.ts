@@ -43,6 +43,9 @@ export interface ServiceObjectiveEvaluation {
   compliant: boolean | null;
   breached: boolean | null;
   sampleCount: number | null;
+  sampleCountExact?: string | null;
+  elapsedSumMs?: string | null;
+  coverage?: { effectiveStart: Date; effectiveEnd: Date; complete: boolean };
   periodStart: Date;
   periodEnd: Date;
   dataState: 'AVAILABLE' | 'NO_DATA' | 'UNAVAILABLE';

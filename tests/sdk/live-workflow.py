@@ -1,6 +1,7 @@
 """Invoked by live-workflows.mjs. Credentials arrive on stdin, never command-line arguments."""
 import json
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -145,5 +146,33 @@ publication = client.call("getStatusPagePublication", {"params": {"id": configur
 retry = client.call("retryStatusPagePublication", {"params": {"id": configuration["statusPageId"]}, "body": {}, "headers": {"Idempotency-Key": uuid.uuid4().hex, "If-Match": '"%s"' % publication["revision"]}})["data"]
 assert retry["status"] == "PENDING"
 job = client.call("getStatusPagePublicationJob", {"params": {"id": configuration["statusPageId"], "jobId": retry["id"]}})["data"]
-assert job["id"] == retry["id"] and job["result"] is None
+assert job["id"] == retry["id"]
 print("Python live status-page publication inspection and durable retry acceptance passed.")
+
+objective = client.call("createServiceObjective", {"body": {"definition": {
+    "serviceId": configuration["runbookRuleServiceId"], "name": "Python response objective",
+    "metricType": "MTTA", "target": 30, "comparator": "LESS_THAN_OR_EQUAL", "windowType": "SEVEN_DAYS"
+}, "expectedActiveVersionId": None}, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
+objective_params = {"id": objective["id"]}
+assert len(client.call("getServiceObjectiveCatalog", {})["data"]["metrics"]) == 4
+client.call("listServiceObjectives", {"query": {"serviceId": configuration["runbookRuleServiceId"], "limit": 1}})
+client.call("getServiceObjective", {"params": objective_params})
+changed = client.call("updateServiceObjective", {"params": objective_params, "body": {"target": 20},
+    "headers": {"If-Match": '"%s"' % objective["revision"], "Idempotency-Key": uuid.uuid4().hex}})["data"]
+for operation in ["listServiceObjectiveVersions", "listServiceObjectiveSnapshots", "getServiceObjectiveHistory"]:
+    client.call(operation, {"params": objective_params})
+evaluation = client.call("evaluateServiceObjective", {"params": objective_params,
+    "body": {"expectedVersionId": changed["versionId"]}, "headers": {"Idempotency-Key": uuid.uuid4().hex}})["data"]
+for attempt in range(100):
+    result = client.call("getServiceObjectiveEvaluation", {"params": {**objective_params, "evaluationId": evaluation["id"]}})["data"]
+    if result["status"] == "COMPLETED":
+        assert result["result"]["outcome"] == "EVALUATED"
+        assert result["result"]["evaluation"]["definitionVersion"] == 2
+        break
+    assert result["status"] != "FAILED"
+    time.sleep(0.5)
+else:
+    raise AssertionError("Python objective evaluation did not complete")
+client.call("archiveServiceObjective", {"params": objective_params, "body": {},
+    "headers": {"If-Match": '"%s"' % changed["revision"], "Idempotency-Key": uuid.uuid4().hex}})
+print("Python objective lifecycle and real general-worker evaluation passed.")

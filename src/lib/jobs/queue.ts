@@ -1348,6 +1348,12 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         return true;
       }
       case 'SCHEDULED_TASK': {
+        if (payloadValue(job.payload, 'task') === 'SERVICE_OBJECTIVE_EVALUATE') {
+          const { processObjectiveEvaluation } = await import('../slo/evaluation-jobs');
+          await processObjectiveEvaluation(job.id, job.claimToken);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
+          return true;
+        }
         if (payloadValue(job.payload, 'task') === 'STATUS_PAGE_PUBLICATION_RETRY') {
           const { processStatusPagePublicationRetry } =
             await import('../status-pages/publication-jobs');

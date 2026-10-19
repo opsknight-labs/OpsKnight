@@ -97,13 +97,14 @@
         "Status-page domain ownership, validated branding assets, preview and combined certification",
         "Structured postmortem impact, collaboration and action items",
         "Durable report/export jobs and result authorization",
-        "Product decision on unfinished SLO management",
+        "Service-objective history/evaluation UI parity and combined certification of the four supported measurements",
         "Audit exports, dashboards and approved operational configuration"
       ],
       "delivered": [
         "Five scoped subscriber administration operations",
         "Eleven revision-fenced configuration/component operations",
-        "Three publication inspection/durable-retry operations using canonical reconciliation"
+        "Three publication inspection/durable-retry operations using canonical reconciliation",
+        "Eleven service-objective operations with immutable definitions, explicit revision fences, precision-preserving history and bounded authorized evaluation jobs; administrator UI uses the same commands"
       ]
     },
     {
@@ -187,7 +188,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 140,
+    "registeredOperationCount": 151,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {

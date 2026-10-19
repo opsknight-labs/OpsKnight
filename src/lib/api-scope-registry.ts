@@ -218,8 +218,29 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.STATUS_PAGES_WRITE,
     'Status pages manage',
     'Status pages',
-    'Create status pages, update name, slug, enabled and default state, and post announcements. Components, subscribers and branding are not available over REST.',
+    'Create status pages, configure supported sections and service components, post announcements and request durable publication retry. Subscriber contacts and revocation require separate explicit subscriber scopes; domain proof and asset upload remain unfinished.',
     { write: true, issuableBy: ADMINS }
+  ),
+  [S.SERVICE_OBJECTIVES_READ]: def(
+    S.SERVICE_OBJECTIVES_READ,
+    'Service objectives read',
+    'Reports',
+    'Read authorized objective definitions, immutable versions and evaluation jobs. Shared snapshot/history reads require global metrics visibility; scoped readers can request actor-filtered evaluations.',
+    { issuableBy: ALL_ROLES }
+  ),
+  [S.SERVICE_OBJECTIVES_WRITE]: def(
+    S.SERVICE_OBJECTIVES_WRITE,
+    'Service objectives configure',
+    'Reports',
+    'Create, version or archive service objectives. Explicit administrator scope; changes retain immutable historical definitions.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.SERVICE_OBJECTIVES_EVALUATE]: def(
+    S.SERVICE_OBJECTIVES_EVALUATE,
+    'Service objectives evaluate',
+    'Reports',
+    'Request quota-bound asynchronous evaluation of an authorized immutable definition. Does not modify scheduled shared history.',
+    { write: true, issuableBy: ALL_ROLES }
   ),
   [S.RUNBOOKS_READ]: def(
     S.RUNBOOKS_READ,

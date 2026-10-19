@@ -1,0 +1,71 @@
+{
+  "sourceParent": "27b525035981ab91d21c3eb44f90edf88991bd56",
+  "measuredAt": "2026-10-19T03:43:48.228124+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Eleven service-objective REST operations and administrator definition management; incomplete enterprise coverage and history/evaluation UI parity.",
+  "registeredOperationCount": 151,
+  "addedOperations": 11,
+  "postgres": {
+    "passed": 19,
+    "restCases": 18,
+    "existingMigrationCases": 1,
+    "coverage": [
+      "Immutable versions and archive revision fences",
+      "Required retry keys and active-slot creation preconditions",
+      "Concurrent edits and concurrent per-credential evaluation admission",
+      "Real queue processing with durable completion receipt and canonical audit",
+      "Revocation before computation and during computation",
+      "Role/team authorization context retained for eventual result access",
+      "Scoped service visibility and denial of shared history",
+      "Precision-preserving snapshots and lineage-bound history cursors",
+      "Shared UI/REST commands and stale form rejection",
+      "Real MTTA source uses frozen SLA elapsed milliseconds, measured-sample denominator and exact breach threshold"
+    ]
+  },
+  "unitContract": {
+    "passed": 84,
+    "files": 12
+  },
+  "pageUnit": {
+    "passed": 5
+  },
+  "pythonSdkUnit": {
+    "passed": 9
+  },
+  "index": {
+    "migrationAppliedTo": [
+      "api_completion_test",
+      "runbook_ui_test"
+    ],
+    "valid": true,
+    "ready": true,
+    "predicateEligibility": "Index Only Scan confirmed with sequential scans disabled; this is eligibility evidence, not a production query latency certification."
+  },
+  "productionBuild": "passed on final source including build TypeScript stage",
+  "cleanTypecheck": "passed non-incremental",
+  "browser": {
+    "passed": 3,
+    "projects": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "skipped": 0,
+    "flaky": 0,
+    "scope": "Production create/edit/archive preserves immutable versions; legacy latency remains readable, cannot be edited and can be archived."
+  },
+  "liveSdkWithGeneralWorker": "passed TypeScript and Python: all eleven operations, immutable version evaluation completed by a separate production general-worker process; full existing SDK workflow regression passed",
+  "remaining": [
+    "History and evaluation UI parity",
+    "Reference load, rolling upgrade/recovery and combined enterprise certification",
+    "Latest pushed commit complete CI"
+  ],
+  "changedSourceLint": "passed zero warnings",
+  "ciRemediation": {
+    "sourceCommit": "27b525035981ab91d21c3eb44f90edf88991bd56",
+    "failure": "Both SDKs shared one write-rate budget; Python subscriber removal received 429.",
+    "fix": "Separate short-lived credentials for independent SDK callers, with the same scopes and unmodified production limits.",
+    "verification": "Both full live workflows passed, including Python subscriber removal."
+  },
+  "generatedClients": "TypeScript SDK build and generated drift passed; nine Python SDK unit tests passed"
+}

@@ -447,3 +447,20 @@ explicit opt-in retains the existing documented supersession policy. No producti
 mixed-version rollout certification is claimed by these fixes.
 
 The latest runbook browser CI failure was also traced to selecting a pool result during a debounced options refresh. The shared selector now disables stale results immediately and ignores responses from aborted searches. Delayed/out-of-order response tests and all three affected browser projects pass locally. Evidence: review-238aef3-remediation.json.
+
+
+## Follow-up: service objectives and SDK certification rate isolation
+
+Delivered eleven scoped service-objective operations with immutable versions,
+concrete revision fences, separately typed history, quota-bound durable evaluation,
+canonical audit and administrator forms sharing the domain commands. Worker and
+result authorization include current role/team context. Real PostgreSQL verifies
+mid-computation revocation, concurrent admission, exact captured MTTA elapsed time,
+and loss of access to a formerly global result after role demotion.
+
+The automation check at `27b525035` failed because TypeScript and Python shared a
+single credential's write budget. Independent short-lived credentials preserve the
+same scopes and production limits. Both complete live SDK workflows now pass,
+including separate production general-worker evaluation completion. Final SLO
+browser journeys pass Chromium, Firefox and WebKit with no skips or retries.
+See `service-objective-certification.json` for scope, results and remaining gates.

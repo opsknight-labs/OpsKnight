@@ -19,6 +19,14 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type ServiceObjective = { "id": string; "versionId": string; "serviceId": string | null; "name": string; "description": string | null; "metricType": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR" | "LATENCY_P99" | "ERROR_RATE"; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "windowType": "SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS"; "windowValue": number | null; "version": number; "revision": number; "activeFrom": string; "activeTo": string | null; "status": "ACTIVE" | "ARCHIVED"; "legacySlaDefinitionId": string | null; "createdAt": string };
+export type ServiceObjectiveCatalog = { "version": 1; "metrics": Array<{ "id": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR"; "unit": "percent" | "minutes"; "serviceRequired": boolean; "definition": string }>; "comparators": Array<"GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL">; "windows": Array<"SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS">; "windowSemantics": string; "rollingDays": { "minimum": number; "maximum": number }; "history": string; "noData": string; "unsupportedCreationMetrics": Array<"LATENCY_P99" | "ERROR_RATE"> };
+export type ServiceObjectiveSnapshot = { "id": string; "objectiveId": string; "periodStart": string; "periodEnd": string; "value": number | null; "numerator": string | null; "denominator": string | null; "sampleCount": string | null; "target": number; "breached": boolean | null; "dataState": "AVAILABLE" | "NO_DATA" | "UNAVAILABLE"; "definitionVersion": number; "createdAt": string };
+export type ServiceObjectiveLegacySnapshot = { "id": string; "slaDefinitionId": string; "date": string; "totalIncidents": number; "metAckTime": number; "metResolveTime": number; "evaluatedAckCount": number; "evaluatedResolveCount": number; "complianceScore": number | null; "denominatorUnknown": boolean; "targetAckMinutes": number | null; "targetResolveMinutes": number | null; "definitionVersion": number | null; "targetCapturedAt": string | null; "targetSource": string | null; "createdAt": string };
+export type ServiceObjectiveHistoryItem = { "source": "OBJECTIVE"; "id": string; "periodEnd": string; "record": ServiceObjectiveSnapshot } | { "source": "LEGACY_INCIDENT_SLA"; "id": string; "periodEnd": string; "record": ServiceObjectiveLegacySnapshot };
+export type ServiceObjectiveEvaluation = { "objectiveId": string; "metric": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR" | "LATENCY_P99" | "ERROR_RATE"; "value": number | null; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "compliant": boolean | null; "breached": boolean | null; "sampleCount": number | null; "sampleCountExact"?: string | null; "elapsedSumMs"?: string | null; "periodStart": string; "periodEnd": string; "dataState": "AVAILABLE" | "NO_DATA" | "UNAVAILABLE"; "definitionVersion": number; "coverage"?: { "effectiveStart": string; "effectiveEnd": string; "complete": boolean } };
+export type ServiceObjectiveEvaluationReceipt = { "outcome": "EVALUATED"; "completedAt": string; "evaluation": ServiceObjectiveEvaluation } | { "outcome": "ACCESS_REVOKED"; "completedAt": string };
+export type ServiceObjectiveEvaluationJob = { "id": string; "objectiveId": string; "versionId": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED"; "attempts": number; "createdAt": string; "completedAt": string | null; "result": ServiceObjectiveEvaluationReceipt | null; "errorCode": "EVALUATION_FAILED" | null };
 export type StatusPagePublicationState = { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "stale"?: boolean; "lastError"?: string | null };
 export type StatusPagePublication = { "id": string; "revision": number; "publication": StatusPagePublicationState };
 export type StatusPagePublicationReceipt = { "outcome": string; "completedAt": string; "publication": StatusPagePublicationState };
@@ -82,6 +90,17 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  getServiceObjectiveCatalog: Record<string, never>;
+  listServiceObjectives: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
+  createServiceObjective: { "headers": { "Idempotency-Key": string }; "body": { "definition": { "serviceId"?: string | null; "name": string; "description"?: string | null; "metricType": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR"; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "windowType": "SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS"; "windowValue"?: number | null }; "expectedActiveVersionId": string | null } };
+  getServiceObjective: { "params": { "id": string } };
+  updateServiceObjective: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "description"?: string | null; "target"?: number; "comparator"?: "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "windowType"?: "SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS"; "windowValue"?: number | null } };
+  archiveServiceObjective: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  listServiceObjectiveVersions: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listServiceObjectiveSnapshots: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getServiceObjectiveHistory: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string; "source"?: "OBJECTIVE" | "LEGACY_INCIDENT_SLA" } };
+  evaluateServiceObjective: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedVersionId": string; "start"?: string; "end"?: string } };
+  getServiceObjectiveEvaluation: { "params": { "id": string; "evaluationId": string } };
   getStatusPagePublication: { "params": { "id": string } };
   retryStatusPagePublication: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
   getStatusPagePublicationJob: { "params": { "id": string; "jobId": string } };
@@ -224,6 +243,17 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  getServiceObjectiveCatalog: { "data": ServiceObjectiveCatalog; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listServiceObjectives: { "data": Array<ServiceObjective>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createServiceObjective: { "data": ServiceObjective; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceObjective: { "data": ServiceObjective; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateServiceObjective: { "data": ServiceObjective; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  archiveServiceObjective: { "data": ServiceObjective; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listServiceObjectiveVersions: { "data": Array<ServiceObjective>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listServiceObjectiveSnapshots: { "data": Array<ServiceObjectiveSnapshot>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceObjectiveHistory: { "data": Array<ServiceObjectiveHistoryItem>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  evaluateServiceObjective: { "data": ServiceObjectiveEvaluationJob; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceObjectiveEvaluation: { "data": ServiceObjectiveEvaluationJob; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPagePublication: { "data": StatusPagePublication; "requestId": string; "timestamp": string } & Record<string, unknown>;
   retryStatusPagePublication: { "data": StatusPagePublicationJob; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPagePublicationJob: { "data": StatusPagePublicationJob; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -366,6 +396,104 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "getServiceObjectiveCatalog": {
+    "method": "GET",
+    "path": "/service-objectives/catalog",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceObjectives": {
+    "method": "GET",
+    "path": "/service-objectives",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceObjective": {
+    "method": "GET",
+    "path": "/service-objectives/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceObjective": {
+    "method": "PATCH",
+    "path": "/service-objectives/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "archiveServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives/{id}/archive",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listServiceObjectiveVersions": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/versions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceObjectiveSnapshots": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/snapshots",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getServiceObjectiveHistory": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/history",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "evaluateServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives/{id}/evaluate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceObjectiveEvaluation": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/evaluations/{evaluationId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getStatusPagePublication": {
     "method": "GET",
     "path": "/status-pages/{id}/publication",

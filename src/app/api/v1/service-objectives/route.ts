@@ -8,6 +8,8 @@ import { serviceObjectiveCreateSchema } from '@/lib/slo/schemas';
 import { logger } from '@/lib/logger';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { v1ErrorResponse } from '@/lib/api-v1-errors';
+import { createServiceObjective } from '@/lib/slo/commands';
+import { runSerializableTransaction } from '@/lib/db-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,8 +37,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let actor: Awaited<ReturnType<typeof assertAdmin>>;
   try {
-    await assertAdmin();
+    actor = await assertAdmin();
   } catch {
     return jsonError('Admin access required', 403);
   }
@@ -47,32 +50,9 @@ export async function POST(request: NextRequest) {
       if (!service) return jsonError('Service not found', 404);
     }
 
-    const objective = await prisma.$transaction(async tx => {
-      const lineageId = `so_${crypto.randomUUID()}`;
-      await tx.serviceObjective.updateMany({
-        where: {
-          serviceId: data.serviceId ?? null,
-          metricType: data.metricType,
-          activeTo: null,
-        },
-        data: { activeTo: new Date() },
-      });
-      return tx.serviceObjective.create({
-        data: {
-          id: lineageId,
-          lineageId,
-          serviceId: data.serviceId ?? null,
-          name: data.name,
-          description: data.description ?? null,
-          metricType: data.metricType,
-          target: data.target,
-          comparator: data.comparator,
-          windowType: data.windowType,
-          windowValue: data.windowValue ?? null,
-        },
-        include: { service: { select: { id: true, name: true } } },
-      });
-    });
+    const objective = await runSerializableTransaction(tx =>
+      createServiceObjective(tx, data, { id: actor.id, source: 'UI' })
+    );
     return jsonOk({ ...objective, id: objective.lineageId, versionId: objective.id }, 201);
   } catch (error) {
     if (error instanceof z.ZodError) {
