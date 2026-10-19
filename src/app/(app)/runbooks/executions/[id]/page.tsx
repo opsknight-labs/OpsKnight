@@ -169,7 +169,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       errorMessage: step.errorMessage ? redactRunbookOutput(step.errorMessage) : null,
       outputPreview: step.outputPreview ? redactRunbookOutput(step.outputPreview) : null,
       outputArtifactId: step.outputArtifactId,
-      verification: formatDiagnosticEvidence(step.verificationResult),
+      verification: formatDiagnosticEvidence(step.verificationResult, inputValues),
       requiresApproval: step.requiresApproval,
       approvedBy: step.approvedBy?.name ?? null,
       approvedAt: step.approvedAt ? fmt(step.approvedAt, '') : null,
@@ -209,7 +209,10 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
         planDigest: att.planDigest,
         outputPreview: att.outputPreview ? redactRunbookOutput(att.outputPreview) : null,
         outputArtifactId: att.outputArtifactId,
-        evidence: formatDiagnosticEvidence({ before: att.preState, after: att.postState }),
+        evidence: formatDiagnosticEvidence(
+          { before: att.preState, after: att.postState },
+          inputValues
+        ),
         artifactCount: att._count.artifacts,
         artifacts: att.artifacts,
       })),

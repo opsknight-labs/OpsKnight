@@ -12,6 +12,10 @@ export const GET = defineV2Route({
   querySchema: PaginationQuerySchema.strict(),
   handler: async ({ actor, params, pagination }) => {
     await requireReadableExecution(prisma, actor, params.id);
+    const context = await prisma.runbookExecution.findUniqueOrThrow({
+      where: { id: params.id },
+      select: { inputValues: true },
+    });
     const rows = await prisma.runbookStepAttempt.findMany({
       where: {
         AND: [{ executionStep: { executionId: params.id } }, buildCursorWhere(pagination.cursor)],
@@ -34,7 +38,10 @@ export const GET = defineV2Route({
     return {
       data: result.data.map(({ preState, postState, ...row }) => ({
         ...row,
-        evidence: formatDiagnosticEvidence({ before: preState, after: postState }).slice(0, 16000),
+        evidence: formatDiagnosticEvidence(
+          { before: preState, after: postState },
+          context.inputValues as Record<string, unknown>
+        ).slice(0, 16000),
       })),
       pagination: result.pagination,
       headers: { 'Cache-Control': 'no-store' },

@@ -1,0 +1,32 @@
+{
+  "sourceParent": "072b69f8df627312684aaec9184ad75f3e82f822",
+  "measuredAt": "2026-10-19T05:15:39.725574+00:00",
+  "status": "focused_checks_passed_production_and_cluster_verification_pending",
+  "review": "b7d92fec-a3e6-4f1b-8170-4c7dac6126f1",
+  "changes": [
+    "Corrected API coverage section for delivered runbook decisions/service rules and status-page components/subscribers/branding settings; domain/validated asset/preview gaps remain explicit.",
+    "Review plans mask all submitted inputs before interpolation, preserving the original digest fence on actual inputs.",
+    "REST and execution-detail evidence redact known string input values before JSON escaping, including nested values and serialized object keys.",
+    "Registry presence is explicitly distinguished from route-specific and enterprise certification evidence."
+  ],
+  "checks": {
+    "unitComponentDocs": {
+      "passed": 16,
+      "files": 3,
+      "newPrivacyCases": 8
+    },
+    "realPostgresIntervention": {
+      "passed": 19,
+      "newPrivacyCase": 1
+    },
+    "typecheck": "passed",
+    "changedSourceLint": "passed zero warnings",
+    "generatedDrift": "passed"
+  },
+  "remaining": [
+    "Production build of this source revision",
+    "Latest-head CI",
+    "Namespace SDK, real Agent and load/recovery certification",
+    "Other enterprise feature families and release gates"
+  ]
+}

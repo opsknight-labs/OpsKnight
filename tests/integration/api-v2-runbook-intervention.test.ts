@@ -252,8 +252,13 @@ it('previews and starts a terminal rerun using the exact current reviewed plan',
   );
   expect(previewResponse.status).toBe(200);
   const preview = (await previewResponse.json()).data;
-  const previewAudit = await db.auditLog.findFirstOrThrow({ where: { action: 'runbook.execution.previewed' } });
-  expect(previewAudit.details).toMatchObject({ source: 'API', metadata: { apiClientId: f.credential.key.id } });
+  const previewAudit = await db.auditLog.findFirstOrThrow({
+    where: { action: 'runbook.execution.previewed' },
+  });
+  expect(previewAudit.details).toMatchObject({
+    source: 'API',
+    metadata: { apiClientId: f.credential.key.id },
+  });
   const body = {
     expectedPlanDigest: preview.digest,
     previewAuthorizationToken: preview.authorizationToken,
@@ -581,4 +586,30 @@ it('permits service-team reviewers and rechecks membership before replay', async
   expect((await call()).status).toBe(202);
   await db.teamMember.delete({ where: { id: membership.id } });
   expect((await call()).status).toBe(404);
+});
+
+it('withholds arbitrary submitted plaintext from real approval and evidence responses', async () => {
+  const f = await fixture();
+  const value = 'opaque-reviewed-value-8193"\\tail';
+  await db.runbookExecution.update({
+    where: { id: f.execution.id },
+    data: { inputValues: { innocuous: value } },
+  });
+  await db.runbookExecutionStep.update({
+    where: { id: f.step.id },
+    data: { type: 'BASH', config: { command: 'echo ${{ inputs.innocuous }}' } },
+  });
+  await db.runbookStepAttempt.create({
+    data: { executionStepId: f.step.id, attemptNumber: 1, postState: { custom: value } },
+  });
+  for (const [handler, suffix] of [
+    [steps, 'steps'],
+    [evidence, 'evidence'],
+  ] as const) {
+    const response = await invokeV2(handler, f.credential.token, 'GET', `${f.path}/${suffix}`, {
+      id: f.execution.id,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).not.toContain('opaque-reviewed-value');
+  }
 });

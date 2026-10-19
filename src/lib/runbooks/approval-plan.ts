@@ -30,7 +30,12 @@ export function resolvedApprovalPlan(
   inputValues: Record<string, unknown>
 ): Array<[string, string]> {
   const keys = PLAN_KEYS.get(type) ?? [];
-  const resolved = resolveInputTemplates(config, inputValues) as Record<string, unknown>;
+  // Review permission does not grant access to submitted input values. Mask before
+  // interpolation so arbitrary plaintext cannot bypass output-pattern redaction.
+  const displayInputs = Object.fromEntries(
+    Object.keys(inputValues ?? {}).map(key => [key, '[input withheld]'])
+  );
+  const resolved = resolveInputTemplates(config, displayInputs) as Record<string, unknown>;
   return Object.entries(resolved)
     .filter(([key, value]) => keys.includes(key) && value !== undefined)
     .map(([key, value]) => [
