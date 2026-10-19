@@ -9,6 +9,8 @@
  * - Graceful degradation on DB failures
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- Prisma mock return values are partial fixtures. */
+
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getCronSchedulerStatus,

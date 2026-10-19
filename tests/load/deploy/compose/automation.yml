@@ -16,11 +16,10 @@ services:
     image: postgres:16-alpine
     command: [postgres, '-c', 'max_connections=${AUTOMATION_POSTGRES_MAX_CONNECTIONS:-160}']
     environment:
-      {
-        POSTGRES_USER: automation,
-        POSTGRES_PASSWORD: automation-cert-only,
-        POSTGRES_DB: automation_cert,
-      }
+      POSTGRES_USER: automation
+      # checkov:skip=CKV_SECRET_4: Ephemeral credential for a disposable load-certification database.
+      POSTGRES_PASSWORD: automation-cert-only
+      POSTGRES_DB: automation_cert
     healthcheck:
       {
         test: [CMD-SHELL, pg_isready -U automation -d automation_cert],

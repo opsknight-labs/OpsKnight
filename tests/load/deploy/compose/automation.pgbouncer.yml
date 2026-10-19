@@ -20,5 +20,6 @@ services:
       retries: 30
   web:
     environment:
+      # checkov:skip=CKV_SECRET_4: Ephemeral credential for a disposable load-certification database.
       DATABASE_URL: postgresql://automation:automation-cert-only@pgbouncer:6432/automation_cert?pgbouncer=true&connection_limit=12&pool_timeout=30
     depends_on: { pgbouncer: { condition: service_healthy } }
