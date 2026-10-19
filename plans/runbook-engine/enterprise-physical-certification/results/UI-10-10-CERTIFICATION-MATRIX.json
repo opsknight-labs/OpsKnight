@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-18T13:51:19.656Z",
+  "timestamp": "2026-10-19T02:51:49.499Z",
   "ratings": {
     "dimension1_ux_and_rbac": {
       "rating": "10/10",
@@ -36,9 +36,14 @@
           ]
         },
         {
-          "test": "Negative form validation (prevents empty submission)",
+          "test": "Negative form validation (prevents empty submission and invalid tag pattern)",
           "passed": true,
-          "errorsFound": [],
+          "validationDetails": {
+            "nameRequired": true,
+            "nameValidityMissing": true,
+            "tagsInvalid": true,
+            "validationErrorMessage": "Invalid tag: invalid tag with spaces & uppercase!!!. Use lowercase letters, numbers, dot, dash or underscore (max 40 characters)."
+          },
           "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim1_create_negative_validation.png"
         }
       ]
@@ -49,11 +54,35 @@
         {
           "test": "Runbook catalog inspection in UI",
           "passed": true,
-          "runbookCount": 35,
+          "runbookCount": 39,
           "runbooks": [
+            {
+              "title": "RUNNING NOW",
+              "href": "https://opssentinal.com/runbooks/executions"
+            },
+            {
+              "title": "FLEET AGENTS",
+              "href": "https://opssentinal.com/runbooks/agents"
+            },
+            {
+              "title": "Executions",
+              "href": "https://opssentinal.com/runbooks/executions"
+            },
+            {
+              "title": "Agents",
+              "href": "https://opssentinal.com/runbooks/agents"
+            },
             {
               "title": "Health",
               "href": "https://opssentinal.com/runbooks/health"
+            },
+            {
+              "title": "E2E Blast Radius Guard 3026",
+              "href": "https://opssentinal.com/runbooks/cmvc8rni10415r4wgqbw2zjsh"
+            },
+            {
+              "title": "Open",
+              "href": "https://opssentinal.com/runbooks/cmvc8rni10415r4wgqbw2zjsh"
             },
             {
               "title": "Cert Suite UI Created 9056",
@@ -66,10 +95,6 @@
             {
               "title": "E2E Blast Radius Guard 3026 (Copy)",
               "href": "https://opssentinal.com/runbooks/cmvcadj1h08chr4wg5tm4f5i3"
-            },
-            {
-              "title": "Open",
-              "href": "https://opssentinal.com/runbooks/cmvcadj1h08chr4wg5tm4f5i3"
             }
           ],
           "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim2_runbooks_inventory.png"
@@ -81,7 +106,8 @@
             "title": "Automated Docker Container Recovery",
             "hasSucceededBadge": true,
             "hasContainerStarted": true,
-            "stepCount": 10
+            "hasVerifyHealth": true,
+            "stepCount": 130
           },
           "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim2_execution_receipt_details.png"
         }
@@ -116,24 +142,16 @@
           "editorDetails": {
             "hasActionSelect": true,
             "hasExpectedStateOrSystemd": true,
-            "labels": [
-              "",
-              "Step name\n*",
-              "Step key\n*",
-              "Step type",
-              "Responder notes\n(optional)",
-              "Action",
-              "Service unit",
-              "Risk",
-              "Timeout",
-              "Approval always required\nMutations, manual tasks and approval steps always wait for a responder."
-            ],
+            "hasPrecheckOrVerification": true,
             "selects": [
-              "",
-              "Systemd",
-              "Manual task\nApproval\nCondition\nWait\nHTTP request\nLinux diagnostics\nSystemd\nDocker\nKubernetes\nBash",
-              "Restart · full restart (needs approval)",
-              "Status · inspect health (read-only)\nLogs · recent journal entries (read-only)\nStart · start a stopped unit (safe write)\nStop · halt the unit (safe write)\nRestart · full restart (needs approval)"
+              "Collapse sidebar",
+              "CRITICAL ALERT\nH 481 · M 14 · L 14\n|\nH 481\n·\nM 14\n·\nL 14",
+              "99+\nNotifications",
+              "Create",
+              "Publish draft",
+              "Details",
+              "Overview",
+              "Workflow"
             ]
           },
           "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim4_systemd_action_editor.png"
@@ -143,7 +161,9 @@
           "passed": true,
           "jsonEditorDetails": {
             "hasTextarea": true,
-            "contentSnippet": ""
+            "contentLength": 1157,
+            "contentSnippet": "{\n  \"steps\": [\n    {\n      \"key\": \"guarded_systemd_restart\",\n      \"name\": \"Guarded Systemd Restart\",\n      \"type\": \"SYSTEMD\",\n      \"riskClass\": \"NON",
+            "hasApplyButton": true
           },
           "screenshot": "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_dim4_builder_json_editor.png"
         }

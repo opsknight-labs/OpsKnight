@@ -107,7 +107,7 @@ describe('Evidence Collector Schema & Persistence', () => {
       'HA-011',
       'HA-012',
     ];
-    const expectedCandidateCommit = 'd1a2b3814339e6e90f3f51f640f48273172562ab';
+    const expectedCandidateCommit = '6983d61e9a514b062615b7fb7c4bc8ebbb355316';
 
     it('strictly loads and validates all 20 certified evidence records without skipping or warnings', () => {
       const records = loadAllTestEvidence(undefined, true);

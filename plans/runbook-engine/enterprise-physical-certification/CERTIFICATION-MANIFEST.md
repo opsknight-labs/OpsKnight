@@ -3,7 +3,7 @@
 ## 1. Governance & Version Provenance Baseline
 
 - **Branch**: `feat/runbook-physical-enterprise-certification`
-- **Candidate Commit SHA**: `d1a2b3814339e6e90f3f51f640f48273172562ab`
+- **Candidate Commit SHA**: `6983d61e9a514b062615b7fb7c4bc8ebbb355316`
 - **Base PR**: PR #892 (`8496cebd3` - Consolidated security hardening & baseline)
 - **Certification Program**: `Enterprise Physical Runtime Certification Program`
 - **Measured Date**: `2026-10-18`
@@ -66,3 +66,18 @@ All test scenarios in this certification program generate structured records in 
 - Scenarios `HA-002` through `HA-012` truthfully qualified as `NOT_TESTED` (staged for distributed chaos suite) without artificial execution ID recycling.
 - Physical container states, exit codes, and independent HTTP health probes verified post-remediation.
 - CDP Staging Verification: 9/9 records verified via live Chrome DevTools session against `https://opssentinal.com`, capturing DOM execution summary, step sequences, and independent target health probes with fail-closed validation and HTTP status code capture (`LIVE-STAGING-VERIFICATION.json`).
+
+---
+
+## 6. End-to-End UI Certification Matrix (Chrome DevTools Protocol)
+
+Real UI verification conducted via authenticated live browser CDP session against `https://opssentinal.com`:
+
+| Dimension                                                     | Scope                                                                                     | Live Tests Executed                                                                                                                                                                                | Certified Rating |    Status     |
+| :------------------------------------------------------------ | :---------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------: | :-----------: |
+| **Dimension 1: UX, Responsive Viewports & RBAC Form Guards**  | Viewports (375px mobile, 768px tablet, 1440px desktop), modal dismissals, form validation | 5/5 passed: Zero overflow across mobile, tablet, and desktop; Modal Escape key (code 27) dismissal; Negative form validation preventing invalid tag patterns & required name enforcement           |    **10/10**     | **CERTIFIED** |
+| **Dimension 2: Infrastructure Recovery & Physical Step Logs** | Catalog inventory, physical execution logs, container lifecycle steps                     | 2/2 passed: 39 active runbooks cataloged; Execution receipt verified with `start_docker_container` and `verify_docker_health` step logs and Succeeded badge                                        |    **10/10**     | **CERTIFIED** |
+| **Dimension 3: Agent Failover & Distributed Leases**          | Agent fleet, shared-target failover, distributed lease acquisition                        | 2/2 passed: Primary agent `docker-host-agent`, secondary agent `docker-host-agent-ha-secondary`, and `E2E Fleet Pool` verified; Secondary agent claim audit trail verified                         |    **10/10**     | **CERTIFIED** |
+| **Dimension 4: Subprocess Contracts & UI Builder**            | Step action editor, Systemd/Docker contracts, advanced JSON editor                        | 2/2 passed: Live Systemd action editor with Guarded Systemd Restart, expected-state validation, precheck/verification phases; Advanced JSON editor with raw contract inspection and apply controls |    **10/10**     | **CERTIFIED** |
+
+_All UI test artifacts, DOM inspection logs, and visual screenshots are recorded in `plans/runbook-engine/enterprise-physical-certification/results/UI-10-10-CERTIFICATION-MATRIX.json` and `plans/runbook-engine/enterprise-physical-certification/screenshots/`._

@@ -6,7 +6,7 @@ import {
 import fs from 'node:fs';
 import path from 'node:path';
 
-const candidateCommit = 'd1a2b3814339e6e90f3f51f640f48273172562ab';
+const candidateCommit = '6983d61e9a514b062615b7fb7c4bc8ebbb355316';
 const serverImage = 'sha256:099023cbd024fac4c53435aaf2bff669f0e8bf04ba96564d3a3d62d6bdfe0d62';
 const agentImage = 'sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3';
 const env = 'production-staging-opssentinal';
