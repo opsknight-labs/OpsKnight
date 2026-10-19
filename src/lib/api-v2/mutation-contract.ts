@@ -51,6 +51,27 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/runbooks/executions/[id]/rerun-preview': natural(
+    'Preview revalidates the current source/rule/target policy without starting execution.'
+  ),
+  'POST /api/v2/runbooks/executions/[id]/rerun': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Exact preview plan digest and authorization token fence the current execution plan. New run, canonical audit, durable job and replay commit together. Replays reauthorize source access.',
+  },
+  'POST /api/v2/runbooks/executions/[id]/steps/[stepId]/approve': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Reviewed planDigest body and waiting-state conditional transition fence the decision. State, canonical audit, job and replay commit atomically. Replays reauthorize source access.',
+  },
+  'POST /api/v2/runbooks/executions/[id]/steps/[stepId]/reject': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Reviewed planDigest body and waiting-state conditional transition fence the decision. State, canonical audit, job and replay commit atomically. Replays reauthorize source access.',
+  },
   'POST /api/v2/service-objectives': {
     idempotency: 'required',
     concurrency: 'none',

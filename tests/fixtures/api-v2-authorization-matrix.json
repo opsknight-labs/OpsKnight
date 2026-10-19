@@ -323,7 +323,49 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /runbooks/executions/{id}/events [runbooks:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/executions/{id}/evidence [runbooks:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/executions/{id}/rerun [runbooks:execute]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/executions/{id}/rerun-preview [runbooks:execute]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /runbooks/executions/{id} [runbooks:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/executions/{id}/steps/{stepId}/approve [runbooks:approve]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /runbooks/executions/{id}/steps/{stepId}/reject [runbooks:approve]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /runbooks/executions/{id}/steps [runbooks:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",

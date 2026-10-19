@@ -182,13 +182,14 @@ export async function startTriggeredRunbookExecution(
 /** Resolves the execution preflight and issues a responder-bound preview capability. */
 export async function previewRunbookExecution(
   input: RunbookExecutionRequest,
-  externalTx?: Prisma.TransactionClient
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
 ) {
   if (!input.triggeredByUserId)
     throw new RunbookDefinitionError(
       'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder is required.'
     );
-  const result = await prepareRunbookExecution(input, true, 'MANUAL', externalTx);
+  const result = await prepareRunbookExecution(input, true, 'MANUAL', externalTx, auditContext);
   if (!('digest' in result)) throw new Error('Preview was not generated.');
   return result;
 }
@@ -750,12 +751,14 @@ async function prepareRunbookExecution(
         await logAudit(
           {
             action: 'runbook.execution.previewed',
+            ...(auditContext ? { source: 'API' as const } : {}),
             entityType: 'RUNBOOK',
             entityId: runbook.id,
             actorId: input.triggeredByUserId,
             details: {
               ...authorizationScope,
               previewGrantId: grant.id,
+              ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
               planDigest: preview.digest,
               expiresAt: grant.expiresAt.toISOString(),
             },
@@ -903,7 +906,7 @@ async function prepareRunbookExecution(
   return prisma.$transaction(runner);
 }
 
-function resolvedPlanDigest(
+export function resolvedPlanDigest(
   step: RunbookExecutionStep,
   execution: {
     definitionChecksum: string;
@@ -1601,6 +1604,77 @@ export async function approveExecutionStep(
   };
   if (externalTx) return command(externalTx);
   return prisma.$transaction(command);
+}
+
+/** Reject only the exact waiting step that was reviewed. Cancellation and both
+ * distinct business events share the caller transaction; no Agent assignment is created.
+ */
+export async function rejectExecutionStep(
+  input: {
+    executionId: string;
+    stepId: string;
+    planDigest: string;
+    actorId: string;
+    reason: string;
+  },
+  externalTx?: Prisma.TransactionClient,
+  auditContext?: RunbookExecutionAuditContext
+) {
+  const command = async (tx: Prisma.TransactionClient) => {
+    const step = await tx.runbookExecutionStep.findFirst({
+      where: { id: input.stepId, executionId: input.executionId },
+      include: {
+        execution: {
+          select: {
+            definitionChecksum: true,
+            inputValues: true,
+            resolvedTargetAgentId: true,
+            resolvedTargetAgentPoolId: true,
+          },
+        },
+      },
+    });
+    if (!step) throw new RunbookExecutionNotFoundError(input.executionId);
+    if (step.status !== 'WAITING_APPROVAL')
+      throw new RunbookExecutionInvalidTransitionError(input.executionId, step.status, 'CANCELLED');
+    if (resolvedPlanDigest(step, step.execution) !== input.planDigest)
+      throw new RunbookApprovalPlanChangedError(step.id);
+    const changed = await tx.runbookExecutionStep.updateMany({
+      where: { id: step.id, executionId: input.executionId, status: 'WAITING_APPROVAL' },
+      data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'APPROVAL_REJECTED' },
+    });
+    if (changed.count !== 1)
+      throw new RunbookExecutionInvalidTransitionError(input.executionId, step.status, 'CANCELLED');
+    const parent = await tx.runbookExecution.updateMany({
+      where: { id: input.executionId, status: { in: ['QUEUED', 'RUNNING', 'WAITING_APPROVAL'] } },
+      data: { updatedAt: new Date() },
+    });
+    if (parent.count !== 1)
+      throw new RunbookExecutionInvalidTransitionError(
+        input.executionId,
+        'TERMINAL_OR_CANCELLED',
+        'CANCEL_REQUESTED'
+      );
+    await cancelExecution(input.executionId, input.actorId, input.reason, tx, auditContext);
+    await logAudit(
+      {
+        action: 'runbook.execution.step.rejected',
+        ...(auditContext ? { source: 'API' as const } : {}),
+        entityType: 'RUNBOOK_EXECUTION',
+        entityId: input.executionId,
+        actorId: input.actorId,
+        details: {
+          stepId: step.id,
+          planDigest: input.planDigest,
+          reason: input.reason,
+          ...(auditContext ? { apiClientId: auditContext.apiClientId } : {}),
+        },
+      },
+      tx
+    );
+    return { executionId: input.executionId, stepId: step.id, status: 'CANCEL_REQUESTED' };
+  };
+  return externalTx ? command(externalTx) : prisma.$transaction(command);
 }
 
 export async function cancelExecution(

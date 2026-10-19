@@ -488,3 +488,25 @@ Docker/failover CI remain release gates. These fixes do not certify remaining
 resource authorization, SLO execution budgets or mixed-version worker recovery.
 
 See `review-fac454a7-remediation.json` for exact checks and open gates.
+
+## Execution intervention completion checkpoint
+
+Seven new operations add execution step/evidence/event reads, explicit
+`runbooks:approve` decisions and reviewed terminal rerun. Decisions fence the exact
+plan and waiting state, bind nested step identity, and commit canonical audit,
+durable work and replay together. REST reviewers require owner/service-team control
+or ADMIN. Revoked scope, ownership and membership deny cached success. Rejection
+requests parent cancellation; the actual queue handler reconciles it without
+assigning Agent work. Both preview routes now record API credential provenance.
+
+Local PostgreSQL, contract/component/scope, production build/type/lint/drift and both
+live SDK checks passed. Seeded approval fixtures do not establish real Agent
+approval/rerun end-to-end certification. The user requested a fresh namespace in
+the existing Kind cluster after code is pushed; results will be recorded separately.
+See `runbook-intervention-certification.json` for exact scope and remaining gates.
+
+The c9df92b4c CI failures were two automation test expectations that still allowed
+changed required If-Match validators to replay. Both now assert 409; exact original
+validator retries still replay successfully. The two full PostgreSQL suites pass
+35 cases. OpenAPI and the automation/command references now consistently describe
+revision-bound replay and candidate staging while LIVE.

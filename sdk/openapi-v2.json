@@ -1305,6 +1305,242 @@
           "updatedAt"
         ]
       },
+      "RunbookIntervention": {
+        "type": "object",
+        "properties": {
+          "executionId": {
+            "type": "string"
+          },
+          "stepId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "APPROVED",
+              "CANCEL_REQUESTED"
+            ]
+          }
+        },
+        "required": [
+          "executionId",
+          "stepId",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "RunbookRerun": {
+        "type": "object",
+        "properties": {
+          "executionId": {
+            "type": "string"
+          },
+          "sourceExecutionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "executionId",
+          "sourceExecutionId",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "RunbookExecutionStepSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stepKey": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "riskClass": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "requiresApproval": {
+            "type": "boolean"
+          },
+          "approvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "attemptCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pendingApproval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "planDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "timeoutSeconds": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "plan": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "planDigest",
+                  "timeoutSeconds",
+                  "plan"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "stepKey",
+          "sequence",
+          "name",
+          "type",
+          "riskClass",
+          "status",
+          "requiresApproval",
+          "approvedAt",
+          "attemptCount",
+          "startedAt",
+          "completedAt",
+          "createdAt",
+          "pendingApproval"
+        ],
+        "additionalProperties": false
+      },
+      "RunbookExecutionEvidence": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "executionStepId": {
+            "type": "string"
+          },
+          "attemptNumber": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string"
+          },
+          "planDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 16000
+          }
+        },
+        "required": [
+          "id",
+          "executionStepId",
+          "attemptNumber",
+          "status",
+          "planDigest",
+          "createdAt",
+          "completedAt",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "RunbookExecutionEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "actorId",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
       "ServiceObjective": {
         "type": "object",
         "properties": {
@@ -4289,6 +4525,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "authorizationToken": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
           "digest": {
             "type": "string"
           },
@@ -13501,6 +13741,877 @@
         "x-concurrency": "none"
       }
     },
+    "/runbooks/executions/{id}/steps": {
+      "get": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "Read bounded execution steps and eligible pending approval plans",
+        "description": "Requires runbooks:read. Pending approval plans additionally require explicit runbooks:approve and approver capability plus execution ownership/service-team access (ADMIN excepted). Configuration, raw inputs and secret values are never returned.\n\nRequires API scope `runbooks:read` (Runbooks read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunbookExecutionStepSummary"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listRunbookExecutionSteps",
+        "x-required-scope": "runbooks:read"
+      }
+    },
+    "/runbooks/executions/{id}/evidence": {
+      "get": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "Read redacted bounded execution attempt evidence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunbookExecutionEvidence"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listRunbookExecutionEvidence",
+        "x-required-scope": "runbooks:read",
+        "description": "Requires API scope `runbooks:read` (Runbooks read)."
+      }
+    },
+    "/runbooks/executions/{id}/events": {
+      "get": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "Read bounded execution business-event metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunbookExecutionEvent"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listRunbookExecutionEvents",
+        "x-required-scope": "runbooks:read",
+        "description": "Requires API scope `runbooks:read` (Runbooks read)."
+      }
+    },
+    "/runbooks/executions/{id}/steps/{stepId}/approve": {
+      "post": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "Approve the exact reviewed waiting step",
+        "description": "Explicit runbooks:approve plus runbooks:read. Caller must own the execution or belong to its service team, unless ADMIN. Required retry key binds the exact reviewed plan. Domain command verifies the waiting state and digest; approval, job, canonical audit and replay commit together. Replays reauthorize execution access.\n\nRequires API scope `runbooks:approve` (Runbooks approve).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "planDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "planDigest"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunbookIntervention"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "approveRunbookExecutionStep",
+        "x-required-scope": "runbooks:approve",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/runbooks/executions/{id}/steps/{stepId}/reject": {
+      "post": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "Reject the exact reviewed waiting step and request cancellation",
+        "description": "Same scope and ownership policy as approval. Rejection cancels the waiting step and requests parent cancellation atomically. Poll parent status for final reconciliation.\n\nRequires API scope `runbooks:approve` (Runbooks approve).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "planDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "planDigest",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunbookIntervention"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "rejectRunbookExecutionStep",
+        "x-required-scope": "runbooks:approve",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/runbooks/executions/{id}/rerun-preview": {
+      "post": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "Preview a finished execution against current rules and published version",
+        "description": "Requires runbooks:execute and runbooks:read, execution ownership/team access and current target/rule policy. Does not start execution. The preview supplies the plan digest and authorization token for rerun.\n\nRequires API scope `runbooks:execute` (Runbooks execute).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunbookExecutionPreview"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "previewRunbookExecutionRerun",
+        "x-required-scope": "runbooks:execute",
+        "x-idempotency": "natural",
+        "x-concurrency": "none"
+      }
+    },
+    "/runbooks/executions/{id}/rerun": {
+      "post": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "Start a reviewed rerun of a finished execution",
+        "description": "Required retry key. Current source, rule, inputs, role and target policy are revalidated. Changed plans fail. New execution, canonical audit, durable advance job and replay commit together. Cached results require current source access.\n\nRequires API scope `runbooks:execute` (Runbooks execute).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedPlanDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "previewAuthorizationToken": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "expectedPlanDigest",
+                  "previewAuthorizationToken"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunbookRerun"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "rerunRunbookExecution",
+        "x-required-scope": "runbooks:execute",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
     "/service-objectives/catalog": {
       "get": {
         "tags": [
@@ -21267,7 +22378,7 @@
           "Services"
         ],
         "summary": "Publish a validated immutable service automation version",
-        "description": "Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE stages a candidate version evaluated in parallel shadow mode without interrupting current routing. Replayed requests return the original committed result, even with a different concrete If-Match value; use a new idempotency key for a new conditional write.\n\nRequires API scope `automation:publish` (Automation publish).",
+        "description": "Requires the draft resource ETag in If-Match. Returns immutable id, versionNumber and checksum without an ETag; read the draft again for the next mutation validator. Publishing while LIVE stages a candidate version evaluated in parallel shadow mode without interrupting current routing. Exact retries with the original required If-Match value return the committed result. Reusing an idempotency key with a different normalized revision returns 409; read current state and use a new key for a new conditional write.\n\nRequires API scope `automation:publish` (Automation publish).",
         "parameters": [
           {
             "name": "id",

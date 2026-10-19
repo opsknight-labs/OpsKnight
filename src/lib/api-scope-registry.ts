@@ -249,6 +249,13 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'List runbooks, read step summaries (never step configuration) and read execution state.',
     { issuableBy: NON_USER }
   ),
+  [S.RUNBOOKS_APPROVE]: def(
+    S.RUNBOOKS_APPROVE,
+    'Runbooks approve',
+    'Runbooks',
+    'Inspect reviewed step plans and approve or reject waiting execution steps. Requires an execution approver role; read access and resource visibility remain separate.',
+    { write: true, issuableBy: OPERATORS }
+  ),
   [S.RUNBOOKS_EXECUTE]: def(
     S.RUNBOOKS_EXECUTE,
     'Runbooks execute',

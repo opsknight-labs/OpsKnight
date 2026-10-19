@@ -548,17 +548,19 @@ enabled. Image identity verification in the certification harness still applies.
 
 ### Version cutover safety
 
-Publishing or restoring a version while the service is LIVE returns a conflict.
-Switch to SHADOW or DISABLED first, publish the version, then explicitly activate
-LIVE after reviewing that version's validation and shadow evidence (or recording
-the existing explicit acknowledgments). Publication keeps the selected non-LIVE
-mode. Emergency disable remains available. Restoring an older version creates a
-new immutable version through the same guarded publication command.
+Publishing or restoring while LIVE stages an immutable candidate while the
+current active version continues routing. Review the candidate's validation and
+shadow evidence before explicit activation. Replacing an existing candidate also
+requires its expected identity. In SHADOW or DISABLED, publication replaces the
+active version and retains the selected mode. Emergency disable remains available.
+Restoring an older version creates a new immutable version through the same
+publication command.
 
 The publication API accepts the draft ETag and returns immutable version identity
 without an ETag. Read the draft again for its next mutation validator. Replays
-return the original committed result; a different concrete If-Match header does
-not turn the same key and body into a new write.
+with the original required If-Match revision return the committed result. A
+different normalized required revision with the same key returns 409. Reconcile
+current state before using a new key for a deliberate new write.
 
 ### Worker-backed candidate evidence and approval
 

@@ -19,6 +19,11 @@ export type ServiceAccount = { "id": string; "name": string; "role": string; "de
 export type AuditLog = { "id": string; "action": string; "entityType": string; "entityId"?: string | null; "actorId"?: string | null; "actorEmail"?: string | null; "actorName"?: string | null; "details"?: Record<string, unknown> | null; "ip"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type MetricsReport = { "windowDays": number; "serviceId"?: string | null; "slaCompliancePercent": number; "meanTimeToAcknowledgeMinutes"?: number | null; "meanTimeToResolveMinutes"?: number | null; "totalIncidents": number; "resolvedIncidents": number; "byPriority"?: Record<string, unknown>; "statusMix"?: Array<Record<string, unknown>> } & Record<string, unknown>;
 export type Postmortem = { "id": string; "incidentId": string; "title"?: string | null; "summary": string; "rootCause"?: string | null; "resolution"?: string | null; "mitigation"?: string | null; "impact"?: string | null; "lessons"?: string | null; "status": "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic": boolean; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type RunbookIntervention = { "executionId": string; "stepId": string; "status": "APPROVED" | "CANCEL_REQUESTED" };
+export type RunbookRerun = { "executionId": string; "sourceExecutionId": string; "status": string };
+export type RunbookExecutionStepSummary = { "id": string; "stepKey": string; "sequence": number; "name": string; "type": string; "riskClass": string; "status": string; "requiresApproval": boolean; "approvedAt": string | null; "attemptCount": number; "startedAt": string | null; "completedAt": string | null; "createdAt": string; "pendingApproval": null | { "planDigest": string; "timeoutSeconds": number; "plan": Array<Array<string>> } };
+export type RunbookExecutionEvidence = { "id": string; "executionStepId": string; "attemptNumber": number; "status": string; "planDigest": string | null; "createdAt": string; "completedAt": string | null; "evidence": string };
+export type RunbookExecutionEvent = { "id": string; "action": string; "actorId": string | null; "createdAt": string };
 export type ServiceObjective = { "id": string; "versionId": string; "serviceId": string | null; "name": string; "description": string | null; "metricType": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR" | "LATENCY_P99" | "ERROR_RATE"; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "windowType": "SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS"; "windowValue": number | null; "version": number; "revision": number; "activeFrom": string; "activeTo": string | null; "status": "ACTIVE" | "ARCHIVED"; "legacySlaDefinitionId": string | null; "createdAt": string };
 export type ServiceObjectiveCatalog = { "version": 1; "metrics": Array<{ "id": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR"; "unit": "percent" | "minutes"; "serviceRequired": boolean; "definition": string }>; "comparators": Array<"GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL">; "windows": Array<"SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS">; "windowSemantics": string; "rollingDays": { "minimum": number; "maximum": number }; "history": string; "noData": string; "unsupportedCreationMetrics": Array<"LATENCY_P99" | "ERROR_RATE"> };
 export type ServiceObjectiveSnapshot = { "id": string; "objectiveId": string; "periodStart": string; "periodEnd": string; "value": number | null; "numerator": string | null; "denominator": string | null; "sampleCount": string | null; "target": number; "breached": boolean | null; "dataState": "AVAILABLE" | "NO_DATA" | "UNAVAILABLE"; "definitionVersion": number; "createdAt": string };
@@ -62,7 +67,7 @@ export type AutomationSettings = { "automationEnabled": boolean; "automationRead
 export type IncidentWatcher = { "id": string; "incidentId": string; "userId": string; "role": string; "createdAt": string };
 export type IncidentWatcherRemoved = { "id": string; "incidentId": string; "removed": true };
 export type RunbookCancellationRequested = { "executionId": string; "status": "CANCEL_REQUESTED"; "message": string };
-export type RunbookExecutionPreview = { "digest": string; "expiresAt"?: string; "versionId": string; "version": number; "checksum": string; "agentId": string | null; "agentPoolId": string | null; "timeoutSeconds": number; "readiness"?: Array<{ "state": "passed" | "blocked" | "deferred"; "message": string }>; "steps": Array<{ "key": string; "name": string; "type": string; "risk": string; "purpose": string; "requiresApproval": boolean; "timeoutSeconds": number }> };
+export type RunbookExecutionPreview = { "authorizationToken"?: string; "digest": string; "expiresAt"?: string; "versionId": string; "version": number; "checksum": string; "agentId": string | null; "agentPoolId": string | null; "timeoutSeconds": number; "readiness"?: Array<{ "state": "passed" | "blocked" | "deferred"; "message": string }>; "steps": Array<{ "key": string; "name": string; "type": string; "risk": string; "purpose": string; "requiresApproval": boolean; "timeoutSeconds": number }> };
 export type ScheduleParticipantMutation = { "scheduleId": string; "layerId": string; "userId": string; "layerName"?: string; "userName"?: string; "assignmentId"?: string; "position"?: number; "direction"?: "up" | "down"; "removed"?: boolean };
 export type IncidentLifecycleResult = { "incidentId": string; "command": string | null; "source": string; "previousStatus": string; "status": string; "changed": boolean };
 export type RunbookDefinitionInput = { "steps": Array<RunbookStepInput>; "description"?: string; "defaultTimeoutSeconds"?: number; "defaultMaxRetries"?: number };
@@ -90,6 +95,13 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listRunbookExecutionSteps: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listRunbookExecutionEvidence: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listRunbookExecutionEvents: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  approveRunbookExecutionStep: { "params": { "id": string; "stepId": string }; "headers": { "Idempotency-Key": string }; "body": { "planDigest": string } };
+  rejectRunbookExecutionStep: { "params": { "id": string; "stepId": string }; "headers": { "Idempotency-Key": string }; "body": { "planDigest": string; "reason": string } };
+  previewRunbookExecutionRerun: { "params": { "id": string }; "body": Record<string, never> };
+  rerunRunbookExecution: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "expectedPlanDigest": string; "previewAuthorizationToken": string } };
   getServiceObjectiveCatalog: Record<string, never>;
   listServiceObjectives: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
   createServiceObjective: { "headers": { "Idempotency-Key": string }; "body": { "definition": { "serviceId"?: string | null; "name": string; "description"?: string | null; "metricType": "UPTIME" | "AVAILABILITY" | "MTTA" | "MTTR"; "target": number; "comparator": "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL"; "windowType": "SEVEN_DAYS" | "THIRTY_DAYS" | "NINETY_DAYS" | "QUARTERLY" | "YEARLY" | "ROLLING_DAYS"; "windowValue"?: number | null }; "expectedActiveVersionId": string | null } };
@@ -243,6 +255,13 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listRunbookExecutionSteps: { "data": Array<RunbookExecutionStepSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookExecutionEvidence: { "data": Array<RunbookExecutionEvidence>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookExecutionEvents: { "data": Array<RunbookExecutionEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  approveRunbookExecutionStep: { "data": RunbookIntervention; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  rejectRunbookExecutionStep: { "data": RunbookIntervention; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  previewRunbookExecutionRerun: { "data": RunbookExecutionPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  rerunRunbookExecution: { "data": RunbookRerun; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getServiceObjectiveCatalog: { "data": ServiceObjectiveCatalog; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServiceObjectives: { "data": Array<ServiceObjective>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createServiceObjective: { "data": ServiceObjective; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -396,6 +415,68 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listRunbookExecutionSteps": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/steps",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutionEvidence": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/evidence",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutionEvents": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "approveRunbookExecutionStep": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/steps/{stepId}/approve",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "rejectRunbookExecutionStep": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/steps/{stepId}/reject",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "previewRunbookExecutionRerun": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/rerun-preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "rerunRunbookExecution": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/rerun",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
   "getServiceObjectiveCatalog": {
     "method": "GET",
     "path": "/service-objectives/catalog",

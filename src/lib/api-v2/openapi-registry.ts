@@ -31,6 +31,62 @@ const op = (
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
     'get',
+    '/runbooks/executions/{id}/steps',
+    'listRunbookExecutionSteps',
+    'runbooks:read',
+    'list',
+    'RunbookExecutionStepSummary'
+  ),
+  op(
+    'get',
+    '/runbooks/executions/{id}/evidence',
+    'listRunbookExecutionEvidence',
+    'runbooks:read',
+    'list',
+    'RunbookExecutionEvidence'
+  ),
+  op(
+    'get',
+    '/runbooks/executions/{id}/events',
+    'listRunbookExecutionEvents',
+    'runbooks:read',
+    'list',
+    'RunbookExecutionEvent'
+  ),
+  op(
+    'post',
+    '/runbooks/executions/{id}/steps/{stepId}/approve',
+    'approveRunbookExecutionStep',
+    'runbooks:approve',
+    'item',
+    'RunbookIntervention'
+  ),
+  op(
+    'post',
+    '/runbooks/executions/{id}/steps/{stepId}/reject',
+    'rejectRunbookExecutionStep',
+    'runbooks:approve',
+    'item',
+    'RunbookIntervention'
+  ),
+  op(
+    'post',
+    '/runbooks/executions/{id}/rerun-preview',
+    'previewRunbookExecutionRerun',
+    'runbooks:execute',
+    'item',
+    'RunbookExecutionPreview'
+  ),
+  op(
+    'post',
+    '/runbooks/executions/{id}/rerun',
+    'rerunRunbookExecution',
+    'runbooks:execute',
+    'item',
+    'RunbookRerun'
+  ),
+  op(
+    'get',
     '/service-objectives/catalog',
     'getServiceObjectiveCatalog',
     'service-objectives:read',

@@ -83,10 +83,11 @@
         "Privileged editable draft views with revision-bound preservation of hidden configuration and defaults",
         "Serializable binding enablement and deterministic archive snapshot race coverage",
         "Eight metadata/lifecycle operations with canonical audit and revision fencing",
-        "Twelve service-rule, policy-check, discovery and readiness operations with trigger invariants"
+        "Twelve service-rule, policy-check, discovery and readiness operations with trigger invariants",
+        "Seven execution intervention operations: scoped step/evidence/event reads, exact-plan approval/rejection and preview-authorized rerun, with canonical transactional audit and replay"
       ],
       "remaining": [
-        "Approvals, agents, pools, enrollment and secret grants",
+        "Agents, pools, enrollment, secret grants and combined intervention/Agent certification",
         "Docker and Kubernetes target-isolation/recovery certification"
       ]
     },
@@ -188,7 +189,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 151,
+    "registeredOperationCount": 158,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -244,7 +245,7 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 151,
+  "registeredOperationCount": 158,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,
