@@ -214,21 +214,23 @@ export function CreateRuleSheet({
                         />
                       </div>
                     </div>
+                    <div className="space-y-3 border-t pt-4">
+                      <div>
+                        <p className="text-sm font-medium">Service Automation</p>
+                        <p className="text-xs text-muted-foreground">
+                          Optional. Monitoring incidents only run rules that opt in. Inputs and
+                          targets can come from the incident automation context.
+                        </p>
+                      </div>
+                      <RuleAutomationFields
+                        key={version?.id}
+                        inputs={version?.inputs ?? []}
+                        automationContext={automationContext}
+                        agents={agents}
+                        pools={pools}
+                      />
+                    </div>
                   </>
-                ),
-              },
-              {
-                title: 'Service Automation',
-                description:
-                  'Optional. Monitoring incidents only run rules that opt in. Inputs and targets can come from the incident automation context.',
-                content: (
-                  <RuleAutomationFields
-                    key={version?.id}
-                    inputs={version?.inputs ?? []}
-                    automationContext={automationContext}
-                    agents={agents}
-                    pools={pools}
-                  />
                 ),
               },
               {

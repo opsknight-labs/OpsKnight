@@ -593,7 +593,6 @@ suite('PR 864 review regression contracts', () => {
   });
   it('evaluates 100/1000/10000 incident rules in bounded batches and deduplicates concurrent events', async () => {
     const { service, workflow, old } = await fixture();
-    const incident = await createTestIncident('Trigger scale', service.id);
     const { evaluateIncidentTriggers } = await import('@/lib/runbooks/triggers');
     const { default: applicationPrisma } = await import('@/lib/prisma');
     const original = applicationPrisma.serviceAutomationRule.findMany.bind(
@@ -640,6 +639,8 @@ suite('PR 864 review regression contracts', () => {
           })),
         });
         previous = size;
+        // A rule suggests a runbook once per incident, so each size gets its own incident.
+        const incident = await createTestIncident(`Trigger scale ${size}`, service.id);
         const start = performance.now();
         const source = `scale-${size}`;
         const results = await Promise.all(
