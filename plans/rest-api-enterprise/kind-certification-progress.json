@@ -1,7 +1,7 @@
 {
   "sourceParent": "2d30c0251f4886739a528570651bf975a69b910c",
-  "updatedAt": "2026-10-19T08:18:45.620631+00:00",
-  "status": "image_build_pending",
+  "updatedAt": "2026-10-19T09:02:26.423811+00:00",
+  "status": "native_ci_image_pending",
   "context": "kind-opsknight-cluster",
   "namespace": "opsknight-api-886-072b69f",
   "topology": {
@@ -31,7 +31,7 @@
     }
   ],
   "next": [
-    "Build exact pushed source with 2 GiB Node heap and 3 GiB container limit/four CPUs",
+    "Push and dispatch native ARM64 certification archive job, verify and import exact image",
     "Load and deploy the image into the owned namespace",
     "Run both SDKs and real worker functional paths",
     "Run measured 1/2/4-replica load, quota/revocation and pod/database recovery checks",
@@ -44,7 +44,7 @@
   ],
   "currentAttempt": {
     "applicationRevision": "2d30c0251f4886739a528570651bf975a69b910c",
-    "status": "image_build_pending",
+    "status": "cancelled_incomplete",
     "buildResources": {
       "nodeHeapMiB": 2048,
       "containerMemoryGiB": 3,
@@ -54,7 +54,17 @@
       "Immutable source archive uploaded; Dockerfile builder COPY reached.",
       "Cluster API requests timed out during shared-VM contention; no application pods deployed.",
       "Native worker approval/rejection/rerun REST journey added; positive cluster execution still pending.",
-      "External-mode safety tests: first run 9 passed and 2 startup timeouts; unchanged rerun all 11 passed."
+      "External-mode safety tests: first run 9 passed and 2 startup timeouts; unchanged rerun all 11 passed.",
+      "Local compilation made no further reported progress after almost an hour; only this owned build was cancelled. No image was produced."
     ]
+  },
+  "nativeCiFallback": {
+    "status": "implemented_not_dispatched",
+    "workflow": "docker-image.yml",
+    "input": "certification_archive=true",
+    "architecture": "arm64",
+    "registryPublication": false,
+    "retentionDays": 1,
+    "purpose": "Build the official production Dockerfile away from the resource-constrained shared local VM; verify archive/source/image identity before Kind import."
   }
 }
