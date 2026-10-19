@@ -17,6 +17,21 @@ const membership = object({
   createdAt: { type: 'string', format: 'date-time' },
 });
 export const TEAM_ADMINISTRATION_SCHEMAS: Record<string, Schema> = {
+  TeamManagedService: object({
+    id: text,
+    name: text,
+    teamId: { type: ['string', 'null'] },
+    revision,
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  }),
+  TeamActivity: object({
+    id: text,
+    action: text,
+    createdAt: { type: 'string', format: 'date-time' },
+    actor: { oneOf: [object({ id: text, name: { type: ['string', 'null'] } }), { type: 'null' }] },
+    details: {},
+  }),
   TeamMembership: membership,
   TeamMembershipChange: object({
     teamId: text,
@@ -42,6 +57,28 @@ export const TEAM_ADMINISTRATION_OPERATIONS: Array<{
   body?: Schema;
   paginated?: boolean;
 }> = [
+  {
+    method: 'get',
+    path: '/teams/{id}/activity',
+    summary: 'Read bounded team administrative activity',
+    paginated: true,
+    description:
+      'teams:read and administrator or current team-owner permission. Same event selection and projection as the UI. Includes canonical Team and TeamMember history with bounded, redacted details and actor IDs/names; no actor emails, IP addresses or raw audit metadata. Cursors must belong to this team.',
+  },
+  {
+    method: 'get',
+    path: '/teams/{id}/services',
+    summary: 'List services currently managed by the team',
+    paginated: true,
+  },
+  {
+    method: 'put',
+    path: '/teams/{id}/services/{serviceId}',
+    summary: 'Assign a service to a team',
+    body: object({}),
+    description:
+      'teams:write plus current administrator or team owner. Required Idempotency-Key and concrete Service If-Match, obtained from GET /services/{serviceId} or the revision in listTeamServices. The validator is for the Service, not the Team. Owners can claim unassigned services or retain existing assignments; only administrators can move services between teams. Shared UI/REST command joins the Automation service lock. Concurrent destination changes, canonical audit and receipt are transactional. No-op assignments do not churn revisions or audits. Replay rechecks current team authority and current service ownership.',
+  },
   {
     method: 'get',
     path: '/teams/{id}/members',

@@ -691,6 +691,7 @@ model Service {
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
 
   @@index([teamId])
+  @@index([teamId, createdAt, id], map: "Service_team_page_idx")
   @@index([escalationPolicyId])
   @@index([slackIntegrationId])
 }

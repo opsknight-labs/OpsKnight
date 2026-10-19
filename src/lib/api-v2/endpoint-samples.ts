@@ -4,6 +4,7 @@
  */
 
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
+  'PUT /teams/{id}/services/{serviceId}': {},
   'PUT /teams/{id}/members/{userId}': { role: 'MEMBER', receiveTeamNotifications: true },
   'PUT /teams/{id}/lead': { userId: 'cm123456789012345678901234' },
   'POST /services/{id}/automation/validate': {

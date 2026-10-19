@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { assignTeamServices } from '@/lib/teams/service-commands';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
@@ -258,56 +259,16 @@ function teamAdministrationError(error: unknown) {
   return { error: error instanceof Error ? error.message : 'Team administration failed.' };
 }
 
-export async function assignServicesToTeam(teamId: string, serviceIds: string[]) {
-  let currentUser: { id: string; role: string } | null = null;
+export async function assignServicesToTeam(
+  teamId: string,
+  serviceIds: string[]
+): Promise<{ error?: string; success?: boolean }> {
   try {
-    currentUser = await assertAdminOrTeamOwner(teamId);
+    const actor = await assertAdminOrTeamOwner(teamId);
+    await assignTeamServices(teamId, { serviceIds }, actor);
+    revalidateTeamAdministration(teamId);
+    return { success: true };
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Team Owner access required.',
-    };
+    return teamAdministrationError(error);
   }
-
-  if (serviceIds.length === 0) {
-    return { error: 'Please select at least one service to assign.' };
-  }
-
-  const services = await prisma.service.findMany({
-    where: { id: { in: serviceIds } },
-    select: { id: true, teamId: true },
-  });
-  if (services.length !== new Set(serviceIds).size) {
-    return { error: 'One or more services could not be found.' };
-  }
-  if (
-    currentUser.role !== 'ADMIN' &&
-    services.some(service => service.teamId !== null && service.teamId !== teamId)
-  ) {
-    return { error: 'Only administrators can move a service between teams.' };
-  }
-
-  await prisma.service.updateMany({
-    where: { id: { in: serviceIds } },
-    data: { teamId },
-  });
-
-  const actorId = currentUser.id;
-  await logAudit({
-    action: 'team.services_assigned',
-    entityType: 'TEAM',
-    entityId: teamId,
-    actorId,
-    details: { serviceIds },
-  });
-
-  revalidatePath('/teams');
-  revalidatePath(`/teams/${teamId}`);
-  revalidatePath('/services');
-  revalidatePath('/audit');
-
-  logger.info('team.services_assigned', { teamId, serviceIds, actorId });
-  return { success: true };
 }

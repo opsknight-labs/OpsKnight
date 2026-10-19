@@ -186,13 +186,16 @@ const decisions: readonly ApiCapability[] = [
     title: 'Team membership and lead administration',
     status: 'partial',
     explanation:
-      'Bounded membership reads and revision-protected membership/lead changes use shared UI/REST commands, current ownership checks, last-active-owner protection, SCIM ownership restrictions, session revocation, transactional audits and notifications. Managed service assignment and activity contracts remain in progress.',
+      'Bounded membership reads and revision-protected membership/lead changes use shared UI/REST commands, current ownership checks, last-active-owner protection, SCIM ownership restrictions, session revocation, transactional audits and notifications. Managed service lists/assignment and owner-only activity use shared UI/REST commands with Service revisions, cross-team transfer protection, redacted projections and bounded indexes. Combined certification remains pending.',
     operationIds: [
       'listTeamMembers',
       'setTeamMember',
       'removeTeamMember',
       'getTeamLead',
       'setTeamLead',
+      'listTeamServices',
+      'assignTeamService',
+      'listTeamActivity',
     ],
   },
   {

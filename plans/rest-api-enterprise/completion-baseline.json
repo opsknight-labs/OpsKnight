@@ -102,5 +102,30 @@
       ],
       "correctedSuites": "Targeted rerun passed"
     }
+  },
+  "teamServiceActivityFollowUp": {
+    "sourceParentCommit": "e14545b94529b2c3216d353eb180f058a91e7f1e",
+    "operations": [
+      "listTeamServices",
+      "assignTeamService",
+      "listTeamActivity"
+    ],
+    "domainCommands": [
+      "src/lib/teams/service-commands.ts",
+      "src/lib/teams/activity.ts"
+    ],
+    "postgresTests": 29,
+    "focusedContractTests": 395,
+    "freshInstallAndPopulatedUpgradeMigrations": 275,
+    "existingMigrationChecksums": "preserved",
+    "scope": "Shared UI/REST service ownership and bounded owner-only team activity; no full user lifecycle claim",
+    "status": "local_verification_passed_latest_ci_pending",
+    "browser": "Production build passed in Chromium, Firefox and WebKit, including UI/REST assignment and first/cursor activity pages.",
+    "latestCI": "pending",
+    "populatedTargetTables": {
+      "serviceRowsPreserved": 1000,
+      "auditRowsPreserved": 3000
+    },
+    "productionRegression": "Activity queries use complete tagged first-page/cursor SQL. Production browser and PostgreSQL both verify these query paths."
   }
 }

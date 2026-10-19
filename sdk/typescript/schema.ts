@@ -34,6 +34,8 @@ export type RunbookAgentPolicyStatus = { "agentId": string; "status": string; "c
 export type RunbookAgentRevocation = { "id": string; "status": "REVOKED"; "revokedAt": string | null };
 export type RunbookAgentEnrollment = { "id": string; "status": string; "token": string | null; "executionPublicKey": string; "expiresAt": string };
 export type RunbookAgentEnrollmentStatus = { "id": string; "status": string; "enrollmentState": "PENDING" | "EXPIRED" | "CONSUMED" | "REVOKED" | "UNKNOWN"; "expiresAt": string | null; "enrolledAt": string | null; "revokedAt": string | null };
+export type TeamManagedService = { "id": string; "name": string; "teamId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
+export type TeamActivity = { "id": string; "action": string; "createdAt": string; "actor": { "id": string; "name": string | null } | null; "details": unknown };
 export type TeamMembership = { "id": string; "teamId": string; "userId": string; "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications": boolean; "createdAt": string };
 export type TeamMembershipChange = { "teamId": string; "userId": string; "revision": number; "membership": TeamMembership | null };
 export type TeamLead = { "teamId": string; "teamLeadId": string | null; "revision": number };
@@ -114,6 +116,9 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listTeamActivity: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listTeamServices: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  assignTeamService: { "params": { "id": string; "serviceId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
   listTeamMembers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   setTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications"?: boolean } };
   removeTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
@@ -311,6 +316,9 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listTeamActivity: { "data": Array<TeamActivity>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listTeamServices: { "data": Array<TeamManagedService>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  assignTeamService: { "data": TeamManagedService; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listTeamMembers: { "data": Array<TeamMembership>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -508,6 +516,33 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listTeamActivity": {
+    "method": "GET",
+    "path": "/teams/{id}/activity",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listTeamServices": {
+    "method": "GET",
+    "path": "/teams/{id}/services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "assignTeamService": {
+    "method": "PUT",
+    "path": "/teams/{id}/services/{serviceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listTeamMembers": {
     "method": "GET",
     "path": "/teams/{id}/members",

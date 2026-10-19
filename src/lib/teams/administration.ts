@@ -30,7 +30,8 @@ export async function requireTeamAccess(
   tx: Prisma.TransactionClient,
   teamId: string,
   source: TeamCommandActor,
-  write: boolean
+  write: boolean,
+  administrativeRead = false
 ) {
   const [user, team] = await Promise.all([
     tx.user.findUnique({
@@ -59,8 +60,14 @@ export async function requireTeamAccess(
     actor,
     write
       ? AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE
-      : AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_READ,
-    { type: 'team', teamId, ...(write ? { ownerIds: owner ? [owner.userId] : [] } : {}) }
+      : administrativeRead
+        ? AUTHORIZATION_ACTIONS.TEAM_ACTIVITY_READ
+        : AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_READ,
+    {
+      type: 'team',
+      teamId,
+      ...(write || administrativeRead ? { ownerIds: owner ? [owner.userId] : [] } : {}),
+    }
   );
   if (write && team.scimExternalId)
     throw conflict(

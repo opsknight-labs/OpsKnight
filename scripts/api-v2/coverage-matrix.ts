@@ -40,30 +40,159 @@ const teamOperationIds = new Set([
   'removeTeamMember',
   'getTeamLead',
   'setTeamLead',
+  'listTeamServices',
+  'assignTeamService',
+  'listTeamActivity',
 ]);
-const teamReview = {
-  sharedCommands: ['src/lib/teams/administration.ts'],
-  uiCommands: ['src/app/(app)/teams/actions.ts', 'src/app/(app)/users/actions.ts'],
-  resourceAuthorization:
-    'Current role/status and owner/membership reloaded in Serializable transaction, also before replay; SCIM manual edits denied.',
-  auditEvents: [
-    'team.member.added',
-    'team.member.role.updated',
-    'team.member.notifications.updated',
-    'team.member.removed',
-    'team.lead_updated',
+const teamReviews = new Map<
+  string,
+  {
+    sharedCommands: string[];
+    uiCommands: string[];
+    auditEvents: string[];
+    sideEffects: string[];
+    resourceAuthorization: string;
+    acceptanceTests: string[];
+    finalCandidateCertification: string;
+  }
+>([
+  [
+    'listTeamMembers',
+    {
+      sharedCommands: ['src/lib/teams/administration.ts:requireTeamAccess'],
+      uiCommands: ['src/app/(app)/teams/[id]/page.tsx:membership read'],
+      auditEvents: [],
+      sideEffects: [],
+      resourceAuthorization:
+        'Current role/status and membership reloaded; scoped members see only their team. Cursor bound to team.',
+      acceptanceTests: ['tests/integration/api-v2-team-administration.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
   ],
-  sideEffects: [
-    'Transactional in-app notification for addition/removal',
-    'User tokenVersion on membership/role change',
-    'Local projection invalidation after commit',
+  [
+    'getTeamLead',
+    {
+      sharedCommands: ['src/lib/teams/administration.ts:requireTeamAccess'],
+      uiCommands: ['src/app/(app)/teams/[id]/page.tsx:lead read'],
+      auditEvents: [],
+      sideEffects: [],
+      resourceAuthorization: 'Current directory-read role or membership in this team.',
+      acceptanceTests: ['tests/integration/api-v2-team-administration.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
   ],
-  acceptanceTests: [
-    'tests/integration/api-v2-team-administration.test.ts',
-    'tests/integration/team-administration-parity.test.ts',
+  [
+    'setTeamMember',
+    {
+      sharedCommands: ['src/lib/teams/administration.ts:setTeamMembership'],
+      uiCommands: [
+        'src/app/(app)/teams/actions.ts:addTeamMember/updateTeamMemberRole/updateTeamMemberNotifications',
+        'src/app/(app)/users/actions.ts:addUserToTeam',
+      ],
+      auditEvents: [
+        'team.member.added',
+        'team.member.role.updated',
+        'team.member.notifications.updated',
+      ],
+      sideEffects: [
+        'Transactional notification only on addition',
+        'User tokenVersion only on addition/role change',
+        'Local projection invalidation after commit',
+        'All-writer Team revision trigger',
+      ],
+      resourceAuthorization:
+        'Current administrator or team owner; SCIM-managed membership rejected; active target and last-active-owner checks; current authority checked on replay.',
+      acceptanceTests: [
+        'tests/integration/api-v2-team-administration.test.ts',
+        'tests/integration/team-administration-parity.test.ts',
+      ],
+      finalCandidateCertification: 'pending',
+    },
   ],
-  finalCandidateCertification: 'pending',
-};
+  [
+    'removeTeamMember',
+    {
+      sharedCommands: ['src/lib/teams/administration.ts:deleteTeamMembership'],
+      uiCommands: [
+        'src/app/(app)/teams/actions.ts:removeTeamMember',
+        'src/app/(app)/users/actions.ts:removeUserFromTeam',
+      ],
+      auditEvents: ['team.member.removed'],
+      sideEffects: [
+        'Transactional removal notification',
+        'User tokenVersion increment',
+        'Clear removed member lead designation',
+        'Local projection invalidation after commit',
+        'All-writer Team revision trigger',
+      ],
+      resourceAuthorization:
+        'Current administrator or team owner; SCIM rejected; last active owner retained; replay checks current authority.',
+      acceptanceTests: [
+        'tests/integration/api-v2-team-administration.test.ts',
+        'tests/integration/team-administration-parity.test.ts',
+      ],
+      finalCandidateCertification: 'pending',
+    },
+  ],
+  [
+    'setTeamLead',
+    {
+      sharedCommands: ['src/lib/teams/administration.ts:setTeamLead'],
+      uiCommands: ['src/app/(app)/teams/actions.ts:designateTeamLead/updateTeam'],
+      auditEvents: ['team.lead_updated'],
+      sideEffects: ['Team revision increment for a changed designation'],
+      resourceAuthorization:
+        'Current administrator or team owner; SCIM rejected; selected lead must be active member; replay checks current authority.',
+      acceptanceTests: [
+        'tests/integration/api-v2-team-administration.test.ts',
+        'tests/integration/team-administration-parity.test.ts',
+      ],
+      finalCandidateCertification: 'pending',
+    },
+  ],
+  [
+    'listTeamServices',
+    {
+      sharedCommands: [
+        'src/lib/teams/administration.ts:requireTeamAccess',
+        'src/app/api/v2/teams/[id]/services/route.ts:bounded service read',
+      ],
+      uiCommands: ['src/app/(app)/teams/[id]/page.tsx:managed services read'],
+      auditEvents: [],
+      sideEffects: [],
+      resourceAuthorization:
+        'Current directory-read role or team membership. Cursor bound to current team service assignment.',
+      acceptanceTests: ['tests/integration/api-v2-team-services.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
+  ],
+  [
+    'assignTeamService',
+    {
+      sharedCommands: ['src/lib/teams/service-commands.ts:assignTeamServices'],
+      uiCommands: ['src/app/(app)/teams/actions.ts:assignServicesToTeam'],
+      auditEvents: ['team.services_assigned'],
+      sideEffects: ['Changed Service teamId and revision; no-op does not write or audit'],
+      resourceAuthorization:
+        'Current administrator or destination-team owner. Only administrator may transfer from a different team. Service revision and Automation lock fence assignment. Replay rechecks current team/service authority.',
+      acceptanceTests: ['tests/integration/api-v2-team-services.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
+  ],
+  [
+    'listTeamActivity',
+    {
+      sharedCommands: ['src/lib/teams/activity.ts:listTeamActivity'],
+      uiCommands: ['src/app/(app)/teams/[id]/page.tsx:administrative timeline'],
+      auditEvents: [],
+      sideEffects: [],
+      resourceAuthorization:
+        'Current administrator or team owner; ordinary members and auditors denied. Bounded redacted business-field projection and team-bound cursor.',
+      acceptanceTests: ['tests/integration/api-v2-team-activity.test.ts'],
+      finalCandidateCertification: 'pending',
+    },
+  ],
+]);
 function declaredActions(source: string, method: string) {
   const file = ts.createSourceFile('route.ts', source, ts.ScriptTarget.Latest, true);
   const found = new Set<string>();
@@ -123,7 +252,7 @@ const operations = V2_OPERATIONS.map(operation => {
     authorization: declaredActions(source, method),
     mutation: contracts.get(`${method} /api/v2${relativePath}`) ?? null,
     capabilityIds,
-    domainReview: teamOperationIds.has(operation.operationId) ? teamReview : null,
+    domainReview: teamReviews.get(operation.operationId) ?? null,
     reviewRequired: !teamOperationIds.has(operation.operationId),
   };
 });

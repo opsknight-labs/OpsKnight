@@ -51,6 +51,13 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PUT /api/v2/teams/[id]/services/[serviceId]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Concrete Service revision fences assignment. Shared UI/REST command rechecks current owner/admin authority and locks the Automation service before changing team ownership. Mutation, canonical audit and receipt commit together; replay rechecks current team/service authority.',
+  },
   ...Object.fromEntries(
     [
       'PUT /api/v2/teams/[id]/members/[userId]',

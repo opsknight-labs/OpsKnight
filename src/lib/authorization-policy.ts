@@ -25,6 +25,7 @@ export const AUTHORIZATION_ACTIONS = {
   TEAM_READ: 'team.read',
   TEAM_MANAGE: 'team.manage',
   TEAM_MEMBERSHIP_READ: 'team.membership.read',
+  TEAM_ACTIVITY_READ: 'team.activity.read',
   TEAM_MEMBERSHIP_MANAGE: 'team.membership.manage',
   USER_READ: 'user.read',
   USER_MANAGE: 'user.manage',
@@ -119,6 +120,9 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.SCHEDULE_MANAGE]?: ScheduleResource;
   [AUTHORIZATION_ACTIONS.TEAM_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.TEAM_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.TEAM_ACTIVITY_READ]: Extract<AuthorizationResource, { type: 'team' }> & {
+    ownerIds: readonly string[];
+  };
   [AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_READ]: Extract<AuthorizationResource, { type: 'team' }>;
   [AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE]: Extract<
     AuthorizationResource,
@@ -386,6 +390,14 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     },
   ],
   [
+    AUTHORIZATION_ACTIONS.TEAM_ACTIVITY_READ,
+    {
+      global: CAPABILITIES.ADMIN_MANAGE,
+      scoped: CAPABILITIES.TEAM_ADMINISTER_SCOPED,
+      apiScope: API_SCOPES.TEAMS_READ,
+    },
+  ],
+  [
     AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE,
     {
       global: CAPABILITIES.ADMIN_MANAGE,
@@ -638,7 +650,8 @@ export function authorize<A extends AuthorizationAction>(
   }
   if (!resource) return { allowed: true, scope: 'resource' };
   if (
-    action === AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE &&
+    (action === AUTHORIZATION_ACTIONS.TEAM_MEMBERSHIP_MANAGE ||
+      action === AUTHORIZATION_ACTIONS.TEAM_ACTIVITY_READ) &&
     (resource.type !== 'team' || !resource.ownerIds?.includes(actor.id))
   )
     return { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };

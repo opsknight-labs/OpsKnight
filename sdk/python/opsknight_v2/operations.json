@@ -1,4 +1,31 @@
 {
+  "listTeamActivity": {
+    "method": "GET",
+    "path": "/teams/{id}/activity",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listTeamServices": {
+    "method": "GET",
+    "path": "/teams/{id}/services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "assignTeamService": {
+    "method": "PUT",
+    "path": "/teams/{id}/services/{serviceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listTeamMembers": {
     "method": "GET",
     "path": "/teams/{id}/members",

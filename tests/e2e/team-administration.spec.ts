@@ -83,7 +83,11 @@ test('UI and REST share team membership, lead, revision and session-revocation o
     await page.getByRole('menuitem', { name: 'Admin', exact: true }).click();
     await expect.poll(async () => (await membership())?.role).toBe('ADMIN');
     const row = () =>
-      page.getByRole('tabpanel', { name: /Members/ }).locator('p').filter({ hasText: target.email }).locator('xpath=ancestor::div[contains(@class, "p-3.5")][1]');
+      page
+        .getByRole('tabpanel', { name: /Members/ })
+        .locator('p')
+        .filter({ hasText: target.email })
+        .locator('xpath=ancestor::div[contains(@class, "p-3.5")][1]');
     await row().getByRole('switch').click();
     await expect.poll(async () => (await membership())?.receiveTeamNotifications).toBe(false);
     await row().getByRole('button', { name: 'ADMIN', exact: true }).click();
@@ -143,6 +147,69 @@ test('UI and REST share team membership, lead, revision and session-revocation o
     expect(
       await db.inAppNotification.count({ where: { userId: target.id, entityId: team.id } })
     ).toBe(2);
+    const [uiService, apiService] = await Promise.all(
+      ['UI', 'REST'].map(channel =>
+        db.service.create({
+          data: { name: `Team ${channel} service ${suffix}` },
+        })
+      )
+    );
+    await page.goto(`/teams/${team.id}?tab=services`);
+    await page.mouse.move(0, 0);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Assign Services', exact: true }).click();
+    const serviceModal = page.getByRole('dialog');
+    await serviceModal.getByText(uiService.name, { exact: true }).click();
+    await serviceModal.getByRole('button', { name: 'Assign (1)', exact: true }).click();
+    await expect(serviceModal).not.toBeVisible();
+    await expect
+      .poll(
+        async () => (await db.service.findUniqueOrThrow({ where: { id: uiService.id } })).teamId
+      )
+      .toBe(team.id);
+    const assigned = await page.request.put(`/api/v2/teams/${team.id}/services/${apiService.id}`, {
+      headers: {
+        ...apiHeaders,
+        'If-Match': `"${apiService.revision}"`,
+        'Idempotency-Key': `service-${suffix}`,
+      },
+      data: {},
+    });
+    expect(assigned.status()).toBe(200);
+    await page.reload();
+    await expect(
+      page.getByRole('tabpanel', { name: /Services/ }).getByText(apiService.name, { exact: true })
+    ).toBeVisible();
+    const services = await page.request.get(`/api/v2/teams/${team.id}/services`, {
+      headers: apiHeaders,
+    });
+    expect(services.status()).toBe(200);
+    expect(
+      (await services.json()).data.map((service: { id: string }) => service.id).sort()
+    ).toEqual([uiService.id, apiService.id].sort());
+    const history = await page.request.get(`/api/v2/teams/${team.id}/activity`, {
+      headers: apiHeaders,
+    });
+    expect(history.status()).toBe(200);
+    const events = (await history.json()).data;
+    expect(
+      events.filter((event: { action: string }) => event.action === 'team.services_assigned')
+    ).toHaveLength(2);
+    expect(JSON.stringify(events)).not.toContain(admin.email);
+    const firstActivityPage = await page.request.get(`/api/v2/teams/${team.id}/activity?limit=1`, {
+      headers: apiHeaders,
+    });
+    expect(firstActivityPage.status()).toBe(200);
+    const firstActivity = await firstActivityPage.json();
+    expect(firstActivity.pagination.hasMore).toBe(true);
+    const nextActivityPage = await page.request.get(
+      `/api/v2/teams/${team.id}/activity?limit=1&cursor=${firstActivity.pagination.nextCursor}`,
+      { headers: apiHeaders }
+    );
+    expect(nextActivityPage.status()).toBe(200);
+    expect((await nextActivityPage.json()).data[0].id).not.toBe(firstActivity.data[0].id);
+    await page.goto(`/teams/${team.id}?tab=activity`);
+    await expect(page.getByRole('tabpanel', { name: 'Activity', exact: true }).getByText('Team Audit Trail', { exact: true })).toBeVisible();
   } finally {
     await db.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
   }

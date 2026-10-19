@@ -195,7 +195,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 195,
+    "registeredOperationCount": 198,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -251,7 +251,7 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 195,
+  "registeredOperationCount": 198,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,
@@ -287,10 +287,12 @@
       "setTeamMember",
       "removeTeamMember",
       "getTeamLead",
-      "setTeamLead"
+      "setTeamLead",
+      "listTeamServices",
+      "assignTeamService",
+      "listTeamActivity"
     ],
     "remaining": [
-      "Managed service assignment and activity",
       "Complete user identity lifecycle",
       "Exact-head CI and final combined certification"
     ]

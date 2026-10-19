@@ -324,6 +324,14 @@
         {
           "path": "src/lib/api-v2/team-administration.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/teams/service-commands.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/teams/activity.ts",
+          "branch": "baseline"
         }
       ],
       "reviewStatus": "partial-implementation-verification-pending",
@@ -334,15 +342,17 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Managed service assignment and activity contracts remain in progress.",
-        "Final browser, SDK/live and complete identity lifecycle certification remain pending."
+        "Final combined identity/browser/SDK certification pending."
       ],
       "implementedOperations": [
         "listTeamMembers",
         "setTeamMember",
         "removeTeamMember",
         "getTeamLead",
-        "setTeamLead"
+        "setTeamLead",
+        "listTeamServices",
+        "assignTeamService",
+        "listTeamActivity"
       ]
     },
     {
