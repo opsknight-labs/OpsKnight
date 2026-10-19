@@ -74,9 +74,28 @@ Every single functional scope, viewport, modal dismissal, form validation, and t
 
 ---
 
-## 7. Machine-Readable Test Artifacts
+## 7. Deep Interactive Lifecycle Suite (End-to-End Functional Workflows)
 
-The complete structured execution record is saved in:
+In response to deep release audit requirements, live interactive user workflows were executed through real UI form interactions on `https://opssentinal.com`:
 
-- [`UI-FULL-PLAN-VERIFICATION.json`](results/UI-FULL-PLAN-VERIFICATION.json)
-- All 28 corresponding screenshots are archived in [`screenshots/`](screenshots/).
+| Lifecycle Stage                          | User Action Dispatched                                                                                                      | Verification & Outcome                                                                                                                           | Visual Proof Artifact                                                                                        |  Result  |
+| :--------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------- | :------: |
+| **1. Runbook Creation**                  | Clicked "New Runbook" modal; filled Name, Description, Slug, Tags, and selected `service-recovery` template; submitted form | Created Runbook `cmvepjo2o1ohhd9pakxygd947`; browser redirected to `/runbooks/cmvepjo2o1ohhd9pakxygd947`                                         | [`ui_deep_01_creation_redirect.png`](screenshots/ui_deep_01_creation_redirect.png)                           | **PASS** |
+| **2. Builder & Inputs Editing**          | Inspected `?tab=builder` and `?editor=inputs` on the newly created runbook                                                  | Verified step sequence, action cards, and typed input bindings                                                                                   | [`ui_deep_02_builder_view.png`](screenshots/ui_deep_02_builder_view.png)                                     | **PASS** |
+| **3. Activation & Versioning**           | Clicked "Publish draft" trigger; confirmed "Publish immutable v1" dialog                                                    | Version transitioned from draft to immutable `Live v1`; published version badge updated                                                          | [`ui_deep_03_published_version_v1.png`](screenshots/ui_deep_03_published_version_v1.png)                     | **PASS** |
+| **4. Approval & Authorization Gate**     | Evaluated `/runbooks/executions/cmvchadqm09584qmqassxvp0s`                                                                  | Verified non-idempotent action warning (`Restart`), responder identity, and authorization status badge                                           | [`ui_deep_04_approval_authorization_gate.png`](screenshots/ui_deep_04_approval_authorization_gate.png)       | **PASS** |
+| **5. Secrets Form & Drawer Interaction** | Opened Scoped Secrets drawer; populated Secret Name, Password Value, and Description fields; dismissed via `Escape`         | Form fields populated; `<ConfigureSheet>` drawer dismissed smoothly on `Escape` key (code 27)                                                    | [`ui_deep_05_secret_drawer_filled.png`](screenshots/ui_deep_05_secret_drawer_filled.png)                     | **PASS** |
+| **6. Negative Constraint Validation**    | Attempted creation with empty name and invalid tag regex pattern (`INVALID TAG & SPACES!!!`)                                | Form submission blocked; inline hint rendered custom pattern error: _"Invalid tag: ... Use lowercase letters, numbers, dot, dash or underscore"_ | [`ui_deep_06_negative_constraint_validation.png`](screenshots/ui_deep_06_negative_constraint_validation.png) | **PASS** |
+| **7. Clean-up & Archival**               | Dispatched "Archive Runbook" action on test runbook                                                                         | Test runbook archived cleanly; production staging library preserved                                                                              | [`ui_deep_07_archive_cleanup.png`](screenshots/ui_deep_07_archive_cleanup.png)                               | **PASS** |
+
+**Deep Lifecycle Suite Result**: **6 / 6 Passing (100%)**.
+
+---
+
+## 8. Machine-Readable Test Artifacts
+
+The complete structured execution records are saved in:
+
+- Full plan matrix: [`UI-FULL-PLAN-VERIFICATION.json`](results/UI-FULL-PLAN-VERIFICATION.json)
+- Deep functional lifecycle: [`UI-DEEP-LIFECYCLE-VERIFICATION.json`](results/UI-DEEP-LIFECYCLE-VERIFICATION.json)
+- All corresponding screenshots are archived in [`screenshots/`](screenshots/).
