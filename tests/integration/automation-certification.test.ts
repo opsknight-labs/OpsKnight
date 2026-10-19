@@ -146,6 +146,31 @@ describe('service automation transaction certification', () => {
     expect(visible.description).toBeNull();
   });
 
+  it('classifies older SHADOW writers during a rolling upgrade', async () => {
+    const { service, version } = await setup(snapshot, 'SHADOW');
+    const incident = await db.incident.create({
+      data: { serviceId: service.id, title: 'Legacy customer ABC123 failure' },
+    });
+    expect(incident.automationSourceRestricted).toBe(false);
+    await db.automationTrace.create({
+      data: {
+        incidentId: incident.id,
+        serviceId: service.id,
+        versionId: version.id,
+        mode: 'SHADOW',
+        evaluationAt: new Date(),
+        durationMs: 1,
+        detail: {},
+      },
+    });
+    await db.automationTrace.deleteMany({ where: { incidentId: incident.id } });
+    const captured = await db.incident.findUniqueOrThrow({ where: { id: incident.id } });
+    expect(captured.automationSourceRestricted).toBe(true);
+    const { visibleIncidentSource } =
+      await import('@/lib/automation/presentation/source-visibility');
+    expect(visibleIncidentSource(captured, false).title).not.toContain('ABC123');
+  });
+
   it('falls back before incident creation when a published route becomes snapshot-invalid', async () => {
     const policy = await db.escalationPolicy.create({ data: { name: 'Later oversized route' } });
     const definition: Snapshot = {
@@ -1251,6 +1276,129 @@ describe('service automation transaction certification', () => {
       }
     }
   );
+
+  it('routes P1 to the critical policy with Slack and Teams, and P2 to the standard policy with Slack only', async () => {
+    process.env.ENCRYPTION_KEY = '0123456789abcdef'.repeat(4);
+    const service = await db.service.create({ data: { name: 'Tiered routing' } });
+    const actor = await createTestUser({ role: 'ADMIN' });
+    const [critical, standard] = await Promise.all(
+      [
+        ['Critical', 1],
+        ['Standard', 5],
+      ].map(([name, delayMinutes]) =>
+        db.escalationPolicy.create({
+          data: {
+            name: name as string,
+            steps: {
+              create: [
+                {
+                  delayMinutes: delayMinutes as number,
+                  stepOrder: 0,
+                  targetType: 'USER',
+                  targetUserId: actor.id,
+                  notificationChannels: ['EMAIL'],
+                },
+              ],
+            },
+          },
+        })
+      )
+    );
+    const teams = await db.microsoftTeamsDestination.create({
+      data: { serviceId: service.id, tenantId: 'tenant', teamId: 'team', channelId: 'channel' },
+    });
+    const slack = await db.slackDestination.create({
+      data: { serviceId: service.id, workspaceId: 'workspace', channelId: 'C_TIER' },
+    });
+    const notifySlack = {
+      type: 'NOTIFY_CHANNEL' as const,
+      provider: 'SLACK' as const,
+      destinationId: slack.id,
+    };
+    const tiered: Snapshot = {
+      ...snapshot,
+      fields: [
+        {
+          fieldId: 'tier',
+          key: 'tier',
+          label: 'Tier',
+          type: 'ENUM',
+          caseSensitive: false,
+          allowedValues: ['p1', 'p2'],
+          aliases: {},
+          mappings: [{ source: 'EVENT', path: 'payload.custom_details.tier' }],
+        },
+      ],
+      rules: [
+        {
+          id: 'p1',
+          name: 'P1',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [{ fieldKey: 'tier', operator: 'EQ', value: 'p1' }],
+          actions: [
+            { type: 'USE_ESCALATION_POLICY', policyId: critical.id },
+            notifySlack,
+            { type: 'NOTIFY_CHANNEL', provider: 'TEAMS', destinationId: teams.id },
+          ],
+        },
+        {
+          id: 'p2',
+          name: 'P2',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [{ fieldKey: 'tier', operator: 'EQ', value: 'p2' }],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: standard.id }, notifySlack],
+        },
+      ],
+    };
+    const draft = await saveDraft({
+      serviceId: service.id,
+      actorId: actor.id,
+      snapshot: tiered,
+      expectedRevision: 0,
+    });
+    const version = await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: draft.revision,
+      expectedActiveVersionId: null,
+    });
+    await changeMode({
+      serviceId: service.id,
+      actorId: actor.id,
+      mode: 'LIVE',
+      acknowledgeNoShadow: true,
+      expectedActiveVersionId: version.id,
+    });
+
+    for (const [tier, policy, delayMinutes] of [
+      ['p1', critical, 1],
+      ['p2', standard, 5],
+    ] as const) {
+      const result = await ingest(service.id, {
+        ...event,
+        dedup_key: `tier-${tier}`,
+        payload: { ...event.payload, custom_details: { tier } },
+      });
+      const incidentId = result.incident!.id;
+      const incident = await db.incident.findUniqueOrThrow({ where: { id: incidentId } });
+      expect(incident.nextEscalationAt!.getTime() - incident.createdAt.getTime()).toBe(
+        delayMinutes * 60000
+      );
+      expect((await resolveIncidentResponderRouting(incidentId, service.id)).policy?.id).toBe(
+        policy.id
+      );
+      const channels = (await db.notification.findMany({ where: { incidentId } })).map(
+        notification => notification.channel
+      );
+      expect(channels.filter(channel => channel === 'SLACK')).toHaveLength(1);
+      expect(channels.includes('MICROSOFT_TEAMS')).toBe(tier === 'p1');
+      expect(
+        await db.externalOperation.count({ where: { incidentId, provider: 'MICROSOFT_TEAMS' } })
+      ).toBe(tier === 'p1' ? 1 : 0);
+    }
+  });
 
   it.skipIf(process.env.AUTOMATION_INFRA_DB_RESTART !== 'true')(
     'recovers an isolated PostgreSQL restart during concurrent ingestion and replay',

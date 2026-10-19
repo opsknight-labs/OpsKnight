@@ -131,17 +131,32 @@ export async function processAutomationJob(payload: unknown) {
   await prisma.$transaction(tx => enqueueAutomationNotification(tx, job));
 }
 export type NotifyJob = Extract<z.infer<typeof jobSchema>, { task: 'AUTOMATION_NOTIFY' }>;
+function logNotificationSkipped(
+  job: NotifyJob,
+  reason: 'INCIDENT_NOT_FOUND' | 'DESTINATION_UNAVAILABLE'
+) {
+  // Identifiers only: alert content must not reach logs.
+  logger.warn('automation.notify.skipped', {
+    reason,
+    provider: job.provider,
+    incidentId: job.incidentId,
+    serviceId: job.serviceId,
+    destinationId: job.destinationId,
+    ruleId: job.ruleId,
+    versionId: job.versionId,
+  });
+}
 export async function enqueueAutomationNotification(tx: Prisma.TransactionClient, job: NotifyJob) {
   const incident = await tx.incident.findFirst({
     where: { id: job.incidentId, serviceId: job.serviceId },
     include: { service: { select: { name: true } } },
   });
-  if (!incident) return;
+  if (!incident) return logNotificationSkipped(job, 'INCIDENT_NOT_FOUND');
   if (job.provider === 'TEAMS') {
     const destination = await tx.microsoftTeamsDestination.findFirst({
       where: { id: job.destinationId, serviceId: job.serviceId, enabled: true },
     });
-    if (!destination) return;
+    if (!destination) return logNotificationSkipped(job, 'DESTINATION_UNAVAILABLE');
     await enqueueMicrosoftTeamsDeliveryInTransaction(tx, {
       incidentId: incident.id,
       destinationId: destination.id,
@@ -159,7 +174,7 @@ export async function enqueueAutomationNotification(tx: Prisma.TransactionClient
     const destination = await tx.slackDestination.findFirst({
       where: { id: job.destinationId, serviceId: job.serviceId, enabled: true },
     });
-    if (!destination) return;
+    if (!destination) return logNotificationSkipped(job, 'DESTINATION_UNAVAILABLE');
     await createCentralNotificationIntent(
       {
         category: 'INCIDENT',
