@@ -6,31 +6,34 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (Pool Membership Detached Mid-Flight)",
-  "test_start_time": "2026-10-18T11:50:00.000Z",
-  "test_end_time": "2026-10-18T11:50:30.000Z",
-  "service_id": "cmvbffoig07q614marj783x7f",
+  "test_start_time": "2026-10-19T08:31:25.147Z",
+  "test_end_time": "2026-10-19T08:31:26.023Z",
+  "service_id": "cmvezwctq005vvheirhg7u8b1",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-pool-membership-detached",
-  "incident_id": "UNEXECUTED",
-  "rule_id": "cmvbggld301silnzi9b329eey",
-  "rule_revision": 3,
-  "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
-  "execution_id": "UNEXECUTED",
-  "step_attempt_ids": [
-    "NOT_TESTED"
-  ],
-  "agent_id": "cmvbcv9lr02hz14mah9j953nm",
+  "incident_id": "cmvezwcu0005xvheirkzuyv8l",
+  "rule_id": "cmvezwcua005zvheio0hl9cmd",
+  "rule_revision": 1,
+  "runbook_version_id": "cmvezh3h80007aa92b9rxfq9j",
+  "execution_id": "cmvezwd1s0063vheimoy751ri",
+  "step_attempt_ids": ["cmvezwd57006dvheiq3cfluap"],
+  "agent_id": "cmvez3bhv0002w9s7tm5xsege",
   "policy_hash": "6ef4d4f0dacf",
-  "result": "NOT_TESTED",
-  "physical_state_before": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
-  "physical_state_after": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
+  "result": "PASS",
+  "physical_state_before": {
+    "pool_membership": "detached_mid_flight",
+    "in_flight_lease": "active"
+  },
+  "physical_state_after": {
+    "in_flight_step_completed": true,
+    "subsequent_claims_denied": true
+  },
   "independent_health_result": {
-    "verified": false,
-    "status": "NOT_TESTED",
-    "staged_for": "distributed_chaos_suite"
+    "ok": true,
+    "in_flight_drain_successful": true
   },
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Pool detachment: Immediate authority fence revokes ongoing claim upon pool removal."
+  "notes": "Pool detachment: Agent A was detached mid-run -> Active leased step completed successfully under existing lease -> Future claims safely fenced (execution cmvezwd1s0063vheimoy751ri)."
 }

@@ -6,31 +6,39 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (Pre-mutation failure fence)",
-  "test_start_time": "2026-10-18T11:44:00.000Z",
-  "test_end_time": "2026-10-18T11:44:45.000Z",
-  "service_id": "cmvbffoig07q614marj783x7f",
+  "test_start_time": "2026-10-19T08:31:20.281Z",
+  "test_end_time": "2026-10-19T08:31:20.609Z",
+  "service_id": "cmvezw9250013vheidrfbbl4g",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-pre-mutation-failure",
-  "incident_id": "UNEXECUTED",
-  "rule_id": "cmvbggld301silnzi9b329eey",
-  "rule_revision": 3,
-  "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
-  "execution_id": "UNEXECUTED",
-  "step_attempt_ids": [
-    "NOT_TESTED"
-  ],
-  "agent_id": "cmvdqw3n82xgj4qmqyaz4tk6m",
+  "incident_id": "cmvezw9290015vheiuqa4m47v",
+  "rule_id": "cmvezw92m0017vheixgz7d2my",
+  "rule_revision": 1,
+  "runbook_version_id": "cmvezh3h80007aa92b9rxfq9j",
+  "execution_id": "cmvezw94i001bvheic10z0bav",
+  "step_attempt_ids": ["cmvezw95j001lvheisd7iz2nb"],
+  "agent_id": "cmvez3bib0004w9s7zh0y2hcl",
   "policy_hash": "6ef4d4f0dacf",
-  "result": "NOT_TESTED",
-  "physical_state_before": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
-  "physical_state_after": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
+  "result": "PASS",
+  "physical_state_before": {
+    "workload_status": "exited",
+    "primary_agent_lease": "expired_pre_mutation",
+    "attempt_state": "CLAIMED"
+  },
+  "physical_state_after": {
+    "status": "running",
+    "running": true,
+    "reclaimed_by": "local-docker-host-agent-secondary",
+    "startedAt": "2026-10-19T08:31:20.500Z"
+  },
   "independent_health_result": {
-    "verified": false,
-    "status": "NOT_TESTED",
-    "staged_for": "distributed_chaos_suite"
+    "ok": true,
+    "http_code": 200,
+    "endpoint": "http://127.0.0.1:8095/health",
+    "body": "{\"status\":\"ok\",\"service\":\"e2e-api\"}"
   },
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Safe handling on pre-mutation crash: Verified at code level via lease timeout and claim reset."
+  "notes": "Pre-mutation crash: Agent A lease expired pre-mutation -> Reconciler reset attempt to PENDING -> Survivor Agent B claimed and executed cleanly (execution cmvezw94i001bvheic10z0bav)."
 }

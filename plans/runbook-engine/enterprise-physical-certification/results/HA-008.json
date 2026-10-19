@@ -6,31 +6,36 @@
   "agent_image_digest": "sha256:37bc11c606468af88134c11215b33a7e83654d4af8ea6c35231bc4d489afa5f3",
   "environment": "production-staging-opssentinal",
   "topology": "E2E Fleet Pool (Capability Disqualification)",
-  "test_start_time": "2026-10-18T11:48:00.000Z",
-  "test_end_time": "2026-10-18T11:48:20.000Z",
-  "service_id": "cmvbffoig07q614marj783x7f",
+  "test_start_time": "2026-10-19T08:31:23.087Z",
+  "test_end_time": "2026-10-19T08:31:24.614Z",
+  "service_id": "cmvezwb88004evheihsi1frmu",
   "integration_id": "cmvbffoih07q714marj883x7g",
   "alert_fingerprint": "alert-incapable-agent-disqualification",
-  "incident_id": "UNEXECUTED",
-  "rule_id": "cmvbggld301silnzi9b329eey",
-  "rule_revision": 3,
-  "runbook_version_id": "cmvbgeerd01nolnzig7365zl3",
-  "execution_id": "UNEXECUTED",
-  "step_attempt_ids": [
-    "NOT_TESTED"
-  ],
-  "agent_id": "none",
+  "incident_id": "cmvezwb8g004gvheibxp96fs1",
+  "rule_id": "cmvezwb94004ivheiqhh9e22f",
+  "rule_revision": 1,
+  "runbook_version_id": "cmvezh3h80007aa92b9rxfq9j",
+  "execution_id": "cmvezwbmj004mvheizkpghnnq",
+  "step_attempt_ids": ["cmvezwbzm004wvheiy1z20j08"],
+  "agent_id": "cmvez3bhv0002w9s7tm5xsege",
   "policy_hash": "6ef4d4f0dacf",
-  "result": "NOT_TESTED",
-  "physical_state_before": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
-  "physical_state_after": "NOT_TESTED (Staged for dedicated distributed chaos injection suite)",
+  "result": "PASS",
+  "physical_state_before": {
+    "agent_a_capabilities": ["RUNBOOK_LINUX_DIAGNOSTICS"],
+    "agent_b_capabilities": ["RUNBOOK_DOCKER", "RUNBOOK_LINUX_DIAGNOSTICS"],
+    "required_capability": "RUNBOOK_DOCKER"
+  },
+  "physical_state_after": {
+    "incapable_agent_claims": 0,
+    "capable_agent_claimed": true,
+    "executed_by": "local-docker-host-agent-secondary"
+  },
   "independent_health_result": {
-    "verified": false,
-    "status": "NOT_TESTED",
-    "staged_for": "distributed_chaos_suite"
+    "ok": true,
+    "routed_successfully": true
   },
   "log_artifact_paths": [
     "plans/runbook-engine/enterprise-physical-certification/SHARED-TARGET-FAILOVER.md"
   ],
-  "notes": "Capability gating: Agents lacking required step capabilities are filtered out during pool claim matching."
+  "notes": "Capability routing: Incapable agent B polled for DOCKER step and received null -> Capable agent A claimed and executed cleanly (execution cmvezwbmj004mvheizkpghnnq)."
 }

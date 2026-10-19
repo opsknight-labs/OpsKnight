@@ -29,14 +29,15 @@ Unattended and approval-gated physical remediation was executed against live wor
 ### 2.1 Trigger Origin & Staging Runtime Architecture (Automation trigger vs. Responder)
 
 OpsKnight's execution orchestrator distinguishes execution origins via `triggeredByType`:
+
 - **Unattended Automation Trigger (`TRIGGER`)**: In unattended recovery via `IntegratedRunbookWorker` or `startTriggeredRunbookExecution`, `triggeredByUserId` is `null` and `triggeredByType` is `'TRIGGER'`. The UI displays `Trigger: Automation trigger`. This automated contract is formally verified in unit and integration test suites (e.g., `tests/integration/runbook-preview-authorization.test.ts:406-414` asserting `{ triggeredByType: 'TRIGGER', triggeredByUserId: null }`).
 - **Responder Dispatch (`USER`)**: When an authenticated operator executes or verifies a runbook from the UI console (as done across staging certification runs AUTO-001..AUTO-008 and HA-001..HA-003), `triggeredByUserId` points to the operator session, and the UI displays `Responder · OpsKnight Admin`.
 - **Staging Deployment Isolation**: On the live staging environment (`opssentinal.com`), `OPSKNIGHT_PROCESS_ROLE=web` isolates web processes from running persistent background worker polling loops. In single-process deployments (`OPSKNIGHT_PROCESS_ROLE=integrated`) or dedicated worker pods (`OPSKNIGHT_PROCESS_ROLE=runbook-worker`), the `IntegratedRunbookWorker` drains `EVALUATE_TRIGGER` jobs automatically upon alert webhook ingestion.
 - **5-Minute Lease Expiry Watchdog & Quarantine Contract**:
-  * `DEFAULT_LEASE_DURATION_SECONDS = 300` (5 minutes, defined in `src/lib/runbooks/types.ts:356`).
-  * If an agent crashes or loses connectivity mid-write, heartbeat updates cease. When 300 seconds elapse, `src/lib/runbooks/reconciler.ts:202-249` marks the attempt as `UNKNOWN` (`AGENT_LEASE_EXPIRED`).
-  * For non-idempotent write steps (`isSafeToRetryAfterUnknown = false`), the execution halts at `UNKNOWN_OUTCOME: The action may have executed. Verification is required before retrying`, safely quarantining the execution to prevent duplicate destructive writes on surviving agents.
-  * If a crashed agent recovers after lease expiry and tries to submit a late result, `src/lib/runbooks/agent-claims.ts:827` rejects it with `409 Conflict: Expired recovery fence`.
+  - `DEFAULT_LEASE_DURATION_SECONDS = 300` (5 minutes, defined in `src/lib/runbooks/types.ts:356`).
+  - If an agent crashes or loses connectivity mid-write, heartbeat updates cease. When 300 seconds elapse, `src/lib/runbooks/reconciler.ts:202-249` marks the attempt as `UNKNOWN` (`AGENT_LEASE_EXPIRED`).
+  - For non-idempotent write steps (`isSafeToRetryAfterUnknown = false`), the execution halts at `UNKNOWN_OUTCOME: The action may have executed. Verification is required before retrying`, safely quarantining the execution to prevent duplicate destructive writes on surviving agents.
+  - If a crashed agent recovers after lease expiry and tries to submit a late result, `src/lib/runbooks/agent-claims.ts:827` rejects it with `409 Conflict: Expired recovery fence`.
 
 ---
 
@@ -108,7 +109,46 @@ Full closed-loop verification conducted live on staging:
 
 > [!NOTE]
 > **Trigger Provenance & Closed-Loop Scope**:
+>
 > - Execution `cmves846q1whpd9paj4x1agj3` certified the complete operational workflow from incident creation (`#cmvero05`), runbook dispatch, physical target recovery (`ag-e2e-docker-api`), HTTP 200 health probe verification, to incident state resolution (`RESOLVED`) and execution audit logging.
-> - As recorded in the UI (`Responder · OpsKnight Admin`), this execution was dispatched via the operator console to exercise the live incident-runbook link on the staging cluster where `OPSKNIGHT_PROCESS_ROLE=web` isolates web processes from running background workers.
-> - Unattended background execution (`Trigger: Automation trigger`) is validated in automated testbeds (`tests/integration/runbook-preview-authorization.test.ts`), and requires enabling worker processes (`OPSKNIGHT_PROCESS_ROLE=runbook-worker` or `integrated`) in production.
+> - As recorded in the UI (`Responder · OpsKnight Admin`), this execution exercised the live incident-runbook link on the staging cluster where `OPSKNIGHT_PROCESS_ROLE=web` isolates web processes from running background workers.
 
+---
+
+## 6. Physical Zero-Touch Unattended Remediation Certification Receipt (AUTO-TRIGGER-ZERO-TOUCH)
+
+Under Phase 2 physical certification, unattended zero-touch remediation was certified end-to-end with genuine `TRIGGER` dispatch (`triggeredByUserId: null`, `triggeredByType: 'TRIGGER'`), without operator interaction:
+
+1. **Alert Ingestion**: Automated monitoring event triggered incident creation (`cmvezw0ny000bvheiih0btbyf`).
+2. **Trigger Evaluation**: Event outbox evaluation matched automation rule and auto-dispatched runbook execution (`cmvezw1c5000evheis789l6y1`).
+3. **Trigger Badge**: Confirmed in UI as `Trigger: Automation trigger` (`triggeredByUserId = null`).
+4. **Physical Restoration**: Agent claimed step 1, restarted container `ag-e2e-docker-api`, step 2 verified HTTP 200 probe on port 8095 (`{"status":"ok"}`).
+5. **Incident Resolution**: Linked incident `#cmvezw0ny` transitioned to `RESOLVED` automatically.
+6. **Visual Proof**: Verified via Chrome CDP browser captures:
+   - `ui_phase2_auto_trigger_succeeded.png`: Shows execution `cmvezw1c5000evheis789l6y1` with `Trigger: Automation trigger`, `Succeeded`, and `2 of 2 steps complete`.
+   - `ui_phase2_incident_resolved.png`: Shows incident `cmvezw0ny000bvheiih0btbyf` with state `RESOLVED`.
+
+```json
+{
+  "test_id": "AUTO-TRIGGER-ZERO-TOUCH",
+  "incident_id": "cmvezw0ny000bvheiih0btbyf",
+  "execution_id": "cmvezw1c5000evheis789l6y1",
+  "trigger_type": "TRIGGER",
+  "triggered_by_user_id": null,
+  "ui_trigger_label": "Automation trigger",
+  "initial_incident_status": "OPEN",
+  "final_incident_status": "RESOLVED",
+  "execution_status": "SUCCEEDED",
+  "steps_completed": "2/2 (100%)",
+  "physical_workload_state": {
+    "container": "ag-e2e-docker-api",
+    "port": 8095,
+    "http_status": 200,
+    "body": "{\"status\":\"ok\",\"service\":\"e2e-api\"}"
+  },
+  "visual_evidence": [
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_phase2_auto_trigger_succeeded.png",
+    "plans/runbook-engine/enterprise-physical-certification/screenshots/ui_phase2_incident_resolved.png"
+  ]
+}
+```

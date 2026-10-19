@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   TestEvidenceRecord,
@@ -134,12 +135,7 @@ describe('Evidence Collector Schema & Persistence', () => {
         if (record.test_id === 'AUTO-005') {
           expect(record.result).toBe('FAILED_PRECHECK_DIAGNOSTIC');
           expect(record.execution_id).toBe('cmvdpp7jv2ue94qmq9sxnqlrc');
-        } else if (
-          record.test_id.startsWith('AUTO-') ||
-          record.test_id === 'HA-001' ||
-          record.test_id === 'HA-002' ||
-          record.test_id === 'HA-003'
-        ) {
+        } else if (record.test_id.startsWith('AUTO-') || record.test_id.startsWith('HA-')) {
           expect(record.result).toBe('PASS');
           expect(record.execution_id).not.toBe('UNEXECUTED');
         } else {
@@ -188,7 +184,7 @@ describe('Evidence Collector Schema & Persistence', () => {
       const uniqueExecutionIds = new Set(executionIds);
 
       expect(uniqueExecutionIds.size).toBe(passRecords.length);
-      expect(passRecords.length).toBe(10); // AUTO-001..AUTO-004, AUTO-006..AUTO-008 + HA-001, HA-002, HA-003
+      expect(passRecords.length).toBe(19); // AUTO-001..AUTO-004, AUTO-006..AUTO-008 + HA-001..HA-012
     });
   });
 });
