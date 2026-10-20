@@ -15,10 +15,9 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getRerunBlockedReason } from '@/lib/runbooks/rerun';
 import { ExecutionStatusChips } from '@/components/runbooks/executions/ExecutionStatusChips';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
-import { StatTile } from '@/components/runbooks/ui/primitives';
-import { Activity, CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Clock, Play, ShieldAlert, XCircle } from 'lucide-react';
 import { ExecutionFilterBar } from '@/components/runbooks/executions/ExecutionFilterBar';
 import { ExecutionList } from '@/components/runbooks/executions/ExecutionList';
 import {
@@ -191,49 +190,71 @@ export default async function RunbookExecutionsPage({
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <RunbookPageHeader
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-3 sm:px-4 md:px-6 py-4 md:py-5">
+      <DetailHeroBanner
+        tag="Automation Execution Engine"
         title="Executions"
-        description={`Every runbook run across services and incidents, with live status, approvals and outcomes. As of ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone}).`}
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Play className="h-6 w-6" aria-hidden="true" />
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Every runbook run across services and incidents, with live status, approvals, and
+            outcomes.
+          </p>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+              title={`All execution timestamps reflect your profile timezone: ${userTimeZone}`}
+            >
+              <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
+              {userTimeZone}
+            </span>
+          </div>
+        }
+        statsPlacement="bottom"
+        stats={[
+          {
+            label: 'Running',
+            value: summary.running,
+            icon: <Activity className="h-3.5 w-3.5 text-sky-200" />,
+            valueClassName: summary.running > 0 ? 'text-sky-200 font-bold' : undefined,
+            href: '/runbooks/executions?status=RUNNING',
+            active: status === 'RUNNING',
+          },
+          {
+            label: 'Waiting Approval',
+            value: summary.waitingApproval,
+            icon: <ShieldAlert className="h-3.5 w-3.5 text-amber-200" />,
+            valueClassName: summary.waitingApproval > 0 ? 'text-amber-200 font-bold' : undefined,
+            href: '/runbooks/executions?status=WAITING_APPROVAL',
+            active: status === 'WAITING_APPROVAL',
+          },
+          {
+            label: 'Failed (24h)',
+            value: failedLastDay,
+            icon: <XCircle className="h-3.5 w-3.5 text-rose-200" />,
+            valueClassName: failedLastDay > 0 ? 'text-rose-200 font-bold' : undefined,
+            href: '/runbooks/executions?status=FAILED&timeRange=24h',
+            active: status === 'FAILED',
+          },
+          {
+            label: 'Succeeded (24h)',
+            value: succeededLastDay,
+            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: succeededLastDay > 0 ? 'text-emerald-200 font-bold' : undefined,
+            href: '/runbooks/executions?status=SUCCEEDED&timeRange=24h',
+            active: status === 'SUCCEEDED',
+          },
+        ]}
       />
 
       {/* Static here so the execution table header can own the sticky slot. */}
       <RunbookModuleNav summary={navigation} className="static" />
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="Running"
-          value={summary.running}
-          icon={Activity}
-          tone={summary.running > 0 ? 'info' : 'neutral'}
-          hint={summary.running > 0 ? 'Active on Agents now' : 'Nothing running'}
-          href="/runbooks/executions?status=RUNNING"
-        />
-        <StatTile
-          label="Waiting approval"
-          value={summary.waitingApproval}
-          icon={ShieldAlert}
-          tone={summary.waitingApproval > 0 ? 'warning' : 'neutral'}
-          hint={summary.waitingApproval > 0 ? 'A responder must review' : 'No approvals pending'}
-          href="/runbooks/executions?status=WAITING_APPROVAL"
-        />
-        <StatTile
-          label="Failed (24h)"
-          value={failedLastDay}
-          icon={XCircle}
-          tone={failedLastDay > 0 ? 'danger' : 'neutral'}
-          hint={timedOutLastDay > 0 ? `Plus ${timedOutLastDay} timed out` : 'Last 24 hours'}
-          href="/runbooks/executions?status=FAILED&timeRange=24h"
-        />
-        <StatTile
-          label="Succeeded (24h)"
-          value={succeededLastDay}
-          icon={CheckCircle2}
-          tone={succeededLastDay > 0 ? 'success' : 'neutral'}
-          hint={successRate}
-          href="/runbooks/executions?status=SUCCEEDED&timeRange=24h"
-        />
-      </div>
 
       <ExecutionFilterBar key={JSON.stringify(query)} query={query}>
         <ExecutionStatusChips query={query} counts={countsByStatus} selected={status ?? null} />

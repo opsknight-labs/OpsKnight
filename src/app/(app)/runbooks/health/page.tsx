@@ -6,10 +6,9 @@ import {
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
-import { StatTile } from '@/components/runbooks/ui/primitives';
-import { Bot, HeartPulse, ListOrdered, Play, ShieldCheck } from 'lucide-react';
+import { Bot, Clock, HeartPulse, ListOrdered, Play, ShieldCheck } from 'lucide-react';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { RunbookLiveRefresh } from '@/components/runbooks/RunbookLiveRefresh';
 import {
@@ -225,13 +224,79 @@ export default async function RunbookHealthPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <RunbookLiveRefresh enabled={true} intervalMs={20000} />
-      <RunbookPageHeader
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-3 sm:px-4 md:px-6 py-4 md:py-5">
+      <DetailHeroBanner
+        tag="System Surveillance & Diagnostics"
         title="Automation Health"
-        icon={HeartPulse}
-        description={`Continuous health surveillance across execution workers, queues and agents. Last evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone}).`}
-        badge={<RunbookStatusBadge status={health.health} context="health" />}
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <HeartPulse className="h-6 w-6" aria-hidden="true" />
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Continuous health surveillance across execution workers, queues, and agents.
+          </p>
+        }
+        badges={<RunbookStatusBadge status={health.health} context="health" />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+              title={`Health evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone})`}
+            >
+              <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
+              {userTimeZone}
+            </span>
+            <RunbookLiveRefresh enabled={true} intervalMs={20000} />
+          </div>
+        }
+        statsPlacement="bottom"
+        stats={[
+          {
+            label: 'Active Executions',
+            value: activeExecutions,
+            icon: <Play className="h-3.5 w-3.5 text-sky-200" />,
+            valueClassName:
+              typeof activeExecutions === 'number' && activeExecutions > 0
+                ? 'text-sky-200 font-bold'
+                : undefined,
+            href: '/runbooks/executions',
+            subtext: `${activeExecutions} in-flight`,
+          },
+          {
+            label: 'Healthy Fleet',
+            value: `${health.fleet.enrolled - health.fleet.unhealthy}/${health.fleet.enrolled}`,
+            icon: <Bot className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName:
+              health.fleet.unhealthy === 0
+                ? 'text-emerald-200 font-bold'
+                : 'text-amber-200 font-bold',
+            href: health.fleet.unhealthy ? '/runbooks/agents?attention=1' : '/runbooks/agents',
+            subtext: health.fleet.enrolled
+              ? `${health.fleet.unhealthy} require attention`
+              : 'No Agents configured',
+          },
+          {
+            label: 'Queue Pending',
+            value: pending,
+            icon: <ListOrdered className="h-3.5 w-3.5 text-amber-200" />,
+            valueClassName: pending > 20 ? 'text-amber-200 font-bold' : undefined,
+            href: '/runbooks/executions?status=QUEUED',
+            subtext: `${oldest}s oldest`,
+          },
+          {
+            label: 'Safety Controls',
+            value: attention
+              ? `${issues.length} ${issues.length === 1 ? 'Alert' : 'Alerts'}`
+              : health.health === 'UNKNOWN'
+                ? 'Unknown'
+                : 'Nominal',
+            icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: attention ? 'text-amber-200 font-bold' : 'text-emerald-200 font-bold',
+            subtext: attention ? 'Action required' : 'Zero tripped',
+          },
+        ]}
       />
 
       <RunbookModuleNav summary={navigation} />
@@ -241,58 +306,6 @@ export default async function RunbookHealthPage() {
         issues={issues}
         agentsCount={health.fleet.enrolled}
       />
-
-      <section aria-label="Health indicators" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="Active executions"
-          icon={Play}
-          value={activeExecutions}
-          tone={typeof activeExecutions === 'number' && activeExecutions > 0 ? 'info' : 'neutral'}
-          hint={`${activeExecutions} in-flight`}
-          href="/runbooks/executions"
-        />
-        <StatTile
-          label="Healthy fleet"
-          icon={Bot}
-          value={`${health.fleet.enrolled - health.fleet.unhealthy}/${health.fleet.enrolled}`}
-          tone={
-            !health.fleet.enrolled ? 'neutral' : health.fleet.unhealthy === 0 ? 'success' : 'danger'
-          }
-          hint={
-            health.fleet.enrolled
-              ? `${health.fleet.unhealthy} require attention`
-              : 'No Agents configured'
-          }
-          href={health.fleet.unhealthy ? '/runbooks/agents?attention=1' : '/runbooks/agents'}
-        />
-        <StatTile
-          label="Queue pending"
-          icon={ListOrdered}
-          value={pending}
-          tone={pending > 20 ? 'warning' : 'neutral'}
-          hint={`${oldest}s oldest`}
-          href="/runbooks/executions?status=QUEUED"
-        />
-        <StatTile
-          label="Safety controls"
-          icon={ShieldCheck}
-          value={
-            attention
-              ? `${issues.length} ${issues.length === 1 ? 'Alert' : 'Alerts'}`
-              : health.health === 'UNKNOWN'
-                ? 'Unknown'
-                : 'Nominal'
-          }
-          tone={attention ? 'warning' : health.health === 'UNKNOWN' ? 'neutral' : 'success'}
-          hint={
-            attention
-              ? 'Action required'
-              : health.health === 'UNKNOWN'
-                ? 'Status unknown'
-                : 'Zero tripped'
-          }
-        />
-      </section>
 
       <HealthDetailCards
         localWorker={localWorker}
