@@ -150,6 +150,7 @@ export default function ServiceRunbooks({
   const ids = useId();
   const [searchQuery, setSearchQuery] = useState(rulesSearch);
   const [modeFilter, setModeFilter] = useState<ModeFilter>('ALL');
+  const [showScope, setShowScope] = useState(Boolean(catalogQuery || targetQuery));
 
   const filteredBindings = useMemo(() => {
     const q = searchQuery.trim() === rulesSearch.trim() ? '' : searchQuery.trim().toLowerCase();
@@ -257,7 +258,7 @@ export default function ServiceRunbooks({
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-4 sm:space-y-4.5">
       {/* Dependency Warning if Agents or Library failed to load */}
       {loadErrors.length > 0 && (
         <div
@@ -297,7 +298,7 @@ export default function ServiceRunbooks({
       )}
 
       {/* Top Header Section */}
-      <header className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/25 shadow-2xs">
             <Workflow className="h-5 w-5" aria-hidden />
@@ -313,15 +314,16 @@ export default function ServiceRunbooks({
           </div>
         </div>
 
+        {/* Proper Matching Action Buttons */}
         <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
           <Button
             asChild
             variant="outline"
             size="sm"
-            className="h-8.5 gap-1.5 shadow-2xs text-xs font-semibold"
+            className="h-9 px-3.5 gap-2 rounded-xl border border-border/80 bg-background hover:bg-accent/60 text-foreground font-semibold text-xs shadow-2xs transition-all inline-flex items-center justify-center"
           >
             <Link href="/runbooks">
-              <BookOpen className="h-3.5 w-3.5" aria-hidden />
+              <BookOpen className="h-4 w-4 text-primary" aria-hidden />
               <span>Catalog</span>
             </Link>
           </Button>
@@ -372,52 +374,56 @@ export default function ServiceRunbooks({
         </div>
       )}
 
-      {/* Filter Card matching Services, Incidents, and Runbooks */}
+      {/* Redesigned Clean & Robust Filter Card matching LibraryFilterBar */}
       <Card className="border border-border/80 shadow-xs transition-colors">
-        <CardHeader className="pb-3 pt-3.5 sm:pt-4 px-4 sm:px-5">
+        <CardHeader className="pb-2.5 pt-3.5 px-4 sm:px-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base font-bold">
-                <Filter className="h-4 w-4 text-primary" /> Filter Rules
-              </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                Filter automation rules by execution mode, target agent, or keywords
-              </CardDescription>
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                <Filter className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-sm sm:text-base font-bold text-foreground">
+                  Filter Rules
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                  Filter by execution mode, lifecycle status, or keyword
+                </CardDescription>
+              </div>
             </div>
             {hasActiveFilters && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
                 onClick={() => {
                   setSearchQuery('');
                   setModeFilter('ALL');
                   window.location.href = `/services/${serviceId}?tab=runbooks`;
                 }}
               >
-                <X className="mr-1 h-3.5 w-3.5" /> Clear All
+                <X className="mr-1 h-3 w-3" /> Clear filters
               </Button>
             )}
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-3.5 pt-0 px-4 sm:px-5 pb-4 sm:pb-5">
-          {/* Quick Mode Filters */}
+        <CardContent className="space-y-3 pt-0 px-4 sm:px-5 pb-3.5 sm:pb-4">
+          {/* Quick Mode Filter Pills */}
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             <Badge
               variant={modeFilter === 'ALL' && !archived ? 'default' : 'outline'}
               size="sm"
               className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
                 modeFilter === 'ALL' && !archived
                   ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
               onClick={() => {
                 setModeFilter('ALL');
-                if (archived) {
+                if (archived)
                   window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
-                }
               }}
             >
               All rules ({bindings.length})
@@ -426,16 +432,15 @@ export default function ServiceRunbooks({
               variant={modeFilter === 'AUTOMATIC' && !archived ? 'success' : 'outline'}
               size="sm"
               className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
                 modeFilter === 'AUTOMATIC' && !archived
                   ? 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/30'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10'
               )}
               onClick={() => {
                 setModeFilter(modeFilter === 'AUTOMATIC' ? 'ALL' : 'AUTOMATIC');
-                if (archived) {
+                if (archived)
                   window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
-                }
               }}
             >
               <Zap className="mr-1 h-3 w-3" /> Automatic ({countMode('AUTOMATIC')})
@@ -444,16 +449,15 @@ export default function ServiceRunbooks({
               variant={modeFilter === 'SUGGESTED' && !archived ? 'warning' : 'outline'}
               size="sm"
               className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
                 modeFilter === 'SUGGESTED' && !archived
                   ? 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 hover:bg-amber-700'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/30'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10'
               )}
               onClick={() => {
                 setModeFilter(modeFilter === 'SUGGESTED' ? 'ALL' : 'SUGGESTED');
-                if (archived) {
+                if (archived)
                   window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
-                }
               }}
             >
               <Sparkles className="mr-1 h-3 w-3" /> Suggested ({countMode('SUGGESTED')})
@@ -462,16 +466,15 @@ export default function ServiceRunbooks({
               variant={modeFilter === 'MANUAL' && !archived ? 'info' : 'outline'}
               size="sm"
               className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
                 modeFilter === 'MANUAL' && !archived
                   ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 hover:bg-sky-700'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-sky-700 dark:hover:text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/30'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-sky-700 dark:hover:text-sky-300 hover:bg-sky-500/10'
               )}
               onClick={() => {
                 setModeFilter(modeFilter === 'MANUAL' ? 'ALL' : 'MANUAL');
-                if (archived) {
+                if (archived)
                   window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
-                }
               }}
             >
               <Hand className="mr-1 h-3 w-3" /> Manual ({countMode('MANUAL')})
@@ -480,10 +483,10 @@ export default function ServiceRunbooks({
               variant={archived ? 'secondary' : 'outline'}
               size="sm"
               className={cn(
-                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-2.5 text-xs',
                 archived
                   ? 'bg-slate-700 text-white border-slate-700 hover:bg-slate-800'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
               onClick={() => {
                 window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=${archived ? 'active' : 'archived'}`;
@@ -493,37 +496,37 @@ export default function ServiceRunbooks({
             </Badge>
           </div>
 
-          {/* Search and State Input Form */}
-          <form
-            method="get"
-            className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end pt-1"
-            aria-label="Search service rule history"
-          >
-            <input type="hidden" name="tab" value="runbooks" />
-            <input type="hidden" name="rulesState" value={rulesState} />
-
-            <div className="space-y-1.5 md:col-span-8 lg:col-span-9">
+          {/* Grid Layout Inputs Row matching LibraryFilterBar */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end pt-2 border-t border-border/60">
+            {/* Search Input */}
+            <div
+              className={cn(
+                'space-y-1',
+                canManage ? 'sm:col-span-7 lg:col-span-8' : 'sm:col-span-8 lg:col-span-9'
+              )}
+            >
               <Label
                 htmlFor={`${ids}-search`}
-                className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1"
+                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
               >
-                <Search className="h-3 w-3" /> Search Rules
+                <Search className="h-3 w-3" /> Search
               </Label>
               <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                 <Input
                   id={`${ids}-search`}
                   name="rulesSearch"
                   placeholder="Search rules by name, runbook, or target agent…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="h-9 rounded-xl pr-8 text-xs font-medium"
+                  className="h-9 rounded-xl pl-9 pr-8 text-xs font-medium w-full bg-background/80 shadow-2xs"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     aria-label="Clear search"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -531,9 +534,15 @@ export default function ServiceRunbooks({
               </div>
             </div>
 
-            <div className="space-y-1.5 md:col-span-4 lg:col-span-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
-                <Archive className="h-3 w-3" /> Rule Lifecycle
+            {/* Lifecycle Dropdown */}
+            <div
+              className={cn(
+                'space-y-1',
+                canManage ? 'sm:col-span-3 lg:col-span-2' : 'sm:col-span-4 lg:col-span-3'
+              )}
+            >
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <Activity className="h-3 w-3" /> Lifecycle
               </Label>
               <Select
                 value={rulesState}
@@ -541,7 +550,7 @@ export default function ServiceRunbooks({
                   window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=${val}`;
                 }}
               >
-                <SelectTrigger className="h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors">
+                <SelectTrigger className="h-9 w-full rounded-xl border border-input/80 bg-background/80 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 transition-colors">
                   <SelectValue placeholder="Attached rules" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl p-1">
@@ -560,72 +569,98 @@ export default function ServiceRunbooks({
                 </SelectContent>
               </Select>
             </div>
-          </form>
 
-          {/* Advanced Catalog Scope Disclosure (Refactored out of the raw dashed box) */}
-          {canManage && (
-            <details className="group/scope pt-2 border-t border-border/60">
-              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors select-none py-1">
-                <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-                <span>Advanced catalog &amp; target query parameters</span>
-                <ChevronDown className="h-3.5 w-3.5 transition-transform group-open/scope:rotate-180" />
-              </summary>
-              <form
-                method="get"
-                className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/20 p-3"
-              >
-                <input type="hidden" name="tab" value="runbooks" />
-                <input type="hidden" name="rulesState" value={rulesState} />
-                <input type="hidden" name="rulesSearch" value={rulesSearch} />
-                <div className="flex-1 min-w-[180px]">
-                  <Label
-                    htmlFor={`${ids}-catalog`}
-                    className="text-[11px] text-muted-foreground mb-1 block"
-                  >
-                    Catalog Workflow Scope
-                  </Label>
-                  <Input
-                    id={`${ids}-catalog`}
-                    name="ruleCatalog"
-                    defaultValue={catalogQuery}
-                    maxLength={100}
-                    placeholder="Filter workflow creation list…"
-                    className="h-8 text-xs rounded-lg"
+            {/* Scope Parameters Toggle Button */}
+            {canManage && (
+              <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <SlidersHorizontal className="h-3 w-3" /> Scope
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowScope(!showScope)}
+                  className={cn(
+                    'h-9 w-full justify-between rounded-xl border-input/80 bg-background/80 text-xs font-medium shadow-2xs',
+                    (catalogQuery || targetQuery) && 'border-primary/50 text-primary bg-primary/5',
+                    showScope && 'border-primary text-primary'
+                  )}
+                >
+                  <span className="flex items-center gap-1.5 truncate">
+                    <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                    <span>Filter</span>
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
+                      showScope && 'rotate-180'
+                    )}
                   />
-                </div>
-                <div className="flex-1 min-w-[180px]">
-                  <Label
-                    htmlFor={`${ids}-targets`}
-                    className="text-[11px] text-muted-foreground mb-1 block"
-                  >
-                    Target Agent/Pool Scope
-                  </Label>
-                  <Input
-                    id={`${ids}-targets`}
-                    name="ruleTargets"
-                    defaultValue={targetQuery}
-                    maxLength={100}
-                    placeholder="Filter target agents/pools…"
-                    className="h-8 text-xs rounded-lg"
-                  />
-                </div>
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Scope Inputs (only displayed when expanded) */}
+          {showScope && canManage && (
+            <form
+              method="get"
+              className="mt-2.5 grid grid-cols-1 sm:grid-cols-12 gap-2.5 rounded-xl border border-border/70 bg-muted/20 p-3"
+            >
+              <input type="hidden" name="tab" value="runbooks" />
+              <input type="hidden" name="rulesState" value={rulesState} />
+              <input type="hidden" name="rulesSearch" value={rulesSearch} />
+              <div className="sm:col-span-5 space-y-1">
+                <Label
+                  htmlFor={`${ids}-catalog`}
+                  className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"
+                >
+                  <BookOpen className="h-3 w-3" /> Catalog Scope
+                </Label>
+                <Input
+                  id={`${ids}-catalog`}
+                  name="ruleCatalog"
+                  defaultValue={catalogQuery}
+                  maxLength={100}
+                  placeholder="Filter workflow creation list…"
+                  className="h-8.5 text-xs rounded-lg bg-background/80"
+                />
+              </div>
+              <div className="sm:col-span-5 space-y-1">
+                <Label
+                  htmlFor={`${ids}-targets`}
+                  className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider flex items-center gap-1"
+                >
+                  <Workflow className="h-3 w-3" /> Target Scope
+                </Label>
+                <Input
+                  id={`${ids}-targets`}
+                  name="ruleTargets"
+                  defaultValue={targetQuery}
+                  maxLength={100}
+                  placeholder="Filter target agents/pools…"
+                  className="h-8.5 text-xs rounded-lg bg-background/80"
+                />
+              </div>
+              <div className="sm:col-span-2 flex items-end">
                 <Button
                   type="submit"
                   variant="secondary"
                   size="sm"
-                  className="h-8 self-end text-xs font-medium"
+                  className="h-8.5 w-full text-xs font-semibold shadow-2xs"
                 >
-                  Apply Scope
+                  Apply
                 </Button>
-              </form>
-            </details>
+              </div>
+            </form>
           )}
         </CardContent>
       </Card>
 
-      {/* Readiness Check Telemetry Bar */}
+      {/* Compact Fleet Readiness Telemetry Bar */}
       {bindings.length > 0 && !archived && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/60 backdrop-blur-xs px-4 py-2.5 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-border/70 bg-card/60 backdrop-blur-xs px-3.5 py-2 shadow-2xs">
           <p className="text-xs text-muted-foreground tabular-nums flex items-center gap-2">
             <span className="font-semibold text-foreground">
               {filteredBindings.length === bindings.length
@@ -633,19 +668,21 @@ export default function ServiceRunbooks({
                 : `${filteredBindings.length} of ${bindings.length} rules`}
             </span>
             <span>·</span>
-            <span>Readiness is verified on demand to preserve low-latency page performance.</span>
+            <span className="text-[11px]">
+              Readiness is verified on demand to preserve low-latency page performance.
+            </span>
           </p>
           <Button
             asChild
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 shadow-2xs text-xs font-semibold hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-300"
+            className="h-7.5 gap-1.5 shadow-2xs text-xs font-semibold hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-300"
           >
             <Link
               href={`/services/${serviceId}?${query({ rulesCheck: '1', rulesAfter: pagination?.after ?? '' })}`}
             >
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
-              <span>Verify Rule Readiness</span>
+              <span>Verify Readiness</span>
             </Link>
           </Button>
         </div>
@@ -653,7 +690,7 @@ export default function ServiceRunbooks({
 
       {/* Rules Grid List */}
       {filteredBindings.length > 0 && (
-        <div className="space-y-3.5">
+        <div className="space-y-3">
           {filteredBindings.map(binding =>
             binding.detachedAt ? (
               <ArchivedRuleCard key={binding.id} serviceId={serviceId} binding={binding} />

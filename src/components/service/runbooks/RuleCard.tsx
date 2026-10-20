@@ -89,14 +89,14 @@ export function ArchivedRuleCard({
   binding: ServiceRunbookBinding;
 }) {
   return (
-    <article className="bg-card group relative overflow-hidden rounded-2xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs p-5 sm:p-6 shadow-xs hover:border-border transition-all">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/60 border border-border/70 text-muted-foreground shadow-2xs">
-            <Archive className="h-4.5 w-4.5" aria-hidden />
+    <article className="bg-card group relative overflow-hidden rounded-xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs p-3.5 sm:p-4 shadow-xs hover:border-border transition-all">
+      <div className="flex flex-wrap items-start justify-between gap-2.5">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 border border-border/70 text-muted-foreground shadow-2xs">
+            <Archive className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h3 className="break-words text-base font-bold text-foreground">
+            <h3 className="break-words text-sm sm:text-base font-bold text-foreground">
               {binding.name || binding.runbook.name}
             </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -106,11 +106,11 @@ export function ArchivedRuleCard({
         </div>
         <RuleStatusPill kind="ARCHIVED" />
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
         This rule cannot be triggered. Its configuration parameters, condition rules, and past
         execution evidence are permanently preserved for audit.
       </p>
-      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between">
+      <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between">
         <Button
           asChild
           variant="outline"
@@ -168,14 +168,14 @@ export function RuleCard({
   const readinessView = binding.readiness ? readinessPresentation(binding.readiness.state) : null;
 
   return (
-    <article className="bg-card group relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200">
-      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1.5', accent)} />
-      <div className="space-y-4 p-5 sm:p-6 pl-6 sm:pl-7">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0 flex-1">
+    <article className="bg-card group relative overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200">
+      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1', accent)} />
+      <div className="space-y-3 p-3.5 sm:p-4 pl-4 sm:pl-4.5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
+          <div className="flex items-start gap-2.5 min-w-0 flex-1">
             <div
               className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-2xs transition-transform group-hover:scale-105',
+                'flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-lg shadow-2xs transition-transform group-hover:scale-105',
                 binding.mode === 'AUTOMATIC'
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                   : binding.mode === 'SUGGESTED'
@@ -184,15 +184,15 @@ export function RuleCard({
               )}
             >
               {binding.mode === 'AUTOMATIC' ? (
-                <Zap className="h-4.5 w-4.5" />
+                <Zap className="h-4 w-4" />
               ) : binding.mode === 'SUGGESTED' ? (
-                <Sparkles className="h-4.5 w-4.5" />
+                <Sparkles className="h-4 w-4" />
               ) : (
-                <Hand className="h-4.5 w-4.5" />
+                <Hand className="h-4 w-4" />
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-base font-bold leading-snug">
+              <h3 className="text-sm sm:text-base font-bold leading-snug">
                 <Link
                   href={rulePath}
                   className="break-words text-foreground hover:text-primary transition-colors focus-visible:underline"
@@ -209,7 +209,7 @@ export function RuleCard({
           </div>
           <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-auto sm:justify-end">
             <RuleStatusPill kind={kind} />
-            <span className="inline-flex items-center gap-1 rounded-full border border-border/80 bg-muted/50 px-2.5 py-0.5 text-[11px] font-mono font-medium text-foreground shadow-2xs">
+            <span className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-muted/50 px-2 py-0.5 text-[11px] font-mono font-medium text-foreground shadow-2xs">
               {binding.versionStrategy === 'PINNED'
                 ? `v${binding.runbookVersion?.version ?? '?'} pinned`
                 : 'Latest published'}
@@ -217,16 +217,16 @@ export function RuleCard({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-1 text-muted-foreground shadow-2xs">
-            <Server className="h-3.5 w-3.5 text-primary shrink-0" />
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 px-2 py-0.5 text-muted-foreground text-[11px] shadow-2xs">
+            <Server className="h-3 w-3 text-primary shrink-0" />
             <span>
               Target:{' '}
               <strong className="text-foreground font-semibold">{presentation.target}</strong>
             </span>
           </div>
-          <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-1 text-muted-foreground shadow-2xs">
-            <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 px-2 py-0.5 text-muted-foreground text-[11px] shadow-2xs">
+            <Zap className="h-3 w-3 text-amber-500 shrink-0" />
             <span>
               Trigger:{' '}
               <strong className="text-foreground font-semibold">{presentation.trigger}</strong>
@@ -234,16 +234,16 @@ export function RuleCard({
           </div>
         </div>
 
-        <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/70 rounded-xl border border-border/70 bg-muted/20">
-          <div className="min-w-0 px-3.5 py-2.5">
+        <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/70 rounded-lg border border-border/70 bg-muted/20">
+          <div className="min-w-0 px-3 py-1.5 sm:py-2">
             <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Clock className="h-3 w-3 text-muted-foreground" /> Last Run
             </dt>
-            <dd className="mt-1 min-w-0">
+            <dd className="mt-0.5 min-w-0">
               {lastExecution ? (
                 <Link
                   href={`/runbooks/executions/${lastExecution.id}`}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 hover:underline"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-0.5 hover:underline"
                 >
                   <RunbookStatusBadge status={lastExecution.status} size="sm" />
                   <span className="text-[11px] font-medium text-muted-foreground">
@@ -255,59 +255,55 @@ export function RuleCard({
               )}
             </dd>
           </div>
-          <div className="min-w-0 px-3.5 py-2.5">
+          <div className="min-w-0 px-3 py-1.5 sm:py-2">
             <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Activity className="h-3 w-3 text-muted-foreground" /> Executions
             </dt>
-            <dd className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-base font-extrabold tracking-tight text-foreground tabular-nums">
+            <dd className="mt-0.5 flex items-baseline gap-1.5">
+              <span className="text-sm sm:text-base font-extrabold tracking-tight text-foreground tabular-nums">
                 {executionCount}
               </span>
               <span className="text-[11px] text-muted-foreground">runs</span>
             </dd>
           </div>
-          <div className="min-w-0 px-3.5 py-2.5">
+          <div className="min-w-0 px-3 py-1.5 sm:py-2">
             <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <ShieldCheck className="h-3 w-3 text-muted-foreground" /> Fleet Readiness
             </dt>
-            <dd className="mt-1 text-xs">
+            <dd className="mt-0.5 text-xs">
               {readinessView ? (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1.5 font-semibold',
+                    'inline-flex items-center gap-1.5 font-semibold text-xs',
                     TONE_TEXT[readinessView.tone]
                   )}
                 >
                   <span
                     aria-hidden
-                    className={cn('h-2 w-2 shrink-0 rounded-full', TONE_DOT[readinessView.tone])}
+                    className={cn(
+                      'h-1.5 w-1.5 shrink-0 rounded-full',
+                      TONE_DOT[readinessView.tone]
+                    )}
                   />
                   {readinessView.label}
                 </span>
               ) : (
-                <span className="font-medium text-muted-foreground">Not checked</span>
+                <span className="font-medium text-muted-foreground text-xs">Not checked</span>
               )}
             </dd>
           </div>
         </dl>
 
-        {!binding.readiness && (
-          <p className="text-xs text-muted-foreground">
-            {binding.enabled
-              ? 'Readiness not checked yet. Open Rule evidence or check visible rules.'
-              : 'Rule paused · Target checks not run.'}
-          </p>
-        )}
         {binding.readiness && (
           <section
             aria-label="Rule readiness"
             className={cn(
-              'space-y-1.5 text-xs',
+              'space-y-1 text-xs',
               blocked.length > 0 &&
-                'rounded-lg bg-destructive/5 p-3 ring-1 ring-inset ring-destructive/20'
+                'rounded-lg bg-destructive/5 p-2.5 ring-1 ring-inset ring-destructive/20'
             )}
           >
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-[11px]">
               {binding.readiness.eligibleAgents === null
                 ? binding.readiness.state === 'PAUSED'
                   ? 'Target checks paused'
@@ -333,7 +329,7 @@ export function RuleCard({
               </time>
             </p>
             {blocked.slice(0, 3).map(check => (
-              <p key={check.code} className="flex items-start gap-1.5">
+              <p key={check.code} className="flex items-start gap-1.5 text-xs">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
                 <span>
                   {check.message}{' '}
@@ -347,9 +343,9 @@ export function RuleCard({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-border/70 bg-muted/20 px-4 sm:px-6 py-3 pl-5 sm:pl-7">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border/70 bg-muted/20 px-3.5 sm:px-4 py-2 pl-4 sm:pl-4.5">
         {binding.enabled && (
-          <Button asChild size="sm" className="h-8 gap-1.5 shadow-2xs font-semibold">
+          <Button asChild size="sm" className="h-8 gap-1.5 shadow-2xs font-semibold text-xs">
             <Link href={`${rulePath}#run-now`}>
               <Play className="h-3.5 w-3.5" aria-hidden />
               Run now
@@ -393,14 +389,14 @@ export function RuleCard({
       </div>
 
       <details className="group/manage border-t border-border/60 [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-5 sm:px-6 pl-6 sm:pl-7 text-xs font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 px-3.5 sm:px-4 py-2 pl-4 sm:pl-4.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
           Manage rule
           <ChevronDown
-            className="h-4 w-4 transition-transform group-open/manage:rotate-180"
+            className="h-3.5 w-3.5 transition-transform group-open/manage:rotate-180"
             aria-hidden
           />
         </summary>
-        <div className="space-y-4 border-t border-border/60 px-5 sm:px-6 py-4 pl-6 sm:pl-7">
+        <div className="space-y-3 border-t border-border/60 px-3.5 sm:px-4 py-3 pl-4 sm:pl-4.5">
           <div>
             <h4 className="mb-2 text-xs font-semibold text-foreground">Inputs</h4>
             <InputSummary
