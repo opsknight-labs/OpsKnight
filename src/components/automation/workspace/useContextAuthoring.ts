@@ -33,6 +33,11 @@ export function useContextAuthoring({
   const [values, setValues] = useState<string[]>(['production', 'staging', 'development']);
   const [advanced, setAdvanced] = useState(false);
 
+  const handleManualPathChange = useCallback((nextPath: string) => {
+    setObservedPath(nextPath);
+    setSelectedIntegrationType(undefined);
+  }, []);
+
   const selectObservedField = useCallback(
     (
       field: {
@@ -68,7 +73,13 @@ export function useContextAuthoring({
   const handleIntegrationTypeChange = useCallback(
     (nextType: string) => {
       setIntegrationType(nextType);
-      if (nextType !== 'ALL' && selectedIntegrationType && selectedIntegrationType !== nextType) {
+      if (nextType === 'ALL') {
+        setSelectedIntegrationType(undefined);
+      } else if (
+        nextType !== 'ALL' &&
+        selectedIntegrationType &&
+        selectedIntegrationType !== nextType
+      ) {
         setObservedPath('');
         setSelectedSource(undefined);
         setSelectedIntegrationType(undefined);
@@ -108,9 +119,21 @@ export function useContextAuthoring({
       onError('Choose a unique field name and an observed source field');
       return;
     }
-    const matchingDiscovery = discoveries.find(item => item.path === observedPath);
+    const matchingDiscovery = discoveries.find(
+      item =>
+        item.path === observedPath &&
+        (!selectedIntegrationType ||
+          item.integrationType === selectedIntegrationType ||
+          !item.integrationType ||
+          item.integrationType === 'ALL') &&
+        (!integrationType ||
+          integrationType === 'ALL' ||
+          !item.integrationType ||
+          item.integrationType === 'ALL' ||
+          item.integrationType === integrationType)
+    );
     const effectiveIntegration =
-      selectedIntegrationType ?? matchingDiscovery?.integrationType ?? integrationType;
+      integrationType === 'ALL' ? undefined : (selectedIntegrationType ?? integrationType);
     const source =
       selectedSource ??
       matchingDiscovery?.source ??
@@ -131,10 +154,7 @@ export function useContextAuthoring({
           mappings: [
             {
               source,
-              integrationType:
-                source === 'EVENT' || effectiveIntegration === 'ALL'
-                  ? undefined
-                  : effectiveIntegration,
+              integrationType: effectiveIntegration,
               path: observedPath,
             },
           ],
@@ -164,6 +184,7 @@ export function useContextAuthoring({
     setIntegrationType,
     handleIntegrationTypeChange,
     selectObservedField,
+    handleManualPathChange,
     discoveries,
     setDiscoveries,
     fieldLabel,
@@ -171,7 +192,7 @@ export function useContextAuthoring({
     fieldType,
     setFieldType,
     observedPath,
-    setObservedPath,
+    setObservedPath: handleManualPathChange,
     selectedSource,
     setSelectedSource,
     selectedIntegrationType,

@@ -150,7 +150,12 @@ it('shows recent-field frequency/examples and authors an EVENT mapping from the 
           fields: expect.arrayContaining([
             expect.objectContaining({
               key: 'environment',
-              mappings: [{ source: 'EVENT', path: 'payload.custom_details.environment' }],
+              mappings: [
+                expect.objectContaining({
+                  source: 'EVENT',
+                  path: 'payload.custom_details.environment',
+                }),
+              ],
             }),
           ]),
         }),
@@ -522,8 +527,38 @@ it('correctly maps manually authored paths for GitHub (PROVIDER) and Events API 
         mappings: [
           expect.objectContaining({
             source: 'EVENT',
-            integrationType: undefined,
+            integrationType: 'EVENTS_API',
             path: 'payload.custom_details.environment',
+          }),
+        ],
+      }),
+    ])
+  );
+
+  savedSnapshot = null;
+
+  // 3. Author All providers manual event path -> integrationType should be undefined
+  fireEvent.change(screen.getByLabelText('Integration'), { target: { value: 'ALL' } });
+  fireEvent.change(screen.getByLabelText('Payload source'), { target: { value: 'EVENT' } });
+  fireEvent.change(screen.getByLabelText('Source path'), {
+    target: { value: 'event_action' },
+  });
+  fireEvent.change(screen.getByLabelText('Field label'), {
+    target: { value: 'Event Action' },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  expect(savedSnapshot!.fields).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        key: 'event_action',
+        mappings: [
+          expect.objectContaining({
+            source: 'EVENT',
+            integrationType: undefined,
+            path: 'event_action',
           }),
         ],
       }),
@@ -768,4 +803,77 @@ it('provenance resolves accurately: root event_action as EVENT, provider payload
     source: 'EVENT',
     path: 'custom.event.metric',
   });
+});
+
+it('clearing a selected observation and manually entering another path ensures no stale source or integration survives', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    integrations: [
+      { id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' },
+      { id: 'cw-1', name: 'CloudWatch Integration', type: 'CLOUDWATCH' },
+    ],
+    observations: [
+      {
+        id: 'obs-1',
+        serviceId: 'service-1',
+        integrationId: 'gh-1',
+        integrationType: 'GITHUB',
+        fieldKey: 'repository_name',
+        sourcePath: 'repository.name',
+        fieldType: 'STRING',
+        count: 5,
+        unmapped: false,
+        lastSeenAt: '2026-10-20T00:00:00Z',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // 1. Select the GitHub observation
+  const integrationSelect = (await screen.findByLabelText('Integration')) as HTMLSelectElement;
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+  const observedSelect = (await screen.findByLabelText('Observed field')) as HTMLSelectElement;
+  fireEvent.change(observedSelect, { target: { value: 'GITHUB:PROVIDER:repository.name' } });
+  expect(observedSelect.value).toBe('GITHUB:PROVIDER:repository.name');
+
+  // 2. Clear the selected observation ("Choose field…")
+  fireEvent.change(observedSelect, { target: { value: '' } });
+  expect(observedSelect.value).toBe('');
+
+  // 3. Open Advanced mapping and manually enter a path for CLOUDWATCH
+  fireEvent.change(integrationSelect, { target: { value: 'CLOUDWATCH' } });
+
+  fireEvent.click(screen.getByRole('button', { name: /Advanced mapping/i }));
+  fireEvent.change(screen.getByLabelText('Payload source'), { target: { value: 'EVENT' } });
+  fireEvent.change(screen.getByLabelText('Source path'), {
+    target: { value: 'custom.event.metric' },
+  });
+  fireEvent.change(screen.getByLabelText('Field label'), {
+    target: { value: 'Custom Metric' },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const customField = savedSnapshot!.fields.find(f => f.key === 'custom_metric');
+  expect(customField?.mappings[0]).toMatchObject({
+    source: 'EVENT',
+    integrationType: 'CLOUDWATCH',
+    path: 'custom.event.metric',
+  });
+  // Ensure no stale GITHUB or PROVIDER from step 1 survived
+  expect(customField?.mappings[0].integrationType).not.toBe('GITHUB');
+  expect(customField?.mappings[0].source).not.toBe('PROVIDER');
 });

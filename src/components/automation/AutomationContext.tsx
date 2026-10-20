@@ -85,7 +85,7 @@ export function AutomationContext({
   observedPath: string;
   setObservedPath: (value: string) => void;
   selectedSource?: 'PROVIDER' | 'EVENT';
-  setSelectedSource?: (value: 'PROVIDER' | 'EVENT') => void;
+  setSelectedSource?: (value: 'PROVIDER' | 'EVENT' | undefined) => void;
   selectedIntegrationType?: string;
   setSelectedIntegrationType?: (value: string | undefined) => void;
   discoveries: Discovery[];
@@ -111,7 +111,19 @@ export function AutomationContext({
   const [internalIntType, setInternalIntType] = useState<string | undefined>(undefined);
   const effectiveIntType = selectedIntegrationType ?? internalIntType;
   const setIntType = setSelectedIntegrationType ?? setInternalIntType;
-  const selectedDiscovery = discoveries.find(d => d.path === observedPath);
+  const selectedDiscovery = discoveries.find(
+    d =>
+      d.path === observedPath &&
+      (!effectiveIntType ||
+        effectiveIntType === 'ALL' ||
+        !d.integrationType ||
+        d.integrationType === 'ALL' ||
+        d.integrationType === effectiveIntType) &&
+      (integrationType === 'ALL' ||
+        !d.integrationType ||
+        d.integrationType === 'ALL' ||
+        d.integrationType === integrationType)
+  );
   const effectiveSource: 'PROVIDER' | 'EVENT' =
     selectedSource ??
     internalSource ??
@@ -146,8 +158,20 @@ export function AutomationContext({
 
     for (const o of data.observations) {
       if (integrationType !== 'ALL' && o.integrationType !== integrationType) continue;
-      const matchingDisc = discoveries.find(d => d.path === o.sourcePath);
-      const matchingMap = draft.fields.flatMap(f => f.mappings).find(m => m.path === o.sourcePath);
+      const matchingDisc = discoveries.find(
+        d =>
+          d.path === o.sourcePath &&
+          (!d.integrationType ||
+            d.integrationType === 'ALL' ||
+            d.integrationType === o.integrationType)
+      );
+      const matchingMap = draft.fields
+        .flatMap(f => f.mappings)
+        .find(
+          m =>
+            m.path === o.sourcePath &&
+            (!m.integrationType || m.integrationType === o.integrationType)
+        );
       const source: 'PROVIDER' | 'EVENT' =
         matchingDisc?.source ??
         matchingMap?.source ??
@@ -169,7 +193,7 @@ export function AutomationContext({
     for (const d of discoveries) {
       if (integrationType !== 'ALL' && d.integrationType && d.integrationType !== integrationType)
         continue;
-      const source = d.source ?? 'PROVIDER';
+      const source = d.source ?? (d.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
       const compositeId = `${d.integrationType ?? 'ALL'}:${source}:${d.path}`;
       if (seen.has(compositeId)) continue;
       seen.add(compositeId);
@@ -224,6 +248,7 @@ export function AutomationContext({
             ...field,
             label: field.label ?? formatHierarchicalLabel(field.path),
             source: 'EVENT' as const,
+            integrationType: integrationType === 'ALL' ? undefined : integrationType,
           }));
           setDiscoveries(enriched);
           if (!enriched.length)
@@ -368,6 +393,16 @@ export function AutomationContext({
                       aria-describedby={problems.source ? `${formId}-source-error` : undefined}
                       onChange={e => {
                         const val = e.target.value;
+                        if (!val) {
+                          if (selectObservedField) {
+                            selectObservedField(null);
+                          } else {
+                            setObservedPath('');
+                            setSource(undefined);
+                            setIntType(undefined);
+                          }
+                          return;
+                        }
                         const found = observedOptions.find(o => o.id === val);
                         if (found) {
                           if (selectObservedField) {
@@ -381,6 +416,7 @@ export function AutomationContext({
                           } else {
                             setObservedPath(found.path);
                             if (found.source) setSource(found.source);
+                            else setSource(undefined);
                             setIntType(found.integrationType);
                             setFieldLabel(found.label);
                             if (found.type) {
@@ -395,6 +431,8 @@ export function AutomationContext({
                           }
                         } else {
                           setObservedPath(val);
+                          setSource(undefined);
+                          setIntType(undefined);
                         }
                       }}
                     >
@@ -471,7 +509,10 @@ export function AutomationContext({
                               : 'repository.full_name'
                           }
                           value={observedPath}
-                          onChange={e => setObservedPath(e.target.value)}
+                          onChange={e => {
+                            setObservedPath(e.target.value);
+                            setIntType(undefined);
+                          }}
                         />
                         <Hint>Dot-separated path into the event or provider payload.</Hint>
                       </div>
@@ -599,12 +640,14 @@ export function AutomationContext({
               <ul aria-label="Discovered context fields" className="space-y-2">
                 {discoveries.map(field => {
                   const hierarchical = field.label ?? formatHierarchicalLabel(field.path);
-                  const fieldCompositeId = `${field.integrationType ?? 'ALL'}:${field.source ?? 'PROVIDER'}:${field.path}`;
-                  const currentCompositeId = `${effectiveIntType ?? 'ALL'}:${effectiveSource ?? 'UNKNOWN'}:${observedPath}`;
+                  const fieldSource =
+                    field.source ?? (field.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
+                  const fieldCompositeId = `${field.integrationType ?? 'ALL'}:${fieldSource}:${field.path}`;
+                  const currentCompositeId = `${effectiveIntType ?? 'ALL'}:${effectiveSource}:${observedPath}`;
                   const chosen = Boolean(observedPath) && fieldCompositeId === currentCompositeId;
                   return (
                     <li
-                      key={`${field.integrationType ?? 'ALL'}:${field.source ?? 'PROVIDER'}:${field.path}`}
+                      key={fieldCompositeId}
                       className={cn(
                         'space-y-1 rounded-md border p-3 text-sm',
                         chosen ? 'border-primary/50 bg-primary/5' : 'border-border/70'
