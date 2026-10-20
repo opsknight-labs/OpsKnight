@@ -17,6 +17,17 @@ beforeEach(async () => {
 it('creates, lists, updates and deletes an owned dashboard with revision and audit fencing', async () => {
   const owner = await createV2Credential(['reports:read', 'reports:write'], 'USER');
   const path = '/dashboards';
+  for (const widget of [
+    { widgetType: 'custom', metricKey: 'totalIncidents' },
+    { widgetType: 'metric', metricKey: 'privateMetric' },
+    { widgetType: 'metric', metricKey: 'totalIncidents', widgetDefinitionId: 'mttr' },
+  ]) {
+    const invalid = await invokeV2(create, owner.token, 'POST', path, {}, {
+      name: 'Unsupported', widgets: [widget],
+    }, { 'Idempotency-Key': `invalid-${widget.widgetType}-${widget.metricKey}-${widget.widgetDefinitionId ?? 'none'}` });
+    expect(invalid.status).toBe(400);
+  }
+  expect(await db.dashboard.count()).toBe(0);
   const created = await invokeV2(create, owner.token, 'POST', path, {}, {
     name: 'Operations', widgets: [{ widgetType: 'metric', metricKey: 'totalIncidents' }],
   }, { 'Idempotency-Key': 'create-ops' });
