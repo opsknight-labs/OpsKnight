@@ -522,6 +522,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listRunbookExecutions": {
+    "method": "GET",
+    "path": "/runbooks/executions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listRunbookExecutionEvidence": {
     "method": "GET",
     "path": "/runbooks/executions/{id}/evidence",
@@ -1656,6 +1664,62 @@
     "method": "GET",
     "path": "/notifications",
     "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listNotificationAttempts": {
+    "method": "GET",
+    "path": "/notifications/{id}/attempts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getNotificationFeedback": {
+    "method": "GET",
+    "path": "/notifications/{id}/feedback",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentResponseActivity": {
+    "method": "GET",
+    "path": "/incidents/{id}/response-activity",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentAlerts": {
+    "method": "GET",
+    "path": "/incidents/{id}/alerts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentRunbookExecutions": {
+    "method": "GET",
+    "path": "/incidents/{id}/runbook-executions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentNotificationAttempts": {
+    "method": "GET",
+    "path": "/incidents/{id}/notification-attempts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentAvailableActions": {
+    "method": "GET",
+    "path": "/incidents/{id}/available-actions",
+    "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false

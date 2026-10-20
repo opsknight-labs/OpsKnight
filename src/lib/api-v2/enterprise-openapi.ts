@@ -1797,6 +1797,55 @@ const operations: Operation[] = [
     body: object({ reason: { ...string(1000), minLength: 1 } }, ['reason']),
   },
   {
+    method: 'get',
+    path: '/runbooks/executions',
+    summary: 'List bounded Runbook executions for an accessible incident',
+    description: 'Requires both runbooks:read and incidents:read. Returns execution metadata without inputs, plans, target details or agent output.',
+    paginated: true,
+  },
+  {
+    method: 'get',
+    path: '/notifications/{id}/attempts',
+    summary: 'List redacted delivery attempts for a notification',
+    description: 'Provider message identifiers and raw error text are never returned.',
+    paginated: true,
+  },
+  {
+    method: 'get',
+    path: '/notifications/{id}/feedback',
+    summary: 'Read bounded provider feedback correlated with a notification',
+    description: 'Returns at most 50 events correlated through up to 100 message identifiers. Identifiers and raw provider payloads are never disclosed; truncation flags describe the limits.',
+  },
+  {
+    method: 'get',
+    path: '/incidents/{id}/response-activity',
+    summary: 'Read bounded incident response activity across alerting, routing, paging and remediation',
+    description: 'Requires incidents:read, notifications:read and runbooks:read. Each section contains at most 50 newest records with a truncation flag; follow its dedicated paginated endpoint for older records. Raw alert payloads, notification content and Runbook inputs/output are excluded.',
+  },
+  {
+    method: 'get', path: '/incidents/{id}/alerts',
+    summary: 'List redacted alerts linked to an incident',
+    description: 'Cursor-paginated. Correlation keys are returned only as keyed hashes; raw alert payloads are omitted.',
+    paginated: true,
+  },
+  {
+    method: 'get', path: '/incidents/{id}/runbook-executions',
+    summary: 'List incident Runbook execution metadata',
+    description: 'Requires incidents:read and runbooks:read. Inputs, plans, target details and agent output are omitted.',
+    paginated: true,
+  },
+  {
+    method: 'get', path: '/incidents/{id}/notification-attempts',
+    summary: 'List incident notification delivery attempts',
+    description: 'Requires incidents:read and notifications:read. Provider identifiers and raw errors are omitted.',
+    paginated: true,
+  },
+  {
+    method: 'get', path: '/incidents/{id}/available-actions',
+    summary: 'Discover incident actions permitted for this credential and current state',
+    description: 'Advisory snapshot only. Mutations recheck authorization and state. Runbook execution requires selecting a runbook and calling its preview before execution.',
+  },
+  {
     method: 'post',
     path: '/schedules/{id}/layers/{layerId}/participants',
     summary: 'Add an active rotation participant',
@@ -1983,6 +2032,9 @@ export function enterpriseOpenApiPaths() {
       parameters: [
         ...parameters,
         ...queryParameters,
+        ...(operation.path === '/runbooks/executions'
+          ? [{ name: 'incidentId', in: 'query', required: true, schema: { ...id, maxLength: 100 } }]
+          : []),
         ...(['/dashboards/{id}/data', '/dashboards/{id}/export'].includes(operation.path)
           ? [
               { name: 'days', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 90 } },

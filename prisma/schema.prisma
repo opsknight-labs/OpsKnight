@@ -1224,6 +1224,7 @@ model Alert {
 
   @@index([serviceId, status])
   @@index([incidentId])
+  @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_alert_incident_cursor")
   @@index([dedupKey, status])
   @@index([createdAt])
   @@index([createdAt, incidentId], name: "idx_alert_retention")
@@ -1901,6 +1902,8 @@ model NotificationDeliveryAttempt {
 
   @@unique([notificationId, ordinal])
   @@index([notificationId, startedAt])
+  @@index([notificationId, startedAt(sort: Desc), id(sort: Desc)], map: "idx_notification_attempt_cursor")
+  @@index([startedAt(sort: Desc), id(sort: Desc)], map: "idx_notification_attempt_global_cursor")
   @@index([outcome, startedAt])
 }
 
@@ -3805,6 +3808,7 @@ model RunbookExecution {
   @@index([status, updatedAt])
   @@index([status, deadlineAt])
   @@index([incidentId])
+  @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_runbook_execution_incident_cursor")
   @@index([serviceId])
   @@index([runbookId])
   @@index([runbookVersionId])

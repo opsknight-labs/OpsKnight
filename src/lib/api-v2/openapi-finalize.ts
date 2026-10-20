@@ -51,6 +51,120 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  IncidentAvailableActions: {
+    type: 'object', properties: {
+      incidentId: { type: 'string' }, incidentStatus: { type: 'string' },
+      observedAt: { type: 'string', format: 'date-time' }, advisory: { type: 'boolean' },
+      actions: { type: 'array', items: { type: 'object', properties: {
+        operationId: { type: 'string' }, method: { type: 'string' }, path: { type: 'string' },
+        allowed: { type: 'boolean' }, stateEligible: { type: 'boolean' },
+      }, required: ['operationId', 'method', 'path', 'allowed', 'stateEligible'] } },
+      runbookExecution: { type: 'object', properties: {
+        requiresRunbookSelection: { type: 'boolean' }, previewPath: { type: 'string' },
+        allowedToAttemptPreview: { type: 'boolean' },
+      }, required: ['requiresRunbookSelection', 'previewPath', 'allowedToAttemptPreview'] },
+    }, required: ['incidentId', 'incidentStatus', 'observedAt', 'advisory', 'actions', 'runbookExecution'],
+  },
+  IncidentAlertSummary: {
+    type: 'object', properties: {
+      id: { type: 'string' }, incidentId: { type: ['string', 'null'] }, serviceId: { type: 'string' },
+      status: { type: 'string' }, correlationHash: { type: ['string', 'null'] },
+      createdAt: { type: 'string', format: 'date-time' },
+    }, required: ['id', 'incidentId', 'serviceId', 'status', 'correlationHash', 'createdAt'],
+  },
+  IncidentNotificationAttempt: {
+    allOf: [
+      { $ref: '#/components/schemas/NotificationDeliveryAttempt' },
+      { type: 'object', properties: { notification: {
+        type: 'object', properties: { channel: { type: 'string' }, status: { type: 'string' } },
+        required: ['channel', 'status'],
+      } }, required: ['notification'] },
+    ],
+  },
+  IncidentResponseActivity: {
+    type: 'object',
+    properties: {
+      incident: { type: 'object', properties: {
+        id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+        serviceId: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' },
+        acknowledgedAt: { type: ['string', 'null'], format: 'date-time' },
+        resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+        resolutionKind: { type: ['string', 'null'] },
+        automationDecision: { type: ['object', 'null'], properties: {
+          mode: { type: 'string' }, routeType: { type: 'string' },
+          escalationPolicyId: { type: ['string', 'null'] }, matchedRouteRuleId: { type: ['string', 'null'] },
+          evaluationAt: { type: 'string', format: 'date-time' },
+        } },
+      }, required: ['id', 'title', 'status', 'serviceId', 'createdAt', 'acknowledgedAt', 'resolvedAt', 'resolutionKind', 'automationDecision'] },
+      alerts: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, status: { type: 'string' }, correlationHash: { type: ['string', 'null'] },
+        createdAt: { type: 'string', format: 'date-time' },
+      }, required: ['id', 'status', 'correlationHash', 'createdAt'] } },
+      events: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, type: { type: ['string', 'null'] }, createdAt: { type: 'string', format: 'date-time' },
+      }, required: ['id', 'type', 'createdAt'] } },
+      notifications: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, channel: { type: 'string' }, status: { type: 'string' }, attempts: { type: 'integer' },
+        createdAt: { type: 'string', format: 'date-time' }, sentAt: { type: ['string', 'null'], format: 'date-time' },
+        deliveredAt: { type: ['string', 'null'], format: 'date-time' }, failedAt: { type: ['string', 'null'], format: 'date-time' },
+      }, required: ['id', 'channel', 'status', 'attempts', 'createdAt', 'sentAt', 'deliveredAt', 'failedAt'] } },
+      executions: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, runbookId: { type: 'string' }, status: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' }, startedAt: { type: ['string', 'null'], format: 'date-time' },
+        completedAt: { type: ['string', 'null'], format: 'date-time' }, recoveryOutcome: { type: ['string', 'null'] },
+        runbook: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      }, required: ['id', 'runbookId', 'status', 'createdAt', 'startedAt', 'completedAt', 'recoveryOutcome', 'runbook'] } },
+      truncated: { type: 'object', properties: {
+        alerts: { type: 'boolean' }, events: { type: 'boolean' }, notifications: { type: 'boolean' }, executions: { type: 'boolean' },
+      }, required: ['alerts', 'events', 'notifications', 'executions'] },
+    },
+    required: ['incident', 'alerts', 'events', 'notifications', 'executions', 'truncated'],
+  },
+  RunbookExecutionSummary: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' }, runbookId: { type: 'string' }, incidentId: { type: 'string' },
+      status: { type: 'string' }, triggeredByType: { type: 'string' },
+      startedAt: { type: ['string', 'null'], format: 'date-time' },
+      completedAt: { type: ['string', 'null'], format: 'date-time' },
+      createdAt: { type: 'string', format: 'date-time' },
+      recoveryOutcome: { type: ['string', 'null'] },
+      runbook: { type: 'object', properties: {
+        id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' },
+      }, required: ['id', 'name', 'slug'] },
+    },
+    required: ['id', 'runbookId', 'incidentId', 'status', 'triggeredByType', 'startedAt', 'completedAt', 'createdAt', 'recoveryOutcome', 'runbook'],
+  },
+  NotificationDeliveryAttempt: {
+    type: 'object',
+    description: 'Delivery metadata. Provider message IDs and raw error text are intentionally omitted.',
+    properties: {
+      id: { type: 'string' }, notificationId: { type: 'string' }, ordinal: { type: 'integer' },
+      outcome: { type: 'string' }, provider: { type: ['string', 'null'] },
+      errorCode: { type: ['string', 'null'] },
+      startedAt: { type: 'string', format: 'date-time' },
+      finishedAt: { type: ['string', 'null'], format: 'date-time' },
+      reconciliationDeadline: { type: ['string', 'null'], format: 'date-time' },
+      latencyMs: { type: ['integer', 'null'] },
+    },
+    required: ['id', 'notificationId', 'ordinal', 'outcome', 'provider', 'errorCode', 'startedAt', 'finishedAt', 'reconciliationDeadline', 'latencyMs'],
+  },
+  NotificationFeedback: {
+    type: 'object',
+    properties: {
+      notificationId: { type: 'string' },
+      events: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, provider: { type: 'string' }, eventType: { type: 'string' },
+        occurredAt: { type: 'string', format: 'date-time' },
+        processedAt: { type: ['string', 'null'], format: 'date-time' },
+        quarantinedAt: { type: ['string', 'null'], format: 'date-time' },
+      }, required: ['id', 'provider', 'eventType', 'occurredAt', 'processedAt', 'quarantinedAt'] } },
+      truncated: { type: 'object', properties: {
+        correlation: { type: 'boolean' }, events: { type: 'boolean' },
+      }, required: ['correlation', 'events'] },
+    },
+    required: ['notificationId', 'events', 'truncated'],
+  },
   EscalationPolicyDependencies: {
     type: 'object',
     properties: {
@@ -481,6 +595,18 @@ export function finalizeOpenApiSpec(base: Json): Json {
 
     operation.operationId = definition.operationId;
     operation['x-required-scope'] = definition.scope;
+    if (definition.operationId === 'getIncidentResponseActivity') {
+      operation['x-additional-required-scopes'] = ['notifications:read', 'runbooks:read'];
+    }
+    if (definition.operationId === 'listRunbookExecutions') {
+      operation['x-additional-required-scopes'] = ['incidents:read'];
+    }
+    if (definition.operationId === 'listIncidentRunbookExecutions') {
+      operation['x-additional-required-scopes'] = ['runbooks:read'];
+    }
+    if (definition.operationId === 'listIncidentNotificationAttempts') {
+      operation['x-additional-required-scopes'] = ['notifications:read'];
+    }
     operation.description = [
       operation.description,
       `Requires API scope \`${definition.scope}\` (${API_SCOPE_REGISTRY[definition.scope as ApiScope]?.title ?? definition.scope}).`,

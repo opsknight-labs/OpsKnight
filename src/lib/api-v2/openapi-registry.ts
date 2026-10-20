@@ -431,6 +431,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'list',
     'RunbookExecutionStepSummary'
   ),
+  op('get', '/runbooks/executions', 'listRunbookExecutions', 'runbooks:read', 'list', 'RunbookExecutionSummary'),
   op(
     'get',
     '/runbooks/executions/{id}/evidence',
@@ -1280,6 +1281,13 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'ActionResult'
   ),
   op('get', '/notifications', 'listNotifications', 'notifications:read', 'list', 'Notification'),
+  op('get', '/notifications/{id}/attempts', 'listNotificationAttempts', 'notifications:read', 'list', 'NotificationDeliveryAttempt'),
+  op('get', '/notifications/{id}/feedback', 'getNotificationFeedback', 'notifications:read', 'item', 'NotificationFeedback'),
+  op('get', '/incidents/{id}/response-activity', 'getIncidentResponseActivity', 'incidents:read', 'item', 'IncidentResponseActivity'),
+  op('get', '/incidents/{id}/alerts', 'listIncidentAlerts', 'incidents:read', 'list', 'IncidentAlertSummary'),
+  op('get', '/incidents/{id}/runbook-executions', 'listIncidentRunbookExecutions', 'incidents:read', 'list', 'RunbookExecutionSummary'),
+  op('get', '/incidents/{id}/notification-attempts', 'listIncidentNotificationAttempts', 'incidents:read', 'list', 'IncidentNotificationAttempt'),
+  op('get', '/incidents/{id}/available-actions', 'getIncidentAvailableActions', 'incidents:read', 'item', 'IncidentAvailableActions'),
   op('get', '/postmortems/{id}', 'getPostmortem', 'postmortems:read', 'item', 'Postmortem'),
   op('patch', '/postmortems/{id}', 'updatePostmortem', 'postmortems:write', 'item', 'Postmortem'),
   op('delete', '/postmortems/{id}', 'deletePostmortem', 'postmortems:write', 'none', ''),

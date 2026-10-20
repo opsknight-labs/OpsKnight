@@ -8401,6 +8401,657 @@
           "status"
         ]
       },
+      "IncidentAvailableActions": {
+        "type": "object",
+        "properties": {
+          "incidentId": {
+            "type": "string"
+          },
+          "incidentStatus": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "advisory": {
+            "type": "boolean"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "operationId": {
+                  "type": "string"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "allowed": {
+                  "type": "boolean"
+                },
+                "stateEligible": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "operationId",
+                "method",
+                "path",
+                "allowed",
+                "stateEligible"
+              ]
+            }
+          },
+          "runbookExecution": {
+            "type": "object",
+            "properties": {
+              "requiresRunbookSelection": {
+                "type": "boolean"
+              },
+              "previewPath": {
+                "type": "string"
+              },
+              "allowedToAttemptPreview": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "requiresRunbookSelection",
+              "previewPath",
+              "allowedToAttemptPreview"
+            ]
+          }
+        },
+        "required": [
+          "incidentId",
+          "incidentStatus",
+          "observedAt",
+          "advisory",
+          "actions",
+          "runbookExecution"
+        ]
+      },
+      "IncidentAlertSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "incidentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "correlationHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "incidentId",
+          "serviceId",
+          "status",
+          "correlationHash",
+          "createdAt"
+        ]
+      },
+      "IncidentNotificationAttempt": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/NotificationDeliveryAttempt"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "notification": {
+                "type": "object",
+                "properties": {
+                  "channel": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "channel",
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "notification"
+            ]
+          }
+        ]
+      },
+      "IncidentResponseActivity": {
+        "type": "object",
+        "properties": {
+          "incident": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "serviceId": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "acknowledgedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "resolvedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "resolutionKind": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "automationDecision": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string"
+                  },
+                  "routeType": {
+                    "type": "string"
+                  },
+                  "escalationPolicyId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "matchedRouteRuleId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "evaluationAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "status",
+              "serviceId",
+              "createdAt",
+              "acknowledgedAt",
+              "resolvedAt",
+              "resolutionKind",
+              "automationDecision"
+            ]
+          },
+          "alerts": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "correlationHash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "correlationHash",
+                "createdAt"
+              ]
+            }
+          },
+          "events": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "createdAt"
+              ]
+            }
+          },
+          "notifications": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "channel": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "attempts": {
+                  "type": "integer"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "sentAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "deliveredAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "failedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "channel",
+                "status",
+                "attempts",
+                "createdAt",
+                "sentAt",
+                "deliveredAt",
+                "failedAt"
+              ]
+            }
+          },
+          "executions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "runbookId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "startedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "completedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "recoveryOutcome": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "runbook": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "runbookId",
+                "status",
+                "createdAt",
+                "startedAt",
+                "completedAt",
+                "recoveryOutcome",
+                "runbook"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "object",
+            "properties": {
+              "alerts": {
+                "type": "boolean"
+              },
+              "events": {
+                "type": "boolean"
+              },
+              "notifications": {
+                "type": "boolean"
+              },
+              "executions": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "alerts",
+              "events",
+              "notifications",
+              "executions"
+            ]
+          }
+        },
+        "required": [
+          "incident",
+          "alerts",
+          "events",
+          "notifications",
+          "executions",
+          "truncated"
+        ]
+      },
+      "RunbookExecutionSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "runbookId": {
+            "type": "string"
+          },
+          "incidentId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "triggeredByType": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recoveryOutcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runbook": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "slug"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "runbookId",
+          "incidentId",
+          "status",
+          "triggeredByType",
+          "startedAt",
+          "completedAt",
+          "createdAt",
+          "recoveryOutcome",
+          "runbook"
+        ]
+      },
+      "NotificationDeliveryAttempt": {
+        "type": "object",
+        "description": "Delivery metadata. Provider message IDs and raw error text are intentionally omitted.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "notificationId": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "reconciliationDeadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "notificationId",
+          "ordinal",
+          "outcome",
+          "provider",
+          "errorCode",
+          "startedAt",
+          "finishedAt",
+          "reconciliationDeadline",
+          "latencyMs"
+        ]
+      },
+      "NotificationFeedback": {
+        "type": "object",
+        "properties": {
+          "notificationId": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "eventType": {
+                  "type": "string"
+                },
+                "occurredAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "processedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "quarantinedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "provider",
+                "eventType",
+                "occurredAt",
+                "processedAt",
+                "quarantinedAt"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "object",
+            "properties": {
+              "correlation": {
+                "type": "boolean"
+              },
+              "events": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "correlation",
+              "events"
+            ]
+          }
+        },
+        "required": [
+          "notificationId",
+          "events",
+          "truncated"
+        ]
+      },
       "EscalationPolicyDependencies": {
         "type": "object",
         "properties": {
@@ -8424,6 +9075,40 @@
                 "name"
               ]
             }
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "services": {
+                "type": "integer"
+              },
+              "versionRefs": {
+                "type": "integer"
+              },
+              "decisions": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "services",
+              "versionRefs",
+              "decisions"
+            ]
+          },
+          "truncated": {
+            "type": "object",
+            "properties": {
+              "services": {
+                "type": "boolean"
+              },
+              "targets": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "services",
+              "targets"
+            ]
           },
           "targets": {
             "type": "array",
@@ -8473,6 +9158,8 @@
         "required": [
           "policyId",
           "services",
+          "usage",
+          "truncated",
           "targets",
           "valid",
           "deletionAllowed"
@@ -36402,6 +37089,881 @@
         "description": "Requires API scope `runbooks:execute` (Runbooks execute).",
         "x-idempotency": "required",
         "x-concurrency": "none"
+      }
+    },
+    "/runbooks/executions": {
+      "get": {
+        "tags": [
+          "Runbooks"
+        ],
+        "summary": "List bounded Runbook executions for an accessible incident",
+        "description": "Requires both runbooks:read and incidents:read. Returns execution metadata without inputs, plans, target details or agent output.\n\nRequires API scope `runbooks:read` (Runbooks read).",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "incidentId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunbookExecutionSummary"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listRunbookExecutions",
+        "x-required-scope": "runbooks:read",
+        "x-additional-required-scopes": [
+          "incidents:read"
+        ]
+      }
+    },
+    "/notifications/{id}/attempts": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List redacted delivery attempts for a notification",
+        "description": "Provider message identifiers and raw error text are never returned.\n\nRequires API scope `notifications:read` (Notifications read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NotificationDeliveryAttempt"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listNotificationAttempts",
+        "x-required-scope": "notifications:read"
+      }
+    },
+    "/notifications/{id}/feedback": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read bounded provider feedback correlated with a notification",
+        "description": "Returns at most 50 events correlated through up to 100 message identifiers. Identifiers and raw provider payloads are never disclosed; truncation flags describe the limits.\n\nRequires API scope `notifications:read` (Notifications read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationFeedback"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getNotificationFeedback",
+        "x-required-scope": "notifications:read"
+      }
+    },
+    "/incidents/{id}/response-activity": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read bounded incident response activity across alerting, routing, paging and remediation",
+        "description": "Requires incidents:read, notifications:read and runbooks:read. Each section contains at most 50 newest records with a truncation flag; follow its dedicated paginated endpoint for older records. Raw alert payloads, notification content and Runbook inputs/output are excluded.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentResponseActivity"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getIncidentResponseActivity",
+        "x-required-scope": "incidents:read",
+        "x-additional-required-scopes": [
+          "notifications:read",
+          "runbooks:read"
+        ]
+      }
+    },
+    "/incidents/{id}/alerts": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List redacted alerts linked to an incident",
+        "description": "Cursor-paginated. Correlation keys are returned only as keyed hashes; raw alert payloads are omitted.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IncidentAlertSummary"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listIncidentAlerts",
+        "x-required-scope": "incidents:read"
+      }
+    },
+    "/incidents/{id}/runbook-executions": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List incident Runbook execution metadata",
+        "description": "Requires incidents:read and runbooks:read. Inputs, plans, target details and agent output are omitted.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunbookExecutionSummary"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listIncidentRunbookExecutions",
+        "x-required-scope": "incidents:read",
+        "x-additional-required-scopes": [
+          "runbooks:read"
+        ]
+      }
+    },
+    "/incidents/{id}/notification-attempts": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List incident notification delivery attempts",
+        "description": "Requires incidents:read and notifications:read. Provider identifiers and raw errors are omitted.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IncidentNotificationAttempt"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listIncidentNotificationAttempts",
+        "x-required-scope": "incidents:read",
+        "x-additional-required-scopes": [
+          "notifications:read"
+        ]
+      }
+    },
+    "/incidents/{id}/available-actions": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Discover incident actions permitted for this credential and current state",
+        "description": "Advisory snapshot only. Mutations recheck authorization and state. Runbook execution requires selecting a runbook and calling its preview before execution.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentAvailableActions"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getIncidentAvailableActions",
+        "x-required-scope": "incidents:read"
       }
     },
     "/schedules/{id}/layers/{layerId}/participants": {

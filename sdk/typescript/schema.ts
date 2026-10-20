@@ -135,7 +135,14 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
-export type EscalationPolicyDependencies = { "policyId": string; "services": Array<{ "id": string; "name": string } & Record<string, unknown>>; "targets": Array<{ "stepId": string; "stepOrder": number; "targetType": "USER" | "TEAM" | "SCHEDULE"; "targetId": string | null; "exists": boolean } & Record<string, unknown>>; "valid": boolean; "deletionAllowed": boolean } & Record<string, unknown>;
+export type IncidentAvailableActions = { "incidentId": string; "incidentStatus": string; "observedAt": string; "advisory": boolean; "actions": Array<{ "operationId": string; "method": string; "path": string; "allowed": boolean; "stateEligible": boolean } & Record<string, unknown>>; "runbookExecution": { "requiresRunbookSelection": boolean; "previewPath": string; "allowedToAttemptPreview": boolean } & Record<string, unknown> } & Record<string, unknown>;
+export type IncidentAlertSummary = { "id": string; "incidentId": string | null; "serviceId": string; "status": string; "correlationHash": string | null; "createdAt": string } & Record<string, unknown>;
+export type IncidentNotificationAttempt = unknown;
+export type IncidentResponseActivity = { "incident": { "id": string; "title": string; "status": string; "serviceId": string; "createdAt": string; "acknowledgedAt": string | null; "resolvedAt": string | null; "resolutionKind": string | null; "automationDecision": { "mode"?: string; "routeType"?: string; "escalationPolicyId"?: string | null; "matchedRouteRuleId"?: string | null; "evaluationAt"?: string } & Record<string, unknown> | null } & Record<string, unknown>; "alerts": Array<{ "id": string; "status": string; "correlationHash": string | null; "createdAt": string } & Record<string, unknown>>; "events": Array<{ "id": string; "type": string | null; "createdAt": string } & Record<string, unknown>>; "notifications": Array<{ "id": string; "channel": string; "status": string; "attempts": number; "createdAt": string; "sentAt": string | null; "deliveredAt": string | null; "failedAt": string | null } & Record<string, unknown>>; "executions": Array<{ "id": string; "runbookId": string; "status": string; "createdAt": string; "startedAt": string | null; "completedAt": string | null; "recoveryOutcome": string | null; "runbook": { "name": string } & Record<string, unknown> } & Record<string, unknown>>; "truncated": { "alerts": boolean; "events": boolean; "notifications": boolean; "executions": boolean } & Record<string, unknown> } & Record<string, unknown>;
+export type RunbookExecutionSummary = { "id": string; "runbookId": string; "incidentId": string; "status": string; "triggeredByType": string; "startedAt": string | null; "completedAt": string | null; "createdAt": string; "recoveryOutcome": string | null; "runbook": { "id": string; "name": string; "slug": string } & Record<string, unknown> } & Record<string, unknown>;
+export type NotificationDeliveryAttempt = { "id": string; "notificationId": string; "ordinal": number; "outcome": string; "provider": string | null; "errorCode": string | null; "startedAt": string; "finishedAt": string | null; "reconciliationDeadline": string | null; "latencyMs": number | null } & Record<string, unknown>;
+export type NotificationFeedback = { "notificationId": string; "events": Array<{ "id": string; "provider": string; "eventType": string; "occurredAt": string; "processedAt": string | null; "quarantinedAt": string | null } & Record<string, unknown>>; "truncated": { "correlation": boolean; "events": boolean } & Record<string, unknown> } & Record<string, unknown>;
+export type EscalationPolicyDependencies = { "policyId": string; "services": Array<{ "id": string; "name": string } & Record<string, unknown>>; "usage": { "services": number; "versionRefs": number; "decisions": number } & Record<string, unknown>; "truncated": { "services": boolean; "targets": boolean } & Record<string, unknown>; "targets": Array<{ "stepId": string; "stepOrder": number; "targetType": "USER" | "TEAM" | "SCHEDULE"; "targetId": string | null; "exists": boolean } & Record<string, unknown>>; "valid": boolean; "deletionAllowed": boolean } & Record<string, unknown>;
 export type ActionResult = { "success": boolean; "message"?: string } & Record<string, unknown>;
 export type IncidentTransition = { "id": string; "title": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: string | null; "urgency": "LOW" | "MEDIUM" | "HIGH"; "acknowledgedAt"?: string | null; "resolvedAt"?: string | null; "updatedAt": string } & Record<string, unknown>;
 export type IncidentAssignment = { "id": string; "title"?: string; "status": string; "assigneeId"?: string | null; "teamId"?: string | null; "assignee"?: { "id"?: string; "name"?: string; "email"?: string } & Record<string, unknown> | null; "team"?: { "id"?: string; "name"?: string } & Record<string, unknown> | null; "updatedAt": string } & Record<string, unknown>;
@@ -207,6 +214,7 @@ export interface OperationRequests {
   getRunbookAgentEnrollment: { "params": { "id": string } };
   revokeRunbookAgent: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": Record<string, never> };
   listRunbookExecutionSteps: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listRunbookExecutions: { "query": { "limit"?: number; "cursor"?: string; "incidentId": string } };
   listRunbookExecutionEvidence: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listRunbookExecutionEvents: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   approveRunbookExecutionStep: { "params": { "id": string; "stepId": string }; "headers": { "Idempotency-Key": string }; "body": { "planDigest": string } };
@@ -332,6 +340,13 @@ export interface OperationRequests {
   listIntegrations: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
   retryNotification: { "params": { "id": string } };
   listNotifications: { "query"?: { "limit"?: number; "cursor"?: string; "channel"?: string; "status"?: string; "incidentId"?: string; "userId"?: string } };
+  listNotificationAttempts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getNotificationFeedback: { "params": { "id": string } };
+  getIncidentResponseActivity: { "params": { "id": string } };
+  listIncidentAlerts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listIncidentRunbookExecutions: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listIncidentNotificationAttempts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getIncidentAvailableActions: { "params": { "id": string } };
   getPostmortem: { "params": { "id": string } };
   updatePostmortem: { "params": { "id": string }; "body": { "title"?: string; "summary"?: string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: boolean } & Record<string, unknown> };
   deletePostmortem: { "params": { "id": string } };
@@ -463,6 +478,7 @@ export interface OperationResponses {
   getRunbookAgentEnrollment: { "data": RunbookAgentEnrollmentStatus; "requestId": string; "timestamp": string } & Record<string, unknown>;
   revokeRunbookAgent: { "data": RunbookAgentRevocation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookExecutionSteps: { "data": Array<RunbookExecutionStepSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRunbookExecutions: { "data": Array<RunbookExecutionSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookExecutionEvidence: { "data": Array<RunbookExecutionEvidence>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listRunbookExecutionEvents: { "data": Array<RunbookExecutionEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   approveRunbookExecutionStep: { "data": RunbookIntervention; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -588,6 +604,13 @@ export interface OperationResponses {
   listIntegrations: { "data": Array<Integration>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   retryNotification: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listNotifications: { "data": Array<Notification>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listNotificationAttempts: { "data": Array<NotificationDeliveryAttempt>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getNotificationFeedback: { "data": NotificationFeedback; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncidentResponseActivity: { "data": IncidentResponseActivity; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIncidentAlerts: { "data": Array<IncidentAlertSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIncidentRunbookExecutions: { "data": Array<RunbookExecutionSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIncidentNotificationAttempts: { "data": Array<IncidentNotificationAttempt>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncidentAvailableActions: { "data": IncidentAvailableActions; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getPostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updatePostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deletePostmortem: null;
@@ -1181,6 +1204,14 @@ export const OPERATIONS = {
   "listRunbookExecutionSteps": {
     "method": "GET",
     "path": "/runbooks/executions/{id}/steps",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutions": {
+    "method": "GET",
+    "path": "/runbooks/executions",
     "kind": "list",
     "idempotency": null,
     "requiredHeaders": [],
@@ -2320,6 +2351,62 @@ export const OPERATIONS = {
     "method": "GET",
     "path": "/notifications",
     "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listNotificationAttempts": {
+    "method": "GET",
+    "path": "/notifications/{id}/attempts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getNotificationFeedback": {
+    "method": "GET",
+    "path": "/notifications/{id}/feedback",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentResponseActivity": {
+    "method": "GET",
+    "path": "/incidents/{id}/response-activity",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentAlerts": {
+    "method": "GET",
+    "path": "/incidents/{id}/alerts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentRunbookExecutions": {
+    "method": "GET",
+    "path": "/incidents/{id}/runbook-executions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentNotificationAttempts": {
+    "method": "GET",
+    "path": "/incidents/{id}/notification-attempts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentAvailableActions": {
+    "method": "GET",
+    "path": "/incidents/{id}/available-actions",
+    "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
