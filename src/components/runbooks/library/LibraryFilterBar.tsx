@@ -259,7 +259,7 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
               <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
                 <SelectItem
                   value="all"
-                  className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                  className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
                 >
                   All teams
                 </SelectItem>
@@ -267,7 +267,7 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
                   <SelectItem
                     key={team.id}
                     value={team.id}
-                    className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                    className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
                   >
                     {team.name}
                   </SelectItem>
