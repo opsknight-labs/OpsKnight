@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 export type RunbookModuleNavProps = {
   summary?: import('@/lib/runbooks/presentation/contracts').NavigationSummary;
   className?: string;
+  actions?: React.ReactNode;
 };
 
 const SECTION_ROOTS = ['/runbooks/executions', '/runbooks/agents', '/runbooks/health'];
@@ -20,7 +21,7 @@ export function isRunbookSectionActive(pathname: string, href: string) {
   return within(href) && !SECTION_ROOTS.some(within);
 }
 
-export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) {
+export function RunbookModuleNav({ summary, className, actions }: RunbookModuleNavProps) {
   const pathname = usePathname() ?? '';
   const activeExecutions = summary?.activeExecutions;
   const health = summary?.health ?? 'UNKNOWN';
@@ -47,8 +48,8 @@ export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) 
 
   return (
     <nav aria-label="Runbook navigation" className={cn('w-full', className)}>
-      <div className="overflow-x-auto pb-1 scrollbar-none w-full">
-        <div className="flex sm:grid sm:grid-cols-4 min-w-max sm:min-w-0 gap-1.5 rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs">
+      <div className="overflow-x-auto pb-0.5 scrollbar-none w-full">
+        <div className="flex sm:grid sm:grid-cols-4 min-w-max sm:min-w-0 gap-1 sm:gap-1.5 rounded-xl border border-border/80 bg-muted/60 p-1 backdrop-blur-xs shadow-2xs">
           {items.map(item => {
             const isActive = isRunbookSectionActive(pathname, item.href);
             const Icon = item.icon;
@@ -59,7 +60,7 @@ export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) 
                 href={item.href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'group relative flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-2 sm:py-2.5 px-3 sm:px-3.5 text-xs font-medium transition-all duration-150 select-none cursor-pointer whitespace-nowrap shrink-0',
+                  'group relative flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-1 sm:py-1.5 px-3 text-xs font-medium transition-all duration-150 select-none cursor-pointer whitespace-nowrap shrink-0',
                   'border shadow-2xs',
                   isActive
                     ? 'bg-background text-foreground font-semibold border-primary/50 shadow-xs ring-2 ring-primary/20'
@@ -69,7 +70,7 @@ export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) 
                 <Icon
                   aria-hidden="true"
                   className={cn(
-                    'h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 transition-transform duration-150 group-hover:scale-110',
+                    'h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:scale-110',
                     isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'
                   )}
                 />
@@ -78,7 +79,7 @@ export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) 
                 {item.count !== undefined && item.count !== null && (
                   <span
                     className={cn(
-                      'ml-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors tabular-nums',
+                      'ml-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.25 text-[10px] font-semibold transition-colors tabular-nums',
                       isActive
                         ? 'bg-primary/10 text-primary font-bold'
                         : item.live
@@ -100,7 +101,7 @@ export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) 
                   <span
                     aria-label={`Health: ${item.healthIndicator.toLowerCase()}`}
                     className={cn(
-                      'ml-0.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                      'ml-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.25 text-[10px] font-semibold',
                       item.healthIndicator === 'HEALTHY' &&
                         'border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
                       item.healthIndicator === 'DEGRADED' &&
