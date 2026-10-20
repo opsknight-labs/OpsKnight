@@ -158,7 +158,7 @@ export default async function IncidentRunbooks({
   const budgetExhausted = budgets.some(item => item.limit > 0 && item.used >= item.limit);
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3.5 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-border/80 bg-card p-4 sm:py-3.5 shadow-xs">
         <div className="min-w-0 flex-1 space-y-2.5">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold">
@@ -178,7 +178,11 @@ export default async function IncidentRunbooks({
           </div>
           <AutomationSafetyMeter items={budgets} />
         </div>
-        {canExecute && <AdhocRunbookLauncher incidentId={incidentId} />}
+        {canExecute && (
+          <div className="w-full sm:w-auto shrink-0">
+            <AdhocRunbookLauncher incidentId={incidentId} />
+          </div>
+        )}
       </div>
       {nothingYet && (
         <EmptyHint

@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -71,7 +69,6 @@ export default async function RunbookDetailPage({
   const { id } = await params;
   const { query, page: rawVersionPage } = runbookPageQuery(await searchParams);
   const rawBindingPage = Math.max(1, Math.min(10000, Number(query.bindingPage) || 1));
-  const navigationPromise = getRunbookNavigationSummary();
   const permissionsPromise = getUserPermissions();
   const userPromise = getCurrentUser();
 
@@ -92,66 +89,64 @@ export default async function RunbookDetailPage({
     Math.max(1, Math.ceil(runbookMeta._count.bindings / 20))
   );
 
-  const [permissions, user, runbook, navigation, serviceCount, topServiceGroups] =
-    await Promise.all([
-      permissionsPromise,
-      userPromise,
-      prisma.runbook.findUnique({
-        where: { id },
-        include: {
-          ownerTeam: { select: { id: true, name: true } },
-          draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-          publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-          versions: {
-            orderBy: { version: 'desc' },
-            skip: (versionPage - 1) * 20,
-            take: 20,
-            select: {
-              id: true,
-              version: true,
-              state: true,
-              publishedAt: true,
-              createdAt: true,
-              checksum: true,
-              publishedBy: { select: { name: true, email: true } },
-              _count: {
-                select: {
-                  executions: true,
-                  bindings: { where: { versionStrategy: 'PINNED', detachedAt: null } },
-                },
+  const [permissions, user, runbook, serviceCount, topServiceGroups] = await Promise.all([
+    permissionsPromise,
+    userPromise,
+    prisma.runbook.findUnique({
+      where: { id },
+      include: {
+        ownerTeam: { select: { id: true, name: true } },
+        draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+        publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+        versions: {
+          orderBy: { version: 'desc' },
+          skip: (versionPage - 1) * 20,
+          take: 20,
+          select: {
+            id: true,
+            version: true,
+            state: true,
+            publishedAt: true,
+            createdAt: true,
+            checksum: true,
+            publishedBy: { select: { name: true, email: true } },
+            _count: {
+              select: {
+                executions: true,
+                bindings: { where: { versionStrategy: 'PINNED', detachedAt: null } },
               },
             },
           },
-          bindings: {
-            include: { service: { select: { id: true, name: true } } },
-            orderBy: { createdAt: 'desc' },
-            skip: (bindingPage - 1) * 20,
-            take: 20,
-          },
-          executions: {
-            orderBy: { createdAt: 'desc' },
-            take: 30,
-            select: {
-              id: true,
-              status: true,
-              incidentId: true,
-              createdAt: true,
-              runbookVersion: { select: { version: true } },
-            },
-          },
-          _count: { select: { executions: true, bindings: true, versions: true } },
         },
-      }),
-      navigationPromise,
-      prisma.service.count({ where: { runbookBindings: { some: { runbookId: id } } } }),
-      prisma.serviceAutomationRule.groupBy({
-        by: ['serviceId'],
-        where: { runbookId: id },
-        _count: { _all: true },
-        orderBy: { _count: { serviceId: 'desc' } },
-        take: 5,
-      }),
-    ]);
+        bindings: {
+          include: { service: { select: { id: true, name: true } } },
+          orderBy: { createdAt: 'desc' },
+          skip: (bindingPage - 1) * 20,
+          take: 20,
+        },
+        executions: {
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+          select: {
+            id: true,
+            status: true,
+            incidentId: true,
+            createdAt: true,
+            runbookVersion: { select: { version: true } },
+          },
+        },
+        _count: { select: { executions: true, bindings: true, versions: true } },
+      },
+    }),
+    prisma.service.count({ where: { runbookBindings: { some: { runbookId: id } } } }),
+    prisma.serviceAutomationRule.groupBy({
+      by: ['serviceId'],
+      where: { runbookId: id },
+      _count: { _all: true },
+      orderBy: { _count: { serviceId: 'desc' } },
+      take: 5,
+    }),
+  ]);
   if (!runbook) notFound();
   const userTimeZone = getUserTimeZone(user);
   const isArchived = Boolean(runbook.archivedAt);
@@ -422,7 +417,7 @@ export default async function RunbookDetailPage({
         tag="Automation & Remediation Catalog"
         title={runbook.name}
         icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20 backdrop-blur-xs shadow-xs">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 backdrop-blur-xs shadow-xs">
             <Workflow className="h-6 w-6" aria-hidden="true" />
           </div>
         }
@@ -432,9 +427,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/40 text-[10px] font-mono gap-1"
+                className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-mono gap-1"
               >
-                <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                 Published v{runbook.publishedVersion.version}
               </Badge>
             )}
@@ -442,9 +437,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-amber-500/20 text-amber-100 border-amber-400/40 text-[10px] font-mono gap-1"
+                className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-mono gap-1"
               >
-                <PencilLine className="h-3 w-3 text-amber-300" />
+                <PencilLine className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                 Draft v{runbook.draftVersion.version}
               </Badge>
             )}
@@ -452,9 +447,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-rose-500/20 text-rose-100 border-rose-400/40 text-[10px] gap-1"
+                className="bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 text-[10px] gap-1"
               >
-                <Archive className="h-3 w-3 text-rose-300" />
+                <Archive className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                 Archived
               </Badge>
             )}
@@ -462,16 +457,16 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] gap-1"
+                className="bg-muted text-foreground border-border/80 text-[10px] gap-1"
               >
-                <Users className="h-3 w-3" />
+                <Users className="h-3 w-3 text-muted-foreground" />
                 {runbook.ownerTeam.name}
               </Badge>
             ) : (
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-primary-foreground/10 text-primary-foreground/80 border-primary-foreground/20 text-[10px] gap-1"
+                className="bg-muted/60 text-muted-foreground border-border/60 text-[10px] gap-1"
               >
                 <Users className="h-3 w-3" />
                 No owner team
@@ -480,7 +475,7 @@ export default async function RunbookDetailPage({
             <Badge
               variant="outline"
               size="xs"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-mono gap-1"
+              className="bg-muted text-muted-foreground border-border/80 text-[10px] font-mono gap-1"
             >
               <Hash className="h-3 w-3" />
               {runbook.slug}
@@ -489,7 +484,7 @@ export default async function RunbookDetailPage({
         }
         subtitle={
           <div className="space-y-1.5">
-            <p className="text-xs text-primary-foreground/85 leading-relaxed max-w-3xl">
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
               {runbook.description ||
                 'Enterprise automated remediation runbook with guardrails, parameter bindings, and auditable history.'}
             </p>
@@ -499,7 +494,7 @@ export default async function RunbookDetailPage({
                   <Link
                     key={tag}
                     href={`/runbooks?tag=${encodeURIComponent(tag)}`}
-                    className="rounded-full bg-primary-foreground/10 px-2.5 py-0.5 font-mono text-[10px] text-primary-foreground/90 ring-1 ring-inset ring-primary-foreground/20 hover:bg-primary-foreground/25 transition-colors"
+                    className="rounded-full bg-muted/80 px-2.5 py-0.5 font-mono text-[10px] text-muted-foreground border border-border/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     #{tag}
                   </Link>
@@ -599,7 +594,6 @@ export default async function RunbookDetailPage({
           ) : undefined
         }
       />
-      <RunbookModuleNav summary={navigation} />
       <DetailTabs
         defaultTab={runbook.draftVersion ? 'builder' : 'overview'}
         tabs={[

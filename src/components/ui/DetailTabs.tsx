@@ -150,12 +150,12 @@ export default function DetailTabs({
             className={cn(
               'h-auto w-full rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
               layout === 'grid' && [
-                'grid min-w-[540px]',
-                tabs.length === 2 && 'grid-cols-2',
-                tabs.length === 3 && 'grid-cols-3',
-                tabs.length === 4 && 'grid-cols-4',
-                tabs.length === 5 && 'grid-cols-5',
-                tabs.length >= 6 && 'grid-cols-6',
+                'flex sm:grid min-w-max sm:min-w-0',
+                tabs.length === 2 && 'sm:grid-cols-2',
+                tabs.length === 3 && 'sm:grid-cols-3',
+                tabs.length === 4 && 'sm:grid-cols-4',
+                tabs.length === 5 && 'sm:grid-cols-5',
+                tabs.length >= 6 && 'sm:grid-cols-6',
               ],
               layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 flex-wrap sm:flex-nowrap',
               listClassName
@@ -167,7 +167,7 @@ export default function DetailTabs({
                 value={tab.id}
                 disabled={tab.disabled}
                 className={cn(
-                  'group relative flex items-center justify-center gap-2 rounded-lg py-2.5 px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
+                  'group relative flex flex-1 sm:flex-initial items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-2 sm:py-2.5 px-3 sm:px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap shrink-0',
                   'border border-border/40 bg-background/50 text-muted-foreground/90 shadow-2xs',
                   'hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]',
                   'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20'
@@ -178,7 +178,7 @@ export default function DetailTabs({
                     {tab.icon}
                   </span>
                 )}
-                <span className="truncate">{tab.label}</span>
+                <span className="whitespace-nowrap">{tab.label}</span>
 
                 {/* Count Pill */}
                 {tab.count !== undefined && tab.count !== null && (

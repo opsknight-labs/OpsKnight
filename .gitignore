@@ -27,6 +27,7 @@ public/uploads/
 # misc
 .DS_Store
 *.pem
+*.dump
 
 # debug
 npm-debug.log*

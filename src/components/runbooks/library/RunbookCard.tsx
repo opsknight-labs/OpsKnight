@@ -122,7 +122,7 @@ export function RunbookCard({
       )}
     >
       <div className={cn('min-w-0 flex-1', isList ? 'space-y-1.5' : 'space-y-3.5')}>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div
               className={cn(
@@ -145,7 +145,7 @@ export function RunbookCard({
               </Link>
             </h2>
           </div>
-          <div className="relative z-10 flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+          <div className="relative z-10 flex flex-wrap items-center gap-1.5 shrink-0 sm:justify-end">
             <RunbookStatusBadge status={statusLabel} size="sm" context="lifecycle" />
             {isPublished && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">
@@ -222,7 +222,7 @@ export function RunbookCard({
         )}
       >
         {meta}
-        <div className="flex items-center gap-3">
+        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3">
           <span className="text-xs text-muted-foreground">
             {isArchived ? 'Archived · bindings disabled' : `Updated ${updated}`}
           </span>
