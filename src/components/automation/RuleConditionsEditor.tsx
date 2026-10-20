@@ -138,6 +138,11 @@ const ConditionRow = memo(function ConditionRow({
           <Trash2 aria-hidden="true" />
         </Button>
       )}
+      {(condition.operator === 'NE' || condition.operator === 'NOT_IN') && (
+        <p className="px-1 text-[11px] text-muted-foreground sm:col-span-5">
+          Does not equal and not in only match recognized values. Missing or unmapped values evaluate to unknown and do not match; use “is missing” or “is unmapped” to match them explicitly.
+        </p>
+      )}
     </div>
   );
 });

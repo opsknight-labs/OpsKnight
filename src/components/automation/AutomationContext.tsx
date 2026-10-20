@@ -24,7 +24,7 @@ import {
 
 import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
 import { builtinFields, LIMITS, type Snapshot, type Field } from '@/lib/automation/contract';
-import type { Observation } from '@/lib/automation/discovery';
+import { formatHierarchicalLabel } from '@/lib/automation/discovery';
 
 import type { Data, Discovery } from './presentation-types';
 const EMPTY_SET = new Set<string>();
@@ -101,17 +101,54 @@ export function AutomationContext({
   const stableDeleteField = useStableCallback(setDeleteField);
   const canReadSensitive = data.canReadSensitive !== false;
 
-  const observedOptions = useMemo(
-    () => [
-      ...new Map([
-        ...data.observations
-          .filter(o => integrationType === 'ALL' || o.integrationType === integrationType)
-          .map(o => [o.sourcePath, o.fieldKey] as const),
-        ...discoveries.map(o => [o.path, o.key] as const),
-      ]).entries(),
-    ],
-    [data.observations, discoveries, integrationType]
-  );
+  const observedOptions = useMemo(() => {
+    const list: Array<{
+      id: string;
+      path: string;
+      key: string;
+      label: string;
+      integrationType?: string;
+      source: 'PROVIDER' | 'EVENT';
+      type?: string;
+    }> = [];
+    const seen = new Set<string>();
+
+    for (const o of data.observations) {
+      if (integrationType !== 'ALL' && o.integrationType !== integrationType) continue;
+      const compositeId = `${o.integrationType}:PROVIDER:${o.sourcePath}`;
+      if (seen.has(compositeId)) continue;
+      seen.add(compositeId);
+      list.push({
+        id: compositeId,
+        path: o.sourcePath,
+        key: o.fieldKey,
+        label: formatHierarchicalLabel(o.sourcePath),
+        integrationType: o.integrationType,
+        source: 'PROVIDER',
+        type: o.fieldType,
+      });
+    }
+
+    for (const d of discoveries) {
+      if (integrationType !== 'ALL' && d.integrationType && d.integrationType !== integrationType)
+        continue;
+      const source = d.source ?? 'PROVIDER';
+      const compositeId = `${d.integrationType ?? 'ALL'}:${source}:${d.path}`;
+      if (seen.has(compositeId)) continue;
+      seen.add(compositeId);
+      list.push({
+        id: compositeId,
+        path: d.path,
+        key: d.key,
+        label: d.label ?? formatHierarchicalLabel(d.path),
+        integrationType: d.integrationType,
+        source,
+        type: d.type,
+      });
+    }
+    return list;
+  }, [data.observations, discoveries, integrationType]);
+
   const integrationTypes = useMemo(
     () => [...new Set(data.integrations.map(i => i.type))],
     [data.integrations]
@@ -144,8 +181,14 @@ export function AutomationContext({
         });
         if (!response.ok) setError(response.error);
         else {
-          setDiscoveries(response.data as Observation[]);
-          if (!(response.data as Observation[]).length)
+          const raw = response.data as Discovery[];
+          const enriched = raw.map(field => ({
+            ...field,
+            label: field.label ?? formatHierarchicalLabel(field.path),
+            source: 'EVENT' as const,
+          }));
+          setDiscoveries(enriched);
+          if (!enriched.length)
             setError('No suitable fields in recent alerts. Use a provider sample to get started.');
         }
       } finally {
@@ -271,21 +314,27 @@ export function AutomationContext({
                       aria-invalid={!!problems.source || undefined}
                       aria-describedby={problems.source ? `${formId}-source-error` : undefined}
                       onChange={e => {
-                        setObservedPath(e.target.value);
-                        const found = [
-                          ...data.observations.map(o => ({ path: o.sourcePath, key: o.fieldKey })),
-                          ...discoveries,
-                        ].find(o => o.path === e.target.value);
-                        if (found) setFieldLabel(found.key.replace(/_/g, ' '));
+                        const path = e.target.value;
+                        setObservedPath(path);
+                        const found = observedOptions.find(o => o.path === path);
+                        if (found) {
+                          setFieldLabel(found.label);
+                          if (found.integrationType && found.integrationType !== 'ALL') {
+                            setIntegrationType(found.integrationType);
+                          }
+                          if (found.type === 'NUMBER' || found.type === 'BOOLEAN') {
+                            setFieldType(found.type);
+                          }
+                        }
                       }}
                     >
                       <option value="">Choose field…</option>
-                      {observedPath && !observedOptions.some(([path]) => path === observedPath) && (
+                      {observedPath && !observedOptions.some(o => o.path === observedPath) && (
                         <option value={observedPath}>{observedPath}</option>
                       )}
-                      {observedOptions.map(([path, key]) => (
-                        <option key={path} value={path}>
-                          {key.replace(/_/g, ' ')}
+                      {observedOptions.map(option => (
+                        <option key={option.id} value={option.path}>
+                          {option.label} — {option.path}{option.integrationType ? ` (${option.integrationType})` : ''}
                         </option>
                       ))}
                     </NativeSelect>
@@ -446,18 +495,18 @@ export function AutomationContext({
             {discoveries.length > 0 && (
               <ul aria-label="Discovered context fields" className="space-y-2">
                 {discoveries.map(field => {
-                  const name = field.path.split('.').at(-1)?.replace(/_/g, ' ');
+                  const hierarchical = field.label ?? formatHierarchicalLabel(field.path);
                   const chosen = observedPath === field.path;
                   return (
                     <li
-                      key={field.path}
+                      key={`${field.integrationType ?? 'ALL'}:${field.source ?? 'PROVIDER'}:${field.path}`}
                       className={cn(
                         'space-y-1 rounded-md border p-3 text-sm',
                         chosen ? 'border-primary/50 bg-primary/5' : 'border-border/70'
                       )}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{name}</span>
+                        <span className="font-medium">{hierarchical}</span>
                         <Button
                           size="sm"
                           variant={chosen ? 'secondary' : 'outline'}
@@ -465,12 +514,15 @@ export function AutomationContext({
                           className="h-10 sm:h-9"
                           onClick={() => {
                             setObservedPath(field.path);
-                            setFieldLabel(name ?? field.key);
+                            setFieldLabel(hierarchical);
                             setFieldType(
                               field.type === 'NUMBER' || field.type === 'BOOLEAN'
                                 ? field.type
                                 : 'STRING'
                             );
+                            if (field.integrationType && field.integrationType !== 'ALL') {
+                              setIntegrationType(field.integrationType);
+                            }
                           }}
                         >
                           Choose field
@@ -478,6 +530,8 @@ export function AutomationContext({
                       </div>
                       <p className="break-all font-mono text-xs text-muted-foreground">
                         {field.path} · {field.type}
+                        {field.integrationType ? ` · ${field.integrationType}` : ''}
+                        {field.source ? ` · ${field.source}` : ''}
                         {field.frequency ? ` · ${field.frequency} recent alerts` : ''}
                       </p>
                       <p className="break-words text-xs">

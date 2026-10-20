@@ -6,6 +6,9 @@ import { RuleActionsEditor } from '@/components/automation/RuleActionsEditor';
 import { conditionOperators } from '@/components/automation/RuleConditionsEditor';
 import { semanticSnapshotChanges } from '@/lib/automation/diff';
 import { emptySnapshot, type Rule } from '@/lib/automation/contract';
+import { formatHierarchicalLabel } from '@/lib/automation/discovery';
+import { deriveUniqueFieldKey } from '@/components/automation/authoring/context-fields';
+import { AutomationTest } from '@/components/automation/AutomationTest';
 const api = vi.hoisted(() => ({ action: vi.fn(), area: vi.fn() }));
 vi.mock('@/app/(app)/services/[id]/automation/actions', () => ({
   automationAction: api.action,
@@ -259,4 +262,93 @@ it('reviews actual routing and priority changes using names rather than opaque p
     { policies: [{ id: 'opaque-policy-id', name: 'Production Primary' }] }
   );
   expect(changes).toEqual(['Production: Before: Service default → After: Production Primary']);
+});
+
+it('formats hierarchical labels and generates unique stable field keys without collisions', () => {
+  expect(formatHierarchicalLabel('repository.name')).toBe('Repository Name');
+  expect(formatHierarchicalLabel('workflow_run.name')).toBe('Workflow Run Name');
+  expect(formatHierarchicalLabel('payload.custom_details.service_tier')).toBe('Service Tier');
+
+  const keys = new Set<string>();
+  const repoKey = deriveUniqueFieldKey('Repository Name', keys);
+  expect(repoKey).toBe('repository_name');
+  keys.add(repoKey);
+
+  const workflowKey = deriveUniqueFieldKey('Workflow Run Name', keys);
+  expect(workflowKey).toBe('workflow_run_name');
+  keys.add(workflowKey);
+
+  const duplicateRepoKey = deriveUniqueFieldKey('Repository Name', keys);
+  expect(duplicateRepoKey).toBe('repository_name_2');
+});
+
+it('AutomationTest restores integration identity, shows replay mode, and warns on missing provider sample', () => {
+  const setIntegrationId = vi.fn();
+  const setIntegrationType = vi.fn();
+  const setSample = vi.fn();
+  const setProviderSample = vi.fn();
+  const testData = {
+    ...data,
+    integrations: [{ id: 'int-gh', name: 'GitHub Actions', type: 'GITHUB' }],
+    alerts: [
+      {
+        id: 'alert-1',
+        serviceId: 'service',
+        createdAt: '2026-10-20T12:00:00Z',
+        integrationId: 'int-gh',
+        integrationType: 'GITHUB',
+        replayMode: 'PROVIDER' as const,
+        providerSample: { action: 'workflow_run' },
+        payload: { summary: 'CI failure', severity: 'error', source: 'github' },
+      },
+    ],
+  };
+
+  const { rerender } = render(
+    <AutomationTest
+      data={testData}
+      integrationId=""
+      setIntegrationId={setIntegrationId}
+      setIntegrationType={setIntegrationType}
+      sample="{}"
+      setSample={setSample}
+      providerSample="{}"
+      setProviderSample={setProviderSample}
+      busy={false}
+      runTest={vi.fn()}
+      result={null}
+    />
+  );
+
+  fireEvent.change(screen.getByLabelText('Use recent alert'), { target: { value: 'alert-1' } });
+  expect(setIntegrationId).toHaveBeenCalledWith('int-gh');
+  expect(setIntegrationType).toHaveBeenCalledWith('GITHUB');
+  expect(setProviderSample).toHaveBeenCalledWith(JSON.stringify({ action: 'workflow_run' }, null, 2));
+
+  rerender(
+    <AutomationTest
+      data={testData}
+      integrationId="int-gh"
+      setIntegrationId={setIntegrationId}
+      setIntegrationType={setIntegrationType}
+      sample="{}"
+      setSample={setSample}
+      providerSample="{}"
+      setProviderSample={setProviderSample}
+      busy={false}
+      runTest={vi.fn()}
+      result={{
+        issues: [],
+        providerFieldsMissing: ['automation.workflow_id'],
+        goldenResults: [],
+        durationMs: 1.23,
+        result: null,
+      }}
+    />
+  );
+
+  expect(screen.getByText('Provider-only mapping unavailable')).toBeInTheDocument();
+  expect(
+    screen.getByText(/automation\.workflow_id cannot be extracted because no raw provider sample was supplied/)
+  ).toBeInTheDocument();
 });

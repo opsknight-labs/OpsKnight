@@ -11,7 +11,7 @@ import { evaluateOperator } from '@/lib/automation/evaluator/operators';
 import { normalizeValue } from '@/lib/automation/context/normalize';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { evaluateAutomation } from '@/lib/automation/evaluator';
-import { compilePath } from '@/lib/automation/context/extract';
+import { compilePath, readCompiledPath } from '@/lib/automation/context/extract';
 describe('automation semantics', () => {
   for (const result of goldenResults())
     it(`golden pipeline: ${result.name}`, () => expect(result.actual).toBe(result.expected));
@@ -53,6 +53,73 @@ describe('automation semantics', () => {
   it('blocks unsafe paths', () => {
     for (const path of ['a.__proto__.b', '$.Authorization', 'a.token', '$.a[*]', 'a..b'])
       expect(() => compilePath(path)).toThrow();
+  });
+  it('supports root array bracket paths and rejects bare numeric paths', () => {
+    const tokens = compilePath('[0].name');
+    expect(readCompiledPath([{ name: 'test-service' }], tokens)).toBe('test-service');
+    const tokensDollar = compilePath('$[1].id');
+    expect(readCompiledPath([{ id: 'a' }, { id: 'b' }], tokensDollar)).toBe('b');
+    expect(() => compilePath('0.name')).toThrow(/bracket notation/);
+  });
+  it('suppresses priority conflict warnings when rules are mutually exclusive and honors displayOnly', () => {
+    const result = compileAutomation({
+      schemaVersion: 1,
+      fields: [
+        {
+          fieldId: 'env',
+          key: 'environment',
+          label: 'Environment',
+          type: 'ENUM',
+          allowedValues: ['production', 'staging'],
+          aliases: {},
+          mappings: [],
+        },
+        {
+          fieldId: 'audit',
+          key: 'audit_log',
+          label: 'Audit Log',
+          type: 'STRING',
+          displayOnly: true,
+          mappings: [],
+        },
+      ],
+      rules: [
+        {
+          id: 'prod-rule',
+          name: 'Prod',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [{ fieldKey: 'environment', operator: 'EQ', value: 'production' }],
+          actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+        },
+        {
+          id: 'staging-rule',
+          name: 'Staging',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [{ fieldKey: 'environment', operator: 'EQ', value: 'staging' }],
+          actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+        },
+      ],
+    });
+    expect(result.issues.filter(i => i.code === 'PRIORITY_CONFLICT')).toHaveLength(0);
+    expect(
+      result.issues.filter(i => i.code === 'UNUSED_FIELD' && i.fieldKey === 'audit_log')
+    ).toHaveLength(0);
+  });
+  it('preserves fail-safe semantics where missing or unmapped values evaluate to UNKNOWN for NE and NOT_IN', () => {
+    const missingState: FieldState = { state: 'MISSING' };
+    const unmappedState: FieldState = { state: 'UNMAPPED' };
+    expect(
+      evaluateOperator(missingState, { fieldKey: 'environment', operator: 'NE', value: 'production' })
+    ).toBe('UNKNOWN');
+    expect(
+      evaluateOperator(unmappedState, {
+        fieldKey: 'environment',
+        operator: 'NOT_IN',
+        value: ['production', 'staging'],
+      })
+    ).toBe('UNKNOWN');
   });
   it('detects alias collisions', () => {
     const result = compileAutomation({

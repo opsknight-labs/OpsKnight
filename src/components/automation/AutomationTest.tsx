@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown, Play } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
@@ -49,6 +49,8 @@ export function AutomationTest({
   result: Awaited<ReturnType<typeof testAutomation>> | null;
 }) {
   const id = useId();
+  const [selectedAlertId, setSelectedAlertId] = useState<string>('');
+  const selectedAlert = data.alerts.find(a => a.id === selectedAlertId);
   const outcome = result?.result?.outcome;
   const policyName =
     outcome?.type === 'ESCALATION_POLICY'
@@ -78,17 +80,37 @@ export function AutomationTest({
             <NativeSelect
               id={`${id}-alert`}
               disabled={!data.alerts.length}
+              value={selectedAlertId}
               onChange={e => {
                 const alert = data.alerts.find(a => a.id === e.target.value);
                 if (alert) {
-                  setProviderSample('{}');
+                  setSelectedAlertId(alert.id);
+                  if (alert.integrationId) {
+                    setIntegrationId(alert.integrationId);
+                    setIntegrationType(
+                      alert.integrationType ??
+                        data.integrations.find(i => i.id === alert.integrationId)?.type ??
+                        'EVENTS_API'
+                    );
+                  }
+                  if (alert.providerSample && Object.keys(alert.providerSample).length > 0) {
+                    setProviderSample(JSON.stringify(alert.providerSample, null, 2));
+                  } else {
+                    setProviderSample('{}');
+                  }
                   setSample(
                     JSON.stringify(
-                      { event_action: 'trigger', dedup_key: 'sample', payload: alert.payload },
+                      {
+                        event_action: 'trigger',
+                        dedup_key: alert.dedupKey ?? 'sample',
+                        payload: alert.payload,
+                      },
                       null,
                       2
                     )
                   );
+                } else {
+                  setSelectedAlertId('');
                 }
               }}
             >
@@ -123,9 +145,19 @@ export function AutomationTest({
             </NativeSelect>
           </div>
         </div>
+        {selectedAlert && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs">
+            <span className="font-medium text-foreground">
+              {selectedAlert.replayMode === 'PROVIDER'
+                ? 'Replay mode: Full provider replay (sanitized provider payload available)'
+                : 'Replay mode: Normalized alert only (raw provider payload unavailable)'}
+            </span>
+          </div>
+        )}
         <Hint>
-          Recent alerts replay the normalized OpsKnight event only. Provider-specific mappings
-          require a raw provider sample in Advanced inputs.
+          {selectedAlert?.replayMode === 'PROVIDER'
+            ? 'Testing with sanitized provider context and normalized alert.'
+            : 'Recent alerts replay the normalized OpsKnight event. If rules require provider-specific mappings, paste a raw provider sample under Advanced inputs.'}
         </Hint>
         <ManualSample onBuild={setSample} />
         <details className="group rounded-lg border border-border/70 bg-card">
@@ -201,6 +233,17 @@ export function AutomationTest({
                 </dd>
               </div>
             </dl>
+            {result.providerFieldsMissing && result.providerFieldsMissing.length > 0 && (
+              <div
+                role="alert"
+                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+              >
+                <p className="font-semibold">Provider-only mapping unavailable</p>
+                <p className="mt-0.5">
+                  {result.providerFieldsMissing.join(', ')} cannot be extracted because no raw provider sample was supplied. Enter a provider sample in Advanced sample JSON to test provider mappings.
+                </p>
+              </div>
+            )}
             {result.issues.length > 0 && (
               <ul aria-label="Draft issues" className="space-y-1.5">
                 {result.issues.map((i, n) => (

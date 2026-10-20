@@ -6,18 +6,21 @@ export const forbiddenSegment = (key: string): boolean =>
     key
   ) || ['__proto__', 'prototype', 'constructor'].includes(key);
 export function compilePath(path: string): Array<string | number> {
-  const cleaned = path.replace(/^\$\.?/, '');
-  const segments = cleaned.replace(/\[(\d+)\]/g, '.$1').split('.');
+  const cleaned = path.trim().replace(/^\$\.?/, '');
+  if (!cleaned) throw new Error('Invalid extraction path');
+  if (/^\d/.test(cleaned))
+    throw new Error('Invalid extraction path: root array indexing requires bracket notation like [0]');
+  const normalized = cleaned
+    .replace(/^\[(\d+)\]/, '$1')
+    .replace(/\[(\d+)\]/g, '.$1')
+    .replace(/^\./, '');
+  const segments = normalized.split('.');
   if (
     !segments.length ||
-    segments.some(t => !/^[A-Za-z_][\w-]*$/.test(t) && !/^\d+$/.test(t)) ||
-    /^\d/.test(segments[0])
+    segments.some(t => !/^[A-Za-z_][\w-]*$/.test(t) && !/^\d+$/.test(t))
   )
     throw new Error('Invalid extraction path');
-  const tokens = cleaned
-    .replace(/\[(\d+)\]/g, '.$1')
-    .split('.')
-    .map(t => (/^\d+$/.test(t) ? Number(t) : t));
+  const tokens = segments.map(t => (/^\d+$/.test(t) ? Number(t) : t));
   if (
     tokens.length > LIMITS.depth ||
     tokens.some(t => typeof t === 'string' && forbiddenSegment(t))

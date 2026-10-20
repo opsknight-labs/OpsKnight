@@ -149,7 +149,6 @@ export default function AutomationWorkspace({
   );
   useEffect(() => {
     // Fetches the selected area from the server; state is set when the request resolves.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(area);
   }, [area, load]);
 
@@ -309,6 +308,7 @@ export default function AutomationWorkspace({
   const openContext = useCallback(() => setArea('context'), []);
   const viewAffectedRules = (ruleIds: string[]) => {
     setRuleSearch('');
+    setRuleStateFilter('all');
     setArea('rules');
     setExpandedRules(new Set(ruleIds));
     setDeleteField(null);

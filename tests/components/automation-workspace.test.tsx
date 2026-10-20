@@ -215,6 +215,31 @@ it('only offers field removal when no rule references the field', () => {
   expect(onConfirm).toHaveBeenCalledWith(field);
 });
 
+it('deleting a referenced field from Context area and clicking View affected rules switches to Rules area and closes dialog', async () => {
+  const field: Field = {
+    fieldId: 'f1',
+    key: 'missing_field',
+    label: 'Region',
+    type: 'STRING',
+    caseSensitive: false,
+    aliases: {},
+    mappings: [{ source: 'EVENT', path: 'payload.region' }],
+  };
+  api.area.mockResolvedValue({
+    ...base,
+    draft: { snapshot: { ...emptySnapshot, fields: [field], rules: [brokenRule] }, revision: 1 },
+  });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove field' }));
+  const dialog = await screen.findByRole('alertdialog');
+  expect(dialog).toHaveTextContent('Region is used by 1 rule.');
+  fireEvent.click(screen.getByRole('button', { name: 'View affected rules' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  const configure = await screen.findByRole('button', { name: 'Configure Broken routing' });
+  expect(configure).toHaveAttribute('aria-expanded', 'true');
+});
+
 it('applies starter templates without clobbering incompatible or existing ENUM fields', () => {
   const conflicting: Snapshot = {
     ...emptySnapshot,

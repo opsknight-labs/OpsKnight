@@ -58,6 +58,8 @@ export function transformCloudWatchToEvent(message: CloudWatchAlarmMessage): {
         region: message.Region,
         trigger: message.Trigger,
         stateChangeTime: message.StateChangeTime,
+        awsAccountId: message.AWSAccountId,
+        AWSAccountId: message.AWSAccountId,
       },
     },
   };

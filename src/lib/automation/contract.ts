@@ -42,6 +42,7 @@ export const fieldSchema = z
     label: z.string().min(1).max(100),
     type: z.enum(['STRING', 'ENUM', 'NUMBER', 'BOOLEAN']),
     caseSensitive: z.boolean().default(false),
+    displayOnly: z.boolean().default(false),
     allowedValues: z
       .array(enumValueSchema.refine(value => value.length > 0))
       .max(200)

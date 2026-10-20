@@ -39,23 +39,35 @@ export function useContextAuthoring({
         onError(response.error);
         return;
       }
-      setDiscoveries(response.data as Observation[]);
+      const raw = response.data as Observation[];
+      setDiscoveries(
+        raw.map(item => ({
+          ...item,
+          source: 'PROVIDER' as const,
+          integrationType: integrationType === 'ALL' ? undefined : integrationType,
+        }))
+      );
     } catch {
       onError('Enter a valid JSON provider sample');
     }
-  }, [serviceId, providerSample, onError]);
+  }, [serviceId, providerSample, integrationType, onError]);
 
   const addField = useCallback(() => {
-    const key = fieldLabel
+    const existingKeys = new Set([...builtinFields, ...draft.fields].map(field => field.key));
+    const baseKey = fieldLabel
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_');
-    const taken = [...builtinFields, ...draft.fields].some(field => field.key === key);
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const key = /^[a-z]/.test(baseKey) ? baseKey : `field_${baseKey}`;
+    const taken = existingKeys.has(key);
     if (!/^[a-z][a-z0-9_]{0,63}$/.test(key) || taken || !observedPath) {
       onError('Choose a unique field name and an observed source field');
       return;
     }
-    const source = discoveries.find(item => item.path === observedPath)?.source;
+    const matchingDiscovery = discoveries.find(item => item.path === observedPath);
+    const source = matchingDiscovery?.source ?? 'PROVIDER';
+    const effectiveIntegration = matchingDiscovery?.integrationType ?? integrationType;
     edit({
       ...draft,
       fields: [
@@ -66,13 +78,16 @@ export function useContextAuthoring({
           label: fieldLabel.trim(),
           type: fieldType,
           caseSensitive: false,
+          displayOnly: false,
           ...(fieldType === 'ENUM' ? { allowedValues: values } : {}),
           aliases: {},
           mappings: [
             {
-              source: source ?? 'PROVIDER',
+              source,
               integrationType:
-                source === 'EVENT' || integrationType === 'ALL' ? undefined : integrationType,
+                source === 'EVENT' || effectiveIntegration === 'ALL'
+                  ? undefined
+                  : effectiveIntegration,
               path: observedPath,
             },
           ],
