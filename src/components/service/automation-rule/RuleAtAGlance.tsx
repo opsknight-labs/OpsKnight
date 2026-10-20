@@ -47,8 +47,22 @@ export function RuleAtAGlance({ glance }: { glance: RuleGlance }) {
           {glance.readiness.label}
         </span>
       </Row>
-      <Row label="Eligible Agents">{glance.eligibleAgents ?? '—'}</Row>
-      <Row label="Certified Agents">{glance.certifiedAgents}</Row>
+      <Row label="Eligible Agents">
+        {glance.eligibleAgents === 0 ? (
+          <span className="inline-flex items-center gap-1.5 font-semibold text-rose-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />0 online
+          </span>
+        ) : (
+          (glance.eligibleAgents ?? '—')
+        )}
+      </Row>
+      <Row label="Certified Agents">
+        {glance.certifiedAgents === 0 ? (
+          <span className="font-semibold text-rose-500">0 certified</span>
+        ) : (
+          glance.certifiedAgents
+        )}
+      </Row>
       <Row label="Last run">
         {glance.lastRun ? (
           <span className="inline-flex flex-wrap items-center justify-end gap-2">

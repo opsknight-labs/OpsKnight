@@ -1,4 +1,4 @@
-import { Filter, Radio, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Filter, Radio, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { describeCondition, eventLabel } from './rule-presentation';
 
@@ -48,19 +48,36 @@ export function RuleTrigger({ triggers }: { triggers: RuleTriggerView[] }) {
               <ShieldCheck className="h-3 w-3" />
               {trigger.enabled ? 'Enabled Trigger' : 'Disabled Trigger'}
             </span>
-            {trigger.conditions.length > 0 && (
+            {trigger.conditions.length === 0 ? (
+              <span
+                className={cn(
+                  chip,
+                  'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-mono text-[11px]'
+                )}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Wildcard (All Incidents)
+              </span>
+            ) : (
               <span className={cn(chip, 'border-border/80 bg-muted/40 text-foreground font-mono')}>
                 {trigger.conditionLogic === 'OR' ? 'Match Any Condition' : 'Match All Conditions'}
               </span>
             )}
           </div>
           {trigger.conditions.length === 0 ? (
-            <p className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/60">
-              <Filter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              No filter conditions applied. Automatically matches every{' '}
-              <strong className="text-foreground">{eventLabel(trigger.event)}</strong> event for
-              this service.
-            </p>
+            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.05] p-3 text-xs text-muted-foreground shadow-2xs">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" aria-hidden />
+              <div className="space-y-0.5">
+                <p className="font-semibold text-amber-700 dark:text-amber-400">
+                  Wildcard Trigger · Automatically Matches All Incidents
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  No attribute filter conditions applied. This automated runbook will dispatch on
+                  every <strong className="text-foreground">{eventLabel(trigger.event)}</strong>{' '}
+                  event declared for this service.
+                </p>
+              </div>
+            </div>
           ) : (
             <ul
               aria-label={`Conditions · ${trigger.conditionLogic === 'OR' ? 'Match any' : 'Match all'}`}

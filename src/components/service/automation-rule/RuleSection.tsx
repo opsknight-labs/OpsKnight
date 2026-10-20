@@ -140,7 +140,16 @@ export const RULE_SECTIONS = [
   { id: 'audit', label: 'Audit trail', icon: ScrollText },
 ] as const;
 
-export function RuleSectionNav() {
+export function RuleSectionNav({
+  badges,
+}: {
+  badges?: Partial<
+    Record<
+      (typeof RULE_SECTIONS)[number]['id'],
+      { label: string; tone?: 'danger' | 'warning' | 'info' | 'success' }
+    >
+  >;
+}) {
   return (
     <nav
       aria-label="Rule evidence sections"
@@ -149,6 +158,7 @@ export function RuleSectionNav() {
       <ul className="flex min-w-max gap-1">
         {RULE_SECTIONS.map(section => {
           const Icon = section.icon;
+          const badge = badges?.[section.id];
           return (
             <li key={section.id}>
               <a
@@ -157,6 +167,22 @@ export function RuleSectionNav() {
               >
                 <Icon className="h-3.5 w-3.5 opacity-70" />
                 <span>{section.label}</span>
+                {badge && (
+                  <span
+                    className={cn(
+                      'ml-0.5 rounded-full px-1.5 py-0 text-[10px] font-mono font-bold leading-tight border shadow-2xs',
+                      badge.tone === 'danger'
+                        ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                        : badge.tone === 'warning'
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : badge.tone === 'success'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'border-border/80 bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {badge.label}
+                  </span>
+                )}
               </a>
             </li>
           );

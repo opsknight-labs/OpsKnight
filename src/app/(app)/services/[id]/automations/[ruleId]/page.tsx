@@ -194,6 +194,15 @@ export default async function AutomationRulePage({
             >
               {selectedVersion ? `v${selectedVersion.version}` : 'No version'} ({strategy})
             </Badge>
+            {matchesEverything && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/40 bg-amber-500/10 text-amber-300 font-medium text-[11px] shadow-2xs flex items-center gap-1"
+              >
+                <AlertTriangle className="h-3 w-3 text-amber-400" />
+                Wildcard Trigger (All Incidents)
+              </Badge>
+            )}
           </div>
         }
         icon={
@@ -252,8 +261,9 @@ export default async function AutomationRulePage({
             label: 'TRIGGER',
             value: presentation.trigger,
             icon: <Radio className="h-3.5 w-3.5 text-amber-400" />,
-            subtext:
-              rule.triggers.length === 1
+            subtext: matchesEverything
+              ? '⚡ Matches all incidents (Wildcard)'
+              : rule.triggers.length === 1
                 ? '1 trigger condition'
                 : `${rule.triggers.length} triggers`,
           },
@@ -270,8 +280,16 @@ export default async function AutomationRulePage({
                 {readinessView.label}
               </span>
             ),
-            icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />,
-            subtext: `${readiness.checks.length} policy checks evaluated`,
+            icon:
+              readiness.state === 'BLOCKED' ? (
+                <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+              ) : (
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              ),
+            subtext:
+              readiness.state === 'BLOCKED'
+                ? `${readiness.checks.filter(c => c.state === 'blocked').length} blocking issues`
+                : `${readiness.checks.length} policy checks evaluated`,
           },
           {
             label: 'EXECUTIONS',
@@ -349,11 +367,16 @@ export default async function AutomationRulePage({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
           <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <ClipboardCheck className="h-3.5 w-3.5" />
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <ClipboardCheck className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-xs font-bold text-foreground">1. Configuration</h3>
+              </div>
+              <span className="rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-semibold px-1.5 py-0.5">
+                Valid
               </span>
-              <h3 className="text-xs font-bold text-foreground">1. Configuration</h3>
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               Validates version, typed inputs, trigger and target schemas. Performs no physical
@@ -362,11 +385,23 @@ export default async function AutomationRulePage({
           </div>
 
           <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                <ShieldCheck className="h-3.5 w-3.5" />
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-xs font-bold text-foreground">2. Agent Policy</h3>
+              </div>
+              <span
+                className={cn(
+                  'rounded border text-[10px] font-mono font-semibold px-1.5 py-0.5',
+                  certifiedAgents > 0
+                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                )}
+              >
+                {certifiedAgents} / {readiness.eligibleAgents ?? 0} Certified
               </span>
-              <h3 className="text-xs font-bold text-foreground">2. Agent Policy</h3>
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               A fresh signed allowlist check for this exact configuration. Does not grant platform
@@ -375,11 +410,16 @@ export default async function AutomationRulePage({
           </div>
 
           <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                <FlaskConical className="h-3.5 w-3.5" />
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                  <FlaskConical className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-xs font-bold text-foreground">3. Execution Preview</h3>
+              </div>
+              <span className="rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[10px] font-mono font-semibold px-1.5 py-0.5">
+                Frozen
               </span>
-              <h3 className="text-xs font-bold text-foreground">3. Execution Preview</h3>
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               Review frozen plan and approval gates. Preview neither runs commands nor mutates
@@ -388,11 +428,16 @@ export default async function AutomationRulePage({
           </div>
 
           <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                <Activity className="h-3.5 w-3.5" />
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Activity className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-xs font-bold text-foreground">4. Target Verification</h3>
+              </div>
+              <span className="rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-mono font-semibold px-1.5 py-0.5">
+                Enforced
               </span>
-              <h3 className="text-xs font-bold text-foreground">4. Target Verification</h3>
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               Requires completed action and authored checks with healthy post-state.
@@ -411,7 +456,23 @@ export default async function AutomationRulePage({
         </div>
       )}
 
-      <RuleSectionNav />
+      <RuleSectionNav
+        badges={{
+          overview:
+            readiness.state === 'BLOCKED'
+              ? {
+                  label: `${readiness.checks.filter(c => c.state === 'blocked').length}`,
+                  tone: 'danger',
+                }
+              : readiness.state === 'CHECKS_REQUIRED'
+                ? { label: 'check', tone: 'warning' }
+                : { label: 'ready', tone: 'success' },
+          trigger: matchesEverything ? { label: 'all', tone: 'warning' } : undefined,
+          version: selectedVersion ? { label: `v${selectedVersion.version}` } : undefined,
+          history: rule.executions.length > 0 ? { label: `${rule.executions.length}` } : undefined,
+          policy: checks.length > 0 ? { label: `${checks.length}` } : undefined,
+        }}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         <aside
@@ -753,6 +814,16 @@ export default async function AutomationRulePage({
                   </Button>
                 )}
               </div>
+
+              {readiness.eligibleAgents === 0 && (
+                <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/[0.05] px-3 py-2 text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
+                  <span>
+                    No healthy online agents currently match this fleet target. Dispatches to this
+                    node will fail until an eligible agent is online and reporting health.
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground leading-relaxed">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
