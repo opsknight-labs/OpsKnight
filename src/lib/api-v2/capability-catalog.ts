@@ -150,8 +150,8 @@ const decisions: readonly ApiCapability[] = [
     title: 'Cross-feature response diagnostics',
     status: 'partial',
     explanation:
-      'A bounded, redacted activity snapshot joins incident alerts, events, routing, notification delivery and Runbook recovery. Incident-scoped alert, Runbook execution and delivery-attempt pagination, bounded provider feedback, and advisory action discovery support deeper inspection. Historical correlation and deployment-change evidence remain pending.',
-    operationIds: ['getIncidentResponseActivity', 'listIncidentAlerts', 'listIncidentRunbookExecutions', 'listIncidentNotificationAttempts', 'getIncidentAvailableActions', 'listRunbookExecutions', 'listNotificationAttempts', 'getNotificationFeedback'],
+      'A bounded, redacted activity snapshot joins incident alerts, events, routing, notification delivery and Runbook recovery. Incident-scoped pagination, advisory action discovery, evidence-based related-incident search, service health, escalation preview, operational events and service audit changes support investigation. Deployment-change ingestion is not yet represented by structured records.',
+    operationIds: ['getIncidentResponseActivity', 'listIncidentAlerts', 'listIncidentRunbookExecutions', 'listIncidentNotificationAttempts', 'getIncidentAvailableActions', 'listRelatedIncidents', 'listRunbookExecutions', 'listNotificationAttempts', 'getNotificationFeedback', 'listOperationalEvents', 'listServiceChangeEvents', 'previewEscalationPolicy', 'getServiceHealthSummary'],
   },
   {
     id: 'incident-collaboration',

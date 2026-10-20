@@ -51,6 +51,82 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  ServiceHealthSummary: {
+    type: 'object', properties: {
+      service: { type: 'object', properties: {
+        id: { type: 'string' }, name: { type: 'string' }, status: { type: 'string' },
+        escalationPolicyId: { type: ['string', 'null'] },
+      }, required: ['id', 'name', 'status', 'escalationPolicyId'] },
+      observedAt: { type: 'string', format: 'date-time' },
+      activeIncidentCount: { type: 'integer' },
+      recentIncidents: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
+        id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' },
+      }, required: ['id', 'title', 'status', 'createdAt'] } },
+      last24Hours: { type: 'object', properties: {
+        linkedAlertCount: { type: 'integer' }, failedNotificationCount: { type: 'integer' },
+      }, required: ['linkedAlertCount', 'failedNotificationCount'] },
+      onCallCoverage: { type: 'object', properties: {
+        state: { type: 'string' }, eligibleResponderCount: { type: ['integer', 'null'] },
+        basis: { type: 'string' },
+      }, required: ['state', 'eligibleResponderCount', 'basis'] },
+      objectives: { type: 'array', maxItems: 10, items: { type: 'object', properties: {
+        id: { type: 'string' }, name: { type: 'string' }, metricType: { type: 'string' },
+        target: { type: 'number' }, latestSnapshot: { type: ['object', 'null'], properties: {
+          periodEnd: { type: 'string', format: 'date-time' }, value: { type: ['number', 'null'] },
+          breached: { type: ['boolean', 'null'] }, dataState: { type: 'string' },
+        }, required: ['periodEnd', 'value', 'breached', 'dataState'] },
+      }, required: ['id', 'name', 'metricType', 'target', 'latestSnapshot'] } },
+      truncated: { type: 'object', properties: {
+        objectives: { type: 'boolean' }, recentIncidents: { type: 'boolean' },
+      }, required: ['objectives', 'recentIncidents'] },
+    }, required: ['service', 'observedAt', 'activeIncidentCount', 'recentIncidents', 'last24Hours', 'onCallCoverage', 'objectives', 'truncated'],
+  },
+  EscalationPolicyPreview: {
+    type: 'object', properties: {
+      policyId: { type: 'string' }, policyRevision: { type: 'integer' },
+      incidentId: { type: 'string' }, evaluatedAt: { type: 'string', format: 'date-time' },
+      supportHoursState: { type: 'string' },
+      steps: { type: 'array', maxItems: 100, items: { type: 'object', properties: {
+        stepId: { type: 'string' }, stepOrder: { type: 'integer' }, delayMinutes: { type: 'integer' },
+        targetType: { type: 'string' }, applicable: { type: 'boolean' }, outcome: { type: 'string' },
+        recipientUserIds: { type: 'array', items: { type: 'string' } },
+      }, required: ['stepId', 'stepOrder', 'delayMinutes', 'targetType', 'applicable', 'outcome', 'recipientUserIds'] } },
+      truncated: { type: 'boolean' }, timingAssumption: { type: 'string' }, advisory: { type: 'boolean' },
+    }, required: ['policyId', 'policyRevision', 'incidentId', 'evaluatedAt', 'supportHoursState', 'steps', 'truncated', 'timingAssumption', 'advisory'],
+  },
+  ServiceChangeEvent: {
+    type: 'object', properties: {
+      id: { type: 'string' }, action: { type: 'string' }, entityId: { type: ['string', 'null'] },
+      createdAt: { type: 'string', format: 'date-time' },
+      source: { type: 'string', enum: ['AUDIT_LOG'] },
+    }, required: ['id', 'action', 'entityId', 'createdAt', 'source'],
+  },
+  OperationalEvent: {
+    type: 'object', properties: {
+      id: { type: 'string' }, incidentId: { type: 'string' },
+      type: { type: ['string', 'null'] }, createdAt: { type: 'string', format: 'date-time' },
+      incident: { type: 'object', properties: {
+        status: { type: 'string' }, serviceId: { type: 'string' },
+      }, required: ['status', 'serviceId'] },
+    }, required: ['id', 'incidentId', 'type', 'createdAt', 'incident'],
+  },
+  RelatedIncidents: {
+    type: 'object', properties: {
+      incidentId: { type: 'string' }, evidence: { type: 'string', enum: ['ALERT_DEDUP_KEY'] },
+      related: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        incident: { type: 'object', properties: {
+          id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+          serviceId: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' },
+        }, required: ['id', 'title', 'status', 'serviceId', 'createdAt'] },
+        matchedAt: { type: 'string', format: 'date-time' },
+        correlationHashes: { type: 'array', items: { type: 'string' } },
+      }, required: ['incident', 'matchedAt', 'correlationHashes'] } },
+      truncated: { type: 'object', properties: {
+        sourceKeys: { type: 'boolean' }, matches: { type: 'boolean' },
+      }, required: ['sourceKeys', 'matches'] },
+    }, required: ['incidentId', 'evidence', 'related', 'truncated'],
+  },
   IncidentAvailableActions: {
     type: 'object', properties: {
       incidentId: { type: 'string' }, incidentStatus: { type: 'string' },
@@ -606,6 +682,15 @@ export function finalizeOpenApiSpec(base: Json): Json {
     }
     if (definition.operationId === 'listIncidentNotificationAttempts') {
       operation['x-additional-required-scopes'] = ['notifications:read'];
+    }
+    if (definition.operationId === 'listServiceChangeEvents') {
+      operation['x-additional-required-scopes'] = ['audit:read'];
+    }
+    if (definition.operationId === 'previewEscalationPolicy') {
+      operation['x-additional-required-scopes'] = ['incidents:read', 'users:read', 'schedules:read'];
+    }
+    if (definition.operationId === 'getServiceHealthSummary') {
+      operation['x-additional-required-scopes'] = ['incidents:read', 'notifications:read', 'service-objectives:read', 'escalation-policies:read', 'schedules:read'];
     }
     operation.description = [
       operation.description,

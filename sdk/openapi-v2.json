@@ -8401,6 +8401,442 @@
           "status"
         ]
       },
+      "ServiceHealthSummary": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "escalationPolicyId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "status",
+              "escalationPolicyId"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activeIncidentCount": {
+            "type": "integer"
+          },
+          "recentIncidents": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "createdAt"
+              ]
+            }
+          },
+          "last24Hours": {
+            "type": "object",
+            "properties": {
+              "linkedAlertCount": {
+                "type": "integer"
+              },
+              "failedNotificationCount": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "linkedAlertCount",
+              "failedNotificationCount"
+            ]
+          },
+          "onCallCoverage": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string"
+              },
+              "eligibleResponderCount": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "basis": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "eligibleResponderCount",
+              "basis"
+            ]
+          },
+          "objectives": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "metricType": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "number"
+                },
+                "latestSnapshot": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "periodEnd": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "value": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "breached": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "dataState": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "periodEnd",
+                    "value",
+                    "breached",
+                    "dataState"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "metricType",
+                "target",
+                "latestSnapshot"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "object",
+            "properties": {
+              "objectives": {
+                "type": "boolean"
+              },
+              "recentIncidents": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "objectives",
+              "recentIncidents"
+            ]
+          }
+        },
+        "required": [
+          "service",
+          "observedAt",
+          "activeIncidentCount",
+          "recentIncidents",
+          "last24Hours",
+          "onCallCoverage",
+          "objectives",
+          "truncated"
+        ]
+      },
+      "EscalationPolicyPreview": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string"
+          },
+          "policyRevision": {
+            "type": "integer"
+          },
+          "incidentId": {
+            "type": "string"
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supportHoursState": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "properties": {
+                "stepId": {
+                  "type": "string"
+                },
+                "stepOrder": {
+                  "type": "integer"
+                },
+                "delayMinutes": {
+                  "type": "integer"
+                },
+                "targetType": {
+                  "type": "string"
+                },
+                "applicable": {
+                  "type": "boolean"
+                },
+                "outcome": {
+                  "type": "string"
+                },
+                "recipientUserIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "stepId",
+                "stepOrder",
+                "delayMinutes",
+                "targetType",
+                "applicable",
+                "outcome",
+                "recipientUserIds"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "timingAssumption": {
+            "type": "string"
+          },
+          "advisory": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "policyId",
+          "policyRevision",
+          "incidentId",
+          "evaluatedAt",
+          "supportHoursState",
+          "steps",
+          "truncated",
+          "timingAssumption",
+          "advisory"
+        ]
+      },
+      "ServiceChangeEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "AUDIT_LOG"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "entityId",
+          "createdAt",
+          "source"
+        ]
+      },
+      "OperationalEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "incidentId": {
+            "type": "string"
+          },
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "incident": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "serviceId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "serviceId"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "incidentId",
+          "type",
+          "createdAt",
+          "incident"
+        ]
+      },
+      "RelatedIncidents": {
+        "type": "object",
+        "properties": {
+          "incidentId": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "ALERT_DEDUP_KEY"
+            ]
+          },
+          "related": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "serviceId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "status",
+                    "serviceId",
+                    "createdAt"
+                  ]
+                },
+                "matchedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "correlationHashes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "incident",
+                "matchedAt",
+                "correlationHashes"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "object",
+            "properties": {
+              "sourceKeys": {
+                "type": "boolean"
+              },
+              "matches": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sourceKeys",
+              "matches"
+            ]
+          }
+        },
+        "required": [
+          "incidentId",
+          "evidence",
+          "related",
+          "truncated"
+        ]
+      },
       "IncidentAvailableActions": {
         "type": "object",
         "properties": {
@@ -37964,6 +38400,548 @@
         },
         "operationId": "getIncidentAvailableActions",
         "x-required-scope": "incidents:read"
+      }
+    },
+    "/incidents/{id}/related-incidents": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Find accessible incidents linked by recorded alert correlation evidence",
+        "description": "Scans at most 100 source alerts and 500 matching alerts, returning at most 50 unique incidents. Returns keyed correlation hashes and truncation flags; no raw deduplication keys or alert payloads.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RelatedIncidents"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listRelatedIncidents",
+        "x-required-scope": "incidents:read"
+      }
+    },
+    "/operational-events": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List incident operational events visible to this credential",
+        "description": "Cursor-paginated incident state events. Untrusted event messages and private incident details are omitted.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OperationalEvent"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listOperationalEvents",
+        "x-required-scope": "incidents:read"
+      }
+    },
+    "/services/{id}/change-events": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "List service configuration changes recorded in the canonical audit log",
+        "description": "Requires services:read and audit:read. Returns action metadata only, without audit details or deployment telemetry.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceChangeEvent"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listServiceChangeEvents",
+        "x-required-scope": "services:read",
+        "x-additional-required-scopes": [
+          "audit:read"
+        ]
+      }
+    },
+    "/escalation-policies/{id}/preview": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Preview escalation conditions and recipients without paging",
+        "description": "Read-only advisory preview. Requires escalation-policies:read, incidents:read, users:read and schedules:read. Actual escalation rechecks state and may use pinned policy versions.\n\nRequires API scope `escalation-policies:read` (Escalation policies read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "incidentId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "incidentId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EscalationPolicyPreview"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "previewEscalationPolicy",
+        "x-required-scope": "escalation-policies:read",
+        "x-additional-required-scopes": [
+          "incidents:read",
+          "users:read",
+          "schedules:read"
+        ],
+        "x-idempotency": "natural",
+        "x-concurrency": "none"
+      }
+    },
+    "/services/{id}/health-summary": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Read bounded service health, visible incidents, paging failures and latest objectives",
+        "description": "Requires services:read, incidents:read, notifications:read, service-objectives:read, escalation-policies:read and schedules:read. On-call coverage is based on the current first unconditional escalation step; conditional steps are explicitly marked unevaluated.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceHealthSummary"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceHealthSummary",
+        "x-required-scope": "services:read",
+        "x-additional-required-scopes": [
+          "incidents:read",
+          "notifications:read",
+          "service-objectives:read",
+          "escalation-policies:read",
+          "schedules:read"
+        ]
       }
     },
     "/schedules/{id}/layers/{layerId}/participants": {

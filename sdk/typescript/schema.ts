@@ -135,6 +135,11 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
+export type ServiceHealthSummary = { "service": { "id": string; "name": string; "status": string; "escalationPolicyId": string | null } & Record<string, unknown>; "observedAt": string; "activeIncidentCount": number; "recentIncidents": Array<{ "id": string; "title": string; "status": string; "createdAt": string } & Record<string, unknown>>; "last24Hours": { "linkedAlertCount": number; "failedNotificationCount": number } & Record<string, unknown>; "onCallCoverage": { "state": string; "eligibleResponderCount": number | null; "basis": string } & Record<string, unknown>; "objectives": Array<{ "id": string; "name": string; "metricType": string; "target": number; "latestSnapshot": { "periodEnd": string; "value": number | null; "breached": boolean | null; "dataState": string } & Record<string, unknown> | null } & Record<string, unknown>>; "truncated": { "objectives": boolean; "recentIncidents": boolean } & Record<string, unknown> } & Record<string, unknown>;
+export type EscalationPolicyPreview = { "policyId": string; "policyRevision": number; "incidentId": string; "evaluatedAt": string; "supportHoursState": string; "steps": Array<{ "stepId": string; "stepOrder": number; "delayMinutes": number; "targetType": string; "applicable": boolean; "outcome": string; "recipientUserIds": Array<string> } & Record<string, unknown>>; "truncated": boolean; "timingAssumption": string; "advisory": boolean } & Record<string, unknown>;
+export type ServiceChangeEvent = { "id": string; "action": string; "entityId": string | null; "createdAt": string; "source": "AUDIT_LOG" } & Record<string, unknown>;
+export type OperationalEvent = { "id": string; "incidentId": string; "type": string | null; "createdAt": string; "incident": { "status": string; "serviceId": string } & Record<string, unknown> } & Record<string, unknown>;
+export type RelatedIncidents = { "incidentId": string; "evidence": "ALERT_DEDUP_KEY"; "related": Array<{ "incident": { "id": string; "title": string; "status": string; "serviceId": string; "createdAt": string } & Record<string, unknown>; "matchedAt": string; "correlationHashes": Array<string> } & Record<string, unknown>>; "truncated": { "sourceKeys": boolean; "matches": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type IncidentAvailableActions = { "incidentId": string; "incidentStatus": string; "observedAt": string; "advisory": boolean; "actions": Array<{ "operationId": string; "method": string; "path": string; "allowed": boolean; "stateEligible": boolean } & Record<string, unknown>>; "runbookExecution": { "requiresRunbookSelection": boolean; "previewPath": string; "allowedToAttemptPreview": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type IncidentAlertSummary = { "id": string; "incidentId": string | null; "serviceId": string; "status": string; "correlationHash": string | null; "createdAt": string } & Record<string, unknown>;
 export type IncidentNotificationAttempt = unknown;
@@ -347,6 +352,11 @@ export interface OperationRequests {
   listIncidentRunbookExecutions: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentNotificationAttempts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   getIncidentAvailableActions: { "params": { "id": string } };
+  listRelatedIncidents: { "params": { "id": string } };
+  listOperationalEvents: { "query"?: { "limit"?: number; "cursor"?: string } };
+  listServiceChangeEvents: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  previewEscalationPolicy: { "params": { "id": string }; "body": { "incidentId": string; "at"?: string } };
+  getServiceHealthSummary: { "params": { "id": string } };
   getPostmortem: { "params": { "id": string } };
   updatePostmortem: { "params": { "id": string }; "body": { "title"?: string; "summary"?: string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: boolean } & Record<string, unknown> };
   deletePostmortem: { "params": { "id": string } };
@@ -611,6 +621,11 @@ export interface OperationResponses {
   listIncidentRunbookExecutions: { "data": Array<RunbookExecutionSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentNotificationAttempts: { "data": Array<IncidentNotificationAttempt>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getIncidentAvailableActions: { "data": IncidentAvailableActions; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listRelatedIncidents: { "data": RelatedIncidents; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listOperationalEvents: { "data": Array<OperationalEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listServiceChangeEvents: { "data": Array<ServiceChangeEvent>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  previewEscalationPolicy: { "data": EscalationPolicyPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceHealthSummary: { "data": ServiceHealthSummary; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getPostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updatePostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deletePostmortem: null;
@@ -2406,6 +2421,46 @@ export const OPERATIONS = {
   "getIncidentAvailableActions": {
     "method": "GET",
     "path": "/incidents/{id}/available-actions",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRelatedIncidents": {
+    "method": "GET",
+    "path": "/incidents/{id}/related-incidents",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listOperationalEvents": {
+    "method": "GET",
+    "path": "/operational-events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceChangeEvents": {
+    "method": "GET",
+    "path": "/services/{id}/change-events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "previewEscalationPolicy": {
+    "method": "POST",
+    "path": "/escalation-policies/{id}/preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getServiceHealthSummary": {
+    "method": "GET",
+    "path": "/services/{id}/health-summary",
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],

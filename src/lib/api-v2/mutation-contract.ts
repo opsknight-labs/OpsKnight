@@ -51,6 +51,10 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/escalation-policies/[id]/preview': {
+    idempotency: 'natural', concurrency: 'none',
+    rationale: 'Read-only bounded escalation evaluation; repeated previews never enqueue notifications or edit policy state.',
+  },
   'POST /api/v2/reports/exports': {
     idempotency: 'required', concurrency: 'none',
     rationale: 'Bounded immutable query, per-credential and global admission, durable queue job, owner and audit commit with the replay receipt.',

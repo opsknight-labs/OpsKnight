@@ -1226,6 +1226,7 @@ model Alert {
   @@index([incidentId])
   @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_alert_incident_cursor")
   @@index([dedupKey, status])
+  @@index([dedupKey, createdAt(sort: Desc), id(sort: Desc)], map: "idx_alert_correlation_recent")
   @@index([createdAt])
   @@index([createdAt, incidentId], name: "idx_alert_retention")
   @@index([serviceId, createdAt], name: "idx_alert_by_service")
@@ -1554,6 +1555,7 @@ model IncidentEvent {
   @@index([incidentId, message, createdAt], name: "idx_event_ack_search")
   @@index([incidentId, type], name: "idx_event_type")
   @@index([createdAt], name: "idx_event_global_created_at")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_event_operational_cursor")
 }
 
 model IncidentNote {
@@ -1991,6 +1993,7 @@ model AuditLog {
   actor       User?           @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
+  @@index([entityType, entityId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_service_change_cursor")
   @@index([actorId, createdAt])
   @@index([createdAt])
   @@index([entityType, createdAt])

@@ -1846,6 +1846,37 @@ const operations: Operation[] = [
     description: 'Advisory snapshot only. Mutations recheck authorization and state. Runbook execution requires selecting a runbook and calling its preview before execution.',
   },
   {
+    method: 'get', path: '/incidents/{id}/related-incidents',
+    summary: 'Find accessible incidents linked by recorded alert correlation evidence',
+    description: 'Scans at most 100 source alerts and 500 matching alerts, returning at most 50 unique incidents. Returns keyed correlation hashes and truncation flags; no raw deduplication keys or alert payloads.',
+  },
+  {
+    method: 'get', path: '/operational-events',
+    summary: 'List incident operational events visible to this credential',
+    description: 'Cursor-paginated incident state events. Untrusted event messages and private incident details are omitted.',
+    paginated: true,
+  },
+  {
+    method: 'get', path: '/services/{id}/change-events',
+    summary: 'List service configuration changes recorded in the canonical audit log',
+    description: 'Requires services:read and audit:read. Returns action metadata only, without audit details or deployment telemetry.',
+    paginated: true,
+  },
+  {
+    method: 'post', path: '/escalation-policies/{id}/preview',
+    summary: 'Preview escalation conditions and recipients without paging',
+    description: 'Read-only advisory preview. Requires escalation-policies:read, incidents:read, users:read and schedules:read. Actual escalation rechecks state and may use pinned policy versions.',
+    body: object({
+      incidentId: id,
+      at: { type: 'string', format: 'date-time' },
+    }, ['incidentId']),
+  },
+  {
+    method: 'get', path: '/services/{id}/health-summary',
+    summary: 'Read bounded service health, visible incidents, paging failures and latest objectives',
+    description: 'Requires services:read, incidents:read, notifications:read, service-objectives:read, escalation-policies:read and schedules:read. On-call coverage is based on the current first unconditional escalation step; conditional steps are explicitly marked unevaluated.',
+  },
+  {
     method: 'post',
     path: '/schedules/{id}/layers/{layerId}/participants',
     summary: 'Add an active rotation participant',

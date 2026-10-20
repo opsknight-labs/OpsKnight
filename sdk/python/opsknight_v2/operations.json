@@ -1724,6 +1724,46 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listRelatedIncidents": {
+    "method": "GET",
+    "path": "/incidents/{id}/related-incidents",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listOperationalEvents": {
+    "method": "GET",
+    "path": "/operational-events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceChangeEvents": {
+    "method": "GET",
+    "path": "/services/{id}/change-events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "previewEscalationPolicy": {
+    "method": "POST",
+    "path": "/escalation-policies/{id}/preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getServiceHealthSummary": {
+    "method": "GET",
+    "path": "/services/{id}/health-summary",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getPostmortem": {
     "method": "GET",
     "path": "/postmortems/{id}",
