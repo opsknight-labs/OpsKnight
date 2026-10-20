@@ -166,19 +166,19 @@ const decisions: readonly ApiCapability[] = [
     id: 'schedule-layers',
     area: 'Schedules',
     title: 'Layer configuration, override cancellation and coverage previews',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Schedules, current on-call, override creation and participant management are available. Remaining rotation editing and period previews need shared domain contracts.',
-    operationIds: [],
+      'Override cancellation, bounded effective coverage reads and participant management are available. Layer rotation configuration and unsaved-change previews still need shared domain contracts.',
+    operationIds: ['cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
   },
   {
     id: 'escalation-validation',
     area: 'Escalations',
     title: 'Policy usage and validation workflows',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Escalation-policy CRUD validates steps. Dedicated dependency and usage operations are not yet exposed.',
-    operationIds: [],
+      'Escalation-policy CRUD validates steps. A bounded dependency snapshot reports live targets and deletion-blocking references; full validation and usage workflows remain pending.',
+    operationIds: ['getEscalationPolicyDependencies'],
   },
   {
     id: 'team-membership',

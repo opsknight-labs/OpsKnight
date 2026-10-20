@@ -1,7 +1,16 @@
 import { beforeEach, expect, it } from 'vitest';
+import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/v2/escalation-policies/[id]/dependencies/route';
+import { DELETE } from '@/app/api/v2/escalation-policies/[id]/route';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
-import { createTestEscalationPolicy, createTestService, createTestUser, resetDatabase } from '../helpers/test-db';
+import { createTestEscalationPolicy, createTestService, createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
+
+function deletePolicy(token: string, id: string) {
+  return DELETE(new NextRequest(`http://localhost/api/v2/escalation-policies/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  }), { params: Promise.resolve({ id }) });
+}
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
@@ -25,11 +34,52 @@ it('reports service usage and live step targets for deletion and validation', as
     policyId: policy.id,
     valid: true,
     deletionAllowed: false,
+    usage: { services: 1, versionRefs: 0, decisions: 0 },
+    truncated: { services: false, targets: false },
     services: [{ id: service.id }],
     targets: [{ targetType: 'USER', targetId: user.id, exists: true }],
   });
   expect(response.headers.get('cache-control')).toBe('no-store');
 });
+
+it('blocks deletion while a service references the policy and allows it after reassignment', async () => {
+  const manager = await createV2Credential(['escalation-policies:write', 'escalation-policies:read']);
+  const policy = await createTestEscalationPolicy('deletion safety', []);
+  const service = await createTestService('Deletion safety service', null, { escalationPolicyId: policy.id });
+  const path = `/escalation-policies/${policy.id}`;
+  expect((await deletePolicy(manager.token, policy.id)).status).toBe(409);
+  expect(await testPrisma.escalationPolicy.findUnique({ where: { id: policy.id } })).not.toBeNull();
+  await testPrisma.service.update({ where: { id: service.id }, data: { escalationPolicyId: null } });
+  const snapshot = await invokeV2(GET, manager.token, 'GET', `${path}/dependencies`, { id: policy.id });
+  expect((await snapshot.json()).data).toMatchObject({ deletionAllowed: true, usage: { services: 0 } });
+  expect((await deletePolicy(manager.token, policy.id)).status).toBe(200);
+  expect(await testPrisma.escalationPolicy.findUnique({ where: { id: policy.id } })).toBeNull();
+});
+
+it('serializes deletion with a concurrent service assignment', async () => {
+  const manager = await createV2Credential(['escalation-policies:write']);
+  const policy = await createTestEscalationPolicy('concurrent assignment', []);
+  const service = await createTestService('Concurrent assignment service');
+  let releaseAssignment!: () => void;
+  let assignmentReady!: () => void;
+  const release = new Promise<void>(resolve => { releaseAssignment = resolve; });
+  const ready = new Promise<void>(resolve => { assignmentReady = resolve; });
+  const assignment = testPrisma.$transaction(async tx => {
+    await tx.service.update({ where: { id: service.id }, data: { escalationPolicyId: policy.id } });
+    assignmentReady();
+    await release;
+  }, { timeout: 10_000 });
+  await ready;
+  const deletion = deletePolicy(manager.token, policy.id);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } finally {
+    releaseAssignment();
+  }
+  await assignment;
+  expect((await deletion).status).toBe(409);
+  expect((await testPrisma.service.findUnique({ where: { id: service.id } }))?.escalationPolicyId).toBe(policy.id);
+}, 15_000);
 
 it('denies credentials without escalation read permission', async () => {
   const other = await createV2Credential(['services:read']);

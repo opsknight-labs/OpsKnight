@@ -56,6 +56,8 @@ const extraSchemas: Json = {
     properties: {
       policyId: { type: 'string' },
       services: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } }, required: ['id', 'name'] } },
+      usage: { type: 'object', properties: { services: { type: 'integer' }, versionRefs: { type: 'integer' }, decisions: { type: 'integer' } }, required: ['services', 'versionRefs', 'decisions'] },
+      truncated: { type: 'object', properties: { services: { type: 'boolean' }, targets: { type: 'boolean' } }, required: ['services', 'targets'] },
       targets: { type: 'array', items: { type: 'object', properties: {
         stepId: { type: 'string' }, stepOrder: { type: 'integer' }, targetType: { type: 'string', enum: ['USER', 'TEAM', 'SCHEDULE'] },
         targetId: { type: ['string', 'null'] }, exists: { type: 'boolean' },
@@ -63,7 +65,7 @@ const extraSchemas: Json = {
       valid: { type: 'boolean' },
       deletionAllowed: { type: 'boolean' },
     },
-    required: ['policyId', 'services', 'targets', 'valid', 'deletionAllowed'],
+    required: ['policyId', 'services', 'usage', 'truncated', 'targets', 'valid', 'deletionAllowed'],
   },
   ActionResult: {
     type: 'object',

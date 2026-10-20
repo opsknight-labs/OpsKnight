@@ -11,22 +11,32 @@ export const GET = defineV2Route({
   paramsSchema,
   querySchema: z.object({}).strict(),
   handler: async ({ params }) => {
-    const policy = await prisma.escalationPolicy.findUnique({
-      where: { id: params.id },
-      select: {
-        id: true,
-        services: { select: { id: true, name: true }, orderBy: { id: 'asc' } },
-        steps: {
-          select: { id: true, stepOrder: true, targetType: true, targetUserId: true, targetTeamId: true, targetScheduleId: true },
-          orderBy: { stepOrder: 'asc' },
-        },
-      },
-    });
+    const { policy, usage } = await prisma.$transaction(async tx => {
+      const [policy, services, versionRefs, decisions] = await Promise.all([
+        tx.escalationPolicy.findUnique({
+          where: { id: params.id },
+          select: {
+            id: true,
+            services: { select: { id: true, name: true }, orderBy: { id: 'asc' }, take: 101 },
+            steps: {
+              select: { id: true, stepOrder: true, targetType: true, targetUserId: true, targetTeamId: true, targetScheduleId: true },
+              orderBy: { stepOrder: 'asc' },
+              take: 501,
+            },
+          },
+        }),
+        tx.service.count({ where: { escalationPolicyId: params.id } }),
+        tx.automationVersionPolicyRef.count({ where: { escalationPolicyId: params.id } }),
+        tx.incidentAutomationDecision.count({ where: { escalationPolicyId: params.id } }),
+      ]);
+      return { policy, usage: { services, versionRefs, decisions } };
+    }, { isolationLevel: 'RepeatableRead' });
     if (!policy) throw new AppError({ code: 'ESCALATION_POLICY_NOT_FOUND' });
 
-    const userIds = policy.steps.flatMap(step => step.targetType === 'USER' && step.targetUserId ? [step.targetUserId] : []);
-    const teamIds = policy.steps.flatMap(step => step.targetType === 'TEAM' && step.targetTeamId ? [step.targetTeamId] : []);
-    const scheduleIds = policy.steps.flatMap(step => step.targetType === 'SCHEDULE' && step.targetScheduleId ? [step.targetScheduleId] : []);
+    const displayedSteps = policy.steps.slice(0, 500);
+    const userIds = displayedSteps.flatMap(step => step.targetType === 'USER' && step.targetUserId ? [step.targetUserId] : []);
+    const teamIds = displayedSteps.flatMap(step => step.targetType === 'TEAM' && step.targetTeamId ? [step.targetTeamId] : []);
+    const scheduleIds = displayedSteps.flatMap(step => step.targetType === 'SCHEDULE' && step.targetScheduleId ? [step.targetScheduleId] : []);
     const [users, teams, schedules] = await Promise.all([
       prisma.user.findMany({ where: { id: { in: userIds }, status: 'ACTIVE' }, select: { id: true } }),
       prisma.team.findMany({ where: { id: { in: teamIds } }, select: { id: true } }),
@@ -35,7 +45,7 @@ export const GET = defineV2Route({
     const validUsers = new Set(users.map(user => user.id));
     const validTeams = new Set(teams.map(team => team.id));
     const validSchedules = new Set(schedules.map(schedule => schedule.id));
-    const targets = policy.steps.map(step => {
+    const targets = displayedSteps.map(step => {
       const targetId = step.targetType === 'USER' ? step.targetUserId : step.targetType === 'TEAM' ? step.targetTeamId : step.targetScheduleId;
       const exists = Boolean(targetId && (step.targetType === 'USER' ? validUsers.has(targetId) : step.targetType === 'TEAM' ? validTeams.has(targetId) : validSchedules.has(targetId)));
       return { stepId: step.id, stepOrder: step.stepOrder, targetType: step.targetType, targetId, exists };
@@ -43,10 +53,12 @@ export const GET = defineV2Route({
     return {
       data: {
         policyId: policy.id,
-        services: policy.services,
+        services: policy.services.slice(0, 100),
+        usage,
+        truncated: { services: policy.services.length > 100, targets: policy.steps.length > 500 },
         targets,
-        valid: targets.every(target => target.exists),
-        deletionAllowed: policy.services.length === 0,
+        valid: policy.steps.length <= 500 && targets.every(target => target.exists),
+        deletionAllowed: Object.values(usage).every(count => count === 0),
       },
       headers: { 'Cache-Control': 'no-store' },
     };
