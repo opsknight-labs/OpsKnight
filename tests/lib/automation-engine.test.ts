@@ -12,6 +12,8 @@ import { normalizeValue } from '@/lib/automation/context/normalize';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { evaluateAutomation } from '@/lib/automation/evaluator';
 import { compilePath, readCompiledPath } from '@/lib/automation/context/extract';
+import { discoverFields } from '@/lib/automation/discovery';
+import { jobSchema } from '@/lib/automation/jobs';
 describe('automation semantics', () => {
   for (const result of goldenResults())
     it(`golden pipeline: ${result.name}`, () => expect(result.actual).toBe(result.expected));
@@ -62,56 +64,120 @@ describe('automation semantics', () => {
     expect(() => compilePath('0.name')).toThrow(/bracket notation/);
   });
   it('suppresses priority conflict warnings when rules are mutually exclusive and honors displayOnly', () => {
-    const result = compileAutomation({
+    const fields = [
+      {
+        fieldId: 'env',
+        key: 'environment',
+        label: 'Environment',
+        type: 'ENUM' as const,
+        allowedValues: ['production', 'staging'],
+        aliases: {},
+        mappings: [],
+      },
+      {
+        fieldId: 'audit',
+        key: 'audit_log',
+        label: 'Audit Log',
+        type: 'STRING' as const,
+        displayOnly: true,
+        mappings: [],
+      },
+    ];
+
+    // Mutually exclusive rules writing priority: environment == production vs environment == staging
+    const exclusiveResult = compileAutomation({
       schemaVersion: 1,
-      fields: [
-        {
-          fieldId: 'env',
-          key: 'environment',
-          label: 'Environment',
-          type: 'ENUM',
-          allowedValues: ['production', 'staging'],
-          aliases: {},
-          mappings: [],
-        },
-        {
-          fieldId: 'audit',
-          key: 'audit_log',
-          label: 'Audit Log',
-          type: 'STRING',
-          displayOnly: true,
-          mappings: [],
-        },
-      ],
+      fields,
       rules: [
         {
           id: 'prod-rule',
-          name: 'Prod',
-          phase: 'ROUTE',
+          name: 'Prod Priority',
+          phase: 'ENRICH',
           enabled: true,
           conditions: [{ fieldKey: 'environment', operator: 'EQ', value: 'production' }],
-          actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+          actions: [{ type: 'SET_PRIORITY', value: 'P1' }],
         },
         {
           id: 'staging-rule',
-          name: 'Staging',
-          phase: 'ROUTE',
+          name: 'Staging Priority',
+          phase: 'ENRICH',
           enabled: true,
           conditions: [{ fieldKey: 'environment', operator: 'EQ', value: 'staging' }],
-          actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+          actions: [{ type: 'SET_PRIORITY', value: 'P2' }],
         },
       ],
     });
-    expect(result.issues.filter(i => i.code === 'PRIORITY_CONFLICT')).toHaveLength(0);
+    expect(exclusiveResult.issues.filter(i => i.code === 'PRIORITY_CONFLICT')).toHaveLength(0);
     expect(
-      result.issues.filter(i => i.code === 'UNUSED_FIELD' && i.fieldKey === 'audit_log')
+      exclusiveResult.issues.filter(
+        i => i.code === 'UNUSED_FIELD' && i.message.includes('audit_log')
+      )
     ).toHaveLength(0);
+
+    // Overlapping rules writing priority: no conditions (catch-all) or non-exclusive conditions
+    const overlappingResult = compileAutomation({
+      schemaVersion: 1,
+      fields,
+      rules: [
+        {
+          id: 'rule-1',
+          name: 'Rule 1',
+          phase: 'ENRICH',
+          enabled: true,
+          conditions: [{ fieldKey: 'environment', operator: 'EQ', value: 'production' }],
+          actions: [{ type: 'SET_PRIORITY', value: 'P1' }],
+        },
+        {
+          id: 'rule-2',
+          name: 'Rule 2',
+          phase: 'ENRICH',
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'SET_PRIORITY', value: 'P2' }],
+        },
+      ],
+    });
+    expect(overlappingResult.issues.filter(i => i.code === 'PRIORITY_CONFLICT')).toHaveLength(1);
+  });
+
+  it('validates observation-job payload contract and rejects extra properties', () => {
+    const discovered = discoverFields({
+      repository: { name: 'opsknight', active: true, stars: 100 },
+    });
+    expect(discovered.length).toBeGreaterThan(0);
+    for (const item of discovered) {
+      expect(item).not.toHaveProperty('label');
+      expect(item).not.toHaveProperty('source');
+      expect(item).not.toHaveProperty('integrationType');
+    }
+
+    const validPayload = {
+      task: 'AUTOMATION_OBSERVE',
+      logicalKey: 'AUTOMATION_OBSERVE:inc-123',
+      serviceId: 'srv-1',
+      integrationId: 'int-1',
+      integrationType: 'GITHUB',
+      observations: discovered,
+    };
+    expect(jobSchema.safeParse(validPayload).success).toBe(true);
+
+    // Unrecognized key 'label' must fail strict job schema validation
+    const invalidPayload = {
+      ...validPayload,
+      observations: discovered.map(o => ({ ...o, label: 'Invalid Label' })),
+    };
+    expect(jobSchema.safeParse(invalidPayload).success).toBe(false);
   });
   it('preserves fail-safe semantics where missing or unmapped values evaluate to UNKNOWN for NE and NOT_IN', () => {
     const missingState: FieldState = { state: 'MISSING' };
-    const unmappedState: FieldState = { state: 'UNMAPPED' };
+    const unmappedState: FieldState = { state: 'UNMAPPED', raw: 'other' };
+
     expect(
-      evaluateOperator(missingState, { fieldKey: 'environment', operator: 'NE', value: 'production' })
+      evaluateOperator(missingState, {
+        fieldKey: 'environment',
+        operator: 'NE',
+        value: 'production',
+      })
     ).toBe('UNKNOWN');
     expect(
       evaluateOperator(unmappedState, {

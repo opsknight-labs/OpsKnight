@@ -16,7 +16,7 @@ const observationSchema = z
     unmapped: z.boolean(),
   })
   .strict();
-const jobSchema = z.discriminatedUnion('task', [
+export const jobSchema = z.discriminatedUnion('task', [
   z
     .object({
       task: z.literal('AUTOMATION_NOTIFY'),

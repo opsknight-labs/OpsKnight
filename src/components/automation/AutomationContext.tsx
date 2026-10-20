@@ -39,6 +39,10 @@ export function AutomationContext({
   setIntegrationType,
   observedPath,
   setObservedPath,
+  selectedSource,
+  setSelectedSource,
+  selectedIntegrationType,
+  setSelectedIntegrationType,
   discoveries,
   setDiscoveries,
   fieldLabel,
@@ -68,6 +72,10 @@ export function AutomationContext({
   setIntegrationType: (value: string) => void;
   observedPath: string;
   setObservedPath: (value: string) => void;
+  selectedSource?: 'PROVIDER' | 'EVENT';
+  setSelectedSource?: (value: 'PROVIDER' | 'EVENT') => void;
+  selectedIntegrationType?: string;
+  setSelectedIntegrationType?: (value: string | undefined) => void;
   discoveries: Discovery[];
   setDiscoveries: (value: Discovery[]) => void;
   fieldLabel: string;
@@ -87,6 +95,12 @@ export function AutomationContext({
   setProviderSample: (value: string) => void;
   analyze: () => Promise<void>;
 }) {
+  const [internalSource, setInternalSource] = useState<'PROVIDER' | 'EVENT'>('EVENT');
+  const [internalIntType, setInternalIntType] = useState<string | undefined>(undefined);
+  const effectiveSource = selectedSource ?? internalSource;
+  const setSource = setSelectedSource ?? setInternalSource;
+  const effectiveIntType = selectedIntegrationType ?? internalIntType;
+  const setIntType = setSelectedIntegrationType ?? setInternalIntType;
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const formId = useId();
   const visibleFields = useMemo(
@@ -310,14 +324,25 @@ export function AutomationContext({
                     <Label htmlFor={`${formId}-observed`}>Observed field</Label>
                     <NativeSelect
                       id={`${formId}-observed`}
-                      value={observedPath}
+                      value={
+                        observedOptions.find(
+                          o =>
+                            o.path === observedPath &&
+                            (!effectiveIntType || o.integrationType === effectiveIntType) &&
+                            o.source === effectiveSource
+                        )?.id ??
+                        observedOptions.find(o => o.path === observedPath)?.id ??
+                        observedPath
+                      }
                       aria-invalid={!!problems.source || undefined}
                       aria-describedby={problems.source ? `${formId}-source-error` : undefined}
                       onChange={e => {
-                        const path = e.target.value;
-                        setObservedPath(path);
-                        const found = observedOptions.find(o => o.path === path);
+                        const val = e.target.value;
+                        const found = observedOptions.find(o => o.id === val);
                         if (found) {
+                          setObservedPath(found.path);
+                          setSource(found.source);
+                          setIntType(found.integrationType);
                           setFieldLabel(found.label);
                           if (found.integrationType && found.integrationType !== 'ALL') {
                             setIntegrationType(found.integrationType);
@@ -325,6 +350,8 @@ export function AutomationContext({
                           if (found.type === 'NUMBER' || found.type === 'BOOLEAN') {
                             setFieldType(found.type);
                           }
+                        } else {
+                          setObservedPath(val);
                         }
                       }}
                     >
@@ -333,8 +360,9 @@ export function AutomationContext({
                         <option value={observedPath}>{observedPath}</option>
                       )}
                       {observedOptions.map(option => (
-                        <option key={option.id} value={option.path}>
-                          {option.label} — {option.path}{option.integrationType ? ` (${option.integrationType})` : ''}
+                        <option key={option.id} value={option.id}>
+                          {option.label} — {option.path}
+                          {option.integrationType ? ` (${option.integrationType})` : ''}
                         </option>
                       ))}
                     </NativeSelect>
@@ -514,6 +542,8 @@ export function AutomationContext({
                           className="h-10 sm:h-9"
                           onClick={() => {
                             setObservedPath(field.path);
+                            setSource(field.source ?? 'EVENT');
+                            setIntType(field.integrationType);
                             setFieldLabel(hierarchical);
                             setFieldType(
                               field.type === 'NUMBER' || field.type === 'BOOLEAN'

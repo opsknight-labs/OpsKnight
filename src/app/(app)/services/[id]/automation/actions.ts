@@ -314,40 +314,31 @@ export async function getAutomationArea(
       ? await prisma.alert.findMany({
           where: { serviceId },
           orderBy: { createdAt: 'desc' },
-          select: { id: true, payload: true, createdAt: true, dedupKey: true, incidentId: true },
+          select: { id: true, payload: true, createdAt: true, dedupKey: true },
           take: 20,
         })
       : [];
-  const alerts = await Promise.all(
-    rawAlerts.map(async alert => {
-      const matched = integrations.find(
-        i => alert.dedupKey?.startsWith(i.id + ':') || alert.dedupKey === i.id
+  const alerts = rawAlerts.map(alert => {
+    const payload = alert.payload as Record<string, unknown> | null;
+    const sourceStr = typeof payload?.source === 'string' ? payload.source.toLowerCase() : '';
+    const matched =
+      integrations.find(i => alert.dedupKey?.startsWith(i.id + ':') || alert.dedupKey === i.id) ??
+      integrations.find(
+        i =>
+          sourceStr &&
+          (i.type.toLowerCase() === sourceStr || i.name.toLowerCase().includes(sourceStr))
       );
-      let providerSample: Record<string, unknown> | null = null;
-      let replayMode: 'PROVIDER' | 'NORMALIZED_ONLY' = 'NORMALIZED_ONLY';
-      if (alert.incidentId) {
-        const trace = await prisma.automationTrace.findFirst({
-          where: { incidentId: alert.incidentId },
-          select: { detail: true },
-        });
-        const detail = trace?.detail as Record<string, unknown> | null;
-        if (detail?.replayEvidence && typeof detail.replayEvidence === 'object') {
-          providerSample = detail.replayEvidence as Record<string, unknown>;
-          replayMode = 'PROVIDER';
-        }
-      }
-      return {
-        id: alert.id,
-        payload: alert.payload,
-        createdAt: alert.createdAt,
-        dedupKey: alert.dedupKey,
-        integrationId: matched?.id ?? null,
-        integrationType: matched?.type ?? null,
-        providerSample,
-        replayMode,
-      };
-    })
-  );
+    return {
+      id: alert.id,
+      payload: alert.payload,
+      createdAt: alert.createdAt,
+      dedupKey: alert.dedupKey,
+      integrationId: matched?.id ?? null,
+      integrationType: matched?.type ?? null,
+      providerSample: null,
+      replayMode: 'NORMALIZED_ONLY' as const,
+    };
+  });
   const activeVersion = config?.activeVersionId
     ? await prisma.automationVersion.findUnique({
         where: { id: config.activeVersionId },

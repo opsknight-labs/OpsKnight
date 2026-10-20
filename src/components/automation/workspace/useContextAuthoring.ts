@@ -4,6 +4,7 @@ import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
 import { builtinFields, type Field, type Snapshot } from '@/lib/automation/contract';
 import type { Observation } from '@/lib/automation/discovery';
 import type { Discovery } from '../presentation-types';
+import { deriveUniqueFieldKey } from '../authoring/context-fields';
 import { defaultProviderSample } from './constants';
 
 /** Field-authoring form state for the Context section; kept here so it survives tab switches. */
@@ -25,6 +26,10 @@ export function useContextAuthoring({
   const [fieldLabel, setFieldLabel] = useState('Environment');
   const [fieldType, setFieldType] = useState<Field['type']>('ENUM');
   const [observedPath, setObservedPath] = useState('');
+  const [selectedSource, setSelectedSource] = useState<'PROVIDER' | 'EVENT'>('EVENT');
+  const [selectedIntegrationType, setSelectedIntegrationType] = useState<string | undefined>(
+    undefined
+  );
   const [values, setValues] = useState<string[]>(['production', 'staging', 'development']);
   const [advanced, setAdvanced] = useState(false);
 
@@ -54,20 +59,18 @@ export function useContextAuthoring({
 
   const addField = useCallback(() => {
     const existingKeys = new Set([...builtinFields, ...draft.fields].map(field => field.key));
-    const baseKey = fieldLabel
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    const key = /^[a-z]/.test(baseKey) ? baseKey : `field_${baseKey}`;
-    const taken = existingKeys.has(key);
-    if (!/^[a-z][a-z0-9_]{0,63}$/.test(key) || taken || !observedPath) {
+    const key = deriveUniqueFieldKey(fieldLabel, existingKeys);
+    if (!/^[a-z][a-z0-9_]{0,63}$/.test(key) || !observedPath) {
       onError('Choose a unique field name and an observed source field');
       return;
     }
     const matchingDiscovery = discoveries.find(item => item.path === observedPath);
-    const source = matchingDiscovery?.source ?? 'PROVIDER';
-    const effectiveIntegration = matchingDiscovery?.integrationType ?? integrationType;
+    const source =
+      selectedSource ??
+      matchingDiscovery?.source ??
+      (observedPath.startsWith('payload.') ? 'EVENT' : 'PROVIDER');
+    const effectiveIntegration =
+      selectedIntegrationType ?? matchingDiscovery?.integrationType ?? integrationType;
     edit({
       ...draft,
       fields: [
@@ -103,6 +106,8 @@ export function useContextAuthoring({
     integrationType,
     observedPath,
     onError,
+    selectedIntegrationType,
+    selectedSource,
     values,
   ]);
 
@@ -121,6 +126,10 @@ export function useContextAuthoring({
     setFieldType,
     observedPath,
     setObservedPath,
+    selectedSource,
+    setSelectedSource,
+    selectedIntegrationType,
+    setSelectedIntegrationType,
     values,
     setValues,
     advanced,

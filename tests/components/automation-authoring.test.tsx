@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { TypedValueInput, parseAuthoringScalar } from '@/components/automation/TypedValueInput';
@@ -5,7 +6,7 @@ import AutomationWorkspace from '@/components/automation/AutomationWorkspace';
 import { RuleActionsEditor } from '@/components/automation/RuleActionsEditor';
 import { conditionOperators } from '@/components/automation/RuleConditionsEditor';
 import { semanticSnapshotChanges } from '@/lib/automation/diff';
-import { emptySnapshot, type Rule } from '@/lib/automation/contract';
+import { emptySnapshot, type Rule, type Snapshot } from '@/lib/automation/contract';
 import { formatHierarchicalLabel } from '@/lib/automation/discovery';
 import { deriveUniqueFieldKey } from '@/components/automation/authoring/context-fields';
 import { AutomationTest } from '@/components/automation/AutomationTest';
@@ -16,8 +17,9 @@ vi.mock('@/app/(app)/services/[id]/automation/actions', () => ({
 }));
 const data = {
   enabled: true,
-  mode: 'SHADOW',
+  mode: 'SHADOW' as const,
   canPublish: true,
+
   canEdit: true,
   activeVersionId: null,
   activeVersion: null,
@@ -31,6 +33,8 @@ const data = {
   observations: [],
   versions: [],
   versionTotal: 0,
+  canReadSensitive: true,
+  unmappedCount: 0,
 };
 beforeEach(() => {
   localStorage.clear();
@@ -282,7 +286,7 @@ it('formats hierarchical labels and generates unique stable field keys without c
   expect(duplicateRepoKey).toBe('repository_name_2');
 });
 
-it('AutomationTest restores integration identity, shows replay mode, and warns on missing provider sample', () => {
+it('AutomationTest restores integration identity, shows normalized replay mode, and warns on missing provider sample', () => {
   const setIntegrationId = vi.fn();
   const setIntegrationType = vi.fn();
   const setSample = vi.fn();
@@ -293,12 +297,12 @@ it('AutomationTest restores integration identity, shows replay mode, and warns o
     alerts: [
       {
         id: 'alert-1',
-        serviceId: 'service',
-        createdAt: '2026-10-20T12:00:00Z',
+        dedupKey: 'dedup-1',
+        createdAt: new Date('2026-10-20T12:00:00Z'),
         integrationId: 'int-gh',
         integrationType: 'GITHUB',
-        replayMode: 'PROVIDER' as const,
-        providerSample: { action: 'workflow_run' },
+        replayMode: 'NORMALIZED_ONLY' as const,
+        providerSample: null,
         payload: { summary: 'CI failure', severity: 'error', source: 'github' },
       },
     ],
@@ -323,7 +327,8 @@ it('AutomationTest restores integration identity, shows replay mode, and warns o
   fireEvent.change(screen.getByLabelText('Use recent alert'), { target: { value: 'alert-1' } });
   expect(setIntegrationId).toHaveBeenCalledWith('int-gh');
   expect(setIntegrationType).toHaveBeenCalledWith('GITHUB');
-  expect(setProviderSample).toHaveBeenCalledWith(JSON.stringify({ action: 'workflow_run' }, null, 2));
+  expect(setProviderSample).toHaveBeenCalledWith('{}');
+  expect(screen.getByText(/Normalized alert only/)).toBeInTheDocument();
 
   rerender(
     <AutomationTest
@@ -337,18 +342,109 @@ it('AutomationTest restores integration identity, shows replay mode, and warns o
       setProviderSample={setProviderSample}
       busy={false}
       runTest={vi.fn()}
-      result={{
-        issues: [],
-        providerFieldsMissing: ['automation.workflow_id'],
-        goldenResults: [],
-        durationMs: 1.23,
-        result: null,
-      }}
+      result={
+        {
+          issues: [],
+          providerFieldsMissing: ['automation.workflow_id'],
+          goldenResults: [],
+          durationMs: 1.23,
+          result: null,
+        } as unknown as ComponentProps<typeof AutomationTest>['result']
+      }
     />
   );
 
   expect(screen.getByText('Provider-only mapping unavailable')).toBeInTheDocument();
   expect(
-    screen.getByText(/automation\.workflow_id cannot be extracted because no raw provider sample was supplied/)
+    screen.getByText(
+      /automation\.workflow_id cannot be extracted because no raw provider sample was supplied/
+    )
   ).toBeInTheDocument();
+});
+
+it('disambiguates identical paths across providers and preserves exact provider source and integration', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    integrations: [
+      { id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' },
+      { id: 'cw-1', name: 'CloudWatch Integration', type: 'CLOUDWATCH' },
+    ],
+    observations: [
+      {
+        id: 'obs-1',
+        serviceId: 'service',
+        integrationId: 'gh-1',
+        integrationType: 'GITHUB',
+        fieldKey: 'repository_name',
+        sourcePath: 'repository.name',
+        fieldType: 'STRING',
+        count: 5,
+        unmapped: false,
+        lastSeenAt: '2026-10-20T00:00:00Z',
+      },
+      {
+        id: 'obs-2',
+        serviceId: 'service',
+        integrationId: 'cw-1',
+        integrationType: 'CLOUDWATCH',
+        fieldKey: 'repository_name',
+        sourcePath: 'repository.name',
+        fieldType: 'STRING',
+        count: 3,
+        unmapped: false,
+        lastSeenAt: '2026-10-20T00:00:00Z',
+      },
+    ],
+  };
+
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // Switch integration to ALL providers to see both
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'ALL' } });
+
+  // Dropdown should contain both distinct options
+  const options = screen.getAllByRole('option');
+  const ghOption = options.find(o => o.textContent?.includes('repository.name (GITHUB)'));
+  expect(ghOption).toBeDefined();
+  expect(ghOption?.getAttribute('value')).toBe('GITHUB:PROVIDER:repository.name');
+
+  const cwOption = options.find(o => o.textContent?.includes('repository.name (CLOUDWATCH)'));
+  expect(cwOption).toBeDefined();
+  expect(cwOption?.getAttribute('value')).toBe('CLOUDWATCH:PROVIDER:repository.name');
+
+  // Select the CloudWatch option
+  fireEvent.change(screen.getByLabelText('Observed field'), {
+    target: { value: 'CLOUDWATCH:PROVIDER:repository.name' },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  expect(savedSnapshot!.fields).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        key: 'repository_name',
+        mappings: [
+          expect.objectContaining({
+            source: 'PROVIDER',
+            integrationType: 'CLOUDWATCH',
+            path: 'repository.name',
+          }),
+        ],
+      }),
+    ])
+  );
 });

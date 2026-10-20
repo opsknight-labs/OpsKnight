@@ -42,7 +42,7 @@ export const fieldSchema = z
     label: z.string().min(1).max(100),
     type: z.enum(['STRING', 'ENUM', 'NUMBER', 'BOOLEAN']),
     caseSensitive: z.boolean().default(false),
-    displayOnly: z.boolean().default(false),
+    displayOnly: z.boolean().optional(),
     allowedValues: z
       .array(enumValueSchema.refine(value => value.length > 0))
       .max(200)
@@ -141,6 +141,7 @@ export const builtinFields: Field[] = [
     label: 'Priority',
     type: 'ENUM',
     caseSensitive: true,
+    displayOnly: false,
     allowedValues: [...PRIORITIES],
     aliases: {},
     mappings: [],
@@ -151,6 +152,7 @@ export const builtinFields: Field[] = [
     label: key[0].toUpperCase() + key.slice(1),
     type: 'STRING' as const,
     caseSensitive: false,
+    displayOnly: false,
     aliases: {},
     mappings: [],
   })),

@@ -13,6 +13,8 @@ export type Counts = {
 import type { Observation } from '@/lib/automation/discovery';
 export type Discovery = Observation & {
   source?: 'EVENT' | 'PROVIDER';
+  integrationType?: string;
+  label?: string;
   frequency?: number;
   examples?: string[];
 };

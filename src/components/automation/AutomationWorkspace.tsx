@@ -453,6 +453,10 @@ export default function AutomationWorkspace({
               setIntegrationType={context.setIntegrationType}
               observedPath={context.observedPath}
               setObservedPath={context.setObservedPath}
+              selectedSource={context.selectedSource}
+              setSelectedSource={context.setSelectedSource}
+              selectedIntegrationType={context.selectedIntegrationType}
+              setSelectedIntegrationType={context.setSelectedIntegrationType}
               discoveries={context.discoveries}
               setDiscoveries={context.setDiscoveries}
               fieldLabel={context.fieldLabel}

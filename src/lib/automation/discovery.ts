@@ -6,9 +6,6 @@ export type Observation = {
   value: string;
   type: string;
   unmapped: boolean;
-  label?: string;
-  source?: 'PROVIDER' | 'EVENT';
-  integrationType?: string;
 };
 
 /** Formats a dotted or bracketed path into a readable hierarchical title, e.g. repository.name -> Repository Name */
@@ -74,7 +71,6 @@ export function discoverFields(payload: unknown): Observation[] {
       fields.push({
         key: formatObservationKey(tokens),
         path,
-        label: formatHierarchicalLabel(path),
         value: text,
         type:
           typeof value === 'number' ? 'NUMBER' : typeof value === 'boolean' ? 'BOOLEAN' : 'STRING',
@@ -100,4 +96,3 @@ export function discoverFields(payload: unknown): Observation[] {
   visit(payload, [], 0);
   return fields;
 }
-

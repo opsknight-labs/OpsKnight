@@ -15,37 +15,52 @@ export function areRulesMutuallyExclusive(
   for (const condA of ruleA.conditions) {
     for (const condB of ruleB.conditions) {
       if (condA.fieldKey !== condB.fieldKey) continue;
-      if (condA.operator === 'EQ' && condB.operator === 'EQ' && condA.value !== condB.value)
+      const isScalarA = condA.value !== undefined && !Array.isArray(condA.value);
+      const isScalarB = condB.value !== undefined && !Array.isArray(condB.value);
+      if (
+        condA.operator === 'EQ' &&
+        condB.operator === 'EQ' &&
+        isScalarA &&
+        isScalarB &&
+        condA.value !== condB.value
+      ) {
         return true;
+      }
       if (
         (condA.operator === 'IS_MISSING' &&
           (condB.operator === 'IS_SET' || condB.operator === 'EQ')) ||
         (condB.operator === 'IS_MISSING' &&
           (condA.operator === 'IS_SET' || condA.operator === 'EQ'))
-      )
+      ) {
         return true;
+      }
       if (
         condA.operator === 'IN' &&
         condB.operator === 'IN' &&
         Array.isArray(condA.value) &&
-        Array.isArray(condB.value) &&
-        !condA.value.some(v => (condB.value as unknown[]).includes(v))
-      )
-        return true;
+        Array.isArray(condB.value)
+      ) {
+        const setB = new Set(condB.value);
+        if (!condA.value.some(v => setB.has(v))) return true;
+      }
       if (
         condA.operator === 'EQ' &&
         condB.operator === 'IN' &&
+        isScalarA &&
         Array.isArray(condB.value) &&
-        !condB.value.includes(condA.value)
-      )
+        !(condB.value as unknown[]).includes(condA.value)
+      ) {
         return true;
+      }
       if (
         condB.operator === 'EQ' &&
         condA.operator === 'IN' &&
+        isScalarB &&
         Array.isArray(condA.value) &&
-        !condA.value.includes(condB.value)
-      )
+        !(condA.value as unknown[]).includes(condB.value)
+      ) {
         return true;
+      }
     }
   }
   return false;
@@ -202,9 +217,7 @@ export function compileAutomation(raw: unknown): {
   const used = new Set([
     ...snapshot.rules.flatMap(r => r.conditions.map(c => c.fieldKey)),
     ...snapshot.rules.flatMap(r =>
-      r.actions
-        .filter(a => a.type === 'SET_CONTEXT')
-        .map(a => (a as { fieldKey: string }).fieldKey)
+      r.actions.filter(a => a.type === 'SET_CONTEXT').map(a => (a as { fieldKey: string }).fieldKey)
     ),
   ]);
   for (const field of fields)

@@ -148,16 +148,13 @@ export function AutomationTest({
         {selectedAlert && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs">
             <span className="font-medium text-foreground">
-              {selectedAlert.replayMode === 'PROVIDER'
-                ? 'Replay mode: Full provider replay (sanitized provider payload available)'
-                : 'Replay mode: Normalized alert only (raw provider payload unavailable)'}
+              Replay mode: Normalized alert only (raw provider payload unavailable)
             </span>
           </div>
         )}
         <Hint>
-          {selectedAlert?.replayMode === 'PROVIDER'
-            ? 'Testing with sanitized provider context and normalized alert.'
-            : 'Recent alerts replay the normalized OpsKnight event. If rules require provider-specific mappings, paste a raw provider sample under Advanced inputs.'}
+          Recent alerts replay the normalized OpsKnight event. If rules require provider-specific
+          mappings, paste a raw provider sample under Advanced sample JSON.
         </Hint>
         <ManualSample onBuild={setSample} />
         <details className="group rounded-lg border border-border/70 bg-card">
@@ -240,7 +237,9 @@ export function AutomationTest({
               >
                 <p className="font-semibold">Provider-only mapping unavailable</p>
                 <p className="mt-0.5">
-                  {result.providerFieldsMissing.join(', ')} cannot be extracted because no raw provider sample was supplied. Enter a provider sample in Advanced sample JSON to test provider mappings.
+                  {result.providerFieldsMissing.join(', ')} cannot be extracted because no raw
+                  provider sample was supplied. Enter a provider sample in Advanced sample JSON to
+                  test provider mappings.
                 </p>
               </div>
             )}
