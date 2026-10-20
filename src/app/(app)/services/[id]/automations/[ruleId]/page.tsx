@@ -661,22 +661,29 @@ export default async function AutomationRulePage({
             icon={Activity}
             title="Readiness"
             description={
-              <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1.5 font-medium',
-                    TONE_TEXT[readinessView.tone]
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-2xs',
+                    readinessView.tone === 'danger'
+                      ? 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                      : readinessView.tone === 'warning'
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                   )}
                 >
                   <span
                     aria-hidden
-                    className={cn('h-2 w-2 rounded-full', TONE_DOT[readinessView.tone])}
+                    className={cn('h-1.5 w-1.5 rounded-full', TONE_DOT[readinessView.tone])}
                   />
                   {readinessView.label}
                 </span>
-                · checked{' '}
-                <RuleTimestamp {...timestamp(new Date(readiness.checkedAt), userTimeZone)} />
-              </span>
+                <span className="text-muted-foreground/60 text-xs select-none">·</span>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <span>Checked</span>
+                  <RuleTimestamp {...timestamp(new Date(readiness.checkedAt), userTimeZone)} />
+                </span>
+              </div>
             }
           >
             <RuleReadiness
