@@ -245,10 +245,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'notification-configuration',
     area: 'Notifications',
     title: 'Delivery preferences and provider diagnostics',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'History and safe failed-delivery retry are available. Configuration, test sends and cost budgets require dedicated contracts.',
-    operationIds: [],
+      'Self-service channel preferences now use the same revision-protected command in UI and REST. Provider configuration, safe test sends, diagnostics and cost budgets still require dedicated contracts.',
+    operationIds: ['getMyNotificationPreferences', 'updateMyNotificationPreferences'],
   },
   {
     id: 'runbook-service-rules',

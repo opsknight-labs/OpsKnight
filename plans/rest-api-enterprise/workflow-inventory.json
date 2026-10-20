@@ -341,9 +341,7 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": [
-        "Final combined identity/browser/SDK certification pending."
-      ],
+      "blockers": ["Final combined identity/browser/SDK certification pending."],
       "implementedOperations": [
         "listTeamMembers",
         "setTeamMember",
@@ -467,6 +465,10 @@
         {
           "path": "src/lib/notification-control-plane.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/notifications/preferences.ts",
+          "branch": "baseline"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -476,7 +478,11 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Provider configuration, credential rotation, provider test sends and diagnostics remain unfinished.",
+        "Self-service preference browser and deployment certification remain pending."
+      ],
+      "operationIds": ["getMyNotificationPreferences", "updateMyNotificationPreferences"]
     },
     {
       "capabilityId": "runbook-service-rules",

@@ -4,6 +4,14 @@
  */
 
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
+  'PATCH /users/me/notification-preferences': {
+    emailEnabled: false,
+    smsEnabled: false,
+    pushEnabled: false,
+    voiceEnabled: false,
+    whatsappEnabled: false,
+    timeZone: 'UTC',
+  },
   'PUT /teams/{id}/services/{serviceId}': {},
   'PUT /teams/{id}/members/{userId}': { role: 'MEMBER', receiveTeamNotifications: true },
   'POST /users/invitations': {

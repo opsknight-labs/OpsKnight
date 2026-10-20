@@ -37,6 +37,7 @@ export type RunbookAgentEnrollmentStatus = { "id": string; "status": string; "en
 export type UserInvitationPolicy = { "mode": "PASSWORD_ONLY" | "SSO_OPTIONAL" | "SSO_REQUIRED"; "policyVersion": number; "passwordInvitationsAllowed": boolean; "ssoInvitationsAllowed": boolean; "oidcConfigVersion": number | null };
 export type UserInvitation = { "userId": string; "revision": number; "status": "INVITED"; "authenticationMode": "PASSWORD" | "SSO"; "invitationGeneration": number; "expiresAt": string; "notificationId": string | null; "deliveryStatus": "QUEUED" | "MANUAL"; "inviteUrl": string | null; "recipientEmail": string; "disclosure": "DISCLOSED_ONCE" | "ALREADY_DISCLOSED" | "NOT_REQUESTED" };
 export type UserInvitationState = { "userId": string; "revision": number; "status": "ACTIVE" | "INVITED" | "DISABLED"; "invitationGeneration": number; "linkingApprovalRevision": string | null; "authenticationMode": "PASSWORD" | "SSO" | null; "expiresAt": string | null; "delivery": { "notificationId": string; "status": string } | null };
+export type UserNotificationPreferences = { "id": string; "revision": number; "timeZone": string | null; "phoneNumber": string | null; "emailNotificationsEnabled": boolean; "smsNotificationsEnabled": boolean; "pushNotificationsEnabled": boolean; "voiceNotificationsEnabled": boolean; "whatsappNotificationsEnabled": boolean };
 export type UserAdministration = { "id": string; "name": string; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER"; "roleSource": "MANUAL" | "OIDC" | "SCIM"; "status": "ACTIVE" | "INVITED" | "DISABLED"; "revision": number; "deactivatedAt": string | null; "updatedAt": string };
 export type TeamManagedService = { "id": string; "name": string; "teamId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
 export type TeamActivity = { "id": string; "action": string; "createdAt": string; "actor": { "id": string; "name": string | null } | null; "details": unknown };
@@ -120,6 +121,8 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  getMyNotificationPreferences: Record<string, never>;
+  updateMyNotificationPreferences: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "emailEnabled": boolean; "smsEnabled": boolean; "pushEnabled": boolean; "voiceEnabled": boolean; "whatsappEnabled": boolean; "phoneNumber"?: string | null; "timeZone"?: string } };
   listTeamActivity: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listTeamServices: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   assignTeamService: { "params": { "id": string; "serviceId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
@@ -326,6 +329,8 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  getMyNotificationPreferences: { "data": UserNotificationPreferences; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateMyNotificationPreferences: { "data": UserNotificationPreferences; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listTeamActivity: { "data": Array<TeamActivity>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listTeamServices: { "data": Array<TeamManagedService>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   assignTeamService: { "data": TeamManagedService; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -532,6 +537,25 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "getMyNotificationPreferences": {
+    "method": "GET",
+    "path": "/users/me/notification-preferences",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMyNotificationPreferences": {
+    "method": "PATCH",
+    "path": "/users/me/notification-preferences",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listTeamActivity": {
     "method": "GET",
     "path": "/teams/{id}/activity",

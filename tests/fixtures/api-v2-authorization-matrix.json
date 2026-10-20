@@ -1217,6 +1217,18 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /users/me/notification-preferences [notification-preferences:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "PATCH /users/me/notification-preferences [notification-preferences:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
   "GET /users [users:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

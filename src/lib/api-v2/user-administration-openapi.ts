@@ -136,3 +136,46 @@ export const USER_INVITATION_OPERATIONS: typeof USER_ADMINISTRATION_OPERATIONS =
     }),
   },
 ];
+
+export const USER_NOTIFICATION_PREFERENCE_SCHEMAS = {
+  UserNotificationPreferences: object({
+    id: { type: 'string' },
+    revision: { type: 'integer', minimum: 1 },
+    timeZone: { type: ['string', 'null'] },
+    phoneNumber: { type: ['string', 'null'], format: 'phone' },
+    emailNotificationsEnabled: { type: 'boolean' },
+    smsNotificationsEnabled: { type: 'boolean' },
+    pushNotificationsEnabled: { type: 'boolean' },
+    voiceNotificationsEnabled: { type: 'boolean' },
+    whatsappNotificationsEnabled: { type: 'boolean' },
+  }),
+};
+
+export const USER_NOTIFICATION_PREFERENCE_OPERATIONS: typeof USER_ADMINISTRATION_OPERATIONS = [
+  {
+    method: 'get',
+    path: '/users/me/notification-preferences',
+    summary: 'Read the credential owner’s notification preferences',
+    description:
+      'A self-service read. The response includes the User ETag, the caller’s saved channels and phone number, and never returns another user’s preferences.',
+  },
+  {
+    method: 'patch',
+    path: '/users/me/notification-preferences',
+    summary: 'Update the credential owner’s notification preferences',
+    description:
+      'Self-service only. Requires explicit notification-preferences:write, a concrete User If-Match and Idempotency-Key. Channel enablement requires an available configured provider; SMS, Voice and WhatsApp require a valid E.164 phone number. Audit metadata records phone presence only.',
+    body: {
+      ...object({
+        emailEnabled: { type: 'boolean' },
+        smsEnabled: { type: 'boolean' },
+        pushEnabled: { type: 'boolean' },
+        voiceEnabled: { type: 'boolean' },
+        whatsappEnabled: { type: 'boolean' },
+        phoneNumber: { type: ['string', 'null'], format: 'phone' },
+        timeZone: { type: 'string', maxLength: 100 },
+      }),
+      required: ['emailEnabled', 'smsEnabled', 'pushEnabled', 'voiceEnabled', 'whatsappEnabled'],
+    },
+  },
+];

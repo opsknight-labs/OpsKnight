@@ -29,6 +29,22 @@ const op = (
 ): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
+  op(
+    'get',
+    '/users/me/notification-preferences',
+    'getMyNotificationPreferences',
+    'notification-preferences:read',
+    'item',
+    'UserNotificationPreferences'
+  ),
+  op(
+    'patch',
+    '/users/me/notification-preferences',
+    'updateMyNotificationPreferences',
+    'notification-preferences:write',
+    'item',
+    'UserNotificationPreferences'
+  ),
   op('get', '/teams/{id}/activity', 'listTeamActivity', 'teams:read', 'list', 'TeamActivity'),
   op('get', '/teams/{id}/services', 'listTeamServices', 'teams:read', 'list', 'TeamManagedService'),
   op(

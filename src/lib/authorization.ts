@@ -37,6 +37,7 @@ export const CAPABILITIES = {
   REPORT_READ: 'report.read',
   REPORT_EXPORT: 'report.export',
   USER_READ_ALL: 'user.read.all',
+  USER_NOTIFICATION_PREFERENCES: 'user.notification_preferences',
   TEAM_ADMINISTER_SCOPED: 'team.administer.scoped',
   POLICY_READ_ALL: 'policy.read.all',
   PRIVACY_READ: 'privacy.read',
@@ -86,6 +87,8 @@ export const API_SCOPES = {
   INTEGRATIONS_WRITE: 'integrations:write',
   NOTIFICATIONS_READ: 'notifications:read',
   NOTIFICATIONS_WRITE: 'notifications:write',
+  NOTIFICATION_PREFERENCES_READ: 'notification-preferences:read',
+  NOTIFICATION_PREFERENCES_WRITE: 'notification-preferences:write',
   STATUS_PAGES_READ: 'status-pages:read',
   STATUS_PAGES_WRITE: 'status-pages:write',
   AUTOMATION_READ: 'automation:read',
@@ -132,6 +135,8 @@ export const API_SCOPES = {
 /** Infrastructure permissions are never implied by a broad administrator credential. */
 export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
   API_SCOPES.USERS_WRITE,
+  API_SCOPES.NOTIFICATION_PREFERENCES_READ,
+  API_SCOPES.NOTIFICATION_PREFERENCES_WRITE,
   API_SCOPES.AUTOMATION_READ,
   API_SCOPES.AUTOMATION_WRITE,
   API_SCOPES.AUTOMATION_PUBLISH,
@@ -200,6 +205,7 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_APPROVE,
 ]);
 const AUDITOR_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
   CAPABILITIES.AUTOMATION_READ,
   CAPABILITIES.INCIDENT_READ_ALL,
   CAPABILITIES.SERVICE_READ_ALL,
@@ -226,6 +232,7 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_READ_ALL,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
   CAPABILITIES.TEAM_ADMINISTER_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,

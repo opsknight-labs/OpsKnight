@@ -305,6 +305,20 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Retry failed notification deliveries.',
     { write: true }
   ),
+  [S.NOTIFICATION_PREFERENCES_READ]: def(
+    S.NOTIFICATION_PREFERENCES_READ,
+    'Notification preferences read',
+    'Notifications',
+    'Read only the credential owner’s personal notification channel preferences.',
+    { issuableBy: ALL_ROLES }
+  ),
+  [S.NOTIFICATION_PREFERENCES_WRITE]: def(
+    S.NOTIFICATION_PREFERENCES_WRITE,
+    'Notification preferences update',
+    'Notifications',
+    'Update only the credential owner’s personal notification channel preferences and verified contact availability.',
+    { write: true, issuableBy: ALL_ROLES }
+  ),
   [S.STATUS_PAGES_READ]: def(
     S.STATUS_PAGES_READ,
     'Status pages read',

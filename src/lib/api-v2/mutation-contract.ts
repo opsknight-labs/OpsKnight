@@ -51,6 +51,13 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PATCH /api/v2/users/me/notification-preferences': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Updates only the credential owner’s preferences. Provider availability is checked before the transaction; User revision, safe attributed audit and receipt commit together.',
+  },
   'POST /api/v2/users/invitations': {
     idempotency: 'required',
     concurrency: 'none',
