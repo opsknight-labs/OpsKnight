@@ -742,6 +742,9 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     'incidentId',
     'removed',
   ]),
+  IncidentTag: object({ id, incidentId: id, tagId: id, createdAt: date, tag: object({ name: string(100), color: { type: ['string', 'null'] } }, ['name', 'color']) }, ['id', 'incidentId', 'tagId', 'createdAt', 'tag']),
+  IncidentTagAdded: object({ id, incidentId: id, name: string(100), color: { type: ['string', 'null'] }, added: { type: 'boolean' } }, ['id', 'incidentId', 'name', 'color', 'added']),
+  IncidentTagRemoved: object({ id, incidentId: id, removed: { type: 'boolean' } }, ['id', 'incidentId', 'removed']),
   RunbookCancellationRequested: object(
     { executionId: id, status: { const: 'CANCEL_REQUESTED' }, message: string() },
     ['executionId', 'status', 'message']
@@ -1761,6 +1764,10 @@ const operations: Operation[] = [
     summary: 'List incident watchers',
     paginated: true,
   },
+  { method: 'get', path: '/incidents/{id}/tags', summary: 'List incident tags', paginated: true },
+  { method: 'post', path: '/incidents/{id}/tags', summary: 'Add a tag to an incident', body: object({ name: { ...string(100), minLength: 1 } }, ['name']) },
+  { method: 'delete', path: '/incidents/{id}/tags/{tagId}', summary: 'Remove a tag from an incident' },
+  { method: 'get', path: '/incidents/{id}/routing-decision', summary: 'Read the redacted routing decision for an accessible incident' },
   {
     method: 'post',
     path: '/incidents/{id}/watchers',

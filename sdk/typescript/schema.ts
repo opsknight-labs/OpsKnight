@@ -105,6 +105,9 @@ export type AutomationConfig = { "serviceId": string; "activeVersionId"?: string
 export type AutomationSettings = { "automationEnabled": boolean; "automationReadinessPolicyValid"?: boolean; "automationStoreObservationPreviews"?: boolean; "automationReadinessPolicy"?: AutomationReadinessPolicy; "automationTraceRetentionDays": number; "automationSettingsRevision": number };
 export type IncidentWatcher = { "id": string; "incidentId": string; "userId": string; "role": string; "createdAt": string };
 export type IncidentWatcherRemoved = { "id": string; "incidentId": string; "removed": true };
+export type IncidentTag = { "id": string; "incidentId": string; "tagId": string; "createdAt": string; "tag": { "name": string; "color": string | null } };
+export type IncidentTagAdded = { "id": string; "incidentId": string; "name": string; "color": string | null; "added": boolean };
+export type IncidentTagRemoved = { "id": string; "incidentId": string; "removed": boolean };
 export type RunbookCancellationRequested = { "executionId": string; "status": "CANCEL_REQUESTED"; "message": string };
 export type RunbookExecutionPreview = { "authorizationToken"?: string; "digest": string; "expiresAt"?: string; "versionId": string; "version": number; "checksum": string; "agentId": string | null; "agentPoolId": string | null; "timeoutSeconds": number; "readiness"?: Array<{ "state": "passed" | "blocked" | "deferred"; "message": string }>; "steps": Array<{ "key": string; "name": string; "type": string; "risk": string; "purpose": string; "requiresApproval": boolean; "timeoutSeconds": number }> };
 export type ScheduleParticipantMutation = { "scheduleId": string; "layerId": string; "userId": string; "layerName"?: string; "userName"?: string; "assignmentId"?: string; "position"?: number; "direction"?: "up" | "down"; "removed"?: boolean };
@@ -294,6 +297,10 @@ export interface OperationRequests {
   getAutomationSettings: Record<string, never>;
   updateAutomationSettings: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "automationEnabled": boolean; "automationStoreObservationPreviews"?: boolean; "automationReadinessPolicy"?: AutomationReadinessPolicy; "automationTraceRetentionDays": number } };
   listIncidentWatchers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listIncidentTags: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  addIncidentTag: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "name": string } };
+  removeIncidentTag: { "params": { "id": string; "tagId": string }; "headers": { "Idempotency-Key": string } };
+  getIncidentRoutingDecision: { "params": { "id": string } };
   setIncidentWatcher: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "userId": string; "role"?: "FOLLOWER" | "STAKEHOLDER" | "EXEC" } };
   removeIncidentWatcher: { "params": { "id": string; "watcherId": string }; "headers": { "Idempotency-Key": string } };
   previewRunbookExecution: { "params": { "id": string }; "body": { "incidentId"?: string | null; "serviceId"?: string | null; "bindingId"?: string | null; "parameters"?: Record<string, unknown> } };
@@ -563,6 +570,10 @@ export interface OperationResponses {
   getAutomationSettings: { "data": AutomationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateAutomationSettings: { "data": AutomationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentWatchers: { "data": Array<IncidentWatcher>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIncidentTags: { "data": Array<IncidentTag>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  addIncidentTag: { "data": IncidentTagAdded; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  removeIncidentTag: { "data": IncidentTagRemoved; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncidentRoutingDecision: { "data": AutomationDecision; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setIncidentWatcher: { "data": IncidentWatcher; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeIncidentWatcher: { "data": IncidentWatcherRemoved; "requestId": string; "timestamp": string } & Record<string, unknown>;
   previewRunbookExecution: { "data": RunbookExecutionPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1916,6 +1927,42 @@ export const OPERATIONS = {
     "method": "GET",
     "path": "/incidents/{id}/watchers",
     "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentTags": {
+    "method": "GET",
+    "path": "/incidents/{id}/tags",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "addIncidentTag": {
+    "method": "POST",
+    "path": "/incidents/{id}/tags",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "removeIncidentTag": {
+    "method": "DELETE",
+    "path": "/incidents/{id}/tags/{tagId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getIncidentRoutingDecision": {
+    "method": "GET",
+    "path": "/incidents/{id}/routing-decision",
+    "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false

@@ -1218,6 +1218,42 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listIncidentTags": {
+    "method": "GET",
+    "path": "/incidents/{id}/tags",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "addIncidentTag": {
+    "method": "POST",
+    "path": "/incidents/{id}/tags",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "removeIncidentTag": {
+    "method": "DELETE",
+    "path": "/incidents/{id}/tags/{tagId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getIncidentRoutingDecision": {
+    "method": "GET",
+    "path": "/incidents/{id}/routing-decision",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "setIncidentWatcher": {
     "method": "POST",
     "path": "/incidents/{id}/watchers",

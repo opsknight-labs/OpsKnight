@@ -130,19 +130,19 @@ const decisions: readonly ApiCapability[] = [
     id: 'service-settings',
     area: 'Services',
     title: 'Notification settings and response policies',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Basic service CRUD is available. Complete notification, support-hours and response-policy management still requires shared commands and versioned REST contracts.',
-    operationIds: [],
+      'Service notification settings, support hours, classification and SLA policy versions have REST contracts. Remaining notification channel/event controls still require parity work.',
+    operationIds: ['getServiceNotificationSettings', 'updateServiceNotificationSettings', 'getServiceSupportHours', 'updateServiceSupportHours', 'getServiceClassificationPolicy', 'updateServiceClassificationPolicy', 'getServiceSlaPolicy', 'updateServiceSlaPolicy'],
   },
   {
     id: 'incident-metadata',
     area: 'Incidents',
     title: 'Custom-field updates, tags and routing decisions',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Incident creation accepts validated custom fields. Separate metadata updates, tag management and routing-decision history are not yet exposed.',
-    operationIds: [],
+      'Incident tags can be listed, added and removed through shared UI/REST commands with scoped authorization and transactional timeline events. A redacted incident routing decision requires automation scope and incident visibility. Custom-field updates remain pending.',
+    operationIds: ['listIncidentTags', 'addIncidentTag', 'removeIncidentTag', 'getIncidentRoutingDecision'],
   },
   {
     id: 'incident-diagnostics',

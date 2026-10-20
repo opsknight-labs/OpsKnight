@@ -208,7 +208,7 @@
     {
       "capabilityId": "incident-metadata",
       "delivery": "API-13",
-      "workflow": "Custom fields, tags and routing history",
+      "workflow": "Custom-field updates pending; incident tags and redacted routing decision delivered",
       "sources": [
         {
           "path": "src/lib/custom-fields.ts",

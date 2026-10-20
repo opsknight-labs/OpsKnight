@@ -552,6 +552,14 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     concurrency: 'none',
     rationale: 'Shared watcher command, timeline and audit commit with replay record.',
   },
+  'POST /api/v2/incidents/[id]/tags': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Shared tag command, incident timeline, credential audit and replay commit atomically; duplicate associations emit no event.',
+  },
+  'DELETE /api/v2/incidents/[id]/tags/[tagId]': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Parent-scoped idempotent removal emits a timeline event only when an association existed.',
+  },
   'DELETE /api/v2/incidents/[id]/watchers/[watcherId]': {
     idempotency: 'required',
     concurrency: 'none',

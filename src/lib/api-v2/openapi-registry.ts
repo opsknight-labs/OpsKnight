@@ -1020,6 +1020,10 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'list',
     'IncidentWatcher'
   ),
+  op('get', '/incidents/{id}/tags', 'listIncidentTags', 'incidents:read', 'list', 'IncidentTag'),
+  op('post', '/incidents/{id}/tags', 'addIncidentTag', 'incidents:write', 'item', 'IncidentTagAdded'),
+  op('delete', '/incidents/{id}/tags/{tagId}', 'removeIncidentTag', 'incidents:write', 'item', 'IncidentTagRemoved'),
+  op('get', '/incidents/{id}/routing-decision', 'getIncidentRoutingDecision', 'automation:read', 'item', 'AutomationDecision'),
   op(
     'post',
     '/incidents/{id}/watchers',
