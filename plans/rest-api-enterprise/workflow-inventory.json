@@ -651,7 +651,7 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Domain ownership, validated branding asset lifecycle, preview and combined status-page certification remain unfinished."
+        "Canonical raster signature checks protect new and legacy stored logos; domain ownership, full branding asset lifecycle, preview and combined status-page certification remain unfinished."
       ]
     },
     {
