@@ -34,20 +34,19 @@ export function notificationEndpointAddressHash(
     .digest('hex');
 }
 
-export async function syncUserNotificationEndpoint(input: {
-  userId: string;
-  channel: NotificationChannel;
-  address: string;
-}): Promise<{ available: boolean; status: NotificationEndpointStatus }> {
+export async function syncUserNotificationEndpoint(
+  input: { userId: string; channel: NotificationChannel; address: string },
+  store: Pick<Prisma.TransactionClient, 'userNotificationEndpoint'> = prisma
+): Promise<{ available: boolean; status: NotificationEndpointStatus }> {
   // Mixed-version deployments may briefly run generated clients from before
   // the endpoint-health migration. Preserve delivery until the new client is live.
-  if (!prisma.userNotificationEndpoint) return { available: true, status: 'UNVERIFIED' };
+  if (!store.userNotificationEndpoint) return { available: true, status: 'UNVERIFIED' };
   const addressHash = notificationEndpointAddressHash(input.channel, input.address);
-  const endpoint = await prisma.userNotificationEndpoint.findUnique({
+  const endpoint = await store.userNotificationEndpoint.findUnique({
     where: { userId_channel: { userId: input.userId, channel: input.channel } },
   });
   if (!endpoint) {
-    const created = await prisma.userNotificationEndpoint.create({
+    const created = await store.userNotificationEndpoint.create({
       data: {
         userId: input.userId,
         channel: input.channel,
@@ -59,7 +58,7 @@ export async function syncUserNotificationEndpoint(input: {
     return { available: true, status: created.status };
   }
   if (endpoint.addressHash !== addressHash) {
-    await prisma.userNotificationEndpoint.update({
+    await store.userNotificationEndpoint.update({
       where: { id: endpoint.id },
       data: {
         addressHash,

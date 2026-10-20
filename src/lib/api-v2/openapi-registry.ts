@@ -58,6 +58,31 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/users/invitation-policy',
+    'getUserInvitationPolicy',
+    'users:read',
+    'item',
+    'UserInvitationPolicy'
+  ),
+  op('post', '/users/invitations', 'createUserInvitation', 'users:write', 'item', 'UserInvitation'),
+  op(
+    'get',
+    '/users/{id}/invitation',
+    'getUserInvitation',
+    'users:read',
+    'item',
+    'UserInvitationState'
+  ),
+  op(
+    'post',
+    '/users/{id}/invitation',
+    'renewUserInvitation',
+    'users:write',
+    'item',
+    'UserInvitation'
+  ),
+  op(
+    'get',
     '/users/{id}/administration',
     'getUserAdministration',
     'users:read',

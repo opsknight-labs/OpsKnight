@@ -42,7 +42,7 @@
     },
     {
       "name": "Users",
-      "description": "Safe directory and user details"
+      "description": "User directory, role/lifecycle administration and invitations"
     },
     {
       "name": "Schedules",
@@ -2035,6 +2035,206 @@
           "expiresAt",
           "enrolledAt",
           "revokedAt"
+        ]
+      },
+      "UserInvitationPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "PASSWORD_ONLY",
+              "SSO_OPTIONAL",
+              "SSO_REQUIRED"
+            ]
+          },
+          "policyVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "passwordInvitationsAllowed": {
+            "type": "boolean"
+          },
+          "ssoInvitationsAllowed": {
+            "type": "boolean"
+          },
+          "oidcConfigVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "required": [
+          "mode",
+          "policyVersion",
+          "passwordInvitationsAllowed",
+          "ssoInvitationsAllowed",
+          "oidcConfigVersion"
+        ]
+      },
+      "UserInvitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "INVITED"
+            ]
+          },
+          "authenticationMode": {
+            "type": "string",
+            "enum": [
+              "PASSWORD",
+              "SSO"
+            ]
+          },
+          "invitationGeneration": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notificationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deliveryStatus": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "MANUAL"
+            ]
+          },
+          "inviteUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "recipientEmail": {
+            "type": "string",
+            "format": "email"
+          },
+          "disclosure": {
+            "type": "string",
+            "enum": [
+              "DISCLOSED_ONCE",
+              "ALREADY_DISCLOSED",
+              "NOT_REQUESTED"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "revision",
+          "status",
+          "authenticationMode",
+          "invitationGeneration",
+          "expiresAt",
+          "notificationId",
+          "deliveryStatus",
+          "inviteUrl",
+          "recipientEmail",
+          "disclosure"
+        ]
+      },
+      "UserInvitationState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INVITED",
+              "DISABLED"
+            ]
+          },
+          "invitationGeneration": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "linkingApprovalRevision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "authenticationMode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "PASSWORD",
+              "SSO",
+              null
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "delivery": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "notificationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "notificationId",
+                  "status"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "revision",
+          "status",
+          "invitationGeneration",
+          "linkingApprovalRevision",
+          "authenticationMode",
+          "expiresAt",
+          "delivery"
         ]
       },
       "UserAdministration": {
@@ -18615,6 +18815,563 @@
         "x-concurrency": "none"
       }
     },
+    "/users/invitation-policy": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Inspect safe invitation policy and active provider versions",
+        "description": "users:read and current active administrator. Returns no provider credentials or recovery capabilities.\n\nRequires API scope `users:read` (Users read).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserInvitationPolicy"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getUserInvitationPolicy",
+        "x-required-scope": "users:read"
+      }
+    },
+    "/users/invitations": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Create an invited user and deliver or disclose its invitation",
+        "description": "Explicit users:write and a current active administrator. Required Idempotency-Key. Read GET /users/invitation-policy and echo its policyVersion and oidcConfigVersion as expectedPolicyVersion/expectedOidcConfigVersion. Password mode cannot bypass SSO Required or recovery policy. SSO approval binds the exact active issuer/configuration and creates no password token. EMAIL requires a configured provider and returns QUEUED, never a delivery claim or capability URL. MANUAL explicitly discloses a link once; persisted retry receipts strip inviteUrl and return ALREADY_DISCLOSED. Replaying never sends again or rotates a token. If the initial manual response is lost, inspect the invitation and explicitly renew with a new key. Tokens are stored only as hashes; queued content is encrypted. Account, token/approval, canonical attributed audit, notification and receipt commit atomically. Delivery rechecks current status, generation, recipient, policy and SSO approval before transport. A shared 64-active-invitation queue budget bounds pending email work. UI uses the same command and transactional notification endpoint.\n\nRequires API scope `users:write` (Users manage).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "authenticationMode": {
+                    "type": "string",
+                    "enum": [
+                      "PASSWORD",
+                      "SSO"
+                    ]
+                  },
+                  "delivery": {
+                    "type": "string",
+                    "enum": [
+                      "EMAIL",
+                      "MANUAL"
+                    ]
+                  },
+                  "expectedPolicyVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "expectedOidcConfigVersion": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "ADMIN",
+                      "RESPONDER",
+                      "AUDITOR",
+                      "USER"
+                    ]
+                  }
+                },
+                "required": [
+                  "authenticationMode",
+                  "delivery",
+                  "expectedPolicyVersion",
+                  "expectedOidcConfigVersion",
+                  "name",
+                  "email",
+                  "role"
+                ]
+              },
+              "example": {
+                "name": "Automation user",
+                "email": "automation-user@example.com",
+                "role": "RESPONDER",
+                "authenticationMode": "PASSWORD",
+                "delivery": "MANUAL",
+                "expectedPolicyVersion": 1,
+                "expectedOidcConfigVersion": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserInvitation"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "createUserInvitation",
+        "x-required-scope": "users:write",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/users/{id}/invitation": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Inspect invitation generation, expiry and safe delivery status",
+        "description": "users:read and current active administrator. Returns the User ETag and an opaque linkingApprovalRevision. No token hashes, bearer URLs, provider credentials or rendered email payloads. The User ETag covers User fields; the separate approval revision covers every approval writer.\n\nRequires API scope `users:read` (Users read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserInvitationState"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getUserInvitation",
+        "x-required-scope": "users:read"
+      },
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Renew a reviewed pending invitation and invalidate its older generation",
+        "description": "Explicit users:write and a current active administrator. Required Idempotency-Key. Read GET /users/invitation-policy and echo its policyVersion and oidcConfigVersion as expectedPolicyVersion/expectedOidcConfigVersion. Password mode cannot bypass SSO Required or recovery policy. SSO approval binds the exact active issuer/configuration and creates no password token. EMAIL requires a configured provider and returns QUEUED, never a delivery claim or capability URL. MANUAL explicitly discloses a link once; persisted retry receipts strip inviteUrl and return ALREADY_DISCLOSED. Replaying never sends again or rotates a token. If the initial manual response is lost, inspect the invitation and explicitly renew with a new key. Tokens are stored only as hashes; queued content is encrypted. Account, token/approval, canonical attributed audit, notification and receipt commit atomically. Delivery rechecks current status, generation, recipient, policy and SSO approval before transport. A shared 64-active-invitation queue budget bounds pending email work. UI uses the same command and transactional notification endpoint. Required concrete User If-Match and expectedLinkingApprovalRevision from the invitation read, including null when absent. This separately fences child approval changes. Only INVITED users can be renewed; active/disabled accounts are not taken over. An explicit mode switch revokes the previous method capability.\n\nRequires API scope `users:write` (Users manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "authenticationMode": {
+                    "type": "string",
+                    "enum": [
+                      "PASSWORD",
+                      "SSO"
+                    ]
+                  },
+                  "delivery": {
+                    "type": "string",
+                    "enum": [
+                      "EMAIL",
+                      "MANUAL"
+                    ]
+                  },
+                  "expectedPolicyVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "expectedOidcConfigVersion": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "expectedLinkingApprovalRevision": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "authenticationMode",
+                  "delivery",
+                  "expectedPolicyVersion",
+                  "expectedOidcConfigVersion",
+                  "expectedLinkingApprovalRevision"
+                ]
+              },
+              "example": {
+                "authenticationMode": "PASSWORD",
+                "delivery": "MANUAL",
+                "expectedPolicyVersion": 1,
+                "expectedOidcConfigVersion": null,
+                "expectedLinkingApprovalRevision": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserInvitation"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "renewUserInvitation",
+        "x-required-scope": "users:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
     "/users/{id}/administration": {
       "get": {
         "tags": [
@@ -18677,6 +19434,12 @@
                 "description": "Unix time at which the window resets.",
                 "schema": {
                   "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -19399,6 +20162,12 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -19808,6 +20577,12 @@
                 "description": "Unix time at which the window resets.",
                 "schema": {
                   "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
                 }
               }
             }

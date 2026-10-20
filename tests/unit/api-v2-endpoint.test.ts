@@ -75,6 +75,72 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 
 describe('defineV2Route Endpoint Factory', () => {
+  it('prepares authorized configuration before opening a mutation transaction and keeps it out of responses', async () => {
+    let inTransaction = false;
+    const configuration = { privateConfiguration: 'owned-test-configuration' };
+    const prepare = vi.fn(async () => {
+      expect(inTransaction).toBe(false);
+      return configuration;
+    });
+    vi.mocked(runSerializableTransaction).mockImplementationOnce(async fn => {
+      inTransaction = true;
+      try {
+        return await fn({} as Parameters<Parameters<typeof runSerializableTransaction>[0]>[0]);
+      } finally {
+        inTransaction = false;
+      }
+    });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.TEAM_MANAGE,
+      idempotent: true,
+      idempotencyRequired: true,
+      prepare,
+      handler: async context => {
+        expect(inTransaction).toBe(true);
+        expect(context.prepared).toBe(configuration);
+        return { data: { accepted: true } };
+      },
+    });
+    const response = await route(
+      new NextRequest('http://localhost/api/v2/teams', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'Idempotency-Key': 'prepared-configuration',
+        },
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(await response.text()).not.toContain('owned-test-configuration');
+  });
+
+  it('rejects missing authority or a required retry key before configuration preparation', async () => {
+    for (const [authorization, expectedStatus] of [
+      ['Bearer viewer-token', 403],
+      ['Bearer admin-token', 400],
+    ] as const) {
+      const prepare = vi.fn();
+      const handler = vi.fn();
+      const route = defineV2Route({
+        action: AUTHORIZATION_ACTIONS.TEAM_MANAGE,
+        idempotent: true,
+        idempotencyRequired: true,
+        prepare,
+        handler,
+      });
+      const response = await route(
+        new NextRequest('http://localhost/api/v2/teams', {
+          method: 'POST',
+          headers: { authorization },
+        })
+      );
+      expect(response.status).toBe(expectedStatus);
+      expect(prepare).not.toHaveBeenCalled();
+      expect(handler).not.toHaveBeenCalled();
+    }
+  });
+
   it('evicts local security projections only after successful commit, never after rollback', async () => {
     let committed = false;
     const invalidate = vi.fn(() => {

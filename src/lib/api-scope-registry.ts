@@ -261,7 +261,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.USERS_WRITE,
     'Users manage',
     'Users',
-    'Administer user roles, lifecycle and session revocation with current administrator authorization.',
+    'Administer invitations, user roles, lifecycle and session revocation with current administrator authorization.',
     { write: true, issuableBy: ADMINS }
   ),
   [S.ESCALATION_POLICIES_READ]: def(

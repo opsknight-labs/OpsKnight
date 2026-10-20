@@ -354,7 +354,8 @@ export function finalizeOpenApiSpec(base: Json): Json {
       ok.headers = {
         ...(ok.headers ?? {}),
         ...rateLimitHeaders,
-        ...(definition.method === 'get' && contractIsEtagResource(definition)
+        ...((definition.method === 'get' && contractIsEtagResource(definition)) ||
+        (definition.method === 'post' && definition.path === '/users/invitations')
           ? { ETag: etagHeader }
           : {}),
         ...(contract?.concurrency === 'etag' && contract.responseEtag !== false
@@ -397,6 +398,10 @@ const etagHeader = {
 };
 
 const ETAG_RESOURCES = new Set([
+  '/users/{id}/administration',
+  '/users/{id}/invitation',
+  '/teams/{id}/lead',
+  '/teams/{id}/members',
   '/service-objectives/{id}',
   '/status-pages/{id}/publication',
   '/status-pages/{id}/services',

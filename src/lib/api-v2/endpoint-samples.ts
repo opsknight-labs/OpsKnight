@@ -6,6 +6,22 @@
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'PUT /teams/{id}/services/{serviceId}': {},
   'PUT /teams/{id}/members/{userId}': { role: 'MEMBER', receiveTeamNotifications: true },
+  'POST /users/invitations': {
+    name: 'Automation user',
+    email: 'automation-user@example.com',
+    role: 'RESPONDER',
+    authenticationMode: 'PASSWORD',
+    delivery: 'MANUAL',
+    expectedPolicyVersion: 1,
+    expectedOidcConfigVersion: null,
+  },
+  'POST /users/{id}/invitation': {
+    authenticationMode: 'PASSWORD',
+    delivery: 'MANUAL',
+    expectedPolicyVersion: 1,
+    expectedOidcConfigVersion: null,
+    expectedLinkingApprovalRevision: null,
+  },
   'PATCH /users/{id}/administration': { operation: 'set-role', role: 'RESPONDER' },
   'PUT /teams/{id}/lead': { userId: 'cm123456789012345678901234' },
   'POST /services/{id}/automation/validate': {

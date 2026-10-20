@@ -29,6 +29,7 @@ export interface V2RouteContext<TParams = any, TQuery = any, TBody = any> {
   apiKey: V2ApiKeyIdentity;
   rateLimitHeaders: Record<string, string>;
   tx?: Prisma.TransactionClient;
+  prepared?: unknown;
 }
 
 export type V2RouteHandlerResult<TResult = any> =
@@ -42,6 +43,13 @@ export type V2RouteHandlerResult<TResult = any> =
 
 export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = any> = {
   rateLimitTier?: V2OperationClass;
+  /** Authorized configuration reads before reserving a mutation transaction connection. Never perform provider I/O here. */
+  prepare?: (
+    ctx: Pick<
+      V2RouteContext<TParams, TQuery, TBody>,
+      'req' | 'params' | 'query' | 'body' | 'actor' | 'apiKey'
+    >
+  ) => Promise<unknown>;
   resourceExtractor?: (
     ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders' | 'tx'>
   ) => Promise<AuthorizationResource | undefined> | AuthorizationResource | undefined;
@@ -174,18 +182,22 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
           ? requireRevisionIfMatch(req)
           : undefined;
 
+        if (config.idempotent && config.idempotencyRequired) {
+          const idempotencyKey = req.headers.get('idempotency-key')?.trim();
+          if (!idempotencyKey) {
+            throw new AppError({
+              code: 'IDEMPOTENCY_KEY_REQUIRED',
+              userMessage: 'The Idempotency-Key header is required for this operation.',
+            });
+          }
+        }
+
+        const prepared = config.prepare
+          ? await config.prepare({ req, params, query, body, actor, apiKey })
+          : undefined;
+
         // 7. Execute Handler (Idempotent vs Non-Idempotent)
         if (config.idempotent) {
-          if (config.idempotencyRequired) {
-            const idempotencyKey = req.headers.get('idempotency-key')?.trim();
-            if (!idempotencyKey) {
-              throw new AppError({
-                code: 'IDEMPOTENCY_KEY_REQUIRED',
-                userMessage: 'The Idempotency-Key header is required for this operation.',
-              });
-            }
-          }
-
           const scope =
             typeof config.idempotencyScope === 'function'
               ? config.idempotencyScope({ params, body })
@@ -212,6 +224,7 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
                 apiKey,
                 rateLimitHeaders,
                 tx,
+                prepared,
               });
             },
             config.replayAuthGuard
@@ -269,6 +282,7 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
           actor,
           apiKey,
           rateLimitHeaders,
+          prepared,
         });
 
         if (result instanceof Response) {

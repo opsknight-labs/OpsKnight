@@ -29,7 +29,10 @@ function buildBaseSpec(): Record<string, unknown> {
       { name: 'Incidents', description: 'Incident lifecycle, assignment, notes, and timeline' },
       { name: 'Services', description: 'Service inventory, configuration, and dependencies' },
       { name: 'Teams', description: 'Team organization and memberships' },
-      { name: 'Users', description: 'Safe directory and user details' },
+      {
+        name: 'Users',
+        description: 'User directory, role/lifecycle administration and invitations',
+      },
       {
         name: 'Schedules',
         description: 'On-call rotations, layers, overrides, and live on-call lookups',
@@ -44,7 +47,11 @@ function buildBaseSpec(): Record<string, unknown> {
         name: 'Status Pages',
         description: 'Status pages, components, and public incident announcements',
       },
-      { name: 'Service Objectives', description: 'Versioned measurement contracts, authorized history and bounded asynchronous evaluations' },
+      {
+        name: 'Service Objectives',
+        description:
+          'Versioned measurement contracts, authorized history and bounded asynchronous evaluations',
+      },
       { name: 'Runbooks', description: 'Automated remediation workflows and execution tracking' },
       {
         name: 'Service Accounts',

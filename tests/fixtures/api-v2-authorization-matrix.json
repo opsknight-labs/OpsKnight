@@ -1187,10 +1187,34 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /users/{id}/invitation [users:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /users/{id}/invitation [users:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /users/{id} [users:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /users/invitation-policy [users:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /users/invitations [users:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
   "GET /users [users:read]": {

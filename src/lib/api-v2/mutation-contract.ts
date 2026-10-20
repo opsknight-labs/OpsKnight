@@ -51,6 +51,19 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/users/invitations': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Reviewed authentication/provider versions and explicit users:write. User, generation capability, canonical audit, encrypted delivery and receipt commit together. Manual disclosure is stripped from stored receipts; replay never rediscloses a bearer URL.',
+  },
+  'POST /api/v2/users/[id]/invitation': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Concrete User revision plus reviewed linking-approval state hash and authentication/provider versions fence renewal. Only pending users; every older capability is invalidated. Manual links are disclosed once and removed from stored replay metadata.',
+  },
   'PATCH /api/v2/users/[id]/administration': {
     idempotency: 'required',
     concurrency: 'etag',

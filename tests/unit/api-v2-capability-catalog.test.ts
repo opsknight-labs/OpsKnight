@@ -31,7 +31,14 @@ describe('truthful capability inventory', () => {
       API_CAPABILITY_CATALOG.find(capability => capability.id === 'identity-lifecycle')
     ).toMatchObject({
       status: 'partial',
-      operationIds: ['getUserAdministration', 'administerUser'],
+      operationIds: [
+        'getUserAdministration',
+        'administerUser',
+        'getUserInvitationPolicy',
+        'createUserInvitation',
+        'getUserInvitation',
+        'renewUserInvitation',
+      ],
     });
     for (const id of ['runbook-agents', 'runbook-secrets']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(

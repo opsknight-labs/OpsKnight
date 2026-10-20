@@ -56,6 +56,43 @@
     ],
     "bodyRequired": false
   },
+  "getUserInvitationPolicy": {
+    "method": "GET",
+    "path": "/users/invitation-policy",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createUserInvitation": {
+    "method": "POST",
+    "path": "/users/invitations",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getUserInvitation": {
+    "method": "GET",
+    "path": "/users/{id}/invitation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "renewUserInvitation": {
+    "method": "POST",
+    "path": "/users/{id}/invitation",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "getUserAdministration": {
     "method": "GET",
     "path": "/users/{id}/administration",

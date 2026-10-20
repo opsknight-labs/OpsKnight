@@ -45,6 +45,10 @@ const reviewedOperationIds = new Set([
   'listTeamActivity',
   'getUserAdministration',
   'administerUser',
+  'getUserInvitationPolicy',
+  'createUserInvitation',
+  'getUserInvitation',
+  'renewUserInvitation',
 ]);
 const domainReviews = new Map<
   string,

@@ -366,10 +366,18 @@
         },
         {
           "path": "src/lib/users/administration.ts",
-          "branch": "feat/api-13-enterprise-contracts"
+          "branch": "baseline"
         },
         {
           "path": "src/app/(app)/users/actions.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/users/invitations.ts",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/lib/users/invitation-policy.ts",
           "branch": "baseline"
         }
       ],
@@ -381,13 +389,17 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Invitation issuance/renewal and delivery need shared durable commands with SSO/recovery boundaries.",
+        "Invitation commands and durable delivery implemented; final candidate browser and deployment evidence pending.",
         "Dependency inspection, bulk administration and profile parity remain unfinished.",
         "Final candidate browser, authorization and deployment certification remain required."
       ],
       "operationIds": [
         "getUserAdministration",
-        "administerUser"
+        "administerUser",
+        "getUserInvitationPolicy",
+        "createUserInvitation",
+        "getUserInvitation",
+        "renewUserInvitation"
       ]
     },
     {

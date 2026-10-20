@@ -75,4 +75,92 @@ describeIfRealDB('notification control-plane database guarantees', { timeout: 30
       testPrisma.notification.findUniqueOrThrow({ where: { id: created.id } })
     ).resolves.toMatchObject({ status: 'PENDING', attempts: 3, maxAttempts: 4 });
   });
+  it('commits an encrypted user intent and endpoint with a newly invited user in the caller transaction', async () => {
+    let userId = '';
+    const queued = await testPrisma.$transaction(
+      async tx => {
+        const user = await tx.user.create({
+          data: {
+            name: 'Transactional invitation',
+            email: 'transactional-invite@example.invalid',
+            status: 'INVITED',
+          },
+        });
+        userId = user.id;
+        return createCentralNotificationIntent(
+          {
+            category: 'ADMINISTRATION',
+            channel: 'EMAIL',
+            recipientType: 'USER',
+            recipientId: user.id,
+            recipientAddress: user.email,
+            userId: user.id,
+            templateKey: 'user-invitation',
+            sourceType: 'USER_INVITATION',
+            sourceId: user.id,
+            eventKey: 'generation-1',
+            displayMessage: 'Workspace invitation',
+            payload: {
+              kind: 'EMAIL',
+              to: user.email,
+              subject: 'Workspace invitation',
+              html: '<a href="https://example.invalid/set-password#token=private-invite-capability">Accept</a>',
+            },
+          },
+          tx
+        );
+      },
+      { timeout: 10000 }
+    );
+    expect(queued).toMatchObject({ created: true });
+    expect(await testPrisma.userNotificationEndpoint.count({ where: { userId } })).toBe(1);
+    const row = await testPrisma.notification.findUniqueOrThrow({ where: { id: queued.id } });
+    expect(row).toMatchObject({ userId, status: 'PENDING' });
+    expect(row.payloadEncrypted).not.toContain('private-invite-capability');
+    expect(row.message).not.toContain('private-invite-capability');
+  });
+
+  it('rolls back a new user, encrypted notification and endpoint together after an outer failure', async () => {
+    await expect(
+      testPrisma.$transaction(
+        async tx => {
+          const user = await tx.user.create({
+            data: {
+              name: 'Rolled back invitation',
+              email: 'rollback-invite@example.invalid',
+              status: 'INVITED',
+            },
+          });
+          await createCentralNotificationIntent(
+            {
+              category: 'ADMINISTRATION',
+              channel: 'EMAIL',
+              recipientType: 'USER',
+              recipientId: user.id,
+              recipientAddress: user.email,
+              userId: user.id,
+              templateKey: 'user-invitation',
+              sourceType: 'USER_INVITATION',
+              sourceId: user.id,
+              eventKey: 'generation-1',
+              displayMessage: 'Workspace invitation',
+              payload: {
+                kind: 'EMAIL',
+                to: user.email,
+                subject: 'Workspace invitation',
+                text: 'Private invitation payload',
+              html: '<p>Private invitation payload</p>',
+              },
+            },
+            tx
+          );
+          throw new Error('Invitation receipt failed');
+        },
+        { timeout: 10000 }
+      )
+    ).rejects.toThrow('Invitation receipt failed');
+    expect(await testPrisma.user.count()).toBe(0);
+    expect(await testPrisma.userNotificationEndpoint.count()).toBe(0);
+    expect(await testPrisma.notification.count()).toBe(0);
+  });
 });

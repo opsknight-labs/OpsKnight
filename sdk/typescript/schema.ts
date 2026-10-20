@@ -34,6 +34,9 @@ export type RunbookAgentPolicyStatus = { "agentId": string; "status": string; "c
 export type RunbookAgentRevocation = { "id": string; "status": "REVOKED"; "revokedAt": string | null };
 export type RunbookAgentEnrollment = { "id": string; "status": string; "token": string | null; "executionPublicKey": string; "expiresAt": string };
 export type RunbookAgentEnrollmentStatus = { "id": string; "status": string; "enrollmentState": "PENDING" | "EXPIRED" | "CONSUMED" | "REVOKED" | "UNKNOWN"; "expiresAt": string | null; "enrolledAt": string | null; "revokedAt": string | null };
+export type UserInvitationPolicy = { "mode": "PASSWORD_ONLY" | "SSO_OPTIONAL" | "SSO_REQUIRED"; "policyVersion": number; "passwordInvitationsAllowed": boolean; "ssoInvitationsAllowed": boolean; "oidcConfigVersion": number | null };
+export type UserInvitation = { "userId": string; "revision": number; "status": "INVITED"; "authenticationMode": "PASSWORD" | "SSO"; "invitationGeneration": number; "expiresAt": string; "notificationId": string | null; "deliveryStatus": "QUEUED" | "MANUAL"; "inviteUrl": string | null; "recipientEmail": string; "disclosure": "DISCLOSED_ONCE" | "ALREADY_DISCLOSED" | "NOT_REQUESTED" };
+export type UserInvitationState = { "userId": string; "revision": number; "status": "ACTIVE" | "INVITED" | "DISABLED"; "invitationGeneration": number; "linkingApprovalRevision": string | null; "authenticationMode": "PASSWORD" | "SSO" | null; "expiresAt": string | null; "delivery": { "notificationId": string; "status": string } | null };
 export type UserAdministration = { "id": string; "name": string; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER"; "roleSource": "MANUAL" | "OIDC" | "SCIM"; "status": "ACTIVE" | "INVITED" | "DISABLED"; "revision": number; "deactivatedAt": string | null; "updatedAt": string };
 export type TeamManagedService = { "id": string; "name": string; "teamId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
 export type TeamActivity = { "id": string; "action": string; "createdAt": string; "actor": { "id": string; "name": string | null } | null; "details": unknown };
@@ -123,6 +126,10 @@ export interface OperationRequests {
   listTeamMembers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   setTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications"?: boolean } };
   removeTeamMember: { "params": { "id": string; "userId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  getUserInvitationPolicy: Record<string, never>;
+  createUserInvitation: { "headers": { "Idempotency-Key": string }; "body": { "authenticationMode": "PASSWORD" | "SSO"; "delivery": "EMAIL" | "MANUAL"; "expectedPolicyVersion": number; "expectedOidcConfigVersion": number | null; "name": string; "email": string; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER" } };
+  getUserInvitation: { "params": { "id": string } };
+  renewUserInvitation: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "authenticationMode": "PASSWORD" | "SSO"; "delivery": "EMAIL" | "MANUAL"; "expectedPolicyVersion": number; "expectedOidcConfigVersion": number | null; "expectedLinkingApprovalRevision": string | null } };
   getUserAdministration: { "params": { "id": string } };
   administerUser: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "operation": "set-role"; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER" } | { "operation": "deactivate" } | { "operation": "reactivate" } | { "operation": "revoke-sessions" } };
   getTeamLead: { "params": { "id": string } };
@@ -325,6 +332,10 @@ export interface OperationResponses {
   listTeamMembers: { "data": Array<TeamMembership>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeTeamMember: { "data": TeamMembershipChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getUserInvitationPolicy: { "data": UserInvitationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createUserInvitation: { "data": UserInvitation; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getUserInvitation: { "data": UserInvitationState; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  renewUserInvitation: { "data": UserInvitation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getUserAdministration: { "data": UserAdministration; "requestId": string; "timestamp": string } & Record<string, unknown>;
   administerUser: { "data": UserAdministration; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getTeamLead: { "data": TeamLead; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -577,6 +588,43 @@ export const OPERATIONS = {
       "If-Match"
     ],
     "bodyRequired": false
+  },
+  "getUserInvitationPolicy": {
+    "method": "GET",
+    "path": "/users/invitation-policy",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createUserInvitation": {
+    "method": "POST",
+    "path": "/users/invitations",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getUserInvitation": {
+    "method": "GET",
+    "path": "/users/{id}/invitation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "renewUserInvitation": {
+    "method": "POST",
+    "path": "/users/{id}/invitation",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
   },
   "getUserAdministration": {
     "method": "GET",

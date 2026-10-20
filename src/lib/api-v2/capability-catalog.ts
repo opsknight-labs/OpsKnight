@@ -204,8 +204,15 @@ const decisions: readonly ApiCapability[] = [
     title: 'Invitations, user roles and activation',
     status: 'partial',
     explanation:
-      'Administrator-only lifecycle reads and revision-protected role, deactivation, reactivation and session-revocation commands share UI authorization, last-active-admin protection, canonical transactional audits and credential revocation. Manual role overrides match existing UI semantics; provider mappings may reassert roles on synchronization. Invitations, dependency inspection, bulk/profile parity and combined certification remain unfinished.',
-    operationIds: ['getUserAdministration', 'administerUser'],
+      'Shared UI/REST role, lifecycle and invitation commands preserve current administration authority, last-active-admin protection, identity policy/provider fences, linking-approval state and transactional audit/delivery. Manual invitation URLs are disclosed once and stripped from retry receipts; email payloads are encrypted and rechecked at dispatch. Dependency inspection, bulk/profile parity and final combined certification remain unfinished.',
+    operationIds: [
+      'getUserAdministration',
+      'administerUser',
+      'getUserInvitationPolicy',
+      'createUserInvitation',
+      'getUserInvitation',
+      'renewUserInvitation',
+    ],
   },
   {
     id: 'scim',
