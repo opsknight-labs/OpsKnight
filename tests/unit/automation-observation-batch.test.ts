@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { persistObservationBatch } from '@/lib/automation/observation-batch';
 import type { ObservationJob } from '@/lib/automation/jobs';
 import type { Prisma } from '@prisma/client';
@@ -233,5 +234,62 @@ describe('persistObservationBatch', () => {
     expect(sql.values).toContain('PROVIDER');
     expect(sql.values.filter(v => v === 'open')).toHaveLength(2);
     expect(sql.values.filter(v => v === 'status')).toHaveLength(4);
+  });
+
+  it('preserves null source for historical observations without coercing into EVENT or PROVIDER', async () => {
+    const job: ObservationJob = {
+      task: 'AUTOMATION_OBSERVE',
+      logicalKey: 'job-historical-compat',
+      serviceId: 'srv-1',
+      integrationId: 'int-cw-1',
+      integrationType: 'CLOUDWATCH',
+      observations: [
+        {
+          key: 'status',
+          path: 'detail.status',
+          value: 'open',
+          type: 'STRING',
+          unmapped: false,
+          source: 'EVENT',
+        },
+      ],
+    };
+
+    const hash = createHash('sha256').update('open').digest('hex');
+    const tx = createMockTx({ pendingRows: [] });
+    // Simulate historical observation row in DB with source: null
+    vi.mocked(tx.automationContextObservation.findMany).mockResolvedValueOnce([
+      {
+        id: 'obs-old-1',
+        serviceId: 'srv-1',
+        integrationId: 'int-cw-1',
+        integrationType: 'CLOUDWATCH',
+        fieldType: 'STRING',
+        rawValuePreview: 'open',
+        unmapped: false,
+        count: 1,
+        firstSeenAt: new Date(),
+        lastSeenAt: new Date(),
+        fieldKey: 'status',
+        sourcePath: 'detail.status',
+        source: null,
+        normalizedRawValueHash: hash,
+      },
+    ]);
+
+    const result = await persistObservationBatch(tx, job, p => p as ObservationJob);
+    expect(result.recorded).toBe(true);
+
+    const calls = vi.mocked(tx.$executeRaw).mock.calls;
+    const insertCall = calls.find(call => {
+      const sqlObj = call[0] as unknown as { strings: string[]; values: unknown[] };
+      return sqlObj?.strings?.some(s => s.includes('INSERT INTO "AutomationContextObservation"'));
+    });
+    expect(insertCall).toBeDefined();
+    const sql = insertCall![0] as unknown as { strings: string[]; values: unknown[] };
+    expect(sql.values).toContain('EVENT');
+    expect(sql.strings.join('')).toContain(
+      'ON CONFLICT ("serviceId", "integrationId", "fieldKey", "sourcePath", "normalizedRawValueHash", "source")'
+    );
   });
 });

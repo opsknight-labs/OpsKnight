@@ -105,12 +105,7 @@ export async function persistObservationBatch(
     ]);
     const identities = new Set(
       existing.map(row =>
-        JSON.stringify([
-          row.fieldKey,
-          row.sourcePath,
-          row.source ?? (current.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER'),
-          row.normalizedRawValueHash,
-        ])
+        JSON.stringify([row.fieldKey, row.sourcePath, row.source, row.normalizedRawValueHash])
       )
     );
     const cardinalities = new Map(totals.map(row => [row.fieldKey, row._count._all]));
