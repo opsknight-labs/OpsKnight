@@ -4,8 +4,10 @@ import {
   BookOpen,
   CheckCircle2,
   Clock,
+  Lock,
   PencilLine,
   Server,
+  ShieldCheck,
   Workflow,
 } from 'lucide-react';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
@@ -146,7 +148,7 @@ export default async function RunbooksPage({
   const executionCount = navigation.activeExecutions ?? 'Unknown';
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-3 sm:px-4 md:px-6 py-4 md:py-5">
       {/* Centralized Glassmorphic Hero Banner matching Services */}
       <DetailHeroBanner
         tag="Automation & Remediation Catalog"
@@ -230,7 +232,7 @@ export default async function RunbooksPage({
 
       <RunbookModuleNav summary={navigation} />
 
-      <div className="space-y-4 md:space-y-5">
+      <div className="space-y-3.5 md:space-y-4">
         {/* Search text is excluded from the key so typing keeps focus */}
         <LibraryFilterBar
           key={JSON.stringify({ ...query, q: undefined })}
@@ -276,28 +278,42 @@ export default async function RunbooksPage({
         {/* Bounded Server Pagination */}
         <RunbookPagination page={page} total={total} query={query} />
 
-        {/* Enterprise Contextual Operational Card matching Services */}
-        <Card className="bg-muted/40 border-dashed">
-          <CardContent className="p-5 text-sm text-muted-foreground flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <strong className="text-foreground font-semibold">
-                Enterprise Execution Guarantee:
-              </strong>{' '}
-              Published runbook versions are immutable and cryptographically checksummed before
-              execution. Production changes with non-idempotent risk classes require peer approval
-              gates.
+        {/* Enterprise Execution Guarantee Callout */}
+        <div className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800/80 bg-gradient-to-r from-zinc-50/90 via-white to-zinc-50/70 dark:from-zinc-900/60 dark:via-zinc-900/40 dark:to-zinc-900/60 p-4 sm:p-5 shadow-xs transition-colors">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/25">
+                <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-bold tracking-tight text-foreground">
+                    Enterprise Execution Guarantee
+                  </h3>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+                    Immutable &amp; Signed
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed max-w-4xl">
+                  Published runbook versions are immutable and cryptographically checksummed before
+                  fleet dispatch. Production changes with non-idempotent risk classes require peer
+                  approval gates and generate end-to-end audit telemetry.
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-xs shrink-0">
+
+            <div className="flex items-center gap-2 self-start sm:self-center shrink-0 rounded-lg border border-border/80 bg-background/90 px-3 py-1.5 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:hidden" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
-              <span className="font-medium text-foreground">
+              <span className="text-xs font-semibold text-foreground tabular-nums">
                 {onlineAgents} Fleet Runners Online
               </span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -68,24 +68,24 @@ export default function DetailHeroBanner({
       )}
 
       {/* Main Glassmorphic Hero Banner (Matching OpsKnight Command Center & Services style) */}
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 text-slate-100 shadow-xl ring-1 ring-white/5">
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-3.5 sm:p-4.5 md:p-5 text-slate-100 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
 
         <div
           className={cn(
-            'relative flex flex-col justify-between gap-4 lg:flex-row',
+            'relative flex flex-col justify-between gap-3.5 lg:flex-row',
             statsPlacement === 'bottom' ? 'lg:items-start' : 'lg:items-center'
           )}
         >
           {/* Left: Icon/Avatar & Identity Details */}
-          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             {icon && <div className="shrink-0">{icon}</div>}
 
             <div className="min-w-0 flex-1">
               {(tag || badges) && (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {tag && (
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                       {tag}
                     </p>
                   )}
@@ -93,12 +93,12 @@ export default function DetailHeroBanner({
                 </div>
               )}
 
-              <h1 className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-white md:text-[1.65rem]">
+              <h1 className="mt-0.5 text-lg sm:text-xl md:text-2xl font-extrabold tracking-tight text-white">
                 {title}
               </h1>
 
               {subtitle && (
-                <div className="mt-1 text-xs text-slate-300 leading-relaxed max-w-3xl">
+                <div className="mt-0.5 text-xs text-slate-300 leading-relaxed max-w-3xl">
                   {subtitle}
                 </div>
               )}
@@ -202,7 +202,7 @@ export default function DetailHeroBanner({
         {statsPlacement === 'bottom' && stats.length > 0 && (
           <div
             className={cn(
-              'mt-5 pt-4 border-t border-zinc-800/70 grid gap-2 sm:gap-2.5',
+              'mt-3.5 pt-3 border-t border-zinc-800/70 grid gap-1.5 sm:gap-2',
               stats.length === 1 && 'grid-cols-1',
               stats.length === 2 && 'grid-cols-2',
               stats.length === 3 && 'grid-cols-1 sm:grid-cols-3',
@@ -215,12 +215,12 @@ export default function DetailHeroBanner({
             {stats.map((stat, idx) => {
               const statContent = (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate w-full">
+                  <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate w-full">
                     {stat.label}
                   </p>
                   <div
                     className={cn(
-                      'mt-0.5 flex h-7 items-center justify-center gap-1.5 text-sm sm:text-base font-extrabold text-white min-w-0 max-w-full px-1',
+                      'mt-0.5 flex h-6 items-center justify-center gap-1.5 text-xs sm:text-sm md:text-base font-extrabold text-white min-w-0 max-w-full px-1',
                       stat.valueClassName
                     )}
                   >
@@ -245,7 +245,7 @@ export default function DetailHeroBanner({
               );
 
               const itemClassName = cn(
-                'min-w-0 overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 sm:p-3 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[68px]',
+                'min-w-0 overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2 sm:p-2.5 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[58px]',
                 idx === 4 && stats.length === 5 && 'col-span-2 sm:col-span-1',
                 stat.href &&
                   'hover:bg-zinc-800/80 hover:border-zinc-700/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
@@ -357,7 +357,7 @@ export function DetailHeroBannerSkeleton({
         {statsCount > 0 && statsPlacement === 'bottom' && (
           <div
             className={cn(
-              'mt-5 pt-4 border-t border-zinc-800/70 grid gap-2 sm:gap-2.5',
+              'mt-3.5 pt-3 border-t border-zinc-800/70 grid gap-1.5 sm:gap-2',
               statsCount === 1 && 'grid-cols-1',
               statsCount === 2 && 'grid-cols-2',
               statsCount === 3 && 'grid-cols-1 sm:grid-cols-3',
@@ -371,7 +371,7 @@ export function DetailHeroBannerSkeleton({
               <div
                 key={idx}
                 className={cn(
-                  'rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 flex flex-col items-center justify-center gap-1.5 min-h-[68px]',
+                  'rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2 sm:p-2.5 flex flex-col items-center justify-center gap-1.5 min-h-[58px]',
                   idx === 4 && statsCount === 5 && 'col-span-2 sm:col-span-1'
                 )}
               >
