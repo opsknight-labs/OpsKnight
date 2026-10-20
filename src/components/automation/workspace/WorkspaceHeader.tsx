@@ -112,12 +112,17 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
                 onClick={onPublish}
               >
                 <Rocket aria-hidden="true" />
-                Publish
+                {mode === 'LIVE' ? 'Publish candidate' : 'Publish'}
               </Button>
             </div>
             {publishBlockedReason && (
               <p id={hintId} className="text-xs text-muted-foreground lg:text-right">
                 {publishBlockedReason}
+              </p>
+            )}
+            {mode === 'LIVE' && (
+              <p className="text-xs text-muted-foreground lg:text-right">
+                Publishing while LIVE stages a candidate version for parallel shadow evaluation without interrupting routing.
               </p>
             )}
             {!status.enabled && (

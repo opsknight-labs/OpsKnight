@@ -27,7 +27,6 @@ const runtimeSecretFiles = [
   'ALLOW_INSECURE_SECRETS',
 ] as const;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Parsed YAML manifests are untyped.
 type AnyMap = Record<string, any>;
 
 function yaml(file: string): AnyMap {

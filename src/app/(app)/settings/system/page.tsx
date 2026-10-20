@@ -1,4 +1,3 @@
-import { getAutomationPrivacyCleanupStatus } from '@/lib/automation/privacy-cleanup';
 import AuthenticationSettingsLoader from '@/components/settings/AuthenticationSettingsLoader';
 import AutomationSettings from '@/components/settings/AutomationSettings';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';

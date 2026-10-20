@@ -34,6 +34,13 @@ const copy = new Map([
     },
   ],
   [
+    'activateCandidate',
+    {
+      title: 'Review candidate activation · Cutover to LIVE',
+      description: 'New incidents will use the promoted candidate. Existing incident decisions stay pinned.',
+    },
+  ],
+  [
     'restore',
     {
       title: 'Review version restore',
@@ -86,12 +93,13 @@ export function AutomationReviewDialog({
   version,
   enabled,
   counts,
+  candidateFallbacks = 0,
   busy,
   error,
   onCancel,
   onConfirm,
 }: {
-  action: 'publish' | 'restore' | 'LIVE' | null;
+  action: 'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null;
   snapshot: Snapshot;
   before?: Snapshot;
   mode?: string;
@@ -100,38 +108,44 @@ export function AutomationReviewDialog({
   version: number | null;
   enabled: boolean;
   counts?: { evaluated: number; routes: number; priorities: number; skips: number; errors: number };
+  candidateFallbacks?: number;
   busy: boolean;
   error?: string;
   onCancel: () => void;
-  onConfirm: (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean) => void;
+  onConfirm: (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean, acknowledgeMaterialDifferences: boolean) => void;
 }) {
   const blockedId = useId();
   const [acknowledge, setAcknowledge] = useState(false);
   const [acknowledgeErrors, setAcknowledgeErrors] = useState(false);
+  const [acknowledgeDifferences, setAcknowledgeDifferences] = useState(false);
+  const liveReview = action === 'LIVE' || action === 'activateCandidate';
   // Only diff and compile while the dialog is open; the closed dialog re-renders on every edit.
   const changes = useMemo(
     () =>
-      action && action !== 'LIVE' && before
+      action && !liveReview && before
         ? semanticSnapshotChanges(before, snapshot, { policies, destinations })
         : [],
-    [action, before, snapshot, policies, destinations]
+    [action, liveReview, before, snapshot, policies, destinations]
   );
   const issues = useMemo(() => (action ? lint(snapshot) : []), [action, snapshot]);
   const errors = issues.filter(issue => issue.level === 'ERROR');
   const warnings = issues.filter(issue => issue.level === 'WARNING');
   const noShadowEvidence = !counts?.evaluated;
+  const materialDifferences = !!(counts?.routes || counts?.priorities || counts?.skips);
   const blockedReason = errors.length
     ? 'Fix the blocking issues above before confirming.'
-    : action === 'LIVE' && !version
+    : liveReview && !version
       ? 'Publish a version before enabling LIVE.'
-      : action === 'LIVE' && !enabled
+      : liveReview && !enabled
         ? 'An administrator must turn on the global automation switch first.'
-        : action === 'LIVE' && noShadowEvidence && !acknowledge
+        : liveReview && noShadowEvidence && !acknowledge
           ? 'Acknowledge the missing Shadow evidence to continue.'
-          : action === 'LIVE' && !!counts?.errors && !acknowledgeErrors
+          : liveReview && (!!counts?.errors || candidateFallbacks > 0) && !acknowledgeErrors
             ? 'Accept the observed Shadow errors to continue.'
+            : action === 'activateCandidate' && materialDifferences && !acknowledgeDifferences
+              ? 'Approve the observed material differences to continue.'
             : null;
-  const TitleIcon = action === 'LIVE' ? Zap : action === 'restore' ? History : Rocket;
+  const TitleIcon = liveReview ? Zap : action === 'restore' ? History : Rocket;
   const { title, description } = copy.get(action ?? 'publish')!;
   return (
     <Dialog
@@ -158,17 +172,16 @@ export function AutomationReviewDialog({
           </p>
         )}
         <div className="space-y-4 text-sm">
-          {action !== 'LIVE' && mode === 'LIVE' && (
+          {action === 'publish' && mode === 'LIVE' && (
             <p role="alert" className={cn('flex gap-2 rounded-lg border p-3', noticeClasses.warn)}>
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
-                This service is LIVE. Publishing immediately changes automation behavior for new
-                incidents. Existing incidents remain pinned to their previous routing decision.
+                Publishing stages a candidate version for parallel shadow evaluation. The active LIVE version stays in place.
               </span>
             </p>
           )}
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {action === 'LIVE' ? (
+            {liveReview ? (
               <>
                 <Stat label="Version" value={version ?? '—'} />
                 <Stat label="Evaluations" value={counts?.evaluated ?? 0} />
@@ -184,7 +197,7 @@ export function AutomationReviewDialog({
               </>
             )}
           </dl>
-          {action !== 'LIVE' && (
+          {!liveReview && (
             <section className="space-y-2">
               <h3 className="flex items-center gap-2 font-semibold">
                 <ArrowRightLeft className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -206,7 +219,7 @@ export function AutomationReviewDialog({
             </section>
           )}
           <p className="text-muted-foreground">
-            {action === 'LIVE'
+            {liveReview
               ? `Published version ${version ?? 'unavailable'}`
               : `${snapshot.fields.length} context fields · ${snapshot.rules.length} rules`}
           </p>
@@ -261,14 +274,14 @@ export function AutomationReviewDialog({
               ))}
             </ul>
           )}
-          {action === 'LIVE' && (
+          {liveReview && (
             <section className="space-y-2 rounded-lg border p-3">
               <h3 className="flex items-center gap-2 font-semibold">
                 <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 Shadow readiness · last 7 days
               </h3>
               <p>
-                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors/fallbacks
+                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors · {candidateFallbacks} fallbacks
               </p>
               <p>
                 {counts?.routes ?? 0} routing differences · {counts?.priorities ?? 0} priority
@@ -303,7 +316,7 @@ export function AutomationReviewDialog({
                   </label>
                 </div>
               )}
-              {!!counts?.errors && (
+              {(!!counts?.errors || candidateFallbacks > 0) && (
                 <label
                   className={cn(
                     'flex min-h-10 cursor-pointer items-start gap-2 rounded-md border p-3',
@@ -317,6 +330,13 @@ export function AutomationReviewDialog({
                     onChange={event => setAcknowledgeErrors(event.target.checked)}
                   />
                   I explicitly accept enabling LIVE despite observed Shadow errors and fallbacks.
+                </label>
+              )}
+              {action === 'activateCandidate' && materialDifferences && (
+                <label className={cn('flex min-h-10 cursor-pointer items-start gap-2 rounded-md border p-3', noticeClasses.warn)}>
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    checked={acknowledgeDifferences} onChange={event => setAcknowledgeDifferences(event.target.checked)} />
+                  I approve the observed routing, priority and suppression differences.
                 </label>
               )}
             </section>
@@ -348,9 +368,9 @@ export function AutomationReviewDialog({
             className="h-10"
             disabled={busy || !!blockedReason}
             aria-describedby={blockedReason ? blockedId : undefined}
-            onClick={() => onConfirm(acknowledge, acknowledgeErrors)}
+            onClick={() => onConfirm(acknowledge, acknowledgeErrors, acknowledgeDifferences)}
           >
-            {busy ? 'Saving…' : action === 'LIVE' ? 'Confirm LIVE' : 'Confirm publication'}
+            {busy ? 'Saving…' : liveReview ? 'Confirm LIVE' : 'Confirm publication'}
           </Button>
         </div>
       </DialogContent>

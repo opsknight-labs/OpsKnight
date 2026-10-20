@@ -167,6 +167,13 @@ export const AutomationActivity = memo(function AutomationActivity({
                         Restore as new version
                       </Button>
                     )}
+                    {data.canEdit && onRestoreDraft && (
+                      <Button variant="outline" size="sm" className="h-10 sm:h-9"
+                        disabled={busy} onClick={() => onRestoreDraft(version.id)}>
+                        <History aria-hidden="true" />
+                        Restore as draft
+                      </Button>
+                    )}
                   </div>
                 </div>
                 {expanded && snapshot && active.success && (
