@@ -225,6 +225,50 @@
       "blockers": []
     },
     {
+      "capabilityId": "incident-diagnostics",
+      "delivery": "API-13",
+      "workflow": "Bounded incident response evidence, permission-aware action discovery, related incidents, service health and escalation preview",
+      "sources": [
+        {
+          "path": "src/lib/api-v2/incident-diagnostics.ts",
+          "branch": "feat/api-13-enterprise-contracts"
+        },
+        {
+          "path": "src/app/api/v2/incidents/[id]/response-activity/route.ts",
+          "branch": "feat/api-13-enterprise-contracts"
+        },
+        {
+          "path": "src/app/api/v2/services/[id]/health-summary/route.ts",
+          "branch": "feat/api-13-enterprise-contracts"
+        }
+      ],
+      "reviewStatus": "local-evidence-passed-final-ci-pending",
+      "requiredEvidence": [
+        "authorization-negative",
+        "postgres-integration",
+        "contract-sdk",
+        "final-candidate-ci"
+      ],
+      "blockers": [
+        "Structured deployment-change ingestion is not part of the current service audit feed; final-candidate CI is pending."
+      ],
+      "implementedOperations": [
+        "getIncidentResponseActivity",
+        "listIncidentAlerts",
+        "listIncidentRunbookExecutions",
+        "listIncidentNotificationAttempts",
+        "getIncidentAvailableActions",
+        "listRelatedIncidents",
+        "listRunbookExecutions",
+        "listNotificationAttempts",
+        "getNotificationFeedback",
+        "listOperationalEvents",
+        "listServiceChangeEvents",
+        "previewEscalationPolicy",
+        "getServiceHealthSummary"
+      ]
+    },
+    {
       "capabilityId": "incident-collaboration",
       "delivery": "API-17",
       "workflow": "Provision, synchronize, close and reconcile provider collaboration",
