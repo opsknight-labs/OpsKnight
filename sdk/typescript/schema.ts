@@ -51,6 +51,7 @@ export type IntegrationType = { "type": string; "direction": "INBOUND"; "authent
 export type IntegrationValidation = { "id": string; "type": string; "valid": boolean; "checks": Array<{ "code": string; "valid": boolean }>; "activationAllowed": boolean; "revision": number };
 export type IntegrationUsage = { "id": string; "type": string; "service": { "id": string; "name": string }; "deliveriesByStatus": Record<string, number>; "automationObservations": number; "enabledServiceRunbookBindings": number };
 export type UserAdministration = { "id": string; "name": string; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER"; "roleSource": "MANUAL" | "OIDC" | "SCIM"; "status": "ACTIVE" | "INVITED" | "DISABLED"; "revision": number; "deactivatedAt": string | null; "updatedAt": string };
+export type UserDependencies = { "userId": string; "userRevision": number; "asOf": string; "total": number; "counts": { "teams": number; "teamsLed": number; "escalationPolicies": number; "scheduleLayers": number; "overrides": number; "shifts": number; "incidents": number; "actionItems": number; "dashboards": number } };
 export type TeamManagedService = { "id": string; "name": string; "teamId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
 export type TeamActivity = { "id": string; "action": string; "createdAt": string; "actor": { "id": string; "name": string | null } | null; "details": unknown };
 export type TeamMembership = { "id": string; "teamId": string; "userId": string; "role": "OWNER" | "ADMIN" | "MEMBER"; "receiveTeamNotifications": boolean; "createdAt": string };
@@ -169,6 +170,7 @@ export interface OperationRequests {
   getUserInvitation: { "params": { "id": string } };
   renewUserInvitation: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "authenticationMode": "PASSWORD" | "SSO"; "delivery": "EMAIL" | "MANUAL"; "expectedPolicyVersion": number; "expectedOidcConfigVersion": number | null; "expectedLinkingApprovalRevision": string | null } };
   getUserAdministration: { "params": { "id": string } };
+  getUserDependencies: { "params": { "id": string } };
   administerUser: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "operation": "set-role"; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER" } | { "operation": "deactivate" } | { "operation": "reactivate" } | { "operation": "revoke-sessions" } };
   getTeamLead: { "params": { "id": string } };
   setTeamLead: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "userId": string | null } };
@@ -423,6 +425,7 @@ export interface OperationResponses {
   getUserInvitation: { "data": UserInvitationState; "requestId": string; "timestamp": string } & Record<string, unknown>;
   renewUserInvitation: { "data": UserInvitation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getUserAdministration: { "data": UserAdministration; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getUserDependencies: { "data": UserDependencies; "requestId": string; "timestamp": string } & Record<string, unknown>;
   administerUser: { "data": UserAdministration; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getTeamLead: { "data": TeamLead; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setTeamLead: { "data": TeamLeadChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -830,6 +833,14 @@ export const OPERATIONS = {
   "getUserAdministration": {
     "method": "GET",
     "path": "/users/{id}/administration",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getUserDependencies": {
+    "method": "GET",
+    "path": "/users/{id}/dependencies",
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],

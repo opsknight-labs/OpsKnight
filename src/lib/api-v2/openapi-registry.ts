@@ -154,6 +154,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'UserAdministration'
   ),
   op(
+    'get',
+    '/users/{id}/dependencies',
+    'getUserDependencies',
+    'users:read',
+    'item',
+    'UserDependencies'
+  ),
+  op(
     'patch',
     '/users/{id}/administration',
     'administerUser',

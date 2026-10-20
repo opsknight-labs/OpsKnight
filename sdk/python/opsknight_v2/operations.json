@@ -176,6 +176,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getUserDependencies": {
+    "method": "GET",
+    "path": "/users/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "administerUser": {
     "method": "PATCH",
     "path": "/users/{id}/administration",

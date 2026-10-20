@@ -18,6 +18,16 @@ export const USER_ADMINISTRATION_SCHEMAS = {
     deactivatedAt: { type: ['string', 'null'], format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
   }),
+  UserDependencies: object({
+    userId: { type: 'string' },
+    userRevision: { type: 'integer', minimum: 1 },
+    asOf: { type: 'string', format: 'date-time' },
+    total: { type: 'integer', minimum: 0 },
+    counts: object(Object.fromEntries(
+      ['teams', 'teamsLed', 'escalationPolicies', 'scheduleLayers', 'overrides', 'shifts', 'incidents', 'actionItems', 'dashboards']
+        .map(kind => [kind, { type: 'integer', minimum: 0 }])
+    )),
+  }),
 };
 export const USER_ADMINISTRATION_OPERATIONS: Array<{
   method: V2OperationDefinition['method'];
@@ -33,6 +43,13 @@ export const USER_ADMINISTRATION_OPERATIONS: Array<{
     summary: 'Read administrator-only user lifecycle state',
     description:
       'users:read plus a current active administrator role. Returns a concrete User ETag and safe metadata, excluding email, credentials, invitation capabilities and session token versions.',
+  },
+  {
+    method: 'get',
+    path: '/users/{id}/dependencies',
+    summary: 'Inspect bounded user lifecycle dependency counts',
+    description:
+      'users:read (or its inherited administrator scope) and a current active administrator role. Returns a repeatable-read snapshot of nine dependency counts and the user revision without titles, contact details or unbounded records. Counts describe references; they are not a deletion or deactivation authorization decision.',
   },
   {
     method: 'patch',

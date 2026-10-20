@@ -388,7 +388,7 @@
       ],
       "blockers": [
         "Invitation commands and durable delivery implemented; final candidate browser and deployment evidence pending.",
-        "Dependency inspection, bulk administration and profile parity remain unfinished.",
+        "Administrator-only bounded dependency counts passed local PostgreSQL authorization and contract tests; bulk administration and profile parity remain unfinished.",
         "Final candidate browser, authorization and deployment certification remain required."
       ],
       "operationIds": [

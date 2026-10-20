@@ -204,9 +204,10 @@ const decisions: readonly ApiCapability[] = [
     title: 'Invitations, user roles and activation',
     status: 'partial',
     explanation:
-      'Shared UI/REST role, lifecycle and invitation commands preserve current administration authority, last-active-admin protection, identity policy/provider fences, linking-approval state and transactional audit/delivery. Manual invitation URLs are disclosed once and stripped from retry receipts; email payloads are encrypted and rechecked at dispatch. Dependency inspection, bulk/profile parity and final combined certification remain unfinished.',
+      'Shared UI/REST role, lifecycle and invitation commands preserve current administration authority, last-active-admin protection, identity policy/provider fences, linking-approval state and transactional audit/delivery. Manual invitation URLs are disclosed once and stripped from retry receipts; email payloads are encrypted and rechecked at dispatch. Administrator-only dependency counts are available without linked record details. Bulk/profile parity and final combined certification remain unfinished.',
     operationIds: [
       'getUserAdministration',
+      'getUserDependencies',
       'administerUser',
       'getUserInvitationPolicy',
       'createUserInvitation',

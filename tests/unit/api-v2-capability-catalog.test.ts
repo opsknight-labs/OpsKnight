@@ -37,6 +37,7 @@ describe('truthful capability inventory', () => {
       status: 'partial',
       operationIds: [
         'getUserAdministration',
+        'getUserDependencies',
         'administerUser',
         'getUserInvitationPolicy',
         'createUserInvitation',

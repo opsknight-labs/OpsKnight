@@ -6,6 +6,7 @@ vi.mock('@/lib/rbac', async importOriginal => ({
   assertAdmin: async () => ({ id: identity.id, role: 'ADMIN' }),
 }));
 import { GET, PATCH } from '@/app/api/v2/users/[id]/administration/route';
+import { GET as getDependencies } from '@/app/api/v2/users/[id]/dependencies/route';
 import { updateUserRole, deactivateUser, reactivateUser } from '@/app/(app)/users/actions';
 import { administerUser } from '@/lib/users/administration';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
@@ -48,6 +49,32 @@ it('returns privileged safe metadata and an all-writer revision without credenti
   expect((await db.user.findUniqueOrThrow({ where: { id: target.id } })).revision).toBe(
     target.revision + 1
   );
+});
+it('returns bounded dependency counts to administrators without leaking linked resource details', async () => {
+  const admin = await createV2Credential(['users:read']);
+  const target = await createTestUser();
+  const team = await db.team.create({ data: { name: 'Private response team', teamLeadId: target.id } });
+  await db.teamMember.create({ data: { teamId: team.id, userId: target.id } });
+  await db.dashboard.create({ data: {
+    name: 'Private dashboard', userId: target.id, layout: [],
+  } });
+  const path = `/users/${target.id}/dependencies`;
+  const response = await invokeV2(getDependencies, admin.token, 'GET', path, { id: target.id });
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  const body = await response.json();
+  expect(body.data).toMatchObject({
+    userId: target.id,
+    total: 3,
+    counts: { teams: 1, teamsLed: 1, dashboards: 1, incidents: 0 },
+  });
+  expect(JSON.stringify(body)).not.toContain('Private response team');
+  expect(JSON.stringify(body)).not.toContain('Private dashboard');
+  expect(JSON.stringify(body)).not.toContain(target.email);
+  const responder = await createV2Credential(['users:read'], 'RESPONDER');
+  expect((await invokeV2(getDependencies, responder.token, 'GET', path, { id: target.id })).status).toBe(403);
+  const broad = await createV2Credential(['admin:manage']);
+  expect((await invokeV2(getDependencies, broad.token, 'GET', path, { id: target.id })).status).toBe(200);
 });
 it('commits a canonical attributed role audit and concurrent same-key requests only once', async () => {
   const admin = await createV2Credential(['users:write']);

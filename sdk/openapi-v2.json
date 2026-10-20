@@ -2937,6 +2937,87 @@
           "updatedAt"
         ]
       },
+      "UserDependencies": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "userRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "teams": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "teamsLed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "escalationPolicies": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "scheduleLayers": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "overrides": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "shifts": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "incidents": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "actionItems": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "dashboards": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "teams",
+              "teamsLed",
+              "escalationPolicies",
+              "scheduleLayers",
+              "overrides",
+              "shifts",
+              "incidents",
+              "actionItems",
+              "dashboards"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "userRevision",
+          "asOf",
+          "total",
+          "counts"
+        ]
+      },
       "TeamManagedService": {
         "type": "object",
         "additionalProperties": false,
@@ -24841,6 +24922,98 @@
         "x-required-scope": "users:write",
         "x-idempotency": "required",
         "x-concurrency": "etag"
+      }
+    },
+    "/users/{id}/dependencies": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Inspect bounded user lifecycle dependency counts",
+        "description": "users:read (or its inherited administrator scope) and a current active administrator role. Returns a repeatable-read snapshot of nine dependency counts and the user revision without titles, contact details or unbounded records. Counts describe references; they are not a deletion or deactivation authorization decision.\n\nRequires API scope `users:read` (Users read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserDependencies"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getUserDependencies",
+        "x-required-scope": "users:read"
       }
     },
     "/teams/{id}/activity": {
