@@ -1393,6 +1393,8 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('patch', '/services/{id}/notification-settings', 'updateServiceNotificationSettings', 'services:write', 'item', 'ServiceNotificationSettings'),
   op('get', '/services/{id}/support-hours', 'getServiceSupportHours', 'response-policy:read', 'item', 'ServiceSupportHours'),
   op('put', '/services/{id}/support-hours', 'updateServiceSupportHours', 'response-policy:write', 'item', 'ServiceSupportHours'),
+  op('get', '/services/{id}/response-policy/classification', 'getServiceClassificationPolicy', 'response-policy:read', 'item', 'ServiceClassificationPolicy'),
+  op('put', '/services/{id}/response-policy/classification', 'updateServiceClassificationPolicy', 'response-policy:write', 'item', 'ServiceClassificationPolicy'),
   op('patch', '/services/{id}', 'updateService', 'services:write', 'item', 'Service'),
   op('delete', '/services/{id}', 'deleteService', 'services:write', 'item', 'ActionResult'),
   op('get', '/services', 'listServices', 'services:read', 'list', 'Service'),

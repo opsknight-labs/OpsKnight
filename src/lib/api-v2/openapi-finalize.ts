@@ -234,6 +234,43 @@ const extraSchemas: Json = {
     },
     required: ['policy'],
   },
+  ServiceClassificationPolicy: {
+    type: 'object',
+    properties: {
+      policy: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              scopeKey: { type: 'string' },
+              version: { type: 'integer' },
+              derivePriorityFromUrgency: { type: 'boolean' },
+              priorityFallbackMode: { type: 'string', enum: ['INHERIT', 'ENABLED', 'DISABLED'] },
+              rules: {
+                type: 'array',
+                minItems: 4,
+                maxItems: 4,
+                items: {
+                  type: 'object',
+                  properties: {
+                    matchValue: { type: 'string', enum: ['critical', 'error', 'warning', 'info'] },
+                    priorityMode: { type: 'string', enum: ['INHERIT', 'FALLBACK', 'SET', 'CLEAR'] },
+                    priority: { type: ['string', 'null'], enum: ['P1', 'P2', 'P3', 'P4', 'P5', null] },
+                    urgencyMode: { type: 'string', enum: ['INHERIT', 'SET', 'DEFAULT'] },
+                    urgency: { type: ['string', 'null'], enum: ['HIGH', 'MEDIUM', 'LOW', null] },
+                  },
+                  required: ['matchValue', 'priorityMode', 'priority', 'urgencyMode', 'urgency'],
+                },
+              },
+            },
+            required: ['scopeKey', 'version', 'derivePriorityFromUrgency', 'priorityFallbackMode', 'rules'],
+          },
+        ],
+      },
+    },
+    required: ['policy'],
+  },
   RunbookExecutionStarted: {
     type: 'object',
     properties: {

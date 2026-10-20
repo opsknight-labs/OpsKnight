@@ -87,7 +87,7 @@
     "applicationReplicas": 2,
     "coverage": "Functional SDK/UI/ingestion parity and publication safety; not load/HA or full enterprise coverage"
   },
-  "registeredOperationCount": 227,
+  "registeredOperationCount": 229,
   "currentReview": {
     "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
     "milestone": "M0",

@@ -631,6 +631,13 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Canonical support-hours policy version lock, immutable version creation, business audit and credential-scoped replay receipt commit in the same transaction.',
   },
+  'PUT /api/v2/services/[id]/response-policy/classification': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical classification version lock, four-rule validation, immutable version, attributed audit and replay receipt commit atomically.',
+  },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
   'PATCH /api/v2/schedules/[id]': natural('Sets fields to the requested values.', 'etag'),

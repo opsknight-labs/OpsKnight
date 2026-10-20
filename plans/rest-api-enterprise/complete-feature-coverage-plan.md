@@ -531,7 +531,7 @@ OpsKnight has a substantial notification control plane:
 
 REST v2 now exposes notification history, failed-delivery retry, self-service channel preferences, safe provider configuration, provider readiness, redacted diagnostics, durable idempotent test intents, VAPID rotation and service-specific notification channel/event settings. Service policy updates use the Service revision, durable replay and canonical audit; disabling Slack also disables active service Slack destinations in the same transaction. Runtime capacity administration, delivery feedback and the remaining operational recovery surface are still separate gaps tracked in the workflow inventory.
 
-Versioned service support-hours policies are also available under `/services/{id}/support-hours`. REST uses the canonical policy validator and immutable-version command; a concrete policy version ETag, idempotency receipt, advisory lock and business audit commit together. Workspace and integration-scoped policy administration, classification/SLA lifecycle and broader response-policy previews remain pending.
+Versioned service support-hours and severity-classification policies are available under `/services/{id}/support-hours` and `/services/{id}/response-policy/classification`. REST uses the canonical policy validators and immutable-version commands; a concrete policy version ETag, idempotency receipt, advisory lock and business audit commit together. Workspace and integration-scoped policy administration, SLA lifecycle and broader response-policy previews remain pending.
 
 ### A. Proposed endpoints
 

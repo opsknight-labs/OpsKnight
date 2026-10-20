@@ -1902,6 +1902,25 @@
     ],
     "bodyRequired": true
   },
+  "getServiceClassificationPolicy": {
+    "method": "GET",
+    "path": "/services/{id}/response-policy/classification",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceClassificationPolicy": {
+    "method": "PUT",
+    "path": "/services/{id}/response-policy/classification",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "updateService": {
     "method": "PATCH",
     "path": "/services/{id}",
