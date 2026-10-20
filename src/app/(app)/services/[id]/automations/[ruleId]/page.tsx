@@ -11,6 +11,7 @@ import {
   FlaskConical,
   Gauge,
   GitBranch,
+  Hand,
   History,
   Info,
   PauseCircle,
@@ -22,6 +23,8 @@ import {
   Server,
   Settings2,
   ShieldCheck,
+  Sparkles,
+  Zap,
 } from 'lucide-react';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
@@ -36,9 +39,10 @@ import { getUserTimeZone } from '@/lib/timezone';
 import { CAPABILITIES } from '@/lib/authorization';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import { describeBinding } from '@/lib/runbooks/presentation/binding-contract';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { SectionCard } from '@/components/runbooks/ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import RuleConfigurationCheck from '@/components/runbooks/RuleConfigurationCheck';
 import RunbookExecutionPreview from '@/components/runbooks/RunbookExecutionPreview';
 import { ActionForm, SubmitButton } from '@/components/runbooks/RunbookControls';
@@ -173,83 +177,228 @@ export default async function AutomationRulePage({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
-      <RunbookPageHeader
-        title={ruleName}
-        breadcrumbs={[
-          { label: 'Services', href: '/services' },
-          { label: rule.service?.name ?? 'Service', href: `/services/${input.id}` },
-          { label: 'Automations', href: configureHref },
-          { label: ruleName },
-        ]}
-        badge={<RuleStatusPill kind={statusKind} />}
-        description={
-          <>
-            Runs{' '}
-            <Link
-              href={`/runbooks/${rule.runbookId}`}
-              className="font-medium text-foreground hover:underline"
+      <DetailHeroBanner
+        statsPlacement="bottom"
+        breadcrumb={{
+          label: rule.service?.name ?? 'Service Automations',
+          href: configureHref,
+          current: ruleName,
+        }}
+        tag="AUTOMATION RULE · SERVICE PROTECTOR"
+        badges={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <RuleStatusPill kind={statusKind} />
+            <Badge
+              variant="outline"
+              className="border-white/20 bg-white/5 text-slate-300 font-mono text-[11px] font-normal shadow-2xs"
             >
-              {rule.runbook.name}
-            </Link>
-            {' · '}
-            {selectedVersion ? `v${selectedVersion.version}` : 'No version'} ({strategy}){' · '}
-            created by {rule.createdBy?.name ?? 'Unavailable user'}{' '}
-            <RuleTimestamp {...timestamp(rule.createdAt, userTimeZone)} />
-          </>
+              {selectedVersion ? `v${selectedVersion.version}` : 'No version'} ({strategy})
+            </Badge>
+          </div>
         }
+        icon={
+          <div
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border shadow-inner transition-transform',
+              rule.mode === 'AUTOMATIC'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : rule.mode === 'SUGGESTED'
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                  : 'border-sky-500/30 bg-sky-500/10 text-sky-400'
+            )}
+          >
+            {rule.mode === 'AUTOMATIC' ? (
+              <Zap className="h-6 w-6" />
+            ) : rule.mode === 'SUGGESTED' ? (
+              <Sparkles className="h-6 w-6" />
+            ) : (
+              <Hand className="h-6 w-6" />
+            )}
+          </div>
+        }
+        title={ruleName}
+        subtitle={
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+            <span>
+              Runs{' '}
+              <Link
+                href={`/runbooks/${rule.runbookId}`}
+                className="font-semibold text-white hover:text-primary transition-colors underline-offset-2 hover:underline"
+              >
+                {rule.runbook.name}
+              </Link>
+            </span>
+            <span>·</span>
+            <span>created by {rule.createdBy?.name ?? 'OpsKnight Admin'}</span>
+            <span>·</span>
+            <RuleTimestamp
+              {...timestamp(rule.createdAt, userTimeZone)}
+              className="text-slate-400"
+            />
+          </div>
+        }
+        stats={[
+          {
+            label: 'TARGET',
+            value: presentation.target,
+            icon: <Server className="h-3.5 w-3.5 text-primary" />,
+            subtext: rule.defaultAgent
+              ? 'Dedicated Agent'
+              : rule.defaultAgentPool
+                ? 'Agent Pool'
+                : 'Dynamic Target',
+          },
+          {
+            label: 'TRIGGER',
+            value: presentation.trigger,
+            icon: <Radio className="h-3.5 w-3.5 text-amber-400" />,
+            subtext:
+              rule.triggers.length === 1
+                ? '1 trigger condition'
+                : `${rule.triggers.length} triggers`,
+          },
+          {
+            label: 'FLEET READINESS',
+            value: (
+              <span
+                className={cn('inline-flex items-center gap-1.5', TONE_TEXT[readinessView.tone])}
+              >
+                <span
+                  aria-hidden
+                  className={cn('h-2 w-2 shrink-0 rounded-full', TONE_DOT[readinessView.tone])}
+                />
+                {readinessView.label}
+              </span>
+            ),
+            icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />,
+            subtext: `${readiness.checks.length} policy checks evaluated`,
+          },
+          {
+            label: 'EXECUTIONS',
+            value: `${rule.executions.length} runs`,
+            icon: <Activity className="h-3.5 w-3.5 text-indigo-400" />,
+            subtext:
+              successRate(rule.executions) !== null
+                ? `${successRate(rule.executions)}% success rate`
+                : 'No runs recorded',
+          },
+        ]}
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             {canRun && (
-              <Button asChild size="sm">
+              <Button
+                asChild
+                size="sm"
+                className="h-9 px-3.5 gap-2 rounded-xl font-semibold shadow-xs"
+              >
                 <a href="#run-now">
                   <Play className="h-4 w-4" aria-hidden />
-                  Run now
+                  <span>Run now</span>
                 </a>
               </Button>
             )}
-            <Button asChild size="sm" variant="outline">
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-9 px-3.5 gap-2 rounded-xl border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold shadow-xs"
+            >
               <Link href={configureHref}>
                 <Settings2 className="h-4 w-4" aria-hidden />
-                Configure
+                <span>Configure</span>
               </Link>
             </Button>
-            <Button asChild size="sm" variant="ghost">
+            <Button
+              asChild
+              size="sm"
+              variant="ghost"
+              className="h-9 px-3.5 gap-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 font-semibold"
+            >
               <Link href={`/runbooks/${rule.runbookId}`}>
                 <BookOpen className="h-4 w-4" aria-hidden />
-                View runbook
+                <span>Master Runbook</span>
               </Link>
             </Button>
-          </>
+          </div>
         }
       />
 
+      {/* Modernized Safety & Verification Pillars */}
       <section
-        aria-label="What the evidence establishes"
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        aria-label="Safety & Verification Pillars"
+        className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/70 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs space-y-3"
       >
-        {[
-          [
-            'Configuration',
-            'Validates version, typed inputs, trigger and target selection. It performs no action.',
-          ],
-          [
-            'Agent policy',
-            'A fresh signed allowlist check for this exact configuration. It does not grant platform permissions.',
-          ],
-          [
-            'Execution preview',
-            'Review the frozen plan and approval gates. Preview neither runs commands nor proves target health.',
-          ],
-          [
-            'Target verification',
-            'Requires a completed action and authored checks with healthy post-state. Investigate UNKNOWN outcomes independently.',
-          ],
-        ].map(([title, description]) => (
-          <div key={title} className="rounded-lg border p-3 text-sm">
-            <h2 className="font-semibold">{title}</h2>
-            <p className="mt-1 text-muted-foreground">{description}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-xs sm:text-sm font-bold text-foreground">
+                Safety & Verification Pillars
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                Boundary guarantees enforced before automated remediation dispatches
+              </p>
+            </div>
           </div>
-        ))}
+          <span className="text-[11px] font-semibold text-muted-foreground px-2 py-0.5 rounded-md border border-border/70 bg-muted/40">
+            4-Stage Gate
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+          <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <ClipboardCheck className="h-3.5 w-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-foreground">1. Configuration</h3>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Validates version, typed inputs, trigger and target schemas. Performs no physical
+              action.
+            </p>
+          </div>
+
+          <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-foreground">2. Agent Policy</h3>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              A fresh signed allowlist check for this exact configuration. Does not grant platform
+              permissions.
+            </p>
+          </div>
+
+          <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                <FlaskConical className="h-3.5 w-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-foreground">3. Execution Preview</h3>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Review frozen plan and approval gates. Preview neither runs commands nor mutates
+              targets.
+            </p>
+          </div>
+
+          <div className="group rounded-xl border border-border/70 bg-card/80 p-3 shadow-2xs hover:border-border transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <Activity className="h-3.5 w-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-foreground">4. Target Verification</h3>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Requires completed action and authored checks with healthy post-state.
+            </p>
+          </div>
+        </div>
       </section>
 
       {rule.detachedAt && (

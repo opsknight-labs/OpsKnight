@@ -21,16 +21,16 @@ export type RuleGlance = {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2 text-sm">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right font-medium break-words">{children}</dd>
+    <div className="flex items-start justify-between gap-3 py-2 text-xs sm:text-sm">
+      <dt className="shrink-0 text-muted-foreground font-medium text-xs">{label}</dt>
+      <dd className="min-w-0 text-right font-semibold break-words text-foreground">{children}</dd>
     </div>
   );
 }
 
 export function RuleAtAGlance({ glance }: { glance: RuleGlance }) {
   return (
-    <dl className="divide-y">
+    <dl className="divide-y divide-border/60">
       <Row label="Mode">{glance.mode}</Row>
       <Row label="Status">
         <RuleStatusPill kind={glance.status} />
