@@ -12,7 +12,13 @@ describe('persistObservationBatch', () => {
     integrationType: 'CLOUDWATCH',
     observations: [
       { key: 'env', path: 'detail.env', value: 'prod', type: 'ENUM', unmapped: true },
-      { key: 'severity', path: 'detail.severity', value: 'critical', type: 'STRING', unmapped: false },
+      {
+        key: 'severity',
+        path: 'detail.severity',
+        value: 'critical',
+        type: 'STRING',
+        unmapped: false,
+      },
     ],
   };
 
@@ -124,5 +130,53 @@ describe('persistObservationBatch', () => {
       { key: 'env', type: 'ENUM' },
       { key: 'custom_flag', type: 'BOOLEAN' },
     ]);
+  });
+
+  it('persists source provenance column for PROVIDER and EVENT observations into database', async () => {
+    const jobWithSources: ObservationJob = {
+      task: 'AUTOMATION_OBSERVE',
+      logicalKey: 'job-sources',
+      serviceId: 'srv-1',
+      integrationId: 'int-gh-1',
+      integrationType: 'GITHUB',
+      observations: [
+        {
+          key: 'status',
+          path: 'status',
+          value: 'open',
+          type: 'STRING',
+          unmapped: false,
+          source: 'EVENT',
+        },
+        {
+          key: 'status',
+          path: 'status',
+          value: 'closed',
+          type: 'STRING',
+          unmapped: true,
+          source: 'PROVIDER',
+        },
+      ],
+    };
+
+    const tx = createMockTx({ pendingRows: [] });
+    const result = await persistObservationBatch(tx, jobWithSources, p => p as ObservationJob);
+
+    expect(result.recorded).toBe(true);
+    expect(tx.$executeRaw).toHaveBeenCalled();
+
+    const calls = vi.mocked(tx.$executeRaw).mock.calls;
+    const insertCall = calls.find(call => {
+      const sqlObj = call[0] as unknown as { strings: string[]; values: unknown[] };
+      return sqlObj?.strings?.some(s => s.includes('INSERT INTO "AutomationContextObservation"'));
+    });
+    expect(insertCall).toBeDefined();
+    const sql = insertCall![0] as unknown as { strings: string[]; values: unknown[] };
+    expect(sql.strings.join('')).toContain('"source"');
+    expect(sql.strings.join('')).toContain(
+      'COALESCE(EXCLUDED."source", "AutomationContextObservation"."source")'
+    );
+    expect(sql.values).toContain('EVENT');
+    expect(sql.values).toContain('PROVIDER');
   });
 });

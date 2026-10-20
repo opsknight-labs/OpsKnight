@@ -6,6 +6,7 @@ export type Observation = {
   value: string;
   type: string;
   unmapped: boolean;
+  source?: 'PROVIDER' | 'EVENT';
 };
 
 /** Formats a dotted or bracketed path into a readable hierarchical title, e.g. repository.name -> Repository Name */

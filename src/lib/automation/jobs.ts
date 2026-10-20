@@ -14,6 +14,7 @@ const observationSchema = z
     value: z.string().max(256),
     type: z.string().max(16),
     unmapped: z.boolean(),
+    source: z.enum(['PROVIDER', 'EVENT']).optional(),
   })
   .strict();
 export const jobSchema = z.discriminatedUnion('task', [

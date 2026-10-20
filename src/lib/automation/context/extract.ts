@@ -9,16 +9,15 @@ export function compilePath(path: string): Array<string | number> {
   const cleaned = path.trim().replace(/^\$\.?/, '');
   if (!cleaned) throw new Error('Invalid extraction path');
   if (/^\d/.test(cleaned))
-    throw new Error('Invalid extraction path: root array indexing requires bracket notation like [0]');
+    throw new Error(
+      'Invalid extraction path: root array indexing requires bracket notation like [0]'
+    );
   const normalized = cleaned
     .replace(/^\[(\d+)\]/, '$1')
     .replace(/\[(\d+)\]/g, '.$1')
     .replace(/^\./, '');
   const segments = normalized.split('.');
-  if (
-    !segments.length ||
-    segments.some(t => !/^[A-Za-z_][\w-]*$/.test(t) && !/^\d+$/.test(t))
-  )
+  if (!segments.length || segments.some(t => !/^[A-Za-z_][\w-]*$/.test(t) && !/^\d+$/.test(t)))
     throw new Error('Invalid extraction path');
   const tokens = segments.map(t => (/^\d+$/.test(t) ? Number(t) : t));
   if (
@@ -54,10 +53,12 @@ export function extractContextWithProvenance(input: {
     raw: string | number | boolean | null;
     canonical: import('../contract').FieldState;
     sourcePath: string | null;
+    source?: 'PROVIDER' | 'EVENT' | null;
   }> = [];
   for (const field of input.fields) {
     let raw: unknown;
     let sourcePath: string | null = null;
+    let source: 'PROVIDER' | 'EVENT' | null = null;
     for (const mapping of field.mappings) {
       if (mapping.integrationType && mapping.integrationType !== input.integrationType) continue;
       const candidate = readCompiledPath(
@@ -71,6 +72,7 @@ export function extractContextWithProvenance(input: {
       ) {
         raw = candidate;
         sourcePath = mapping.path;
+        source = mapping.source;
         break;
       }
     }
@@ -81,6 +83,7 @@ export function extractContextWithProvenance(input: {
         typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean' ? raw : null,
       canonical: context[field.key],
       sourcePath,
+      source: raw !== undefined && raw !== null ? source : null,
     });
   }
   return { context, normalization };

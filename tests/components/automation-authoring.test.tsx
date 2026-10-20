@@ -1033,3 +1033,144 @@ it('disambiguates identical paths between normalized events and provider webhook
   });
   expect(eventField?.mappings[0].integrationType).toBeUndefined();
 });
+
+it('does not coerce an unmapped provider observation into EVENT when an existing mapping shares the path', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    draft: {
+      snapshot: {
+        ...emptySnapshot,
+        fields: [
+          {
+            fieldId: 'fld-event-status',
+            key: 'event_status',
+            label: 'Event Status',
+            type: 'STRING' as const,
+            mappings: [
+              {
+                path: 'status',
+                source: 'EVENT' as const,
+              },
+            ],
+            caseSensitive: false,
+            aliases: {},
+          },
+        ],
+      },
+      revision: 1,
+    },
+    integrations: [{ id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' }],
+    observations: [
+      {
+        id: 'obs-status-provider',
+        serviceId: 'service-1',
+        integrationId: 'gh-1',
+        integrationType: 'GITHUB',
+        fieldKey: 'status',
+        sourcePath: 'status',
+        source: 'PROVIDER',
+        fieldType: 'STRING',
+        count: 7,
+        unmapped: false,
+        lastSeenAt: '2026-10-21T00:00:00Z',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // Switch to GITHUB integration
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+
+  // Observed field select should contain GITHUB:PROVIDER:status, NOT GITHUB:EVENT:status
+  const observedSelect = screen.getByLabelText('Observed field');
+  const options = screen.getAllByRole('option');
+  const providerOption = options.find(o => o.getAttribute('value') === 'GITHUB:PROVIDER:status');
+  expect(providerOption).toBeDefined();
+  expect(providerOption).toHaveTextContent('Status — status (GITHUB)');
+  expect(options.some(o => o.getAttribute('value') === 'GITHUB:EVENT:status')).toBe(false);
+
+  // Select the provider observation and add it
+  fireEvent.change(observedSelect, { target: { value: 'GITHUB:PROVIDER:status' } });
+  fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'GitHub Status' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const newField = savedSnapshot!.fields.find(f => f.key === 'github_status');
+  expect(newField).toBeDefined();
+  expect(newField?.mappings[0]).toMatchObject({
+    source: 'PROVIDER',
+    integrationType: 'GITHUB',
+    path: 'status',
+  });
+});
+
+it('treats legacy observations without recorded source as integration-defaulted rather than guessing from existing mappings', async () => {
+  const testData = {
+    ...data,
+    draft: {
+      snapshot: {
+        ...emptySnapshot,
+        fields: [
+          {
+            fieldId: 'fld-status',
+            key: 'status',
+            label: 'Status',
+            type: 'STRING' as const,
+            mappings: [
+              {
+                path: 'status',
+                source: 'EVENT' as const,
+              },
+            ],
+            caseSensitive: false,
+            aliases: {},
+          },
+        ],
+      },
+      revision: 1,
+    },
+    integrations: [{ id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' }],
+    observations: [
+      {
+        id: 'obs-status-legacy',
+        serviceId: 'service-1',
+        integrationId: 'gh-1',
+        integrationType: 'GITHUB',
+        fieldKey: 'status',
+        sourcePath: 'status',
+        source: null,
+        fieldType: 'STRING',
+        count: 2,
+        unmapped: false,
+        lastSeenAt: '2026-10-21T00:00:00Z',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+
+  const options = screen.getAllByRole('option');
+  // Legacy GITHUB observation without recorded source defaults to PROVIDER by integration, not guessed as EVENT from existing mapping
+  const legacyOption = options.find(o => o.getAttribute('value') === 'GITHUB:PROVIDER:status');
+  expect(legacyOption).toBeDefined();
+  expect(legacyOption).toHaveTextContent('Status — status (GITHUB)');
+  expect(options.some(o => o.getAttribute('value') === 'GITHUB:EVENT:status')).toBe(false);
+});

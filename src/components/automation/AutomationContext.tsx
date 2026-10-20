@@ -155,6 +155,10 @@ export function AutomationContext({
 
     for (const o of data.observations) {
       if (integrationType !== 'ALL' && o.integrationType !== integrationType) continue;
+      const recordedSource: 'PROVIDER' | 'EVENT' | undefined =
+        o.source === 'PROVIDER' || o.source === 'EVENT'
+          ? (o.source as 'PROVIDER' | 'EVENT')
+          : undefined;
       const matchingDisc = discoveries.find(
         d =>
           d.path === o.sourcePath &&
@@ -164,20 +168,9 @@ export function AutomationContext({
               d.integrationType === 'ALL'
             : d.integrationType === o.integrationType || d.integrationType === 'ALL')
       );
-      const matchingMap = draft.fields
-        .flatMap(f => f.mappings)
-        .find(
-          m =>
-            m.path === o.sourcePath &&
-            (o.integrationType === 'EVENTS_API'
-              ? !m.integrationType ||
-                m.integrationType === 'EVENTS_API' ||
-                m.integrationType === 'ALL'
-              : m.integrationType === o.integrationType || m.integrationType === 'ALL')
-        );
       const source: 'PROVIDER' | 'EVENT' =
+        recordedSource ??
         matchingDisc?.source ??
-        matchingMap?.source ??
         (o.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
       const compositeId = `${o.integrationType}:${source}:${o.sourcePath}`;
       if (seen.has(compositeId)) continue;
@@ -211,7 +204,7 @@ export function AutomationContext({
       });
     }
     return list;
-  }, [data.observations, draft.fields, discoveries, integrationType]);
+  }, [data.observations, discoveries, integrationType]);
 
   const integrationTypes = useMemo(
     () => [...new Set(data.integrations.map(i => i.type))],

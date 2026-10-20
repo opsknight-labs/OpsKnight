@@ -14,8 +14,10 @@ import { evaluateAutomation } from '@/lib/automation/evaluator';
 import { compilePath, readCompiledPath } from '@/lib/automation/context/extract';
 import { discoverFields } from '@/lib/automation/discovery';
 import { jobSchema } from '@/lib/automation/jobs';
+import { checksum } from '@/lib/automation/cache';
 import {
   persistAutomation,
+  prepareAutomation,
   type IntegrationEventEnvelope,
   type RuntimeEvaluation,
 } from '@/lib/automation/runtime';
@@ -277,6 +279,146 @@ describe('automation semantics', () => {
       });
     }
   });
+
+  it('records provenance source and preserves both EVENT and PROVIDER observations when paths are identical', async () => {
+    let persistedJobData: { payload: unknown } | null = null;
+    const snapshot: Snapshot = {
+      schemaVersion: 1,
+      fields: [
+        {
+          fieldId: 'fld-status',
+          key: 'status',
+          label: 'Status',
+          type: 'STRING',
+          caseSensitive: false,
+          aliases: {},
+          mappings: [
+            {
+              path: 'status',
+              source: 'EVENT',
+            },
+          ],
+        },
+      ],
+      rules: [],
+    };
+    const { compiled } = compileAutomation(snapshot);
+    const versionId = 'ver-prov-1';
+    const stored = {
+      id: versionId,
+      versionNumber: 1,
+      compiledSnapshot: compiled,
+      checksum: checksum(compiled),
+    };
+
+    const mockTx = {
+      $queryRaw: vi.fn(async () => [{ mode: 'LIVE', activeVersionId: versionId }]),
+      automationVersion: {
+        findUnique: vi.fn(async () => stored),
+      },
+      service: {
+        findUnique: vi.fn(async () => ({
+          escalationPolicyId: null,
+          policy: null,
+        })),
+      },
+      backgroundJob: {
+        create: vi.fn(async ({ data }: { data: { payload: unknown } }) => {
+          persistedJobData = data;
+          return { id: 'job-1' };
+        }),
+      },
+      incidentAutomationDecision: { create: vi.fn(async () => ({})) },
+      automationTrace: { create: vi.fn(async () => ({})) },
+      tag: { createMany: vi.fn(), findMany: vi.fn(async () => []) },
+      incidentTag: { createMany: vi.fn() },
+    };
+
+    const envelope: IntegrationEventEnvelope = {
+      serviceId: 'srv-omega',
+      integrationId: 'int-gh-42',
+      integrationType: 'GITHUB',
+      event: {
+        event_action: 'trigger',
+        dedup_key: 'alert-status-1',
+        payload: {
+          summary: 'Status check',
+          source: 'events-api',
+          severity: 'error',
+          custom_details: {},
+        },
+        status: 'open',
+      } as unknown as IntegrationEventEnvelope['event'],
+      providerPayload: {
+        status: 'closed',
+      },
+      receivedAt: new Date('2026-10-21T00:00:00Z'),
+    };
+
+    const runtime = await prepareAutomation(
+      mockTx as unknown as Parameters<typeof prepareAutomation>[0],
+      envelope,
+      { priority: 'P2', urgency: 'HIGH' }
+    );
+
+    // Verify prepareAutomation populated both observations with distinct source tags
+    expect(runtime).not.toBeNull();
+    expect(runtime!.observations).toHaveLength(2);
+    expect(runtime!.observations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'status',
+          path: 'status',
+          value: 'open',
+          source: 'EVENT',
+        }),
+        expect.objectContaining({
+          key: 'status',
+          path: 'status',
+          value: 'closed',
+          source: 'PROVIDER',
+        }),
+      ])
+    );
+
+    await persistAutomation(
+      mockTx as unknown as Parameters<typeof persistAutomation>[0],
+      'inc-xyz',
+      envelope,
+      runtime!
+    );
+
+    expect(mockTx.backgroundJob.create).toHaveBeenCalled();
+    expect(persistedJobData).not.toBeNull();
+    const payload = persistedJobData!.payload;
+
+    const parseResult = jobSchema.safeParse(payload);
+    expect(parseResult.success).toBe(true);
+    if (parseResult.success && parseResult.data.task === 'AUTOMATION_OBSERVE') {
+      expect(parseResult.data.observations).toHaveLength(2);
+      expect(parseResult.data.observations).toEqual(
+        expect.arrayContaining([
+          {
+            key: 'status',
+            path: 'status',
+            value: 'open',
+            type: 'STRING',
+            unmapped: false,
+            source: 'EVENT',
+          },
+          {
+            key: 'status',
+            path: 'status',
+            value: 'closed',
+            type: 'STRING',
+            unmapped: false,
+            source: 'PROVIDER',
+          },
+        ])
+      );
+    }
+  });
+
   it('preserves fail-safe semantics where missing or unmapped values evaluate to UNKNOWN for NE and NOT_IN', () => {
     const missingState: FieldState = { state: 'MISSING' };
     const unmappedState: FieldState = { state: 'UNMAPPED', raw: 'other' };

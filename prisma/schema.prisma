@@ -4132,6 +4132,7 @@ model AutomationContextObservation {
   serviceId              String
   integrationId          String
   integrationType        String
+  source                 String?
   fieldKey               String
   sourcePath             String
   fieldType              String
