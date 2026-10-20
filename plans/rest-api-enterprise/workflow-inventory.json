@@ -488,7 +488,7 @@
       ],
       "blockers": [
         "Service-specific notification policy, capacity administration, delivery feedback and operational recovery still require end-to-end parity review.",
-        "Self-service preference browser verification, provider test worker execution, and deployment certification remain pending."
+        "Self-service preference browser verification and deployment certification remain pending. Provider test REST queueing, worker delivery, durable receipt, and completed diagnostic visibility passed locally against dedicated PostgreSQL."
       ],
       "operationIds": [
         "getMyNotificationPreferences",
