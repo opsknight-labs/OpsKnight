@@ -4,4 +4,5 @@ export type AuthorizedPolicyActor = {
   actorId: string;
   capabilities: readonly string[];
   source: PolicyAuditSource;
+  apiClientId?: string;
 };

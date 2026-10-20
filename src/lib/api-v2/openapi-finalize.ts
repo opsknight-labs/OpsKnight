@@ -198,6 +198,42 @@ const extraSchemas: Json = {
     },
     required: ['serviceId', 'revision', 'serviceNotificationChannels', 'serviceNotifyOnTriggered', 'serviceNotifyOnAck', 'serviceNotifyOnResolved', 'serviceNotifyOnSlaBreach'],
   },
+  ServiceSupportHours: {
+    type: 'object',
+    properties: {
+      policy: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              scopeKey: { type: 'string' },
+              version: { type: 'integer' },
+              timezone: { type: 'string' },
+              inheritWorkspace: { type: 'boolean' },
+              mode: { type: 'string', enum: ['INHERIT', 'ALWAYS', 'SCHEDULED'] },
+              windows: {
+                type: 'array',
+                items: { type: 'object', properties: {
+                  dayOfWeek: { type: 'integer' }, startMinute: { type: 'integer' }, endMinute: { type: 'integer' },
+                }, required: ['dayOfWeek', 'startMinute', 'endMinute'] },
+              },
+              exceptions: {
+                type: 'array',
+                items: { type: 'object', properties: {
+                  localDate: { type: 'string', format: 'date' }, available: { type: 'boolean' },
+                  startMinute: { type: ['integer', 'null'] }, endMinute: { type: ['integer', 'null'] },
+                  label: { type: ['string', 'null'] },
+                }, required: ['localDate', 'available', 'startMinute', 'endMinute', 'label'] },
+              },
+            },
+            required: ['scopeKey', 'version', 'timezone', 'inheritWorkspace', 'mode', 'windows', 'exceptions'],
+          },
+        ],
+      },
+    },
+    required: ['policy'],
+  },
   RunbookExecutionStarted: {
     type: 'object',
     properties: {

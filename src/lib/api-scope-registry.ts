@@ -503,14 +503,14 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.RESPONSE_POLICY_READ,
     'Response policy read',
     'Administration',
-    'Read response policy through the response-policy API.',
+    'Read versioned response policy, including service support hours.',
     { issuableBy: ADMINS }
   ),
   [S.RESPONSE_POLICY_WRITE]: def(
     S.RESPONSE_POLICY_WRITE,
     'Response policy write',
     'Administration',
-    'Change response policy through the response-policy API.',
+    'Change versioned response policy, including service support hours.',
     { write: true, issuableBy: ADMINS }
   ),
   [S.ADMIN_MANAGE]: def(

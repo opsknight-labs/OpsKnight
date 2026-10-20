@@ -56,7 +56,7 @@ export async function saveIncidentSlaPolicy(
   }
   const result = await prisma.$transaction(async tx => {
     // Scope-specific xact lock serializes even first-version creation (no row exists yet).
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-sla:${input.scopeKey}`}, 0))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-sla:${input.scopeKey}`}, 0))::text`;
     if (serviceId) {
       const exists = await tx.service.findUnique({
         where: { id: serviceId },

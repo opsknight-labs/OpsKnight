@@ -122,7 +122,7 @@ export async function saveClassificationPolicy(
   }
 
   const result = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-classification:${input.scopeKey}`}, 0))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-classification:${input.scopeKey}`}, 0))::text`;
     if (input.scopeKey.startsWith('service:')) {
       const id = input.scopeKey.slice(8);
       if (!(await tx.service.findUnique({ where: { id }, select: { id: true } })))

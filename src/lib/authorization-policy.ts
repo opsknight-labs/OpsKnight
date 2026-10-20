@@ -20,6 +20,8 @@ export const AUTHORIZATION_ACTIONS = {
   SERVICE_CREATE: 'service.create',
   SERVICE_UPDATE: 'service.update',
   SERVICE_DELETE: 'service.delete',
+  RESPONSE_POLICY_READ: 'response_policy.read',
+  RESPONSE_POLICY_MANAGE: 'response_policy.manage',
   SCHEDULE_READ: 'schedule.read',
   SCHEDULE_MANAGE: 'schedule.manage',
   TEAM_READ: 'team.read',
@@ -126,6 +128,8 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.SERVICE_CREATE]?: ServiceResource;
   [AUTHORIZATION_ACTIONS.SERVICE_UPDATE]?: ServiceResource;
   [AUTHORIZATION_ACTIONS.SERVICE_DELETE]?: ServiceResource;
+  [AUTHORIZATION_ACTIONS.RESPONSE_POLICY_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.RESPONSE_POLICY_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SCHEDULE_READ]: ScheduleResource;
   [AUTHORIZATION_ACTIONS.SCHEDULE_MANAGE]?: ScheduleResource;
   [AUTHORIZATION_ACTIONS.TEAM_READ]?: AuthorizationResource;
@@ -370,6 +374,14 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
       global: CAPABILITIES.ADMIN_MANAGE,
       apiScope: API_SCOPES.SERVICES_WRITE,
     },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.RESPONSE_POLICY_READ,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.RESPONSE_POLICY_READ },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.RESPONSE_POLICY_MANAGE,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.RESPONSE_POLICY_WRITE },
   ],
   [
     AUTHORIZATION_ACTIONS.SCHEDULE_READ,

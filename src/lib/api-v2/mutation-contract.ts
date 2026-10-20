@@ -624,6 +624,13 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'An exact Service revision fences policy changes. Notification flags, Slack destination disabling, attributed audit and replay receipt commit atomically.',
   },
+  'PUT /api/v2/services/[id]/support-hours': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Canonical support-hours policy version lock, immutable version creation, business audit and credential-scoped replay receipt commit in the same transaction.',
+  },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
   'PATCH /api/v2/schedules/[id]': natural('Sets fields to the requested values.', 'etag'),

@@ -8097,6 +8097,117 @@
           "serviceNotifyOnSlaBreach"
         ]
       },
+      "ServiceSupportHours": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "scopeKey": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "inheritWorkspace": {
+                    "type": "boolean"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "INHERIT",
+                      "ALWAYS",
+                      "SCHEDULED"
+                    ]
+                  },
+                  "windows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dayOfWeek": {
+                          "type": "integer"
+                        },
+                        "startMinute": {
+                          "type": "integer"
+                        },
+                        "endMinute": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "dayOfWeek",
+                        "startMinute",
+                        "endMinute"
+                      ]
+                    }
+                  },
+                  "exceptions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "localDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "startMinute": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "endMinute": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "localDate",
+                        "available",
+                        "startMinute",
+                        "endMinute",
+                        "label"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "scopeKey",
+                  "version",
+                  "timezone",
+                  "inheritWorkspace",
+                  "mode",
+                  "windows",
+                  "exceptions"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "policy"
+        ]
+      },
       "RunbookExecutionStarted": {
         "type": "object",
         "properties": {
@@ -10419,6 +10530,312 @@
         "operationId": "updateServiceNotificationSettings",
         "x-required-scope": "services:write",
         "description": "Requires API scope `services:write` (Services manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/services/{id}/support-hours": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Read versioned service support-hours policy",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current policy or null, with version ETag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceSupportHours"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceSupportHours",
+        "x-required-scope": "response-policy:read",
+        "description": "Requires API scope `response-policy:read` (Response policy read)."
+      },
+      "put": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "Create the next immutable service support-hours policy version",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "timezone",
+                  "inheritWorkspace",
+                  "windows",
+                  "exceptions"
+                ],
+                "properties": {
+                  "timezone": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "inheritWorkspace": {
+                    "type": "boolean"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "INHERIT",
+                      "ALWAYS",
+                      "SCHEDULED"
+                    ]
+                  },
+                  "windows": {
+                    "type": "array",
+                    "maxItems": 28,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "dayOfWeek",
+                        "startMinute",
+                        "endMinute"
+                      ],
+                      "properties": {
+                        "dayOfWeek": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 6
+                        },
+                        "startMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1439
+                        },
+                        "endMinute": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1440
+                        }
+                      }
+                    }
+                  },
+                  "exceptions": {
+                    "type": "array",
+                    "maxItems": 366,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "localDate",
+                        "available",
+                        "startMinute",
+                        "endMinute"
+                      ],
+                      "properties": {
+                        "localDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "startMinute": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "endMinute": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 120
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New immutable policy version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceSupportHours"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateServiceSupportHours",
+        "x-required-scope": "response-policy:write",
+        "description": "Requires API scope `response-policy:write` (Response policy write).",
         "x-idempotency": "required",
         "x-concurrency": "etag"
       }

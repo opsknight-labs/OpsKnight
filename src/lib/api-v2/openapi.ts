@@ -959,6 +959,39 @@ function buildBaseSpec(): Record<string, unknown> {
           responses: { '200': { description: 'Updated service notification policy' } },
         },
       },
+      '/services/{id}/support-hours': {
+        get: {
+          tags: ['Services'],
+          summary: 'Read versioned service support-hours policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Current policy or null, with version ETag' } },
+        },
+        put: {
+          tags: ['Services'],
+          summary: 'Create the next immutable service support-hours policy version',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['timezone', 'inheritWorkspace', 'windows', 'exceptions'],
+                  properties: {
+                    timezone: { type: 'string', maxLength: 100 },
+                    inheritWorkspace: { type: 'boolean' },
+                    mode: { type: 'string', enum: ['INHERIT', 'ALWAYS', 'SCHEDULED'] },
+                    windows: { type: 'array', maxItems: 28, items: { type: 'object', additionalProperties: false, required: ['dayOfWeek', 'startMinute', 'endMinute'], properties: { dayOfWeek: { type: 'integer', minimum: 0, maximum: 6 }, startMinute: { type: 'integer', minimum: 0, maximum: 1439 }, endMinute: { type: 'integer', minimum: 1, maximum: 1440 } } } },
+                    exceptions: { type: 'array', maxItems: 366, items: { type: 'object', additionalProperties: false, required: ['localDate', 'available', 'startMinute', 'endMinute'], properties: { localDate: { type: 'string', format: 'date' }, available: { type: 'boolean' }, startMinute: { type: ['integer', 'null'] }, endMinute: { type: ['integer', 'null'] }, label: { type: ['string', 'null'], maxLength: 120 } } } },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'New immutable policy version' } },
+        },
+      },
       '/teams': {
         get: {
           tags: ['Teams'],
