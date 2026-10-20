@@ -1241,7 +1241,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         tag="Service Reliability"
         title={service.name}
         icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 backdrop-blur-xs shadow-xs">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
             <Server className="h-6 w-6" aria-hidden="true" />
           </div>
         }
@@ -1271,9 +1271,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-muted text-foreground border-border/80 text-[10px]"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Users className="h-3 w-3 mr-1 text-muted-foreground" />
+                <Users className="h-3 w-3 mr-1 text-slate-400" />
                 {service.team.name}
               </Badge>
             )}
@@ -1282,7 +1282,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-muted text-muted-foreground border-border/80 text-[10px]"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
                 {service.slaTier}
               </Badge>
@@ -1292,9 +1292,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-muted text-muted-foreground border-border/80 text-[10px]"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Globe className="h-3 w-3 mr-1 text-muted-foreground" />
+                <Globe className="h-3 w-3 mr-1 text-slate-400" />
                 {service.region}
               </Badge>
             )}
@@ -1302,10 +1302,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         }
         subtitle={
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
+            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
               {service.description || 'No description provided for this service.'}
             </p>
-            <p className="text-[11px] text-muted-foreground/80">
+            <p className="text-[11px] text-slate-400">
               30-day reliability metrics • Active incident count excludes snoozed alerts
             </p>
           </div>

@@ -417,7 +417,7 @@ export default async function RunbookDetailPage({
         tag="Automation & Remediation Catalog"
         title={runbook.name}
         icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 backdrop-blur-xs shadow-xs">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
             <Workflow className="h-6 w-6" aria-hidden="true" />
           </div>
         }
@@ -427,9 +427,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-mono gap-1"
+                className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[10px] font-mono gap-1"
               >
-                <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
                 Published v{runbook.publishedVersion.version}
               </Badge>
             )}
@@ -437,9 +437,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-mono gap-1"
+                className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px] font-mono gap-1"
               >
-                <PencilLine className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                <PencilLine className="h-3 w-3 text-amber-400" />
                 Draft v{runbook.draftVersion.version}
               </Badge>
             )}
@@ -447,9 +447,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 text-[10px] gap-1"
+                className="bg-rose-500/10 text-rose-300 border-rose-500/30 text-[10px] gap-1"
               >
-                <Archive className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                <Archive className="h-3 w-3 text-rose-400" />
                 Archived
               </Badge>
             )}
@@ -457,16 +457,16 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-muted text-foreground border-border/80 text-[10px] gap-1"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] gap-1"
               >
-                <Users className="h-3 w-3 text-muted-foreground" />
+                <Users className="h-3 w-3 text-slate-400" />
                 {runbook.ownerTeam.name}
               </Badge>
             ) : (
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-muted/60 text-muted-foreground border-border/60 text-[10px] gap-1"
+                className="bg-zinc-800/60 text-slate-400 border-zinc-700/60 text-[10px] gap-1"
               >
                 <Users className="h-3 w-3" />
                 No owner team
@@ -475,16 +475,16 @@ export default async function RunbookDetailPage({
             <Badge
               variant="outline"
               size="xs"
-              className="bg-muted text-muted-foreground border-border/80 text-[10px] font-mono gap-1"
+              className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] font-mono gap-1"
             >
-              <Hash className="h-3 w-3" />
+              <Hash className="h-3 w-3 text-slate-400" />
               {runbook.slug}
             </Badge>
           </>
         }
         subtitle={
           <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
+            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
               {runbook.description ||
                 'Enterprise automated remediation runbook with guardrails, parameter bindings, and auditable history.'}
             </p>
@@ -494,7 +494,7 @@ export default async function RunbookDetailPage({
                   <Link
                     key={tag}
                     href={`/runbooks?tag=${encodeURIComponent(tag)}`}
-                    className="rounded-full bg-muted/80 px-2.5 py-0.5 font-mono text-[10px] text-muted-foreground border border-border/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="rounded-full bg-zinc-800/80 px-2.5 py-0.5 font-mono text-[10px] text-slate-300 border border-zinc-700/80 hover:bg-zinc-700/80 hover:text-white transition-colors"
                   >
                     #{tag}
                   </Link>

@@ -152,12 +152,12 @@ export default async function RunbooksPage({
         tag="Automation & Remediation Catalog"
         title="Runbooks"
         icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 backdrop-blur-xs shadow-xs">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
             <Workflow className="h-6 w-6" aria-hidden="true" />
           </div>
         }
         subtitle={
-          <p className="text-xs text-muted-foreground leading-relaxed">
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
             Version-controlled, safety-verified automated recovery workflows and diagnostics for
             incident responders.
           </p>
@@ -165,7 +165,7 @@ export default async function RunbooksPage({
         actions={
           <div className="flex items-center gap-2">
             <span
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground font-medium tabular-nums shadow-2xs"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-2.5 py-1 text-xs text-primary-foreground/90 font-medium tabular-nums shadow-2xs"
               title={`All runbook library and execution timestamps reflect your profile timezone: ${userTimeZone}`}
             >
               <Clock className="h-3 w-3" aria-hidden="true" />
