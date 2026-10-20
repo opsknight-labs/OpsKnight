@@ -1921,6 +1921,25 @@
     ],
     "bodyRequired": true
   },
+  "getServiceSlaPolicy": {
+    "method": "GET",
+    "path": "/services/{id}/response-policy/sla",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceSlaPolicy": {
+    "method": "PUT",
+    "path": "/services/{id}/response-policy/sla",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "updateService": {
     "method": "PATCH",
     "path": "/services/{id}",

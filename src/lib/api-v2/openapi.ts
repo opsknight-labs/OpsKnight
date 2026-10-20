@@ -1035,6 +1035,50 @@ function buildBaseSpec(): Record<string, unknown> {
           responses: { '200': { description: 'New immutable classification policy version' } },
         },
       },
+      '/services/{id}/response-policy/sla': {
+        get: {
+          tags: ['Services'],
+          summary: 'Read versioned service SLA policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Current policy or null, with version ETag' } },
+        },
+        put: {
+          tags: ['Services'],
+          summary: 'Create the next immutable service SLA policy version',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['inheritWorkspace', 'baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
+                  properties: {
+                    inheritWorkspace: { type: 'boolean' },
+                    baseAckTargetMs: { type: ['integer', 'null'], minimum: 1, maximum: 2073600000 },
+                    baseResolveTargetMs: { type: ['integer', 'null'], minimum: 1, maximum: 2073600000 },
+                    rules: {
+                      type: 'array', maxItems: 5,
+                      items: {
+                        type: 'object', additionalProperties: false,
+                        required: ['priority', 'ackTargetMs', 'resolveTargetMs'],
+                        properties: {
+                          priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+                          ackTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                          resolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                          label: { type: 'string', maxLength: 120 },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'New immutable SLA policy version' } },
+        },
+      },
       '/teams': {
         get: {
           tags: ['Teams'],

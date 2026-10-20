@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { incidentSlaPolicyInputSchema } from './policy-validation';
 import { emitAuditEvent } from '@/lib/audit';
 import type { AuthorizedPolicyActor } from '@/lib/incidents/policy-actor';
+import type { Prisma } from '@prisma/client';
 
 export type IncidentResponsePolicyErrorCode = 'CONFLICT' | 'UNAUTHORIZED' | 'NOT_FOUND';
 
@@ -33,7 +34,8 @@ export async function getIncidentSlaPolicy(scopeKey: string) {
 
 export async function saveIncidentSlaPolicy(
   rawInput: unknown,
-  authorizedActor?: AuthorizedPolicyActor
+  authorizedActor?: AuthorizedPolicyActor,
+  client?: Prisma.TransactionClient
 ) {
   const input = incidentSlaPolicyInputSchema.parse(rawInput);
   const permissions = authorizedActor
@@ -54,7 +56,7 @@ export async function saveIncidentSlaPolicy(
   } else if (!permissions.capabilities.includes('admin.manage')) {
     throw new IncidentResponsePolicyError('UNAUTHORIZED');
   }
-  const result = await prisma.$transaction(async tx => {
+  const save = async (tx: Prisma.TransactionClient) => {
     // Scope-specific xact lock serializes even first-version creation (no row exists yet).
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-sla:${input.scopeKey}`}, 0))::text`;
     if (serviceId) {
@@ -104,14 +106,16 @@ export async function saveIncidentSlaPolicy(
           baseResolveTargetMs: sealedPolicy.baseResolveTargetMs,
           rules: sealedPolicy.rules,
           futureIncidentsOnly: true,
+          apiClientId: authorizedActor?.apiClientId ?? null,
         },
       },
       tx
     );
     return sealedPolicy;
-  });
+  };
+  const result = client ? await save(client) : await prisma.$transaction(save);
   // No policy cache to invalidate. Refresh every settings/read route that presents configuration.
-  for (const path of [
+  if (!client) for (const path of [
     '/settings/incident-sla',
     '/settings',
     '/services',

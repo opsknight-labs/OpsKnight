@@ -271,6 +271,41 @@ const extraSchemas: Json = {
     },
     required: ['policy'],
   },
+  ServiceSlaPolicy: {
+    type: 'object',
+    properties: {
+      policy: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              scopeKey: { type: 'string' },
+              version: { type: 'integer' },
+              inheritWorkspace: { type: 'boolean' },
+              baseAckTargetMs: { type: ['integer', 'null'] },
+              baseResolveTargetMs: { type: ['integer', 'null'] },
+              rules: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+                    ackTargetMs: { type: 'integer' },
+                    resolveTargetMs: { type: 'integer' },
+                    label: { type: ['string', 'null'] },
+                  },
+                  required: ['priority', 'ackTargetMs', 'resolveTargetMs', 'label'],
+                },
+              },
+            },
+            required: ['scopeKey', 'version', 'inheritWorkspace', 'baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
+          },
+        ],
+      },
+    },
+    required: ['policy'],
+  },
   RunbookExecutionStarted: {
     type: 'object',
     properties: {

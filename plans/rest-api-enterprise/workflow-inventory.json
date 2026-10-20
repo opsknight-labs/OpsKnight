@@ -189,7 +189,7 @@
     {
       "capabilityId": "service-settings",
       "delivery": "API-20",
-      "workflow": "Remaining response policies (notification channel/event settings, versioned service support hours and classification delivered)",
+      "workflow": "Remaining response policies (notification channel/event settings; versioned service support hours, classification and SLA delivered)",
       "sources": [
         {
           "path": "src/app/(app)/services",

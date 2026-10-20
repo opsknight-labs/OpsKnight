@@ -134,6 +134,7 @@ export type ScheduleCoverage = { "schedule": { "id": string; "name": string; "ti
 export type ServiceNotificationSettings = { "serviceId": string; "revision": number; "serviceNotificationChannels": Array<"SLACK" | "WEBHOOK" | "EMAIL" | "SMS" | "PUSH" | "WHATSAPP" | "MICROSOFT_TEAMS">; "serviceNotifyOnTriggered": boolean; "serviceNotifyOnAck": boolean; "serviceNotifyOnResolved": boolean; "serviceNotifyOnSlaBreach": boolean } & Record<string, unknown>;
 export type ServiceSupportHours = { "policy": null | { "scopeKey": string; "version": number; "timezone": string; "inheritWorkspace": boolean; "mode": "INHERIT" | "ALWAYS" | "SCHEDULED"; "windows": Array<{ "dayOfWeek": number; "startMinute": number; "endMinute": number } & Record<string, unknown>>; "exceptions": Array<{ "localDate": string; "available": boolean; "startMinute": number | null; "endMinute": number | null; "label": string | null } & Record<string, unknown>> } & Record<string, unknown> } & Record<string, unknown>;
 export type ServiceClassificationPolicy = { "policy": null | { "scopeKey": string; "version": number; "derivePriorityFromUrgency": boolean; "priorityFallbackMode": "INHERIT" | "ENABLED" | "DISABLED"; "rules": Array<{ "matchValue": "critical" | "error" | "warning" | "info"; "priorityMode": "INHERIT" | "FALLBACK" | "SET" | "CLEAR"; "priority": "P1" | "P2" | "P3" | "P4" | "P5" | null; "urgencyMode": "INHERIT" | "SET" | "DEFAULT"; "urgency": "HIGH" | "MEDIUM" | "LOW" | null } & Record<string, unknown>> } & Record<string, unknown> } & Record<string, unknown>;
+export type ServiceSlaPolicy = { "policy": null | { "scopeKey": string; "version": number; "inheritWorkspace": boolean; "baseAckTargetMs": number | null; "baseResolveTargetMs": number | null; "rules": Array<{ "priority": "P1" | "P2" | "P3" | "P4" | "P5"; "ackTargetMs": number; "resolveTargetMs": number; "label": string | null } & Record<string, unknown>> } & Record<string, unknown> } & Record<string, unknown>;
 export type RunbookExecutionStarted = { "executionId": string; "status": string; "runbookId": string; "incidentId"?: string | null; "serviceId"?: string | null; "message"?: string } & Record<string, unknown>;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
@@ -350,6 +351,8 @@ export interface OperationRequests {
   updateServiceSupportHours: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "timezone": string; "inheritWorkspace": boolean; "mode"?: "INHERIT" | "ALWAYS" | "SCHEDULED"; "windows": Array<{ "dayOfWeek": number; "startMinute": number; "endMinute": number }>; "exceptions": Array<{ "localDate": string; "available": boolean; "startMinute": number | null; "endMinute": number | null; "label"?: string | null }> } };
   getServiceClassificationPolicy: { "params": { "id": string } };
   updateServiceClassificationPolicy: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "derivePriorityFromUrgency"?: boolean; "priorityFallbackMode"?: "INHERIT" | "ENABLED" | "DISABLED"; "rules": Array<{ "matchValue": "critical" | "error" | "warning" | "info"; "priorityMode"?: "INHERIT" | "FALLBACK" | "SET" | "CLEAR"; "priority": "P1" | "P2" | "P3" | "P4" | "P5" | null; "urgencyMode"?: "INHERIT" | "SET" | "DEFAULT"; "urgency": "HIGH" | "MEDIUM" | "LOW" | null }> } };
+  getServiceSlaPolicy: { "params": { "id": string } };
+  updateServiceSlaPolicy: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "inheritWorkspace": boolean; "baseAckTargetMs": number | null; "baseResolveTargetMs": number | null; "rules": Array<{ "priority": "P1" | "P2" | "P3" | "P4" | "P5"; "ackTargetMs": number; "resolveTargetMs": number; "label"?: string }> } };
   updateService: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "description"?: string | null; "teamId"?: string; "escalationPolicyId"?: string; "status"?: "OPERATIONAL" | "DEGRADED" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "MAINTENANCE" } & Record<string, unknown> };
   deleteService: { "params": { "id": string } };
   listServices: { "query"?: { "limit"?: number; "cursor"?: string; "teamId"?: string; "status"?: "OPERATIONAL" | "DEGRADED" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "MAINTENANCE"; "search"?: string } };
@@ -581,6 +584,8 @@ export interface OperationResponses {
   updateServiceSupportHours: { "data": ServiceSupportHours; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getServiceClassificationPolicy: { "data": ServiceClassificationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateServiceClassificationPolicy: { "data": ServiceClassificationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceSlaPolicy: { "data": ServiceSlaPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateServiceSlaPolicy: { "data": ServiceSlaPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateService: { "data": Service; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteService: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServices: { "data": Array<Service>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2514,6 +2519,25 @@ export const OPERATIONS = {
   "updateServiceClassificationPolicy": {
     "method": "PUT",
     "path": "/services/{id}/response-policy/classification",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceSlaPolicy": {
+    "method": "GET",
+    "path": "/services/{id}/response-policy/sla",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceSlaPolicy": {
+    "method": "PUT",
+    "path": "/services/{id}/response-policy/sla",
     "kind": "item",
     "idempotency": "required",
     "requiredHeaders": [
