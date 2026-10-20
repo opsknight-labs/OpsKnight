@@ -29,19 +29,13 @@ describe('enterprise workflow inventory admission checks', () => {
     }
   });
 
-  it('links local implementation sources and explicitly gates the external automation branch', () => {
+  it('links each workflow to implementation sources present in the candidate', () => {
     const sourceRoot = resolve('src') + sep;
     for (const workflow of inventory.workflows) {
       expect(workflow.sources.length).toBeGreaterThan(0);
       for (const source of workflow.sources) {
         expect(resolve(source.path).startsWith(sourceRoot)).toBe(true);
-        if (source.branch === 'baseline') {
-          expect(existsSync(source.path), source.path).toBe(true);
-        } else {
-          expect(workflow.capabilityId).toBe('service-automation');
-          expect(source.branch).toBe('feat/service-automation');
-          expect(workflow.blockers.length).toBeGreaterThan(0);
-        }
+        expect(existsSync(source.path), source.path).toBe(true);
       }
     }
   });
