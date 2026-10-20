@@ -12,6 +12,7 @@ import {
   Loader2,
   Lock,
   ShieldAlert,
+  X,
   XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -77,12 +78,16 @@ export default function RunbookExecutionPreview({
   disabled = false,
   previewLabel = 'Preview execution',
   executeLabel = 'Execute this plan',
+  headerContent,
+  className,
 }: {
   disabled?: boolean;
   previewAction: () => Promise<{ preview?: ExecutionPreview; error?: string }>;
   executeAction: RunbookFormAction;
   previewLabel?: string;
   executeLabel?: string;
+  headerContent?: ReactNode;
+  className?: string;
 }) {
   const [preview, setPreview] = useState<ExecutionPreview>();
   const [error, setError] = useState('');
@@ -107,38 +112,52 @@ export default function RunbookExecutionPreview({
   const hasWrites = preview?.steps.some(step => step.risk !== 'READ_ONLY') ?? false;
   const blocked = preview?.readiness?.some(check => check.state === 'blocked') ?? false;
   const inputEntries = preview ? Object.entries(preview.inputs) : [];
+
+  const previewButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={disabled || pending}
+      aria-busy={pending}
+      className="h-8 gap-1.5 text-xs font-medium border-border/80 hover:bg-muted/60 shrink-0"
+      onClick={async () => {
+        setPending(true);
+        setError('');
+        setExpired(false);
+        setPreview(undefined);
+        setConfirmed(false);
+        try {
+          const result = await previewAction();
+          setPreview(result.preview);
+          setNow(Date.now());
+          setError(result.error ?? '');
+        } catch {
+          setError('Could not load preview. Try again.');
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      {pending ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+      ) : (
+        <Eye className="h-3.5 w-3.5" aria-hidden />
+      )}
+      {pending ? 'Resolving plan…' : previewLabel}
+    </Button>
+  );
+
   return (
-    <div className="w-full min-w-0 space-y-3">
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled || pending}
-        aria-busy={pending}
-        onClick={async () => {
-          setPending(true);
-          setError('');
-          setExpired(false);
-          setPreview(undefined);
-          setConfirmed(false);
-          try {
-            const result = await previewAction();
-            setPreview(result.preview);
-            setNow(Date.now());
-            setError(result.error ?? '');
-          } catch {
-            setError('Could not load preview. Try again.');
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
-        {pending ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Eye className="h-4 w-4" aria-hidden />
-        )}
-        {pending ? 'Resolving plan…' : previewLabel}
-      </Button>
+    <div className={cn('w-full min-w-0 space-y-3', className)}>
+      {headerContent ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {headerContent}
+          <div className="shrink-0 pl-9.5 sm:pl-0 flex items-center gap-2">{previewButton}</div>
+        </div>
+      ) : (
+        previewButton
+      )}
       {error && (
         <p
           role="alert"
@@ -163,15 +182,28 @@ export default function RunbookExecutionPreview({
                 </span>
               </p>
             </div>
-            {remainingMs !== null && !expired && (
-              <Pill
-                tone={remainingMs < 60_000 ? 'warning' : 'neutral'}
-                icon={Clock}
-                className="tabular-nums"
+            <div className="flex items-center gap-2">
+              {remainingMs !== null && !expired && (
+                <Pill
+                  tone={remainingMs < 60_000 ? 'warning' : 'neutral'}
+                  icon={Clock}
+                  className="tabular-nums"
+                >
+                  <span role="timer">Expires in {formatCountdown(remainingMs)}</span>
+                </Pill>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                onClick={() => setPreview(undefined)}
+                title="Close preview"
               >
-                <span role="timer">Expires in {formatCountdown(remainingMs)}</span>
-              </Pill>
-            )}
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close preview</span>
+              </Button>
+            </div>
           </header>
 
           <div className="divide-y">

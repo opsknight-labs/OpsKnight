@@ -27,6 +27,8 @@ export function tabForAnchor(anchor: string, hasRunbooks: boolean): string | nul
   return null;
 }
 
+const VALID_TABS = ['overview', 'runbooks', 'timeline', 'postmortem', 'response'];
+
 export default function IncidentDetailTabs({
   defaultTab = 'overview',
   eventCount,
@@ -40,6 +42,29 @@ export default function IncidentDetailTabs({
 }: IncidentDetailTabsProps) {
   const [tab, setTab] = useState(defaultTab);
   const hasRunbooks = !!runbooksContent;
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('tab');
+      if (p && VALID_TABS.includes(p)) {
+        setTab(p);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = new URLSearchParams(window.location.search).get('tab');
+      if (p && VALID_TABS.includes(p)) {
+        setTab(p);
+      } else {
+        setTab('overview');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   useEffect(() => {
     const sync = () => {
       const anchor = decodeURIComponent(window.location.hash.slice(1));
@@ -57,8 +82,24 @@ export default function IncidentDetailTabs({
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
   }, [hasRunbooks]);
+
+  const handleTabChange = (nextTab: string) => {
+    setTab(nextTab);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (nextTab === 'overview') {
+        params.delete('tab');
+      } else {
+        params.set('tab', nextTab);
+      }
+      const query = params.toString();
+      const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+      window.history.replaceState(null, '', newUrl);
+    }
+  };
+
   return (
-    <Tabs value={tab} onValueChange={setTab} className={cn('w-full', className)}>
+    <Tabs value={tab} onValueChange={handleTabChange} className={cn('w-full', className)}>
       <div className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden text-card-foreground transition-all">
         {/* Compact, Unified Header Bar */}
         <div className="px-3 sm:px-4 py-2 border-b border-border/80 bg-muted/30 flex items-center justify-between gap-3">

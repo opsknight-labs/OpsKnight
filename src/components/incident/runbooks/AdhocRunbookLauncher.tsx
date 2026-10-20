@@ -99,8 +99,11 @@ export default function AdhocRunbookLauncher({ incidentId }: { incidentId: strin
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <Play className="h-4 w-4" aria-hidden /> Run another runbook
+        <Button
+          size="sm"
+          className="gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium shadow-xs h-8 text-xs shrink-0"
+        >
+          <Play className="h-3.5 w-3.5 fill-current" aria-hidden /> Run another runbook
         </Button>
       </SheetTrigger>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
