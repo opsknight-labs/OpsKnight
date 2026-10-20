@@ -25,6 +25,10 @@ import {
 } from './service-objective-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
+import {
+  NOTIFICATION_PROVIDER_SCHEMAS,
+  NOTIFICATION_PROVIDER_OPERATIONS,
+} from './notification-providers-openapi';
 import { MAX_SELECT_OPTIONS } from '@/lib/runbooks/input-options';
 import {
   RUNBOOK_INPUT_TYPES,
@@ -193,6 +197,15 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...RUNBOOK_FLEET_SCHEMAS,
   ...USER_INVITATION_SCHEMAS,
   ...USER_NOTIFICATION_PREFERENCE_SCHEMAS,
+  ...NOTIFICATION_PROVIDER_SCHEMAS,
+  IntegrationCredentialState: object({ id, revision: integer, routingKeyConfigured: { type: 'boolean' }, signingSecretConfigured: { type: 'boolean' }, previousRoutingKeyValidUntil: { type: ['string', 'null'], format: 'date-time' }, previousSignatureSecretValidUntil: { type: ['string', 'null'], format: 'date-time' }, updatedAt: date }, ['id', 'revision', 'routingKeyConfigured', 'signingSecretConfigured', 'previousRoutingKeyValidUntil', 'previousSignatureSecretValidUntil', 'updatedAt']),
+  IntegrationCredentialRotation: object({ id, credential: { type: 'string', enum: ['routing-key', 'signature-secret'] }, secret: { type: ['string', 'null'] }, revision: integer, updatedAt: date }, ['id', 'credential', 'secret', 'revision', 'updatedAt']),
+  IntegrationCreated: object({ id, name: string(100), type: string(64), serviceId: id, enabled: { type: 'boolean' }, revision: integer, createdAt: date, updatedAt: date, key: { type: ['string', 'null'], description: 'Disclosed only on the initial successful response; replay returns null.' } }, ['id', 'name', 'type', 'serviceId', 'enabled', 'revision', 'createdAt', 'updatedAt', 'key']),
+  IntegrationTestResult: object({ valid: { type: 'boolean' }, provider: string(), errors: array(object({ path: string(), message: string() }, ['path', 'message']), 50) }, ['valid', 'provider', 'errors']),
+  IntegrationDiagnostics: object({ id, type: string(), enabled: { type: 'boolean' }, revision: integer, configurationState: string(), deliveryCounts: object({ recent: integer, failed: integer, processing: integer }, ['recent', 'failed', 'processing']), recentDeliveries: array(object({ status: string(), createdAt: date, completedAt: { type: ['string', 'null'], format: 'date-time' }, attempt: integer }, ['status', 'createdAt', 'completedAt', 'attempt']), 10) }, ['id', 'type', 'enabled', 'revision', 'configurationState', 'deliveryCounts', 'recentDeliveries']),
+  IntegrationType: object({ type: string(), direction: { const: 'INBOUND' }, authentication: array(string()), configurationFields: array(string()), testMode: { const: 'LOCAL_PAYLOAD_VALIDATION' } }, ['type', 'direction', 'authentication', 'configurationFields', 'testMode']),
+  IntegrationValidation: object({ id, type: string(), valid: { type: 'boolean' }, checks: array(object({ code: string(), valid: { type: 'boolean' } }, ['code', 'valid'])), activationAllowed: { type: 'boolean' }, revision: integer }, ['id', 'type', 'valid', 'checks', 'activationAllowed', 'revision']),
+  IntegrationUsage: object({ id, type: string(), service: object({ id, name: string() }, ['id', 'name']), deliveriesByStatus: { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } }, automationObservations: integer, enabledServiceRunbookBindings: integer }, ['id', 'type', 'service', 'deliveriesByStatus', 'automationObservations', 'enabledServiceRunbookBindings']),
   ...USER_ADMINISTRATION_SCHEMAS,
   ...TEAM_ADMINISTRATION_SCHEMAS,
   ...RUNBOOK_INTERVENTION_SCHEMAS,
@@ -1141,10 +1154,28 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  { method: 'get', path: '/integrations/types', summary: 'List safe supported inbound provider types and configuration capabilities' },
+  {
+    method: 'post', path: '/services/{id}/integrations', summary: 'Create a service inbound integration and disclose its API key once',
+    description: 'Requires integrations:create and an Idempotency-Key. The response contains the initial bearer key once; replay returns safe metadata with key null. Secrets are never stored in audit details.',
+    body: object({ name: string(100), type: string(64), snsTopicArn: string(512) }, ['name']),
+  },
+  { method: 'get', path: '/integrations/{id}/credentials', summary: 'Read signing credential state without secret material' },
+  {
+    method: 'post', path: '/integrations/{id}/credentials', summary: 'Rotate an integration signing secret with bounded overlap',
+    description: 'Requires concrete If-Match and Idempotency-Key. Choose routing-key or signature-secret. Replacement material is disclosed once and never stored in replay receipts. Previous encrypted credentials are accepted only until the overlap deadline.',
+    body: object({ credential: { type: 'string', enum: ['routing-key', 'signature-secret'], default: 'signature-secret' }, overlapSeconds: { type: 'integer', minimum: 0, maximum: 86400, default: 3600 } }),
+  },
+  { method: 'post', path: '/integrations/{id}/test', summary: 'Validate a bounded sample payload without ingesting an event', body: object({ payload: {} }) },
+  { method: 'get', path: '/integrations/{id}/diagnostics', summary: 'Read bounded integration delivery health and safe diagnostics' },
+  { method: 'post', path: '/integrations/{id}/validate', summary: 'Validate stored integration configuration without activation' },
+  { method: 'get', path: '/integrations/{id}/usage', summary: 'Inspect service, delivery, observation and enabled runbook usage' },
+  { method: 'delete', path: '/integrations/{id}', summary: 'Disable and safely delete an integration when no deliveries are in flight' },
   ...RUNBOOK_ADMINISTRATION_OPERATIONS,
   ...RUNBOOK_FLEET_OPERATIONS,
   ...USER_INVITATION_OPERATIONS,
   ...USER_NOTIFICATION_PREFERENCE_OPERATIONS,
+  ...NOTIFICATION_PROVIDER_OPERATIONS,
   ...USER_ADMINISTRATION_OPERATIONS,
   ...TEAM_ADMINISTRATION_OPERATIONS,
   ...RUNBOOK_INTERVENTION_OPERATIONS,

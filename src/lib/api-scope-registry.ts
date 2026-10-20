@@ -288,7 +288,35 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.INTEGRATIONS_WRITE,
     'Integrations update',
     'Integrations',
-    'Rename and enable or disable existing integrations. Creating integrations and editing connector configuration is not available over REST.',
+    'Rename, enable or disable integrations and update supported allow-listed configuration such as CloudWatch SNS topics.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_CREATE]: def(
+    S.INTEGRATIONS_CREATE,
+    'Integration creation',
+    'Integrations',
+    'Create inbound integrations. The routing key is disclosed once and stored encrypted at rest.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_CREDENTIALS_WRITE]: def(
+    S.INTEGRATIONS_CREDENTIALS_WRITE,
+    'Integration credential rotation',
+    'Integrations',
+    'Rotate inbound routing or signing credentials with a bounded overlap window; replacement plaintext is disclosed once.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_TEST]: def(
+    S.INTEGRATIONS_TEST,
+    'Integration diagnostics',
+    'Integrations',
+    'Run bounded, local payload validation and delivery health diagnostics without creating incidents.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_DELETE]: def(
+    S.INTEGRATIONS_DELETE,
+    'Integration deletion',
+    'Integrations',
+    'Disable and safely remove integrations after dependency and in-flight delivery checks.',
     { write: true, issuableBy: ADMINS }
   ),
   [S.NOTIFICATIONS_READ]: def(
@@ -318,6 +346,27 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Notifications',
     'Update only the credential owner’s personal notification channel preferences and verified contact availability.',
     { write: true, issuableBy: ALL_ROLES }
+  ),
+  [S.NOTIFICATION_PROVIDERS_READ]: def(
+    S.NOTIFICATION_PROVIDERS_READ,
+    'Notification provider read',
+    'Notifications',
+    'Read notification provider state, configuration completeness and redacted diagnostics.',
+    { issuableBy: ADMINS }
+  ),
+  [S.NOTIFICATION_PROVIDERS_WRITE]: def(
+    S.NOTIFICATION_PROVIDERS_WRITE,
+    'Notification provider configuration',
+    'Notifications',
+    'Configure notification providers and rotate Web Push VAPID keys. Secrets are never returned.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.NOTIFICATION_PROVIDERS_TEST]: def(
+    S.NOTIFICATION_PROVIDERS_TEST,
+    'Notification provider test',
+    'Notifications',
+    'Queue an idempotent, administrator-directed provider test notification.',
+    { issuableBy: ADMINS, write: true }
   ),
   [S.STATUS_PAGES_READ]: def(
     S.STATUS_PAGES_READ,

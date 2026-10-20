@@ -9,6 +9,8 @@ import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
 } from '@/lib/integrations/request-security';
+import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
+import { decryptStoredSecret } from '@/lib/encryption';
 
 export async function POST(req: NextRequest) {
   const startTime = performance.now();
@@ -58,15 +60,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { safeCompare } = await import('@/lib/integrations/signature-verification');
     const integration = paramId
-      ? await prisma.integration.findUnique({
-          where: { id: paramId },
-        })
+      ? await prisma.integration.findUnique({ where: { id: paramId } })
       : await prisma.integration.findFirst({
           where: {
-            key: providedKey || '',
             enabled: true,
             type: 'PAGERDUTY',
+            OR: [
+              { keyFingerprint: integrationKeyFingerprint(providedKey || '') },
+              { previousKeyFingerprint: integrationKeyFingerprint(providedKey || ''), previousKeyExpiresAt: { gt: new Date() } },
+              // Legacy rows keep plaintext keys until they are rotated.
+              { key: providedKey || '' },
+              { previousKey: providedKey || '', previousKeyExpiresAt: { gt: new Date() } },
+            ],
           },
         });
 
@@ -77,8 +84,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { safeCompare } = await import('@/lib/integrations/signature-verification');
-    if (paramId && (!providedKey || !safeCompare(integration.key, providedKey))) {
+    const currentKey = await decryptStoredSecret(integration.key);
+    const priorKey = integration.previousKey ? await decryptStoredSecret(integration.previousKey) : null;
+    if (paramId && (!providedKey || !(safeCompare(currentKey, providedKey) ||
+      (priorKey && integration.previousKeyExpiresAt && integration.previousKeyExpiresAt.getTime() > Date.now() && safeCompare(priorKey, providedKey))))) {
       return new Response(JSON.stringify({ status: 'error', message: 'Invalid integration key' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
+import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 
 export const PaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -172,7 +173,30 @@ export const EscalationPolicyUpdateV2Schema = z.object({
 export const IntegrationUpdateV2Schema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   enabled: z.boolean().optional(),
+  snsTopicArn: z.string().trim().min(1).max(512).regex(/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/).optional(),
+}).strict().refine(value => Object.keys(value).length > 0, 'At least one supported field is required.');
+
+export const IntegrationCreateV2Schema = z.object({
+  name: z.string().trim().min(1).max(100),
+  type: z.enum(INTEGRATION_TYPES).default('EVENTS_API_V2'),
+  snsTopicArn: z.string().trim().min(1).max(512).optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.type === 'CLOUDWATCH' && !value.snsTopicArn) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['snsTopicArn'], message: 'CloudWatch requires an SNS topic ARN.' });
+  }
+  if (value.snsTopicArn && !/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(value.snsTopicArn)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['snsTopicArn'], message: 'A valid exact AWS SNS Topic ARN is required.' });
+  }
 });
+
+export const IntegrationTestV2Schema = z.object({
+  payload: z.unknown().optional(),
+}).strict();
+
+export const IntegrationCredentialRotateV2Schema = z.object({
+  credential: z.enum(['routing-key', 'signature-secret']).default('signature-secret'),
+  overlapSeconds: z.number().int().min(0).max(86400).default(3600),
+}).strict();
 
 export const StatusPageCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),

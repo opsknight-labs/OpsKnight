@@ -47,6 +47,7 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
         type: true,
         serviceId: true,
         enabled: true,
+        snsTopicArn: true,
         createdAt: true,
         updatedAt: true,
         service: {

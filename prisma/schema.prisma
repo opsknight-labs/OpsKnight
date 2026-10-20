@@ -758,7 +758,13 @@ model Integration {
   name            String
   type            String   @default("EVENTS_API_V2")
   key             String   @unique
+  keyFingerprint String? @unique
   signatureSecret String?
+  previousKey String?
+  previousKeyFingerprint String?
+  previousKeyExpiresAt DateTime?
+  previousSignatureSecret String?
+  previousSignatureSecretExpiresAt DateTime?
   snsTopicArn     String?
   enabled         Boolean  @default(true)
   serviceId       String
@@ -2089,6 +2095,7 @@ model NotificationProvider {
   provider      String   @unique
   enabled       Boolean  @default(false)
   config        Json
+  revision      Int      @default(1)
   updatedBy     String?
   updatedAt     DateTime @updatedAt
   createdAt     DateTime @default(now())

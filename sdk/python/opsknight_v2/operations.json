@@ -1,4 +1,60 @@
 {
+  "listNotificationProviders": {
+    "method": "GET",
+    "path": "/notification-providers",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getNotificationProvider": {
+    "method": "GET",
+    "path": "/notification-providers/{provider}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "configureNotificationProvider": {
+    "method": "PUT",
+    "path": "/notification-providers/{provider}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getNotificationProviderDiagnostics": {
+    "method": "GET",
+    "path": "/notification-providers/{provider}/diagnostics",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "testNotificationProvider": {
+    "method": "POST",
+    "path": "/notification-providers/{provider}/test",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "rotateWebPushKeys": {
+    "method": "POST",
+    "path": "/notification-providers/web-push/rotate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "getMyNotificationPreferences": {
     "method": "GET",
     "path": "/users/me/notification-preferences",
@@ -1474,6 +1530,86 @@
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIntegrationTypes": {
+    "method": "GET",
+    "path": "/integrations/types",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceIntegration": {
+    "method": "POST",
+    "path": "/services/{id}/integrations",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getIntegrationCredentialState": {
+    "method": "GET",
+    "path": "/integrations/{id}/credentials",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "rotateIntegrationCredentials": {
+    "method": "POST",
+    "path": "/integrations/{id}/credentials",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateIntegrationPayload": {
+    "method": "POST",
+    "path": "/integrations/{id}/test",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getIntegrationDiagnostics": {
+    "method": "GET",
+    "path": "/integrations/{id}/diagnostics",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "validateIntegrationConfiguration": {
+    "method": "POST",
+    "path": "/integrations/{id}/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIntegrationUsage": {
+    "method": "GET",
+    "path": "/integrations/{id}/usage",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteIntegration": {
+    "method": "DELETE",
+    "path": "/integrations/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
     "bodyRequired": false
   },
   "updateIntegration": {

@@ -4,19 +4,16 @@ import prisma from '@/lib/prisma';
 import crypto from 'crypto';
 import { decryptProviderConfig } from '@/lib/encrypted-provider-config';
 import {
+  createCentralNotificationIntent,
   enqueueCentralNotification,
   type CentralNotificationInput,
 } from '@/lib/notification-control-plane';
 import { logAudit } from '@/lib/audit';
+import type { Prisma } from '@prisma/client';
+import { AppError } from '@/lib/errors';
 
 export type ProviderTestStatus =
-  | 'ACCEPTED'
-  | 'DELIVERED'
-  | 'QUEUED'
-  | 'DEFERRED'
-  | 'CONFIGURED_NO_DEVICE'
-  | 'FAILED'
-  | 'UNKNOWN';
+  'ACCEPTED' | 'DELIVERED' | 'QUEUED' | 'DEFERRED' | 'CONFIGURED_NO_DEVICE' | 'FAILED' | 'UNKNOWN';
 
 export type ProviderTestResult = {
   success: boolean;
@@ -37,6 +34,207 @@ export type ProviderTestUser = {
   name?: string | null;
   role?: string;
 };
+
+export type ProviderTestIntent = {
+  input: CentralNotificationInput;
+  channel: string;
+  provider: string;
+  revision: number;
+};
+
+export async function prepareProviderTestIntent(
+  providerKey: string,
+  user: ProviderTestUser,
+  eventKey: string,
+  configOverride?: Record<string, unknown>
+): Promise<ProviderTestIntent> {
+  const normalizedKey = providerKey.toLowerCase();
+  const lookupKey = normalizedKey === 'whatsapp' ? 'twilio' : normalizedKey;
+  const record = await prisma.notificationProvider.findUnique({ where: { provider: lookupKey } });
+  if (!record || (normalizedKey !== 'whatsapp' && !record.enabled)) {
+    throw new AppError({ code: 'NOTIFICATION_PROVIDER_UNAVAILABLE' });
+  }
+  const config =
+    configOverride ??
+    (await decryptProviderConfig(lookupKey, (record.config as Record<string, unknown>) || {}));
+  if (normalizedKey !== 'whatsapp') {
+    const { assertProviderConfigReady, notificationProviderKeySchema } =
+      await import('@/lib/notifications/provider-schema');
+    const provider = notificationProviderKeySchema.parse(lookupKey);
+    assertProviderConfigReady(provider, config);
+  }
+  const now = new Date().toISOString();
+  let input: CentralNotificationInput;
+  if (['resend', 'sendgrid', 'ses', 'smtp'].includes(normalizedKey)) {
+    if (!user.email)
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage:
+          'The active administrator must have an email address to receive a provider test.',
+      });
+    input = {
+      category: 'SYSTEM',
+      channel: 'EMAIL',
+      recipientType: 'USER',
+      recipientId: user.id,
+      recipientAddress: user.email,
+      userId: user.id,
+      templateKey: 'provider-test',
+      sourceType: 'USER',
+      sourceId: user.id,
+      eventKey,
+      displayMessage: `Provider test via ${normalizedKey.toUpperCase()}`,
+      priority: 2,
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+      payload: {
+        kind: 'EMAIL',
+        to: user.email,
+        subject: `[OpsKnight Test] Outbound Alert via ${normalizedKey.toUpperCase()}`,
+        html: `<p>OpsKnight provider test via ${normalizedKey.toUpperCase()} at ${now}.</p>`,
+        text: `[OpsKnight] Provider test notification via ${normalizedKey.toUpperCase()} at ${now}.`,
+        providerKey: normalizedKey,
+      },
+    };
+  } else if (
+    normalizedKey === 'twilio' ||
+    normalizedKey === 'aws-sns' ||
+    normalizedKey === 'whatsapp'
+  ) {
+    const whatsapp = normalizedKey === 'whatsapp';
+    const target =
+      user.phoneNumber ||
+      (whatsapp
+        ? config.whatsappNumber
+        : normalizedKey === 'twilio'
+          ? config.fromNumber
+          : undefined);
+    if (!target)
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage:
+          'The active administrator must have a phone number to receive this provider test.',
+      });
+    if (whatsapp && !config.whatsappEnabled && !config.whatsappNumber)
+      throw new AppError({ code: 'NOTIFICATION_PROVIDER_UNAVAILABLE' });
+    const channel = whatsapp ? 'WHATSAPP' : 'SMS';
+    input = {
+      category: 'SYSTEM',
+      channel,
+      recipientType: 'USER',
+      recipientId: user.id,
+      recipientAddress: String(target),
+      userId: user.id,
+      templateKey: 'provider-test',
+      sourceType: 'USER',
+      sourceId: user.id,
+      eventKey,
+      displayMessage: `Provider test via ${whatsapp ? 'WhatsApp' : normalizedKey.toUpperCase()}`,
+      priority: 2,
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+      payload: {
+        kind: whatsapp ? 'WHATSAPP' : 'SMS',
+        to: String(target),
+        message: `[OpsKnight] Provider test via ${normalizedKey.toUpperCase()} at ${now}.`,
+        providerKey: whatsapp ? 'twilio' : normalizedKey,
+      },
+    };
+  } else if (normalizedKey === 'web-push') {
+    input = {
+      category: 'SYSTEM',
+      channel: 'PUSH',
+      recipientType: 'USER',
+      recipientId: user.id,
+      recipientAddress: user.id,
+      userId: user.id,
+      templateKey: 'provider-test',
+      sourceType: 'USER',
+      sourceId: user.id,
+      eventKey,
+      displayMessage: 'Provider test via Web Push',
+      priority: 2,
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+      payload: {
+        kind: 'PUSH',
+        userId: user.id,
+        title: 'OpsKnight Provider Test',
+        body: 'Web Push is configured and active.',
+        data: { url: '/settings/notifications', type: 'test' },
+        providerKey: 'web-push',
+      },
+    };
+  } else {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage: 'Unsupported notification provider.',
+    });
+  }
+  return {
+    input,
+    channel: input.channel,
+    provider: normalizedKey === 'whatsapp' ? 'twilio' : normalizedKey,
+    revision: record.revision,
+  };
+}
+
+export async function queueProviderTestIntent(options: {
+  providerKey: string;
+  user: ProviderTestUser;
+  eventKey: string;
+  client: Prisma.TransactionClient;
+  apiKeyId: string;
+  expectedRevision: number;
+}) {
+  const activeAdmin = await options.client.user.findFirst({
+    where: { id: options.user.id, role: 'ADMIN', status: 'ACTIVE' },
+    select: { id: true },
+  });
+  if (!activeAdmin) {
+    const { AppError } = await import('@/lib/errors');
+    throw new AppError({ code: 'AUTHORIZATION_DENIED' });
+  }
+  const prepared = await prepareProviderTestIntent(
+    options.providerKey,
+    options.user,
+    options.eventKey
+  );
+  const lookupKey = options.providerKey === 'whatsapp' ? 'twilio' : options.providerKey;
+  const current = await options.client.notificationProvider.findUnique({
+    where: { provider: lookupKey },
+    select: { revision: true, enabled: true },
+  });
+  if (
+    !current ||
+    current.revision !== options.expectedRevision ||
+    current.revision !== prepared.revision ||
+    (!current.enabled && options.providerKey !== 'whatsapp')
+  ) {
+    const { preconditionFailed } = await import('@/lib/api-v2/concurrency');
+    throw preconditionFailed();
+  }
+  const created = await createCentralNotificationIntent(prepared.input, options.client);
+  await logAudit(
+    {
+      action: 'notification_provider.test_queued',
+      entityType: 'SYSTEM_CONFIG',
+      entityId: created.id,
+      actorId: options.user.id,
+      details: {
+        provider: prepared.provider,
+        channel: prepared.channel,
+        created: created.created,
+        apiKeyId: options.apiKeyId,
+      },
+    },
+    options.client
+  );
+  return {
+    id: created.id,
+    provider: prepared.provider,
+    channel: prepared.channel,
+    status: created.skipped ? 'SKIPPED' : 'PENDING',
+    created: created.created,
+  };
+}
 
 /**
  * Resolves the final state of a test notification intent from the database.

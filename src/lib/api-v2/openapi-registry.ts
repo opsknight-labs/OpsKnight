@@ -31,6 +31,54 @@ const op = (
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op(
     'get',
+    '/notification-providers',
+    'listNotificationProviders',
+    'notification-providers:read',
+    'list',
+    'NotificationProvider'
+  ),
+  op(
+    'get',
+    '/notification-providers/{provider}',
+    'getNotificationProvider',
+    'notification-providers:read',
+    'item',
+    'NotificationProvider'
+  ),
+  op(
+    'put',
+    '/notification-providers/{provider}',
+    'configureNotificationProvider',
+    'notification-providers:write',
+    'item',
+    'NotificationProvider'
+  ),
+  op(
+    'get',
+    '/notification-providers/{provider}/diagnostics',
+    'getNotificationProviderDiagnostics',
+    'notification-providers:read',
+    'item',
+    'NotificationProviderDiagnostics'
+  ),
+  op(
+    'post',
+    '/notification-providers/{provider}/test',
+    'testNotificationProvider',
+    'notification-providers:test',
+    'item',
+    'NotificationProviderTest'
+  ),
+  op(
+    'post',
+    '/notification-providers/web-push/rotate',
+    'rotateWebPushKeys',
+    'notification-providers:write',
+    'item',
+    'WebPushRotation'
+  ),
+  op(
+    'get',
     '/users/me/notification-preferences',
     'getMyNotificationPreferences',
     'notification-preferences:read',
@@ -1196,6 +1244,15 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/incidents', 'listIncidents', 'incidents:read', 'list', 'Incident'),
   op('post', '/incidents', 'createIncident', 'incidents:write', 'item', 'Incident'),
   op('get', '/integrations/{id}', 'getIntegration', 'integrations:read', 'item', 'Integration'),
+  op('get', '/integrations/types', 'listIntegrationTypes', 'integrations:read', 'list', 'IntegrationType'),
+  op('post', '/services/{id}/integrations', 'createServiceIntegration', 'integrations:create', 'item', 'IntegrationCreated'),
+  op('get', '/integrations/{id}/credentials', 'getIntegrationCredentialState', 'integrations:read', 'item', 'IntegrationCredentialState'),
+  op('post', '/integrations/{id}/credentials', 'rotateIntegrationCredentials', 'integrations:credentials:write', 'item', 'IntegrationCredentialRotation'),
+  op('post', '/integrations/{id}/test', 'validateIntegrationPayload', 'integrations:test', 'item', 'IntegrationTestResult'),
+  op('get', '/integrations/{id}/diagnostics', 'getIntegrationDiagnostics', 'integrations:read', 'item', 'IntegrationDiagnostics'),
+  op('post', '/integrations/{id}/validate', 'validateIntegrationConfiguration', 'integrations:test', 'item', 'IntegrationValidation'),
+  op('get', '/integrations/{id}/usage', 'getIntegrationUsage', 'integrations:read', 'item', 'IntegrationUsage'),
+  op('delete', '/integrations/{id}', 'deleteIntegration', 'integrations:delete', 'none', ''),
   op(
     'patch',
     '/integrations/{id}',

@@ -51,6 +51,28 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PUT /api/v2/notification-providers/[provider]': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: false,
+    rationale:
+      'Existing provider records require an exact revision; creates require no If-Match. The keyed request fingerprint, encrypted config, active-admin recheck, mutation, audit and replay receipt are transactional. Secrets never appear in replay data.',
+  },
+  'POST /api/v2/notification-providers/[provider]/test': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    responseEtag: false,
+    rationale:
+      'Requires the current provider revision. A deterministic credential-scoped event key deduplicates delivery; notification intent, attributed audit and receipt commit together. External provider calls occur asynchronously after commit.',
+  },
+  'POST /api/v2/notification-providers/web-push/rotate': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'The exact provider revision fences key rotation. Active-admin recheck, encrypted private key, safe public-key response, audit and receipt commit atomically; private material is never returned.',
+  },
   'PATCH /api/v2/users/me/notification-preferences': {
     idempotency: 'required',
     concurrency: 'etag',
@@ -609,6 +631,20 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   ),
   'DELETE /api/v2/escalation-policies/[id]': natural('A repeat returns 404.'),
   'PATCH /api/v2/integrations/[id]': natural('Sets name and enabled state.', 'etag'),
+  'POST /api/v2/services/[id]/integrations': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'The created integration and audit are transactional. Its initial API key is disclosed once; durable replay metadata strips the key.',
+  },
+  'POST /api/v2/integrations/[id]/credentials': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Exact revision fences routing-key or signing-secret rotation. Prior key values are retained only through the bounded encrypted overlap window and are committed with audit; plaintext is stripped from replay metadata.',
+  },
+  'POST /api/v2/integrations/[id]/test': natural('Pure local payload validation; repeating it does not ingest or emit an event.'),
+  'POST /api/v2/integrations/[id]/validate': natural('Pure local configuration validation; it does not activate the integration or contact its provider.'),
+  'DELETE /api/v2/integrations/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Delete requires current revision and no in-flight inbound deliveries; deletion, safe metadata audit and receipt commit together.',
+  },
   'POST /api/v2/status-pages': natural('Slugs are unique; a repeat returns 409.'),
   'PATCH /api/v2/status-pages/[id]': natural('Sets configuration to the requested values.'),
   'POST /api/v2/status-pages/[id]/announcements': supported(

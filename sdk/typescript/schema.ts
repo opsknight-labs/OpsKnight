@@ -9,7 +9,7 @@ export type Team = { "id": string; "revision"?: number; "name": string; "descrip
 export type User = { "id": string; "name": string; "email": string; "role": string; "status": string; "timeZone"?: string; "department"?: string | null; "jobTitle"?: string | null; "createdAt"?: string } & Record<string, unknown>;
 export type Schedule = { "id": string; "revision"?: number; "name": string; "timeZone": string; "description"?: string | null; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type EscalationPolicy = { "id": string; "revision"?: number; "name": string; "description"?: string | null; "stepCount"?: number; "serviceCount"?: number; "steps"?: Array<Record<string, unknown>>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
-export type Integration = { "id": string; "revision"?: number; "name": string; "type": string; "enabled": boolean; "serviceId": string; "service"?: { "id"?: string; "name"?: string } & Record<string, unknown>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
+export type Integration = { "id": string; "revision"?: number; "name": string; "type": string; "enabled": boolean; "snsTopicArn"?: string | null; "serviceId": string; "service"?: { "id"?: string; "name"?: string } & Record<string, unknown>; "createdAt": string; "updatedAt": string } & Record<string, unknown>;
 export type Notification = { "id": string; "channel": string; "status": string; "incidentId"?: string | null; "userId": string; "failureReason"?: string | null; "sentAt"?: string | null; "createdAt": string } & Record<string, unknown>;
 export type StatusPage = { "id": string; "name": string; "slug": string; "isDefault": boolean; "enabled": boolean; "description"?: string | null; "createdAt": string; "updatedAt": string; "publication"?: { "status": "LIVE" | "PUBLISHING" | "FAILED" | "DISABLED"; "revision": string; "lastError"?: string | null; "stale"?: boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type StatusPageAnnouncement = { "id": string; "title": string; "message": string; "type": string; "isActive": boolean; "startDate"?: string | null; "endDate"?: string | null; "createdAt": string } & Record<string, unknown>;
@@ -38,6 +38,18 @@ export type UserInvitationPolicy = { "mode": "PASSWORD_ONLY" | "SSO_OPTIONAL" | 
 export type UserInvitation = { "userId": string; "revision": number; "status": "INVITED"; "authenticationMode": "PASSWORD" | "SSO"; "invitationGeneration": number; "expiresAt": string; "notificationId": string | null; "deliveryStatus": "QUEUED" | "MANUAL"; "inviteUrl": string | null; "recipientEmail": string; "disclosure": "DISCLOSED_ONCE" | "ALREADY_DISCLOSED" | "NOT_REQUESTED" };
 export type UserInvitationState = { "userId": string; "revision": number; "status": "ACTIVE" | "INVITED" | "DISABLED"; "invitationGeneration": number; "linkingApprovalRevision": string | null; "authenticationMode": "PASSWORD" | "SSO" | null; "expiresAt": string | null; "delivery": { "notificationId": string; "status": string } | null };
 export type UserNotificationPreferences = { "id": string; "revision": number; "timeZone": string | null; "phoneNumber": string | null; "emailNotificationsEnabled": boolean; "smsNotificationsEnabled": boolean; "pushNotificationsEnabled": boolean; "voiceNotificationsEnabled": boolean; "whatsappNotificationsEnabled": boolean };
+export type NotificationProvider = { "id": string; "provider": "twilio" | "aws-sns" | "resend" | "sendgrid" | "smtp" | "ses" | "web-push"; "enabled": boolean; "revision": number; "config": Record<string, unknown>; "configurationState": "READY" | "INCOMPLETE" | "DISABLED" | "DECRYPTION_ERROR"; "updatedAt": string };
+export type NotificationProviderDiagnostics = { "provider": "twilio" | "aws-sns" | "resend" | "sendgrid" | "smtp" | "ses" | "web-push"; "enabled": boolean; "configurationState": string; "missingRequiredFields": Array<string>; "recentTests": Array<{ "id": string; "status": string; "channel": string; "createdAt": string; "errorCode": string | null }> };
+export type NotificationProviderTest = { "id": string; "provider": string; "channel": string; "status": string; "created": boolean };
+export type WebPushRotation = { "publicKey": string; "subject": string; "provider": NotificationProvider };
+export type IntegrationCredentialState = { "id": string; "revision": number; "routingKeyConfigured": boolean; "signingSecretConfigured": boolean; "previousRoutingKeyValidUntil": string | null; "previousSignatureSecretValidUntil": string | null; "updatedAt": string };
+export type IntegrationCredentialRotation = { "id": string; "credential": "routing-key" | "signature-secret"; "secret": string | null; "revision": number; "updatedAt": string };
+export type IntegrationCreated = { "id": string; "name": string; "type": string; "serviceId": string; "enabled": boolean; "revision": number; "createdAt": string; "updatedAt": string; "key": string | null };
+export type IntegrationTestResult = { "valid": boolean; "provider": string; "errors": Array<{ "path": string; "message": string }> };
+export type IntegrationDiagnostics = { "id": string; "type": string; "enabled": boolean; "revision": number; "configurationState": string; "deliveryCounts": { "recent": number; "failed": number; "processing": number }; "recentDeliveries": Array<{ "status": string; "createdAt": string; "completedAt": string | null; "attempt": number }> };
+export type IntegrationType = { "type": string; "direction": "INBOUND"; "authentication": Array<string>; "configurationFields": Array<string>; "testMode": "LOCAL_PAYLOAD_VALIDATION" };
+export type IntegrationValidation = { "id": string; "type": string; "valid": boolean; "checks": Array<{ "code": string; "valid": boolean }>; "activationAllowed": boolean; "revision": number };
+export type IntegrationUsage = { "id": string; "type": string; "service": { "id": string; "name": string }; "deliveriesByStatus": Record<string, number>; "automationObservations": number; "enabledServiceRunbookBindings": number };
 export type UserAdministration = { "id": string; "name": string; "role": "ADMIN" | "RESPONDER" | "AUDITOR" | "USER"; "roleSource": "MANUAL" | "OIDC" | "SCIM"; "status": "ACTIVE" | "INVITED" | "DISABLED"; "revision": number; "deactivatedAt": string | null; "updatedAt": string };
 export type TeamManagedService = { "id": string; "name": string; "teamId": string | null; "revision": number; "createdAt": string; "updatedAt": string };
 export type TeamActivity = { "id": string; "action": string; "createdAt": string; "actor": { "id": string; "name": string | null } | null; "details": unknown };
@@ -121,6 +133,12 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listNotificationProviders: Record<string, never>;
+  getNotificationProvider: { "params": { "provider": string } };
+  configureNotificationProvider: { "params": { "provider": string }; "headers": { "Idempotency-Key": string; "If-Match"?: string }; "body": { "provider": "twilio" | "aws-sns" | "resend" | "sendgrid" | "smtp" | "ses" | "web-push"; "enabled": boolean; "config": Record<string, unknown> } };
+  getNotificationProviderDiagnostics: { "params": { "provider": string } };
+  testNotificationProvider: { "params": { "provider": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": Record<string, never> };
+  rotateWebPushKeys: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "subject": string; "keepPrevious"?: boolean } };
   getMyNotificationPreferences: Record<string, never>;
   updateMyNotificationPreferences: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "emailEnabled": boolean; "smsEnabled": boolean; "pushEnabled": boolean; "voiceEnabled": boolean; "whatsappEnabled": boolean; "phoneNumber"?: string | null; "timeZone"?: string } };
   listTeamActivity: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
@@ -281,6 +299,15 @@ export interface OperationRequests {
   listIncidents: { "query"?: { "limit"?: number; "cursor"?: string; "status"?: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: "P1" | "P2" | "P3" | "P4" | "P5"; "urgency"?: "LOW" | "MEDIUM" | "HIGH"; "serviceId"?: string; "assigneeId"?: string; "teamId"?: string; "search"?: string } };
   createIncident: { "headers"?: { "Idempotency-Key"?: string }; "body": { "title": string; "description"?: string | null; "serviceId": string; "urgency"?: "LOW" | "MEDIUM" | "HIGH"; "priority"?: "P1" | "P2" | "P3" | "P4" | "P5" | null; "assigneeId"?: string | null; "teamId"?: string | null; "dedupKey"?: string | null; "customFields"?: Array<Record<string, unknown>> } & Record<string, unknown> };
   getIntegration: { "params": { "id": string } };
+  listIntegrationTypes: Record<string, never>;
+  createServiceIntegration: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "name": string; "type"?: string; "snsTopicArn"?: string } };
+  getIntegrationCredentialState: { "params": { "id": string } };
+  rotateIntegrationCredentials: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "credential"?: "routing-key" | "signature-secret"; "overlapSeconds"?: number } };
+  validateIntegrationPayload: { "params": { "id": string }; "body": { "payload"?: unknown } };
+  getIntegrationDiagnostics: { "params": { "id": string } };
+  validateIntegrationConfiguration: { "params": { "id": string } };
+  getIntegrationUsage: { "params": { "id": string } };
+  deleteIntegration: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
   updateIntegration: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "enabled"?: boolean } & Record<string, unknown> };
   listIntegrations: { "query"?: { "limit"?: number; "cursor"?: string; "serviceId"?: string } };
   retryNotification: { "params": { "id": string } };
@@ -329,6 +356,12 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listNotificationProviders: { "data": Array<NotificationProvider>; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getNotificationProvider: { "data": NotificationProvider; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  configureNotificationProvider: { "data": NotificationProvider; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getNotificationProviderDiagnostics: { "data": NotificationProviderDiagnostics; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  testNotificationProvider: { "data": NotificationProviderTest; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  rotateWebPushKeys: { "data": WebPushRotation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getMyNotificationPreferences: { "data": UserNotificationPreferences; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateMyNotificationPreferences: { "data": UserNotificationPreferences; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listTeamActivity: { "data": Array<TeamActivity>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -489,6 +522,15 @@ export interface OperationResponses {
   listIncidents: { "data"?: Array<Incident>; "pagination"?: Pagination } & Record<string, unknown>;
   createIncident: { "data": Incident; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getIntegration: { "data": Integration; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIntegrationTypes: { "data": Array<IntegrationType>; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createServiceIntegration: { "data": IntegrationCreated; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIntegrationCredentialState: { "data": IntegrationCredentialState; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  rotateIntegrationCredentials: { "data": IntegrationCredentialRotation; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  validateIntegrationPayload: { "data": IntegrationTestResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIntegrationDiagnostics: { "data": IntegrationDiagnostics; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  validateIntegrationConfiguration: { "data": IntegrationValidation; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIntegrationUsage: { "data": IntegrationUsage; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteIntegration: null;
   updateIntegration: { "data": Integration; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIntegrations: { "data": Array<Integration>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   retryNotification: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -537,6 +579,62 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listNotificationProviders": {
+    "method": "GET",
+    "path": "/notification-providers",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getNotificationProvider": {
+    "method": "GET",
+    "path": "/notification-providers/{provider}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "configureNotificationProvider": {
+    "method": "PUT",
+    "path": "/notification-providers/{provider}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getNotificationProviderDiagnostics": {
+    "method": "GET",
+    "path": "/notification-providers/{provider}/diagnostics",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "testNotificationProvider": {
+    "method": "POST",
+    "path": "/notification-providers/{provider}/test",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "rotateWebPushKeys": {
+    "method": "POST",
+    "path": "/notification-providers/web-push/rotate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "getMyNotificationPreferences": {
     "method": "GET",
     "path": "/users/me/notification-preferences",
@@ -2012,6 +2110,86 @@ export const OPERATIONS = {
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIntegrationTypes": {
+    "method": "GET",
+    "path": "/integrations/types",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceIntegration": {
+    "method": "POST",
+    "path": "/services/{id}/integrations",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getIntegrationCredentialState": {
+    "method": "GET",
+    "path": "/integrations/{id}/credentials",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "rotateIntegrationCredentials": {
+    "method": "POST",
+    "path": "/integrations/{id}/credentials",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateIntegrationPayload": {
+    "method": "POST",
+    "path": "/integrations/{id}/test",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getIntegrationDiagnostics": {
+    "method": "GET",
+    "path": "/integrations/{id}/diagnostics",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "validateIntegrationConfiguration": {
+    "method": "POST",
+    "path": "/integrations/{id}/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIntegrationUsage": {
+    "method": "GET",
+    "path": "/integrations/{id}/usage",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteIntegration": {
+    "method": "DELETE",
+    "path": "/integrations/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
     "bodyRequired": false
   },
   "updateIntegration": {

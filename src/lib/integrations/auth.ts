@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import type { NextRequest } from 'next/server';
+import { decryptStoredSecret } from '@/lib/encryption';
 
 function safeEqual(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
@@ -38,8 +39,21 @@ export function extractIntegrationKey(req: NextRequest): string | null {
   return queryKey?.trim() || null;
 }
 
-export function isIntegrationAuthorized(req: NextRequest, expectedKey: string): boolean {
+export async function isIntegrationAuthorized(
+  req: NextRequest,
+  expectedKey: string,
+  previousKey?: string | null,
+  previousKeyExpiresAt?: Date | null
+): Promise<boolean> {
   const provided = extractIntegrationKey(req);
   if (!provided) return false;
-  return safeEqual(provided, expectedKey);
+  const [currentValue, previousValue] = await Promise.all([
+    decryptStoredSecret(expectedKey),
+    previousKey ? decryptStoredSecret(previousKey) : Promise.resolve(null),
+  ]);
+  const currentMatches = safeEqual(provided, currentValue);
+  const previousMatches = previousValue && previousKeyExpiresAt && previousKeyExpiresAt.getTime() > Date.now()
+    ? safeEqual(provided, previousValue)
+    : false;
+  return currentMatches || previousMatches;
 }

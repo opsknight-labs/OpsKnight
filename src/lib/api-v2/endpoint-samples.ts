@@ -4,6 +4,21 @@
  */
 
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
+  'POST /services/{id}/integrations': { name: 'Production alert source', type: 'EVENTS_API_V2' },
+  'POST /integrations/{id}/credentials': { credential: 'routing-key', overlapSeconds: 3600 },
+  'POST /integrations/{id}/test': {
+    payload: { event_action: 'trigger', dedup_key: 'sample-event', payload: { summary: 'Sample alert', source: 'api-example', severity: 'warning' } },
+  },
+  'PUT /notification-providers/{provider}': {
+    provider: 'resend',
+    enabled: true,
+    config: { apiKey: 'replace-with-provider-secret', fromEmail: 'alerts@example.com' },
+  },
+  'POST /notification-providers/{provider}/test': {},
+  'POST /notification-providers/web-push/rotate': {
+    subject: 'mailto:admin@example.com',
+    keepPrevious: true,
+  },
   'PATCH /users/me/notification-preferences': {
     emailEnabled: false,
     smsEnabled: false,

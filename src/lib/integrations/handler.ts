@@ -89,7 +89,12 @@ export function createIntegrationHandler<T>(
           serviceId: true,
           enabled: true,
           signatureSecret: true,
+          previousSignatureSecret: true,
+          previousSignatureSecretExpiresAt: true,
           key: true,
+          keyFingerprint: true,
+          previousKey: true,
+          previousKeyExpiresAt: true,
         },
       });
 
@@ -107,7 +112,7 @@ export function createIntegrationHandler<T>(
         );
       }
 
-      if (!isIntegrationAuthorized(req, integration.key)) {
+      if (!(await isIntegrationAuthorized(req, integration.key, integration.previousKey, integration.previousKeyExpiresAt))) {
         throw IntegrationErrors.invalidPayload('Invalid integration key');
       }
 
@@ -154,7 +159,16 @@ export function createIntegrationHandler<T>(
       if (VERIFY_SIGNATURES && !options.skipSignatureVerification && integration.signatureSecret) {
         const provider = options.signatureProvider || 'generic';
         const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
-        const sigResult = verifyWebhookSignature(provider, rawPayload, headers, signatureSecret);
+        let sigResult = verifyWebhookSignature(provider, rawPayload, headers, signatureSecret);
+        if (
+          !sigResult.valid &&
+          integration.previousSignatureSecret &&
+          integration.previousSignatureSecretExpiresAt &&
+          integration.previousSignatureSecretExpiresAt.getTime() > Date.now()
+        ) {
+          const previousSecret = await decryptStoredSecret(integration.previousSignatureSecret);
+          sigResult = verifyWebhookSignature(provider, rawPayload, headers, previousSecret);
+        }
 
         if (!sigResult.valid) {
           logger.warn('integration.signature_verification_failed', {
@@ -325,7 +339,7 @@ export async function withIntegrationMiddleware(
 
   const integration = await prisma.integration.findUnique({
     where: { id: integrationId },
-    select: { key: true, enabled: true, type: true },
+    select: { key: true, previousKey: true, previousKeyExpiresAt: true, enabled: true, type: true },
   });
 
   if (!integration) {
@@ -388,7 +402,7 @@ export async function withIntegrationMiddleware(
     );
   }
 
-  if (!isIntegrationAuthorized(req, integration.key)) {
+  if (!(await isIntegrationAuthorized(req, integration.key, integration.previousKey, integration.previousKeyExpiresAt))) {
     logger.warn('integration.invalid_key', { integrationId });
     recordWebhookReceived(
       integrationType,

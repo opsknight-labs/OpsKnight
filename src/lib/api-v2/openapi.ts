@@ -315,6 +315,7 @@ function buildBaseSpec(): Record<string, unknown> {
             name: { type: 'string' },
             type: { type: 'string' },
             enabled: { type: 'boolean' },
+            snsTopicArn: { type: ['string', 'null'], description: 'Configured CloudWatch SNS topic; absent for other provider types.' },
             serviceId: { type: 'string' },
             service: {
               type: 'object',

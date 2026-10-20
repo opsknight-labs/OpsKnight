@@ -3,7 +3,17 @@ import type { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { runV2AuditedMutation, type V2AuditParams } from './audit';
 import { recordIdempotency } from './observability';
-import { executeIdempotentOperation, type IdempotentExecution } from '@/lib/idempotency';
+import {
+  executeIdempotentOperation,
+  readIdempotentOperationResult,
+  type IdempotentExecution,
+} from '@/lib/idempotency';
+import prisma from '@/lib/prisma';
+import { AppError } from '@/lib/errors';
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'P2002');
+}
 
 export async function runV2IdempotentMutation<T>(
   req: NextRequest,
@@ -23,19 +33,32 @@ export async function runV2IdempotentMutation<T>(
     });
   }
 
-  return runSerializableTransaction(async tx => {
-    return executeIdempotentOperation(tx, {
-      scope,
-      context: {
-        key: idempotencyKey,
-        principalId,
-      },
-      payload,
-      execute: () => execute(tx),
-      onReplay,
-      persistResult,
+  const context = { key: idempotencyKey, principalId };
+  try {
+    return await runSerializableTransaction(async tx => {
+      return executeIdempotentOperation(tx, {
+        scope,
+        context,
+        payload,
+        execute: () => execute(tx),
+        onReplay,
+        persistResult,
+      });
     });
-  });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    // Concurrent requests can race on a business unique key or on the durable
+    // idempotency receipt itself. Re-read in a fresh snapshot: if the same key
+    // committed, return that receipt; otherwise report a resource conflict.
+    const replay = await prisma.$transaction(tx =>
+      readIdempotentOperationResult<T>(tx, { scope, context, payload, onReplay })
+    );
+    if (replay) return replay;
+    throw new AppError({
+      code: 'RESOURCE_CONFLICT',
+      userMessage: 'The requested resource conflicts with a concurrent change.',
+    });
+  }
 }
 
 export function idempotencyResponseHeaders(replayed: boolean): Record<string, string> {

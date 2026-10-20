@@ -427,6 +427,14 @@
         {
           "path": "src/lib/integrations",
           "branch": "baseline"
+        },
+        {
+          "path": "src/app/api/v2/integrations",
+          "branch": "feat/api-13-enterprise-contracts"
+        },
+        {
+          "path": "src/app/api/v2/services/[id]/integrations/route.ts",
+          "branch": "feat/api-13-enterprise-contracts"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -479,10 +487,19 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Provider configuration, credential rotation, provider test sends and diagnostics remain unfinished.",
-        "Self-service preference browser and deployment certification remain pending."
+        "Service-specific notification policy, capacity administration, delivery feedback and operational recovery still require end-to-end parity review.",
+        "Self-service preference browser verification, provider test worker execution, and deployment certification remain pending."
       ],
-      "operationIds": ["getMyNotificationPreferences", "updateMyNotificationPreferences"]
+      "operationIds": [
+        "getMyNotificationPreferences",
+        "updateMyNotificationPreferences",
+        "listNotificationProviders",
+        "getNotificationProvider",
+        "configureNotificationProvider",
+        "getNotificationProviderDiagnostics",
+        "testNotificationProvider",
+        "rotateWebPushKeys"
+      ]
     },
     {
       "capabilityId": "runbook-service-rules",

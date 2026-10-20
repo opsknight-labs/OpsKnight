@@ -319,24 +319,23 @@ Priority P0 · High customer value
 
 OpsKnight already has provider-specific ingestion handlers in `src/lib/integrations/`, service integration UI, and shared notification/provider controls.
 
-REST v2 currently mainly supports listing, reading, renaming and enable/disable.
+REST v2 now supports scoped inbound integration provisioning, allow-listed CloudWatch configuration, provider discovery, local configuration/payload validation, encrypted routing keys, routing/signature credential rotation with bounded overlap, usage/health diagnostics, and guarded deletion. Writes require explicit ADMIN-only scopes in addition to service/resource authorization. Delivery into incidents is never performed by the test routes.
 
 ### A. Proposed endpoints
 
 | Method    | Endpoint                                | Function                                                |
 | --------- | --------------------------------------- | ------------------------------------------------------- |
-| GET       | `/integrations/types`                   | List supported provider types and configuration schemas |
-| POST      | `/services/{id}/integrations`           | Create a provider integration                           |
-| GET/PATCH | `/integrations/{id}`                    | Read safe metadata and update configuration             |
-| POST      | `/integrations/{id}/validate`           | Validate configuration without activation               |
-| POST      | `/integrations/{id}/test`               | Run a bounded provider-specific diagnostic              |
-| POST      | `/integrations/{id}/credentials/rotate` | Rotate inbound secrets or supported credentials         |
-| GET       | `/integrations/{id}/credentials`        | Safe key versions and expiration metadata               |
-| POST      | `/integrations/{id}/enable`             | Enable only after required checks                       |
-| POST      | `/integrations/{id}/disable`            | Stop accepting new work according to policy             |
-| GET       | `/integrations/{id}/usage`              | Services, sources and dependent workflows               |
-| GET       | `/integrations/{id}/delivery-health`    | Failures, rejection reasons and diagnostics             |
-| DELETE    | `/integrations/{id}`                    | Safe removal with dependency handling                   |
+| GET       | `/integrations/types`                   | List supported inbound providers and safe config capabilities |
+| POST      | `/services/{id}/integrations`           | Create an integration; encrypted routing key is disclosed once |
+| GET/PATCH | `/integrations/{id}`                    | Read safe metadata; update name, state or CloudWatch topic |
+| POST      | `/integrations/{id}/validate`           | Validate saved configuration without activation         |
+| POST      | `/integrations/{id}/test`               | Validate a bounded provider payload locally, no ingestion |
+| POST      | `/integrations/{id}/credentials`        | Rotate routing/signature credentials with bounded overlap |
+| GET       | `/integrations/{id}/credentials`        | Read credential presence and expiration metadata         |
+| PATCH     | `/integrations/{id}`                    | Enable/disable; CloudWatch cannot enable without valid SNS topic |
+| GET       | `/integrations/{id}/usage`              | Service, delivery, automation observation and runbook-binding usage |
+| GET       | `/integrations/{id}/diagnostics`        | Bounded delivery counts and safe recent metadata         |
+| DELETE    | `/integrations/{id}`                    | Reject in-flight delivery, remove terminal delivery rows and audit |
 
 ### B. Provider-specific configuration
 
@@ -372,7 +371,9 @@ A provider timeout must not produce an ambiguous “connected successfully” re
 
 Provider tests must be opt-in and constrained so they do not unintentionally create production incidents, send customer-facing messages, or produce excessive cost.
 
-Completion criterion: A customer can provision, validate, rotate, diagnose, disable and safely remove integrations through REST without losing existing alerts or bypassing provider security.
+Additional work remains for external OAuth-backed integrations and outbound destinations; REST never fabricates provider consent or treats an unperformed remote probe as a successful connection test. The inbound integration workflows above have focused PostgreSQL concurrency, replay, secret-at-rest, overlap-expiry, authorization and no-side-effect validation tests. Legacy plaintext routing keys are supported during migration and must be upgraded with `npm run integrations:encrypt-legacy-keys:dry-run`, then `npm run integrations:encrypt-legacy-keys` after reviewing the count and confirming the active encryption keyring.
+
+Completion criterion for inbound providers: A customer can provision, validate, rotate, diagnose, disable and safely remove inbound integrations through REST without losing in-flight events or bypassing provider security.
 
 ## 5. Schedules API — Complete rotation administration
 
@@ -528,27 +529,30 @@ OpsKnight has a substantial notification control plane:
 - `src/app/api/settings/notifications/route.ts`
 - `src/app/api/admin/notifications/providers/[key]/test/route.ts`
 
-REST v2 currently exposes notification history and failed-delivery retry, but not the full configuration and operations layer.
+REST v2 now exposes notification history, failed-delivery retry, self-service channel preferences, safe provider configuration, provider readiness, redacted diagnostics, durable idempotent test intents and VAPID rotation. Service-specific notification policy, runtime capacity administration, delivery feedback and the remaining operational recovery surface are still separate gaps tracked in the workflow inventory.
 
 ### A. Proposed endpoints
 
-| Method    | Endpoint                                | Function                                  |
-| --------- | --------------------------------------- | ----------------------------------------- |
-| GET/PATCH | `/services/{id}/notification-settings`  | Service-specific notification settings    |
-| GET/PATCH | `/users/me/notification-preferences`    | Self-service channel preferences          |
-| GET/PATCH | `/settings/notifications`               | Administrative notification configuration |
-| GET       | `/notifications/providers`              | Configured providers and availability     |
-| GET       | `/notifications/providers/{key}/health` | Provider diagnostics                      |
-| POST      | `/notifications/providers/{key}/test`   | Controlled test send                      |
-| GET       | `/notifications/operations`             | Filtered operational delivery history     |
-| GET       | `/notifications/{id}`                   | Delivery detail with permitted redactions |
-| GET       | `/notifications/{id}/attempts`          | Attempt history                           |
-| GET       | `/notifications/{id}/feedback`          | Provider acceptance/failure feedback      |
-| GET/PATCH | `/settings/notifications/capacity`      | Runtime capacity settings                 |
-| GET       | `/notifications/capacity/health`        | Saturation, queues and throttling         |
-| POST      | `/notifications/operations/{id}/retry`  | Authorized recovery action                |
+| Method    | Endpoint                                         | Function                                      |
+| --------- | ------------------------------------------------ | --------------------------------------------- |
+| GET/PATCH | `/services/{id}/notification-settings`           | Service-specific notification settings        |
+| GET/PATCH | `/users/me/notification-preferences`             | Self-service channel preferences              |
+| GET/PUT   | `/notification-providers/{provider}`             | Safe provider configuration and revision      |
+| GET       | `/notification-providers`                        | Configured providers and readiness            |
+| GET       | `/notification-providers/{provider}/diagnostics` | Redacted diagnostics and bounded test history |
+| POST      | `/notification-providers/{provider}/test`        | Idempotent durable test intent                |
+| POST      | `/notification-providers/web-push/rotate`        | VAPID rotation; private key never returned    |
+| GET       | `/notifications/operations`                      | Filtered operational delivery history         |
+| GET       | `/notifications/{id}`                            | Delivery detail with permitted redactions     |
+| GET       | `/notifications/{id}/attempts`                   | Attempt history                               |
+| GET       | `/notifications/{id}/feedback`                   | Provider acceptance/failure feedback          |
+| GET/PATCH | `/settings/notifications/capacity`               | Runtime capacity settings                     |
+| GET       | `/notifications/capacity/health`                 | Saturation, queues and throttling             |
+| POST      | `/notifications/operations/{id}/retry`           | Authorized recovery action                    |
 
 ### B. Notification policy configuration
+
+Provider administration uses dedicated explicit `notification-providers:read`, `notification-providers:write` and `notification-providers:test` scopes. Existing `admin:manage` credentials do not implicitly gain these capabilities. Configuration secrets are encrypted before persistence, redacted in reads and diagnostics, and omitted/placeholder secret fields preserve the stored value. Existing configurations require a concrete provider revision; create uses a unique provider key and no `If-Match`. Mutations use durable idempotency receipts and record an attributed audit event in the same transaction. Test sends resolve only the active administrator’s own configured endpoints, queue an encrypted notification intent, and let workers perform network delivery after commit. VAPID private keys and retained key history remain encrypted at rest; only the public key is returned.
 
 Expose the existing delivery policy and channel configuration. Where supported by OpsKnight's policy engine, clients should be able to configure different delivery behavior by priority, escalation step, or service.
 

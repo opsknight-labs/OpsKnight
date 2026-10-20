@@ -68,8 +68,13 @@
       "status": "in_progress",
       "remaining": [
         "Complete combined-branch certification of the 17 implemented automation operations, including the deployed API-only lifecycle and upgrade evidence",
-        "Integration setup/configuration/rotation/test/delete commands",
-        "Notification preference and provider diagnostics contracts"
+        "Outbound webhook/ChatOps/Jira integration control plane and OAuth setup-session status APIs",
+        "Notification provider test-send and diagnostic deployment verification"
+      ],
+      "delivered": [
+        "Inbound integration types/create/configuration/enable-disable/validate/test/usage/diagnostics/credential-state/rotation/delete operations with explicit admin scopes",
+        "Encrypted routing keys with fingerprint lookup, one-time creation/rotation disclosure, 24-hour overlap ceiling and legacy upgrade tooling",
+        "PostgreSQL tests for concurrent idempotency replay, credential rotation/expiry, no-incident test validation and in-flight-safe deletion"
       ]
     },
     {
@@ -195,7 +200,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 206,
+    "registeredOperationCount": 221,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -251,7 +256,7 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 206,
+  "registeredOperationCount": 221,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,

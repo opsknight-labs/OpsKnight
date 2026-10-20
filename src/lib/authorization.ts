@@ -85,10 +85,17 @@ export const API_SCOPES = {
   ESCALATION_POLICIES_WRITE: 'escalation-policies:write',
   INTEGRATIONS_READ: 'integrations:read',
   INTEGRATIONS_WRITE: 'integrations:write',
+  INTEGRATIONS_CREATE: 'integrations:create',
+  INTEGRATIONS_CREDENTIALS_WRITE: 'integrations:credentials:write',
+  INTEGRATIONS_TEST: 'integrations:test',
+  INTEGRATIONS_DELETE: 'integrations:delete',
   NOTIFICATIONS_READ: 'notifications:read',
   NOTIFICATIONS_WRITE: 'notifications:write',
   NOTIFICATION_PREFERENCES_READ: 'notification-preferences:read',
   NOTIFICATION_PREFERENCES_WRITE: 'notification-preferences:write',
+  NOTIFICATION_PROVIDERS_READ: 'notification-providers:read',
+  NOTIFICATION_PROVIDERS_WRITE: 'notification-providers:write',
+  NOTIFICATION_PROVIDERS_TEST: 'notification-providers:test',
   STATUS_PAGES_READ: 'status-pages:read',
   STATUS_PAGES_WRITE: 'status-pages:write',
   AUTOMATION_READ: 'automation:read',
@@ -137,6 +144,13 @@ export const EXPLICIT_API_SCOPES: ReadonlySet<string> = new Set([
   API_SCOPES.USERS_WRITE,
   API_SCOPES.NOTIFICATION_PREFERENCES_READ,
   API_SCOPES.NOTIFICATION_PREFERENCES_WRITE,
+  API_SCOPES.NOTIFICATION_PROVIDERS_READ,
+  API_SCOPES.NOTIFICATION_PROVIDERS_WRITE,
+  API_SCOPES.NOTIFICATION_PROVIDERS_TEST,
+  API_SCOPES.INTEGRATIONS_CREATE,
+  API_SCOPES.INTEGRATIONS_CREDENTIALS_WRITE,
+  API_SCOPES.INTEGRATIONS_TEST,
+  API_SCOPES.INTEGRATIONS_DELETE,
   API_SCOPES.AUTOMATION_READ,
   API_SCOPES.AUTOMATION_WRITE,
   API_SCOPES.AUTOMATION_PUBLISH,
@@ -179,6 +193,7 @@ export function isWriteApiScope(scope: ApiScope): boolean {
     scope.endsWith(':write') ||
     scope.endsWith(':execute') ||
     scope.endsWith(':publish') ||
+    scope.endsWith(':test') ||
     scope === 'admin:manage'
   );
 }
