@@ -33,6 +33,7 @@ export type SearchableRunbookSelectProps = {
   onChange?: (value: string) => void;
   required?: boolean;
   className?: string;
+  triggerClassName?: string;
   placeholder?: string;
   ariaLabel?: string;
 };
@@ -56,6 +57,7 @@ export function SearchableRunbookSelect({
   onChange,
   required = false,
   className,
+  triggerClassName,
   placeholder,
   ariaLabel,
 }: SearchableRunbookSelectProps) {
@@ -151,7 +153,8 @@ export function SearchableRunbookSelect({
               className={cn(
                 'h-9 w-full justify-between rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium px-2.5 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-primary/50 data-[state=open]:ring-2 data-[state=open]:ring-primary/20',
                 !required && selectedValue ? 'pr-12' : 'pr-2.5',
-                !selectedValue && 'text-muted-foreground'
+                !selectedValue && 'text-muted-foreground',
+                triggerClassName
               )}
             >
               <div className="flex items-center gap-2 min-w-0 truncate">

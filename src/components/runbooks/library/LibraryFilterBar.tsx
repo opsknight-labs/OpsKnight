@@ -116,14 +116,15 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
 
   return (
     <Card className="border border-border/80 shadow-xs transition-colors">
-      <CardHeader className="pb-3 pt-3.5 sm:pt-4 px-4 sm:px-5">
+      <CardHeader className="py-2.5 sm:py-3 px-3.5 sm:px-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base font-bold">
-              <Filter className="h-4 w-4 text-primary" /> Filter Runbooks
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold">
+              <Filter className="h-3.5 w-3.5 text-primary" /> Filter Runbooks
             </CardTitle>
-            <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Filter by lifecycle status, service bindings, owning team, or tags
+            <span className="hidden sm:inline text-muted-foreground/50 text-xs">•</span>
+            <CardDescription className="text-[11px] text-muted-foreground mt-0">
+              Filter by lifecycle, service bindings, owning team, or tags
             </CardDescription>
           </div>
           {hasActiveFilters && (
@@ -131,24 +132,24 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
+                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
                 onClick={resetFilters}
               >
-                <X className="mr-1 h-3.5 w-3.5" /> Clear All
+                <X className="mr-1 h-3 w-3" /> Clear All
               </Button>
             </div>
           )}
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3.5 pt-0 px-4 sm:px-5 pb-4 sm:pb-5">
+      <CardContent className="space-y-2.5 pt-0 px-3.5 sm:px-4 pb-3 sm:pb-3.5">
         {/* Quick Status Filters matching Services and Incidents */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Badge
             variant={status === 'all' ? 'default' : 'outline'}
             size="sm"
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'all'
                 ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
@@ -161,48 +162,48 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
             variant={status === 'published' ? 'success' : 'outline'}
             size="sm"
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'published'
                 ? 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/30'
             )}
             onClick={() => navigate({ status: status === 'published' ? 'all' : 'published' })}
           >
-            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Published
+            <CheckCircle2 className="mr-1 h-3 w-3" /> Published
           </Badge>
           <Badge
             variant={status === 'draft' ? 'warning' : 'outline'}
             size="sm"
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'draft'
                 ? 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 hover:bg-amber-700'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/30'
             )}
             onClick={() => navigate({ status: status === 'draft' ? 'all' : 'draft' })}
           >
-            <PencilLine className="mr-1 h-3.5 w-3.5" /> Draft
+            <PencilLine className="mr-1 h-3 w-3" /> Draft
           </Badge>
           <Badge
             variant={status === 'archived' ? 'secondary' : 'outline'}
             size="sm"
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'archived'
                 ? 'bg-slate-700 text-white border-slate-700 hover:bg-slate-800'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
             )}
             onClick={() => navigate({ status: status === 'archived' ? 'all' : 'archived' })}
           >
-            <Archive className="mr-1 h-3.5 w-3.5" /> Archived
+            <Archive className="mr-1 h-3 w-3" /> Archived
           </Badge>
         </div>
 
         {/* Inputs Grid: Search, Service, Team */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-3 items-end">
           {/* Search */}
-          <div className="space-y-1.5 md:col-span-2 lg:col-span-6">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+          <div className="space-y-1 md:col-span-2 lg:col-span-6">
+            <Label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Search className="h-3 w-3" /> Search
             </Label>
             <div className="relative">
@@ -210,7 +211,7 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
                 placeholder="Search by name, slug or purpose…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="h-9 rounded-xl pr-8 text-xs font-medium"
+                className="h-8.5 rounded-lg pr-8 text-xs font-medium"
               />
               {searchTerm && (
                 <button
@@ -222,15 +223,15 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
                   }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3 w-3" />
                 </button>
               )}
             </div>
           </div>
 
           {/* Service Filter */}
-          <div className="space-y-1.5 md:col-span-1 lg:col-span-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+          <div className="space-y-1 md:col-span-1 lg:col-span-3">
+            <Label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Server className="h-3 w-3" /> Service
             </Label>
             <SearchableRunbookSelect
@@ -239,17 +240,18 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
               ariaLabel="Filter by service"
               placeholder="All services"
               value={serviceId}
+              triggerClassName="h-8.5 rounded-lg"
               onChange={val => navigate({ service: val })}
             />
           </div>
 
           {/* Team Filter */}
-          <div className="space-y-1.5 md:col-span-1 lg:col-span-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+          <div className="space-y-1 md:col-span-1 lg:col-span-3">
+            <Label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Users className="h-3 w-3" /> Team
             </Label>
             <Select value={teamId} onValueChange={val => navigate({ team: val })}>
-              <SelectTrigger className="h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors">
+              <SelectTrigger className="h-8.5 w-full rounded-lg border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors">
                 <div className="flex items-center gap-1.5 min-w-0 truncate">
                   <SelectValue placeholder="All teams" />
                 </div>
@@ -277,13 +279,13 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
 
         {/* Tags & Active Filters Metadata Row */}
         {(activeTag || ownerId || visibleTags.length > 0 || activeFiltersCount > 0) && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-border/70 pt-3">
-            <span className="mr-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2">
+            <span className="mr-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
               <Hash className="h-3 w-3" aria-hidden="true" />
               Tags:
             </span>
             {activeTag && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-2.5 pr-1 font-mono text-[11px] text-primary ring-1 ring-inset ring-primary/30 font-semibold">
+              <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 py-0.5 pl-2 pr-1 font-mono text-[10.5px] text-primary ring-1 ring-inset ring-primary/30 font-semibold">
                 #{activeTag}
                 <button
                   type="button"
@@ -301,19 +303,19 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
                 type="button"
                 aria-label={`Filter by tag ${item.tag}`}
                 onClick={() => navigate({ tag: item.tag })}
-                className="inline-flex items-center gap-1 rounded-full bg-muted/50 px-2 py-0.5 font-mono text-[11px] text-muted-foreground ring-1 ring-inset ring-border transition-colors hover:bg-background hover:text-foreground hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+                className="inline-flex items-center gap-1 rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground ring-1 ring-inset ring-border transition-colors hover:bg-background hover:text-foreground hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
               >
                 #{item.tag}
-                <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                <span className="text-[9.5px] tabular-nums text-muted-foreground/70">
                   {item.count}
                 </span>
               </button>
             ))}
             {!activeTag && visibleTags.length === 0 && (
-              <span className="text-xs text-muted-foreground">No tags yet</span>
+              <span className="text-[11px] text-muted-foreground">No tags yet</span>
             )}
             {ownerId && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted/50 py-0.5 pl-2 pr-0.5 text-[11px] text-foreground ring-1 ring-inset ring-border">
+              <span className="inline-flex items-center gap-1 rounded-md bg-muted/50 py-0.5 pl-2 pr-0.5 text-[10.5px] text-foreground ring-1 ring-inset ring-border">
                 <UserRound className="h-3 w-3" aria-hidden="true" />
                 Created by a specific user
                 <button
@@ -328,16 +330,16 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
             )}
             {activeFiltersCount > 0 && (
               <div className="ml-auto flex items-center gap-2">
-                <span className="text-xs tabular-nums text-muted-foreground">
+                <span className="text-[11px] tabular-nums text-muted-foreground">
                   {activeFiltersCount} {activeFiltersCount === 1 ? 'filter' : 'filters'} active
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={resetFilters}
-                  className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  <RotateCcw className="h-3 w-3" aria-hidden="true" />
                   <span>Reset</span>
                 </Button>
               </div>
