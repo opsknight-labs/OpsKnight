@@ -11,6 +11,7 @@ import {
 import { logAudit } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
+import { escapeHtml } from '@/lib/email-components';
 
 export type ProviderTestStatus =
   'ACCEPTED' | 'DELIVERED' | 'QUEUED' | 'DEFERRED' | 'CONFIGURED_NO_DEVICE' | 'FAILED' | 'UNKNOWN';
@@ -101,13 +102,7 @@ export async function prepareProviderTestIntent(
     normalizedKey === 'whatsapp'
   ) {
     const whatsapp = normalizedKey === 'whatsapp';
-    const target =
-      user.phoneNumber ||
-      (whatsapp
-        ? config.whatsappNumber
-        : normalizedKey === 'twilio'
-          ? config.fromNumber
-          : undefined);
+    const target = user.phoneNumber;
     if (!target)
       throw new AppError({
         code: 'VALIDATION_FAILED',
@@ -451,7 +446,7 @@ export async function executeProviderTest(
             <h2 style="color: #059669; margin-bottom: 8px;">✅ Provider Test Successful</h2>
             <p>This is an automated test notification dispatched from your OpsKnight instance via <strong>${normalizedKey.toUpperCase()}</strong>.</p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-            <p style="font-size: 12px; color: #6b7280;">Dispatched by: ${user.name || user.email || 'Admin'} (${user.role || 'ADMIN'})</p>
+            <p style="font-size: 12px; color: #6b7280;">Dispatched by: ${escapeHtml(user.name || user.email || 'Admin')} (${escapeHtml(user.role || 'ADMIN')})</p>
             <p style="font-size: 12px; color: #6b7280;">Timestamp: ${new Date().toISOString()}</p>
           </div>
         `,
@@ -460,10 +455,7 @@ export async function executeProviderTest(
       },
     };
   } else if (normalizedKey === 'twilio') {
-    const targetPhone =
-      user.phoneNumber ||
-      (decryptedConfig?.fromNumber as string) ||
-      (decryptedConfig?.phoneNumber as string);
+    const targetPhone = user.phoneNumber;
     if (!targetPhone) {
       return {
         success: false,
@@ -471,7 +463,7 @@ export async function executeProviderTest(
         provider: 'twilio',
         channel: 'SMS',
         message:
-          'No recipient phone number available. Add a phone number to your profile or configure a test number.',
+          'No recipient phone number available. Add a phone number to your profile.',
       };
     }
 
@@ -545,14 +537,14 @@ export async function executeProviderTest(
       };
     }
 
-    const targetPhone = user.phoneNumber || (decryptedConfig?.whatsappNumber as string);
+    const targetPhone = user.phoneNumber;
     if (!targetPhone) {
       return {
         success: false,
         status: 'FAILED',
         provider: 'twilio',
         channel: 'WHATSAPP',
-        message: 'No WhatsApp phone number configured.',
+        message: 'Add a phone number to your profile to receive a WhatsApp provider test.',
       };
     }
 

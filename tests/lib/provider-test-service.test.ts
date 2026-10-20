@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { executeProviderTest, resolveTestNotificationOutcome } from '@/lib/provider-test-service';
+import { executeProviderTest, prepareProviderTestIntent, resolveTestNotificationOutcome } from '@/lib/provider-test-service';
 import prisma from '@/lib/prisma';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 
@@ -233,6 +233,33 @@ describe('Provider Test Service', () => {
       role: 'ADMIN',
     };
 
+    it('never sends SMS or WhatsApp tests to a configured sender when the administrator lacks a phone number', async () => {
+      vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
+        id: 'prov-twilio',
+        provider: 'twilio',
+        enabled: true,
+        revision: 1,
+        config: {
+          accountSid: 'AC123',
+          authToken: 'token',
+          fromNumber: '+15005550006',
+          whatsappNumber: '+14155238886',
+          whatsappEnabled: true,
+        },
+      } as never);
+      const noPhone = { ...adminUser, phoneNumber: null };
+
+      await expect(prepareProviderTestIntent('twilio', noPhone, 'test-sms')).rejects.toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
+      await expect(prepareProviderTestIntent('whatsapp', noPhone, 'test-wa')).rejects.toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
+      expect((await executeProviderTest('twilio', noPhone)).success).toBe(false);
+      expect((await executeProviderTest('whatsapp', noPhone)).success).toBe(false);
+      expect(enqueueCentralNotification).not.toHaveBeenCalled();
+    });
+
     it('fails immediately when provider is not configured in database', async () => {
       vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue(null);
 
@@ -295,7 +322,7 @@ describe('Provider Test Service', () => {
         ],
       } as never);
 
-      const result = await executeProviderTest('resend', adminUser);
+      const result = await executeProviderTest('resend', { ...adminUser, name: '<script>alert(1)</script>' });
 
       expect(result).toMatchObject({
         status: 'ACCEPTED',
@@ -313,6 +340,9 @@ describe('Provider Test Service', () => {
         }),
         { dispatchImmediately: true }
       );
+      const payload = vi.mocked(enqueueCentralNotification).mock.calls[0]?.[0].payload;
+      expect(JSON.stringify(payload)).toContain('&lt;script&gt;');
+      expect(JSON.stringify(payload)).not.toContain('<script>');
     });
 
     it('dispatches Twilio WhatsApp test using canonical twilio providerKey and returns ACCEPTED', async () => {
