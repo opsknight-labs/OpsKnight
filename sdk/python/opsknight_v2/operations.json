@@ -1412,6 +1412,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getEscalationPolicyDependencies": {
+    "method": "GET",
+    "path": "/escalation-policies/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "updateEscalationPolicy": {
     "method": "PATCH",
     "path": "/escalation-policies/{id}",

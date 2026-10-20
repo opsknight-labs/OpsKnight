@@ -2,15 +2,11 @@
 
 Objective: Close the remaining REST API gaps so customers can automate every supported OpsKnight workflow programmatically, with the same security, behavior, reliability, and operational safeguards as the web UI.
 
-This plan is based on the implementation in [OpsKnight PR #883](https://github.com/opsknight-labs/OpsKnight/pull/883?utm_source=chatgpt.com), including its capability catalog and implementation tracker, plus the separate `feat/service-automation` branch.
+This plan is based on the implementation in [OpsKnight PR #883](https://github.com/opsknight-labs/OpsKnight/pull/883?utm_source=chatgpt.com), including its capability catalog and implementation tracker, and Service Automation merged into `main` by PR #896.
 
 ## Current delivery contract
 
-All work packages remain in draft PR #886. The newer `feat/service-automation`
-runtime is included in the intended scope and must be reconciled by subsystem;
-it is not certified by the existing Automation REST operations and must not be
-merged wholesale. The eight release gates stay pending until final-candidate
-evidence supports each gate.
+All work packages remain in draft PR #886. The Service Automation runtime is now in `main`; the REST operations require regression checks against that merged implementation, especially candidate activation, response context and Runbook integration. The eight release gates stay pending until final-candidate evidence supports each gate.
 
 Generate the operation review matrix with `npm run --silent api:coverage`.
 It derives operation IDs, methods, scopes, input/response schemas, mutation

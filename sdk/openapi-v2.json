@@ -7712,6 +7712,83 @@
           "checksum"
         ]
       },
+      "EscalationPolicyDependencies": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "stepId": {
+                  "type": "string"
+                },
+                "stepOrder": {
+                  "type": "integer"
+                },
+                "targetType": {
+                  "type": "string",
+                  "enum": [
+                    "USER",
+                    "TEAM",
+                    "SCHEDULE"
+                  ]
+                },
+                "targetId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "exists": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "stepId",
+                "stepOrder",
+                "targetType",
+                "targetId",
+                "exists"
+              ]
+            }
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "deletionAllowed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "policyId",
+          "services",
+          "targets",
+          "valid",
+          "deletionAllowed"
+        ]
+      },
       "ActionResult": {
         "type": "object",
         "properties": {
@@ -13973,6 +14050,85 @@
         "description": "Requires API scope `escalation-policies:write` (Escalation policies manage).",
         "x-idempotency": "natural",
         "x-concurrency": "none"
+      }
+    },
+    "/escalation-policies/{id}/dependencies": {
+      "get": {
+        "tags": [
+          "Escalation Policies"
+        ],
+        "summary": "Inspect service usage and live step target references",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current dependency snapshot and target health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EscalationPolicyDependencies"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getEscalationPolicyDependencies",
+        "x-required-scope": "escalation-policies:read",
+        "description": "Requires API scope `escalation-policies:read` (Escalation policies read)."
       }
     },
     "/integrations": {

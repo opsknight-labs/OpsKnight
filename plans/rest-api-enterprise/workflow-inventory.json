@@ -284,7 +284,7 @@
     {
       "capabilityId": "escalation-validation",
       "delivery": "API-14",
-      "workflow": "Policy reference validation and dependency deletion protection",
+      "workflow": "Policy reference validation and dependency deletion protection (dependency snapshot delivered; safe deletion/concurrency review pending)",
       "sources": [
         {
           "path": "src/lib/escalation",

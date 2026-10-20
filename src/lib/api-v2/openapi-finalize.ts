@@ -51,6 +51,20 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  EscalationPolicyDependencies: {
+    type: 'object',
+    properties: {
+      policyId: { type: 'string' },
+      services: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } }, required: ['id', 'name'] } },
+      targets: { type: 'array', items: { type: 'object', properties: {
+        stepId: { type: 'string' }, stepOrder: { type: 'integer' }, targetType: { type: 'string', enum: ['USER', 'TEAM', 'SCHEDULE'] },
+        targetId: { type: ['string', 'null'] }, exists: { type: 'boolean' },
+      }, required: ['stepId', 'stepOrder', 'targetType', 'targetId', 'exists'] } },
+      valid: { type: 'boolean' },
+      deletionAllowed: { type: 'boolean' },
+    },
+    required: ['policyId', 'services', 'targets', 'valid', 'deletionAllowed'],
+  },
   ActionResult: {
     type: 'object',
     properties: { success: { type: 'boolean' }, message: { type: 'string' } },

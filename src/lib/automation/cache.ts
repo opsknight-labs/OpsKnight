@@ -1,7 +1,6 @@
 import { createHash } from 'crypto';
 import { LIMITS, type CompiledSnapshot } from './contract';
-export type CachedCompiledVersion = { compiled: CompiledSnapshot; versionNumber: number };
-// Versions are immutable once published, so the number is cached alongside the snapshot.
+type CachedCompiledVersion = CompiledSnapshot & { versionNumber: number };
 const versions = new Map<string, CachedCompiledVersion>();
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -17,7 +16,7 @@ export const checksum = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(canonical(value)))
     .digest('hex');
-export function getCachedCompiledVersion(id: string): CachedCompiledVersion | undefined {
+export function getCachedCompiledVersion(id: string) {
   const cached = versions.get(id);
   if (cached) {
     versions.delete(id);
@@ -45,7 +44,7 @@ export function loadCompiledVersion(version: {
     !Array.isArray(compiled.rules)
   )
     throw new Error('VERSION_INVALID');
-  const entry = { compiled, versionNumber: version.versionNumber };
+  const entry = { ...compiled, versionNumber: version.versionNumber };
   versions.set(version.id, entry);
   if (versions.size > LIMITS.cache) versions.delete(versions.keys().next().value!);
   return entry;

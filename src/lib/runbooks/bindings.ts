@@ -3,8 +3,13 @@ import { isValidInputValue, parseInputDefault } from './input-values';
 
 import { Prisma, type RunbookInput, type ServiceAutomationRule } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { runSerializableTransaction } from '@/lib/db-utils';
 import { logAudit } from '@/lib/audit';
+import {
+  runRunbookCommand,
+  logRunbookCommandAudit,
+  type RunbookCommandActor,
+  type RunbookCommandClient,
+} from './command-context';
 import {
   createServiceRunbookBindingSchema,
   updateServiceRunbookBindingSchema,
@@ -162,7 +167,7 @@ async function validateBindingTarget(
   }
   if (agentPoolId) {
     const pool = await tx.runbookAgentPool.findUnique({
-      where: { id: agentPoolId, lifecycle: 'ACTIVE' },
+      where: { id: agentPoolId },
       select: { id: true, mode: true, _count: { select: { members: true } } },
     });
     if (!pool) throw new RunbookDefinitionError('The selected Runbook Agent pool was not found.');
@@ -368,7 +373,7 @@ export async function createServiceBinding(
       },
       tx
     );
-    return tx.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } });
+    return binding;
   });
 }
 
@@ -500,7 +505,8 @@ export async function updateServiceBinding(
         { bindingId, unattendedWritesOnly: true },
         `Stopped: unattended-write authorization was revoked (${revokeReason}).`
       );
-      await logAudit(
+      await logRunbookCommandAudit(
+        actor,
         {
           action: 'runbook.binding.unattended_writes.revoked',
           entityType: 'RUNBOOK',
@@ -517,7 +523,8 @@ export async function updateServiceBinding(
         tx
       );
     }
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.service.binding.updated',
         entityType: 'RUNBOOK',
@@ -811,8 +818,14 @@ export async function revokeUnattendedWrites(
   });
 }
 
-export async function detachServiceBinding(serviceId: string, bindingId: string, actorId: string) {
-  return prisma.$transaction(async tx => {
+export async function detachServiceBinding(
+  serviceId: string,
+  bindingId: string,
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
     await lockServiceRuleForUpdate(tx, serviceId, bindingId);
     const binding = await tx.serviceAutomationRule.findFirst({
       where: { id: bindingId, serviceId, detachedAt: null },
@@ -875,7 +888,7 @@ export async function replaceBindingTrigger(
       sequence: condition.sequence,
     }));
     // Keep suggestion/execution foreign keys intact. Old condition sets remain in the audit.
-    const savedTrigger = previous
+    const trigger = previous
       ? await tx.runbookTrigger.update({
           where: { id: previous.id },
           data: {
@@ -911,7 +924,8 @@ export async function replaceBindingTrigger(
           { bindingId, unattendedWritesOnly: true },
           'Stopped: unattended-write authorization was revoked (SCOPE_CHANGED).'
         );
-        await logAudit(
+        await logRunbookCommandAudit(
+          actor,
           {
             action: 'runbook.binding.unattended_writes.revoked',
             entityType: 'RUNBOOK',
@@ -929,7 +943,8 @@ export async function replaceBindingTrigger(
         );
       }
     }
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.trigger.configured',
         entityType: 'RUNBOOK',
@@ -940,7 +955,6 @@ export async function replaceBindingTrigger(
           serviceId: binding.serviceId,
           event: trigger.event,
           triggerId: trigger.id,
-          retiredTriggers: retired,
           revision: trigger.revision,
           before: previous
             ? {
@@ -988,7 +1002,6 @@ export async function pauseServiceRule(
       where: { id: ruleId, serviceId, detachedAt: null },
     });
     if (!rule) throw new RunbookDefinitionError('Service automation rule not found.');
-    if (!rule.enabled) return;
     await tx.serviceAutomationRule.update({
       where: { id: ruleId },
       data: { enabled: false, configurationRevision: { increment: 1 } },
@@ -1071,7 +1084,7 @@ export async function duplicateServiceRule(
       },
       tx
     );
-    return tx.serviceAutomationRule.findUniqueOrThrow({ where: { id: duplicate.id } });
+    return duplicate;
   });
 }
 

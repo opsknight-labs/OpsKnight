@@ -86,13 +86,12 @@ export function AutomationReviewDialog({
   version,
   enabled,
   counts,
-  readiness,
   busy,
   error,
   onCancel,
   onConfirm,
 }: {
-  action: 'publish' | 'restore' | 'LIVE' | 'activateCandidate' | null;
+  action: 'publish' | 'restore' | 'LIVE' | null;
   snapshot: Snapshot;
   before?: Snapshot;
   mode?: string;
@@ -100,23 +99,11 @@ export function AutomationReviewDialog({
   destinations?: Array<{ id: string; channelName?: string | null; provider: string }>;
   version: number | null;
   enabled: boolean;
-  counts?: {
-    evaluated: number;
-    routes: number;
-    priorities: number;
-    skips: number;
-    errors: number;
-    fallbacks?: number;
-  };
-  readiness?: Awaited<ReturnType<typeof readAutomationReadiness>> | null;
+  counts?: { evaluated: number; routes: number; priorities: number; skips: number; errors: number };
   busy: boolean;
   error?: string;
   onCancel: () => void;
-  onConfirm: (
-    acknowledgeNoShadow: boolean,
-    acknowledgeShadowErrors: boolean,
-    acknowledgeMaterialDifferences: boolean
-  ) => void;
+  onConfirm: (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean) => void;
 }) {
   const blockedId = useId();
   const [acknowledge, setAcknowledge] = useState(false);
@@ -281,12 +268,11 @@ export function AutomationReviewDialog({
                 Shadow readiness · last 7 days
               </h3>
               <p>
-                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors ·{' '}
-                {counts?.fallbacks ?? 0} fallbacks
+                {counts?.evaluated ?? 0} evaluations · {counts?.errors ?? 0} errors/fallbacks
               </p>
               <p>
                 {counts?.routes ?? 0} routing differences · {counts?.priorities ?? 0} priority
-                differences · {counts?.skips ?? 0} suppression differences
+                differences · {counts?.skips ?? 0} would skip escalation
               </p>
               <p className="text-muted-foreground">
                 Review context mapping and deployment queue/latency metrics before enabling. These
@@ -364,11 +350,7 @@ export function AutomationReviewDialog({
             aria-describedby={blockedReason ? blockedId : undefined}
             onClick={() => onConfirm(acknowledge, acknowledgeErrors)}
           >
-            {busy
-              ? 'Saving…'
-              : action === 'LIVE' || action === 'activateCandidate'
-                ? 'Confirm LIVE'
-                : 'Confirm publication'}
+            {busy ? 'Saving…' : action === 'LIVE' ? 'Confirm LIVE' : 'Confirm publication'}
           </Button>
         </div>
       </DialogContent>

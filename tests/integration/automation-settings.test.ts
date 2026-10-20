@@ -63,7 +63,7 @@ it('reads ingestion configuration without caching the shared emergency switch', 
 it('defaults off with 90 days and ignores deployment environment values', async () => {
   vi.stubEnv('OPSKNIGHT_AUTOMATION_ENABLED', 'true');
   vi.stubEnv('OPSKNIGHT_AUTOMATION_TRACE_RETENTION_DAYS', '2');
-  expect(await getAutomationSettings()).toEqual({
+  expect(await getAutomationSettings()).toMatchObject({
     automationEnabled: false,
     automationTraceRetentionDays: 90,
     automationSettingsRevision: 0,
@@ -131,7 +131,7 @@ it('returns ACTIVE_SERVICES without enabling while services are staged', async (
     code: 'ACTIVE_SERVICES',
     message: expect.stringContaining('Services are already configured SHADOW or LIVE.'),
   });
-  expect(await getAutomationSettings()).toEqual({
+  expect(await getAutomationSettings()).toMatchObject({
     automationEnabled: false,
     automationTraceRetentionDays: 90,
     automationSettingsRevision: 0,

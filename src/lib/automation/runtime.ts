@@ -46,8 +46,8 @@ export type RuntimeEvaluation = {
   mode: 'SHADOW' | 'LIVE';
   versionId: string | null;
   versionNumber: number | null;
-  /** Declared fields of the evaluated version (builtins first); never raw payload paths. */
   contextFields: ResponseContextFieldDefinition[];
+  candidateVersionId?: string | null;
   evaluationAt: Date;
   durationMs: number;
   extractionMs: number;
@@ -133,9 +133,8 @@ export async function prepareAutomation(
           select: { id: true, compiledSnapshot: true, checksum: true, versionNumber: true },
         });
     if (!cached && !stored) throw new Error('VERSION_MISSING');
-    const loaded = cached ?? loadCompiledVersion(stored!);
-    const version = loaded.compiled;
-    runtime.versionNumber = loaded.versionNumber;
+    const version = cached ?? loadCompiledVersion(stored!);
+    runtime.versionNumber = version.versionNumber;
     runtime.contextFields = responseContextFieldDefinitions(version);
     runtime.versionLoadMs = performance.now() - versionLoadStart;
     let timeoutPosition: EvaluationPosition = {
@@ -317,7 +316,7 @@ export async function prepareAutomation(
         ? null
         : await tx.automationVersion.findUnique({
             where: { id: config.candidateVersionId },
-            select: { id: true, compiledSnapshot: true, checksum: true },
+            select: { id: true, compiledSnapshot: true, checksum: true, versionNumber: true },
           });
       candGuard();
       if (!cachedCandidate && !storedCandidate) throw new Error('VERSION_MISSING');
@@ -523,7 +522,6 @@ export async function persistAutomation(
       MAX_AUTOMATION_DECISION_BYTES
     );
     runtime.decisionBytes = Buffer.byteLength(JSON.stringify(summary), 'utf8');
-    // Only an intact LIVE evaluation may hand context to downstream consumers (runbooks).
     const responseContext =
       result && runtime.versionId && runtime.versionNumber !== null && !runtime.fallbackReason
         ? buildResponseContext({
@@ -624,7 +622,8 @@ export async function persistAutomation(
   if (encodedDetail.diagnosticLevel === 'FULL')
     runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(encodedDetail), 'utf8');
   // Default-off previews are removed before durable enqueueing, not just at response time.
-  if (runtime.observations.length) await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR SHARE`;
+  if (runtime.observations.length)
+    await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR SHARE`;
   const observationSettings = runtime.observations.length ? await getAutomationSettings(tx) : null;
   const protectedObservations = protectObservationValues(
     envelope.serviceId,

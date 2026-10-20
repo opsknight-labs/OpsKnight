@@ -6,8 +6,6 @@ import {
   type RunbookResource,
 } from '@/lib/runbooks/presentation/binding-contract';
 import prisma from '@/lib/prisma';
-import { decryptStoredSecret } from '@/lib/encryption';
-import AutomationShell from '@/components/automation/AutomationShell';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
 type ClassificationPolicyWithRules = Prisma.IncidentClassificationPolicyGetPayload<{
@@ -456,13 +454,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     });
   }
 
-  const service = {
-    ...serviceRaw,
-    integrations: await Promise.all(serviceRaw.integrations.map(async integration => ({
-      ...integration,
-      key: await decryptStoredSecret(integration.key),
-    }))),
-  };
+  const service = serviceRaw;
   const canDeleteService = currentUser.role === 'ADMIN';
 
   const [

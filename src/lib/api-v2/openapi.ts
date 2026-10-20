@@ -1495,6 +1495,14 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/escalation-policies/{id}/dependencies': {
+        get: {
+          tags: ['Escalation Policies'],
+          summary: 'Inspect service usage and live step target references',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Current dependency snapshot and target health' } },
+        },
+      },
       '/integrations': {
         get: {
           tags: ['Integrations'],
