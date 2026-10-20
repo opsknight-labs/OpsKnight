@@ -86,8 +86,8 @@ replace runtime negative tests with source-string assertions.
 
 ## Delivery and certification
 
-Keep #883 as the foundation. API-14 depends on integration and certification of
-`feat/service-automation`; this inventory does not merge that branch. API-23 depends
+Keep #883 as the foundation. API-14 depends on certification against Service Automation
+merged into `main` by PR #896. API-23 depends
 on approval of the SLO product contract. Restricted SCIM, OAuth, agent protocol and
 recovery workflows remain separate even when a delivery owns their documentation.
 

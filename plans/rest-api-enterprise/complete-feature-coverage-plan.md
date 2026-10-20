@@ -57,11 +57,11 @@ Sensitive responses must use `Cache-Control: no-store`, and one-time credentials
 
 ## 2. Service Automation API — Complete the routing engine
 
-Priority P0 · Integrate service-automation branch first
+Priority P0 · Certify REST operations against merged Service Automation
 
 ### Existing implementation
 
-The separate [`feat/service-automation`](https://github.com/opsknight-labs/OpsKnight/tree/feat/service-automation?utm_source=chatgpt.com) branch already contains an automation contract, evaluator, draft/version management, simulation, discovery, audit, and administrative settings.
+Service Automation merged into `main` in PR #896. It contains an automation contract, evaluator, draft/version management, simulation, discovery, audit, and administrative settings.
 
 Relevant modules include:
 
@@ -72,7 +72,7 @@ Relevant modules include:
 - `src/lib/automation/discovery.ts`
 - `src/app/(app)/services/[id]/automation/actions.ts`
 
-This means we should expose the existing automation engine rather than build a second routing engine for API consumers.
+REST v2 exposes the existing engine. Combined worker, Runbook, migration and load certification remains pending.
 
 ### A. API endpoints to implement
 

@@ -6,8 +6,8 @@
   "scope": "Complete enterprise plan in one draft PR; no intermediate merge.",
   "automationRuntime": {
     "includedInScope": true,
-    "sourceBranch": "feat/service-automation",
-    "status": "subsystem-reconciliation-pending",
+    "sourceBranch": "main (PR #896)",
+    "status": "combined-certification-pending",
     "wholesaleMergeAllowed": false
   },
   "baselineCI": {

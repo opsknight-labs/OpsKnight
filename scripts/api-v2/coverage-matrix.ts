@@ -325,8 +325,8 @@ console.log(
       automationRuntime: {
         includedInScope: true,
         reconciliationStatus: 'pending',
-        sourceBranch: 'feat/service-automation',
-        strategy: 'Subsystem reconciliation; never wholesale branch merge.',
+        sourceBranch: 'main (PR #896)',
+        strategy: 'Verify REST operations against the merged runtime and certify each subsystem.',
       },
       operations,
       capabilities,

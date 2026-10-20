@@ -163,7 +163,7 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Newer feat/service-automation monitoring context, target policy and verified recovery runtime must be reconciled subsystem by subsystem; no wholesale branch merge.",
+        "Merged Service Automation monitoring context, target policy and verified recovery runtime require combined REST and worker certification.",
         "Final combined authorization, latency, load/recovery and deployment compatibility certification remain pending."
       ],
       "implementedOperations": [
