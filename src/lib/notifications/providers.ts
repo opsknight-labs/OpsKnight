@@ -241,7 +241,6 @@ export async function notificationProviderDiagnostics(provider: NotificationProv
       where: {
         eventType: 'provider-test',
         category: 'SYSTEM',
-        payloadEncrypted: { not: null },
         message: { contains: provider.toUpperCase() },
       },
       orderBy: { createdAt: 'desc' },

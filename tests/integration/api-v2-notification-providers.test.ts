@@ -1,4 +1,11 @@
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { processCentralNotificationQueue } from '@/lib/notification-control-plane';
+
+const delivery = vi.hoisted(() => ({ sendEmail: vi.fn() }));
+vi.mock('@/lib/email', async original => ({
+  ...(await original<typeof import('@/lib/email')>()),
+  sendEmail: delivery.sendEmail,
+}));
 import { GET as listProviders } from '@/app/api/v2/notification-providers/route';
 import {
   GET as getProvider,
@@ -15,6 +22,7 @@ beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
     throw new Error('Dedicated test DB required');
   await resetDatabase();
+  delivery.sendEmail.mockReset();
 });
 
 it('returns only redacted provider state and updates existing credentials with revision, audit, and replay fences', async () => {
@@ -219,6 +227,32 @@ it('queues provider tests once and exposes only bounded diagnostics', async () =
   });
   expect(JSON.stringify(diagnosticBody)).not.toContain(secret);
   expect(JSON.stringify(diagnosticBody)).not.toContain(credential.user.email);
+
+  delivery.sendEmail.mockResolvedValue({
+    success: true,
+    providerMessageId: 'smtp-provider-test-receipt',
+    selectedProvider: 'smtp',
+  });
+  const drained = await processCentralNotificationQueue({
+    trafficClasses: ['TRANSACTIONAL'],
+    batchSize: 1,
+    concurrency: 1,
+  });
+  expect(drained.succeeded).toBe(1);
+  expect(delivery.sendEmail).toHaveBeenCalledTimes(1);
+  const delivered = await db.notification.findUniqueOrThrow({ where: { id: payloads[0].data.id } });
+  expect(delivered.status).toBe('SENT');
+  expect(await db.notificationDeliveryAttempt.count({ where: { notificationId: delivered.id } })).toBe(1);
+  const postDeliveryDiagnostics = await invokeV2(
+    getDiagnostics,
+    credential.token,
+    'GET',
+    `${path}/diagnostics`,
+    { provider: 'smtp' }
+  );
+  expect((await postDeliveryDiagnostics.json()).data.recentTests).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: delivered.id, status: 'SENT' })])
+  );
 });
 
 it('rotates Web Push keys with private material encrypted and absent from every response', async () => {
