@@ -108,7 +108,7 @@
       "remaining": [
         "Status-page domain ownership, validated branding assets, preview and combined certification",
         "Structured postmortem impact, collaboration and action items",
-        "Durable report/export jobs and result authorization",
+        "Dashboard exports and broader report/export parity; metric export jobs now have encrypted artifacts and result authorization",
         "Service-objective history/evaluation UI parity and combined certification of the four supported measurements",
         "Audit exports, dashboards and approved operational configuration"
       ],
@@ -200,7 +200,7 @@
       "getAutomationSettings",
       "updateAutomationSettings"
     ],
-    "registeredOperationCount": 248,
+    "registeredOperationCount": 252,
     "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
   },
   "candidateReadinessFollowUp": {
@@ -256,7 +256,7 @@
     "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
     "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
   },
-  "registeredOperationCount": 248,
+  "registeredOperationCount": 252,
   "statusPagePublication": {
     "status": "local_checks_passed_latest_ci_pending",
     "addedOperations": 3,

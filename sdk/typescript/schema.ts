@@ -132,6 +132,8 @@ export type ReportDashboardSummary = { "id"?: string; "revision"?: number; "name
 export type ReportDashboard = { "id"?: string; "revision"?: number; "name"?: string; "description"?: string | null; "visibility"?: "PRIVATE" | "TEAM" | "PUBLIC"; "isDefault"?: boolean; "isTemplate"?: boolean; "templateId"?: string | null; "userId"?: string; "teamId"?: string | null; "layout"?: Record<string, unknown>; "config"?: Record<string, unknown> | null; "widgets"?: Array<ReportDashboardWidget>; "user"?: { "id": string; "name"?: string | null }; "team"?: { "id": string; "name": string } & Record<string, unknown> | null; "permissions"?: { "canEdit": boolean; "canDelete": boolean }; "createdAt"?: string; "updatedAt"?: string };
 export type ReportDashboardData = { "dashboardId": string; "windowDays": number; "serviceId": string | null; "generatedAt": string; "metrics": Record<string, unknown> };
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
+export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
+export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
 export type EscalationPolicyDependencies = { "policyId": string; "services": Array<{ "id": string; "name": string } & Record<string, unknown>>; "targets": Array<{ "stepId": string; "stepOrder": number; "targetType": "USER" | "TEAM" | "SCHEDULE"; "targetId": string | null; "exists": boolean } & Record<string, unknown>>; "valid": boolean; "deletionAllowed": boolean } & Record<string, unknown>;
 export type ActionResult = { "success": boolean; "message"?: string } & Record<string, unknown>;
 export type IncidentTransition = { "id": string; "title": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: string | null; "urgency": "LOW" | "MEDIUM" | "HIGH"; "acknowledgedAt"?: string | null; "resolvedAt"?: string | null; "updatedAt": string } & Record<string, unknown>;
@@ -341,6 +343,10 @@ export interface OperationRequests {
   getSavedReport: { "params": { "id": string } };
   updateSavedReport: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "description"?: string; "metrics"?: Array<string>; "windowDays"?: number; "serviceId"?: string; "visibility"?: string; "teamId"?: string } };
   deleteSavedReport: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  createReportExport: { "headers": { "Idempotency-Key": string }; "body": { "metrics": Array<string>; "windowDays"?: number; "serviceId"?: string } };
+  getReportExport: { "params": { "id": string } };
+  downloadReportExport: { "params": { "id": string } };
+  cancelReportExport: { "params": { "id": string }; "headers": { "Idempotency-Key": string } };
   listReportDashboards: { "query"?: { "limit"?: number; "cursor"?: string } };
   createReportDashboard: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "description"?: string; "visibility"?: string; "teamId"?: string; "templateId"?: string; "sourceTemplate"?: string; "widgets"?: Array<ReportDashboardWidget> } };
   getReportDashboard: { "params": { "id": string } };
@@ -591,6 +597,10 @@ export interface OperationResponses {
   getSavedReport: { "data": SavedReport; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateSavedReport: { "data": SavedReport; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteSavedReport: null;
+  createReportExport: { "data": ReportExport; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getReportExport: { "data": ReportExport; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  downloadReportExport: Uint8Array;
+  cancelReportExport: { "data": ReportExportCancellation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listReportDashboards: { "data": Array<ReportDashboardSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2410,6 +2420,42 @@ export const OPERATIONS = {
     "requiredHeaders": [
       "Idempotency-Key",
       "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "createReportExport": {
+    "method": "POST",
+    "path": "/reports/exports",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getReportExport": {
+    "method": "GET",
+    "path": "/reports/exports/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadReportExport": {
+    "method": "GET",
+    "path": "/reports/exports/{id}/download",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "cancelReportExport": {
+    "method": "POST",
+    "path": "/reports/exports/{id}/cancel",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
     ],
     "bodyRequired": false
   },

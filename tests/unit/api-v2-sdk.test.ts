@@ -139,6 +139,13 @@ describe('generated TypeScript client', () => {
     await expect(client().call('listIncidents', {})).rejects.toThrow('API returned invalid JSON.');
     expect(fetcher).toHaveBeenCalledOnce();
   });
+  it('returns bounded export bytes without parsing the downloaded JSON file as an API envelope', async () => {
+    const bytes = new TextEncoder().encode('{"metrics":{"totalIncidents":1}}');
+    fetcher.mockResolvedValue(new Response(bytes, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } }));
+    const result = await client().call('downloadReportExport', { params: { id: 'report' } });
+    expect(Array.from(result)).toEqual(Array.from(bytes));
+    expect(new Headers(fetcher.mock.calls[0][1]?.headers).get('authorization')).toBe('Bearer private-test-token');
+  });
   it('does not retry transport uncertainty for executable writes', async () => {
     fetcher.mockRejectedValue(new TypeError('network disconnected'));
     await expect(

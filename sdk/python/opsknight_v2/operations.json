@@ -1764,6 +1764,42 @@
     ],
     "bodyRequired": false
   },
+  "createReportExport": {
+    "method": "POST",
+    "path": "/reports/exports",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getReportExport": {
+    "method": "GET",
+    "path": "/reports/exports/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadReportExport": {
+    "method": "GET",
+    "path": "/reports/exports/{id}/download",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "cancelReportExport": {
+    "method": "POST",
+    "path": "/reports/exports/{id}/cancel",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
   "listReportDashboards": {
     "method": "GET",
     "path": "/dashboards",

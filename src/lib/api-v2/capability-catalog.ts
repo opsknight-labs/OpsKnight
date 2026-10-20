@@ -377,10 +377,11 @@ const decisions: readonly ApiCapability[] = [
     title: 'Saved reports and asynchronous exports',
     status: 'partial',
     explanation:
-      'The report catalog, bounded actor-scoped metric queries and revision-protected saved definitions are available. Large exports still require durable jobs, bounded resource use and downloadable result authorization.',
+      'The report catalog, bounded actor-scoped metric queries, saved definitions and encrypted asynchronous metric exports are available. Exports require current global report and incident access and the originating credential; broader reporting and certification remain in progress.',
     operationIds: [
       'getReportCatalog', 'queryReportMetrics', 'listSavedReports', 'createSavedReport',
       'getSavedReport', 'updateSavedReport', 'deleteSavedReport',
+      'createReportExport', 'getReportExport', 'downloadReportExport', 'cancelReportExport',
     ],
   },
   {

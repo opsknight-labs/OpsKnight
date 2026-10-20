@@ -691,7 +691,7 @@
         "contract-sdk"
       ],
       "blockers": [
-        "Durable export jobs, authorized download, cancellation and retention remain pending."
+        "Combined worker deployment, quota/load and upgrade certification remain pending. Metric exports currently require global read authority and the originating credential."
       ],
       "implementedOperations": [
         "getReportCatalog",
@@ -700,7 +700,11 @@
         "createSavedReport",
         "getSavedReport",
         "updateSavedReport",
-        "deleteSavedReport"
+        "deleteSavedReport",
+        "createReportExport",
+        "getReportExport",
+        "downloadReportExport",
+        "cancelReportExport"
       ]
     },
     {

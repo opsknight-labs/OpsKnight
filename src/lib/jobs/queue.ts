@@ -68,7 +68,8 @@ export type JobType =
   | 'ENCRYPTION_LIFECYCLE'
   | 'COMPLIANCE_EVALUATION_SWEEP'
   | 'COMPLIANCE_DRIFT_PROJECT'
-  | 'RUNBOOK';
+  | 'RUNBOOK'
+  | 'REPORT_EXPORT';
 export type JobStatus =
   'PENDING' | 'PROCESSING' | 'PENDING_V2' | 'PROCESSING_V2' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
@@ -169,6 +170,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.projectionVersion;
     case 'runId':
       return values.runId;
+    case 'exportId':
+      return values.exportId;
     case 'evaluationId':
       return values.evaluationId;
     case 'controlId':
@@ -300,6 +303,12 @@ export interface ClaimJobsOptions {
 }
 
 export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueMaintenanceResult> {
+  try {
+    const { expireDueReportExports } = await import('../api-v2/report-exports');
+    await expireDueReportExports();
+  } catch (error) {
+    logger.warn('[Queue] Failed to expire report exports', { error });
+  }
   // Reconcile and sweep any zombie/timed-out encryption lifecycle jobs atomically
   try {
     const { reconcileTerminalEncryptionLifecycleJobs } = await import('../encryption/worker');
@@ -841,6 +850,12 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
     }, PROCESSING_LEASE_HEARTBEAT_MS);
 
     switch (job.type) {
+      case 'REPORT_EXPORT': {
+        const { processReportExportJob } = await import('../api-v2/report-exports');
+        await processReportExportJob(requiredPayloadString(job.payload, 'exportId'), job.id, job.claimToken);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
+        return true;
+      }
       case 'RUNBOOK': {
         const { processRunbookJob } = await import('../runbooks/orchestrator');
         await processRunbookJob(job.payload);

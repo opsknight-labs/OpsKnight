@@ -529,7 +529,14 @@ export function finalizeOpenApiSpec(base: Json): Json {
     if (okCode && definition.kind !== 'none') {
       // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
       const ok = responses[okCode] as Json;
-      if (!ok.content) {
+      if (definition.kind === 'binary') {
+        ok.content = { 'application/json': { schema: { type: 'string', format: 'binary' } } };
+        ok.headers = {
+          ...(ok.headers ?? {}),
+          'Content-Disposition': { description: 'Attachment filename.', schema: { type: 'string' } },
+          'X-Content-SHA256': { description: 'SHA-256 checksum of the downloaded bytes.', schema: { type: 'string' } },
+        };
+      } else if (!ok.content) {
         const paginated = definition.kind === 'list' && hasParam(operation, 'limit', 'query');
         ok.content = {
           'application/json': { schema: successEnvelope(definition, paginated) },

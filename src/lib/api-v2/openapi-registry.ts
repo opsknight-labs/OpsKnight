@@ -7,7 +7,7 @@
  * tests/unit/api-v2-openapi-conformance.test.ts verifies the table against the route
  * handlers (scope, existence) so the contract cannot drift from the implementation.
  */
-export type OperationResultKind = 'item' | 'list' | 'none';
+export type OperationResultKind = 'item' | 'list' | 'none' | 'binary';
 
 export interface V2OperationDefinition {
   method: 'get' | 'post' | 'patch' | 'put' | 'delete';
@@ -1285,6 +1285,10 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/reports/saved/{id}', 'getSavedReport', 'reports:read', 'item', 'SavedReport'),
   op('patch', '/reports/saved/{id}', 'updateSavedReport', 'reports:write', 'item', 'SavedReport'),
   op('delete', '/reports/saved/{id}', 'deleteSavedReport', 'reports:write', 'none', ''),
+  op('post', '/reports/exports', 'createReportExport', 'reports:read', 'item', 'ReportExport'),
+  op('get', '/reports/exports/{id}', 'getReportExport', 'reports:read', 'item', 'ReportExport'),
+  op('get', '/reports/exports/{id}/download', 'downloadReportExport', 'reports:read', 'binary', ''),
+  op('post', '/reports/exports/{id}/cancel', 'cancelReportExport', 'reports:read', 'item', 'ReportExportCancellation'),
   op('get', '/dashboards', 'listReportDashboards', 'reports:read', 'list', 'ReportDashboardSummary'),
   op('post', '/dashboards', 'createReportDashboard', 'reports:write', 'item', 'ReportDashboard'),
   op('get', '/dashboards/{id}', 'getReportDashboard', 'reports:read', 'item', 'ReportDashboard'),

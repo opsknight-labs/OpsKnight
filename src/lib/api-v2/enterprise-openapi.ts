@@ -1188,6 +1188,14 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ReportDashboardWidgets: object({
     dashboardId: id, widgets: array(ref('ReportDashboardWidget'), 50),
   }, ['dashboardId', 'widgets']),
+  ReportExport: object({
+    id, status: { type: 'string', enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED'] },
+    query: object({ metrics: array(string(), 16), windowDays: integer, serviceId: string() }, ['metrics', 'windowDays']),
+    createdAt: date, expiresAt: date, completedAt: { type: ['string', 'null'], format: 'date-time' },
+    failedAt: { type: ['string', 'null'], format: 'date-time' },
+    checksum: { type: ['string', 'null'] }, sizeBytes: { type: ['integer', 'null'] },
+  }, ['id', 'status', 'query', 'createdAt', 'expiresAt']),
+  ReportExportCancellation: object({ id, status: { const: 'CANCELLED' } }, ['id', 'status']),
 };
 
 const draftInput = object(
@@ -1918,6 +1926,12 @@ const operations: Operation[] = [
       widgets: array(ref('ReportDashboardWidget'), 50) }),
   },
   { method: 'delete', path: '/dashboards/{id}', summary: 'Delete an owned dashboard with a strong revision precondition', status: 204 },
+  { method: 'post', path: '/reports/exports', summary: 'Queue a bounded, encrypted report export', status: 201,
+    body: object({ metrics: array(string(), 16), windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id }, ['metrics']) },
+  { method: 'get', path: '/reports/exports/{id}', summary: 'Read owned report export job state and integrity metadata' },
+  { method: 'get', path: '/reports/exports/{id}/download', summary: 'Download an authorized report export',
+    description: 'Returns an application/json file, not a JSON response envelope. Requires current global report and incident permissions.' },
+  { method: 'post', path: '/reports/exports/{id}/cancel', summary: 'Cancel a pending owned report export' },
 ];
 
 /** Add only implemented operations; the canonical registry finalizes shared contracts. */
@@ -2006,7 +2020,7 @@ export function enterpriseOpenApiPaths() {
       ],
       ...(operation.path.endsWith('/automation/decisions')
         ? { 'x-additional-required-scopes': ['incidents:read'] }
-        : operation.path === '/dashboards/{id}/data' || operation.path === '/reports/query'
+        : operation.path === '/dashboards/{id}/data' || operation.path === '/reports/query' || operation.path.startsWith('/reports/exports')
           ? { 'x-additional-required-scopes': ['incidents:read'] }
         : {}),
       ...(operation.body

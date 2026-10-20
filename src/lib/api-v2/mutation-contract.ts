@@ -51,6 +51,14 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/reports/exports': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Bounded immutable query, per-credential and global admission, durable queue job, owner and audit commit with the replay receipt.',
+  },
+  'POST /api/v2/reports/exports/[id]/cancel': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Only a pending owned export can transition to CANCELLED. Other keys observe the accepted cancellation without repeated audit.',
+  },
   'POST /api/v2/reports/query': {
     idempotency: 'natural', concurrency: 'none',
     rationale: 'Read-only bounded analytics query with explicit report and incident visibility scopes; repeated calls do not mutate state.',

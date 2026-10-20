@@ -46,6 +46,7 @@ enum AuditEntityType {
   STATUS_PAGE
   DASHBOARD
   SAVED_REPORT
+  REPORT_EXPORT
   SYSTEM_CONFIG
   PRIVACY_REQUEST
   PRIVACY_EXPORT_ARTIFACT
@@ -549,6 +550,7 @@ model User {
   avatar                      UserAvatar?
   dashboards                  Dashboard[]
   savedReports                SavedReport[]
+  reportExports               ReportExport[]
   assignedActionItems         ActionItem[]
   tokens                      UserToken[]
   privacyRequestsAssigned     PrivacyRequest[]             @relation("PrivacyRequestAssignedTo")
@@ -2045,6 +2047,7 @@ model ApiKey {
   revokedAt  DateTime?
   expiresAt  DateTime?
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportExports ReportExport[]
 
   @@index([userId])
   @@index([tokenHash])
@@ -2121,6 +2124,7 @@ enum JobType {
   COMPLIANCE_EVALUATION_SWEEP
   COMPLIANCE_DRIFT_PROJECT
   RUNBOOK
+  REPORT_EXPORT
 }
 
 enum JobStatus {
@@ -2148,6 +2152,7 @@ model BackgroundJob {
   payload     Json
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  reportExport ReportExport?
 
   @@index([type, status, scheduledAt])
   @@index([status, scheduledAt])
@@ -2904,6 +2909,25 @@ model SavedReport {
 
   @@index([userId, createdAt, id])
   @@index([teamId, createdAt, id])
+}
+
+model ReportExport {
+  id               String   @id @default(cuid())
+  userId           String
+  apiKeyId         String
+  jobId            String   @unique
+  query            Json
+  encryptedPayload String?
+  checksum         String?
+  sizeBytes        Int?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey           ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  job              BackgroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 model RateLimit {

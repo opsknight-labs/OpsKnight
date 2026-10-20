@@ -162,14 +162,16 @@ for (const definition of V2_OPERATIONS) {
     if (operation.requestBody?.required) required.push('body');
   }
   const request: Schema = { type: 'object', additionalProperties: false, properties, required };
-  const response = Object.entries(operation.responses).find(([status]) =>
-    status.startsWith('2')
-  )?.[1].content?.['application/json']?.schema ?? { type: 'null' };
+  const response = definition.kind === 'binary'
+    ? { type: 'string', format: 'binary' }
+    : Object.entries(operation.responses).find(([status]) =>
+        status.startsWith('2')
+      )?.[1].content?.['application/json']?.schema ?? { type: 'null' };
   tsRequests.push(`  ${definition.operationId}: ${ts(request)};`);
-  tsResponses.push(`  ${definition.operationId}: ${ts(response)};`);
+  tsResponses.push(`  ${definition.operationId}: ${definition.kind === 'binary' ? 'Uint8Array' : ts(response)};`);
   const name = title(definition.operationId);
   const requestName = py(request, `${name}Request`);
-  const responseName = py(response, `${name}Response`);
+  const responseName = definition.kind === 'binary' ? 'bytes' : py(response, `${name}Response`);
   overloads.push(
     `    @overload\n    def call(self, operation: Literal[${JSON.stringify(definition.operationId)}], request: ${requestName}) -> ${responseName}: ...`
   );
