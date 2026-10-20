@@ -29,6 +29,7 @@ ALLOW_INSECURE_SECRETS="${ALLOW_INSECURE_SECRETS:-false}"
 AUTO_LABEL_DATABASE_NODE="${AUTO_LABEL_DATABASE_NODE:-false}"
 CONVERGENCE_TIMEOUT_SEC="${CONVERGENCE_TIMEOUT_SEC:-180}"
 DB_READY_TIMEOUT_SEC="${DB_READY_TIMEOUT_SEC:-60}"
+WORKER_DRAIN_TIMEOUT_SEC="${WORKER_DRAIN_TIMEOUT_SEC:-30}"
 
 # Split deployments make the chosen runtime explicit; integrated deployments
 # default to the stable 2.0 tag. Production should pin the verified digest.
@@ -569,6 +570,49 @@ fi
 
 # --- Step 5: Standalone Database Schema Migration ---
 echo "--- [5/8] Running Ephemeral Schema Migration ---"
+
+# Drain and stop incompatible background workers before running schema migrations.
+# Workers running previous container versions execute background queries (such as
+# ON CONFLICT against legacy unique constraints) that can fail if executed concurrently
+# with additive/redefining migrations. Draining and verifying zero active tasks ensures
+# a safe, certified rolling upgrade without constraint mismatch errors.
+INCOMPATIBLE_WORKERS=(
+  "${STACK_NAME}_opsknight-general-worker"
+  "${STACK_NAME}_opsknight-critical-worker"
+  "${STACK_NAME}_opsknight-bulk-worker"
+  "${STACK_NAME}_opsknight-runbook-worker"
+  "${STACK_NAME}_opsknight-scheduler"
+  "${STACK_NAME}_opsknight-status-projector"
+  "${STACK_NAME}_opsknight-app"
+)
+
+echo "🔍 Checking for active incompatible workers requiring pre-migration drain..."
+for svc in "${INCOMPATIBLE_WORKERS[@]}"; do
+  if docker service inspect "${svc}" >/dev/null 2>&1; then
+    replicas=$(docker service inspect "${svc}" --format '{{if .Spec.Mode.Replicated}}{{.Spec.Mode.Replicated.Replicas}}{{else}}0{{end}}' 2>/dev/null || echo "0")
+    if [ "${replicas}" -gt 0 ]; then
+      echo "🛑 Draining and stopping worker before migration: ${svc} (current replicas: ${replicas})..."
+      docker service scale "${svc}=0"
+
+      echo "⏳ Verifying ${svc} tasks have stopped (timeout: ${WORKER_DRAIN_TIMEOUT_SEC}s)..."
+      DRAIN_START=$(date +%s)
+      while true; do
+        active_tasks=$(docker service ps "${svc}" --filter "desired-state=running" -q 2>/dev/null || true)
+        if [ -z "${active_tasks}" ]; then
+          echo "  ✓ Worker ${svc} successfully stopped (0 active tasks)."
+          break
+        fi
+        CURRENT_TIME=$(date +%s)
+        if [ $((CURRENT_TIME - DRAIN_START)) -gt "${WORKER_DRAIN_TIMEOUT_SEC}" ]; then
+          echo "❌ [FATAL] Timed out waiting for worker ${svc} to stop before migration." >&2
+          exit 1
+        fi
+        sleep 1
+      done
+    fi
+  fi
+done
+
 export OPSKNIGHT_IMAGE
 export SWARM_NETWORK_NAME="${NETWORK_NAME}"
 export SWARM_STACK_NAME="${STACK_NAME}"
