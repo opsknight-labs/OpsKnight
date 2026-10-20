@@ -434,12 +434,13 @@ const decisions: readonly ApiCapability[] = [
     title: 'Dashboards and analytics configuration',
     status: 'partial',
     explanation:
-      'Saved dashboard CRUD, widget replacement, visibility and accessible template cloning use explicit report scopes, owner/team checks, revision fencing and audited idempotency. Actor-scoped data projection is available; exports remain pending.',
+      'Saved dashboard CRUD, widget replacement, visibility and accessible template cloning use explicit report scopes, owner/team checks, revision fencing and audited idempotency. Actor-scoped data projection and bounded, audited JSON downloads are available; combined UI/REST parity and load certification remain pending.',
     operationIds: [
       'listReportDashboards',
       'createReportDashboard',
       'getReportDashboard',
       'getReportDashboardData',
+      'downloadReportDashboardData',
       'duplicateReportDashboard',
       'listReportDashboardWidgets',
       'replaceReportDashboardWidgets',

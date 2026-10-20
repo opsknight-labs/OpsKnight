@@ -1301,6 +1301,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('post', '/dashboards', 'createReportDashboard', 'reports:write', 'item', 'ReportDashboard'),
   op('get', '/dashboards/{id}', 'getReportDashboard', 'reports:read', 'item', 'ReportDashboard'),
   op('get', '/dashboards/{id}/data', 'getReportDashboardData', 'reports:read', 'item', 'ReportDashboardData'),
+  op('get', '/dashboards/{id}/export', 'downloadReportDashboardData', 'reports:read', 'binary', ''),
   op('post', '/dashboards/{id}/duplicate', 'duplicateReportDashboard', 'reports:write', 'item', 'ReportDashboard'),
   op('get', '/dashboards/{id}/widgets', 'listReportDashboardWidgets', 'reports:read', 'item', 'ReportDashboardWidgets'),
   op('put', '/dashboards/{id}/widgets', 'replaceReportDashboardWidgets', 'reports:write', 'item', 'ReportDashboardWidgets'),

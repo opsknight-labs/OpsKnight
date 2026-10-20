@@ -1913,6 +1913,8 @@ const operations: Operation[] = [
   },
   { method: 'get', path: '/dashboards/{id}', summary: 'Read an accessible saved dashboard' },
   { method: 'get', path: '/dashboards/{id}/data', summary: 'Calculate actor-scoped data for an accessible dashboard' },
+  { method: 'get', path: '/dashboards/{id}/export', summary: 'Download a bounded JSON snapshot of accessible dashboard data',
+    description: 'Requires reports:read and incidents:read. Uses the same actor-scoped calculation and optional days/serviceId filters as the data endpoint. Maximum 256 KiB; private no-store response with SHA-256 checksum and attributed download audit.' },
   { method: 'post', path: '/dashboards/{id}/duplicate', summary: 'Duplicate an accessible dashboard into an owned dashboard', status: 201,
     body: object({ name: string(200), visibility: string(), teamId: id }) },
   { method: 'get', path: '/dashboards/{id}/widgets', summary: 'List widgets of an accessible dashboard' },
@@ -1981,7 +1983,7 @@ export function enterpriseOpenApiPaths() {
       parameters: [
         ...parameters,
         ...queryParameters,
-        ...(operation.path === '/dashboards/{id}/data'
+        ...(['/dashboards/{id}/data', '/dashboards/{id}/export'].includes(operation.path)
           ? [
               { name: 'days', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 90 } },
               { name: 'serviceId', in: 'query', required: false, schema: id },
@@ -2020,7 +2022,7 @@ export function enterpriseOpenApiPaths() {
       ],
       ...(operation.path.endsWith('/automation/decisions')
         ? { 'x-additional-required-scopes': ['incidents:read'] }
-        : operation.path === '/dashboards/{id}/data' || operation.path === '/reports/query' || operation.path.startsWith('/reports/exports')
+        : operation.path === '/dashboards/{id}/data' || operation.path === '/dashboards/{id}/export' || operation.path === '/reports/query' || operation.path.startsWith('/reports/exports')
           ? { 'x-additional-required-scopes': ['incidents:read'] }
         : {}),
       ...(operation.body

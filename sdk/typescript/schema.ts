@@ -353,6 +353,7 @@ export interface OperationRequests {
   createReportDashboard: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "description"?: string; "visibility"?: string; "teamId"?: string; "templateId"?: string; "sourceTemplate"?: string; "widgets"?: Array<ReportDashboardWidget> } };
   getReportDashboard: { "params": { "id": string } };
   getReportDashboardData: { "params": { "id": string }; "query"?: { "days"?: number; "serviceId"?: string } };
+  downloadReportDashboardData: { "params": { "id": string }; "query"?: { "days"?: number; "serviceId"?: string } };
   duplicateReportDashboard: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "name"?: string; "visibility"?: string; "teamId"?: string } };
   listReportDashboardWidgets: { "params": { "id": string } };
   replaceReportDashboardWidgets: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "widgets": Array<ReportDashboardWidget> } };
@@ -608,6 +609,7 @@ export interface OperationResponses {
   createReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getReportDashboardData: { "data": ReportDashboardData; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  downloadReportDashboardData: Uint8Array;
   duplicateReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listReportDashboardWidgets: { "data": ReportDashboardWidgets; "requestId": string; "timestamp": string } & Record<string, unknown>;
   replaceReportDashboardWidgets: { "data": ReportDashboardWidgets; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2500,6 +2502,14 @@ export const OPERATIONS = {
     "method": "GET",
     "path": "/dashboards/{id}/data",
     "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadReportDashboardData": {
+    "method": "GET",
+    "path": "/dashboards/{id}/export",
+    "kind": "binary",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false

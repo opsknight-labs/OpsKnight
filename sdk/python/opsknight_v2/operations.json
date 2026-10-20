@@ -1842,6 +1842,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "downloadReportDashboardData": {
+    "method": "GET",
+    "path": "/dashboards/{id}/export",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "duplicateReportDashboard": {
     "method": "POST",
     "path": "/dashboards/{id}/duplicate",

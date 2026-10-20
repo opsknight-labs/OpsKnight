@@ -2,6 +2,8 @@ import { beforeEach, expect, it } from 'vitest';
 import { GET as list, POST as create } from '@/app/api/v2/dashboards/route';
 import { GET as read, PATCH as update, DELETE as remove } from '@/app/api/v2/dashboards/[id]/route';
 import { GET as data } from '@/app/api/v2/dashboards/[id]/data/route';
+import { GET as downloadData } from '@/app/api/v2/dashboards/[id]/export/route';
+import { createHash } from 'node:crypto';
 import { POST as duplicate } from '@/app/api/v2/dashboards/[id]/duplicate/route';
 import { GET as listWidgets, PUT as replaceWidgets } from '@/app/api/v2/dashboards/[id]/widgets/route';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
@@ -172,4 +174,27 @@ it('isolates private dashboards and permits team sharing only for current member
   expect((await invokeV2(update, member.token, 'PATCH', `${path}/${sharedId}`, { id: sharedId }, {
     name: 'Unauthorized',
   }, { 'If-Match': '"1"', 'Idempotency-Key': 'not-owner' })).status).toBe(404);
+});
+
+it('downloads a bounded audited dashboard snapshot with the same actor and filter controls as data reads', async () => {
+  const owner = await createV2Credential(['reports:read', 'incidents:read'], 'USER');
+  const outsider = await createV2Credential(['reports:read', 'incidents:read'], 'USER');
+  const dashboard = await db.dashboard.create({
+    data: { name: 'Private metric data', userId: owner.user.id, layout: {}, config: { timeRange: 14 } },
+  });
+  const path = `/dashboards/${dashboard.id}/export?days=3`;
+  const exported = await invokeV2(downloadData, owner.token, 'GET', path, { id: dashboard.id });
+  expect(exported.status, await exported.clone().text()).toBe(200);
+  expect(exported.headers.get('content-type')).toContain('application/json');
+  expect(exported.headers.get('cache-control')).toBe('private, no-store');
+  expect(exported.headers.get('content-disposition')).toContain('attachment;');
+  const bytes = Buffer.from(await exported.arrayBuffer());
+  expect(Number(exported.headers.get('content-length'))).toBe(bytes.length);
+  expect(exported.headers.get('x-content-sha256')).toBe(createHash('sha256').update(bytes).digest('hex'));
+  expect(JSON.parse(bytes.toString())).toMatchObject({ dashboardId: dashboard.id, windowDays: 3 });
+  expect(await db.auditLog.count({ where: { action: 'dashboard.export.downloaded', entityId: dashboard.id } })).toBe(1);
+  expect((await invokeV2(downloadData, outsider.token, 'GET', path, { id: dashboard.id })).status).toBe(404);
+  expect((await invokeV2(downloadData, owner.token, 'GET', `/dashboards/${dashboard.id}/export?days=91`, { id: dashboard.id })).status).toBe(400);
+  await db.apiKey.update({ where: { id: owner.key.id }, data: { scopes: ['reports:read'] } });
+  expect((await invokeV2(downloadData, owner.token, 'GET', path, { id: dashboard.id })).status).toBe(403);
 });
