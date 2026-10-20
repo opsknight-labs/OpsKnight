@@ -1319,6 +1319,22 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'ScheduleOverride'
   ),
+  op(
+    'delete',
+    '/schedules/{id}/overrides/{overrideId}',
+    'cancelScheduleOverride',
+    'schedules:write',
+    'item',
+    'ScheduleOverrideCancellation'
+  ),
+  op(
+    'get',
+    '/schedules/{id}/coverage',
+    'getScheduleCoverage',
+    'schedules:read',
+    'item',
+    'ScheduleCoverage'
+  ),
   op('get', '/schedules/{id}', 'getSchedule', 'schedules:read', 'item', 'Schedule'),
   op('patch', '/schedules/{id}', 'updateSchedule', 'schedules:write', 'item', 'Schedule'),
   op('delete', '/schedules/{id}', 'deleteSchedule', 'schedules:write', 'item', 'ActionResult'),

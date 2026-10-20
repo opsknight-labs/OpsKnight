@@ -265,7 +265,7 @@
     {
       "capabilityId": "schedule-layers",
       "delivery": "API-18",
-      "workflow": "Layer timing, restrictions, precedence, override cancellation and coverage preview",
+      "workflow": "Layer timing, restrictions, precedence and coverage preview (override cancellation delivered)",
       "sources": [
         {
           "path": "src/app/(app)/schedules/actions.ts",

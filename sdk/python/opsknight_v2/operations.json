@@ -1750,6 +1750,24 @@
     "requiredHeaders": [],
     "bodyRequired": true
   },
+  "cancelScheduleOverride": {
+    "method": "DELETE",
+    "path": "/schedules/{id}/overrides/{overrideId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getScheduleCoverage": {
+    "method": "GET",
+    "path": "/schedules/{id}/coverage",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getSchedule": {
     "method": "GET",
     "path": "/schedules/{id}",

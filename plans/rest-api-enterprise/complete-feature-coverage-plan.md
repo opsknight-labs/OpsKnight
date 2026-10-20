@@ -381,7 +381,7 @@ Priority P1
 
 ### Existing implementation
 
-PR #883 provides schedule CRUD, on-call reads, override creation, and participant add/move/remove.
+REST v2 provides schedule CRUD, on-call reads, override creation and cancellation, bounded effective coverage reads, and participant add/move/remove. Override cancellation uses a durable idempotency receipt and records one attributed audit event in the same transaction. Coverage reads use the canonical time-zone-aware engine, query only the authorized schedule, and cap each request at seven days. Layer editing and unsaved-change preview remain outstanding.
 
 The existing `src/app/(app)/schedules/actions.ts` already includes layer creation, editing, precedence changes, deletion and override deletion. `src/lib/schedules/mutations.ts` contains reusable participant and override commands.
 
@@ -393,8 +393,8 @@ The existing `src/app/(app)/schedules/actions.ts` already includes layer creatio
 | GET/PATCH | `/schedules/{id}/layers/{layerId}`       | Read/update timing, restrictions and rotation settings |
 | DELETE    | `/schedules/{id}/layers/{layerId}`       | Remove a layer safely                                  |
 | PUT       | `/schedules/{id}/layers/order`           | Reorder precedence atomically                          |
-| DELETE    | `/schedules/{id}/overrides/{overrideId}` | Cancel an override                                     |
-| GET       | `/schedules/{id}/coverage`               | Compute coverage in a requested period                 |
+| DELETE    | `/schedules/{id}/overrides/{overrideId}` | Cancel an override (implemented)                       |
+| GET       | `/schedules/{id}/coverage`               | Compute bounded effective coverage (implemented)       |
 | POST      | `/schedules/{id}/coverage/preview`       | Preview a proposed change without saving it            |
 | GET       | `/schedules/{id}/changes`                | Audit relevant changes                                 |
 | GET       | `/schedules/{id}/dependencies`           | Show referencing escalation policies                   |

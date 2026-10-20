@@ -129,6 +129,8 @@ export type IncidentTransition = { "id": string; "title": string; "status": "OPE
 export type IncidentAssignment = { "id": string; "title"?: string; "status": string; "assigneeId"?: string | null; "teamId"?: string | null; "assignee"?: { "id"?: string; "name"?: string; "email"?: string } & Record<string, unknown> | null; "team"?: { "id"?: string; "name"?: string } & Record<string, unknown> | null; "updatedAt": string } & Record<string, unknown>;
 export type ScheduleOnCall = { "schedule": { "id"?: string; "name"?: string; "timeZone"?: string } & Record<string, unknown>; "at": string; "onCallUsers": Array<{ "id"?: string; "name"?: string; "email"?: string; "role"?: string; "timeZone"?: string | null } & Record<string, unknown>> } & Record<string, unknown>;
 export type ScheduleOverride = { "id": string; "scheduleId": string; "userId": string; "replacesUserId"?: string | null; "startDate": string; "endDate": string; "createdAt"?: string } & Record<string, unknown>;
+export type ScheduleOverrideCancellation = { "id": string; "cancelled": true } & Record<string, unknown>;
+export type ScheduleCoverage = { "schedule": { "id": string; "name": string; "timeZone": string; "revision": number } & Record<string, unknown>; "start": string; "end": string; "shifts": Array<{ "userId": string; "start": string; "end": string } & Record<string, unknown>>; "gaps": Array<{ "start": string; "end": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type RunbookExecutionStarted = { "executionId": string; "status": string; "runbookId": string; "incidentId"?: string | null; "serviceId"?: string | null; "message"?: string } & Record<string, unknown>;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
@@ -325,6 +327,8 @@ export interface OperationRequests {
   getScheduleOnCall: { "params": { "id": string }; "query"?: { "at"?: string } };
   listScheduleOverrides: { "params": { "id": string } };
   createScheduleOverride: { "params": { "id": string }; "body": { "userId": string; "startDate": string; "endDate": string; "replacesUserId"?: string | null } & Record<string, unknown> };
+  cancelScheduleOverride: { "params": { "id": string; "overrideId": string }; "headers": { "Idempotency-Key": string } };
+  getScheduleCoverage: { "params": { "id": string }; "query": { "start": string; "end": string } };
   getSchedule: { "params": { "id": string } };
   updateSchedule: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "timeZone"?: string; "description"?: string | null } & Record<string, unknown> };
   deleteSchedule: { "params": { "id": string } };
@@ -548,6 +552,8 @@ export interface OperationResponses {
   getScheduleOnCall: { "data": ScheduleOnCall; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listScheduleOverrides: { "data": Array<ScheduleOverride>; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createScheduleOverride: { "data": ScheduleOverride; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  cancelScheduleOverride: { "data": ScheduleOverrideCancellation; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getScheduleCoverage: { "data": ScheduleCoverage; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getSchedule: { "data": Schedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateSchedule: { "data": Schedule; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteSchedule: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2329,6 +2335,24 @@ export const OPERATIONS = {
     "idempotency": "natural",
     "requiredHeaders": [],
     "bodyRequired": true
+  },
+  "cancelScheduleOverride": {
+    "method": "DELETE",
+    "path": "/schedules/{id}/overrides/{overrideId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getScheduleCoverage": {
+    "method": "GET",
+    "path": "/schedules/{id}/coverage",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "getSchedule": {
     "method": "GET",

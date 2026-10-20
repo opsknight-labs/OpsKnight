@@ -136,6 +136,52 @@ const extraSchemas: Json = {
     },
     required: ['id', 'scheduleId', 'userId', 'startDate', 'endDate'],
   },
+  ScheduleOverrideCancellation: {
+    type: 'object',
+    properties: { id: { type: 'string' }, cancelled: { type: 'boolean', const: true } },
+    required: ['id', 'cancelled'],
+  },
+  ScheduleCoverage: {
+    type: 'object',
+    properties: {
+      schedule: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          timeZone: { type: 'string' },
+          revision: { type: 'integer' },
+        },
+        required: ['id', 'name', 'timeZone', 'revision'],
+      },
+      start: { type: 'string', format: 'date-time' },
+      end: { type: 'string', format: 'date-time' },
+      shifts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            userId: { type: 'string' },
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+          },
+          required: ['userId', 'start', 'end'],
+        },
+      },
+      gaps: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+          },
+          required: ['start', 'end'],
+        },
+      },
+    },
+    required: ['schedule', 'start', 'end', 'shifts', 'gaps'],
+  },
   RunbookExecutionStarted: {
     type: 'object',
     properties: {

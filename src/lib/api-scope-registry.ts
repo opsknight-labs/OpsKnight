@@ -232,7 +232,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.SCHEDULES_WRITE,
     'Schedules manage',
     'Schedules',
-    'Create and update schedules, manage rotation participants, and create overrides. Layer configuration editing is not available over REST.',
+    'Create and update schedules, manage rotation participants, and create or cancel overrides. Layer configuration editing is not available over REST.',
     { write: true }
   ),
   [S.TEAMS_READ]: def(

@@ -1200,6 +1200,40 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/schedules/{id}/overrides/{overrideId}': {
+        delete: {
+          tags: ['Schedules'],
+          summary: 'Cancel a schedule override',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'overrideId', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': { description: 'Schedule override cancelled' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/schedules/{id}/coverage': {
+        get: {
+          tags: ['Schedules'],
+          summary: 'Calculate bounded effective coverage and gaps',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'start', in: 'query', required: true, schema: { type: 'string', format: 'date-time' } },
+            { name: 'end', in: 'query', required: true, schema: { type: 'string', format: 'date-time' } },
+          ],
+          responses: {
+            '200': { description: 'Effective shifts and uncovered intervals' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
       '/escalation-policies': {
         get: {
           tags: ['Escalation Policies'],

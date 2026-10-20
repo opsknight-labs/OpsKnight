@@ -624,6 +624,12 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'POST /api/v2/schedules/[id]/overrides': natural(
     'Exact duplicates and overlapping replacements are rejected with 409.'
   ),
+  'DELETE /api/v2/schedules/[id]/overrides/[overrideId]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'A credential-scoped replay returns the original cancellation. The override delete, attributed audit and receipt commit together; a new key after deletion receives 404.',
+  },
   'POST /api/v2/escalation-policies': natural('Policy names are unique; a repeat returns 409.'),
   'PATCH /api/v2/escalation-policies/[id]': natural(
     'Replaces the step list with the requested one.',
