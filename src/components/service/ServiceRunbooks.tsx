@@ -9,18 +9,38 @@ import {
   AlertCircle,
   Archive,
   BookOpen,
+  ChevronDown,
   Filter,
   Hand,
+  Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Workflow,
+  X,
   Zap,
 } from 'lucide-react';
-import { EmptyHint, SearchField, Segmented, StatTile } from '@/components/runbooks/ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/shadcn/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/shadcn/select';
+import { EmptyHint } from '@/components/runbooks/ui/primitives';
 import type {
   BindingPresentation,
   RunbookResource,
@@ -29,6 +49,7 @@ import { ArchivedRuleCard, RuleCard } from './runbooks/RuleCard';
 import { CreateRuleSheet } from './runbooks/CreateRuleSheet';
 import type { AutomationContextSummary } from './runbooks/context-helpers';
 import type { ServiceRunbookUnattendedWriteDetails } from './runbooks/RuleAutomationControls';
+import { cn } from '@/lib/utils';
 
 export type { ServiceRunbookUnattendedWriteDetails };
 
@@ -63,6 +84,7 @@ type CatalogVersion = {
   hasAgentWrite?: boolean;
   metadataOnly?: boolean;
 };
+
 export type AvailableRunbook = {
   id: string;
   name: string;
@@ -87,12 +109,6 @@ export type ServiceRunbookAgentPool = {
 };
 
 type ModeFilter = 'ALL' | 'AUTOMATIC' | 'MANUAL' | 'SUGGESTED';
-const MODE_FILTERS: Array<{ value: ModeFilter; label: string }> = [
-  { value: 'ALL', label: 'All' },
-  { value: 'AUTOMATIC', label: 'Automatic' },
-  { value: 'SUGGESTED', label: 'Suggested' },
-  { value: 'MANUAL', label: 'Manual' },
-];
 
 export default function ServiceRunbooks({
   serviceId,
@@ -136,7 +152,6 @@ export default function ServiceRunbooks({
   const [modeFilter, setModeFilter] = useState<ModeFilter>('ALL');
 
   const filteredBindings = useMemo(() => {
-    // The server already applied rulesSearch; only filter locally while the user is typing.
     const q = searchQuery.trim() === rulesSearch.trim() ? '' : searchQuery.trim().toLowerCase();
     return bindings.filter(binding => {
       if (modeFilter !== 'ALL' && binding.mode !== modeFilter) return false;
@@ -153,51 +168,54 @@ export default function ServiceRunbooks({
 
   const countMode = (mode: Exclude<ModeFilter, 'ALL'>) =>
     bindings.filter(b => b.enabled && b.mode === mode).length;
-  const pageHint = pagination ? 'This page' : undefined;
+
+  const totalExecutions = bindings.reduce(
+    (sum, b) => sum + (b._count?.executions ?? b.executions?.length ?? 0),
+    0
+  );
+
   const stats = [
     {
-      label: 'Attached',
+      label: 'Attached Rules',
       value: bindings.length,
       icon: Workflow,
-      tone: 'brand' as const,
+      color: 'text-primary bg-primary/10 border-primary/20',
       hint: pagination ? 'This page' : 'Active rules',
     },
     {
       label: 'Automatic',
       value: countMode('AUTOMATIC'),
       icon: Zap,
-      tone: 'brand' as const,
-      hint: pageHint ?? 'Runs on trigger',
+      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+      hint: 'Runs on trigger',
     },
     {
       label: 'Suggested',
       value: countMode('SUGGESTED'),
       icon: Sparkles,
-      tone: 'warning' as const,
-      hint: pageHint ?? 'Offered on incidents',
+      color: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
+      hint: 'Incident triage',
     },
     {
       label: 'Manual',
       value: countMode('MANUAL'),
       icon: Hand,
-      tone: 'info' as const,
-      hint: pageHint ?? 'Run on demand',
+      color: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
+      hint: 'On-demand run',
     },
     {
       label: 'Executions',
-      value: bindings.reduce(
-        (sum, b) => sum + (b._count?.executions ?? b.executions?.length ?? 0),
-        0
-      ),
+      value: totalExecutions,
       icon: Activity,
-      tone: 'neutral' as const,
-      hint: pageHint ?? 'All time',
+      color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+      hint: 'Fleet runs',
     },
   ];
 
   const configurationAvailable = !loadErrors.some(resource =>
     ['library', 'agents', 'pools'].includes(resource)
   );
+
   const query = (extra: Record<string, string> = {}) =>
     new URLSearchParams({
       tab: 'runbooks',
@@ -208,50 +226,60 @@ export default function ServiceRunbooks({
       ...extra,
     }).toString();
 
+  const archived = rulesState === 'archived';
+  const hasActiveFilters = Boolean(
+    searchQuery.trim() || modeFilter !== 'ALL' || archived || catalogQuery || targetQuery
+  );
+
   if (loadError || loadErrors.includes('bindings')) {
     return (
-      <div className="flex flex-col items-center rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
-        <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
-          <AlertCircle className="h-5 w-5 text-destructive" aria-hidden />
+      <div className="flex flex-col items-center rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center shadow-xs">
+        <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20">
+          <AlertCircle className="h-5 w-5" aria-hidden />
         </span>
-        <h3 className="text-sm font-semibold text-foreground">Service runbooks unavailable</h3>
-        <p className="mt-1 max-w-md text-xs text-muted-foreground">
-          Attached workflows could not be retrieved. Refresh to retry; the cause has been recorded
-          in server logs.
+        <h3 className="text-sm font-bold text-foreground">Service runbooks unavailable</h3>
+        <p className="mt-1 max-w-md text-xs text-muted-foreground leading-relaxed">
+          Attached workflows could not be retrieved from the database. Refresh to retry; telemetry
+          has been logged.
         </p>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="mt-4 gap-1.5"
+          className="mt-4 gap-1.5 shadow-2xs"
           onClick={() => window.location.reload()}
         >
           <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-          Retry
+          Retry Connection
         </Button>
       </div>
     );
   }
 
-  const archived = rulesState === 'archived';
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
+      {/* Dependency Warning if Agents or Library failed to load */}
       {loadErrors.length > 0 && (
         <div
           role="alert"
-          className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-amber-500/10 p-4 text-sm ring-1 ring-inset ring-amber-500/30"
+          className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-100 ring-1 ring-inset ring-amber-500/30"
         >
           <div className="flex min-w-0 items-start gap-2.5">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {loadErrors.includes('agents') && (
-                <p>Agent inventory unavailable. Existing workflows remain visible.</p>
+                <p className="font-semibold">
+                  Agent inventory unavailable. Existing workflows remain visible.
+                </p>
               )}
-              {loadErrors.includes('pools') && <p>Pool inventory unavailable.</p>}
-              {loadErrors.includes('library') && <p>Runbook library unavailable.</p>}
-              <p className="text-xs text-muted-foreground">
-                Configuration changes are paused until these dependencies can be checked.
+              {loadErrors.includes('pools') && (
+                <p className="font-semibold">Pool inventory unavailable.</p>
+              )}
+              {loadErrors.includes('library') && (
+                <p className="font-semibold">Runbook library unavailable.</p>
+              )}
+              <p className="text-muted-foreground">
+                Configuration edits are temporarily locked until backend dependencies recover.
               </p>
             </div>
           </div>
@@ -259,29 +287,42 @@ export default function ServiceRunbooks({
             type="button"
             variant="outline"
             size="sm"
+            className="h-7 text-xs gap-1"
             onClick={() => window.location.reload()}
           >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-            Retry loading
+            <RefreshCw className="h-3 w-3" aria-hidden />
+            Retry
           </Button>
         </div>
       )}
 
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">
-            Service automations
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Rules attach library runbooks to this service: which version runs, where, with what
-            inputs, and what starts it. Automatic rules save paused until checks pass.
-          </p>
+      {/* Top Header Section */}
+      <header className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/25 shadow-2xs">
+            <Workflow className="h-5 w-5" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
+              Service Automations &amp; Runbooks
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed max-w-2xl">
+              Attach version-controlled runbooks to automatically recover from incidents or provide
+              guided remediation for on-call responders.
+            </p>
+          </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-9 gap-1.5">
+
+        <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="h-8.5 gap-1.5 shadow-2xs text-xs font-semibold"
+          >
             <Link href="/runbooks">
-              <BookOpen className="h-4 w-4" aria-hidden />
-              <span>Library</span>
+              <BookOpen className="h-3.5 w-3.5" aria-hidden />
+              <span>Catalog</span>
             </Link>
           </Button>
           {canManage && configurationAvailable && availableRunbooks.length > 0 && (
@@ -296,141 +337,323 @@ export default function ServiceRunbooks({
         </div>
       </header>
 
-      {canManage && (
-        <form
-          method="get"
-          className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-border/80 bg-muted/20 px-4 py-3"
-          aria-label="Search rule configuration options"
-        >
-          <input type="hidden" name="tab" value="runbooks" />
-          <input type="hidden" name="rulesState" value={rulesState} />
-          <input type="hidden" name="rulesSearch" value={rulesSearch} />
-          <p className="flex basis-full items-center gap-1.5 text-xs font-medium text-muted-foreground md:basis-auto">
-            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-            Narrow create-rule options
-            <span className="sr-only">
-              {' '}
-              (up to 50 workflows, 20 versions each and 100 targets are offered)
-            </span>
-          </p>
-          <label htmlFor={`${ids}-catalog`} className="sr-only">
-            Workflow search
-          </label>
-          <Input
-            id={`${ids}-catalog`}
-            name="ruleCatalog"
-            defaultValue={catalogQuery}
-            maxLength={100}
-            placeholder="Workflow name"
-            className="h-8 min-w-36 flex-1 text-xs"
-          />
-          <label htmlFor={`${ids}-targets`} className="sr-only">
-            Agent / pool search
-          </label>
-          <Input
-            id={`${ids}-targets`}
-            name="ruleTargets"
-            defaultValue={targetQuery}
-            maxLength={100}
-            placeholder="Agent or pool name"
-            className="h-8 min-w-36 flex-1 text-xs"
-          />
-          <Button type="submit" variant="secondary" size="sm" className="h-8 text-xs">
-            Search options
-          </Button>
-        </form>
-      )}
-
+      {/* Modern Metric Telemetry Cards */}
       {bindings.length > 0 && !archived && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {stats.map(stat => (
-            <StatTile
-              key={stat.label}
-              label={stat.label}
-              value={stat.value}
-              icon={stat.icon}
-              tone={stat.tone}
-              hint={stat.hint}
-            />
-          ))}
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          {stats.map(stat => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.label}
+                className="group relative overflow-hidden rounded-xl border border-border/80 bg-card/70 backdrop-blur-xs p-3 sm:p-3.5 shadow-2xs hover:shadow-xs hover:border-border transition-all duration-150"
+              >
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground truncate">
+                    {stat.label}
+                  </span>
+                  <span
+                    className={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-lg border shadow-2xs shrink-0',
+                      stat.color
+                    )}
+                  >
+                    <Icon className="h-3 w-3" aria-hidden />
+                  </span>
+                </div>
+                <div className="mt-1 text-lg sm:text-xl font-extrabold tracking-tight text-foreground tabular-nums">
+                  {stat.value}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground/80 truncate">
+                  {stat.hint}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <form
-          method="get"
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
-          aria-label="Search service rule history"
-        >
-          <input type="hidden" name="tab" value="runbooks" />
-          <select
-            id={`${ids}-state`}
-            name="rulesState"
-            aria-label="Rule history"
-            defaultValue={rulesState}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      {/* Filter Card matching Services, Incidents, and Runbooks */}
+      <Card className="border border-border/80 shadow-xs transition-colors">
+        <CardHeader className="pb-3 pt-3.5 sm:pt-4 px-4 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base font-bold">
+                <Filter className="h-4 w-4 text-primary" /> Filter Rules
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                Filter automation rules by execution mode, target agent, or keywords
+              </CardDescription>
+            </div>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
+                onClick={() => {
+                  setSearchQuery('');
+                  setModeFilter('ALL');
+                  window.location.href = `/services/${serviceId}?tab=runbooks`;
+                }}
+              >
+                <X className="mr-1 h-3.5 w-3.5" /> Clear All
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-3.5 pt-0 px-4 sm:px-5 pb-4 sm:pb-5">
+          {/* Quick Mode Filters */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <Badge
+              variant={modeFilter === 'ALL' && !archived ? 'default' : 'outline'}
+              size="sm"
+              className={cn(
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                modeFilter === 'ALL' && !archived
+                  ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+              )}
+              onClick={() => {
+                setModeFilter('ALL');
+                if (archived) {
+                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                }
+              }}
+            >
+              All rules ({bindings.length})
+            </Badge>
+            <Badge
+              variant={modeFilter === 'AUTOMATIC' && !archived ? 'success' : 'outline'}
+              size="sm"
+              className={cn(
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                modeFilter === 'AUTOMATIC' && !archived
+                  ? 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/30'
+              )}
+              onClick={() => {
+                setModeFilter(modeFilter === 'AUTOMATIC' ? 'ALL' : 'AUTOMATIC');
+                if (archived) {
+                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                }
+              }}
+            >
+              <Zap className="mr-1 h-3 w-3" /> Automatic ({countMode('AUTOMATIC')})
+            </Badge>
+            <Badge
+              variant={modeFilter === 'SUGGESTED' && !archived ? 'warning' : 'outline'}
+              size="sm"
+              className={cn(
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                modeFilter === 'SUGGESTED' && !archived
+                  ? 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 hover:bg-amber-700'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/30'
+              )}
+              onClick={() => {
+                setModeFilter(modeFilter === 'SUGGESTED' ? 'ALL' : 'SUGGESTED');
+                if (archived) {
+                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                }
+              }}
+            >
+              <Sparkles className="mr-1 h-3 w-3" /> Suggested ({countMode('SUGGESTED')})
+            </Badge>
+            <Badge
+              variant={modeFilter === 'MANUAL' && !archived ? 'info' : 'outline'}
+              size="sm"
+              className={cn(
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                modeFilter === 'MANUAL' && !archived
+                  ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 hover:bg-sky-700'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-sky-700 dark:hover:text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/30'
+              )}
+              onClick={() => {
+                setModeFilter(modeFilter === 'MANUAL' ? 'ALL' : 'MANUAL');
+                if (archived) {
+                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                }
+              }}
+            >
+              <Hand className="mr-1 h-3 w-3" /> Manual ({countMode('MANUAL')})
+            </Badge>
+            <Badge
+              variant={archived ? 'secondary' : 'outline'}
+              size="sm"
+              className={cn(
+                'cursor-pointer transition-colors shadow-2xs font-semibold py-1 px-3',
+                archived
+                  ? 'bg-slate-700 text-white border-slate-700 hover:bg-slate-800'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+              )}
+              onClick={() => {
+                window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=${archived ? 'active' : 'archived'}`;
+              }}
+            >
+              <Archive className="mr-1 h-3 w-3" /> Archived
+            </Badge>
+          </div>
+
+          {/* Search and State Input Form */}
+          <form
+            method="get"
+            className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end pt-1"
+            aria-label="Search service rule history"
           >
-            <option value="active">Attached rules</option>
-            <option value="archived">Archived rules</option>
-          </select>
-          <SearchField
-            name="rulesSearch"
-            aria-label="Search rules"
-            placeholder="Search rules, runbooks or Agents…"
-            value={searchQuery}
-            maxLength={100}
-            onChange={event => setSearchQuery(event.target.value)}
-            className="min-w-48 flex-1 sm:max-w-sm"
-          />
+            <input type="hidden" name="tab" value="runbooks" />
+            <input type="hidden" name="rulesState" value={rulesState} />
+
+            <div className="space-y-1.5 md:col-span-8 lg:col-span-9">
+              <Label
+                htmlFor={`${ids}-search`}
+                className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1"
+              >
+                <Search className="h-3 w-3" /> Search Rules
+              </Label>
+              <div className="relative">
+                <Input
+                  id={`${ids}-search`}
+                  name="rulesSearch"
+                  placeholder="Search rules by name, runbook, or target agent…"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="h-9 rounded-xl pr-8 text-xs font-medium"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5 md:col-span-4 lg:col-span-3">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+                <Archive className="h-3 w-3" /> Rule Lifecycle
+              </Label>
+              <Select
+                value={rulesState}
+                onValueChange={val => {
+                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=${val}`;
+                }}
+              >
+                <SelectTrigger className="h-9 w-full rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors">
+                  <SelectValue placeholder="Attached rules" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl p-1">
+                  <SelectItem
+                    value="active"
+                    className="rounded-lg text-xs font-medium cursor-pointer"
+                  >
+                    Attached rules
+                  </SelectItem>
+                  <SelectItem
+                    value="archived"
+                    className="rounded-lg text-xs font-medium cursor-pointer"
+                  >
+                    Archived rules
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </form>
+
+          {/* Advanced Catalog Scope Disclosure (Refactored out of the raw dashed box) */}
+          {canManage && (
+            <details className="group/scope pt-2 border-t border-border/60">
+              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors select-none py-1">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                <span>Advanced catalog &amp; target query parameters</span>
+                <ChevronDown className="h-3.5 w-3.5 transition-transform group-open/scope:rotate-180" />
+              </summary>
+              <form
+                method="get"
+                className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/20 p-3"
+              >
+                <input type="hidden" name="tab" value="runbooks" />
+                <input type="hidden" name="rulesState" value={rulesState} />
+                <input type="hidden" name="rulesSearch" value={rulesSearch} />
+                <div className="flex-1 min-w-[180px]">
+                  <Label
+                    htmlFor={`${ids}-catalog`}
+                    className="text-[11px] text-muted-foreground mb-1 block"
+                  >
+                    Catalog Workflow Scope
+                  </Label>
+                  <Input
+                    id={`${ids}-catalog`}
+                    name="ruleCatalog"
+                    defaultValue={catalogQuery}
+                    maxLength={100}
+                    placeholder="Filter workflow creation list…"
+                    className="h-8 text-xs rounded-lg"
+                  />
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <Label
+                    htmlFor={`${ids}-targets`}
+                    className="text-[11px] text-muted-foreground mb-1 block"
+                  >
+                    Target Agent/Pool Scope
+                  </Label>
+                  <Input
+                    id={`${ids}-targets`}
+                    name="ruleTargets"
+                    defaultValue={targetQuery}
+                    maxLength={100}
+                    placeholder="Filter target agents/pools…"
+                    className="h-8 text-xs rounded-lg"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 self-end text-xs font-medium"
+                >
+                  Apply Scope
+                </Button>
+              </form>
+            </details>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Readiness Check Telemetry Bar */}
+      {bindings.length > 0 && !archived && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/60 backdrop-blur-xs px-4 py-2.5 shadow-2xs">
+          <p className="text-xs text-muted-foreground tabular-nums flex items-center gap-2">
+            <span className="font-semibold text-foreground">
+              {filteredBindings.length === bindings.length
+                ? `${bindings.length} ${bindings.length === 1 ? 'rule' : 'rules'}`
+                : `${filteredBindings.length} of ${bindings.length} rules`}
+            </span>
+            <span>·</span>
+            <span>Readiness is verified on demand to preserve low-latency page performance.</span>
+          </p>
           <Button
-            type="submit"
+            asChild
             variant="outline"
             size="sm"
-            className="h-9"
-            aria-label="Search rule history"
+            className="h-8 gap-1.5 shadow-2xs text-xs font-semibold hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-300"
           >
-            Search
-          </Button>
-        </form>
-        {bindings.length > 2 && !archived && (
-          <Segmented
-            label="Filter by mode"
-            value={modeFilter}
-            onChange={setModeFilter}
-            className="max-w-full self-start overflow-x-auto lg:self-auto"
-            options={MODE_FILTERS.map(mode => ({
-              value: mode.value,
-              label: mode.label,
-              count:
-                mode.value === 'ALL'
-                  ? bindings.length
-                  : bindings.filter(binding => binding.mode === mode.value).length,
-            }))}
-          />
-        )}
-      </div>
-
-      {bindings.length > 0 && !archived && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {filteredBindings.length === bindings.length
-              ? `${bindings.length} ${bindings.length === 1 ? 'rule' : 'rules'}`
-              : `${filteredBindings.length} of ${bindings.length} rules`}{' '}
-            · Readiness is checked on demand to keep this page fast.
-          </p>
-          <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5">
             <Link
               href={`/services/${serviceId}?${query({ rulesCheck: '1', rulesAfter: pagination?.after ?? '' })}`}
             >
-              <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-              Check visible rule readiness
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
+              <span>Verify Rule Readiness</span>
             </Link>
           </Button>
         </div>
       )}
 
+      {/* Rules Grid List */}
       {filteredBindings.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {filteredBindings.map(binding =>
             binding.detachedAt ? (
               <ArchivedRuleCard key={binding.id} serviceId={serviceId} binding={binding} />
@@ -455,6 +678,7 @@ export default function ServiceRunbooks({
         </div>
       )}
 
+      {/* Empty State when no rules exist */}
       {bindings.length === 0 && (
         <EmptyHint
           icon={archived ? Archive : BookOpen}
@@ -463,26 +687,27 @@ export default function ServiceRunbooks({
               ? 'No archived rules'
               : rulesSearch
                 ? 'No rules match your search'
-                : 'No service runbooks'
+                : 'No service runbooks attached'
           }
           description={
             archived
-              ? 'Detached rules appear here with their retained evidence.'
+              ? 'Detached automation rules appear here with their retained execution audit history.'
               : rulesSearch
-                ? 'Try a different name, or clear the search to see every attached rule.'
+                ? 'Try a different keyword, or clear the search filter to display all rules.'
                 : canManage
-                  ? 'Use Create rule to attach a published workflow with this service’s inputs and target.'
-                  : 'No published workflows are attached to this service yet.'
+                  ? 'Attach an automated recovery runbook from the catalog to handle incidents automatically.'
+                  : 'No recovery runbooks have been attached to this service yet.'
           }
           className="bg-card/40"
         />
       )}
 
+      {/* Empty State when filters return 0 results */}
       {bindings.length > 0 && filteredBindings.length === 0 && (
         <EmptyHint
           icon={Filter}
-          title="No matching rules"
-          description="No rules on this page match your search or mode."
+          title="No matching rules found"
+          description="None of the attached rules match your current search query or execution mode filter."
           action={
             <Button
               variant="outline"
@@ -492,28 +717,29 @@ export default function ServiceRunbooks({
                 setModeFilter('ALL');
               }}
             >
-              Clear filters
+              Reset Filters
             </Button>
           }
         />
       )}
 
+      {/* Server-Side Pagination */}
       {pagination && (pagination.after || pagination.hasNext) && (
         <nav
           aria-label="Automation rule pages"
-          className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm"
+          className="flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-4 text-xs"
         >
-          <span className="text-muted-foreground tabular-nums">
+          <span className="text-muted-foreground tabular-nums font-medium">
             {bindings.length} rules on this page
           </span>
           <div className="flex gap-2">
             {pagination.after && (
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="outline" size="sm" className="h-8 text-xs">
                 <Link href={`/services/${serviceId}?${query()}`}>First rules</Link>
               </Button>
             )}
             {pagination.hasNext && (
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="outline" size="sm" className="h-8 text-xs">
                 <Link
                   href={`/services/${serviceId}?${query({ rulesAfter: pagination.nextCursor ?? '' })}`}
                 >
