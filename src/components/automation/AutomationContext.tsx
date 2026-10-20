@@ -114,15 +114,12 @@ export function AutomationContext({
   const selectedDiscovery = discoveries.find(
     d =>
       d.path === observedPath &&
-      (!effectiveIntType ||
-        effectiveIntType === 'ALL' ||
-        !d.integrationType ||
-        d.integrationType === 'ALL' ||
-        d.integrationType === effectiveIntType) &&
-      (integrationType === 'ALL' ||
-        !d.integrationType ||
-        d.integrationType === 'ALL' ||
-        d.integrationType === integrationType)
+      (!selectedSource || d.source === selectedSource) &&
+      (effectiveIntType && effectiveIntType !== 'ALL' && effectiveIntType !== 'EVENTS_API'
+        ? d.integrationType === effectiveIntType ||
+          (d.integrationType === undefined && selectedSource === 'EVENT')
+        : (!effectiveIntType || effectiveIntType === 'ALL' || effectiveIntType === 'EVENTS_API') &&
+          (!d.integrationType || d.integrationType === 'ALL' || d.integrationType === 'EVENTS_API'))
   );
   const effectiveSource: 'PROVIDER' | 'EVENT' =
     selectedSource ??
@@ -161,16 +158,22 @@ export function AutomationContext({
       const matchingDisc = discoveries.find(
         d =>
           d.path === o.sourcePath &&
-          (!d.integrationType ||
-            d.integrationType === 'ALL' ||
-            d.integrationType === o.integrationType)
+          (o.integrationType === 'EVENTS_API'
+            ? !d.integrationType ||
+              d.integrationType === 'EVENTS_API' ||
+              d.integrationType === 'ALL'
+            : d.integrationType === o.integrationType || d.integrationType === 'ALL')
       );
       const matchingMap = draft.fields
         .flatMap(f => f.mappings)
         .find(
           m =>
             m.path === o.sourcePath &&
-            (!m.integrationType || m.integrationType === o.integrationType)
+            (o.integrationType === 'EVENTS_API'
+              ? !m.integrationType ||
+                m.integrationType === 'EVENTS_API' ||
+                m.integrationType === 'ALL'
+              : m.integrationType === o.integrationType || m.integrationType === 'ALL')
         );
       const source: 'PROVIDER' | 'EVENT' =
         matchingDisc?.source ??
@@ -248,7 +251,7 @@ export function AutomationContext({
             ...field,
             label: field.label ?? formatHierarchicalLabel(field.path),
             source: 'EVENT' as const,
-            integrationType: integrationType === 'ALL' ? undefined : integrationType,
+            integrationType: undefined,
           }));
           setDiscoveries(enriched);
           if (!enriched.length)

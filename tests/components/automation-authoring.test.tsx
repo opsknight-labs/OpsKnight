@@ -877,3 +877,159 @@ it('clearing a selected observation and manually entering another path ensures n
   expect(customField?.mappings[0].integrationType).not.toBe('GITHUB');
   expect(customField?.mappings[0].source).not.toBe('PROVIDER');
 });
+
+it('presents recent-alert discoveries as integration-agnostic and saves them without provider scoping', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'discoverRecent') {
+      return Promise.resolve({
+        ok: true,
+        data: [
+          {
+            key: 'status',
+            path: 'payload.status',
+            value: 'firing',
+            examples: ['firing', 'resolved'],
+            frequency: 4,
+            type: 'STRING',
+            unmapped: false,
+          },
+        ],
+      });
+    }
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    integrations: [{ id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' }],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // Switch to GITHUB integration before discovering
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+
+  // Trigger recent discovery while viewing GITHUB
+  fireEvent.click(screen.getByRole('button', { name: 'Discover from recent alerts' }));
+  expect(await screen.findByText('Examples: firing, resolved')).toBeInTheDocument();
+
+  // Suggestion card should not be scoped to GITHUB
+  expect(screen.queryByText(/payload\.status · STRING · GITHUB/)).not.toBeInTheDocument();
+  expect(screen.getByText(/payload\.status · STRING · EVENT/)).toBeInTheDocument();
+
+  // Click choose field and add field
+  fireEvent.click(screen.getByRole('button', { name: 'Choose field' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const statusField = savedSnapshot!.fields.find(f => f.key === 'status');
+  expect(statusField).toBeDefined();
+  expect(statusField?.mappings[0]).toMatchObject({
+    source: 'EVENT',
+    path: 'payload.status',
+  });
+  // Mapping must NOT be stamped with GITHUB
+  expect(statusField?.mappings[0].integrationType).toBeUndefined();
+});
+
+it('disambiguates identical paths between normalized events and provider webhooks without cross-misclassification', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'discoverRecent') {
+      return Promise.resolve({
+        ok: true,
+        data: [
+          {
+            key: 'status',
+            path: 'status',
+            value: 'open',
+            examples: ['open', 'closed'],
+            frequency: 3,
+            type: 'STRING',
+            unmapped: false,
+          },
+        ],
+      });
+    }
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    integrations: [{ id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' }],
+    observations: [
+      {
+        id: 'obs-status-gh',
+        serviceId: 'service-1',
+        integrationId: 'gh-1',
+        integrationType: 'GITHUB',
+        fieldKey: 'status',
+        sourcePath: 'status',
+        fieldType: 'STRING',
+        count: 5,
+        unmapped: false,
+        lastSeenAt: '2026-10-20T00:00:00Z',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // Discover recent alerts so both normalized 'status' and provider 'status' exist
+  fireEvent.click(await screen.findByRole('button', { name: 'Discover from recent alerts' }));
+  expect(await screen.findByText('Examples: open, closed')).toBeInTheDocument();
+
+  // Switch to All providers to view both options
+  const integrationSelect = screen.getByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'ALL' } });
+
+  const options = screen.getAllByRole('option');
+  const ghOption = options.find(o => o.getAttribute('value') === 'GITHUB:PROVIDER:status');
+  const eventOption = options.find(o => o.getAttribute('value') === 'ALL:EVENT:status');
+
+  expect(ghOption).toBeDefined();
+  expect(eventOption).toBeDefined();
+
+  // Select the GitHub provider observation
+  const observedSelect = screen.getByLabelText('Observed field');
+  fireEvent.change(observedSelect, { target: { value: 'GITHUB:PROVIDER:status' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const ghField = savedSnapshot!.fields.find(f => f.key === 'status');
+  expect(ghField?.mappings[0]).toMatchObject({
+    source: 'PROVIDER',
+    integrationType: 'GITHUB',
+    path: 'status',
+  });
+
+  savedSnapshot = null;
+
+  // Now select the normalized event suggestion
+  fireEvent.change(observedSelect, { target: { value: 'ALL:EVENT:status' } });
+  fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'Event Status' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const eventField = savedSnapshot!.fields.find(f => f.key === 'event_status');
+  expect(eventField?.mappings[0]).toMatchObject({
+    source: 'EVENT',
+    path: 'status',
+  });
+  expect(eventField?.mappings[0].integrationType).toBeUndefined();
+});

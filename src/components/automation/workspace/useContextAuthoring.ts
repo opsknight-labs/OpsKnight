@@ -122,18 +122,26 @@ export function useContextAuthoring({
     const matchingDiscovery = discoveries.find(
       item =>
         item.path === observedPath &&
-        (!selectedIntegrationType ||
-          item.integrationType === selectedIntegrationType ||
-          !item.integrationType ||
-          item.integrationType === 'ALL') &&
-        (!integrationType ||
-          integrationType === 'ALL' ||
-          !item.integrationType ||
-          item.integrationType === 'ALL' ||
-          item.integrationType === integrationType)
+        (!selectedSource || item.source === selectedSource) &&
+        (selectedIntegrationType &&
+        selectedIntegrationType !== 'ALL' &&
+        selectedIntegrationType !== 'EVENTS_API'
+          ? item.integrationType === selectedIntegrationType ||
+            (item.integrationType === undefined && selectedSource === 'EVENT')
+          : integrationType && integrationType !== 'ALL' && integrationType !== 'EVENTS_API'
+            ? item.integrationType === integrationType ||
+              (item.integrationType === undefined && selectedSource === 'EVENT')
+            : !item.integrationType ||
+              item.integrationType === 'ALL' ||
+              item.integrationType === 'EVENTS_API')
     );
     const effectiveIntegration =
-      integrationType === 'ALL' ? undefined : (selectedIntegrationType ?? integrationType);
+      integrationType === 'ALL' ||
+      (matchingDiscovery &&
+        !matchingDiscovery.integrationType &&
+        matchingDiscovery.source === 'EVENT')
+        ? undefined
+        : (selectedIntegrationType ?? integrationType);
     const source =
       selectedSource ??
       matchingDiscovery?.source ??
