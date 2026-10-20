@@ -47,19 +47,24 @@ export function RuleReadiness({
   runbookId: string;
   emptyMessage?: string;
 }) {
-  if (checks.length === 0) return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
+  if (checks.length === 0)
+    return (
+      <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-4 text-center">
+        <p className="text-xs text-muted-foreground">{emptyMessage}</p>
+      </div>
+    );
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {GROUPS.map(group => {
         const items = checks.filter(check => check.state === group.state);
         if (items.length === 0) return null;
         const Icon = group.icon;
         return (
           <div key={group.state} className="space-y-2">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Icon className={cn('h-4 w-4', group.iconClass)} aria-hidden />
-              {group.title}
-              <span className="rounded-full bg-muted px-2 text-xs font-medium text-muted-foreground">
+            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Icon className={cn('h-3.5 w-3.5', group.iconClass)} aria-hidden />
+              <span>{group.title}</span>
+              <span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-semibold text-foreground">
                 {items.length}
               </span>
             </h3>
@@ -73,32 +78,39 @@ export function RuleReadiness({
                   <li
                     key={check.code}
                     className={cn(
-                      'flex flex-col gap-2 rounded-lg border px-3 py-2.5 text-sm sm:flex-row sm:items-start sm:justify-between',
+                      'flex flex-col gap-2 rounded-xl border p-3 text-xs sm:text-sm sm:flex-row sm:items-center sm:justify-between shadow-2xs backdrop-blur-xs transition-all',
                       group.rowClass
                     )}
                   >
-                    <span className="flex min-w-0 items-start gap-2">
+                    <div className="flex min-w-0 items-start gap-2.5">
                       <Icon
                         className={cn('mt-0.5 h-4 w-4 shrink-0', group.iconClass)}
                         aria-hidden
                       />
-                      <span className="min-w-0 break-words">{check.message}</span>
-                    </span>
+                      <div className="min-w-0">
+                        <span className="font-semibold text-foreground break-words text-xs sm:text-sm">
+                          {check.message}
+                        </span>
+                        <code className="mt-0.5 block text-[10px] font-mono text-muted-foreground/80">
+                          {check.code}
+                        </code>
+                      </div>
+                    </div>
                     {hint &&
                       (hint.href.startsWith('#') ? (
                         <a
                           href={hint.href}
-                          className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+                          className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline bg-background/80 border border-primary/30 px-2.5 py-1 rounded-lg shadow-2xs transition-colors hover:bg-primary/5"
                         >
-                          Fix: {hint.label}
+                          <span>Fix: {hint.label}</span>
                           <ChevronRight className="h-3 w-3" aria-hidden />
                         </a>
                       ) : (
                         <Link
                           href={hint.href}
-                          className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+                          className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline bg-background/80 border border-primary/30 px-2.5 py-1 rounded-lg shadow-2xs transition-colors hover:bg-primary/5"
                         >
-                          Fix: {hint.label}
+                          <span>Fix: {hint.label}</span>
                           <ChevronRight className="h-3 w-3" aria-hidden />
                         </Link>
                       ))}

@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   Archive,
+  ArrowLeft,
   BookOpen,
   ChevronDown,
   ClipboardCheck,
@@ -40,7 +41,6 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import { describeBinding } from '@/lib/runbooks/presentation/binding-contract';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { SectionCard } from '@/components/runbooks/ui/primitives';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import RuleConfigurationCheck from '@/components/runbooks/RuleConfigurationCheck';
@@ -416,49 +416,80 @@ export default async function AutomationRulePage({
       <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         <aside
           aria-label="Rule summary"
-          className="order-first space-y-6 lg:sticky lg:top-16 lg:order-last lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto lg:pb-1"
+          className="order-first space-y-4 lg:sticky lg:top-16 lg:order-last lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto lg:pb-4"
         >
-          <SectionCard title="At a glance" icon={Gauge} bodyClassName="px-5 py-2">
-            <RuleAtAGlance
-              glance={{
-                mode: MODE_LABELS[rule.mode] ?? rule.mode,
-                status: statusKind,
-                trigger: presentation.trigger,
-                target: presentation.target,
-                version: selectedVersion
-                  ? `v${selectedVersion.version} · ${strategy}`
-                  : `Unavailable · ${strategy}`,
-                readiness: readinessView,
-                eligibleAgents: readiness.eligibleAgents,
-                certifiedAgents,
-                lastRun: lastRun
-                  ? {
-                      status: lastRun.status,
-                      ...timestamp(lastRun.startedAt ?? lastRun.createdAt, userTimeZone),
-                    }
-                  : null,
-                successRate: successRate(rule.executions),
-                recentRuns: rule.executions.length,
-              }}
-            />
-          </SectionCard>
-          <SectionCard
-            title="Lifecycle"
-            icon={Route}
-            description="Configure → validate → activate → monitor."
-          >
-            <RuleLifecycleStepper
-              serviceId={input.id}
-              version={selectedVersion?.version ?? null}
-              readinessState={readiness.state}
-              detached={Boolean(rule.detachedAt)}
-              enabled={rule.enabled}
-              mode={rule.mode}
-              eligibleAgents={readiness.eligibleAgents}
-              certifiedAgents={certifiedAgents}
-              executionCount={rule.executions.length}
-            />
-          </SectionCard>
+          {/* Compact At a glance Card */}
+          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 bg-muted/20">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+                  <Gauge className="h-4 w-4" />
+                </div>
+                <h3 className="text-xs sm:text-sm font-bold tracking-tight text-foreground">
+                  At a glance
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono font-semibold uppercase text-muted-foreground px-2 py-0.5 rounded border border-border/70 bg-background/50">
+                Summary
+              </span>
+            </div>
+            <div className="p-3 sm:p-4">
+              <RuleAtAGlance
+                glance={{
+                  mode: MODE_LABELS[rule.mode] ?? rule.mode,
+                  status: statusKind,
+                  trigger: presentation.trigger,
+                  target: presentation.target,
+                  version: selectedVersion
+                    ? `v${selectedVersion.version} · ${strategy}`
+                    : `Unavailable · ${strategy}`,
+                  readiness: readinessView,
+                  eligibleAgents: readiness.eligibleAgents,
+                  certifiedAgents,
+                  lastRun: lastRun
+                    ? {
+                        status: lastRun.status,
+                        ...timestamp(lastRun.startedAt ?? lastRun.createdAt, userTimeZone),
+                      }
+                    : null,
+                  successRate: successRate(rule.executions),
+                  recentRuns: rule.executions.length,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Compact Lifecycle Stepper Card */}
+          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 bg-muted/20">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-2xs">
+                  <Route className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold tracking-tight text-foreground">
+                    Lifecycle
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground">
+                    Configure → validate → activate → monitor
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="p-3.5 sm:p-4">
+              <RuleLifecycleStepper
+                serviceId={input.id}
+                version={selectedVersion?.version ?? null}
+                readinessState={readiness.state}
+                detached={Boolean(rule.detachedAt)}
+                enabled={rule.enabled}
+                mode={rule.mode}
+                eligibleAgents={readiness.eligibleAgents}
+                certifiedAgents={certifiedAgents}
+                executionCount={rule.executions.length}
+              />
+            </div>
+          </div>
         </aside>
 
         <div className="min-w-0 space-y-6 lg:col-span-2">
@@ -468,29 +499,49 @@ export default async function AutomationRulePage({
             title="Run & validate"
             description="Work through these in order. The first two steps never run anything."
           >
-            <details className="group rounded-lg border bg-muted/20 text-xs [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="inline-flex items-center gap-1.5">
-                  <Info className="h-3.5 w-3.5" aria-hidden />
-                  How this works
+            <details className="group rounded-xl border border-border/80 dark:border-border/60 bg-muted/20 text-xs overflow-hidden shadow-2xs [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="inline-flex items-center gap-2">
+                  <Info className="h-4 w-4 text-primary" aria-hidden />
+                  <span>Execution & Verification Guardrails</span>
                 </span>
                 <ChevronDown
-                  className="h-3.5 w-3.5 transition-transform group-open:rotate-180"
+                  className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180 text-muted-foreground"
                   aria-hidden
                 />
               </summary>
-              <ul className="space-y-1 border-t px-3 py-2.5 leading-relaxed text-muted-foreground">
-                <li>Configuration validation and Agent policy checks perform no action.</li>
-                <li>
-                  A read-only test executes the complete workflow and is rejected if any action can
-                  write.
-                </li>
-                <li>
-                  Run now previews the complete plan and requires write confirmation where
-                  applicable.
-                </li>
-                <li>Approval gates in the workflow always apply, including in Automatic mode.</li>
-              </ul>
+              <div className="border-t border-border/60 bg-background/50 px-4 py-3 text-xs leading-relaxed text-muted-foreground space-y-1.5">
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span>
+                    <strong className="text-foreground">Zero-Mutation Validations:</strong>{' '}
+                    Configuration validation and Agent policy checks perform no action on targets.
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
+                  <span>
+                    <strong className="text-foreground">Read-Only Safety:</strong> A read-only test
+                    executes the complete workflow and is immediately rejected if any step attempts
+                    to write.
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0" />
+                  <span>
+                    <strong className="text-foreground">Plan Preview:</strong> Run now previews the
+                    complete plan and requires explicit write confirmation where applicable.
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>
+                    <strong className="text-foreground">Inviolable Gates:</strong> Approval gates
+                    configured in the master runbook workflow always apply, including in Automatic
+                    mode.
+                  </span>
+                </div>
+              </div>
             </details>
             <ol aria-label="Run and validate checklist">
               <RuleActionTile
@@ -644,34 +695,66 @@ export default async function AutomationRulePage({
             <RuleTrigger triggers={rule.triggers} />
           </RuleSection>
 
-          <RuleSection id="target" icon={Server} title="Target and permissions">
-            <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Server className="h-4 w-4 text-muted-foreground" aria-hidden />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{presentation.target}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {rule.defaultAgent
-                      ? 'Specific Agent'
-                      : rule.defaultAgentPool
-                        ? 'Agent pool'
-                        : 'Resolved at dispatch'}
-                  </p>
+          <RuleSection
+            id="target"
+            icon={Server}
+            title="Target & Topology"
+            description="Designated agent or compute pool assigned to execute this automated runbook"
+          >
+            <div className="rounded-xl border border-border/80 dark:border-border/60 bg-card/60 backdrop-blur-xs p-4 shadow-2xs space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+                    <Server className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-bold text-foreground">
+                        {presentation.target}
+                      </p>
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] font-mono font-medium px-2 py-0 h-4.5 border border-border/80"
+                      >
+                        {rule.defaultAgent
+                          ? 'Dedicated Agent'
+                          : rule.defaultAgentPool
+                            ? 'Agent Pool'
+                            : 'Dynamic Dispatch'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {rule.defaultAgent
+                        ? `Bound to Agent node #${rule.defaultAgentId?.slice(0, 8)}`
+                        : rule.defaultAgentPool
+                          ? `Routing across pool #${rule.defaultAgentPoolId?.slice(0, 8)}`
+                          : 'Target resolved dynamically based on incident topology'}
+                    </p>
+                  </div>
                 </div>
+                {rule.defaultAgentId && (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 shadow-2xs shrink-0"
+                  >
+                    <Link href={`/runbooks/agents?agentId=${rule.defaultAgentId}`}>
+                      <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Inspect Agent</span>
+                    </Link>
+                  </Button>
+                )}
               </div>
-              {rule.defaultAgentId && (
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/runbooks/agents?agentId=${rule.defaultAgentId}`}>
-                    Inspect Agent
-                  </Link>
-                </Button>
-              )}
+
+              <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground leading-relaxed">
+                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                <span>
+                  Online status does not guarantee local execution permissions. Target hosts must
+                  have matching runbook allowlists and signed policy evidence before dispatch.
+                </span>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Online and capable does not establish local allowlist or target-side permission.
-            </p>
           </RuleSection>
 
           <RuleSection id="version" icon={GitBranch} title="Version and inputs">
@@ -726,24 +809,57 @@ export default async function AutomationRulePage({
             />
           </RuleSection>
 
-          <RuleSection id="audit" icon={ScrollText} title="Audit">
-            {permissions.capabilities.includes(CAPABILITIES.AUDIT_READ) ? (
-              <Link
-                href={`/audit?entityType=RUNBOOK&entityId=${rule.runbookId}`}
-                className="text-sm text-primary hover:underline"
-              >
-                Inspect rule and workflow audit events
-              </Link>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Audit access requires the audit.read capability.
-              </p>
-            )}
+          <RuleSection
+            id="audit"
+            icon={ScrollText}
+            title="Audit & Compliance"
+            description="Cryptographic event trails for configuration changes, policy evaluations, and runs"
+          >
+            <div className="rounded-xl border border-border/80 dark:border-border/60 bg-card/60 backdrop-blur-xs p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-2xs">
+                  <ScrollText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground">
+                    Tamper-Evident Runbook Audit Logs
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {permissions.capabilities.includes(CAPABILITIES.AUDIT_READ)
+                      ? 'Detailed history of rule creation, policy approvals, and execution dispatches'
+                      : 'Audit access requires the audit.read capability.'}
+                  </p>
+                </div>
+              </div>
+              {permissions.capabilities.includes(CAPABILITIES.AUDIT_READ) && (
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 shadow-2xs shrink-0"
+                >
+                  <Link href={`/audit?entityType=RUNBOOK&entityId=${rule.runbookId}`}>
+                    <ScrollText className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>View Audit Events</span>
+                  </Link>
+                </Button>
+              )}
+            </div>
           </RuleSection>
 
-          <Link href={configureHref} className="inline-block text-sm text-primary hover:underline">
-            <span aria-hidden>← </span>Back to service automations
-          </Link>
+          <div className="pt-2">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground gap-2"
+            >
+              <Link href={configureHref}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Back to service automations</span>
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
     </div>

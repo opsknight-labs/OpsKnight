@@ -21,7 +21,7 @@ export type RuleGlance = {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2 text-xs sm:text-sm">
+    <div className="flex items-start justify-between gap-3 py-1.5 text-xs">
       <dt className="shrink-0 text-muted-foreground font-medium text-xs">{label}</dt>
       <dd className="min-w-0 text-right font-semibold break-words text-foreground">{children}</dd>
     </div>
