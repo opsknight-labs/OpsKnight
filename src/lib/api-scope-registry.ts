@@ -472,6 +472,13 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Governance',
     'Read operational metrics and reports.'
   ),
+  [S.REPORTS_WRITE]: def(
+    S.REPORTS_WRITE,
+    'Saved dashboards manage',
+    'Governance',
+    'Create and manage owned saved dashboards, with team sharing restricted to memberships.',
+    { write: true, issuableBy: ALL_ROLES }
+  ),
   [S.POSTMORTEMS_READ]: def(
     S.POSTMORTEMS_READ,
     'Postmortems read',

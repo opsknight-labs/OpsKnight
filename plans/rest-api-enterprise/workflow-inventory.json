@@ -690,7 +690,18 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Durable export jobs, authorized download, cancellation and retention remain pending."
+      ],
+      "implementedOperations": [
+        "getReportCatalog",
+        "queryReportMetrics",
+        "listSavedReports",
+        "createSavedReport",
+        "getSavedReport",
+        "updateSavedReport",
+        "deleteSavedReport"
+      ]
     },
     {
       "capabilityId": "slo-management",
@@ -734,6 +745,10 @@
         {
           "path": "src/lib/reports/widget-registry.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/app/api/v2/dashboards",
+          "branch": "feat/api-13-enterprise-contracts"
         }
       ],
       "reviewStatus": "pending-domain-review",
@@ -743,7 +758,20 @@
         "postgres-concurrency",
         "contract-sdk"
       ],
-      "blockers": []
+      "blockers": [
+        "Exports, combined UI/REST parity and load certification remain pending."
+      ],
+      "implementedOperations": [
+        "listReportDashboards",
+        "createReportDashboard",
+        "getReportDashboard",
+        "getReportDashboardData",
+        "duplicateReportDashboard",
+        "listReportDashboardWidgets",
+        "replaceReportDashboardWidgets",
+        "updateReportDashboard",
+        "deleteReportDashboard"
+      ]
     },
     {
       "capabilityId": "audit-export",

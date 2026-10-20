@@ -375,10 +375,13 @@ const decisions: readonly ApiCapability[] = [
     id: 'report-exports',
     area: 'Reports',
     title: 'Saved reports and asynchronous exports',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Metrics reads are available. Saved definitions and large exports require durable jobs, bounded resource use and downloadable result authorization.',
-    operationIds: [],
+      'The report catalog, bounded actor-scoped metric queries and revision-protected saved definitions are available. Large exports still require durable jobs, bounded resource use and downloadable result authorization.',
+    operationIds: [
+      'getReportCatalog', 'queryReportMetrics', 'listSavedReports', 'createSavedReport',
+      'getSavedReport', 'updateSavedReport', 'deleteSavedReport',
+    ],
   },
   {
     id: 'slo-management',
@@ -405,10 +408,20 @@ const decisions: readonly ApiCapability[] = [
     id: 'dashboards',
     area: 'Reports',
     title: 'Dashboards and analytics configuration',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Metrics reads do not imply dashboard authoring. Dashboard configuration and analytics workflows need explicit capability contracts.',
-    operationIds: [],
+      'Saved dashboard CRUD, widget replacement, visibility and accessible template cloning use explicit report scopes, owner/team checks, revision fencing and audited idempotency. Actor-scoped data projection is available; exports remain pending.',
+    operationIds: [
+      'listReportDashboards',
+      'createReportDashboard',
+      'getReportDashboard',
+      'getReportDashboardData',
+      'duplicateReportDashboard',
+      'listReportDashboardWidgets',
+      'replaceReportDashboardWidgets',
+      'updateReportDashboard',
+      'deleteReportDashboard',
+    ],
   },
   {
     id: 'audit-export',

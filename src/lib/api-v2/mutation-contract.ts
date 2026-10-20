@@ -51,6 +51,43 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/reports/query': {
+    idempotency: 'natural', concurrency: 'none',
+    rationale: 'Read-only bounded analytics query with explicit report and incident visibility scopes; repeated calls do not mutate state.',
+  },
+  'POST /api/v2/reports/saved': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Bounded validated definition, current team membership, owner, audit and receipt commit together.',
+  },
+  'PATCH /api/v2/reports/saved/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Exact saved-report revision fences the edit. Owner/team authority, definition, audit and receipt commit together.',
+  },
+  'DELETE /api/v2/reports/saved/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
+    rationale: 'Exact saved-report revision and ownership fence deletion; audit and receipt commit together and deleted resources are not replay-disclosed.',
+  },
+  'POST /api/v2/dashboards': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Credential-scoped replay prevents duplicate dashboards; team membership, accessible template snapshot, nested widgets, owner and audit commit with the receipt.',
+  },
+  'POST /api/v2/dashboards/[id]/duplicate': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'The accessible source is rechecked in the replay transaction; bounded widgets, owned copy, audit and receipt commit together.',
+  },
+  'PUT /api/v2/dashboards/[id]/widgets': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Exact parent revision fences atomic widget replacement; owner/team checks, audit and receipt commit together.',
+  },
+  'PATCH /api/v2/dashboards/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'A concrete dashboard revision atomically fences parent and widget replacement; owner and team authority, audit and replay receipt are checked transactionally.',
+  },
+  'DELETE /api/v2/dashboards/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    responseEtag: false,
+    rationale: 'A concrete dashboard revision and ownership check fence deletion. Audit and receipt commit together; deleted resources are not replay-disclosed.',
+  },
   'PUT /api/v2/notification-providers/[provider]': {
     idempotency: 'required',
     concurrency: 'etag',

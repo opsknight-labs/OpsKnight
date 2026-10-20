@@ -44,6 +44,8 @@ enum AuditEntityType {
   SCHEDULE
   CUSTOM_FIELD
   STATUS_PAGE
+  DASHBOARD
+  SAVED_REPORT
   SYSTEM_CONFIG
   PRIVACY_REQUEST
   PRIVACY_EXPORT_ARTIFACT
@@ -546,6 +548,7 @@ model User {
   oidcLinkingApproval         OidcLinkingApproval?
   avatar                      UserAvatar?
   dashboards                  Dashboard[]
+  savedReports                SavedReport[]
   assignedActionItems         ActionItem[]
   tokens                      UserToken[]
   privacyRequestsAssigned     PrivacyRequest[]             @relation("PrivacyRequestAssignedTo")
@@ -608,6 +611,7 @@ model Team {
   incidentTemplates IncidentTemplate[]
   incidents         Incident[]
   dashboards        Dashboard[]
+  savedReports      SavedReport[]
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
@@ -2844,6 +2848,7 @@ model CronSchedulerState {
 
 model Dashboard {
   id          String              @id @default(cuid())
+  revision    Int                 @default(1)
   name        String
   description String?
   visibility  DashboardVisibility @default(PRIVATE)
@@ -2879,6 +2884,26 @@ model DashboardWidget {
   dashboard          Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
 
   @@index([dashboardId])
+}
+
+model SavedReport {
+  id          String              @id @default(cuid())
+  revision    Int                 @default(1)
+  name        String
+  description String?
+  metricKeys  String[]
+  windowDays  Int                 @default(30)
+  serviceId   String?
+  visibility  DashboardVisibility @default(PRIVATE)
+  userId      String
+  teamId      String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team        Team?               @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt, id])
+  @@index([teamId, createdAt, id])
 }
 
 model RateLimit {

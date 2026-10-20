@@ -1134,6 +1134,60 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     },
     ['valid', 'versionId', 'draftRevision', 'checksum']
   ),
+  ReportCatalog: object({
+    metrics: array(object({
+      key: string(), label: string(), description: string(), formula: string(),
+      scope: string(), direction: string(),
+    }), 16),
+    dimensions: array(string(), 1),
+    windowDays: object({ min: integer, max: integer, default: integer }, ['min', 'max', 'default']),
+  }, ['metrics', 'dimensions', 'windowDays']),
+  ReportQueryResult: object({
+    windowDays: integer, serviceId: { type: ['string', 'null'] },
+    effectiveStart: date, effectiveEnd: date, isClipped: { type: 'boolean' },
+    metrics: { type: 'object', additionalProperties: { type: ['number', 'null'] } },
+  }, ['windowDays', 'serviceId', 'effectiveStart', 'effectiveEnd', 'isClipped', 'metrics']),
+  SavedReport: object({
+    id, revision: integer, name: string(200), description: { type: ['string', 'null'] },
+    metricKeys: array(string(), 16), windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+    serviceId: { type: ['string', 'null'] },
+    visibility: { type: 'string', enum: ['PRIVATE', 'TEAM', 'PUBLIC'] },
+    userId: id, teamId: { type: ['string', 'null'] },
+    createdAt: date, updatedAt: date, canEdit: { type: 'boolean' },
+  }, ['id', 'revision', 'name', 'description', 'metricKeys', 'windowDays', 'serviceId', 'visibility', 'userId', 'teamId', 'createdAt', 'updatedAt']),
+  ReportDashboardWidget: object({
+    id, dashboardId: id, widgetType: string(100), metricKey: string(100),
+    widgetDefinitionId: { type: ['string', 'null'] }, title: { type: ['string', 'null'] },
+    position: { type: 'object' }, config: { type: 'object' },
+    createdAt: date, updatedAt: date,
+  }),
+  ReportDashboardSummary: object({
+    id, revision: integer, name: string(200), description: { type: ['string', 'null'] },
+    visibility: { type: 'string', enum: ['PRIVATE', 'TEAM', 'PUBLIC'] },
+    isDefault: { type: 'boolean' }, isTemplate: { type: 'boolean' },
+    templateId: { type: ['string', 'null'] }, userId: id, teamId: { type: ['string', 'null'] },
+    widgetCount: integer, createdAt: date, updatedAt: date,
+  }),
+  ReportDashboard: object({
+    id, revision: integer, name: string(200), description: { type: ['string', 'null'] },
+    visibility: { type: 'string', enum: ['PRIVATE', 'TEAM', 'PUBLIC'] },
+    isDefault: { type: 'boolean' }, isTemplate: { type: 'boolean' },
+    templateId: { type: ['string', 'null'] }, userId: id, teamId: { type: ['string', 'null'] },
+    layout: { type: 'object' }, config: { type: ['object', 'null'] },
+    widgets: array(ref('ReportDashboardWidget'), 50),
+    user: object({ id, name: { type: ['string', 'null'] } }, ['id']),
+    team: { type: ['object', 'null'], properties: { id, name: string() }, required: ['id', 'name'] },
+    permissions: object({ canEdit: { type: 'boolean' }, canDelete: { type: 'boolean' } }, ['canEdit', 'canDelete']),
+    createdAt: date, updatedAt: date,
+  }),
+  ReportDashboardData: object({
+    dashboardId: id, windowDays: { type: 'integer', minimum: 1, maximum: 90 },
+    serviceId: { type: ['string', 'null'] }, generatedAt: date,
+    metrics: { type: 'object', description: 'Actor-scoped serialized SLA metrics for the requested window.' },
+  }, ['dashboardId', 'windowDays', 'serviceId', 'generatedAt', 'metrics']),
+  ReportDashboardWidgets: object({
+    dashboardId: id, widgets: array(ref('ReportDashboardWidget'), 50),
+  }, ['dashboardId', 'widgets']),
 };
 
 const draftInput = object(
@@ -1824,6 +1878,46 @@ const operations: Operation[] = [
     summary: 'Publish the validated saved draft',
     body: object({}),
   },
+  { method: 'get', path: '/reports/saved', summary: 'List owned and accessible saved reports', paginated: true },
+  { method: 'post', path: '/reports/saved', summary: 'Save a bounded report definition', status: 201,
+    body: object({ name: string(200), description: string(2000), metrics: array(string(), 16),
+      windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id,
+      visibility: string(), teamId: id }, ['name', 'metrics']) },
+  { method: 'get', path: '/reports/saved/{id}', summary: 'Read an accessible report definition' },
+  { method: 'patch', path: '/reports/saved/{id}', summary: 'Update an owned report with an exact revision precondition',
+    body: object({ name: string(200), description: string(2000), metrics: array(string(), 16),
+      windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id,
+      visibility: string(), teamId: id }) },
+  { method: 'delete', path: '/reports/saved/{id}', summary: 'Delete an owned saved report with an exact revision precondition', status: 204 },
+  { method: 'get', path: '/reports/catalog', summary: 'List supported report metrics and dimensions' },
+  { method: 'post', path: '/reports/query', summary: 'Run a bounded actor-scoped analytical query',
+    body: object({ metrics: array(string(), 16), windowDays: { type: 'integer', minimum: 1, maximum: 90 }, serviceId: id }, ['metrics']) },
+  {
+    method: 'get', path: '/dashboards',
+    summary: 'List accessible saved dashboards and templates', paginated: true,
+  },
+  {
+    method: 'post', path: '/dashboards',
+    summary: 'Create a saved dashboard', status: 201,
+    body: object({ name: string(200), description: string(2000), visibility: string(),
+      teamId: id, templateId: id, sourceTemplate: string(100),
+      widgets: array(ref('ReportDashboardWidget'), 50) }, ['name']),
+  },
+  { method: 'get', path: '/dashboards/{id}', summary: 'Read an accessible saved dashboard' },
+  { method: 'get', path: '/dashboards/{id}/data', summary: 'Calculate actor-scoped data for an accessible dashboard' },
+  { method: 'post', path: '/dashboards/{id}/duplicate', summary: 'Duplicate an accessible dashboard into an owned dashboard', status: 201,
+    body: object({ name: string(200), visibility: string(), teamId: id }) },
+  { method: 'get', path: '/dashboards/{id}/widgets', summary: 'List widgets of an accessible dashboard' },
+  { method: 'put', path: '/dashboards/{id}/widgets', summary: 'Replace owned dashboard widgets with an exact revision precondition',
+    body: object({ widgets: array(ref('ReportDashboardWidget'), 50) }, ['widgets']) },
+  {
+    method: 'patch', path: '/dashboards/{id}',
+    summary: 'Update an owned dashboard with a strong revision precondition',
+    body: object({ name: string(200), description: string(2000), visibility: string(),
+      teamId: id, layout: { type: 'object' }, config: { type: 'object' },
+      widgets: array(ref('ReportDashboardWidget'), 50) }),
+  },
+  { method: 'delete', path: '/dashboards/{id}', summary: 'Delete an owned dashboard with a strong revision precondition', status: 204 },
 ];
 
 /** Add only implemented operations; the canonical registry finalizes shared contracts. */
@@ -1852,6 +1946,8 @@ export function enterpriseOpenApiPaths() {
       tags: [
         operation.path.startsWith('/service-objectives')
           ? 'Service Objectives'
+          : operation.path.startsWith('/reports') || operation.path.startsWith('/dashboards')
+            ? 'Reports'
           : operation.path.startsWith('/status-pages')
             ? 'Status Pages'
             : operation.path.startsWith('/settings')
@@ -1871,6 +1967,12 @@ export function enterpriseOpenApiPaths() {
       parameters: [
         ...parameters,
         ...queryParameters,
+        ...(operation.path === '/dashboards/{id}/data'
+          ? [
+              { name: 'days', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 90 } },
+              { name: 'serviceId', in: 'query', required: false, schema: id },
+            ]
+          : []),
         ...(operation.method === 'get' && operation.path === '/service-objectives'
           ? [{ name: 'serviceId', in: 'query', required: false, schema: id }]
           : []),
@@ -1904,6 +2006,8 @@ export function enterpriseOpenApiPaths() {
       ],
       ...(operation.path.endsWith('/automation/decisions')
         ? { 'x-additional-required-scopes': ['incidents:read'] }
+        : operation.path === '/dashboards/{id}/data' || operation.path === '/reports/query'
+          ? { 'x-additional-required-scopes': ['incidents:read'] }
         : {}),
       ...(operation.body
         ? {

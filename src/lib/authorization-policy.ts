@@ -78,6 +78,7 @@ export const AUTHORIZATION_ACTIONS = {
   RUNBOOK_PUBLISH: 'runbook.publish',
   AUDIT_READ: 'audit.read',
   REPORT_READ: 'report.read',
+  REPORT_MANAGE: 'report.manage',
   SERVICE_OBJECTIVE_READ: 'service_objective.read',
   SERVICE_OBJECTIVE_MANAGE: 'service_objective.manage',
   SERVICE_OBJECTIVE_EVALUATE: 'service_objective.evaluate',
@@ -191,6 +192,7 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.RUNBOOK_PUBLISH]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.AUDIT_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.REPORT_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.REPORT_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_EVALUATE]?: AuthorizationResource;
@@ -643,6 +645,14 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
       global: CAPABILITIES.REPORT_READ,
       scoped: CAPABILITIES.REPORT_READ,
       apiScope: API_SCOPES.REPORTS_READ,
+    },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.REPORT_MANAGE,
+    {
+      global: CAPABILITIES.REPORT_READ,
+      scoped: CAPABILITIES.REPORT_READ,
+      apiScope: API_SCOPES.REPORTS_WRITE,
     },
   ],
   [

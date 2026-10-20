@@ -127,6 +127,7 @@ export const API_SCOPES = {
   RUNBOOKS_PUBLISH: 'runbooks:publish',
   AUDIT_READ: 'audit:read',
   REPORTS_READ: 'reports:read',
+  REPORTS_WRITE: 'reports:write',
   SERVICE_OBJECTIVES_READ: 'service-objectives:read',
   SERVICE_OBJECTIVES_WRITE: 'service-objectives:write',
   SERVICE_OBJECTIVES_EVALUATE: 'service-objectives:evaluate',

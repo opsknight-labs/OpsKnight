@@ -1700,6 +1700,155 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getReportCatalog": {
+    "method": "GET",
+    "path": "/reports/catalog",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "queryReportMetrics": {
+    "method": "POST",
+    "path": "/reports/query",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listSavedReports": {
+    "method": "GET",
+    "path": "/reports/saved",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createSavedReport": {
+    "method": "POST",
+    "path": "/reports/saved",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getSavedReport": {
+    "method": "GET",
+    "path": "/reports/saved/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateSavedReport": {
+    "method": "PATCH",
+    "path": "/reports/saved/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteSavedReport": {
+    "method": "DELETE",
+    "path": "/reports/saved/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "listReportDashboards": {
+    "method": "GET",
+    "path": "/dashboards",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createReportDashboard": {
+    "method": "POST",
+    "path": "/dashboards",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getReportDashboard": {
+    "method": "GET",
+    "path": "/dashboards/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getReportDashboardData": {
+    "method": "GET",
+    "path": "/dashboards/{id}/data",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "duplicateReportDashboard": {
+    "method": "POST",
+    "path": "/dashboards/{id}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listReportDashboardWidgets": {
+    "method": "GET",
+    "path": "/dashboards/{id}/widgets",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "replaceReportDashboardWidgets": {
+    "method": "PUT",
+    "path": "/dashboards/{id}/widgets",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "updateReportDashboard": {
+    "method": "PATCH",
+    "path": "/dashboards/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteReportDashboard": {
+    "method": "DELETE",
+    "path": "/dashboards/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "executeRunbook": {
     "method": "POST",
     "path": "/runbooks/{id}/execute",

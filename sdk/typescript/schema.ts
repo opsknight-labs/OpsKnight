@@ -124,6 +124,14 @@ export type RunbookAuthoringVersion = { "id": string; "runbookId": string; "vers
 export type RunbookDraftRead = { "id": string; "runbookId": string; "version": number; "state": "DRAFT" | "PUBLISHED" | "RETIRED"; "checksum": string; "draftRevision": number; "publishedAt": string | null; "createdAt": string; "updatedAt": string; "steps": Array<RunbookStep>; "editable": { "definition": RunbookDefinitionInput; "inputs": Array<RunbookInputDefinition>; "preserveConfiguration": true } };
 export type RunbookCreated = { "id": string; "name": string; "slug": string; "description": string; "draftVersionId": string; "draftVersion": RunbookAuthoringVersion };
 export type RunbookDraftValidation = { "valid": true; "versionId": string; "draftRevision": number; "checksum": string };
+export type ReportCatalog = { "metrics": Array<{ "key"?: string; "label"?: string; "description"?: string; "formula"?: string; "scope"?: string; "direction"?: string }>; "dimensions": Array<string>; "windowDays": { "min": number; "max": number; "default": number } };
+export type ReportQueryResult = { "windowDays": number; "serviceId": string | null; "effectiveStart": string; "effectiveEnd": string; "isClipped": boolean; "metrics": Record<string, number | null> };
+export type SavedReport = { "id": string; "revision": number; "name": string; "description": string | null; "metricKeys": Array<string>; "windowDays": number; "serviceId": string | null; "visibility": "PRIVATE" | "TEAM" | "PUBLIC"; "userId": string; "teamId": string | null; "createdAt": string; "updatedAt": string; "canEdit"?: boolean };
+export type ReportDashboardWidget = { "id"?: string; "dashboardId"?: string; "widgetType"?: string; "metricKey"?: string; "widgetDefinitionId"?: string | null; "title"?: string | null; "position"?: Record<string, unknown>; "config"?: Record<string, unknown>; "createdAt"?: string; "updatedAt"?: string };
+export type ReportDashboardSummary = { "id"?: string; "revision"?: number; "name"?: string; "description"?: string | null; "visibility"?: "PRIVATE" | "TEAM" | "PUBLIC"; "isDefault"?: boolean; "isTemplate"?: boolean; "templateId"?: string | null; "userId"?: string; "teamId"?: string | null; "widgetCount"?: number; "createdAt"?: string; "updatedAt"?: string };
+export type ReportDashboard = { "id"?: string; "revision"?: number; "name"?: string; "description"?: string | null; "visibility"?: "PRIVATE" | "TEAM" | "PUBLIC"; "isDefault"?: boolean; "isTemplate"?: boolean; "templateId"?: string | null; "userId"?: string; "teamId"?: string | null; "layout"?: Record<string, unknown>; "config"?: Record<string, unknown> | null; "widgets"?: Array<ReportDashboardWidget>; "user"?: { "id": string; "name"?: string | null }; "team"?: { "id": string; "name": string } & Record<string, unknown> | null; "permissions"?: { "canEdit": boolean; "canDelete": boolean }; "createdAt"?: string; "updatedAt"?: string };
+export type ReportDashboardData = { "dashboardId": string; "windowDays": number; "serviceId": string | null; "generatedAt": string; "metrics": Record<string, unknown> };
+export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type EscalationPolicyDependencies = { "policyId": string; "services": Array<{ "id": string; "name": string } & Record<string, unknown>>; "targets": Array<{ "stepId": string; "stepOrder": number; "targetType": "USER" | "TEAM" | "SCHEDULE"; "targetId": string | null; "exists": boolean } & Record<string, unknown>>; "valid": boolean; "deletionAllowed": boolean } & Record<string, unknown>;
 export type ActionResult = { "success": boolean; "message"?: string } & Record<string, unknown>;
 export type IncidentTransition = { "id": string; "title": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: string | null; "urgency": "LOW" | "MEDIUM" | "HIGH"; "acknowledgedAt"?: string | null; "resolvedAt"?: string | null; "updatedAt": string } & Record<string, unknown>;
@@ -326,6 +334,22 @@ export interface OperationRequests {
   listPostmortems: { "query"?: { "limit"?: number; "cursor"?: string; "incidentId"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: "true" | "false"; "search"?: string } };
   createPostmortem: { "headers"?: { "Idempotency-Key"?: string }; "body": { "incidentId": string; "title"?: string; "summary": string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED"; "isPublic"?: boolean } & Record<string, unknown> };
   getMetricsReport: { "query"?: { "serviceId"?: string; "days"?: number } };
+  getReportCatalog: Record<string, never>;
+  queryReportMetrics: { "body": { "metrics": Array<string>; "windowDays"?: number; "serviceId"?: string } };
+  listSavedReports: { "query"?: { "limit"?: number; "cursor"?: string } };
+  createSavedReport: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "description"?: string; "metrics": Array<string>; "windowDays"?: number; "serviceId"?: string; "visibility"?: string; "teamId"?: string } };
+  getSavedReport: { "params": { "id": string } };
+  updateSavedReport: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "description"?: string; "metrics"?: Array<string>; "windowDays"?: number; "serviceId"?: string; "visibility"?: string; "teamId"?: string } };
+  deleteSavedReport: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  listReportDashboards: { "query"?: { "limit"?: number; "cursor"?: string } };
+  createReportDashboard: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "description"?: string; "visibility"?: string; "teamId"?: string; "templateId"?: string; "sourceTemplate"?: string; "widgets"?: Array<ReportDashboardWidget> } };
+  getReportDashboard: { "params": { "id": string } };
+  getReportDashboardData: { "params": { "id": string }; "query"?: { "days"?: number; "serviceId"?: string } };
+  duplicateReportDashboard: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "name"?: string; "visibility"?: string; "teamId"?: string } };
+  listReportDashboardWidgets: { "params": { "id": string } };
+  replaceReportDashboardWidgets: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "widgets": Array<ReportDashboardWidget> } };
+  updateReportDashboard: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "description"?: string; "visibility"?: string; "teamId"?: string; "layout"?: Record<string, unknown>; "config"?: Record<string, unknown>; "widgets"?: Array<ReportDashboardWidget> } };
+  deleteReportDashboard: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
   executeRunbook: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body"?: { "incidentId"?: string | null; "serviceId"?: string | null; "bindingId"?: string | null; "expectedPlanDigest"?: string; "parameters"?: Record<string, unknown> } & Record<string, unknown> };
   getRunbook: { "params": { "id": string } };
   getRunbookExecution: { "params": { "id": string } };
@@ -560,6 +584,22 @@ export interface OperationResponses {
   listPostmortems: { "data": Array<Postmortem>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createPostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getMetricsReport: { "data"?: MetricsReport } & Record<string, unknown>;
+  getReportCatalog: { "data": ReportCatalog; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  queryReportMetrics: { "data": ReportQueryResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listSavedReports: { "data": Array<SavedReport>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createSavedReport: { "data": SavedReport; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getSavedReport: { "data": SavedReport; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateSavedReport: { "data": SavedReport; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteSavedReport: null;
+  listReportDashboards: { "data": Array<ReportDashboardSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getReportDashboardData: { "data": ReportDashboardData; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  duplicateReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listReportDashboardWidgets: { "data": ReportDashboardWidgets; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  replaceReportDashboardWidgets: { "data": ReportDashboardWidgets; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateReportDashboard: { "data": ReportDashboard; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteReportDashboard: null;
   executeRunbook: { "data": RunbookExecutionStarted; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getRunbook: { "data": Runbook; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getRunbookExecution: { "data": RunbookExecution; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2307,6 +2347,155 @@ export const OPERATIONS = {
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getReportCatalog": {
+    "method": "GET",
+    "path": "/reports/catalog",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "queryReportMetrics": {
+    "method": "POST",
+    "path": "/reports/query",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listSavedReports": {
+    "method": "GET",
+    "path": "/reports/saved",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createSavedReport": {
+    "method": "POST",
+    "path": "/reports/saved",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getSavedReport": {
+    "method": "GET",
+    "path": "/reports/saved/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateSavedReport": {
+    "method": "PATCH",
+    "path": "/reports/saved/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteSavedReport": {
+    "method": "DELETE",
+    "path": "/reports/saved/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "listReportDashboards": {
+    "method": "GET",
+    "path": "/dashboards",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createReportDashboard": {
+    "method": "POST",
+    "path": "/dashboards",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getReportDashboard": {
+    "method": "GET",
+    "path": "/dashboards/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getReportDashboardData": {
+    "method": "GET",
+    "path": "/dashboards/{id}/data",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "duplicateReportDashboard": {
+    "method": "POST",
+    "path": "/dashboards/{id}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listReportDashboardWidgets": {
+    "method": "GET",
+    "path": "/dashboards/{id}/widgets",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "replaceReportDashboardWidgets": {
+    "method": "PUT",
+    "path": "/dashboards/{id}/widgets",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "updateReportDashboard": {
+    "method": "PATCH",
+    "path": "/dashboards/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteReportDashboard": {
+    "method": "DELETE",
+    "path": "/dashboards/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
     "bodyRequired": false
   },
   "executeRunbook": {
