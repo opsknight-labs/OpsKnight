@@ -163,12 +163,12 @@ export default async function RunbooksPage({
           </p>
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-2.5 py-1 text-xs text-primary-foreground/90 font-medium tabular-nums shadow-2xs"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
               title={`All runbook library and execution timestamps reflect your profile timezone: ${userTimeZone}`}
             >
-              <Clock className="h-3 w-3" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
               {userTimeZone}
             </span>
             {canManage && (
@@ -179,6 +179,7 @@ export default async function RunbooksPage({
             )}
           </div>
         }
+        statsPlacement="bottom"
         stats={[
           {
             label: 'Total Runbooks',

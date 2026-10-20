@@ -383,6 +383,7 @@ export default async function RunbookDetailPage({
         action={publishDraftAction.bind(null, runbook.draftVersion.id, runbook.id)}
         label="Publish draft"
         variant="default"
+        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-xs"
         title={`Publish immutable v${runbook.draftVersion.version}?`}
         description="Only the saved draft is published. Save any builder changes first. Published definitions cannot be edited."
         successMessage="Draft published"
@@ -391,8 +392,13 @@ export default async function RunbookDetailPage({
       <ActionForm
         action={cloneVersionAction.bind(null, nextDraftSource.id, runbook.id)}
         successMessage="Draft created"
+        className="w-full sm:w-auto"
       >
-        <SubmitButton size="sm" pendingLabel="Creating draft…">
+        <SubmitButton
+          size="sm"
+          pendingLabel="Creating draft…"
+          className="w-full sm:w-auto bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs"
+        >
           <PencilLine className="h-4 w-4" aria-hidden="true" />
           Create next editable draft
         </SubmitButton>
@@ -539,6 +545,7 @@ export default async function RunbookDetailPage({
             />
           </div>
         }
+        statsPlacement="bottom"
         stats={[
           {
             label: 'Live Version',

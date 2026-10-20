@@ -212,6 +212,7 @@ export function ConfirmAction({
   label,
   variant = 'destructive',
   successMessage = 'Changes applied',
+  className,
 }: {
   action: RunbookFormAction;
   title: string;
@@ -219,13 +220,14 @@ export function ConfirmAction({
   label: string;
   variant?: ComponentProps<typeof Button>['variant'];
   successMessage?: string;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const destructive = variant === 'destructive';
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button variant={variant} size="sm">
+        <Button variant={variant} size="sm" className={className}>
           {label}
         </Button>
       </AlertDialogTrigger>

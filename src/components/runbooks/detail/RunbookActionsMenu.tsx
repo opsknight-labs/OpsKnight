@@ -49,9 +49,9 @@ export function RunbookActionsMenu({
             variant="outline"
             size="sm"
             aria-label="More runbook actions"
-            className="h-9 w-9 p-0 rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-primary/50 data-[state=open]:ring-2 data-[state=open]:ring-primary/20"
+            className="h-9 w-9 p-0 rounded-xl border border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-700 text-slate-200 hover:text-white shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-zinc-500 data-[state=open]:bg-zinc-700"
           >
-            <MoreHorizontal className="h-4 w-4 text-foreground/80" aria-hidden="true" />
+            <MoreHorizontal className="h-4 w-4 text-slate-200" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

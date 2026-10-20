@@ -71,12 +71,17 @@ export default function DetailHeroBanner({
       <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 text-slate-100 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
 
-        <div className="relative flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+        <div
+          className={cn(
+            'relative flex flex-col justify-between gap-4 lg:flex-row',
+            statsPlacement === 'bottom' ? 'lg:items-start' : 'lg:items-center'
+          )}
+        >
           {/* Left: Icon/Avatar & Identity Details */}
-          <div className="flex items-start gap-3.5">
+          <div className="flex items-start gap-3.5 min-w-0 flex-1">
             {icon && <div className="shrink-0">{icon}</div>}
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {(tag || badges) && (
                 <div className="flex flex-wrap items-center gap-2">
                   {tag && (
@@ -93,14 +98,23 @@ export default function DetailHeroBanner({
               </h1>
 
               {subtitle && (
-                <div className="mt-1 text-xs text-slate-300 leading-relaxed">{subtitle}</div>
+                <div className="mt-1 text-xs text-slate-300 leading-relaxed max-w-3xl">
+                  {subtitle}
+                </div>
               )}
             </div>
           </div>
 
-          {/* Right: Summary Metric Capsules & Action Slots (Inline mode) */}
+          {/* Right: Summary Metric Capsules & Action Slots (Inline mode or Header Actions) */}
           {(statsPlacement !== 'bottom' || bannerActions) && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div
+              className={cn(
+                'flex shrink-0 items-center gap-3',
+                statsPlacement === 'bottom'
+                  ? 'w-full sm:w-auto sm:justify-end'
+                  : 'flex-col sm:flex-row items-stretch sm:items-center'
+              )}
+            >
               {statsPlacement !== 'bottom' && stats.length > 0 && (
                 <div className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto">
                   <div
@@ -110,8 +124,9 @@ export default function DetailHeroBanner({
                       stats.length === 2 && 'sm:grid-cols-2 sm:min-w-[200px]',
                       stats.length === 3 && 'sm:grid-cols-3 sm:min-w-[280px]',
                       stats.length === 4 && 'sm:grid-cols-4 sm:min-w-[360px]',
-                      stats.length >= 5 &&
-                        'sm:grid-cols-3 lg:grid-cols-5 sm:min-w-[360px] lg:min-w-[480px]'
+                      stats.length === 5 && 'sm:grid-cols-5 sm:min-w-[440px]',
+                      stats.length >= 6 &&
+                        'sm:grid-cols-3 lg:grid-cols-6 sm:min-w-[360px] lg:min-w-[520px]'
                     )}
                   >
                     {stats.map((stat, idx) => {
@@ -174,7 +189,11 @@ export default function DetailHeroBanner({
                 </div>
               )}
 
-              {bannerActions && <div className="shrink-0">{bannerActions}</div>}
+              {bannerActions && (
+                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                  {bannerActions}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -183,12 +202,14 @@ export default function DetailHeroBanner({
         {statsPlacement === 'bottom' && stats.length > 0 && (
           <div
             className={cn(
-              'mt-5 grid gap-2 sm:gap-3',
+              'mt-5 pt-4 border-t border-zinc-800/70 grid gap-2 sm:gap-2.5',
               stats.length === 1 && 'grid-cols-1',
               stats.length === 2 && 'grid-cols-2',
               stats.length === 3 && 'grid-cols-1 sm:grid-cols-3',
               stats.length === 4 && 'grid-cols-2 sm:grid-cols-4',
-              stats.length >= 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+              stats.length === 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+              stats.length === 6 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
+              stats.length >= 7 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
             )}
           >
             {stats.map((stat, idx) => {
@@ -224,10 +245,11 @@ export default function DetailHeroBanner({
               );
 
               const itemClassName = cn(
-                'min-w-0 overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[72px]',
+                'min-w-0 overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 sm:p-3 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[68px]',
+                idx === 4 && stats.length === 5 && 'col-span-2 sm:col-span-1',
                 stat.href &&
-                  'hover:bg-zinc-800/60 hover:border-zinc-700/80 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
-                stat.active && 'bg-zinc-800/80 border-zinc-700/80 ring-1 ring-white/10 font-bold',
+                  'hover:bg-zinc-800/80 hover:border-zinc-700/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
+                stat.active && 'bg-zinc-800/90 border-zinc-700/80 ring-1 ring-white/10 font-bold',
                 stat.className
               );
 
@@ -335,18 +357,23 @@ export function DetailHeroBannerSkeleton({
         {statsCount > 0 && statsPlacement === 'bottom' && (
           <div
             className={cn(
-              'mt-5 grid gap-2 sm:gap-3',
+              'mt-5 pt-4 border-t border-zinc-800/70 grid gap-2 sm:gap-2.5',
               statsCount === 1 && 'grid-cols-1',
               statsCount === 2 && 'grid-cols-2',
               statsCount === 3 && 'grid-cols-1 sm:grid-cols-3',
               statsCount === 4 && 'grid-cols-2 sm:grid-cols-4',
-              statsCount >= 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+              statsCount === 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+              statsCount === 6 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
+              statsCount >= 7 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
             )}
           >
             {Array.from({ length: statsCount }).map((_, idx) => (
               <div
                 key={idx}
-                className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 flex flex-col items-center justify-center gap-1.5 min-h-[72px]"
+                className={cn(
+                  'rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 flex flex-col items-center justify-center gap-1.5 min-h-[68px]',
+                  idx === 4 && statsCount === 5 && 'col-span-2 sm:col-span-1'
+                )}
               >
                 <Skeleton className="h-2.5 w-16 bg-zinc-800/80 rounded-xs" />
                 <Skeleton className="h-5 w-10 bg-zinc-700/80 rounded-xs" />
