@@ -603,3 +603,169 @@ it('changing integration dropdown reconciles and resets stale field-selection me
   // The observed field selection should be cleared/reset rather than retaining stale GITHUB metadata
   expect(observedSelect.value).toBe('');
 });
+
+it('provider switching sequence (GitHub -> All providers -> CloudWatch) preserves CloudWatch selection intact', async () => {
+  const testData = {
+    ...data,
+    integrations: [
+      { id: 'gh-1', name: 'GitHub', type: 'GITHUB' },
+      { id: 'cw-1', name: 'CloudWatch', type: 'CLOUDWATCH' },
+    ],
+    observations: [
+      {
+        fieldKey: 'repository_name',
+        sourcePath: 'repository.name',
+        fieldType: 'STRING',
+        integrationType: 'GITHUB',
+      },
+      {
+        fieldKey: 'alarm_name',
+        sourcePath: 'AlarmName',
+        fieldType: 'STRING',
+        integrationType: 'CLOUDWATCH',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  const integrationSelect = (await screen.findByLabelText('Integration')) as HTMLSelectElement;
+  const observedSelect = screen.getByLabelText('Observed field') as HTMLSelectElement;
+
+  // 1. Select GitHub in integration dropdown and choose GitHub observed field
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+  fireEvent.change(observedSelect, { target: { value: 'GITHUB:PROVIDER:repository.name' } });
+  expect(observedSelect.value).toBe('GITHUB:PROVIDER:repository.name');
+
+  // 2. Switch to All providers
+  fireEvent.change(integrationSelect, { target: { value: 'ALL' } });
+
+  // 3. Select CloudWatch observed field
+  fireEvent.change(observedSelect, { target: { value: 'CLOUDWATCH:PROVIDER:AlarmName' } });
+
+  // CloudWatch selection must remain intact and NOT be cleared
+  expect(observedSelect.value).toBe('CLOUDWATCH:PROVIDER:AlarmName');
+});
+
+it('selecting a STRING observed field sets fieldType to STRING instead of leaving it as ENUM', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    integrations: [{ id: 'gh-1', name: 'GitHub', type: 'GITHUB' }],
+    observations: [
+      {
+        fieldKey: 'repository_full_name',
+        sourcePath: 'repository.full_name',
+        fieldType: 'STRING',
+        integrationType: 'GITHUB',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  const integrationSelect = (await screen.findByLabelText('Integration')) as HTMLSelectElement;
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+
+  const observedSelect = screen.getByLabelText('Observed field') as HTMLSelectElement;
+  fireEvent.change(observedSelect, { target: { value: 'GITHUB:PROVIDER:repository.full_name' } });
+
+  // Field type select should now be STRING, NOT ENUM
+  const typeSelect = screen.getByLabelText('Treat as') as HTMLSelectElement;
+  expect(typeSelect.value).toBe('STRING');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const addedField = savedSnapshot!.fields.find(f => f.key === 'repository_full_name');
+  expect(addedField).toBeDefined();
+  expect(addedField?.type).toBe('STRING');
+  // STRING field must not have allowedValues injected
+  expect(addedField).not.toHaveProperty('allowedValues');
+});
+
+it('provenance resolves accurately: root event_action as EVENT, provider payload.* as PROVIDER, and respects source selector', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    integrations: [{ id: 'gh-1', name: 'GitHub', type: 'GITHUB' }],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // 1. Author root field `event_action` for EVENTS_API -> should be saved as EVENT
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'EVENTS_API' } });
+
+  fireEvent.click(screen.getByRole('button', { name: /Advanced mapping/i }));
+  fireEvent.change(screen.getByLabelText('Source path'), { target: { value: 'event_action' } });
+  fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'Event Action' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const actionField = savedSnapshot!.fields.find(f => f.key === 'event_action');
+  expect(actionField?.mappings[0]).toMatchObject({
+    source: 'EVENT',
+    path: 'event_action',
+  });
+
+  savedSnapshot = null;
+
+  // 2. Author provider payload with `payload.workflow_run.id` for GITHUB -> should be saved as PROVIDER
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+  fireEvent.change(screen.getByLabelText('Source path'), {
+    target: { value: 'payload.workflow_run.id' },
+  });
+  fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'Workflow Run ID' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const workflowField = savedSnapshot!.fields.find(f => f.key === 'workflow_run_id');
+  expect(workflowField?.mappings[0]).toMatchObject({
+    source: 'PROVIDER',
+    integrationType: 'GITHUB',
+    path: 'payload.workflow_run.id',
+  });
+
+  savedSnapshot = null;
+
+  // 3. User explicitly overrides Payload source dropdown to EVENT on GITHUB integration
+  fireEvent.change(screen.getByLabelText('Payload source'), { target: { value: 'EVENT' } });
+  fireEvent.change(screen.getByLabelText('Source path'), {
+    target: { value: 'custom.event.metric' },
+  });
+  fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'Custom Metric' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  const customField = savedSnapshot!.fields.find(f => f.key === 'custom_metric');
+  expect(customField?.mappings[0]).toMatchObject({
+    source: 'EVENT',
+    path: 'custom.event.metric',
+  });
+});

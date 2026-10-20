@@ -200,7 +200,8 @@ export const FieldDetail = memo(function FieldDetail({
             />
             <Label htmlFor={`${caseId}-display`}>Display-only field</Label>
             <span className="text-xs text-muted-foreground">
-              Captured for incident presentation and runbook context without requiring rule conditions.
+              Captured for incident presentation and runbook context without requiring rule
+              conditions.
             </span>
           </div>
         </div>
@@ -280,6 +281,7 @@ export function newFieldProblems({
   key,
   existingKeys,
   observedPath,
+  source,
   fieldCount,
   type,
   values,
@@ -288,6 +290,7 @@ export function newFieldProblems({
   key: string;
   existingKeys: Set<string>;
   observedPath: string;
+  source?: 'PROVIDER' | 'EVENT';
   fieldCount: number;
   type: Field['type'];
   values: string[];
@@ -301,6 +304,8 @@ export function newFieldProblems({
     else if (existingKeys.has(key)) problems.label = `A field with key “${key}” already exists.`;
     if (!observedPath)
       problems.source = 'Choose an observed field, or enter a source path under Advanced mapping.';
+    else if (!source)
+      problems.source = 'Select whether the source is a normalized event or raw provider payload.';
   }
   if (type === 'ENUM' && !values.length) problems.values = 'Add at least one canonical choice.';
   return problems;

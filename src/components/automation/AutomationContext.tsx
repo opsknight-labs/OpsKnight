@@ -61,6 +61,8 @@ export function AutomationContext({
   providerSample,
   setProviderSample,
   analyze,
+  handleIntegrationTypeChange,
+  selectObservedField,
 }: {
   data: Data;
   draft: Snapshot;
@@ -70,6 +72,16 @@ export function AutomationContext({
   setDeleteField: (field: Field) => void;
   integrationType: string;
   setIntegrationType: (value: string) => void;
+  handleIntegrationTypeChange?: (value: string) => void;
+  selectObservedField?: (
+    field: {
+      path: string;
+      source?: 'PROVIDER' | 'EVENT';
+      integrationType?: string;
+      label?: string;
+      type?: Field['type'];
+    } | null
+  ) => void;
   observedPath: string;
   setObservedPath: (value: string) => void;
   selectedSource?: 'PROVIDER' | 'EVENT';
@@ -97,13 +109,15 @@ export function AutomationContext({
 }) {
   const [internalSource, setInternalSource] = useState<'PROVIDER' | 'EVENT' | undefined>(undefined);
   const [internalIntType, setInternalIntType] = useState<string | undefined>(undefined);
+  const effectiveIntType = selectedIntegrationType ?? internalIntType;
+  const setIntType = setSelectedIntegrationType ?? setInternalIntType;
+  const selectedDiscovery = discoveries.find(d => d.path === observedPath);
   const effectiveSource: 'PROVIDER' | 'EVENT' =
     selectedSource ??
     internalSource ??
-    (observedPath.startsWith('payload.') ? 'EVENT' : 'PROVIDER');
+    selectedDiscovery?.source ??
+    (effectiveIntType === 'EVENTS_API' || integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
   const setSource = setSelectedSource ?? setInternalSource;
-  const effectiveIntType = selectedIntegrationType ?? internalIntType;
-  const setIntType = setSelectedIntegrationType ?? setInternalIntType;
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const formId = useId();
   const visibleFields = useMemo(
@@ -132,9 +146,12 @@ export function AutomationContext({
 
     for (const o of data.observations) {
       if (integrationType !== 'ALL' && o.integrationType !== integrationType) continue;
-      const source: 'PROVIDER' | 'EVENT' = o.sourcePath.startsWith('payload.')
-        ? 'EVENT'
-        : 'PROVIDER';
+      const matchingDisc = discoveries.find(d => d.path === o.sourcePath);
+      const matchingMap = draft.fields.flatMap(f => f.mappings).find(m => m.path === o.sourcePath);
+      const source: 'PROVIDER' | 'EVENT' =
+        matchingDisc?.source ??
+        matchingMap?.source ??
+        (o.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
       const compositeId = `${o.integrationType}:${source}:${o.sourcePath}`;
       if (seen.has(compositeId)) continue;
       seen.add(compositeId);
@@ -167,7 +184,7 @@ export function AutomationContext({
       });
     }
     return list;
-  }, [data.observations, discoveries, integrationType]);
+  }, [data.observations, draft.fields, discoveries, integrationType]);
 
   const integrationTypes = useMemo(
     () => [...new Set(data.integrations.map(i => i.type))],
@@ -183,6 +200,7 @@ export function AutomationContext({
     key: newKey,
     existingKeys,
     observedPath,
+    source: effectiveSource,
     fieldCount: draft.fields.length,
     type: fieldType,
     values,
@@ -317,7 +335,13 @@ export function AutomationContext({
                     <NativeSelect
                       id={`${formId}-integration`}
                       value={integrationType}
-                      onChange={e => setIntegrationType(e.target.value)}
+                      onChange={e => {
+                        if (handleIntegrationTypeChange) {
+                          handleIntegrationTypeChange(e.target.value);
+                        } else {
+                          setIntegrationType(e.target.value);
+                        }
+                      }}
                     >
                       <option>EVENTS_API</option>
                       <option value="ALL">All providers</option>
@@ -335,7 +359,7 @@ export function AutomationContext({
                           o =>
                             o.path === observedPath &&
                             (!effectiveIntType || o.integrationType === effectiveIntType) &&
-                            o.source === effectiveSource
+                            (!effectiveSource || !o.source || o.source === effectiveSource)
                         )?.id ??
                         observedOptions.find(o => o.path === observedPath)?.id ??
                         observedPath
@@ -346,15 +370,28 @@ export function AutomationContext({
                         const val = e.target.value;
                         const found = observedOptions.find(o => o.id === val);
                         if (found) {
-                          setObservedPath(found.path);
-                          setSource(found.source);
-                          setIntType(found.integrationType);
-                          setFieldLabel(found.label);
-                          if (found.integrationType && found.integrationType !== 'ALL') {
-                            setIntegrationType(found.integrationType);
+                          if (selectObservedField) {
+                            selectObservedField({
+                              path: found.path,
+                              source: found.source,
+                              integrationType: found.integrationType,
+                              label: found.label,
+                              type: (found.type as Field['type']) || 'STRING',
+                            });
+                          } else {
+                            setObservedPath(found.path);
+                            if (found.source) setSource(found.source);
+                            setIntType(found.integrationType);
+                            setFieldLabel(found.label);
+                            if (found.type) {
+                              setFieldType(found.type as Field['type']);
+                            }
+                            if (found.integrationType && found.integrationType !== 'ALL') {
+                              setIntegrationType(found.integrationType);
+                            }
                           }
-                          if (found.type === 'NUMBER' || found.type === 'BOOLEAN') {
-                            setFieldType(found.type);
+                          if (!found.source) {
+                            setAdvanced(true);
                           }
                         } else {
                           setObservedPath(val);
@@ -401,16 +438,26 @@ export function AutomationContext({
                         <Label htmlFor={`${formId}-source-type`}>Payload source</Label>
                         <NativeSelect
                           id={`${formId}-source-type`}
-                          value={effectiveSource}
+                          value={effectiveSource ?? ''}
+                          aria-invalid={!effectiveSource && !!observedPath ? true : undefined}
                           onChange={e => setSource(e.target.value as 'PROVIDER' | 'EVENT')}
                         >
-                          <option value="EVENT">Normalized event (payload.*)</option>
-                          <option value="PROVIDER">Raw provider webhook</option>
+                          <option value="" disabled>
+                            Choose payload source…
+                          </option>
+                          <option value="EVENT">
+                            Normalized event (payload.*, event_action, etc.)
+                          </option>
+                          <option value="PROVIDER">
+                            Raw provider webhook (e.g. GitHub, CloudWatch)
+                          </option>
                         </NativeSelect>
                         <Hint>
                           {effectiveSource === 'EVENT'
-                            ? 'Extracted from OpsKnight standardized event payload (e.g. payload.custom_details.*)'
-                            : 'Extracted directly from incoming third-party provider webhook body'}
+                            ? 'Extracted from OpsKnight standardized event payload (e.g. payload.*, event_action)'
+                            : effectiveSource === 'PROVIDER'
+                              ? 'Extracted directly from incoming third-party provider webhook body'
+                              : 'Select whether this field is extracted from OpsKnight normalized event or raw provider webhook'}
                         </Hint>
                       </div>
                       <div className="space-y-1.5">
@@ -553,7 +600,7 @@ export function AutomationContext({
                 {discoveries.map(field => {
                   const hierarchical = field.label ?? formatHierarchicalLabel(field.path);
                   const fieldCompositeId = `${field.integrationType ?? 'ALL'}:${field.source ?? 'PROVIDER'}:${field.path}`;
-                  const currentCompositeId = `${effectiveIntType ?? 'ALL'}:${effectiveSource}:${observedPath}`;
+                  const currentCompositeId = `${effectiveIntType ?? 'ALL'}:${effectiveSource ?? 'UNKNOWN'}:${observedPath}`;
                   const chosen = Boolean(observedPath) && fieldCompositeId === currentCompositeId;
                   return (
                     <li
@@ -571,17 +618,32 @@ export function AutomationContext({
                           aria-pressed={chosen}
                           className="h-10 sm:h-9"
                           onClick={() => {
-                            setObservedPath(field.path);
-                            setSource(field.source ?? 'EVENT');
-                            setIntType(field.integrationType);
-                            setFieldLabel(hierarchical);
-                            setFieldType(
-                              field.type === 'NUMBER' || field.type === 'BOOLEAN'
-                                ? field.type
-                                : 'STRING'
-                            );
-                            if (field.integrationType && field.integrationType !== 'ALL') {
-                              setIntegrationType(field.integrationType);
+                            if (selectObservedField) {
+                              selectObservedField({
+                                path: field.path,
+                                source: field.source,
+                                integrationType: field.integrationType,
+                                label: hierarchical,
+                                type: (field.type as Field['type']) || 'STRING',
+                              });
+                            } else {
+                              setObservedPath(field.path);
+                              if (field.source) setSource(field.source);
+                              setIntType(field.integrationType);
+                              setFieldLabel(hierarchical);
+                              setFieldType(
+                                field.type === 'NUMBER' ||
+                                  field.type === 'BOOLEAN' ||
+                                  field.type === 'ENUM'
+                                  ? field.type
+                                  : 'STRING'
+                              );
+                              if (field.integrationType && field.integrationType !== 'ALL') {
+                                setIntegrationType(field.integrationType);
+                              }
+                            }
+                            if (!field.source) {
+                              setAdvanced(true);
                             }
                           }}
                         >

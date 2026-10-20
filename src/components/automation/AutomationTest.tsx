@@ -153,8 +153,9 @@ export function AutomationTest({
           </div>
         )}
         <Hint>
-          Recent alerts replay the normalized OpsKnight event. If rules require provider-specific
-          mappings, paste a raw provider sample under Advanced sample JSON.
+          Recent alerts replay the normalized OpsKnight event only; full raw provider payloads are
+          not retained for replay to prevent sensitive credential leakage. If rules require
+          provider-specific mappings, paste a raw provider sample under Advanced sample JSON.
         </Hint>
         <ManualSample onBuild={setSample} />
         <details className="group rounded-lg border border-border/70 bg-card">

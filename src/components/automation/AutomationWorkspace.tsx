@@ -125,10 +125,14 @@ export default function AutomationWorkspace({
     onError: setError,
   });
 
+  const loadSeqRef = useRef(0);
+
   const load = useCallback(
     async (nextArea: Area) => {
+      const seq = ++loadSeqRef.current;
       try {
         const next = await getAutomationArea(serviceId, nextArea, activityPage);
+        if (seq !== loadSeqRef.current) return;
         if (
           next.activeVersion?.snapshot &&
           !snapshotSchema.safeParse(next.activeVersion.snapshot).success
@@ -142,6 +146,7 @@ export default function AutomationWorkspace({
         setError('');
         return next;
       } catch (err) {
+        if (seq !== loadSeqRef.current) return;
         setError(err instanceof Error ? err.message : 'Could not load automation');
       }
     },
@@ -149,11 +154,11 @@ export default function AutomationWorkspace({
   );
 
   useEffect(() => {
-    let cancelled = false;
+    const seq = ++loadSeqRef.current;
     void (async () => {
       try {
         const next = await getAutomationArea(serviceId, area, activityPage);
-        if (cancelled) return;
+        if (seq !== loadSeqRef.current) return;
         if (
           next.activeVersion?.snapshot &&
           !snapshotSchema.safeParse(next.activeVersion.snapshot).success
@@ -166,13 +171,10 @@ export default function AutomationWorkspace({
         setLatest(next);
         setError('');
       } catch (err) {
-        if (cancelled) return;
+        if (seq !== loadSeqRef.current) return;
         setError(err instanceof Error ? err.message : 'Could not load automation');
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [area, serviceId, activityPage, receiveServerDraft]);
 
   const command = useCallback(
@@ -474,6 +476,8 @@ export default function AutomationWorkspace({
               setDeleteField={setDeleteField}
               integrationType={context.integrationType}
               setIntegrationType={context.setIntegrationType}
+              handleIntegrationTypeChange={context.handleIntegrationTypeChange}
+              selectObservedField={context.selectObservedField}
               observedPath={context.observedPath}
               setObservedPath={context.setObservedPath}
               selectedSource={context.selectedSource}

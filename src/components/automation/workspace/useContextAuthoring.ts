@@ -33,15 +33,45 @@ export function useContextAuthoring({
   const [values, setValues] = useState<string[]>(['production', 'staging', 'development']);
   const [advanced, setAdvanced] = useState(false);
 
-  const handleIntegrationTypeChange = useCallback(
-    (nextType: string) => {
-      setIntegrationType(nextType);
-      if (selectedIntegrationType && selectedIntegrationType !== nextType && nextType !== 'ALL') {
+  const selectObservedField = useCallback(
+    (
+      field: {
+        path: string;
+        source?: 'PROVIDER' | 'EVENT';
+        integrationType?: string;
+        label?: string;
+        type?: Field['type'];
+      } | null
+    ) => {
+      if (!field) {
         setObservedPath('');
         setSelectedSource(undefined);
         setSelectedIntegrationType(undefined);
-      } else if (nextType !== 'ALL') {
-        setSelectedIntegrationType(nextType);
+        return;
+      }
+      setObservedPath(field.path);
+      setSelectedSource(field.source);
+      setSelectedIntegrationType(field.integrationType);
+      if (field.label) {
+        setFieldLabel(field.label);
+      }
+      if (field.type) {
+        setFieldType(field.type);
+      }
+      if (field.integrationType && field.integrationType !== 'ALL') {
+        setIntegrationType(field.integrationType);
+      }
+    },
+    []
+  );
+
+  const handleIntegrationTypeChange = useCallback(
+    (nextType: string) => {
+      setIntegrationType(nextType);
+      if (nextType !== 'ALL' && selectedIntegrationType && selectedIntegrationType !== nextType) {
+        setObservedPath('');
+        setSelectedSource(undefined);
+        setSelectedIntegrationType(undefined);
       }
     },
     [selectedIntegrationType]
@@ -79,12 +109,12 @@ export function useContextAuthoring({
       return;
     }
     const matchingDiscovery = discoveries.find(item => item.path === observedPath);
+    const effectiveIntegration =
+      selectedIntegrationType ?? matchingDiscovery?.integrationType ?? integrationType;
     const source =
       selectedSource ??
       matchingDiscovery?.source ??
-      (observedPath.startsWith('payload.') ? 'EVENT' : 'PROVIDER');
-    const effectiveIntegration =
-      selectedIntegrationType ?? matchingDiscovery?.integrationType ?? integrationType;
+      (effectiveIntegration === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
     edit({
       ...draft,
       fields: [
@@ -131,7 +161,9 @@ export function useContextAuthoring({
     providerSample,
     setProviderSample,
     integrationType,
-    setIntegrationType: handleIntegrationTypeChange,
+    setIntegrationType,
+    handleIntegrationTypeChange,
+    selectObservedField,
     discoveries,
     setDiscoveries,
     fieldLabel,
