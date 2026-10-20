@@ -64,7 +64,9 @@ export async function persistObservationBatch(
       const eventIdentities = new Set<string>();
       for (const observed of job.observations) {
         const hash = createHash('sha256').update(observed.value).digest('hex');
-        const identity = JSON.stringify([observed.key, hash]);
+        const source =
+          observed.source ?? (job.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
+        const identity = JSON.stringify([observed.key, observed.path, source, hash]);
         if (eventIdentities.has(identity)) continue;
         eventIdentities.add(identity);
         const prior = observations.get(identity);
@@ -73,7 +75,7 @@ export async function persistObservationBatch(
           hash,
           count: (prior?.count ?? 0) + 1,
           integrationType: job.integrationType,
-          source: observed.source ?? prior?.source,
+          source,
         });
       }
     }
@@ -88,7 +90,12 @@ export async function persistObservationBatch(
           fieldKey: { in: fields },
           normalizedRawValueHash: { in: hashes },
         },
-        select: { fieldKey: true, normalizedRawValueHash: true },
+        select: {
+          fieldKey: true,
+          sourcePath: true,
+          source: true,
+          normalizedRawValueHash: true,
+        },
       }),
       tx.automationContextObservation.groupBy({
         by: ['fieldKey'],
@@ -97,7 +104,14 @@ export async function persistObservationBatch(
       }),
     ]);
     const identities = new Set(
-      existing.map(row => JSON.stringify([row.fieldKey, row.normalizedRawValueHash]))
+      existing.map(row =>
+        JSON.stringify([
+          row.fieldKey,
+          row.sourcePath,
+          row.source ?? (current.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER'),
+          row.normalizedRawValueHash,
+        ])
+      )
     );
     const cardinalities = new Map(totals.map(row => [row.fieldKey, row._count._all]));
     const values: Prisma.Sql[] = [];
@@ -108,16 +122,15 @@ export async function persistObservationBatch(
         cardinalities.set(observed.key, (cardinalities.get(observed.key) ?? 0) + 1);
       }
       values.push(
-        Prisma.sql`(${randomUUID()}, ${current.serviceId}, ${integrationId}, ${observed.integrationType}, ${observed.key}, ${observed.path}, ${observed.type}, ${observed.hash}, ${observed.value}, ${observed.unmapped}, ${observed.count}, NOW(), NOW(), ${observed.source ?? null})`
+        Prisma.sql`(${randomUUID()}, ${current.serviceId}, ${integrationId}, ${observed.integrationType}, ${observed.key}, ${observed.path}, ${observed.type}, ${observed.hash}, ${observed.value}, ${observed.unmapped}, ${observed.count}, NOW(), NOW(), ${observed.source})`
       );
     }
     if (values.length)
       await tx.$executeRaw(Prisma.sql`
       INSERT INTO "AutomationContextObservation" (id, "serviceId", "integrationId", "integrationType", "fieldKey", "sourcePath", "fieldType", "normalizedRawValueHash", "rawValuePreview", unmapped, count, "firstSeenAt", "lastSeenAt", "source") VALUES ${Prisma.join(values)}
-      ON CONFLICT ("serviceId", "integrationId", "fieldKey", "normalizedRawValueHash") DO UPDATE SET count = "AutomationContextObservation".count + EXCLUDED.count, "lastSeenAt" = NOW(), unmapped = EXCLUDED.unmapped,
-      "sourcePath" = EXCLUDED."sourcePath", "integrationType" = EXCLUDED."integrationType",
-      "fieldType" = EXCLUDED."fieldType", "rawValuePreview" = EXCLUDED."rawValuePreview",
-      "source" = COALESCE(EXCLUDED."source", "AutomationContextObservation"."source")`);
+      ON CONFLICT ("serviceId", "integrationId", "fieldKey", "sourcePath", "normalizedRawValueHash", "source") DO UPDATE SET count = "AutomationContextObservation".count + EXCLUDED.count, "lastSeenAt" = NOW(), unmapped = EXCLUDED.unmapped,
+      "integrationType" = EXCLUDED."integrationType",
+      "fieldType" = EXCLUDED."fieldType", "rawValuePreview" = EXCLUDED."rawValuePreview"`);
   }
   const rollups = new Map<string, NonNullable<ObservationJob['shadow']>>();
   for (const job of jobs) {

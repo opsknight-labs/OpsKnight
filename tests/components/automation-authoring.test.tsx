@@ -1174,3 +1174,57 @@ it('treats legacy observations without recorded source as integration-defaulted 
   expect(legacyOption).toHaveTextContent('Status — status (GITHUB)');
   expect(options.some(o => o.getAttribute('value') === 'GITHUB:EVENT:status')).toBe(false);
 });
+
+it('disambiguates persisted observations with identical field keys, paths, and values across EVENT and PROVIDER sources', async () => {
+  const testData = {
+    ...data,
+    integrations: [{ id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' }],
+    observations: [
+      {
+        id: 'obs-event-status',
+        serviceId: 'service-1',
+        integrationId: 'events-1',
+        integrationType: 'EVENTS_API',
+        fieldKey: 'status',
+        sourcePath: 'status',
+        rawValuePreview: 'open',
+        source: 'EVENT',
+        fieldType: 'STRING',
+        count: 5,
+        unmapped: false,
+        lastSeenAt: '2026-10-21T00:00:00Z',
+      },
+      {
+        id: 'obs-provider-status',
+        serviceId: 'service-1',
+        integrationId: 'gh-1',
+        integrationType: 'GITHUB',
+        fieldKey: 'status',
+        sourcePath: 'status',
+        rawValuePreview: 'open',
+        source: 'PROVIDER',
+        fieldType: 'STRING',
+        count: 5,
+        unmapped: false,
+        lastSeenAt: '2026-10-21T00:00:00Z',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // Switch to ALL integrations to view both
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'ALL' } });
+
+  const options = screen.getAllByRole('option');
+  const eventOption = options.find(o => o.getAttribute('value') === 'EVENTS_API:EVENT:status');
+  const providerOption = options.find(o => o.getAttribute('value') === 'GITHUB:PROVIDER:status');
+
+  expect(eventOption).toBeDefined();
+  expect(providerOption).toBeDefined();
+  expect(eventOption).toHaveTextContent('Status — status (EVENTS_API)');
+  expect(providerOption).toHaveTextContent('Status — status (GITHUB)');
+});

@@ -350,7 +350,7 @@ describe('automation semantics', () => {
         status: 'open',
       } as unknown as IntegrationEventEnvelope['event'],
       providerPayload: {
-        status: 'closed',
+        status: 'open',
       },
       receivedAt: new Date('2026-10-21T00:00:00Z'),
     };
@@ -361,7 +361,7 @@ describe('automation semantics', () => {
       { priority: 'P2', urgency: 'HIGH' }
     );
 
-    // Verify prepareAutomation populated both observations with distinct source tags
+    // Verify prepareAutomation populated both observations with distinct source tags even with identical keys, paths, and values
     expect(runtime).not.toBeNull();
     expect(runtime!.observations).toHaveLength(2);
     expect(runtime!.observations).toEqual(
@@ -375,7 +375,7 @@ describe('automation semantics', () => {
         expect.objectContaining({
           key: 'status',
           path: 'status',
-          value: 'closed',
+          value: 'open',
           source: 'PROVIDER',
         }),
       ])
@@ -409,7 +409,7 @@ describe('automation semantics', () => {
           {
             key: 'status',
             path: 'status',
-            value: 'closed',
+            value: 'open',
             type: 'STRING',
             unmapped: false,
             source: 'PROVIDER',

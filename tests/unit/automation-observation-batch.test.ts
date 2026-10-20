@@ -174,9 +174,64 @@ describe('persistObservationBatch', () => {
     const sql = insertCall![0] as unknown as { strings: string[]; values: unknown[] };
     expect(sql.strings.join('')).toContain('"source"');
     expect(sql.strings.join('')).toContain(
-      'COALESCE(EXCLUDED."source", "AutomationContextObservation"."source")'
+      'ON CONFLICT ("serviceId", "integrationId", "fieldKey", "sourcePath", "normalizedRawValueHash", "source")'
     );
     expect(sql.values).toContain('EVENT');
     expect(sql.values).toContain('PROVIDER');
+  });
+
+  it('deduplicates and preserves distinct observations when key, path, and value are identical across EVENT and PROVIDER sources', async () => {
+    const jobWithIdenticalKeyValue: ObservationJob = {
+      task: 'AUTOMATION_OBSERVE',
+      logicalKey: 'job-identical-key-value',
+      serviceId: 'srv-1',
+      integrationId: 'int-gh-1',
+      integrationType: 'GITHUB',
+      observations: [
+        {
+          key: 'status',
+          path: 'status',
+          value: 'open',
+          type: 'STRING',
+          unmapped: false,
+          source: 'EVENT',
+        },
+        {
+          key: 'status',
+          path: 'status',
+          value: 'open',
+          type: 'STRING',
+          unmapped: false,
+          source: 'PROVIDER',
+        },
+      ],
+    };
+
+    const tx = createMockTx({ pendingRows: [] });
+    const result = await persistObservationBatch(
+      tx,
+      jobWithIdenticalKeyValue,
+      p => p as ObservationJob
+    );
+
+    expect(result.recorded).toBe(true);
+    expect(tx.$executeRaw).toHaveBeenCalled();
+
+    const calls = vi.mocked(tx.$executeRaw).mock.calls;
+    const insertCall = calls.find(call => {
+      const sqlObj = call[0] as unknown as { strings: string[]; values: unknown[] };
+      return sqlObj?.strings?.some(s => s.includes('INSERT INTO "AutomationContextObservation"'));
+    });
+    expect(insertCall).toBeDefined();
+    const sql = insertCall![0] as unknown as { strings: string[]; values: unknown[] };
+    expect(sql.strings.join('')).toContain(
+      'ON CONFLICT ("serviceId", "integrationId", "fieldKey", "sourcePath", "normalizedRawValueHash", "source")'
+    );
+    // Both observations must be inserted as separate rows (12 params each = 24) rather than collapsing into one
+    expect(sql.values).toHaveLength(24);
+    expect(sql.values).toContain('EVENT');
+    expect(sql.values).toContain('PROVIDER');
+    expect(sql.values.filter(v => v === 'open')).toHaveLength(2);
+    expect(sql.values.filter(v => v === 'status')).toHaveLength(4);
   });
 });
