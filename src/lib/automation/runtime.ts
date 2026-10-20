@@ -482,6 +482,7 @@ export async function persistAutomation(
           logicalKey: `AUTOMATION_OBSERVE:${incidentId}`,
           serviceId: envelope.serviceId,
           integrationId: envelope.integrationId,
+          integrationType: envelope.integrationType,
           observations: runtime.observations.map(o => ({
             key: o.key,
             path: o.path,

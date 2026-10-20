@@ -448,3 +448,158 @@ it('disambiguates identical paths across providers and preserves exact provider 
     ])
   );
 });
+
+it('correctly maps manually authored paths for GitHub (PROVIDER) and Events API (EVENT)', async () => {
+  let savedSnapshot: Snapshot | null = null;
+  api.action.mockImplementation((input: { action: string; snapshot?: Snapshot }) => {
+    if (input.action === 'save') {
+      savedSnapshot = input.snapshot ?? null;
+      return Promise.resolve({ ok: true, data: { revision: 1 } });
+    }
+    return Promise.resolve({ ok: true, data: {} });
+  });
+
+  const testData = {
+    ...data,
+    integrations: [{ id: 'gh-1', name: 'GitHub Integration', type: 'GITHUB' }],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // 1. Author GitHub manual provider path
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+
+  // Open Advanced mapping
+  fireEvent.click(screen.getByRole('button', { name: /Advanced mapping/i }));
+
+  // Enter manual provider path
+  fireEvent.change(screen.getByLabelText('Source path'), {
+    target: { value: 'repository.full_name' },
+  });
+  fireEvent.change(screen.getByLabelText('Field label'), {
+    target: { value: 'Repo Full Name' },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  expect(savedSnapshot!.fields).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        key: 'repo_full_name',
+        mappings: [
+          expect.objectContaining({
+            source: 'PROVIDER',
+            integrationType: 'GITHUB',
+            path: 'repository.full_name',
+          }),
+        ],
+      }),
+    ])
+  );
+
+  savedSnapshot = null;
+
+  // 2. Author Events API manual event path
+  fireEvent.change(screen.getByLabelText('Integration'), { target: { value: 'EVENTS_API' } });
+  fireEvent.change(screen.getByLabelText('Source path'), {
+    target: { value: 'payload.custom_details.environment' },
+  });
+  fireEvent.change(screen.getByLabelText('Field label'), {
+    target: { value: 'Deployment Env' },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+  await waitFor(() => expect(savedSnapshot).not.toBeNull());
+  expect(savedSnapshot!.fields).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        key: 'deployment_env',
+        mappings: [
+          expect.objectContaining({
+            source: 'EVENT',
+            integrationType: undefined,
+            path: 'payload.custom_details.environment',
+          }),
+        ],
+      }),
+    ])
+  );
+});
+
+it('unifies duplicate-key validation with automatic key generation (preview shows _2 without error)', async () => {
+  const existingField = {
+    fieldId: 'f1',
+    key: 'environment',
+    label: 'Environment',
+    type: 'STRING' as const,
+    caseSensitive: false,
+    displayOnly: false,
+    aliases: {},
+    mappings: [{ source: 'EVENT' as const, path: 'payload.custom_details.environment' }],
+  };
+
+  const testData = {
+    ...data,
+    draft: {
+      snapshot: {
+        schemaVersion: 1,
+        fields: [existingField],
+        rules: [],
+      },
+      revision: 1,
+    },
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // Field label defaults to "Environment"
+  await screen.findByLabelText('Field label');
+
+  // Preview should display automation.environment_2 and NOT show duplicate error
+  expect(screen.getByText(/automation\.environment_2/)).toBeInTheDocument();
+  expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
+});
+
+it('changing integration dropdown reconciles and resets stale field-selection metadata', async () => {
+  const testData = {
+    ...data,
+    integrations: [
+      { id: 'gh-1', name: 'GitHub', type: 'GITHUB' },
+      { id: 'cw-1', name: 'CloudWatch', type: 'CLOUDWATCH' },
+    ],
+    observations: [
+      {
+        fieldKey: 'repository_name',
+        sourcePath: 'repository.name',
+        fieldType: 'STRING',
+        integrationType: 'GITHUB',
+      },
+    ],
+  };
+  api.area.mockResolvedValue(testData);
+
+  render(<AutomationWorkspace serviceId="service-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+
+  // Switch to GITHUB integration
+  const integrationSelect = await screen.findByLabelText('Integration');
+  fireEvent.change(integrationSelect, { target: { value: 'GITHUB' } });
+
+  // Select the GITHUB observed field
+  const observedSelect = screen.getByLabelText('Observed field') as HTMLSelectElement;
+  fireEvent.change(observedSelect, { target: { value: 'GITHUB:PROVIDER:repository.name' } });
+  expect(observedSelect.value).toBe('GITHUB:PROVIDER:repository.name');
+
+  // Now change integration to CLOUDWATCH
+  fireEvent.change(integrationSelect, { target: { value: 'CLOUDWATCH' } });
+
+  // The observed field selection should be cleared/reset rather than retaining stale GITHUB metadata
+  expect(observedSelect.value).toBe('');
+});

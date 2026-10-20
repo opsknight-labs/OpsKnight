@@ -127,7 +127,6 @@ export default function AutomationWorkspace({
 
   const load = useCallback(
     async (nextArea: Area) => {
-      setError('');
       try {
         const next = await getAutomationArea(serviceId, nextArea, activityPage);
         if (
@@ -140,6 +139,7 @@ export default function AutomationWorkspace({
         receiveServerDraft(next.draft, DRAFT_AREAS.includes(nextArea));
         setAreaData(previous => ({ ...previous, [nextArea]: next }));
         setLatest(next);
+        setError('');
         return next;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load automation');
@@ -147,10 +147,33 @@ export default function AutomationWorkspace({
     },
     [serviceId, activityPage, receiveServerDraft]
   );
+
   useEffect(() => {
-    // Fetches the selected area from the server; state is set when the request resolves.
-    void load(area);
-  }, [area, load]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await getAutomationArea(serviceId, area, activityPage);
+        if (cancelled) return;
+        if (
+          next.activeVersion?.snapshot &&
+          !snapshotSchema.safeParse(next.activeVersion.snapshot).success
+        )
+          throw new Error(
+            `Version ${next.activeVersion.versionNumber} failed integrity validation and cannot be rendered`
+          );
+        receiveServerDraft(next.draft, DRAFT_AREAS.includes(area));
+        setAreaData(previous => ({ ...previous, [area]: next }));
+        setLatest(next);
+        setError('');
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Could not load automation');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [area, serviceId, activityPage, receiveServerDraft]);
 
   const command = useCallback(
     async (

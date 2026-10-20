@@ -16,7 +16,7 @@ import {
 } from './authoring/primitives';
 import { useStableCallback } from './authoring/hooks';
 import {
-  deriveFieldKey,
+  deriveUniqueFieldKey,
   FieldCatalogRow,
   FieldDetail,
   newFieldProblems,
@@ -95,9 +95,12 @@ export function AutomationContext({
   setProviderSample: (value: string) => void;
   analyze: () => Promise<void>;
 }) {
-  const [internalSource, setInternalSource] = useState<'PROVIDER' | 'EVENT'>('EVENT');
+  const [internalSource, setInternalSource] = useState<'PROVIDER' | 'EVENT' | undefined>(undefined);
   const [internalIntType, setInternalIntType] = useState<string | undefined>(undefined);
-  const effectiveSource = selectedSource ?? internalSource;
+  const effectiveSource: 'PROVIDER' | 'EVENT' =
+    selectedSource ??
+    internalSource ??
+    (observedPath.startsWith('payload.') ? 'EVENT' : 'PROVIDER');
   const setSource = setSelectedSource ?? setInternalSource;
   const effectiveIntType = selectedIntegrationType ?? internalIntType;
   const setIntType = setSelectedIntegrationType ?? setInternalIntType;
@@ -129,7 +132,10 @@ export function AutomationContext({
 
     for (const o of data.observations) {
       if (integrationType !== 'ALL' && o.integrationType !== integrationType) continue;
-      const compositeId = `${o.integrationType}:PROVIDER:${o.sourcePath}`;
+      const source: 'PROVIDER' | 'EVENT' = o.sourcePath.startsWith('payload.')
+        ? 'EVENT'
+        : 'PROVIDER';
+      const compositeId = `${o.integrationType}:${source}:${o.sourcePath}`;
       if (seen.has(compositeId)) continue;
       seen.add(compositeId);
       list.push({
@@ -138,7 +144,7 @@ export function AutomationContext({
         key: o.fieldKey,
         label: formatHierarchicalLabel(o.sourcePath),
         integrationType: o.integrationType,
-        source: 'PROVIDER',
+        source,
         type: o.fieldType,
       });
     }
@@ -171,7 +177,7 @@ export function AutomationContext({
     () => new Set([...builtinFields, ...draft.fields].map(field => field.key)),
     [draft.fields]
   );
-  const newKey = deriveFieldKey(fieldLabel);
+  const newKey = deriveUniqueFieldKey(fieldLabel, existingKeys);
   const problems = newFieldProblems({
     label: fieldLabel,
     key: newKey,
@@ -390,16 +396,38 @@ export function AutomationContext({
                     Advanced mapping
                   </Button>
                   {advanced && (
-                    <div id={`${formId}-advanced`} className="mt-2 space-y-1.5">
-                      <Label htmlFor={`${formId}-path`}>Source path</Label>
-                      <Input
-                        id={`${formId}-path`}
-                        className="font-mono"
-                        placeholder="payload.custom_details.environment"
-                        value={observedPath}
-                        onChange={e => setObservedPath(e.target.value)}
-                      />
-                      <Hint>Dot-separated path into the event or provider payload.</Hint>
+                    <div id={`${formId}-advanced`} className="mt-2 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`${formId}-source-type`}>Payload source</Label>
+                        <NativeSelect
+                          id={`${formId}-source-type`}
+                          value={effectiveSource}
+                          onChange={e => setSource(e.target.value as 'PROVIDER' | 'EVENT')}
+                        >
+                          <option value="EVENT">Normalized event (payload.*)</option>
+                          <option value="PROVIDER">Raw provider webhook</option>
+                        </NativeSelect>
+                        <Hint>
+                          {effectiveSource === 'EVENT'
+                            ? 'Extracted from OpsKnight standardized event payload (e.g. payload.custom_details.*)'
+                            : 'Extracted directly from incoming third-party provider webhook body'}
+                        </Hint>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`${formId}-path`}>Source path</Label>
+                        <Input
+                          id={`${formId}-path`}
+                          className="font-mono"
+                          placeholder={
+                            effectiveSource === 'EVENT'
+                              ? 'payload.custom_details.environment'
+                              : 'repository.full_name'
+                          }
+                          value={observedPath}
+                          onChange={e => setObservedPath(e.target.value)}
+                        />
+                        <Hint>Dot-separated path into the event or provider payload.</Hint>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -524,7 +552,9 @@ export function AutomationContext({
               <ul aria-label="Discovered context fields" className="space-y-2">
                 {discoveries.map(field => {
                   const hierarchical = field.label ?? formatHierarchicalLabel(field.path);
-                  const chosen = observedPath === field.path;
+                  const fieldCompositeId = `${field.integrationType ?? 'ALL'}:${field.source ?? 'PROVIDER'}:${field.path}`;
+                  const currentCompositeId = `${effectiveIntType ?? 'ALL'}:${effectiveSource}:${observedPath}`;
+                  const chosen = Boolean(observedPath) && fieldCompositeId === currentCompositeId;
                   return (
                     <li
                       key={`${field.integrationType ?? 'ALL'}:${field.source ?? 'PROVIDER'}:${field.path}`}

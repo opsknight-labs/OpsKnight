@@ -14,6 +14,11 @@ import { evaluateAutomation } from '@/lib/automation/evaluator';
 import { compilePath, readCompiledPath } from '@/lib/automation/context/extract';
 import { discoverFields } from '@/lib/automation/discovery';
 import { jobSchema } from '@/lib/automation/jobs';
+import {
+  persistAutomation,
+  type IntegrationEventEnvelope,
+  type RuntimeEvaluation,
+} from '@/lib/automation/runtime';
 describe('automation semantics', () => {
   for (const result of goldenResults())
     it(`golden pipeline: ${result.name}`, () => expect(result.actual).toBe(result.expected));
@@ -167,6 +172,110 @@ describe('automation semantics', () => {
       observations: discovered.map(o => ({ ...o, label: 'Invalid Label' })),
     };
     expect(jobSchema.safeParse(invalidPayload).success).toBe(false);
+  });
+
+  it('validates actual runtime-created payload from persistAutomation against jobSchema', async () => {
+    let persistedJobData: { payload: unknown } | null = null;
+    const mockTx = {
+      backgroundJob: {
+        create: vi.fn(async ({ data }: { data: { payload: unknown } }) => {
+          persistedJobData = data;
+          return { id: 'job-1' };
+        }),
+      },
+      incidentAutomationDecision: { create: vi.fn(async () => ({})) },
+      automationTrace: { create: vi.fn(async () => ({})) },
+      tag: { createMany: vi.fn(), findMany: vi.fn(async () => []) },
+      incidentTag: { createMany: vi.fn() },
+      service: { findUnique: vi.fn(async () => ({ escalationPolicyId: 'p-1' })) },
+    };
+
+    const envelope: IntegrationEventEnvelope = {
+      serviceId: 'srv-omega',
+      integrationId: 'int-gh-42',
+      integrationType: 'GITHUB',
+      event: {
+        event_action: 'trigger',
+        dedup_key: 'alert-1',
+        payload: {
+          summary: 'CI run failed',
+          source: 'github-actions',
+          severity: 'error',
+          custom_details: { environment: 'production' },
+        },
+      },
+      providerPayload: {
+        repository: { name: 'opsknight', full_name: 'opsknight-labs/opsknight' },
+        workflow_run: { id: 123456 },
+      },
+      receivedAt: new Date('2026-10-20T10:00:00Z'),
+    };
+
+    const runtime: RuntimeEvaluation = {
+      mode: 'SHADOW',
+      versionId: 'ver-1',
+      versionNumber: 1,
+      contextFields: [],
+      evaluationAt: new Date('2026-10-20T10:00:01Z'),
+      durationMs: 10,
+      extractionMs: 2,
+      versionLoadMs: 2,
+      evaluatorMs: 3,
+      policyLookupMs: 1,
+      responderSnapshotMs: 0,
+      result: null,
+      fallbackReason: null,
+      shadowDifferent: false,
+      basePriority: null,
+      finalPriority: null,
+      policyId: null,
+      policyName: null,
+      normalization: [],
+      observations: [
+        {
+          key: 'repository_name',
+          path: 'repository.name',
+          value: 'opsknight',
+          type: 'STRING',
+          unmapped: false,
+        },
+        {
+          key: 'workflow_id',
+          path: 'workflow_run.id',
+          value: '123456',
+          type: 'NUMBER',
+          unmapped: false,
+        },
+      ],
+    };
+
+    await persistAutomation(
+      mockTx as unknown as Parameters<typeof persistAutomation>[0],
+      'inc-abc',
+      envelope,
+      runtime
+    );
+
+    expect(mockTx.backgroundJob.create).toHaveBeenCalled();
+    expect(persistedJobData).not.toBeNull();
+    const payload = persistedJobData!.payload;
+
+    // Validate that the actual payload matches the strict jobSchema
+    const parseResult = jobSchema.safeParse(payload);
+    expect(parseResult.success).toBe(true);
+    if (parseResult.success && parseResult.data.task === 'AUTOMATION_OBSERVE') {
+      expect(parseResult.data.integrationType).toBe('GITHUB');
+      expect(parseResult.data.serviceId).toBe('srv-omega');
+      expect(parseResult.data.integrationId).toBe('int-gh-42');
+      expect(parseResult.data.observations).toHaveLength(2);
+      expect(parseResult.data.observations[0]).toEqual({
+        key: 'repository_name',
+        path: 'repository.name',
+        value: 'opsknight',
+        type: 'STRING',
+        unmapped: false,
+      });
+    }
   });
   it('preserves fail-safe semantics where missing or unmapped values evaluate to UNKNOWN for NE and NOT_IN', () => {
     const missingState: FieldState = { state: 'MISSING' };

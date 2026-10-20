@@ -26,12 +26,26 @@ export function useContextAuthoring({
   const [fieldLabel, setFieldLabel] = useState('Environment');
   const [fieldType, setFieldType] = useState<Field['type']>('ENUM');
   const [observedPath, setObservedPath] = useState('');
-  const [selectedSource, setSelectedSource] = useState<'PROVIDER' | 'EVENT'>('EVENT');
+  const [selectedSource, setSelectedSource] = useState<'PROVIDER' | 'EVENT' | undefined>(undefined);
   const [selectedIntegrationType, setSelectedIntegrationType] = useState<string | undefined>(
     undefined
   );
   const [values, setValues] = useState<string[]>(['production', 'staging', 'development']);
   const [advanced, setAdvanced] = useState(false);
+
+  const handleIntegrationTypeChange = useCallback(
+    (nextType: string) => {
+      setIntegrationType(nextType);
+      if (selectedIntegrationType && selectedIntegrationType !== nextType && nextType !== 'ALL') {
+        setObservedPath('');
+        setSelectedSource(undefined);
+        setSelectedIntegrationType(undefined);
+      } else if (nextType !== 'ALL') {
+        setSelectedIntegrationType(nextType);
+      }
+    },
+    [selectedIntegrationType]
+  );
 
   const analyze = useCallback(async () => {
     try {
@@ -117,7 +131,7 @@ export function useContextAuthoring({
     providerSample,
     setProviderSample,
     integrationType,
-    setIntegrationType,
+    setIntegrationType: handleIntegrationTypeChange,
     discoveries,
     setDiscoveries,
     fieldLabel,
