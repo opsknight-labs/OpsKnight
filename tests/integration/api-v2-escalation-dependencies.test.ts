@@ -4,6 +4,8 @@ import { GET } from '@/app/api/v2/escalation-policies/[id]/dependencies/route';
 import { DELETE } from '@/app/api/v2/escalation-policies/[id]/route';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 import { createTestEscalationPolicy, createTestService, createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
+import { emptySnapshot } from '@/lib/automation/contract';
+import { saveDraft, publishVersion } from '@/lib/automation/versioning';
 
 function deletePolicy(token: string, id: string) {
   return DELETE(new NextRequest(`http://localhost/api/v2/escalation-policies/${id}`, {
@@ -80,6 +82,34 @@ it('serializes deletion with a concurrent service assignment', async () => {
   expect((await deletion).status).toBe(409);
   expect((await testPrisma.service.findUnique({ where: { id: service.id } }))?.escalationPolicyId).toBe(policy.id);
 }, 15_000);
+
+it('keeps a policy protected after its service is reassigned when published automation still references it', async () => {
+  const manager = await createV2Credential(['escalation-policies:read', 'escalation-policies:write']);
+  const policy = await createTestEscalationPolicy('historical reference', []);
+  const service = await createTestService('Historical policy service', null, { escalationPolicyId: policy.id });
+  const draft = await saveDraft({
+    serviceId: service.id,
+    actorId: manager.user.id,
+    snapshot: {
+      ...emptySnapshot,
+      rules: [{
+        id: 'route-history', name: 'Historical route', phase: 'ROUTE', enabled: true,
+        conditions: [], actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+      }],
+    },
+    expectedRevision: 0,
+  });
+  await publishVersion({
+    serviceId: service.id,
+    actorId: manager.user.id,
+    expectedRevision: draft.revision,
+    expectedActiveVersionId: null,
+  });
+  await testPrisma.service.update({ where: { id: service.id }, data: { escalationPolicyId: null } });
+  const response = await invokeV2(GET, manager.token, 'GET', `/escalation-policies/${policy.id}/dependencies`, { id: policy.id });
+  expect((await response.json()).data).toMatchObject({ deletionAllowed: false, usage: { services: 0, versionRefs: 1 } });
+  expect((await deletePolicy(manager.token, policy.id)).status).toBe(409);
+});
 
 it('denies credentials without escalation read permission', async () => {
   const other = await createV2Credential(['services:read']);
