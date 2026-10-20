@@ -926,6 +926,39 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/services/{id}/notification-settings': {
+        get: {
+          tags: ['Services'],
+          summary: 'Read service notification policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Service notification policy' } },
+        },
+        patch: {
+          tags: ['Services'],
+          summary: 'Update service notification policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    serviceNotificationChannels: { type: 'array', uniqueItems: true, maxItems: 7, items: { type: 'string', enum: ['SLACK', 'WEBHOOK', 'EMAIL', 'SMS', 'PUSH', 'WHATSAPP', 'MICROSOFT_TEAMS'] } },
+                    serviceNotifyOnTriggered: { type: 'boolean' },
+                    serviceNotifyOnAck: { type: 'boolean' },
+                    serviceNotifyOnResolved: { type: 'boolean' },
+                    serviceNotifyOnSlaBreach: { type: 'boolean' },
+                  },
+                  minProperties: 1,
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Updated service notification policy' } },
+        },
+      },
       '/teams': {
         get: {
           tags: ['Teams'],

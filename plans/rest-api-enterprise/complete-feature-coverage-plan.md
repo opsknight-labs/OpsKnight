@@ -529,13 +529,13 @@ OpsKnight has a substantial notification control plane:
 - `src/app/api/settings/notifications/route.ts`
 - `src/app/api/admin/notifications/providers/[key]/test/route.ts`
 
-REST v2 now exposes notification history, failed-delivery retry, self-service channel preferences, safe provider configuration, provider readiness, redacted diagnostics, durable idempotent test intents and VAPID rotation. Service-specific notification policy, runtime capacity administration, delivery feedback and the remaining operational recovery surface are still separate gaps tracked in the workflow inventory.
+REST v2 now exposes notification history, failed-delivery retry, self-service channel preferences, safe provider configuration, provider readiness, redacted diagnostics, durable idempotent test intents, VAPID rotation and service-specific notification channel/event settings. Service policy updates use the Service revision, durable replay and canonical audit; disabling Slack also disables active service Slack destinations in the same transaction. Runtime capacity administration, delivery feedback and the remaining operational recovery surface are still separate gaps tracked in the workflow inventory.
 
 ### A. Proposed endpoints
 
 | Method    | Endpoint                                         | Function                                      |
 | --------- | ------------------------------------------------ | --------------------------------------------- |
-| GET/PATCH | `/services/{id}/notification-settings`           | Service-specific notification settings        |
+| GET/PATCH | `/services/{id}/notification-settings`           | Service-specific notification settings (implemented) |
 | GET/PATCH | `/users/me/notification-preferences`             | Self-service channel preferences              |
 | GET/PUT   | `/notification-providers/{provider}`             | Safe provider configuration and revision      |
 | GET       | `/notification-providers`                        | Configured providers and readiness            |

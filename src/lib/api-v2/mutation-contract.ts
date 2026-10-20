@@ -617,6 +617,13 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'DELETE /api/v2/teams/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/services': supported('Creation.'),
   'PATCH /api/v2/services/[id]': natural('Sets fields to the requested values.', 'etag'),
+  'PATCH /api/v2/services/[id]/notification-settings': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'An exact Service revision fences policy changes. Notification flags, Slack destination disabling, attributed audit and replay receipt commit atomically.',
+  },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
   'PATCH /api/v2/schedules/[id]': natural('Sets fields to the requested values.', 'etag'),

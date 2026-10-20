@@ -182,6 +182,22 @@ const extraSchemas: Json = {
     },
     required: ['schedule', 'start', 'end', 'shifts', 'gaps'],
   },
+  ServiceNotificationSettings: {
+    type: 'object',
+    properties: {
+      serviceId: { type: 'string' },
+      revision: { type: 'integer' },
+      serviceNotificationChannels: {
+        type: 'array',
+        items: { type: 'string', enum: ['SLACK', 'WEBHOOK', 'EMAIL', 'SMS', 'PUSH', 'WHATSAPP', 'MICROSOFT_TEAMS'] },
+      },
+      serviceNotifyOnTriggered: { type: 'boolean' },
+      serviceNotifyOnAck: { type: 'boolean' },
+      serviceNotifyOnResolved: { type: 'boolean' },
+      serviceNotifyOnSlaBreach: { type: 'boolean' },
+    },
+    required: ['serviceId', 'revision', 'serviceNotificationChannels', 'serviceNotifyOnTriggered', 'serviceNotifyOnAck', 'serviceNotifyOnResolved', 'serviceNotifyOnSlaBreach'],
+  },
   RunbookExecutionStarted: {
     type: 'object',
     properties: {

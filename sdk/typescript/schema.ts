@@ -131,6 +131,7 @@ export type ScheduleOnCall = { "schedule": { "id"?: string; "name"?: string; "ti
 export type ScheduleOverride = { "id": string; "scheduleId": string; "userId": string; "replacesUserId"?: string | null; "startDate": string; "endDate": string; "createdAt"?: string } & Record<string, unknown>;
 export type ScheduleOverrideCancellation = { "id": string; "cancelled": true } & Record<string, unknown>;
 export type ScheduleCoverage = { "schedule": { "id": string; "name": string; "timeZone": string; "revision": number } & Record<string, unknown>; "start": string; "end": string; "shifts": Array<{ "userId": string; "start": string; "end": string } & Record<string, unknown>>; "gaps": Array<{ "start": string; "end": string } & Record<string, unknown>> } & Record<string, unknown>;
+export type ServiceNotificationSettings = { "serviceId": string; "revision": number; "serviceNotificationChannels": Array<"SLACK" | "WEBHOOK" | "EMAIL" | "SMS" | "PUSH" | "WHATSAPP" | "MICROSOFT_TEAMS">; "serviceNotifyOnTriggered": boolean; "serviceNotifyOnAck": boolean; "serviceNotifyOnResolved": boolean; "serviceNotifyOnSlaBreach": boolean } & Record<string, unknown>;
 export type RunbookExecutionStarted = { "executionId": string; "status": string; "runbookId": string; "incidentId"?: string | null; "serviceId"?: string | null; "message"?: string } & Record<string, unknown>;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
@@ -341,6 +342,8 @@ export interface OperationRequests {
   listServiceAccounts: { "query"?: { "limit"?: number; "cursor"?: string } };
   createServiceAccount: { "headers"?: { "Idempotency-Key"?: string }; "body": { "name": string; "role"?: string; "description"?: string; "teamIds"?: Array<string> } & Record<string, unknown> };
   getService: { "params": { "id": string } };
+  getServiceNotificationSettings: { "params": { "id": string } };
+  updateServiceNotificationSettings: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "serviceNotificationChannels"?: Array<"SLACK" | "WEBHOOK" | "EMAIL" | "SMS" | "PUSH" | "WHATSAPP" | "MICROSOFT_TEAMS">; "serviceNotifyOnTriggered"?: boolean; "serviceNotifyOnAck"?: boolean; "serviceNotifyOnResolved"?: boolean; "serviceNotifyOnSlaBreach"?: boolean } };
   updateService: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "description"?: string | null; "teamId"?: string; "escalationPolicyId"?: string; "status"?: "OPERATIONAL" | "DEGRADED" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "MAINTENANCE" } & Record<string, unknown> };
   deleteService: { "params": { "id": string } };
   listServices: { "query"?: { "limit"?: number; "cursor"?: string; "teamId"?: string; "status"?: "OPERATIONAL" | "DEGRADED" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "MAINTENANCE"; "search"?: string } };
@@ -566,6 +569,8 @@ export interface OperationResponses {
   listServiceAccounts: { "data": Array<ServiceAccount>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createServiceAccount: { "data": ServiceAccount; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getService: { "data": Service; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getServiceNotificationSettings: { "data": ServiceNotificationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateServiceNotificationSettings: { "data": ServiceNotificationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateService: { "data": Service; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteService: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServices: { "data": Array<Service>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2449,6 +2454,25 @@ export const OPERATIONS = {
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
+  },
+  "getServiceNotificationSettings": {
+    "method": "GET",
+    "path": "/services/{id}/notification-settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceNotificationSettings": {
+    "method": "PATCH",
+    "path": "/services/{id}/notification-settings",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
   },
   "updateService": {
     "method": "PATCH",
