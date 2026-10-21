@@ -145,6 +145,8 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
+export type CustomFieldDefinition = { "id": string; "revision": number; "name": string; "key": string; "type": "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN" | "URL" | "EMAIL"; "required": boolean; "defaultValue"?: string | null; "options"?: Array<string> | null; "order": number; "showInList": boolean; "usageCount"?: number } & Record<string, unknown>;
+export type CustomFieldDefinitionCollection = { "fields": Array<CustomFieldDefinition>; "nextCursor": string | null } & Record<string, unknown>;
 export type AuditExport = { "id": string; "status": string; "createdAt": string; "expiresAt": string; "filter": Record<string, unknown>; "checksum"?: string | null; "sizeBytes"?: number | null; "recordCount"?: number | null } & Record<string, unknown>;
 export type PostmortemVersionCollection = { "postmortemId": string; "currentRevision": number; "versions": Array<{ "revision": number; "createdAt": string; "snapshot": Record<string, unknown> } & Record<string, unknown>>; "nextBeforeRevision": number | null } & Record<string, unknown>;
 export type PostmortemContributors = { "postmortemId": string; "revision": number; "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR"; "name": string } & Record<string, unknown>> } & Record<string, unknown>;
@@ -188,6 +190,11 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  listCustomFieldDefinitions: Record<string, never>;
+  createCustomFieldDefinition: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "key": string; "type": string; "required"?: boolean; "defaultValue"?: string | null; "options"?: Array<string> | null; "showInList"?: boolean } };
+  getCustomFieldDefinition: { "params": { "id": string } };
+  updateCustomFieldDefinition: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "required"?: boolean; "defaultValue"?: string | null; "options"?: Array<string> | null; "showInList"?: boolean; "order"?: number } };
+  deleteCustomFieldDefinition: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
   createAuditExport: { "headers": { "Idempotency-Key": string }; "body": { "from": string; "to": string; "action"?: string; "entityType"?: string; "entityId"?: string; "actorId"?: string; "maxRecords"?: number } };
   getAuditExport: { "params": { "id": string } };
   downloadAuditExport: { "params": { "id": string } };
@@ -494,6 +501,11 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  listCustomFieldDefinitions: { "data": CustomFieldDefinitionCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createCustomFieldDefinition: { "data": CustomFieldDefinition; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getCustomFieldDefinition: { "data": CustomFieldDefinition; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateCustomFieldDefinition: { "data": CustomFieldDefinition; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteCustomFieldDefinition: null;
   createAuditExport: { "data": AuditExport; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getAuditExport: { "data": AuditExport; "requestId": string; "timestamp": string } & Record<string, unknown>;
   downloadAuditExport: Uint8Array;
@@ -800,6 +812,54 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "listCustomFieldDefinitions": {
+    "method": "GET",
+    "path": "/custom-fields",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createCustomFieldDefinition": {
+    "method": "POST",
+    "path": "/custom-fields",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getCustomFieldDefinition": {
+    "method": "GET",
+    "path": "/custom-fields/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateCustomFieldDefinition": {
+    "method": "PATCH",
+    "path": "/custom-fields/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteCustomFieldDefinition": {
+    "method": "DELETE",
+    "path": "/custom-fields/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "createAuditExport": {
     "method": "POST",
     "path": "/audit-exports",

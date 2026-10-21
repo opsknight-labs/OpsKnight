@@ -51,6 +51,22 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  CustomFieldDefinition: {
+    type: 'object', properties: {
+      id: { type: 'string' }, revision: { type: 'integer' }, name: { type: 'string' },
+      key: { type: 'string' }, type: { type: 'string', enum: ['TEXT', 'NUMBER', 'DATE', 'SELECT', 'BOOLEAN', 'URL', 'EMAIL'] },
+      required: { type: 'boolean' }, defaultValue: { type: ['string', 'null'] },
+      options: { type: ['array', 'null'], items: { type: 'string' } },
+      order: { type: 'integer' }, showInList: { type: 'boolean' },
+      usageCount: { type: 'integer' },
+    }, required: ['id', 'revision', 'name', 'key', 'type', 'required', 'order', 'showInList'],
+  },
+  CustomFieldDefinitionCollection: {
+    type: 'object', properties: {
+      fields: { type: 'array', maxItems: 100, items: { $ref: '#/components/schemas/CustomFieldDefinition' } },
+      nextCursor: { type: ['string', 'null'] },
+    }, required: ['fields', 'nextCursor'],
+  },
   AuditExport: {
     type: 'object', properties: {
       id: { type: 'string' }, status: { type: 'string' },

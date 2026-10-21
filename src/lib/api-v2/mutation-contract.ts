@@ -51,6 +51,18 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/custom-fields': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Shared order lock serializes creation; strict type/default validation, definition, audit and replay receipt commit atomically.',
+  },
+  'PATCH /api/v2/custom-fields/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Exact database revision fences edits; current dependency values are checked before update, audit and replay receipt commit.',
+  },
+  'DELETE /api/v2/custom-fields/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
+    rationale: 'Exact revision fences deletion; populated fields cannot be deleted and audit commits with the replay receipt.',
+  },
   'POST /api/v2/audit-exports': {
     idempotency: 'required', concurrency: 'none',
     rationale: 'Dedicated audit export authority, bounded immutable filter, queue job, owner, request audit and replay receipt commit together.',

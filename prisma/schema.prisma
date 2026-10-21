@@ -2557,6 +2557,7 @@ model StatusPageWebhook {
 
 model CustomField {
   id           String             @id @default(cuid())
+  revision     Int                @default(dbgenerated("1"))
   name         String
   key          String             @unique
   type         CustomFieldType

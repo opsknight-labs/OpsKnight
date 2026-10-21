@@ -474,8 +474,8 @@ const decisions: readonly ApiCapability[] = [
     title: 'SLA, custom-field definitions, ChatOps and preferences',
     status: 'partial',
     explanation:
-      'Workspace SLA policies now share the UI versioned command with scoped, revision-protected REST reads and writes. Custom-field definitions, ChatOps and remaining preferences still require dedicated contracts.',
-    operationIds: ['getWorkspaceSlaPolicy', 'updateWorkspaceSlaPolicy'],
+      'Workspace SLA policies use shared UI/REST versioned commands. Custom-field definitions have strict typed creation, usage-aware reads and revision-protected edits/deletion; populated fields cannot be deleted. ChatOps and remaining preferences still require dedicated contracts and combined UI/REST certification.',
+    operationIds: ['getWorkspaceSlaPolicy', 'updateWorkspaceSlaPolicy', 'listCustomFieldDefinitions', 'createCustomFieldDefinition', 'getCustomFieldDefinition', 'updateCustomFieldDefinition', 'deleteCustomFieldDefinition'],
   },
   {
     id: 'sensitive-maintenance',

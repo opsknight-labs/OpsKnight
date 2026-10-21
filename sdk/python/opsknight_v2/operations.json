@@ -1,4 +1,52 @@
 {
+  "listCustomFieldDefinitions": {
+    "method": "GET",
+    "path": "/custom-fields",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createCustomFieldDefinition": {
+    "method": "POST",
+    "path": "/custom-fields",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getCustomFieldDefinition": {
+    "method": "GET",
+    "path": "/custom-fields/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateCustomFieldDefinition": {
+    "method": "PATCH",
+    "path": "/custom-fields/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteCustomFieldDefinition": {
+    "method": "DELETE",
+    "path": "/custom-fields/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "createAuditExport": {
     "method": "POST",
     "path": "/audit-exports",

@@ -1235,6 +1235,21 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  { method: 'get', path: '/custom-fields', summary: 'Page through incident custom-field definitions and usage counts' },
+  { method: 'get', path: '/custom-fields/{id}', summary: 'Read one custom-field definition and exact revision' },
+  { method: 'post', path: '/custom-fields', summary: 'Create a validated incident custom-field definition',
+    description: 'Requires administrator capability, custom-fields:write, and Idempotency-Key. SELECT options are bounded and unique; the default must match its type.',
+    body: object({ name: string(200), key: string(100), type: { type: 'string' },
+      required: { type: 'boolean' }, defaultValue: { type: ['string', 'null'] },
+      options: { type: ['array', 'null'], items: { type: 'string' }, maxItems: 50 },
+      showInList: { type: 'boolean' } }, ['name', 'key', 'type']), status: 201 },
+  { method: 'patch', path: '/custom-fields/{id}', summary: 'Update a custom-field definition with exact revision',
+    description: 'Rejects SELECT options that would invalidate persisted incident values. Requires If-Match and Idempotency-Key.',
+    body: object({ name: string(200), required: { type: 'boolean' },
+      defaultValue: { type: ['string', 'null'] }, options: { type: ['array', 'null'], items: { type: 'string' }, maxItems: 50 },
+      showInList: { type: 'boolean' }, order: { type: 'integer', minimum: 0, maximum: 10000 } }, []) },
+  { method: 'delete', path: '/custom-fields/{id}', summary: 'Delete an unused custom-field definition',
+    description: 'Rejects deletion while incident values still depend on the field. Requires exact If-Match and Idempotency-Key.' },
   {
     method: 'post', path: '/audit-exports',
     summary: 'Request a bounded redacted audit evidence export',

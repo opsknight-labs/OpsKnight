@@ -29,6 +29,11 @@ const op = (
 ): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
+  op('get', '/custom-fields', 'listCustomFieldDefinitions', 'custom-fields:read', 'item', 'CustomFieldDefinitionCollection'),
+  op('post', '/custom-fields', 'createCustomFieldDefinition', 'custom-fields:write', 'item', 'CustomFieldDefinition'),
+  op('get', '/custom-fields/{id}', 'getCustomFieldDefinition', 'custom-fields:read', 'item', 'CustomFieldDefinition'),
+  op('patch', '/custom-fields/{id}', 'updateCustomFieldDefinition', 'custom-fields:write', 'item', 'CustomFieldDefinition'),
+  op('delete', '/custom-fields/{id}', 'deleteCustomFieldDefinition', 'custom-fields:write', 'none', ''),
   op('post', '/audit-exports', 'createAuditExport', 'audit:export', 'item', 'AuditExport'),
   op('get', '/audit-exports/{id}', 'getAuditExport', 'audit:export', 'item', 'AuditExport'),
   op('get', '/audit-exports/{id}/download', 'downloadAuditExport', 'audit:export', 'binary', ''),

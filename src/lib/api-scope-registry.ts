@@ -471,6 +471,16 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Request and download bounded, redacted audit evidence with integrity verification.',
     { issuableBy: ['ADMIN', 'AUDITOR'], write: true }
   ),
+  [S.CUSTOM_FIELDS_READ]: def(
+    S.CUSTOM_FIELDS_READ, 'Custom-field definitions', 'Administration',
+    'Read administrator-managed incident custom-field definitions and usage counts.',
+    { issuableBy: ADMINS }
+  ),
+  [S.CUSTOM_FIELDS_WRITE]: def(
+    S.CUSTOM_FIELDS_WRITE, 'Custom-field administration', 'Administration',
+    'Create, edit, and safely delete incident custom-field definitions.',
+    { issuableBy: ADMINS, write: true }
+  ),
   [S.REPORTS_READ]: def(
     S.REPORTS_READ,
     'Reports read',

@@ -128,6 +128,8 @@ export const API_SCOPES = {
   RUNBOOKS_PUBLISH: 'runbooks:publish',
   AUDIT_READ: 'audit:read',
   AUDIT_EXPORT: 'audit:export',
+  CUSTOM_FIELDS_READ: 'custom-fields:read',
+  CUSTOM_FIELDS_WRITE: 'custom-fields:write',
   REPORTS_READ: 'reports:read',
   REPORTS_WRITE: 'reports:write',
   SERVICE_OBJECTIVES_READ: 'service-objectives:read',
