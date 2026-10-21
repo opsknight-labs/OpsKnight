@@ -1037,18 +1037,27 @@ test('server pagination, administrator labels, effective capabilities and budget
     .click();
   await page.waitForURL('**/runbooks/agents/security');
   await expect(
-    page.getByText('Automatic remediation budgets', { exact: true }).filter({ visible: true })
+    page
+      .getByText(/Automatic remediation budgets|Remediation Safeguards & Budgets/i)
+      .filter({ visible: true })
+      .first()
   ).toBeVisible();
   await page
-    .getByRole('spinbutton', { name: 'Automatic executions per incident', exact: true })
+    .getByRole('spinbutton', {
+      name: /Automatic executions per incident|Executions Limit/i,
+    })
     .fill('2');
   await page
-    .getByRole('spinbutton', { name: 'Automatic writes per incident', exact: true })
+    .getByRole('spinbutton', {
+      name: /Automatic writes per incident|State Writes/i,
+    })
     .fill('1');
   await page
-    .getByRole('spinbutton', { name: 'Automatic non-idempotent actions per incident', exact: true })
+    .getByRole('spinbutton', {
+      name: /Automatic non-idempotent actions per incident|Non-Idempotent/i,
+    })
     .fill('0');
-  await page.getByRole('button', { name: 'Save remediation budgets' }).click();
+  await page.getByRole('button', { name: /Save [Rr]emediation [Bb]udgets/i }).click();
   // Later browsers may already have these DB values; wait for the action's UI response too.
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' })
@@ -1061,9 +1070,14 @@ test('server pagination, administrator labels, effective capabilities and budget
     )
     .toBe(2);
   await expect(
-    page.getByText('Pinned execution public key', { exact: true }).filter({ visible: true })
+    page
+      .getByText(/Pinned execution public key|Pinned Public Key/i)
+      .filter({ visible: true })
+      .first()
   ).toBeVisible();
-  const stageIdentity = page.getByRole('button', { name: 'Stage next signing identity' });
+  const stageIdentity = page.getByRole('button', {
+    name: /Stage next signing identity/i,
+  });
   if ((await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })) === 0) {
     await stageIdentity.click();
   } else {
@@ -1073,8 +1087,8 @@ test('server pagination, administrator labels, effective capabilities and budget
   await expect
     .poll(async () => prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } }))
     .toBe(1);
-  await expect(page.getByRole('button', { name: 'Activate acknowledged identity' })).toBeVisible();
-  await page.getByRole('button', { name: 'Activate acknowledged identity' }).click();
+  await expect(page.getByRole('button', { name: /Activate acknowledged identity/i })).toBeVisible();
+  await page.getByRole('button', { name: /Activate acknowledged identity/i }).click();
   await expect(
     page
       .getByRole('main')

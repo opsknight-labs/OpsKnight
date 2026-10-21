@@ -159,6 +159,9 @@ export default async function RunbookFleetSecurityPage() {
                 title={
                   <div className="flex items-center gap-2">
                     <span>Remediation Safeguards & Budgets</span>
+                    <span className="text-xs text-muted-foreground font-normal">
+                      · Automatic remediation budgets
+                    </span>
                     <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
                       Circuit Breaker
                     </span>
@@ -176,6 +179,7 @@ export default async function RunbookFleetSecurityPage() {
                     <div className="grid gap-3 sm:grid-cols-3">
                       <BudgetTile
                         label="Executions Limit"
+                        accessibleLabel="Automatic executions per incident"
                         hint="Max automated runs"
                         name="executions"
                         defaultValue={settings?.runbookAutoExecutionsPerIncident ?? 3}
@@ -184,6 +188,7 @@ export default async function RunbookFleetSecurityPage() {
                       />
                       <BudgetTile
                         label="State Writes"
+                        accessibleLabel="Automatic writes per incident"
                         hint="Max mutating steps"
                         name="writes"
                         defaultValue={settings?.runbookAutoWritesPerIncident ?? 3}
@@ -192,6 +197,7 @@ export default async function RunbookFleetSecurityPage() {
                       />
                       <BudgetTile
                         label="Non-Idempotent"
+                        accessibleLabel="Automatic non-idempotent actions per incident"
                         hint="Zero (0) recommended"
                         name="nonIdempotent"
                         defaultValue={settings?.runbookAutoNonIdempotentPerIncident ?? 0}
@@ -213,7 +219,7 @@ export default async function RunbookFleetSecurityPage() {
 
                   <div className="pt-2">
                     <SubmitButton className="w-full h-9 text-xs font-semibold rounded-xl shadow-xs cursor-pointer">
-                      Save Remediation Budgets
+                      Save remediation budgets
                     </SubmitButton>
                   </div>
                 </ActionForm>
@@ -250,6 +256,7 @@ export default async function RunbookFleetSecurityPage() {
 
 function BudgetTile({
   label,
+  accessibleLabel,
   hint,
   name,
   defaultValue,
@@ -258,6 +265,7 @@ function BudgetTile({
   highlightZero = false,
 }: {
   label: string;
+  accessibleLabel?: string;
   hint: string;
   name: string;
   defaultValue: number;
@@ -287,6 +295,7 @@ function BudgetTile({
           min={min}
           max={max}
           defaultValue={defaultValue}
+          aria-label={accessibleLabel ?? label}
           className="h-8 font-semibold tabular-nums text-xs rounded-lg border-border/80 bg-background/80"
         />
       </div>

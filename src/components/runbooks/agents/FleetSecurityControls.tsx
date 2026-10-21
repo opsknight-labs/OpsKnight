@@ -64,7 +64,7 @@ export function ActiveKeyBox({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-foreground">Pinned Public Key</span>
+              <span className="text-xs font-bold text-foreground">Pinned execution public key</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 ACTIVE
@@ -258,7 +258,7 @@ export function SigningKeyList({
             className="h-8 px-3 text-xs font-medium rounded-lg border-border/80 bg-background/80 hover:bg-accent gap-1.5 cursor-pointer shadow-2xs"
           >
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Stage Next Signing Identity
+            Stage next signing identity
           </SubmitButton>
         </ActionForm>
       </div>
@@ -315,7 +315,7 @@ export function SigningKeyList({
                   {key.state === 'NEXT' ? (
                     <>
                       <Check className="h-3.5 w-3.5 mr-1" />
-                      Activate Acknowledged Identity
+                      Activate acknowledged identity
                     </>
                   ) : (
                     <>
