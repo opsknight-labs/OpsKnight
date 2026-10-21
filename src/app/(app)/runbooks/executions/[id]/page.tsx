@@ -399,28 +399,40 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       )}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <SectionCard
-          icon={Layers}
-          title="Steps"
-          description="In execution order, including prechecks, approvals and verification. Output and attempt details expand per step."
-          actions={
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {completedSteps} of {totalSteps} complete
-            </span>
-          }
-        >
-          <ExecutionStepTimeline
-            executionId={execution.id}
-            runbookName={runbookName}
-            steps={timelineSteps}
-            canApprove={canApprove}
-            canDownloadArtifacts={permissions.capabilities.includes(
-              CAPABILITIES.RUNBOOK_ARTIFACT_DOWNLOAD
-            )}
-            targetLabel={targetLabel}
-            versionLabel={versionLabel}
-          />
-        </SectionCard>
+        <div className="min-w-0 space-y-5">
+          <SectionCard
+            icon={Layers}
+            title="Steps"
+            description="In execution order, including prechecks, approvals and verification. Output and attempt details expand per step."
+            actions={
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {completedSteps} of {totalSteps} complete
+              </span>
+            }
+          >
+            <ExecutionStepTimeline
+              executionId={execution.id}
+              runbookName={runbookName}
+              steps={timelineSteps}
+              canApprove={canApprove}
+              canDownloadArtifacts={permissions.capabilities.includes(
+                CAPABILITIES.RUNBOOK_ARTIFACT_DOWNLOAD
+              )}
+              targetLabel={targetLabel}
+              versionLabel={versionLabel}
+            />
+          </SectionCard>
+
+          {!isActive && (
+            <div id="rerun" className="scroll-mt-40">
+              <ExecutionRerunPanel
+                executionId={execution.id}
+                blockedReason={rerunBlockedReason}
+                canExecute={canExecute}
+              />
+            </div>
+          )}
+        </div>
 
         <aside className="space-y-5">
           <SectionCard title="Details">
@@ -510,16 +522,6 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               ]}
             />
           </SectionCard>
-
-          {!isActive && (
-            <div id="rerun" className="scroll-mt-40">
-              <ExecutionRerunPanel
-                executionId={execution.id}
-                blockedReason={rerunBlockedReason}
-                canExecute={canExecute}
-              />
-            </div>
-          )}
         </aside>
       </div>
     </div>
