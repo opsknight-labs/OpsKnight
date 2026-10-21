@@ -88,7 +88,7 @@ export function CreateRunbookDialog({ teams = [] }: { teams?: RunbookTeamOption[
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button className="gap-1.5 shadow-xs font-semibold">
+        <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs">
           <Plus className="h-4 w-4" />
           <span>New Runbook</span>
         </Button>

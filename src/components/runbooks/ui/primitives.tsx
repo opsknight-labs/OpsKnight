@@ -51,7 +51,7 @@ export function SectionCard({
     <section
       id={id}
       className={cn(
-        'scroll-mt-24 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors',
+        'scroll-mt-24 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors overflow-hidden',
         tone === 'danger' && 'border-destructive/40 bg-destructive/[0.02]',
         tone === 'warning' && 'border-amber-500/40 bg-amber-500/[0.02]',
         className
@@ -250,7 +250,7 @@ export function Segmented<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap shrink-0',
               active
                 ? 'bg-background text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'

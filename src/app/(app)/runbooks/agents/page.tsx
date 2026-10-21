@@ -7,12 +7,11 @@ import {
   getRunbookNavigationSummary,
 } from '@/lib/runbooks/presentation/summaries';
 import { resolveEffectiveAgentStatus } from '@/lib/runbooks/presentation/contracts';
-import { AlertTriangle, ArrowRight, Bot, Server } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bot, CheckCircle2, Clock, Server, XCircle } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getAppUrl } from '@/lib/app-url';
-import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import { AgentFleetTable } from '@/components/runbooks/agents/AgentFleetTable';
 import { AgentFilterBar } from '@/components/runbooks/agents/AgentFilterBar';
 import { EnrollAgentSheet } from '@/components/runbooks/agents/EnrollAgentSheet';
@@ -30,31 +29,6 @@ import {
 } from '@/components/runbooks/RunbookPagination';
 
 export const revalidate = 0;
-
-const STATUS_CARDS = [
-  { status: 'ONLINE', key: 'online', label: 'Online', subtext: 'Fresh heartbeat', tone: 'success' },
-  {
-    status: 'DEGRADED',
-    key: 'degraded',
-    label: 'Degraded',
-    subtext: 'Reporting faults',
-    tone: 'warning',
-  },
-  {
-    status: 'OFFLINE',
-    key: 'offline',
-    label: 'Offline',
-    subtext: 'Missed heartbeats',
-    tone: 'danger',
-  },
-  {
-    status: 'ENROLLING',
-    key: 'enrolling',
-    label: 'Enrolling',
-    subtext: 'Awaiting handshake',
-    tone: 'info',
-  },
-] as const;
 
 const ENROLLMENT_STEPS = [
   {
@@ -153,6 +127,45 @@ export default async function RunbookAgentsPage({
   const hasFilters = Object.keys(filterQuery).some(key => key !== 'page');
   const firstEnrollment = fleet.enrolled === 0 && agentTotal === 0 && !hasFilters;
 
+  const fleetStats = [
+    {
+      label: 'Online',
+      value: fleet.online,
+      icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
+      valueClassName: fleet.online > 0 ? 'text-emerald-200 font-bold' : undefined,
+      href: '/runbooks/agents?status=ONLINE',
+      active: filter.status === 'ONLINE' && !attention,
+      subtext: 'Fresh heartbeat',
+    },
+    {
+      label: 'Degraded',
+      value: fleet.degraded,
+      icon: <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />,
+      valueClassName: fleet.degraded > 0 ? 'text-amber-200 font-bold' : undefined,
+      href: '/runbooks/agents?status=DEGRADED',
+      active: filter.status === 'DEGRADED' && !attention,
+      subtext: 'Reporting faults',
+    },
+    {
+      label: 'Offline',
+      value: fleet.offline,
+      icon: <XCircle className="h-3.5 w-3.5 text-rose-200" />,
+      valueClassName: fleet.offline > 0 ? 'text-rose-200 font-bold' : undefined,
+      href: '/runbooks/agents?status=OFFLINE',
+      active: filter.status === 'OFFLINE' && !attention,
+      subtext: 'Missed heartbeats',
+    },
+    {
+      label: 'Enrolling',
+      value: fleet.enrolling,
+      icon: <Bot className="h-3.5 w-3.5 text-sky-200" />,
+      valueClassName: fleet.enrolling > 0 ? 'text-sky-200 font-bold' : undefined,
+      href: '/runbooks/agents?status=ENROLLING',
+      active: filter.status === 'ENROLLING' && !attention,
+      subtext: 'Awaiting handshake',
+    },
+  ];
+
   return (
     <FleetPageShell
       title="Execution Infrastructure"
@@ -160,15 +173,25 @@ export default async function RunbookAgentsPage({
       description={`Outbound-only native Agents, explicit worker pools, and cryptographically isolated credentials. Fleet evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone}).`}
       navigation={navigation}
       canManageSecrets={canManageSecrets}
+      stats={fleetStats}
       actions={
-        canManage ? (
-          <EnrollAgentSheet
-            label="Enroll agent"
-            userTimeZone={userTimeZone}
-            appUrl={appUrl}
-            distribution={distribution}
-          />
-        ) : undefined
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+            title={`Fleet evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone})`}
+          >
+            <Clock className="h-3 w-3 text-slate-400" aria-hidden="true" />
+            {userTimeZone}
+          </span>
+          {canManage && (
+            <EnrollAgentSheet
+              label="Enroll agent"
+              userTimeZone={userTimeZone}
+              appUrl={appUrl}
+              distribution={distribution}
+            />
+          )}
+        </div>
       }
     >
       {firstEnrollment ? (
@@ -210,40 +233,25 @@ export default async function RunbookAgentsPage({
         </SectionCard>
       ) : (
         <>
-          <section aria-label="Fleet health" className="space-y-3">
-            <RunbookMetricStrip
-              stats={STATUS_CARDS.map(card => {
-                const active = filter.status === card.status && !attention;
-                return {
-                  label: card.label,
-                  value: fleet[card.key],
-                  subtext: card.subtext,
-                  tone: fleet[card.key] > 0 ? card.tone : 'default',
-                  active,
-                  href: active ? '/runbooks/agents' : `/runbooks/agents?status=${card.status}`,
-                };
-              })}
-            />
-            {(fleet.deadLetterDepth > 0 || fleet.spoolDepth > 0) && (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Pill tone={fleet.spoolDepth > 0 ? 'info' : 'neutral'}>
-                  <span className="tabular-nums">{fleet.spoolDepth}</span> pending results spooled
-                </Pill>
-                <Pill tone={fleet.deadLetterDepth > 0 ? 'danger' : 'neutral'}>
-                  <span className="tabular-nums">{fleet.deadLetterDepth}</span> dead-letter events
-                </Pill>
-                {fleet.deadLetterDepth > 0 && (
-                  <Link
-                    href="/runbooks/agents?attention=1"
-                    className="inline-flex items-center gap-1 rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Review Agents needing attention
-                    <ArrowRight className="h-3 w-3" aria-hidden="true" />
-                  </Link>
-                )}
-              </div>
-            )}
-          </section>
+          {(fleet.deadLetterDepth > 0 || fleet.spoolDepth > 0) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Pill tone={fleet.spoolDepth > 0 ? 'info' : 'neutral'}>
+                <span className="tabular-nums">{fleet.spoolDepth}</span> pending results spooled
+              </Pill>
+              <Pill tone={fleet.deadLetterDepth > 0 ? 'danger' : 'neutral'}>
+                <span className="tabular-nums">{fleet.deadLetterDepth}</span> dead-letter events
+              </Pill>
+              {fleet.deadLetterDepth > 0 && (
+                <Link
+                  href="/runbooks/agents?attention=1"
+                  className="inline-flex items-center gap-1 rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Review Agents needing attention
+                  <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+          )}
 
           <AgentFilterBar key={JSON.stringify(filterQuery)} query={filterQuery} />
 

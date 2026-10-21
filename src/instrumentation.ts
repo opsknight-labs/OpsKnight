@@ -119,7 +119,11 @@ export async function register() {
       isolatedRunbookWorker: responsibilities.startIsolatedRunbookWorker,
     });
 
-    if (!shutdownHandlersRegistered) {
+    if (
+      typeof process !== 'undefined' &&
+      typeof process.once === 'function' &&
+      !shutdownHandlersRegistered
+    ) {
       shutdownHandlersRegistered = true;
       process.once('SIGTERM', requestShutdown);
       process.once('SIGINT', requestShutdown);

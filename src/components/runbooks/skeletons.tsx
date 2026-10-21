@@ -72,8 +72,8 @@ function ModuleNav() {
 function SubNav() {
   return (
     <div className="flex gap-4 border-b pb-2">
-      {[60, 52, 60, 64].map(width => (
-        <Skeleton key={width} className="h-5" style={{ width }} />
+      {[60, 52, 60, 64].map((width, index) => (
+        <Skeleton key={`${width}-${index}`} className="h-5" style={{ width }} />
       ))}
     </div>
   );
@@ -176,8 +176,8 @@ function Body({ variant }: { variant: RunbookSkeletonVariant }) {
       return (
         <>
           <div className="flex gap-2">
-            {[72, 64, 80, 72].map(width => (
-              <Skeleton key={width} className="h-8" style={{ width }} />
+            {[72, 64, 80, 72].map((width, index) => (
+              <Skeleton key={`${width}-${index}`} className="h-8" style={{ width }} />
             ))}
           </div>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">

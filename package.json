@@ -25,7 +25,8 @@
   },
   "private": false,
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev",
+    "dev:webpack": "next dev --webpack",
     "build": "next build --webpack",
     "start": "node .next/standalone/server.js",
     "start:dev": "next start",

@@ -12,6 +12,7 @@ import {
   Loader2,
   Lock,
   ShieldAlert,
+  X,
   XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -64,8 +65,10 @@ function InputValue({ value }: { value: unknown }) {
 
 function PlanRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-2 px-4 py-3 sm:grid-cols-[7.5rem_minmax(0,1fr)]">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+    <div className="flex flex-col gap-1.5 px-4 py-2.5 sm:px-5 sm:py-3 border-b border-border/40 last:border-b-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
       <div className="min-w-0 text-xs">{children}</div>
     </div>
   );
@@ -77,12 +80,16 @@ export default function RunbookExecutionPreview({
   disabled = false,
   previewLabel = 'Preview execution',
   executeLabel = 'Execute this plan',
+  headerContent,
+  className,
 }: {
   disabled?: boolean;
   previewAction: () => Promise<{ preview?: ExecutionPreview; error?: string }>;
   executeAction: RunbookFormAction;
   previewLabel?: string;
   executeLabel?: string;
+  headerContent?: ReactNode;
+  className?: string;
 }) {
   const [preview, setPreview] = useState<ExecutionPreview>();
   const [error, setError] = useState('');
@@ -107,74 +114,106 @@ export default function RunbookExecutionPreview({
   const hasWrites = preview?.steps.some(step => step.risk !== 'READ_ONLY') ?? false;
   const blocked = preview?.readiness?.some(check => check.state === 'blocked') ?? false;
   const inputEntries = preview ? Object.entries(preview.inputs) : [];
+
+  const previewButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={disabled || pending}
+      aria-busy={pending}
+      className="h-8 gap-1.5 text-xs font-medium border-border/80 hover:bg-muted/60 shrink-0 shadow-2xs"
+      onClick={async () => {
+        setPending(true);
+        setError('');
+        setExpired(false);
+        setPreview(undefined);
+        setConfirmed(false);
+        try {
+          const result = await previewAction();
+          setPreview(result.preview);
+          setNow(Date.now());
+          setError(result.error ?? '');
+        } catch {
+          setError('Could not load preview. Try again.');
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      {pending ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+      ) : (
+        <Eye className="h-3.5 w-3.5" aria-hidden />
+      )}
+      {pending ? 'Resolving plan…' : previewLabel}
+    </Button>
+  );
+
   return (
-    <div className="w-full min-w-0 space-y-3">
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled || pending}
-        aria-busy={pending}
-        onClick={async () => {
-          setPending(true);
-          setError('');
-          setExpired(false);
-          setPreview(undefined);
-          setConfirmed(false);
-          try {
-            const result = await previewAction();
-            setPreview(result.preview);
-            setNow(Date.now());
-            setError(result.error ?? '');
-          } catch {
-            setError('Could not load preview. Try again.');
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
-        {pending ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Eye className="h-4 w-4" aria-hidden />
-        )}
-        {pending ? 'Resolving plan…' : previewLabel}
-      </Button>
+    <div className={cn('w-full min-w-0 space-y-2.5', className)}>
+      {headerContent ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {headerContent}
+          <div className="shrink-0 pl-9.5 sm:pl-0 flex items-center gap-2">{previewButton}</div>
+        </div>
+      ) : (
+        previewButton
+      )}
       {error && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-sm text-rose-700 dark:text-rose-300"
+          className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-700 dark:text-rose-300"
         >
           <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          {error}
+          <span>{error}</span>
         </p>
       )}
       {preview && (
         <section
           aria-label="Execution preview"
-          className="overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs text-sm shadow-xs"
+          className="overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-background/80 dark:bg-background/40 backdrop-blur-xs text-sm shadow-xs mt-2"
         >
-          <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 bg-muted/20 px-5 py-3.5">
+          <header className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 bg-muted/30 px-4 py-3 sm:px-5">
             <div className="min-w-0">
-              <p className="text-sm font-semibold">Review the plan</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Published version {preview.version} ·{' '}
-                <span className="font-mono" title={preview.checksum}>
-                  {preview.checksum.slice(0, 12)}
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-foreground">Review Execution Plan</p>
+                <span className="inline-flex items-center rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] font-medium text-foreground">
+                  v{preview.version}
                 </span>
+              </div>
+              <p
+                className="mt-0.5 text-[11px] text-muted-foreground truncate"
+                title={preview.checksum}
+              >
+                Checksum: <span className="font-mono">{preview.checksum.slice(0, 10)}</span>
               </p>
             </div>
-            {remainingMs !== null && !expired && (
-              <Pill
-                tone={remainingMs < 60_000 ? 'warning' : 'neutral'}
-                icon={Clock}
-                className="tabular-nums"
+            <div className="flex items-center gap-1.5 shrink-0">
+              {remainingMs !== null && !expired && (
+                <Pill
+                  tone={remainingMs < 60_000 ? 'warning' : 'neutral'}
+                  icon={Clock}
+                  className="tabular-nums text-[11px] py-0.5"
+                >
+                  <span role="timer">{formatCountdown(remainingMs)}</span>
+                </Pill>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={() => setPreview(undefined)}
+                title="Close preview"
               >
-                <span role="timer">Expires in {formatCountdown(remainingMs)}</span>
-              </Pill>
-            )}
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close preview</span>
+              </Button>
+            </div>
           </header>
 
-          <div className="divide-y">
+          <div className="divide-y divide-border/40">
             <PlanRow label="Target">
               <p className="flex items-center gap-1.5 font-medium">
                 <Cpu className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
@@ -182,8 +221,8 @@ export default function RunbookExecutionPreview({
                   {preview.agentId ?? preview.agentPoolId ?? 'Control plane'}
                 </span>
               </p>
-              <p className="mt-0.5 text-muted-foreground tabular-nums">
-                Overall deadline {preview.timeoutSeconds}s
+              <p className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+                Overall deadline: {preview.timeoutSeconds}s
               </p>
             </PlanRow>
 
@@ -204,7 +243,7 @@ export default function RunbookExecutionPreview({
                   ))}
                 </dl>
               )}
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Secrets are never shown.</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Secrets are never shown.</p>
             </PlanRow>
 
             {preview.readiness && preview.readiness.length > 0 && (
@@ -214,7 +253,10 @@ export default function RunbookExecutionPreview({
                     const style = READINESS_ICON[check.state];
                     const Icon = style.icon;
                     return (
-                      <li key={check.message} className="flex items-start gap-2">
+                      <li
+                        key={check.message}
+                        className="flex items-start gap-2 rounded-lg border border-border/50 bg-background/50 px-2.5 py-1.5 text-xs"
+                      >
                         <Icon
                           className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', style.className)}
                           aria-hidden
@@ -223,7 +265,7 @@ export default function RunbookExecutionPreview({
                           className={cn(
                             'min-w-0 break-words',
                             check.state === 'blocked'
-                              ? 'text-rose-700 dark:text-rose-300'
+                              ? 'text-rose-700 dark:text-rose-300 font-medium'
                               : 'text-foreground'
                           )}
                         >
@@ -242,54 +284,63 @@ export default function RunbookExecutionPreview({
                 {preview.steps.map((step, index) => (
                   <li
                     key={step.key}
-                    className="rounded-xl border border-border/70 dark:border-border/60 bg-background/80 p-3.5 shadow-2xs"
+                    className="rounded-xl border border-border/70 dark:border-border/60 bg-muted/30 dark:bg-muted/15 p-3 shadow-2xs space-y-1.5"
                   >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold tabular-nums">
                         {index + 1}
                       </span>
-                      <span className="min-w-0 font-medium">{step.name}</span>
-                      <Pill>{step.type.replaceAll('_', ' ')}</Pill>
-                      <Pill tone={RISK_TONE[step.risk] ?? 'neutral'}>
+                      <span className="min-w-0 font-semibold text-xs text-foreground truncate max-w-[160px] sm:max-w-none">
+                        {step.name}
+                      </span>
+                      <Pill tone="neutral" className="text-[10px] py-0 px-1.5">
+                        {step.type.replaceAll('_', ' ')}
+                      </Pill>
+                      <Pill
+                        tone={RISK_TONE[step.risk] ?? 'neutral'}
+                        className="text-[10px] py-0 px-1.5"
+                      >
                         {step.risk.replaceAll('_', ' ')}
                       </Pill>
                     </div>
-                    <p className="mt-1.5 text-xs text-muted-foreground">{step.purpose}</p>
-                    <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                    <p className="text-xs text-muted-foreground leading-relaxed">{step.purpose}</p>
+                    <p className="flex flex-wrap items-center gap-1.5 text-[11px]">
                       {step.requiresApproval ? (
                         <span className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300">
-                          <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          <ShieldAlert className="h-3 w-3 shrink-0" aria-hidden />
                           Human approval required
                         </span>
                       ) : (
                         <span className="text-muted-foreground">No approval gate</span>
                       )}
                       <span className="text-muted-foreground tabular-nums">
-                        · Step timeout: {step.timeoutSeconds}s
+                        · Timeout: {step.timeoutSeconds}s
                       </span>
                     </p>
-                    <details className="group mt-1.5">
-                      <summary className="flex min-h-9 w-fit cursor-pointer list-none items-center gap-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <details className="group mt-1">
+                      <summary className="flex h-6 w-fit cursor-pointer list-none items-center gap-1 rounded text-[11px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                         <ChevronRight
-                          className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
+                          className="h-3 w-3 transition-transform group-open:rotate-90"
                           aria-hidden
                         />
-                        Action and target
+                        Action details
                       </summary>
-                      <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
+                      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background/80 p-2 font-mono text-[11px]">
                         {JSON.stringify(step.config, null, 2)}
                       </pre>
                     </details>
-                    <p className="text-[11px] text-muted-foreground">{step.prerequisite}</p>
+                    {step.prerequisite && (
+                      <p className="text-[11px] text-muted-foreground">{step.prerequisite}</p>
+                    )}
                   </li>
                 ))}
               </ol>
             </PlanRow>
           </div>
 
-          <footer className="space-y-3 border-t bg-muted/20 p-4">
+          <footer className="space-y-2.5 border-t border-border/60 bg-muted/20 px-4 py-3 sm:px-5">
             <details className="group text-xs text-muted-foreground">
-              <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md text-[11px] font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 <Info className="h-3.5 w-3.5" aria-hidden />
                 How preview protects this run
                 <ChevronRight
@@ -297,28 +348,24 @@ export default function RunbookExecutionPreview({
                   aria-hidden
                 />
               </summary>
-              <div className="mt-2 space-y-1.5 leading-relaxed">
+              <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-muted-foreground">
                 <p>
                   Preview resolves configuration without executing actions. Local policy, secret
                   access and live availability are checked at dispatch. Execution rejects changes to
-                  this plan or incident context before starting. Conditions continue to evaluate
-                  live context after execution starts.
+                  this plan before starting.
                 </p>
-                <p>
-                  This preview can be used once and expires after five minutes. Preview again if it
-                  expires.
-                </p>
+                <p>This preview expires after five minutes.</p>
               </div>
             </details>
             {hasWrites && (
-              <label className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-900 dark:text-amber-100">
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs leading-relaxed text-amber-900 dark:text-amber-100">
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-amber-600 rounded"
                   checked={confirmed}
                   onChange={event => setConfirmed(event.target.checked)}
                 />
-                <span>
+                <span className="text-[11px]">
                   I reviewed the target and authorize the planned writes. Step approvals and Agent
                   policy still apply.
                 </span>
@@ -327,10 +374,10 @@ export default function RunbookExecutionPreview({
             {expired && (
               <p
                 role="alert"
-                className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-700 dark:text-rose-300"
+                className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-700 dark:text-rose-300"
               >
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                This preview expired. Preview again before executing.
+                <span>This preview expired. Preview again before executing.</span>
               </p>
             )}
             {blocked && !expired && (
@@ -346,6 +393,9 @@ export default function RunbookExecutionPreview({
                 value={preview.authorizationToken ?? ''}
               />
               <SubmitButton
+                variant="default"
+                size="sm"
+                className="w-full h-8.5 rounded-lg text-xs font-semibold shadow-xs"
                 pendingLabel="Starting…"
                 disabled={disabled || expired || blocked || (hasWrites && !confirmed)}
               >

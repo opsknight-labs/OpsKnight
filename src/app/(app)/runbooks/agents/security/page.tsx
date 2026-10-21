@@ -6,15 +6,22 @@ import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summari
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { FleetPageShell } from '@/components/runbooks/agents/FleetPageShell';
 import { ActionForm, SubmitButton } from '@/components/runbooks/RunbookControls';
-import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
+import { cn } from '@/lib/utils';
 import {
   rotateExecutionSigningIdentityAction,
   updateIncidentRemediationBudgetAction,
   updateRunbookArtifactRetentionAction,
 } from '../../actions';
+import {
+  ActiveKeyBox,
+  MultiKeyMapBox,
+  RotationStepper,
+  SigningKeyList,
+  ArtifactRetentionForm,
+} from '@/components/runbooks/agents/FleetSecurityControls';
 
 export const revalidate = 0;
 
@@ -47,7 +54,7 @@ export default async function RunbookFleetSecurityPage() {
     canManage
       ? prisma.runbookExecutionSigningKey.findMany({
           where: { state: { not: 'RETIRED' } },
-          select: { id: true, publicKey: true, state: true, retiredAt: true },
+          select: { id: true, publicKey: true, state: true, retiredAt: true, createdAt: true },
           orderBy: { createdAt: 'asc' },
         })
       : Promise.resolve([]),
@@ -58,6 +65,12 @@ export default async function RunbookFleetSecurityPage() {
     Math.max(1, Number.parseInt(process.env.RUNBOOK_ARTIFACT_RETENTION_DAYS ?? '30', 10) || 30)
   );
   const nothingVisible = !canManage && !canManageBudgets && !canManageRetention;
+
+  const keyMapJson = JSON.stringify(
+    Object.fromEntries(signingKeys.map(key => [key.id, key.publicKey])),
+    null,
+    2
+  );
 
   return (
     <FleetPageShell
@@ -76,211 +89,216 @@ export default async function RunbookFleetSecurityPage() {
           className="bg-card"
         />
       )}
-      <div className="grid gap-6 lg:grid-cols-2">
+
+      <div className="space-y-6">
+        {/* Card 1: Execution Signing Identity */}
         {canManage && (
           <SectionCard
             icon={Fingerprint}
-            title="Execution signing identity"
-            description="OpsKnight signs every dispatched step. Agents reject work that is not signed by a key they trust, so rotate by staging a NEXT key, distributing it to every Agent, then activating it."
-            className="lg:col-span-2"
-            bodyClassName="space-y-5 text-sm"
+            title={
+              <div className="flex items-center gap-2">
+                <span>Execution Signing Identity</span>
+                <span className="rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  Cryptographically Enforced
+                </span>
+              </div>
+            }
+            description="OpsKnight signs every dispatched step. Agents verify ECDSA/ED25519 signatures before claiming work, ensuring tampered or unauthorized runs are rejected."
+            bodyClassName="space-y-6 p-5 sm:p-6"
           >
             {activeKey ? (
-              <section aria-labelledby="pinned-key-title" className="space-y-2">
-                <h3 id="pinned-key-title" className="!text-sm !leading-snug font-semibold">
-                  Pinned execution public key
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Set OPSKNIGHT_EXECUTION_PUBLIC_KEY on every Agent. Verify the value through your
-                  trusted OpsKnight session.
-                </p>
-                <code className="block rounded-xl border border-border/80 dark:border-border/60 bg-muted/40 p-3.5 font-mono text-xs break-all select-all">
-                  {activeKey.publicKey}
-                </code>
-              </section>
+              <ActiveKeyBox
+                publicKey={activeKey.publicKey}
+                keyId={activeKey.id}
+                activeSince={formatDateTime(activeKey.createdAt, userTimeZone, {
+                  format: 'datetime',
+                  includeTimeZone: true,
+                })}
+              />
             ) : (
-              <p className="rounded-xl border border-dashed border-border/80 p-4 text-xs text-muted-foreground">
-                No active execution signing key is available yet.
-              </p>
+              <div className="rounded-2xl border border-dashed border-border/80 p-5 text-center text-xs text-muted-foreground">
+                No active execution signing key is configured yet.
+              </div>
             )}
+
             {activeKey && (
-              <section
-                aria-labelledby="key-rotation-title"
-                className="space-y-3 border-t border-border/60 pt-4"
-              >
-                <h3 id="key-rotation-title" className="!text-sm !leading-snug font-semibold">
-                  Overlapping rotation
-                </h3>
-                <ol className="grid gap-2.5 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    'Stage the next signing identity.',
-                    'Set OPSKNIGHT_EXECUTION_PUBLIC_KEYS to the trusted key map below on every Agent, including offline Agents.',
-                    'Wait for fleet acknowledgement, then activate NEXT.',
-                    'RETIRING keys keep a 24-hour grace period before they can be retired.',
-                  ].map((step, index) => (
-                    <li
-                      key={index}
-                      className="flex gap-2.5 rounded-xl border border-border/80 dark:border-border/60 bg-muted/30 p-3.5"
-                    >
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary tabular-nums">
-                        {index + 1}
-                      </span>
-                      <span className="leading-relaxed">{step}</span>
-                    </li>
-                  ))}
-                </ol>
-                <code className="block rounded-xl border border-border/80 dark:border-border/60 bg-muted/40 p-3.5 font-mono text-xs break-all">
-                  {JSON.stringify(
-                    Object.fromEntries(signingKeys.map(key => [key.id, key.publicKey]))
-                  )}
-                </code>
-                <ActionForm action={rotateExecutionSigningIdentityAction}>
-                  <input type="hidden" name="operation" value="stage" />
-                  <SubmitButton
-                    variant="outline"
-                    disabled={signingKeys.some(key => key.state === 'NEXT')}
-                  >
-                    Stage next signing identity
-                  </SubmitButton>
-                </ActionForm>
-                {signingKeys
-                  .filter(key => key.state !== 'ACTIVE')
-                  .map(key => (
-                    <ActionForm
-                      key={key.id}
-                      action={rotateExecutionSigningIdentityAction}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-3.5 shadow-xs"
-                    >
-                      <input
-                        type="hidden"
-                        name="operation"
-                        value={key.state === 'NEXT' ? 'activate' : 'retire'}
-                      />
-                      <input type="hidden" name="keyId" value={key.id} />
-                      <div className="min-w-0 space-y-1 text-xs">
-                        <div className="flex items-center gap-2">
-                          <RunbookStatusBadge status={key.state} size="sm" />
-                          <span className="font-mono break-all">{key.id}</span>
-                        </div>
-                        {key.state === 'RETIRING' && key.retiredAt && (
-                          <p className="text-muted-foreground">
-                            Grace ends{' '}
-                            {formatDateTime(key.retiredAt, userTimeZone, {
-                              format: 'datetime',
-                              includeTimeZone: true,
-                            })}
-                          </p>
-                        )}
-                      </div>
-                      <SubmitButton size="sm">
-                        {key.state === 'NEXT'
-                          ? 'Activate acknowledged identity'
-                          : 'Retire after grace period'}
-                      </SubmitButton>
-                    </ActionForm>
-                  ))}
-              </section>
+              <div className="space-y-4 border-t border-border/60 pt-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold text-foreground">
+                      Zero-Downtime Rotation Protocol
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Rotate keys seamlessly across large, multi-environment agent fleets without
+                      interrupting running workloads.
+                    </p>
+                  </div>
+                </div>
+
+                <RotationStepper />
+
+                <MultiKeyMapBox keyMapJson={keyMapJson} keyCount={signingKeys.length} />
+
+                <SigningKeyList
+                  signingKeys={signingKeys}
+                  userTimeZone={userTimeZone}
+                  rotateAction={rotateExecutionSigningIdentityAction}
+                />
+              </div>
             )}
           </SectionCard>
         )}
 
-        {canManageBudgets && (
-          <SectionCard
-            icon={Gauge}
-            title="Automatic remediation budgets"
-            description="Upper bounds on what incident-triggered automation may do on its own for a single incident. Once a budget is exhausted, further runs require an operator."
-          >
-            <ActionForm action={updateIncidentRemediationBudgetAction} className="space-y-4">
-              <Field label="Automatic executions per incident">
-                <Input
-                  name="executions"
-                  aria-label="Automatic executions per incident"
-                  type="number"
-                  min={0}
-                  max={100}
-                  defaultValue={settings?.runbookAutoExecutionsPerIncident ?? 3}
-                />
-              </Field>
-              <Field label="Automatic writes per incident">
-                <Input
-                  name="writes"
-                  aria-label="Automatic writes per incident"
-                  type="number"
-                  min={0}
-                  max={100}
-                  defaultValue={settings?.runbookAutoWritesPerIncident ?? 3}
-                />
-              </Field>
-              <Field label="Automatic non-idempotent actions per incident">
-                <Input
-                  name="nonIdempotent"
-                  aria-label="Automatic non-idempotent actions per incident"
-                  type="number"
-                  min={0}
-                  max={100}
-                  defaultValue={settings?.runbookAutoNonIdempotentPerIncident ?? 0}
-                />
-              </Field>
-              <p className="rounded-lg bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
-                Non-idempotent actions are not safe to repeat; keep this at 0 unless every such step
-                has been reviewed for automatic use.
-              </p>
-              <SubmitButton>Save remediation budgets</SubmitButton>
-            </ActionForm>
-          </SectionCard>
-        )}
+        {/* Two-Column Grid for Budgets & Retention */}
+        {(canManageBudgets || canManageRetention) && (
+          <div className="grid gap-6 lg:grid-cols-2 items-stretch">
+            {/* Card 2: Incident Remediation Budgets */}
+            {canManageBudgets && (
+              <SectionCard
+                icon={Gauge}
+                title={
+                  <div className="flex items-center gap-2">
+                    <span>Remediation Safeguards & Budgets</span>
+                    <span className="text-xs text-muted-foreground font-normal">
+                      · Automatic remediation budgets
+                    </span>
+                    <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      Circuit Breaker
+                    </span>
+                  </div>
+                }
+                description="Ceilings on autonomous remediation actions executed during an active incident. Once exhausted, automation halts until approved by an operator."
+                className="flex flex-col h-full"
+                bodyClassName="flex flex-col justify-between flex-1 p-5 sm:p-6"
+              >
+                <ActionForm
+                  action={updateIncidentRemediationBudgetAction}
+                  className="flex flex-col justify-between h-full space-y-4"
+                >
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <BudgetTile
+                        label="Executions Limit"
+                        accessibleLabel="Automatic executions per incident"
+                        hint="Max automated runs"
+                        name="executions"
+                        defaultValue={settings?.runbookAutoExecutionsPerIncident ?? 3}
+                        min={0}
+                        max={100}
+                      />
+                      <BudgetTile
+                        label="State Writes"
+                        accessibleLabel="Automatic writes per incident"
+                        hint="Max mutating steps"
+                        name="writes"
+                        defaultValue={settings?.runbookAutoWritesPerIncident ?? 3}
+                        min={0}
+                        max={100}
+                      />
+                      <BudgetTile
+                        label="Non-Idempotent"
+                        accessibleLabel="Automatic non-idempotent actions per incident"
+                        hint="Zero (0) recommended"
+                        name="nonIdempotent"
+                        defaultValue={settings?.runbookAutoNonIdempotentPerIncident ?? 0}
+                        min={0}
+                        max={100}
+                        highlightZero
+                      />
+                    </div>
 
-        {canManageRetention && (
-          <SectionCard
-            icon={Archive}
-            tone="danger"
-            title={
-              <span className="flex items-center gap-2">
-                Execution artifact retention
-                <Pill tone="danger">Destructive</Pill>
-              </span>
-            }
-            description="How long step output and evidence artifacts are kept before reconciliation deletes them."
-          >
-            <ActionForm action={updateRunbookArtifactRetentionAction} className="space-y-4">
-              <Field label="Artifact retention days">
-                <Input
-                  name="days"
-                  type="number"
-                  min={1}
-                  max={3650}
-                  required
-                  defaultValue={settings?.runbookArtifactRetentionDays ?? defaultRetention}
+                    <div className="flex items-start gap-2.5 rounded-xl border border-border/70 dark:border-border/50 bg-muted/20 p-3 text-xs leading-relaxed text-muted-foreground">
+                      <ShieldCheck className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                      <p className="text-[11px] leading-relaxed">
+                        These limits act as an automatic circuit breaker against runaway remediation
+                        loops. When any ceiling is reached, further dispatches transition to{' '}
+                        <strong className="text-foreground">WAITING_APPROVAL</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <SubmitButton className="w-full h-9 text-xs font-semibold rounded-xl shadow-xs cursor-pointer">
+                      Save remediation budgets
+                    </SubmitButton>
+                  </div>
+                </ActionForm>
+              </SectionCard>
+            )}
+
+            {/* Card 3: Artifact Retention Policy */}
+            {canManageRetention && (
+              <SectionCard
+                icon={Archive}
+                tone="danger"
+                title={
+                  <div className="flex items-center gap-2">
+                    <span>Evidence & Artifact Retention</span>
+                    <Pill tone="danger">Destructive Policy</Pill>
+                  </div>
+                }
+                description="Controls how long step output logs and execution evidence artifacts are retained before reconciliation permanently purges them."
+                className="flex flex-col h-full"
+                bodyClassName="flex flex-col justify-between flex-1 p-5 sm:p-6"
+              >
+                <ArtifactRetentionForm
+                  defaultDays={settings?.runbookArtifactRetentionDays ?? defaultRetention}
+                  action={updateRunbookArtifactRetentionAction}
                 />
-              </Field>
-              <p className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs leading-relaxed text-destructive">
-                The next reconciliation permanently deletes artifact contents older than this
-                policy. Execution records remain, but deleted output cannot be recovered. Export
-                evidence before shortening retention.
-              </p>
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  name="confirm"
-                  required
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-destructive"
-                />
-                I understand this policy permanently deletes expired evidence.
-              </label>
-              <SubmitButton variant="destructive">Save artifact retention policy</SubmitButton>
-            </ActionForm>
-          </SectionCard>
+              </SectionCard>
+            )}
+          </div>
         )}
       </div>
     </FleetPageShell>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function BudgetTile({
+  label,
+  accessibleLabel,
+  hint,
+  name,
+  defaultValue,
+  min,
+  max,
+  highlightZero = false,
+}: {
+  label: string;
+  accessibleLabel?: string;
+  hint: string;
+  name: string;
+  defaultValue: number;
+  min: number;
+  max: number;
+  highlightZero?: boolean;
+}) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
+    <div
+      className={cn(
+        'flex flex-col justify-between rounded-xl border border-border/80 dark:border-border/60 bg-muted/20 p-3 space-y-2',
+        highlightZero && defaultValue === 0 && 'border-primary/40 bg-primary/5'
+      )}
+    >
+      <div>
+        <Label htmlFor={name} className="text-[11px] font-bold text-foreground">
+          {label}
+        </Label>
+        <p className="text-[10px] text-muted-foreground truncate">{hint}</p>
+      </div>
+
+      <div className="relative">
+        <Input
+          id={name}
+          name={name}
+          type="number"
+          min={min}
+          max={max}
+          defaultValue={defaultValue}
+          aria-label={accessibleLabel ?? label}
+          className="h-8 font-semibold tabular-nums text-xs rounded-lg border-border/80 bg-background/80"
+        />
+      </div>
     </div>
   );
 }

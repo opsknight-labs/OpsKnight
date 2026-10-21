@@ -111,8 +111,8 @@ export function RunbookCard({
       className={cn(
         'group relative flex rounded-2xl border border-border/80 dark:border-border/60 bg-card backdrop-blur-xs shadow-xs transition-all duration-200 focus-within:border-primary/50 focus-within:shadow-md hover:border-border hover:shadow-md hover:-translate-y-0.5',
         isList
-          ? 'flex-col gap-3.5 p-4 sm:flex-row sm:items-center sm:gap-6'
-          : 'flex-col p-5 sm:p-6',
+          ? 'flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:gap-5'
+          : 'flex-col p-4 sm:p-4.5',
         isPublished &&
           'shadow-[0_0_24px_-12px_rgba(16,185,129,0.12)] hover:border-emerald-500/40 hover:shadow-[0_0_24px_-8px_rgba(16,185,129,0.2)]',
         !isPublished &&
@@ -121,12 +121,12 @@ export function RunbookCard({
         isArchived && 'bg-muted/30 opacity-75 hover:opacity-100'
       )}
     >
-      <div className={cn('min-w-0 flex-1', isList ? 'space-y-1.5' : 'space-y-3.5')}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+      <div className={cn('min-w-0 flex-1', isList ? 'space-y-1' : 'space-y-2.5')}>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div
               className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border shadow-2xs group-hover:scale-105 transition-all',
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-2xs group-hover:scale-105 transition-all',
                 isPublished
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                   : isArchived
@@ -134,9 +134,9 @@ export function RunbookCard({
                     : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
               )}
             >
-              <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
+              <BookOpen className="h-4 w-4" aria-hidden="true" />
             </div>
-            <h2 className="min-w-0 !text-base !leading-snug font-bold tracking-tight">
+            <h2 className="min-w-0 text-sm sm:text-base !leading-snug font-bold tracking-tight">
               <Link
                 href={href}
                 className="break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:underline group-hover:text-primary transition-colors"
@@ -145,7 +145,7 @@ export function RunbookCard({
               </Link>
             </h2>
           </div>
-          <div className="relative z-10 flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+          <div className="relative z-10 flex flex-wrap items-center gap-1.5 shrink-0 sm:justify-end">
             <RunbookStatusBadge status={statusLabel} size="sm" context="lifecycle" />
             {isPublished && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">
@@ -217,12 +217,12 @@ export function RunbookCard({
         className={cn(
           'relative z-10 flex flex-wrap items-center justify-between gap-3',
           isList
-            ? 'sm:shrink-0 sm:flex-col sm:items-end sm:gap-2'
-            : 'mt-4 border-t border-border/60 pt-4'
+            ? 'sm:shrink-0 sm:flex-col sm:items-end sm:gap-1.5'
+            : 'mt-3 border-t border-border/60 pt-3'
         )}
       >
         {meta}
-        <div className="flex items-center gap-3">
+        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3">
           <span className="text-xs text-muted-foreground">
             {isArchived ? 'Archived · bindings disabled' : `Updated ${updated}`}
           </span>

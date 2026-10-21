@@ -128,37 +128,37 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
               <SelectItem
                 value="all"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 All active
               </SelectItem>
               <SelectItem
                 value="ONLINE"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 Online
               </SelectItem>
               <SelectItem
                 value="DEGRADED"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 Degraded
               </SelectItem>
               <SelectItem
                 value="OFFLINE"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 Offline
               </SelectItem>
               <SelectItem
                 value="ENROLLING"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 Enrolling
               </SelectItem>
               <SelectItem
                 value="REVOKED"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 Revoked
               </SelectItem>
@@ -203,25 +203,25 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
               <SelectItem
                 value="all"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 All platforms
               </SelectItem>
               <SelectItem
                 value="linux"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 Linux
               </SelectItem>
               <SelectItem
                 value="darwin"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 macOS (Darwin)
               </SelectItem>
               <SelectItem
                 value="win32"
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 Windows
               </SelectItem>
