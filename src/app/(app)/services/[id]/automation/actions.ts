@@ -300,6 +300,7 @@ export async function getAutomationArea(
             integrationType: true,
             fieldKey: true,
             sourcePath: true,
+            source: true,
             fieldType: true,
             rawValuePreview: true,
             count: true,
