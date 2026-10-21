@@ -51,6 +51,13 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  PostmortemPublication: {
+    type: 'object', properties: {
+      id: { type: 'string' }, revision: { type: 'integer' },
+      status: { type: 'string', enum: ['PUBLISHED'] }, isPublic: { type: 'boolean' },
+      publishedAt: { type: 'string', format: 'date-time' },
+    }, required: ['id', 'revision', 'status', 'isPublic', 'publishedAt'],
+  },
   PostmortemActionItemCollection: {
     type: 'object', properties: {
       postmortemId: { type: 'string' }, revision: { type: 'integer' },

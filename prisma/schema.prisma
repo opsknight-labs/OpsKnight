@@ -1580,6 +1580,8 @@ model Postmortem {
   summary           String?
   timeline          Json?
   impact            Json?
+  contributingFactors Json?
+  fiveWhys          Json?
   rootCause         String?
   resolution        String?
   actionItems       Json?

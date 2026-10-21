@@ -44,6 +44,13 @@ export type PostmortemData = {
   summary?: string;
   timeline?: TimelineEvent[];
   impact?: ImpactMetrics;
+  contributingFactors?: Array<{
+    id: string;
+    category: 'TECHNICAL' | 'PROCESS' | 'HUMAN' | 'EXTERNAL' | 'OTHER';
+    description: string;
+    evidence: string[];
+  }>;
+  fiveWhys?: Array<{ id: string; question: string; answer: string }>;
   rootCause?: string;
   resolution?: string;
   actionItems?: ActionItem[];

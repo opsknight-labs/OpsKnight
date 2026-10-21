@@ -1254,6 +1254,12 @@ const operations: Operation[] = [
       priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
     }, ['title']), 100) }, ['items']),
   },
+  {
+    method: 'post', path: '/postmortems/{id}/publish',
+    summary: 'Publish a reviewed postmortem with explicit public visibility',
+    description: 'Requires a resolved incident, complete summary, exact If-Match revision and Idempotency-Key. An already-published revision with matching visibility returns the existing result without another audit.',
+    body: object({ isPublic: { type: 'boolean' } }, ['isPublic']),
+  },
   { method: 'get', path: '/integrations/types', summary: 'List safe supported inbound provider types and configuration capabilities' },
   {
     method: 'post', path: '/services/{id}/integrations', summary: 'Create a service inbound integration and disclose its API key once',

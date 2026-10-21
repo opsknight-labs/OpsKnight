@@ -34,6 +34,8 @@ export const GET = defineV2Route<{ id: string }>({
         lessons: true,
         impact: true,
         timeline: true,
+        contributingFactors: true,
+        fiveWhys: true,
         status: true,
         isPublic: true,
         publishedAt: true,
@@ -95,6 +97,7 @@ export const PATCH = defineV2Route<{ id: string }>({
           accessWhere,
         ],
       },
+      include: { incident: { select: { status: true } } },
     });
 
     if (!existing) {
@@ -102,6 +105,14 @@ export const PATCH = defineV2Route<{ id: string }>({
         code: 'POSTMORTEM_NOT_FOUND',
         userMessage: `Postmortem with id '${id}' not found.`,
       });
+    }
+    if (body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
+      if (existing.status === 'ARCHIVED' || existing.incident.status !== 'RESOLVED') {
+        throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'Only postmortems for resolved incidents can be published.' });
+      }
+      if ((body.summary ?? existing.summary ?? '').trim().length < 5) {
+        throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'A postmortem summary is required before publication.' });
+      }
     }
 
     let publishedAt = existing.publishedAt;
@@ -125,6 +136,8 @@ export const PATCH = defineV2Route<{ id: string }>({
           ...(body.lessons !== undefined ? { lessons: body.lessons } : {}),
           ...(body.impact !== undefined ? { impact: body.impact } : {}),
           ...(body.timeline !== undefined ? { timeline: body.timeline } : {}),
+          ...(body.contributingFactors !== undefined ? { contributingFactors: body.contributingFactors } : {}),
+          ...(body.fiveWhys !== undefined ? { fiveWhys: body.fiveWhys } : {}),
           ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
           ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
         },
@@ -143,6 +156,8 @@ export const PATCH = defineV2Route<{ id: string }>({
           lessons: true,
           impact: true,
           timeline: true,
+          contributingFactors: true,
+          fiveWhys: true,
           status: true,
           isPublic: true,
           publishedAt: true,
@@ -165,7 +180,8 @@ export const PATCH = defineV2Route<{ id: string }>({
         },
       });
       await logV2Audit({
-        action: 'postmortem.updated',
+        action: body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED'
+          ? 'postmortem.published' : 'postmortem.updated',
         entityType: 'INCIDENT',
         entityId: rec.incidentId,
         actorId: actor.id,

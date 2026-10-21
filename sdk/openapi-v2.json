@@ -1331,6 +1331,81 @@
           ]
         }
       },
+      "PostmortemFactors": {
+        "type": "array",
+        "maxItems": 30,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "TECHNICAL",
+                "PROCESS",
+                "HUMAN",
+                "EXTERNAL",
+                "OTHER"
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "evidence": {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "required": [
+            "id",
+            "category",
+            "description",
+            "evidence"
+          ]
+        }
+      },
+      "PostmortemFiveWhys": {
+        "type": "array",
+        "maxItems": 10,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "answer": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "id",
+            "question",
+            "answer"
+          ]
+        }
+      },
       "Postmortem": {
         "type": "object",
         "properties": {
@@ -1385,6 +1460,26 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/PostmortemTimeline"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contributingFactors": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PostmortemFactors"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fiveWhys": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PostmortemFiveWhys"
               },
               {
                 "type": "null"
@@ -8787,6 +8882,37 @@
         "required": [
           "id",
           "status"
+        ]
+      },
+      "PostmortemPublication": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PUBLISHED"
+            ]
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "status",
+          "isPublic",
+          "publishedAt"
         ]
       },
       "PostmortemActionItemCollection": {
@@ -20244,6 +20370,12 @@
                   "timeline": {
                     "$ref": "#/components/schemas/PostmortemTimeline"
                   },
+                  "contributingFactors": {
+                    "$ref": "#/components/schemas/PostmortemFactors"
+                  },
+                  "fiveWhys": {
+                    "$ref": "#/components/schemas/PostmortemFiveWhys"
+                  },
                   "lessons": {
                     "type": "string"
                   },
@@ -20506,6 +20638,12 @@
                   },
                   "timeline": {
                     "$ref": "#/components/schemas/PostmortemTimeline"
+                  },
+                  "contributingFactors": {
+                    "$ref": "#/components/schemas/PostmortemFactors"
+                  },
+                  "fiveWhys": {
+                    "$ref": "#/components/schemas/PostmortemFiveWhys"
                   },
                   "lessons": {
                     "type": "string"
@@ -20986,6 +21124,161 @@
           }
         },
         "operationId": "replacePostmortemActionItems",
+        "x-required-scope": "postmortems:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
+    "/postmortems/{id}/publish": {
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Publish a reviewed postmortem with explicit public visibility",
+        "description": "Requires a resolved incident, complete summary, exact If-Match revision and Idempotency-Key. An already-published revision with matching visibility returns the existing result without another audit.\n\nRequires API scope `postmortems:write` (Postmortems manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "isPublic": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "isPublic"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PostmortemPublication"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "publishPostmortem",
         "x-required-scope": "postmortems:write",
         "x-idempotency": "required",
         "x-concurrency": "etag"

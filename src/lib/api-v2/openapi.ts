@@ -519,6 +519,23 @@ function buildBaseSpec(): Record<string, unknown> {
             required: ['id', 'timestamp', 'type', 'title', 'description'],
           },
         },
+        PostmortemFactors: {
+          type: 'array', maxItems: 30,
+          items: { type: 'object', additionalProperties: false, properties: {
+            id: { type: 'string', minLength: 1, maxLength: 100 },
+            category: { type: 'string', enum: ['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER'] },
+            description: { type: 'string', minLength: 1, maxLength: 2000 },
+            evidence: { type: 'array', maxItems: 10, items: { type: 'string', minLength: 1, maxLength: 500 } },
+          }, required: ['id', 'category', 'description', 'evidence'] },
+        },
+        PostmortemFiveWhys: {
+          type: 'array', maxItems: 10,
+          items: { type: 'object', additionalProperties: false, properties: {
+            id: { type: 'string', minLength: 1, maxLength: 100 },
+            question: { type: 'string', minLength: 1, maxLength: 500 },
+            answer: { type: 'string', minLength: 1, maxLength: 2000 },
+          }, required: ['id', 'question', 'answer'] },
+        },
         Postmortem: {
           type: 'object',
           properties: {
@@ -532,6 +549,8 @@ function buildBaseSpec(): Record<string, unknown> {
             mitigation: { type: 'string', nullable: true },
             impact: { oneOf: [{ $ref: '#/components/schemas/PostmortemImpact' }, { type: 'null' }] },
             timeline: { oneOf: [{ $ref: '#/components/schemas/PostmortemTimeline' }, { type: 'null' }] },
+            contributingFactors: { oneOf: [{ $ref: '#/components/schemas/PostmortemFactors' }, { type: 'null' }] },
+            fiveWhys: { oneOf: [{ $ref: '#/components/schemas/PostmortemFiveWhys' }, { type: 'null' }] },
             lessons: { type: 'string', nullable: true },
             status: { type: 'string', enum: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'] },
             isPublic: { type: 'boolean' },
@@ -2086,6 +2105,8 @@ function buildBaseSpec(): Record<string, unknown> {
                     mitigation: { type: 'string' },
                     impact: { $ref: '#/components/schemas/PostmortemImpact' },
                     timeline: { $ref: '#/components/schemas/PostmortemTimeline' },
+                    contributingFactors: { $ref: '#/components/schemas/PostmortemFactors' },
+                    fiveWhys: { $ref: '#/components/schemas/PostmortemFiveWhys' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',
@@ -2136,6 +2157,8 @@ function buildBaseSpec(): Record<string, unknown> {
                     mitigation: { type: 'string' },
                     impact: { $ref: '#/components/schemas/PostmortemImpact' },
                     timeline: { $ref: '#/components/schemas/PostmortemTimeline' },
+                    contributingFactors: { $ref: '#/components/schemas/PostmortemFactors' },
+                    fiveWhys: { $ref: '#/components/schemas/PostmortemFiveWhys' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',

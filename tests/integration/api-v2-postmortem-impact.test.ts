@@ -87,6 +87,28 @@ it('keeps REST postmortem creation aligned with the resolved-incident UI rule', 
   expect(await db.postmortem.count({ where: { incidentId: incident.id } })).toBe(0);
 });
 
+it('persists bounded contributing factors and five-whys as structured root-cause data', async () => {
+  const writer = await createV2Credential(['postmortems:read', 'postmortems:write', 'incidents:read']);
+  const service = await createTestService('Root cause service');
+  const incident = await createTestIncident('Root cause incident', service.id, { status: 'RESOLVED' });
+  const factors = [{ id: 'factor-1', category: 'TECHNICAL', description: 'Missing timeout', evidence: ['trace-123'] }];
+  const fiveWhys = [{ id: 'why-1', question: 'Why did requests stall?', answer: 'A dependency waited indefinitely.' }];
+  const created = await invokeV2(POST, writer.token, 'POST', '/postmortems', {}, {
+    incidentId: incident.id, summary: 'Root cause analysis', contributingFactors: factors, fiveWhys,
+  }, { 'Idempotency-Key': 'postmortem-analysis-create' });
+  expect(created.status).toBe(201);
+  const id = (await created.json()).data.id as string;
+  const read = await invokeV2(GET_POSTMORTEM, writer.token, 'GET', `/postmortems/${id}`, { id });
+  const data = (await read.json()).data;
+  expect(data.contributingFactors).toEqual(factors);
+  expect(data.fiveWhys).toEqual(fiveWhys);
+  const invalid = await invokeV2(PATCH, writer.token, 'PATCH', `/postmortems/${id}`, { id }, {
+    fiveWhys: [fiveWhys[0], fiveWhys[0]],
+  }, { 'If-Match': read.headers.get('etag')!, 'Idempotency-Key': 'postmortem-analysis-invalid' });
+  expect(invalid.status).toBe(400);
+  expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).fiveWhys).toEqual(fiveWhys);
+});
+
 it('rejects a stale edit after another writer advances the postmortem revision', async () => {
   const writer = await createV2Credential(['postmortems:read', 'postmortems:write', 'incidents:read']);
   const service = await createTestService('Revision service');

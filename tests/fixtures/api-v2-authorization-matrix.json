@@ -479,6 +479,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "POST /postmortems/{id}/publish [postmortems:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /postmortems/{id} [postmortems:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

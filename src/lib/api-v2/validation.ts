@@ -310,6 +310,25 @@ export const PostmortemTimelineV2Schema = z.array(z.object({
   'Timeline event IDs must be unique.'
 );
 
+export const PostmortemFactorsV2Schema = z.array(z.object({
+  id: z.string().trim().min(1).max(100),
+  category: z.enum(['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER']),
+  description: z.string().trim().min(1).max(2000),
+  evidence: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
+}).strict()).max(30).refine(
+  entries => new Set(entries.map(entry => entry.id)).size === entries.length,
+  'Contributing-factor IDs must be unique.'
+);
+
+export const PostmortemFiveWhysV2Schema = z.array(z.object({
+  id: z.string().trim().min(1).max(100),
+  question: z.string().trim().min(1).max(500),
+  answer: z.string().trim().min(1).max(2000),
+}).strict()).max(10).refine(
+  entries => new Set(entries.map(entry => entry.id)).size === entries.length,
+  'Five-whys step IDs must be unique.'
+);
+
 export const PostmortemCreateV2Schema = z.object({
   incidentId: z.string().trim().min(1),
   title: z.string().trim().min(2).max(200).optional(),
@@ -319,6 +338,8 @@ export const PostmortemCreateV2Schema = z.object({
   mitigation: z.string().trim().max(5000).optional(),
   impact: PostmortemImpactV2Schema.optional(),
   timeline: PostmortemTimelineV2Schema.optional(),
+  contributingFactors: PostmortemFactorsV2Schema.optional(),
+  fiveWhys: PostmortemFiveWhysV2Schema.optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED']).default('DRAFT'),
   isPublic: z.boolean().default(true),
@@ -332,6 +353,8 @@ export const PostmortemUpdateV2Schema = z.object({
   mitigation: z.string().trim().max(5000).optional(),
   impact: PostmortemImpactV2Schema.optional(),
   timeline: PostmortemTimelineV2Schema.optional(),
+  contributingFactors: PostmortemFactorsV2Schema.optional(),
+  fiveWhys: PostmortemFiveWhysV2Schema.optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
   isPublic: z.boolean().optional(),

@@ -2010,6 +2010,17 @@
     ],
     "bodyRequired": true
   },
+  "publishPostmortem": {
+    "method": "POST",
+    "path": "/postmortems/{id}/publish",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "updatePostmortem": {
     "method": "PATCH",
     "path": "/postmortems/{id}",
