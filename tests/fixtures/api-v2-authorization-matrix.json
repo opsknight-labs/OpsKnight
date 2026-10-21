@@ -467,6 +467,18 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "PATCH /postmortems/{id}/action-items/{itemId} [postmortems:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /postmortems/{id}/action-items/{itemId} [postmortems:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /postmortems/{id}/action-items [postmortems:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

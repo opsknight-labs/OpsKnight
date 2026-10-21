@@ -149,6 +149,8 @@ export type PostmortemVersionCollection = { "postmortemId": string; "currentRevi
 export type PostmortemContributors = { "postmortemId": string; "revision": number; "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR"; "name": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type PostmortemPublication = { "id": string; "revision": number; "status": "PUBLISHED"; "isPublic": boolean; "publishedAt": string } & Record<string, unknown>;
 export type PostmortemActionItemCollection = { "postmortemId": string; "revision": number; "items": Array<{ "id": string; "title": string; "description": string; "owner"?: string; "dueDate"?: string; "status": "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority": "HIGH" | "MEDIUM" | "LOW"; "completedAt"?: string | null; "externalIssue"?: Record<string, unknown> } & Record<string, unknown>> } & Record<string, unknown>;
+export type PostmortemActionItemChange = { "postmortemId": string; "revision": number; "item": Record<string, unknown> } & Record<string, unknown>;
+export type PostmortemActionItemDeletion = { "postmortemId": string; "revision": number; "deletedId": string } & Record<string, unknown>;
 export type ServiceHealthSummary = { "service": { "id": string; "name": string; "status": string; "escalationPolicyId": string | null } & Record<string, unknown>; "observedAt": string; "activeIncidentCount": number; "recentIncidents": Array<{ "id": string; "title": string; "status": string; "createdAt": string } & Record<string, unknown>>; "last24Hours": { "linkedAlertCount": number; "failedNotificationCount": number } & Record<string, unknown>; "onCallCoverage": { "state": string; "eligibleResponderCount": number | null; "basis": string } & Record<string, unknown>; "objectives": Array<{ "id": string; "name": string; "metricType": string; "target": number; "latestSnapshot": { "periodEnd": string; "value": number | null; "breached": boolean | null; "dataState": string } & Record<string, unknown> | null } & Record<string, unknown>>; "truncated": { "objectives": boolean; "recentIncidents": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type EscalationPolicyPreview = { "policyId": string; "policyRevision": number; "incidentId": string; "evaluatedAt": string; "supportHoursState": string; "steps": Array<{ "stepId": string; "stepOrder": number; "delayMinutes": number; "targetType": string; "applicable": boolean; "outcome": string; "recipientUserIds": Array<string> } & Record<string, unknown>>; "truncated": boolean; "timingAssumption": string; "advisory": boolean } & Record<string, unknown>;
 export type ServiceChangeEvent = { "id": string; "action": string; "entityId": string | null; "createdAt": string; "source": "AUDIT_LOG" } & Record<string, unknown>;
@@ -407,6 +409,8 @@ export interface OperationRequests {
   listPostmortemVersions: { "params": { "id": string } };
   listPostmortemActionItems: { "params": { "id": string } };
   replacePostmortemActionItems: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "items": Array<{ "id"?: string; "title": string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" }> } };
+  updatePostmortemActionItem: { "params": { "id": string; "itemId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" } };
+  deletePostmortemActionItem: { "params": { "id": string; "itemId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
   publishPostmortem: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "isPublic": boolean } };
   listPostmortemContributors: { "params": { "id": string } };
   replacePostmortemContributors: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR" }> } };
@@ -708,6 +712,8 @@ export interface OperationResponses {
   listPostmortemVersions: { "data": PostmortemVersionCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listPostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   replacePostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updatePostmortemActionItem: { "data": PostmortemActionItemChange; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deletePostmortemActionItem: { "data": PostmortemActionItemDeletion; "requestId": string; "timestamp": string } & Record<string, unknown>;
   publishPostmortem: { "data": PostmortemPublication; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listPostmortemContributors: { "data": PostmortemContributors; "requestId": string; "timestamp": string } & Record<string, unknown>;
   replacePostmortemContributors: { "data": PostmortemContributors; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2805,6 +2811,28 @@ export const OPERATIONS = {
       "If-Match"
     ],
     "bodyRequired": true
+  },
+  "updatePostmortemActionItem": {
+    "method": "PATCH",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deletePostmortemActionItem": {
+    "method": "DELETE",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
   },
   "publishPostmortem": {
     "method": "POST",

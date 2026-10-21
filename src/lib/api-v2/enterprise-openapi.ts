@@ -1260,6 +1260,23 @@ const operations: Operation[] = [
     }, ['title']), 100) }, ['items']),
   },
   {
+    method: 'patch', path: '/postmortems/{id}/action-items/{itemId}',
+    summary: 'Update one corrective action',
+    description: 'Requires the parent postmortem If-Match and Idempotency-Key. Preserves other actions and existing external issue links.',
+    body: object({
+      title: { type: 'string', minLength: 1, maxLength: 300 },
+      description: { type: 'string', maxLength: 5000 },
+      ownerId: { type: ['string', 'null'] }, dueDate: { type: ['string', 'null'], format: 'date' },
+      status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+      priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+    }, []),
+  },
+  {
+    method: 'delete', path: '/postmortems/{id}/action-items/{itemId}',
+    summary: 'Delete one corrective action',
+    description: 'Requires the parent postmortem If-Match and Idempotency-Key. Other actions remain unchanged.',
+  },
+  {
     method: 'post', path: '/postmortems/{id}/publish',
     summary: 'Publish a reviewed postmortem with explicit public visibility',
     description: 'Requires a resolved incident, complete summary, exact If-Match revision and Idempotency-Key. An already-published revision with matching visibility returns the existing result without another audit.',

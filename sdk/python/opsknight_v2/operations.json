@@ -2018,6 +2018,28 @@
     ],
     "bodyRequired": true
   },
+  "updatePostmortemActionItem": {
+    "method": "PATCH",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deletePostmortemActionItem": {
+    "method": "DELETE",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "publishPostmortem": {
     "method": "POST",
     "path": "/postmortems/{id}/publish",

@@ -90,6 +90,17 @@ const extraSchemas: Json = {
       }, required: ['id', 'title', 'description', 'status', 'priority'] } },
     }, required: ['postmortemId', 'revision', 'items'],
   },
+  PostmortemActionItemChange: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, revision: { type: 'integer' },
+      item: { type: 'object', additionalProperties: true },
+    }, required: ['postmortemId', 'revision', 'item'],
+  },
+  PostmortemActionItemDeletion: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, revision: { type: 'integer' }, deletedId: { type: 'string' },
+    }, required: ['postmortemId', 'revision', 'deletedId'],
+  },
   ServiceHealthSummary: {
     type: 'object', properties: {
       service: { type: 'object', properties: {

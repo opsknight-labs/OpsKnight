@@ -691,6 +691,14 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
     rationale: 'Exact parent revision fences a bounded complete replacement; relational action items, legacy JSON, audit and replay receipt commit together.',
   },
+  'PATCH /api/v2/postmortems/[id]/action-items/[itemId]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Exact parent revision fences a single corrective-action edit while retaining other actions; data, audit and replay receipt commit together.',
+  },
+  'DELETE /api/v2/postmortems/[id]/action-items/[itemId]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Exact parent revision fences removal of one corrective action; remaining actions, audit and replay receipt commit together.',
+  },
   'POST /api/v2/postmortems/[id]/publish': {
     idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
     rationale: 'Exact parent revision fences the publication transition; visibility, timestamp, canonical audit and replay receipt commit atomically. Repetition at the current revision is side-effect-free.',
