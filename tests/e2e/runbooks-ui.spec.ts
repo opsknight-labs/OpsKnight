@@ -192,7 +192,8 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
   ).toBeVisible();
-  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await expect(
     page.locator('[role="tabpanel"]:visible').getByLabel('Input 1 key', { exact: true })
@@ -1491,14 +1492,14 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
     history.getByRole('link', { name: 'View archived rule evidence', exact: true })
   ).not.toBeVisible();
   await history
-    .getByLabel('Rule history', { exact: true })
+    .getByLabel(/Rule history|Lifecycle/i)
     .filter({ visible: true })
     .selectOption('archived');
   await history
-    .getByLabel('Search rules', { exact: true })
+    .getByLabel(/Search rules/i)
     .filter({ visible: true })
     .fill('Detached response');
-  await history.getByRole('button', { name: 'Search rule history', exact: true }).click();
+  await history.getByRole('button', { name: /Search rule history/i }).click();
   await expect(
     history.getByText('Rule detached · Archived history', { exact: true }).filter({ visible: true })
   ).toBeVisible();

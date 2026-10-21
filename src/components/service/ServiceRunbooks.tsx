@@ -33,13 +33,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
 import { EmptyHint } from '@/components/runbooks/ui/primitives';
 import type {
   BindingPresentation,
@@ -510,26 +503,51 @@ export default function ServiceRunbooks({
               >
                 <Search className="h-3 w-3" /> Search
               </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  id={`${ids}-search`}
-                  name="rulesSearch"
-                  placeholder="Search rules by name, runbook, or target agent…"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="h-9 rounded-xl pl-9 pr-8 text-xs font-medium w-full bg-background/80 shadow-2xs"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    aria-label="Clear search"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id={`${ids}-search`}
+                    name="rulesSearch"
+                    aria-label="Search rules"
+                    placeholder="Search rules by name, runbook, or target agent…"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        router.push(
+                          `/services/${serviceId}?tab=runbooks&rulesSearch=${encodeURIComponent(searchQuery.trim())}&rulesState=${rulesState}`
+                        );
+                      }
+                    }}
+                    className="h-9 rounded-xl pl-9 pr-8 text-xs font-medium w-full bg-background/80 shadow-2xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label="Search rule history"
+                  onClick={() => {
+                    router.push(
+                      `/services/${serviceId}?tab=runbooks&rulesSearch=${encodeURIComponent(searchQuery.trim())}&rulesState=${rulesState}`
+                    );
+                  }}
+                  className="h-9 px-3 rounded-xl border-input/80 text-xs font-semibold shadow-2xs shrink-0 cursor-pointer"
+                >
+                  <Search className="h-3.5 w-3.5 sm:mr-1" />
+                  <span className="hidden sm:inline">Search</span>
+                </Button>
               </div>
             </div>
 
@@ -540,33 +558,25 @@ export default function ServiceRunbooks({
                 canManage ? 'sm:col-span-3 lg:col-span-2' : 'sm:col-span-4 lg:col-span-3'
               )}
             >
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <Label
+                htmlFor={`${ids}-lifecycle`}
+                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"
+              >
                 <Activity className="h-3 w-3" /> Lifecycle
               </Label>
-              <Select
+              <select
+                id={`${ids}-lifecycle`}
+                name="rulesState"
+                aria-label="Rule history"
                 value={rulesState}
-                onValueChange={val => {
-                  router.push(`/services/${serviceId}?tab=runbooks&rulesState=${val}`);
+                onChange={e => {
+                  router.push(`/services/${serviceId}?tab=runbooks&rulesState=${e.target.value}`);
                 }}
+                className="h-9 w-full rounded-xl border border-input/80 bg-background/80 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 transition-colors px-2.5 text-foreground cursor-pointer"
               >
-                <SelectTrigger className="h-9 w-full rounded-xl border border-input/80 bg-background/80 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 transition-colors">
-                  <SelectValue placeholder="Attached rules" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl p-1">
-                  <SelectItem
-                    value="active"
-                    className="rounded-lg text-xs font-medium cursor-pointer"
-                  >
-                    Attached rules
-                  </SelectItem>
-                  <SelectItem
-                    value="archived"
-                    className="rounded-lg text-xs font-medium cursor-pointer"
-                  >
-                    Archived rules
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="active">Attached rules</option>
+                <option value="archived">Archived rules</option>
+              </select>
             </div>
 
             {/* Scope Parameters Toggle Button */}
