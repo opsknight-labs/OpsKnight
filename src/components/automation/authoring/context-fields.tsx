@@ -192,6 +192,18 @@ export const FieldDetail = memo(function FieldDetail({
                 : '“Prod” and “prod” are treated as the same value.'}
             </span>
           </div>
+          <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1">
+            <Switch
+              id={`${caseId}-display`}
+              checked={field.displayOnly ?? false}
+              onCheckedChange={displayOnly => updateField(field.key, { displayOnly })}
+            />
+            <Label htmlFor={`${caseId}-display`}>Display-only field</Label>
+            <span className="text-xs text-muted-foreground">
+              Captured for incident presentation and runbook context without requiring rule
+              conditions.
+            </span>
+          </div>
         </div>
       )}
       {unmapped.length > 0 && (
@@ -249,7 +261,19 @@ export function deriveFieldKey(label: string) {
   return label
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_');
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+export function deriveUniqueFieldKey(label: string, existingKeys: Set<string>): string {
+  const baseKey = deriveFieldKey(label) || 'field';
+  const cleanBase = /^[a-z]/.test(baseKey) ? baseKey : `field_${baseKey}`;
+  if (!existingKeys.has(cleanBase)) return cleanBase;
+  let counter = 2;
+  while (existingKeys.has(`${cleanBase}_${counter}`)) {
+    counter++;
+  }
+  return `${cleanBase}_${counter}`;
 }
 
 export function newFieldProblems({
@@ -257,6 +281,7 @@ export function newFieldProblems({
   key,
   existingKeys,
   observedPath,
+  source,
   fieldCount,
   type,
   values,
@@ -265,6 +290,7 @@ export function newFieldProblems({
   key: string;
   existingKeys: Set<string>;
   observedPath: string;
+  source?: 'PROVIDER' | 'EVENT';
   fieldCount: number;
   type: Field['type'];
   values: string[];
@@ -278,6 +304,8 @@ export function newFieldProblems({
     else if (existingKeys.has(key)) problems.label = `A field with key “${key}” already exists.`;
     if (!observedPath)
       problems.source = 'Choose an observed field, or enter a source path under Advanced mapping.';
+    else if (!source)
+      problems.source = 'Select whether the source is a normalized event or raw provider payload.';
   }
   if (type === 'ENUM' && !values.length) problems.values = 'Add at least one canonical choice.';
   return problems;

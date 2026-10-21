@@ -215,6 +215,31 @@ it('only offers field removal when no rule references the field', () => {
   expect(onConfirm).toHaveBeenCalledWith(field);
 });
 
+it('deleting a referenced field from Context area and clicking View affected rules switches to Rules area and closes dialog', async () => {
+  const field: Field = {
+    fieldId: 'f1',
+    key: 'missing_field',
+    label: 'Region',
+    type: 'STRING',
+    caseSensitive: false,
+    aliases: {},
+    mappings: [{ source: 'EVENT', path: 'payload.region' }],
+  };
+  api.area.mockResolvedValue({
+    ...base,
+    draft: { snapshot: { ...emptySnapshot, fields: [field], rules: [brokenRule] }, revision: 1 },
+  });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove field' }));
+  const dialog = await screen.findByRole('alertdialog');
+  expect(dialog).toHaveTextContent('Region is used by 1 rule.');
+  fireEvent.click(screen.getByRole('button', { name: 'View affected rules' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  const configure = await screen.findByRole('button', { name: 'Configure Broken routing' });
+  expect(configure).toHaveAttribute('aria-expanded', 'true');
+});
+
 it('applies starter templates without clobbering incompatible or existing ENUM fields', () => {
   const conflicting: Snapshot = {
     ...emptySnapshot,
@@ -274,4 +299,87 @@ it('sums Shadow aggregates, optionally for one version only', () => {
   expect(sumShadowAggregates(rows)).toMatchObject({ evaluated: 8, same: 6, routes: 2 });
   expect(sumShadowAggregates(rows, 'v2')).toMatchObject({ evaluated: 3, routes: 1 });
   expect(sumShadowAggregates(undefined)).toBeUndefined();
+});
+
+it('rapid navigation and refreshes discard stale responses and prevent older responses from overwriting newer state', async () => {
+  let resolveRules: (value: unknown) => void;
+  const rulesPromise = new Promise(resolve => {
+    resolveRules = resolve;
+  });
+
+  const rulesData = {
+    ...base,
+    draft: {
+      snapshot: {
+        ...emptySnapshot,
+        rules: [
+          {
+            id: 'r-slow',
+            name: 'Slow Rules Response',
+            phase: 'ROUTE' as const,
+            enabled: true,
+            conditions: [],
+            actions: [],
+          },
+        ],
+      },
+      revision: 1,
+    },
+  };
+
+  const contextData = {
+    ...base,
+    draft: {
+      snapshot: {
+        ...emptySnapshot,
+        fields: [
+          {
+            fieldId: 'f1',
+            key: 'env_fast',
+            label: 'Fast Context Field',
+            type: 'STRING' as const,
+            caseSensitive: false,
+            displayOnly: false,
+            aliases: {},
+            mappings: [],
+          },
+        ],
+      },
+      revision: 2,
+    },
+  };
+
+  api.area.mockImplementation(async (_serviceId: string, area: string) => {
+    if (area === 'rules') {
+      return await rulesPromise;
+    }
+    if (area === 'context') {
+      return contextData;
+    }
+    return base;
+  });
+
+  render(<AutomationWorkspace serviceId="service" />);
+
+  // Initial load completes on overview
+  await screen.findByRole('button', { name: 'Overview' });
+
+  // 1. User navigates to Rules (which is slow/delayed)
+  fireEvent.click(screen.getByRole('button', { name: 'Rules' }));
+
+  // 2. User rapidly navigates to Context (which resolves fast)
+  fireEvent.click(screen.getByRole('button', { name: 'Context' }));
+
+  // Context resolves first and fast
+  await screen.findByRole('heading', { name: 'Add context field' });
+
+  // 3. Now the older Rules response finally resolves
+  resolveRules!(rulesData);
+
+  // Wait a tick to ensure any pending promises settle
+  await new Promise(r => setTimeout(r, 50));
+
+  // The workspace should remain on Context and NOT be overwritten by the stale Rules response
+  expect(screen.getByRole('heading', { name: 'Add context field' })).toBeInTheDocument();
+  expect(screen.queryByText('Slow Rules Response')).not.toBeInTheDocument();
 });

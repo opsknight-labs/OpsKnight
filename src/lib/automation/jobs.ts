@@ -14,9 +14,10 @@ const observationSchema = z
     value: z.string().max(256),
     type: z.string().max(16),
     unmapped: z.boolean(),
+    source: z.enum(['PROVIDER', 'EVENT']).optional(),
   })
   .strict();
-const jobSchema = z.discriminatedUnion('task', [
+export const jobSchema = z.discriminatedUnion('task', [
   z
     .object({
       task: z.literal('AUTOMATION_NOTIFY'),

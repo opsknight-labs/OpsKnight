@@ -274,9 +274,12 @@ it('lists context fields with type, mappings and provenance', () => {
 
 it('validates a new field inline without changing when Add field is enabled', () => {
   renderContext({ fieldLabel: 'Environment' });
-  expect(screen.getByText('A field with key “environment” already exists.')).toBeInTheDocument();
+  expect(screen.getByText(/automation\.environment_2/)).toBeInTheDocument();
+  expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
   expect(
-    screen.getByText('Choose an observed field, or enter a source path under Advanced mapping.')
+    screen.getAllByText(
+      'Choose an observed field, or enter a source path under Advanced mapping.'
+    )[0]
   ).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Add field' })).toBeEnabled();
 });

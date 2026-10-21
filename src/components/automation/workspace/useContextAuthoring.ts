@@ -4,6 +4,7 @@ import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
 import { builtinFields, type Field, type Snapshot } from '@/lib/automation/contract';
 import type { Observation } from '@/lib/automation/discovery';
 import type { Discovery } from '../presentation-types';
+import { deriveUniqueFieldKey } from '../authoring/context-fields';
 import { defaultProviderSample } from './constants';
 
 /** Field-authoring form state for the Context section; kept here so it survives tab switches. */
@@ -25,8 +26,67 @@ export function useContextAuthoring({
   const [fieldLabel, setFieldLabel] = useState('Environment');
   const [fieldType, setFieldType] = useState<Field['type']>('ENUM');
   const [observedPath, setObservedPath] = useState('');
+  const [selectedSource, setSelectedSource] = useState<'PROVIDER' | 'EVENT' | undefined>(undefined);
+  const [selectedIntegrationType, setSelectedIntegrationType] = useState<string | undefined>(
+    undefined
+  );
   const [values, setValues] = useState<string[]>(['production', 'staging', 'development']);
   const [advanced, setAdvanced] = useState(false);
+
+  const handleManualPathChange = useCallback((nextPath: string) => {
+    setObservedPath(nextPath);
+    setSelectedIntegrationType(undefined);
+  }, []);
+
+  const selectObservedField = useCallback(
+    (
+      field: {
+        path: string;
+        source?: 'PROVIDER' | 'EVENT';
+        integrationType?: string;
+        label?: string;
+        type?: Field['type'];
+      } | null
+    ) => {
+      if (!field) {
+        setObservedPath('');
+        setSelectedSource(undefined);
+        setSelectedIntegrationType(undefined);
+        return;
+      }
+      setObservedPath(field.path);
+      setSelectedSource(field.source);
+      setSelectedIntegrationType(field.integrationType);
+      if (field.label) {
+        setFieldLabel(field.label);
+      }
+      if (field.type) {
+        setFieldType(field.type);
+      }
+      if (field.integrationType && field.integrationType !== 'ALL') {
+        setIntegrationType(field.integrationType);
+      }
+    },
+    []
+  );
+
+  const handleIntegrationTypeChange = useCallback(
+    (nextType: string) => {
+      setIntegrationType(nextType);
+      if (nextType === 'ALL') {
+        setSelectedIntegrationType(undefined);
+      } else if (
+        nextType !== 'ALL' &&
+        selectedIntegrationType &&
+        selectedIntegrationType !== nextType
+      ) {
+        setObservedPath('');
+        setSelectedSource(undefined);
+        setSelectedIntegrationType(undefined);
+      }
+    },
+    [selectedIntegrationType]
+  );
 
   const analyze = useCallback(async () => {
     try {
@@ -39,23 +99,53 @@ export function useContextAuthoring({
         onError(response.error);
         return;
       }
-      setDiscoveries(response.data as Observation[]);
+      const raw = response.data as Observation[];
+      setDiscoveries(
+        raw.map(item => ({
+          ...item,
+          source: 'PROVIDER' as const,
+          integrationType: integrationType === 'ALL' ? undefined : integrationType,
+        }))
+      );
     } catch {
       onError('Enter a valid JSON provider sample');
     }
-  }, [serviceId, providerSample, onError]);
+  }, [serviceId, providerSample, integrationType, onError]);
 
   const addField = useCallback(() => {
-    const key = fieldLabel
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_');
-    const taken = [...builtinFields, ...draft.fields].some(field => field.key === key);
-    if (!/^[a-z][a-z0-9_]{0,63}$/.test(key) || taken || !observedPath) {
+    const existingKeys = new Set([...builtinFields, ...draft.fields].map(field => field.key));
+    const key = deriveUniqueFieldKey(fieldLabel, existingKeys);
+    if (!/^[a-z][a-z0-9_]{0,63}$/.test(key) || !observedPath) {
       onError('Choose a unique field name and an observed source field');
       return;
     }
-    const source = discoveries.find(item => item.path === observedPath)?.source;
+    const matchingDiscovery = discoveries.find(
+      item =>
+        item.path === observedPath &&
+        (!selectedSource || item.source === selectedSource) &&
+        (selectedIntegrationType &&
+        selectedIntegrationType !== 'ALL' &&
+        selectedIntegrationType !== 'EVENTS_API'
+          ? item.integrationType === selectedIntegrationType ||
+            (item.integrationType === undefined && selectedSource === 'EVENT')
+          : integrationType && integrationType !== 'ALL' && integrationType !== 'EVENTS_API'
+            ? item.integrationType === integrationType ||
+              (item.integrationType === undefined && selectedSource === 'EVENT')
+            : !item.integrationType ||
+              item.integrationType === 'ALL' ||
+              item.integrationType === 'EVENTS_API')
+    );
+    const effectiveIntegration =
+      integrationType === 'ALL' ||
+      (matchingDiscovery &&
+        !matchingDiscovery.integrationType &&
+        matchingDiscovery.source === 'EVENT')
+        ? undefined
+        : (selectedIntegrationType ?? integrationType);
+    const source =
+      selectedSource ??
+      matchingDiscovery?.source ??
+      (effectiveIntegration === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
     edit({
       ...draft,
       fields: [
@@ -66,13 +156,13 @@ export function useContextAuthoring({
           label: fieldLabel.trim(),
           type: fieldType,
           caseSensitive: false,
+          displayOnly: false,
           ...(fieldType === 'ENUM' ? { allowedValues: values } : {}),
           aliases: {},
           mappings: [
             {
-              source: source ?? 'PROVIDER',
-              integrationType:
-                source === 'EVENT' || integrationType === 'ALL' ? undefined : integrationType,
+              source,
+              integrationType: effectiveIntegration,
               path: observedPath,
             },
           ],
@@ -88,6 +178,8 @@ export function useContextAuthoring({
     integrationType,
     observedPath,
     onError,
+    selectedIntegrationType,
+    selectedSource,
     values,
   ]);
 
@@ -98,6 +190,9 @@ export function useContextAuthoring({
     setProviderSample,
     integrationType,
     setIntegrationType,
+    handleIntegrationTypeChange,
+    selectObservedField,
+    handleManualPathChange,
     discoveries,
     setDiscoveries,
     fieldLabel,
@@ -105,7 +200,11 @@ export function useContextAuthoring({
     fieldType,
     setFieldType,
     observedPath,
-    setObservedPath,
+    setObservedPath: handleManualPathChange,
+    selectedSource,
+    setSelectedSource,
+    selectedIntegrationType,
+    setSelectedIntegrationType,
     values,
     setValues,
     advanced,

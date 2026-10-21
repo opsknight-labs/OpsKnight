@@ -30,6 +30,11 @@ with downtime. Old/new application replicas must not overlap during migration. T
 Helm pre-upgrade gate verifies stopped application runtimes before the migration
 owner runs; other topologies must enforce the same stop-all sequence explicitly.
 
+For the Service Automation observation provenance migration (`20261021040000`), workers running
+predecessor code target the predecessor 4-column unique index. Stop or drain background workers
+(`opsknight-general-worker` and integrated replicas) before applying schema migrations, or cut over
+worker replicas sequentially (`spec.replicas: 0` before migration, followed by new replica launch).
+
 ## Prerequisites
 
 Prepare:

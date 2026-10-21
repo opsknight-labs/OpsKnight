@@ -309,15 +309,36 @@ export async function getAutomationArea(
         select: { id: true, name: true, type: true },
       })
     : [];
-  const alerts =
+  const rawAlerts =
     area === 'test' && canReadSensitive
       ? await prisma.alert.findMany({
           where: { serviceId },
           orderBy: { createdAt: 'desc' },
-          select: { id: true, payload: true, createdAt: true },
+          select: { id: true, payload: true, createdAt: true, dedupKey: true },
           take: 20,
         })
       : [];
+  const alerts = rawAlerts.map(alert => {
+    const payload = alert.payload as Record<string, unknown> | null;
+    const sourceStr = typeof payload?.source === 'string' ? payload.source.toLowerCase() : '';
+    const matched =
+      integrations.find(i => alert.dedupKey?.startsWith(i.id + ':') || alert.dedupKey === i.id) ??
+      integrations.find(
+        i =>
+          sourceStr &&
+          (i.type.toLowerCase() === sourceStr || i.name.toLowerCase().includes(sourceStr))
+      );
+    return {
+      id: alert.id,
+      payload: alert.payload,
+      createdAt: alert.createdAt,
+      dedupKey: alert.dedupKey,
+      integrationId: matched?.id ?? null,
+      integrationType: matched?.type ?? null,
+      providerSample: null,
+      replayMode: 'NORMALIZED_ONLY' as const,
+    };
+  });
   const activeVersion = config?.activeVersionId
     ? await prisma.automationVersion.findUnique({
         where: { id: config.activeVersionId },

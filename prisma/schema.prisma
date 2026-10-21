@@ -4132,6 +4132,7 @@ model AutomationContextObservation {
   serviceId              String
   integrationId          String
   integrationType        String
+  source                 String?
   fieldKey               String
   sourcePath             String
   fieldType              String
@@ -4143,7 +4144,7 @@ model AutomationContextObservation {
   lastSeenAt             DateTime @default(now())
   service                Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@unique([serviceId, integrationId, fieldKey, normalizedRawValueHash])
+  @@unique([serviceId, integrationId, fieldKey, sourcePath, normalizedRawValueHash, source], map: "AutomationContextObservation_provenance_key")
   @@index([serviceId, lastSeenAt])
 }
 

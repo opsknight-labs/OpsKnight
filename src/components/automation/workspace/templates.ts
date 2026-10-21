@@ -18,6 +18,7 @@ export function applyAutomationTemplate(
     label: 'Environment',
     type: 'ENUM',
     caseSensitive: false,
+    displayOnly: false,
     allowedValues: ['production', 'staging', 'development'],
     aliases: { prod: 'production', prd: 'production', stg: 'staging' },
     mappings: [{ source: 'EVENT', path: 'payload.custom_details.environment' }],
@@ -28,6 +29,7 @@ export function applyAutomationTemplate(
     label: kind === 'account' ? 'AWS Account ID' : 'Customer tier',
     type: 'STRING',
     caseSensitive: false,
+    displayOnly: false,
     aliases: {},
     mappings: [{ source: 'PROVIDER', path: kind === 'account' ? 'AWSAccountId' : 'customer_tier' }],
   };

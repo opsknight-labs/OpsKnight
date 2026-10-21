@@ -55,12 +55,57 @@ export async function testAutomation(
     initialContext: context,
     evaluationAt: input.evaluationAt,
   });
+  const isProviderPayloadEmpty =
+    !input.providerPayload ||
+    (typeof input.providerPayload === 'object' &&
+      Object.keys(input.providerPayload as object).length === 0);
+
+  const providerFieldsMissing: string[] = [];
+  for (const field of compiled.fields) {
+    const hasProviderMapping = field.mappings.some(
+      m =>
+        m.source === 'PROVIDER' &&
+        (!m.integrationType || m.integrationType === input.integrationType)
+    );
+    const hasEventMapping = field.mappings.some(
+      m =>
+        m.source === 'EVENT' &&
+        (!m.integrationType || m.integrationType === input.integrationType)
+    );
+    if (hasProviderMapping && !hasEventMapping && isProviderPayloadEmpty) {
+      providerFieldsMissing.push(field.label);
+    }
+  }
+
+  const allIssues = [...issues];
+  if (providerFieldsMissing.length > 0) {
+    allIssues.push({
+      level: 'WARNING',
+      code: 'PROVIDER_PAYLOAD_UNAVAILABLE',
+      message: `Provider-only mapping unavailable for: ${providerFieldsMissing.join(', ')} (no raw provider sample supplied).`,
+    });
+  }
+
+  const normalization = extracted.normalization.map(item => {
+    if (providerFieldsMissing.some(label => {
+      const f = compiled.fields.find(cf => cf.key === item.fieldKey);
+      return f?.label === label;
+    })) {
+      return {
+        ...item,
+        raw: item.raw === null ? '(provider sample unavailable)' : item.raw,
+      };
+    }
+    return item;
+  });
+
   return {
-    issues,
+    issues: allIssues,
     classification,
-    normalization: extracted.normalization,
+    normalization,
     result,
     goldenResults: goldenResults(),
     durationMs: performance.now() - start,
+    providerFieldsMissing,
   };
 }

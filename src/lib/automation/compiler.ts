@@ -8,6 +8,64 @@ export type LintIssue = {
   message: string;
   ruleId?: string;
 };
+export function areRulesMutuallyExclusive(
+  ruleA: { conditions: import('./contract').Condition[] },
+  ruleB: { conditions: import('./contract').Condition[] }
+): boolean {
+  for (const condA of ruleA.conditions) {
+    for (const condB of ruleB.conditions) {
+      if (condA.fieldKey !== condB.fieldKey) continue;
+      const isScalarA = condA.value !== undefined && !Array.isArray(condA.value);
+      const isScalarB = condB.value !== undefined && !Array.isArray(condB.value);
+      if (
+        condA.operator === 'EQ' &&
+        condB.operator === 'EQ' &&
+        isScalarA &&
+        isScalarB &&
+        condA.value !== condB.value
+      ) {
+        return true;
+      }
+      if (
+        (condA.operator === 'IS_MISSING' &&
+          (condB.operator === 'IS_SET' || condB.operator === 'EQ')) ||
+        (condB.operator === 'IS_MISSING' &&
+          (condA.operator === 'IS_SET' || condA.operator === 'EQ'))
+      ) {
+        return true;
+      }
+      if (
+        condA.operator === 'IN' &&
+        condB.operator === 'IN' &&
+        Array.isArray(condA.value) &&
+        Array.isArray(condB.value)
+      ) {
+        const setB = new Set(condB.value);
+        if (!condA.value.some(v => setB.has(v))) return true;
+      }
+      if (
+        condA.operator === 'EQ' &&
+        condB.operator === 'IN' &&
+        isScalarA &&
+        Array.isArray(condB.value) &&
+        !(condB.value as unknown[]).includes(condA.value)
+      ) {
+        return true;
+      }
+      if (
+        condB.operator === 'EQ' &&
+        condA.operator === 'IN' &&
+        isScalarB &&
+        Array.isArray(condA.value) &&
+        !(condA.value as unknown[]).includes(condB.value)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function compileAutomation(raw: unknown): {
   compiled: CompiledSnapshot;
   issues: LintIssue[];
@@ -63,7 +121,7 @@ export function compileAutomation(raw: unknown): {
   const definitions = [...builtinFields, ...fields];
   const ruleIds = new Set<string>();
   let catchAll = false;
-  let priorityWriter = false;
+  const priorPriorityRules: typeof snapshot.rules = [];
   for (const rule of snapshot.rules) {
     if (ruleIds.has(rule.id)) add('DUPLICATE_RULE', 'Rule IDs must be unique', rule.id);
     ruleIds.add(rule.id);
@@ -127,14 +185,17 @@ export function compileAutomation(raw: unknown): {
           );
       }
       if (action.type === 'SET_PRIORITY') {
-        if (priorityWriter)
+        const hasConflict = priorPriorityRules.some(
+          prior => !areRulesMutuallyExclusive(prior, rule)
+        );
+        if (hasConflict)
           add(
             'PRIORITY_CONFLICT',
             'Multiple priority writers use last writer wins',
             rule.id,
             'WARNING'
           );
-        priorityWriter = true;
+        priorPriorityRules.push(rule);
       }
     }
     if (!rule.enabled) continue;
@@ -153,9 +214,14 @@ export function compileAutomation(raw: unknown): {
       }
     }
   }
-  const used = new Set(snapshot.rules.flatMap(r => r.conditions.map(c => c.fieldKey)));
+  const used = new Set([
+    ...snapshot.rules.flatMap(r => r.conditions.map(c => c.fieldKey)),
+    ...snapshot.rules.flatMap(r =>
+      r.actions.filter(a => a.type === 'SET_CONTEXT').map(a => (a as { fieldKey: string }).fieldKey)
+    ),
+  ]);
   for (const field of fields)
-    if (!used.has(field.key))
+    if (!used.has(field.key) && !field.displayOnly)
       add('UNUSED_FIELD', `Field ${field.label} is unused`, undefined, 'WARNING');
   if (snapshot.rules.length > 50)
     add(

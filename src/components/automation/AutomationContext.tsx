@@ -16,7 +16,7 @@ import {
 } from './authoring/primitives';
 import { useStableCallback } from './authoring/hooks';
 import {
-  deriveFieldKey,
+  deriveUniqueFieldKey,
   FieldCatalogRow,
   FieldDetail,
   newFieldProblems,
@@ -24,7 +24,7 @@ import {
 
 import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
 import { builtinFields, LIMITS, type Snapshot, type Field } from '@/lib/automation/contract';
-import type { Observation } from '@/lib/automation/discovery';
+import { formatHierarchicalLabel } from '@/lib/automation/discovery';
 
 import type { Data, Discovery } from './presentation-types';
 const EMPTY_SET = new Set<string>();
@@ -39,6 +39,10 @@ export function AutomationContext({
   setIntegrationType,
   observedPath,
   setObservedPath,
+  selectedSource,
+  setSelectedSource,
+  selectedIntegrationType,
+  setSelectedIntegrationType,
   discoveries,
   setDiscoveries,
   fieldLabel,
@@ -57,6 +61,8 @@ export function AutomationContext({
   providerSample,
   setProviderSample,
   analyze,
+  handleIntegrationTypeChange,
+  selectObservedField,
 }: {
   data: Data;
   draft: Snapshot;
@@ -66,8 +72,22 @@ export function AutomationContext({
   setDeleteField: (field: Field) => void;
   integrationType: string;
   setIntegrationType: (value: string) => void;
+  handleIntegrationTypeChange?: (value: string) => void;
+  selectObservedField?: (
+    field: {
+      path: string;
+      source?: 'PROVIDER' | 'EVENT';
+      integrationType?: string;
+      label?: string;
+      type?: Field['type'];
+    } | null
+  ) => void;
   observedPath: string;
   setObservedPath: (value: string) => void;
+  selectedSource?: 'PROVIDER' | 'EVENT';
+  setSelectedSource?: (value: 'PROVIDER' | 'EVENT' | undefined) => void;
+  selectedIntegrationType?: string;
+  setSelectedIntegrationType?: (value: string | undefined) => void;
   discoveries: Discovery[];
   setDiscoveries: (value: Discovery[]) => void;
   fieldLabel: string;
@@ -87,6 +107,26 @@ export function AutomationContext({
   setProviderSample: (value: string) => void;
   analyze: () => Promise<void>;
 }) {
+  const [internalSource, setInternalSource] = useState<'PROVIDER' | 'EVENT' | undefined>(undefined);
+  const [internalIntType, setInternalIntType] = useState<string | undefined>(undefined);
+  const effectiveIntType = selectedIntegrationType ?? internalIntType;
+  const setIntType = setSelectedIntegrationType ?? setInternalIntType;
+  const selectedDiscovery = discoveries.find(
+    d =>
+      d.path === observedPath &&
+      (!selectedSource || d.source === selectedSource) &&
+      (effectiveIntType && effectiveIntType !== 'ALL' && effectiveIntType !== 'EVENTS_API'
+        ? d.integrationType === effectiveIntType ||
+          (d.integrationType === undefined && selectedSource === 'EVENT')
+        : (!effectiveIntType || effectiveIntType === 'ALL' || effectiveIntType === 'EVENTS_API') &&
+          (!d.integrationType || d.integrationType === 'ALL' || d.integrationType === 'EVENTS_API'))
+  );
+  const effectiveSource: 'PROVIDER' | 'EVENT' =
+    selectedSource ??
+    internalSource ??
+    selectedDiscovery?.source ??
+    (effectiveIntType === 'EVENTS_API' || integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
+  const setSource = setSelectedSource ?? setInternalSource;
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const formId = useId();
   const visibleFields = useMemo(
@@ -101,17 +141,71 @@ export function AutomationContext({
   const stableDeleteField = useStableCallback(setDeleteField);
   const canReadSensitive = data.canReadSensitive !== false;
 
-  const observedOptions = useMemo(
-    () => [
-      ...new Map([
-        ...data.observations
-          .filter(o => integrationType === 'ALL' || o.integrationType === integrationType)
-          .map(o => [o.sourcePath, o.fieldKey] as const),
-        ...discoveries.map(o => [o.path, o.key] as const),
-      ]).entries(),
-    ],
-    [data.observations, discoveries, integrationType]
-  );
+  const observedOptions = useMemo(() => {
+    const list: Array<{
+      id: string;
+      path: string;
+      key: string;
+      label: string;
+      integrationType?: string;
+      source: 'PROVIDER' | 'EVENT';
+      type?: string;
+    }> = [];
+    const seen = new Set<string>();
+
+    for (const o of data.observations) {
+      if (integrationType !== 'ALL' && o.integrationType !== integrationType) continue;
+      const recordedSource: 'PROVIDER' | 'EVENT' | undefined =
+        o.source === 'PROVIDER' || o.source === 'EVENT'
+          ? (o.source as 'PROVIDER' | 'EVENT')
+          : undefined;
+      const matchingDisc = discoveries.find(
+        d =>
+          d.path === o.sourcePath &&
+          (o.integrationType === 'EVENTS_API'
+            ? !d.integrationType ||
+              d.integrationType === 'EVENTS_API' ||
+              d.integrationType === 'ALL'
+            : d.integrationType === o.integrationType || d.integrationType === 'ALL')
+      );
+      const source: 'PROVIDER' | 'EVENT' =
+        recordedSource ??
+        matchingDisc?.source ??
+        (o.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
+      const compositeId = `${o.integrationType}:${source}:${o.sourcePath}`;
+      if (seen.has(compositeId)) continue;
+      seen.add(compositeId);
+      list.push({
+        id: compositeId,
+        path: o.sourcePath,
+        key: o.fieldKey,
+        label: formatHierarchicalLabel(o.sourcePath),
+        integrationType: o.integrationType,
+        source,
+        type: o.fieldType,
+      });
+    }
+
+    for (const d of discoveries) {
+      if (integrationType !== 'ALL' && d.integrationType && d.integrationType !== integrationType)
+        continue;
+      const source = d.source ?? (d.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
+      const compositeId = `${d.integrationType ?? 'ALL'}:${source}:${d.path}`;
+      if (seen.has(compositeId)) continue;
+      seen.add(compositeId);
+      list.push({
+        id: compositeId,
+        path: d.path,
+        key: d.key,
+        label: d.label ?? formatHierarchicalLabel(d.path),
+        integrationType: d.integrationType,
+        source,
+        type: d.type,
+      });
+    }
+    return list;
+  }, [data.observations, discoveries, integrationType]);
+
   const integrationTypes = useMemo(
     () => [...new Set(data.integrations.map(i => i.type))],
     [data.integrations]
@@ -120,12 +214,13 @@ export function AutomationContext({
     () => new Set([...builtinFields, ...draft.fields].map(field => field.key)),
     [draft.fields]
   );
-  const newKey = deriveFieldKey(fieldLabel);
+  const newKey = deriveUniqueFieldKey(fieldLabel, existingKeys);
   const problems = newFieldProblems({
     label: fieldLabel,
     key: newKey,
     existingKeys,
     observedPath,
+    source: effectiveSource,
     fieldCount: draft.fields.length,
     type: fieldType,
     values,
@@ -144,8 +239,15 @@ export function AutomationContext({
         });
         if (!response.ok) setError(response.error);
         else {
-          setDiscoveries(response.data as Observation[]);
-          if (!(response.data as Observation[]).length)
+          const raw = response.data as Discovery[];
+          const enriched = raw.map(field => ({
+            ...field,
+            label: field.label ?? formatHierarchicalLabel(field.path),
+            source: 'EVENT' as const,
+            integrationType: undefined,
+          }));
+          setDiscoveries(enriched);
+          if (!enriched.length)
             setError('No suitable fields in recent alerts. Use a provider sample to get started.');
         }
       } finally {
@@ -254,7 +356,13 @@ export function AutomationContext({
                     <NativeSelect
                       id={`${formId}-integration`}
                       value={integrationType}
-                      onChange={e => setIntegrationType(e.target.value)}
+                      onChange={e => {
+                        if (handleIntegrationTypeChange) {
+                          handleIntegrationTypeChange(e.target.value);
+                        } else {
+                          setIntegrationType(e.target.value);
+                        }
+                      }}
                     >
                       <option>EVENTS_API</option>
                       <option value="ALL">All providers</option>
@@ -267,25 +375,71 @@ export function AutomationContext({
                     <Label htmlFor={`${formId}-observed`}>Observed field</Label>
                     <NativeSelect
                       id={`${formId}-observed`}
-                      value={observedPath}
+                      value={
+                        observedOptions.find(
+                          o =>
+                            o.path === observedPath &&
+                            (!effectiveIntType || o.integrationType === effectiveIntType) &&
+                            (!effectiveSource || !o.source || o.source === effectiveSource)
+                        )?.id ??
+                        observedOptions.find(o => o.path === observedPath)?.id ??
+                        observedPath
+                      }
                       aria-invalid={!!problems.source || undefined}
                       aria-describedby={problems.source ? `${formId}-source-error` : undefined}
                       onChange={e => {
-                        setObservedPath(e.target.value);
-                        const found = [
-                          ...data.observations.map(o => ({ path: o.sourcePath, key: o.fieldKey })),
-                          ...discoveries,
-                        ].find(o => o.path === e.target.value);
-                        if (found) setFieldLabel(found.key.replace(/_/g, ' '));
+                        const val = e.target.value;
+                        if (!val) {
+                          if (selectObservedField) {
+                            selectObservedField(null);
+                          } else {
+                            setObservedPath('');
+                            setSource(undefined);
+                            setIntType(undefined);
+                          }
+                          return;
+                        }
+                        const found = observedOptions.find(o => o.id === val);
+                        if (found) {
+                          if (selectObservedField) {
+                            selectObservedField({
+                              path: found.path,
+                              source: found.source,
+                              integrationType: found.integrationType,
+                              label: found.label,
+                              type: (found.type as Field['type']) || 'STRING',
+                            });
+                          } else {
+                            setObservedPath(found.path);
+                            if (found.source) setSource(found.source);
+                            else setSource(undefined);
+                            setIntType(found.integrationType);
+                            setFieldLabel(found.label);
+                            if (found.type) {
+                              setFieldType(found.type as Field['type']);
+                            }
+                            if (found.integrationType && found.integrationType !== 'ALL') {
+                              setIntegrationType(found.integrationType);
+                            }
+                          }
+                          if (!found.source) {
+                            setAdvanced(true);
+                          }
+                        } else {
+                          setObservedPath(val);
+                          setSource(undefined);
+                          setIntType(undefined);
+                        }
                       }}
                     >
                       <option value="">Choose field…</option>
-                      {observedPath && !observedOptions.some(([path]) => path === observedPath) && (
+                      {observedPath && !observedOptions.some(o => o.path === observedPath) && (
                         <option value={observedPath}>{observedPath}</option>
                       )}
-                      {observedOptions.map(([path, key]) => (
-                        <option key={path} value={path}>
-                          {key.replace(/_/g, ' ')}
+                      {observedOptions.map(option => (
+                        <option key={option.id} value={option.id}>
+                          {option.label} — {option.path}
+                          {option.integrationType ? ` (${option.integrationType})` : ''}
                         </option>
                       ))}
                     </NativeSelect>
@@ -313,16 +467,51 @@ export function AutomationContext({
                     Advanced mapping
                   </Button>
                   {advanced && (
-                    <div id={`${formId}-advanced`} className="mt-2 space-y-1.5">
-                      <Label htmlFor={`${formId}-path`}>Source path</Label>
-                      <Input
-                        id={`${formId}-path`}
-                        className="font-mono"
-                        placeholder="payload.custom_details.environment"
-                        value={observedPath}
-                        onChange={e => setObservedPath(e.target.value)}
-                      />
-                      <Hint>Dot-separated path into the event or provider payload.</Hint>
+                    <div id={`${formId}-advanced`} className="mt-2 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`${formId}-source-type`}>Payload source</Label>
+                        <NativeSelect
+                          id={`${formId}-source-type`}
+                          value={effectiveSource ?? ''}
+                          aria-invalid={!effectiveSource && !!observedPath ? true : undefined}
+                          onChange={e => setSource(e.target.value as 'PROVIDER' | 'EVENT')}
+                        >
+                          <option value="" disabled>
+                            Choose payload source…
+                          </option>
+                          <option value="EVENT">
+                            Normalized event (payload.*, event_action, etc.)
+                          </option>
+                          <option value="PROVIDER">
+                            Raw provider webhook (e.g. GitHub, CloudWatch)
+                          </option>
+                        </NativeSelect>
+                        <Hint>
+                          {effectiveSource === 'EVENT'
+                            ? 'Extracted from OpsKnight standardized event payload (e.g. payload.*, event_action)'
+                            : effectiveSource === 'PROVIDER'
+                              ? 'Extracted directly from incoming third-party provider webhook body'
+                              : 'Select whether this field is extracted from OpsKnight normalized event or raw provider webhook'}
+                        </Hint>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`${formId}-path`}>Source path</Label>
+                        <Input
+                          id={`${formId}-path`}
+                          className="font-mono"
+                          placeholder={
+                            effectiveSource === 'EVENT'
+                              ? 'payload.custom_details.environment'
+                              : 'repository.full_name'
+                          }
+                          value={observedPath}
+                          onChange={e => {
+                            setObservedPath(e.target.value);
+                            setIntType(undefined);
+                          }}
+                        />
+                        <Hint>Dot-separated path into the event or provider payload.</Hint>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -446,31 +635,55 @@ export function AutomationContext({
             {discoveries.length > 0 && (
               <ul aria-label="Discovered context fields" className="space-y-2">
                 {discoveries.map(field => {
-                  const name = field.path.split('.').at(-1)?.replace(/_/g, ' ');
-                  const chosen = observedPath === field.path;
+                  const hierarchical = field.label ?? formatHierarchicalLabel(field.path);
+                  const fieldSource =
+                    field.source ?? (field.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
+                  const fieldCompositeId = `${field.integrationType ?? 'ALL'}:${fieldSource}:${field.path}`;
+                  const currentCompositeId = `${effectiveIntType ?? 'ALL'}:${effectiveSource}:${observedPath}`;
+                  const chosen = Boolean(observedPath) && fieldCompositeId === currentCompositeId;
                   return (
                     <li
-                      key={field.path}
+                      key={fieldCompositeId}
                       className={cn(
                         'space-y-1 rounded-md border p-3 text-sm',
                         chosen ? 'border-primary/50 bg-primary/5' : 'border-border/70'
                       )}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{name}</span>
+                        <span className="font-medium">{hierarchical}</span>
                         <Button
                           size="sm"
                           variant={chosen ? 'secondary' : 'outline'}
                           aria-pressed={chosen}
                           className="h-10 sm:h-9"
                           onClick={() => {
-                            setObservedPath(field.path);
-                            setFieldLabel(name ?? field.key);
-                            setFieldType(
-                              field.type === 'NUMBER' || field.type === 'BOOLEAN'
-                                ? field.type
-                                : 'STRING'
-                            );
+                            if (selectObservedField) {
+                              selectObservedField({
+                                path: field.path,
+                                source: field.source,
+                                integrationType: field.integrationType,
+                                label: hierarchical,
+                                type: (field.type as Field['type']) || 'STRING',
+                              });
+                            } else {
+                              setObservedPath(field.path);
+                              if (field.source) setSource(field.source);
+                              setIntType(field.integrationType);
+                              setFieldLabel(hierarchical);
+                              setFieldType(
+                                field.type === 'NUMBER' ||
+                                  field.type === 'BOOLEAN' ||
+                                  field.type === 'ENUM'
+                                  ? field.type
+                                  : 'STRING'
+                              );
+                              if (field.integrationType && field.integrationType !== 'ALL') {
+                                setIntegrationType(field.integrationType);
+                              }
+                            }
+                            if (!field.source) {
+                              setAdvanced(true);
+                            }
                           }}
                         >
                           Choose field
@@ -478,6 +691,8 @@ export function AutomationContext({
                       </div>
                       <p className="break-all font-mono text-xs text-muted-foreground">
                         {field.path} · {field.type}
+                        {field.integrationType ? ` · ${field.integrationType}` : ''}
+                        {field.source ? ` · ${field.source}` : ''}
                         {field.frequency ? ` · ${field.frequency} recent alerts` : ''}
                       </p>
                       <p className="break-words text-xs">

@@ -10,7 +10,16 @@ reader:
 verification:
   level: source
   verified_at: 2026-09-29
-  evidence: [package.json, docker-entrypoint.sh, scripts/validate-migrations.cjs, scripts/check-migration-health.cjs, scripts/auto-recover-migrations.ts, deploy/kubernetes/helm/opsknight/templates/migration-job.yaml, deploy/swarm/scripts/migrate.sh]
+  evidence:
+    [
+      package.json,
+      docker-entrypoint.sh,
+      scripts/validate-migrations.cjs,
+      scripts/check-migration-health.cjs,
+      scripts/auto-recover-migrations.ts,
+      deploy/kubernetes/helm/opsknight/templates/migration-job.yaml,
+      deploy/swarm/scripts/migrate.sh,
+    ]
 ---
 
 # Operate database migrations
@@ -62,6 +71,17 @@ older release artifacts whose migration owner does not, run the command during
 the `SHADOW` rollout before selecting `INDEXED`. Confirm the index is valid
 rather than assuming schema migrations alone created it; the UI rejects Indexed
 mode until the database check passes.
+
+### Service Automation observation provenance index cutover
+
+Migration `20261021040000_automation_observation_provenance_unique` replaces the 4-column observation index with a 6-column composite index including `sourcePath` and `source` (`NULLS NOT DISTINCT`). Preceding worker binaries execute an `ON CONFLICT ("serviceId", "integrationId", "fieldKey", "normalizedRawValueHash")` clause requiring the predecessor index.
+
+To certify zero `ON CONFLICT` constraint mismatch errors during rolling upgrades:
+
+- Drain and stop background workers (`opsknight-general-worker` and integrated runtime replicas) before applying schema migrations, or replace them via coordinated cutover (`spec.replicas: 0` before migration, then scale new release replicas).
+- In Kubernetes / Helm, the pre-upgrade migration hook Job executes prior to workload rollout; ensure worker replicas cut over after migration completion.
+- In Docker Swarm, `opsknight-general-worker` deploys with `order: stop-first`, ensuring old workers cease claiming tasks before new workers launch against the migrated schema.
+- Older observations with `source IS NULL` remain provenance-unknown without guessed backfill.
 
 ## Apply migrations by deployment type
 

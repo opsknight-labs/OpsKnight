@@ -229,12 +229,18 @@ export async function prepareAutomation(
         value: String(n.raw).slice(0, 256),
         type: version.fields.find(f => f.key === n.fieldKey)?.type ?? 'STRING',
         unmapped: n.canonical.state === 'UNMAPPED',
+        source: n.source ?? (envelope.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER'),
       }));
-    const observedPaths = new Set(configuredObservations.map(field => field.path));
-    runtime.observations = [
-      ...configuredObservations,
-      ...discoverFields(envelope.providerPayload).filter(field => !observedPaths.has(field.path)),
-    ].slice(0, LIMITS.fields);
+    const observedKeys = new Set(
+      configuredObservations.map(field => `${field.source ?? 'PROVIDER'}:${field.path}`)
+    );
+    const discoveredProviderObservations = discoverFields(envelope.providerPayload)
+      .map(field => ({ ...field, source: 'PROVIDER' as const }))
+      .filter(field => !observedKeys.has(`PROVIDER:${field.path}`));
+    runtime.observations = [...configuredObservations, ...discoveredProviderObservations].slice(
+      0,
+      LIMITS.fields
+    );
   } catch (error) {
     // Database failures must abort ingestion and use the transaction/replay path,
     // never silently commit a different responder route as an engine fallback.
@@ -483,7 +489,14 @@ export async function persistAutomation(
           serviceId: envelope.serviceId,
           integrationId: envelope.integrationId,
           integrationType: envelope.integrationType,
-          observations: runtime.observations,
+          observations: runtime.observations.map(o => ({
+            key: o.key,
+            path: o.path,
+            value: o.value,
+            type: o.type,
+            unmapped: o.unmapped,
+            ...(o.source ? { source: o.source } : {}),
+          })),
           ...(shadow ? { shadow } : {}),
         }),
         maxAttempts: 3,

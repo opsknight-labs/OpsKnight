@@ -125,11 +125,14 @@ export default function AutomationWorkspace({
     onError: setError,
   });
 
+  const loadSeqRef = useRef(0);
+
   const load = useCallback(
     async (nextArea: Area) => {
-      setError('');
+      const seq = ++loadSeqRef.current;
       try {
         const next = await getAutomationArea(serviceId, nextArea, activityPage);
+        if (seq !== loadSeqRef.current) return;
         if (
           next.activeVersion?.snapshot &&
           !snapshotSchema.safeParse(next.activeVersion.snapshot).success
@@ -140,18 +143,39 @@ export default function AutomationWorkspace({
         receiveServerDraft(next.draft, DRAFT_AREAS.includes(nextArea));
         setAreaData(previous => ({ ...previous, [nextArea]: next }));
         setLatest(next);
+        setError('');
         return next;
       } catch (err) {
+        if (seq !== loadSeqRef.current) return;
         setError(err instanceof Error ? err.message : 'Could not load automation');
       }
     },
     [serviceId, activityPage, receiveServerDraft]
   );
+
   useEffect(() => {
-    // Fetches the selected area from the server; state is set when the request resolves.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load(area);
-  }, [area, load]);
+    const seq = ++loadSeqRef.current;
+    void (async () => {
+      try {
+        const next = await getAutomationArea(serviceId, area, activityPage);
+        if (seq !== loadSeqRef.current) return;
+        if (
+          next.activeVersion?.snapshot &&
+          !snapshotSchema.safeParse(next.activeVersion.snapshot).success
+        )
+          throw new Error(
+            `Version ${next.activeVersion.versionNumber} failed integrity validation and cannot be rendered`
+          );
+        receiveServerDraft(next.draft, DRAFT_AREAS.includes(area));
+        setAreaData(previous => ({ ...previous, [area]: next }));
+        setLatest(next);
+        setError('');
+      } catch (err) {
+        if (seq !== loadSeqRef.current) return;
+        setError(err instanceof Error ? err.message : 'Could not load automation');
+      }
+    })();
+  }, [area, serviceId, activityPage, receiveServerDraft]);
 
   const command = useCallback(
     async (
@@ -309,6 +333,7 @@ export default function AutomationWorkspace({
   const openContext = useCallback(() => setArea('context'), []);
   const viewAffectedRules = (ruleIds: string[]) => {
     setRuleSearch('');
+    setRuleStateFilter('all');
     setArea('rules');
     setExpandedRules(new Set(ruleIds));
     setDeleteField(null);
@@ -451,8 +476,14 @@ export default function AutomationWorkspace({
               setDeleteField={setDeleteField}
               integrationType={context.integrationType}
               setIntegrationType={context.setIntegrationType}
+              handleIntegrationTypeChange={context.handleIntegrationTypeChange}
+              selectObservedField={context.selectObservedField}
               observedPath={context.observedPath}
               setObservedPath={context.setObservedPath}
+              selectedSource={context.selectedSource}
+              setSelectedSource={context.setSelectedSource}
+              selectedIntegrationType={context.selectedIntegrationType}
+              setSelectedIntegrationType={context.setSelectedIntegrationType}
               discoveries={context.discoveries}
               setDiscoveries={context.setDiscoveries}
               fieldLabel={context.fieldLabel}
