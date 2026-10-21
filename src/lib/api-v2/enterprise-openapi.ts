@@ -1929,6 +1929,20 @@ const operations: Operation[] = [
     }, [...scheduleLayerRequired, 'responderIds']),
   },
   {
+    method: 'post',
+    path: '/schedules/{id}/coverage/preview',
+    summary: 'Preview seven days of coverage after an unsaved layer change',
+    description: 'Read-only advisory simulation using the same rotation, precedence and override engine as live coverage. Requires the exact current schedule If-Match revision.',
+    body: object({
+      start: date, end: date,
+      layerId: { type: ['string', 'null'] },
+      proposedLayer: object({
+        ...scheduleLayerProperties,
+        responderIds: array({ ...id, maxLength: 100 }, 100),
+      }, [...scheduleLayerRequired, 'responderIds']),
+    }, ['start', 'end', 'layerId', 'proposedLayer']),
+  },
+  {
     method: 'put',
     path: '/schedules/{id}/layers/order',
     summary: 'Atomically replace rotation-layer precedence using the schedule revision',

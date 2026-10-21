@@ -923,6 +923,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "POST /schedules/{id}/coverage/preview [schedules:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /schedules/{id}/coverage [schedules:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

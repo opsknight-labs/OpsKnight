@@ -241,6 +241,22 @@ const extraSchemas: Json = {
     },
     required: ['notificationId', 'events', 'truncated'],
   },
+  ScheduleLayerPreview: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' }, revision: { type: 'integer' }, layerId: { type: 'string' },
+      advisory: { type: 'boolean' },
+      start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' },
+      shifts: { type: 'array', items: { type: 'object', properties: {
+        userId: { type: 'string' }, start: { type: 'string', format: 'date-time' },
+        end: { type: 'string', format: 'date-time' },
+      }, required: ['userId', 'start', 'end'] } },
+      gaps: { type: 'array', items: { type: 'object', properties: {
+        start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' },
+      }, required: ['start', 'end'] } },
+    },
+    required: ['scheduleId', 'revision', 'layerId', 'advisory', 'start', 'end', 'shifts', 'gaps'],
+  },
   ScheduleLayerOrder: {
     type: 'object',
     properties: {

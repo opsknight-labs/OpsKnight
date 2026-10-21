@@ -1203,6 +1203,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('patch', '/schedules/{id}/layers/{layerId}', 'updateScheduleLayer', 'schedules:write', 'item', 'ScheduleLayer'),
   op('delete', '/schedules/{id}/layers/{layerId}', 'deleteScheduleLayer', 'schedules:write', 'none', ''),
   op('put', '/schedules/{id}/layers/order', 'reorderScheduleLayers', 'schedules:write', 'item', 'ScheduleLayerOrder'),
+  op('post', '/schedules/{id}/coverage/preview', 'previewScheduleCoverage', 'schedules:write', 'item', 'ScheduleLayerPreview'),
   op(
     'patch',
     '/escalation-policies/{id}',

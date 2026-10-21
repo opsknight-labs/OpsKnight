@@ -740,6 +740,10 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
     rationale: 'Locked schedule revision fences an exact complete layer order; shared UI/REST precedence changes and audit commit with replay receipt.',
   },
+  'POST /api/v2/schedules/[id]/coverage/preview': {
+    idempotency: 'natural', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
+    rationale: 'Read-only bounded seven-day simulation over an exact schedule revision using the canonical rotation and override engine; no jobs or writes.',
+  },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
   'PATCH /api/v2/schedules/[id]': natural('Sets fields to the requested values.', 'etag'),

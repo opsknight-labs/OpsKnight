@@ -9813,6 +9813,85 @@
           "truncated"
         ]
       },
+      "ScheduleLayerPreview": {
+        "type": "object",
+        "properties": {
+          "scheduleId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "layerId": {
+            "type": "string"
+          },
+          "advisory": {
+            "type": "boolean"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "shifts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "userId",
+                "start",
+                "end"
+              ]
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "start",
+                "end"
+              ]
+            }
+          }
+        },
+        "required": [
+          "scheduleId",
+          "revision",
+          "layerId",
+          "advisory",
+          "start",
+          "end",
+          "shifts",
+          "gaps"
+        ]
+      },
       "ScheduleLayerOrder": {
         "type": "object",
         "properties": {
@@ -41701,6 +41780,241 @@
         "description": "Requires API scope `schedules:write` (Schedules manage).",
         "x-idempotency": "required",
         "x-concurrency": "none"
+      }
+    },
+    "/schedules/{id}/coverage/preview": {
+      "post": {
+        "tags": [
+          "Schedules"
+        ],
+        "summary": "Preview seven days of coverage after an unsaved layer change",
+        "description": "Read-only advisory simulation using the same rotation, precedence and override engine as live coverage. Requires the exact current schedule If-Match revision.\n\nRequires API scope `schedules:write` (Schedules manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "layerId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "proposedLayer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "start": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "end": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date-time"
+                      },
+                      "rotationLengthHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 8760
+                      },
+                      "shiftLengthHours": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 1,
+                        "maximum": 8760
+                      },
+                      "restrictions": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "daysOfWeek": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 6
+                                },
+                                "maxItems": 7
+                              },
+                              "startHour": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 23
+                              },
+                              "endHour": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 23
+                              }
+                            },
+                            "required": []
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "responderIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "maxItems": 100
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "start",
+                      "end",
+                      "rotationLengthHours",
+                      "shiftLengthHours",
+                      "restrictions",
+                      "responderIds"
+                    ]
+                  }
+                },
+                "required": [
+                  "start",
+                  "end",
+                  "layerId",
+                  "proposedLayer"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ScheduleLayerPreview"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "previewScheduleCoverage",
+        "x-required-scope": "schedules:write",
+        "x-idempotency": "natural",
+        "x-concurrency": "etag"
       }
     },
     "/schedules/{id}/layers/order": {
