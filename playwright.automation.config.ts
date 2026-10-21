@@ -9,7 +9,7 @@ if (process.env.PLAYWRIGHT_EXTERNAL_SERVER !== 'true') Object.assign(process.env
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: /automation\.spec\.ts/,
+  testMatch: /automation.*\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   timeout: 180000,

@@ -15,7 +15,7 @@ const modes = new Map<string, ModePresentation>([
       icon: PowerOff,
       label: 'DISABLED',
       summary: 'New alerts are not evaluated. Incidents use the service route.',
-      className: 'border-border bg-muted text-muted-foreground',
+      className: 'border-border bg-muted text-slate-700 dark:text-slate-300',
     },
   ],
   [
