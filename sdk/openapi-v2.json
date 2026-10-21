@@ -10039,6 +10039,61 @@
           "truncated"
         ]
       },
+      "ScheduleDependencies": {
+        "type": "object",
+        "properties": {
+          "scheduleId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "escalationSteps": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "policyId": {
+                  "type": "string"
+                },
+                "policyName": {
+                  "type": "string"
+                },
+                "policyArchived": {
+                  "type": "boolean"
+                },
+                "stepOrder": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "policyId",
+                "policyName",
+                "policyArchived",
+                "stepOrder"
+              ]
+            }
+          }
+        },
+        "required": [
+          "scheduleId",
+          "revision",
+          "total",
+          "truncated",
+          "escalationSteps"
+        ]
+      },
       "StatusPagePreview": {
         "type": "object",
         "description": "Current unpublished public projection. Null when the page is disabled.",
@@ -42155,6 +42210,193 @@
         "x-required-scope": "schedules:write",
         "x-idempotency": "natural",
         "x-concurrency": "etag"
+      }
+    },
+    "/schedules/{id}/dependencies": {
+      "get": {
+        "tags": [
+          "Schedules"
+        ],
+        "summary": "Inspect escalation-policy steps referencing a schedule",
+        "description": "Requires schedule administration. Returns at most 100 steps, the total count and a truncation flag; includes archived policies so deletion decisions account for all references.\n\nRequires API scope `schedules:write` (Schedules manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ScheduleDependencies"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getScheduleDependencies",
+        "x-required-scope": "schedules:write"
+      }
+    },
+    "/schedules/{id}/changes": {
+      "get": {
+        "tags": [
+          "Schedules"
+        ],
+        "summary": "Read a redacted, cursor-paginated schedule change history",
+        "description": "Requires schedule administration. Includes only audit records attributed to the exact schedule; details use the standard redaction projection.\n\nRequires API scope `schedules:write` (Schedules manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AuditLog"
+                      }
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listScheduleChanges",
+        "x-required-scope": "schedules:write"
       }
     },
     "/schedules/{id}/layers/order": {

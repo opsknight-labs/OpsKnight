@@ -923,6 +923,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /schedules/{id}/changes [schedules:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "POST /schedules/{id}/coverage/preview [schedules:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -934,6 +940,12 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
+  },
+  "GET /schedules/{id}/dependencies [schedules:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
   },
   "PATCH /schedules/{id}/layers/{layerId}/participants/{userId} [schedules:write]": {
     "ADMIN": "allow:global",

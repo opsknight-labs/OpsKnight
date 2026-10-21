@@ -177,8 +177,8 @@ const decisions: readonly ApiCapability[] = [
     title: 'Layer configuration, override cancellation and coverage previews',
     status: 'partial',
     explanation:
-      'Override cancellation, bounded effective coverage and unsaved-layer previews, participant management, revision-protected layer CRUD and atomic precedence reordering use the canonical schedule engine and shared domain commands. Combined UI/REST certification remains open.',
-    operationIds: ['listScheduleLayers', 'createScheduleLayer', 'getScheduleLayer', 'updateScheduleLayer', 'deleteScheduleLayer', 'reorderScheduleLayers', 'previewScheduleCoverage', 'cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
+      'Override cancellation, bounded effective coverage and unsaved-layer previews, participant management, revision-protected layer CRUD, atomic precedence reordering, bounded escalation dependency inspection and redacted schedule change history use the canonical schedule engine and shared domain commands. Combined UI/REST certification remains open.',
+    operationIds: ['listScheduleLayers', 'createScheduleLayer', 'getScheduleLayer', 'updateScheduleLayer', 'deleteScheduleLayer', 'reorderScheduleLayers', 'previewScheduleCoverage', 'getScheduleDependencies', 'listScheduleChanges', 'cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
   },
   {
     id: 'escalation-validation',

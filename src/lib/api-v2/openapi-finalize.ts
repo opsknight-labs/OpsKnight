@@ -291,6 +291,20 @@ const extraSchemas: Json = {
     },
     required: ['scheduleId', 'layers', 'truncated'],
   },
+  ScheduleDependencies: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' }, revision: { type: 'integer' }, total: { type: 'integer' },
+      truncated: { type: 'boolean' },
+      escalationSteps: { type: 'array', maxItems: 100, items: {
+        type: 'object', properties: {
+          id: { type: 'string' }, policyId: { type: 'string' }, policyName: { type: 'string' },
+          policyArchived: { type: 'boolean' }, stepOrder: { type: 'integer' },
+        }, required: ['id', 'policyId', 'policyName', 'policyArchived', 'stepOrder'],
+      } },
+    },
+    required: ['scheduleId', 'revision', 'total', 'truncated', 'escalationSteps'],
+  },
   StatusPagePreview: {
     type: 'object',
     description: 'Current unpublished public projection. Null when the page is disabled.',

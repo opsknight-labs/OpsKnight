@@ -1639,6 +1639,22 @@
     ],
     "bodyRequired": true
   },
+  "getScheduleDependencies": {
+    "method": "GET",
+    "path": "/schedules/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listScheduleChanges": {
+    "method": "GET",
+    "path": "/schedules/{id}/changes",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "updateEscalationPolicy": {
     "method": "PATCH",
     "path": "/escalation-policies/{id}",

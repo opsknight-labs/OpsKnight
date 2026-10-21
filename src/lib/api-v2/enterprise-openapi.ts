@@ -1951,6 +1951,18 @@ const operations: Operation[] = [
     }, ['start', 'end', 'layerId', 'proposedLayer']),
   },
   {
+    method: 'get',
+    path: '/schedules/{id}/dependencies',
+    summary: 'Inspect escalation-policy steps referencing a schedule',
+    description: 'Requires schedule administration. Returns at most 100 steps, the total count and a truncation flag; includes archived policies so deletion decisions account for all references.',
+  },
+  {
+    method: 'get',
+    path: '/schedules/{id}/changes',
+    summary: 'Read a redacted, cursor-paginated schedule change history',
+    description: 'Requires schedule administration. Includes only audit records attributed to the exact schedule; details use the standard redaction projection.',
+  },
+  {
     method: 'put',
     path: '/schedules/{id}/layers/order',
     summary: 'Atomically replace rotation-layer precedence using the schedule revision',

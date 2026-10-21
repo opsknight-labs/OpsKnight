@@ -158,6 +158,7 @@ export type ScheduleLayerPreview = { "scheduleId": string; "revision": number; "
 export type ScheduleLayerOrder = { "scheduleId": string; "revision": number; "orderedIds": Array<string> } & Record<string, unknown>;
 export type ScheduleLayer = { "id": string; "scheduleId": string; "name": string; "revision": number; "start": string; "end": string | null; "rotationLengthHours": number; "shiftLengthHours": number | null; "restrictions": Record<string, unknown> | null; "priority": number; "createdAt": string; "updatedAt": string; "users"?: Array<{ "userId": string; "position": number } & Record<string, unknown>>; "truncated"?: boolean; "_count"?: { "users": number } & Record<string, unknown> } & Record<string, unknown>;
 export type ScheduleLayerCollection = { "scheduleId": string; "layers": Array<ScheduleLayer>; "truncated": boolean } & Record<string, unknown>;
+export type ScheduleDependencies = { "scheduleId": string; "revision": number; "total": number; "truncated": boolean; "escalationSteps": Array<{ "id": string; "policyId": string; "policyName": string; "policyArchived": boolean; "stepOrder": number } & Record<string, unknown>> } & Record<string, unknown>;
 export type StatusPagePreview = { "pageId": string; "revision": number; "available": boolean; "snapshot": Record<string, unknown> | null } & Record<string, unknown>;
 export type StatusPageAssetUpload = { "assetId": string; "url": string; "contentType": "image/png" | "image/jpeg" | "image/gif" | "image/webp" } & Record<string, unknown>;
 export type EscalationPolicyValidation = { "policyId": string; "revision": number; "valid": boolean; "issues": Array<{ "code": string; "stepId": string | null; "field": string | null; "message": string } & Record<string, unknown>>; "truncated": boolean } & Record<string, unknown>;
@@ -353,6 +354,8 @@ export interface OperationRequests {
   deleteScheduleLayer: { "params": { "id": string; "layerId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
   reorderScheduleLayers: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "orderedIds": Array<string> } };
   previewScheduleCoverage: { "params": { "id": string }; "headers": { "If-Match": string }; "body": { "start": string; "end": string; "layerId": string | null; "proposedLayer": { "name": string; "start": string; "end": string | null; "rotationLengthHours": number; "shiftLengthHours": number | null; "restrictions": { "daysOfWeek"?: Array<number>; "startHour"?: number; "endHour"?: number } | null; "responderIds": Array<string> } } };
+  getScheduleDependencies: { "params": { "id": string } };
+  listScheduleChanges: { "params": { "id": string } };
   updateEscalationPolicy: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "description"?: string | null; "steps"?: Array<Record<string, unknown>> } & Record<string, unknown> };
   deleteEscalationPolicy: { "params": { "id": string } };
   listEscalationPolicies: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string } };
@@ -646,6 +649,8 @@ export interface OperationResponses {
   deleteScheduleLayer: null;
   reorderScheduleLayers: { "data": ScheduleLayerOrder; "requestId": string; "timestamp": string } & Record<string, unknown>;
   previewScheduleCoverage: { "data": ScheduleLayerPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getScheduleDependencies: { "data": ScheduleDependencies; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listScheduleChanges: { "data": Array<AuditLog>; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateEscalationPolicy: { "data": EscalationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteEscalationPolicy: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listEscalationPolicies: { "data": Array<EscalationPolicy>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2402,6 +2407,22 @@ export const OPERATIONS = {
       "If-Match"
     ],
     "bodyRequired": true
+  },
+  "getScheduleDependencies": {
+    "method": "GET",
+    "path": "/schedules/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listScheduleChanges": {
+    "method": "GET",
+    "path": "/schedules/{id}/changes",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "updateEscalationPolicy": {
     "method": "PATCH",
