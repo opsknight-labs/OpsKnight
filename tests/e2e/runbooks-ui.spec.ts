@@ -101,6 +101,7 @@ test('global history stays synchronized across application pages and authenticat
   // as a fresh request, rather than leave stale authenticated UI on screen.
   await context.clearCookies();
   await page.goBack();
+  await page.waitForLoadState('domcontentloaded');
   await page.reload();
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await expect(page.locator('input[type="email"]')).toBeVisible();
@@ -254,7 +255,9 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.getByRole('combobox', { name: 'Initial secret grant' }).click();
   await page.getByPlaceholder('Search initial secret grant…').fill(agentName);
   await page.getByRole('option', { name: `Agent · ${agentName}`, exact: true }).click();
-  await expect(page.getByRole('combobox', { name: 'Initial secret grant' })).toContainText(agentName);
+  await expect(page.getByRole('combobox', { name: 'Initial secret grant' })).toContainText(
+    agentName
+  );
   await page.getByRole('button', { name: 'Create encrypted secret', exact: true }).click();
   await expect
     .poll(async () => prisma.runbookSecret.count({ where: { name: secretName } }))

@@ -284,6 +284,14 @@ export function RuleCard({
           </div>
         </dl>
 
+        {!binding.readiness && (
+          <p className="text-xs text-muted-foreground">
+            {binding.enabled
+              ? 'Readiness not checked yet. Open Rule evidence or check visible rules.'
+              : 'Rule paused · Target checks not run.'}
+          </p>
+        )}
+
         {binding.readiness && (
           <section
             aria-label="Rule readiness"
