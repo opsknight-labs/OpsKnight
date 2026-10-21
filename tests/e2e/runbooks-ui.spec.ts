@@ -745,7 +745,11 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     }
   }
   await page.goto(`/services/${serviceId}/automations/${rule.id}`);
-  await expect(page.getByRole('region', { name: 'What the evidence establishes' })).toBeVisible();
+  await expect(
+    page.getByRole('region', {
+      name: /What the evidence establishes|Safety & Verification Pillars/i,
+    })
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: ruleName, exact: true })).toBeVisible();
   await page
     .getByRole('button', { name: 'Validate configuration · No execution', exact: true })

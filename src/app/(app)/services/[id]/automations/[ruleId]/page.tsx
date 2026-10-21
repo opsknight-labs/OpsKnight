@@ -343,7 +343,7 @@ export default async function AutomationRulePage({
 
       {/* Modernized Safety & Verification Pillars */}
       <section
-        aria-label="Safety & Verification Pillars"
+        aria-label="What the evidence establishes"
         className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/70 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs space-y-3"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
