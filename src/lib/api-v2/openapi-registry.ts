@@ -1321,6 +1321,8 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/postmortems/{id}/action-items', 'listPostmortemActionItems', 'postmortems:read', 'item', 'PostmortemActionItemCollection'),
   op('put', '/postmortems/{id}/action-items', 'replacePostmortemActionItems', 'postmortems:write', 'item', 'PostmortemActionItemCollection'),
   op('post', '/postmortems/{id}/publish', 'publishPostmortem', 'postmortems:write', 'item', 'PostmortemPublication'),
+  op('get', '/postmortems/{id}/contributors', 'listPostmortemContributors', 'postmortems:read', 'item', 'PostmortemContributors'),
+  op('put', '/postmortems/{id}/contributors', 'replacePostmortemContributors', 'postmortems:write', 'item', 'PostmortemContributors'),
   op('patch', '/postmortems/{id}', 'updatePostmortem', 'postmortems:write', 'item', 'Postmortem'),
   op('delete', '/postmortems/{id}', 'deletePostmortem', 'postmortems:write', 'none', ''),
   op('get', '/postmortems', 'listPostmortems', 'postmortems:read', 'list', 'Postmortem'),

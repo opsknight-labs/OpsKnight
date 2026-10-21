@@ -1260,6 +1260,19 @@ const operations: Operation[] = [
     description: 'Requires a resolved incident, complete summary, exact If-Match revision and Idempotency-Key. An already-published revision with matching visibility returns the existing result without another audit.',
     body: object({ isPublic: { type: 'boolean' } }, ['isPublic']),
   },
+  {
+    method: 'get', path: '/postmortems/{id}/contributors',
+    summary: 'List postmortem collaborators and roles',
+    description: 'Incident visibility applies. Returns user identifiers, names and roles without email addresses.',
+  },
+  {
+    method: 'put', path: '/postmortems/{id}/contributors',
+    summary: 'Replace the reviewed collaborator roster',
+    description: 'Requires an exact parent revision and Idempotency-Key. Only active users may be assigned; omitting a user removes the assignment.',
+    body: object({ contributors: array(object({
+      userId: { type: 'string' }, role: { type: 'string', enum: ['AUTHOR', 'REVIEWER', 'CONTRIBUTOR'] },
+    }, ['userId', 'role']), 50) }, ['contributors']),
+  },
   { method: 'get', path: '/integrations/types', summary: 'List safe supported inbound provider types and configuration capabilities' },
   {
     method: 'post', path: '/services/{id}/integrations', summary: 'Create a service inbound integration and disclose its API key once',

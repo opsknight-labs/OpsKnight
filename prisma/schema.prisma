@@ -511,6 +511,7 @@ model User {
   escalationRules             EscalationRule[]
   incidentNotes               IncidentNote[]
   postmortems                 Postmortem[]
+  postmortemContributions     PostmortemContributor[]
   notifications               Notification[]
   notificationEndpoints       UserNotificationEndpoint[]
   inAppNotifications          InAppNotification[]
@@ -1595,10 +1596,29 @@ model Postmortem {
   incident          Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   actionItemRecords ActionItem[]
+  contributors      PostmortemContributor[]
 
   @@index([incidentId])
   @@index([status, createdAt])
   @@index([createdById])
+}
+
+enum PostmortemContributorRole {
+  AUTHOR
+  REVIEWER
+  CONTRIBUTOR
+}
+
+model PostmortemContributor {
+  postmortemId String
+  userId       String
+  role         PostmortemContributorRole
+  createdAt    DateTime @default(now())
+  postmortem   Postmortem @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postmortemId, userId])
+  @@index([userId])
 }
 
 model ActionItem {

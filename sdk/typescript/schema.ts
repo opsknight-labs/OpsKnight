@@ -145,6 +145,7 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
+export type PostmortemContributors = { "postmortemId": string; "revision": number; "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR"; "name": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type PostmortemPublication = { "id": string; "revision": number; "status": "PUBLISHED"; "isPublic": boolean; "publishedAt": string } & Record<string, unknown>;
 export type PostmortemActionItemCollection = { "postmortemId": string; "revision": number; "items": Array<{ "id": string; "title": string; "description": string; "owner"?: string; "dueDate"?: string; "status": "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority": "HIGH" | "MEDIUM" | "LOW"; "completedAt"?: string | null; "externalIssue"?: Record<string, unknown> } & Record<string, unknown>> } & Record<string, unknown>;
 export type ServiceHealthSummary = { "service": { "id": string; "name": string; "status": string; "escalationPolicyId": string | null } & Record<string, unknown>; "observedAt": string; "activeIncidentCount": number; "recentIncidents": Array<{ "id": string; "title": string; "status": string; "createdAt": string } & Record<string, unknown>>; "last24Hours": { "linkedAlertCount": number; "failedNotificationCount": number } & Record<string, unknown>; "onCallCoverage": { "state": string; "eligibleResponderCount": number | null; "basis": string } & Record<string, unknown>; "objectives": Array<{ "id": string; "name": string; "metricType": string; "target": number; "latestSnapshot": { "periodEnd": string; "value": number | null; "breached": boolean | null; "dataState": string } & Record<string, unknown> | null } & Record<string, unknown>>; "truncated": { "objectives": boolean; "recentIncidents": boolean } & Record<string, unknown> } & Record<string, unknown>;
@@ -405,6 +406,8 @@ export interface OperationRequests {
   listPostmortemActionItems: { "params": { "id": string } };
   replacePostmortemActionItems: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "items": Array<{ "id"?: string; "title": string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" }> } };
   publishPostmortem: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "isPublic": boolean } };
+  listPostmortemContributors: { "params": { "id": string } };
+  replacePostmortemContributors: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR" }> } };
   updatePostmortem: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "summary"?: string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "impact"?: PostmortemImpact; "timeline"?: PostmortemTimeline; "contributingFactors"?: PostmortemFactors; "fiveWhys"?: PostmortemFiveWhys; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: boolean } & Record<string, unknown> };
   deletePostmortem: { "params": { "id": string }; "headers": { "If-Match": string } };
   listPostmortems: { "query"?: { "limit"?: number; "cursor"?: string; "incidentId"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: "true" | "false"; "search"?: string } };
@@ -703,6 +706,8 @@ export interface OperationResponses {
   listPostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   replacePostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   publishPostmortem: { "data": PostmortemPublication; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listPostmortemContributors: { "data": PostmortemContributors; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  replacePostmortemContributors: { "data": PostmortemContributors; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updatePostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deletePostmortem: null;
   listPostmortems: { "data": Array<Postmortem>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2793,6 +2798,25 @@ export const OPERATIONS = {
   "publishPostmortem": {
     "method": "POST",
     "path": "/postmortems/{id}/publish",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listPostmortemContributors": {
+    "method": "GET",
+    "path": "/postmortems/{id}/contributors",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "replacePostmortemContributors": {
+    "method": "PUT",
+    "path": "/postmortems/{id}/contributors",
     "kind": "item",
     "idempotency": "required",
     "requiredHeaders": [

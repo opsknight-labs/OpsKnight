@@ -261,6 +261,10 @@ export async function getPostmortem(incidentId: string) {
         },
         orderBy: { createdAt: 'asc' },
       },
+      contributors: {
+        orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
+        select: { userId: true, role: true, user: { select: { name: true } } },
+      },
     },
   });
 
