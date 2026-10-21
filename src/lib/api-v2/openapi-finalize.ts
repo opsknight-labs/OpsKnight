@@ -247,6 +247,22 @@ const extraSchemas: Json = {
       createdAt: { type: 'string', format: 'date-time' },
     }, required: ['id', 'incidentId', 'serviceId', 'status', 'correlationHash', 'createdAt'],
   },
+  IncidentWarRoom: {
+    type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string' }, incidentId: { type: 'string' }, provider: { type: 'string' },
+      generation: { type: 'integer' }, state: { type: 'string' }, health: { type: 'string' },
+      providerChannelName: { type: ['string', 'null'] },
+      providerChannelUrl: { type: ['string', 'null'] },
+      createdAt: { type: 'string', format: 'date-time' },
+      readyAt: { type: ['string', 'null'], format: 'date-time' },
+      closedAt: { type: ['string', 'null'], format: 'date-time' },
+      archivedAt: { type: ['string', 'null'], format: 'date-time' },
+      participantCount: { type: 'integer', minimum: 0 },
+    },
+    required: ['id', 'incidentId', 'provider', 'generation', 'state', 'health',
+      'providerChannelName', 'providerChannelUrl', 'createdAt', 'readyAt',
+      'closedAt', 'archivedAt', 'participantCount'],
+  },
   IncidentNotificationAttempt: {
     allOf: [
       { $ref: '#/components/schemas/NotificationDeliveryAttempt' },

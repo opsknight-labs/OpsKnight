@@ -1975,6 +1975,12 @@ const operations: Operation[] = [
     description: 'Requires incidents:read, notifications:read and runbooks:read. Each section contains at most 50 newest records with a truncation flag; follow its dedicated paginated endpoint for older records. Raw alert payloads, notification content and Runbook inputs/output are excluded.',
   },
   {
+    method: 'get', path: '/incidents/{id}/war-rooms',
+    summary: 'List persisted War Room state for an accessible incident',
+    description: 'Cursor-paginated. Includes provider, lifecycle, health, safe channel link and participant count. Provider errors, participant identities and provider tokens are omitted. No provider call is made.',
+    paginated: true,
+  },
+  {
     method: 'get', path: '/incidents/{id}/alerts',
     summary: 'List redacted alerts linked to an incident',
     description: 'Cursor-paginated. Correlation keys are returned only as keyed hashes; raw alert payloads are omitted.',

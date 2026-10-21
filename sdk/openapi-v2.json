@@ -9907,6 +9907,86 @@
           "createdAt"
         ]
       },
+      "IncidentWarRoom": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "incidentId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "string"
+          },
+          "health": {
+            "type": "string"
+          },
+          "providerChannelName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "providerChannelUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "readyAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "participantCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "incidentId",
+          "provider",
+          "generation",
+          "state",
+          "health",
+          "providerChannelName",
+          "providerChannelUrl",
+          "createdAt",
+          "readyAt",
+          "closedAt",
+          "archivedAt",
+          "participantCount"
+        ]
+      },
       "IncidentNotificationAttempt": {
         "allOf": [
           {
@@ -43900,6 +43980,123 @@
           "notifications:read",
           "runbooks:read"
         ]
+      }
+    },
+    "/incidents/{id}/war-rooms": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List persisted War Room state for an accessible incident",
+        "description": "Cursor-paginated. Includes provider, lifecycle, health, safe channel link and participant count. Provider errors, participant identities and provider tokens are omitted. No provider call is made.\n\nRequires API scope `incidents:read` (Incidents read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IncidentWarRoom"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listIncidentWarRooms",
+        "x-required-scope": "incidents:read"
       }
     },
     "/incidents/{id}/alerts": {

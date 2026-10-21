@@ -2022,6 +2022,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listIncidentWarRooms": {
+    "method": "GET",
+    "path": "/incidents/{id}/war-rooms",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listIncidentAlerts": {
     "method": "GET",
     "path": "/incidents/{id}/alerts",

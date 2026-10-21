@@ -157,10 +157,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'incident-collaboration',
     area: 'Incidents',
     title: 'War-room and collaboration lifecycle',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Watcher management is available. Provider-backed collaboration lifecycle requires durable provider reconciliation and a dedicated API contract.',
-    operationIds: [],
+      'A bounded incident-scoped read exposes persisted War Room state and participant counts without provider calls or sensitive errors. Provider-backed create, close and reconciliation controls still require a dedicated scoped mutation contract.',
+    operationIds: ['listIncidentWarRooms'],
   },
   {
     id: 'incident-templates',

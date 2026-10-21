@@ -1320,6 +1320,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/notifications/{id}/attempts', 'listNotificationAttempts', 'notifications:read', 'list', 'NotificationDeliveryAttempt'),
   op('get', '/notifications/{id}/feedback', 'getNotificationFeedback', 'notifications:read', 'item', 'NotificationFeedback'),
   op('get', '/incidents/{id}/response-activity', 'getIncidentResponseActivity', 'incidents:read', 'item', 'IncidentResponseActivity'),
+  op('get', '/incidents/{id}/war-rooms', 'listIncidentWarRooms', 'incidents:read', 'list', 'IncidentWarRoom'),
   op('get', '/incidents/{id}/alerts', 'listIncidentAlerts', 'incidents:read', 'list', 'IncidentAlertSummary'),
   op('get', '/incidents/{id}/runbook-executions', 'listIncidentRunbookExecutions', 'incidents:read', 'list', 'RunbookExecutionSummary'),
   op('get', '/incidents/{id}/notification-attempts', 'listIncidentNotificationAttempts', 'incidents:read', 'list', 'IncidentNotificationAttempt'),

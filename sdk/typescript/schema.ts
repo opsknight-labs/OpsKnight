@@ -163,6 +163,7 @@ export type OperationalEvent = { "id": string; "incidentId": string; "type": str
 export type RelatedIncidents = { "incidentId": string; "evidence": "ALERT_DEDUP_KEY"; "related": Array<{ "incident": { "id": string; "title": string; "status": string; "serviceId": string; "createdAt": string } & Record<string, unknown>; "matchedAt": string; "correlationHashes": Array<string> } & Record<string, unknown>>; "truncated": { "sourceKeys": boolean; "matches": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type IncidentAvailableActions = { "incidentId": string; "incidentStatus": string; "observedAt": string; "advisory": boolean; "actions": Array<{ "operationId": string; "method": string; "path": string; "allowed": boolean; "stateEligible": boolean } & Record<string, unknown>>; "runbookExecution": { "requiresRunbookSelection": boolean; "previewPath": string; "allowedToAttemptPreview": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type IncidentAlertSummary = { "id": string; "incidentId": string | null; "serviceId": string; "status": string; "correlationHash": string | null; "createdAt": string } & Record<string, unknown>;
+export type IncidentWarRoom = { "id": string; "incidentId": string; "provider": string; "generation": number; "state": string; "health": string; "providerChannelName": string | null; "providerChannelUrl": string | null; "createdAt": string; "readyAt": string | null; "closedAt": string | null; "archivedAt": string | null; "participantCount": number };
 export type IncidentNotificationAttempt = unknown;
 export type IncidentResponseActivity = { "incident": { "id": string; "title": string; "status": string; "serviceId": string; "createdAt": string; "acknowledgedAt": string | null; "resolvedAt": string | null; "resolutionKind": string | null; "automationDecision": { "mode"?: string; "routeType"?: string; "escalationPolicyId"?: string | null; "matchedRouteRuleId"?: string | null; "evaluationAt"?: string } & Record<string, unknown> | null } & Record<string, unknown>; "alerts": Array<{ "id": string; "status": string; "correlationHash": string | null; "createdAt": string } & Record<string, unknown>>; "events": Array<{ "id": string; "type": string | null; "createdAt": string } & Record<string, unknown>>; "notifications": Array<{ "id": string; "channel": string; "status": string; "attempts": number; "createdAt": string; "sentAt": string | null; "deliveredAt": string | null; "failedAt": string | null } & Record<string, unknown>>; "executions": Array<{ "id": string; "runbookId": string; "status": string; "createdAt": string; "startedAt": string | null; "completedAt": string | null; "recoveryOutcome": string | null; "runbook": { "name": string } & Record<string, unknown> } & Record<string, unknown>>; "truncated": { "alerts": boolean; "events": boolean; "notifications": boolean; "executions": boolean } & Record<string, unknown> } & Record<string, unknown>;
 export type RunbookExecutionSummary = { "id": string; "runbookId": string; "incidentId": string; "status": string; "triggeredByType": string; "startedAt": string | null; "completedAt": string | null; "createdAt": string; "recoveryOutcome": string | null; "runbook": { "id": string; "name": string; "slug": string } & Record<string, unknown> } & Record<string, unknown>;
@@ -413,6 +414,7 @@ export interface OperationRequests {
   listNotificationAttempts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   getNotificationFeedback: { "params": { "id": string } };
   getIncidentResponseActivity: { "params": { "id": string } };
+  listIncidentWarRooms: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentAlerts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentRunbookExecutions: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentNotificationAttempts: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
@@ -728,6 +730,7 @@ export interface OperationResponses {
   listNotificationAttempts: { "data": Array<NotificationDeliveryAttempt>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getNotificationFeedback: { "data": NotificationFeedback; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getIncidentResponseActivity: { "data": IncidentResponseActivity; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIncidentWarRooms: { "data": Array<IncidentWarRoom>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentAlerts: { "data": Array<IncidentAlertSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentRunbookExecutions: { "data": Array<RunbookExecutionSummary>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentNotificationAttempts: { "data": Array<IncidentNotificationAttempt>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2841,6 +2844,14 @@ export const OPERATIONS = {
     "method": "GET",
     "path": "/incidents/{id}/response-activity",
     "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentWarRooms": {
+    "method": "GET",
+    "path": "/incidents/{id}/war-rooms",
+    "kind": "list",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
