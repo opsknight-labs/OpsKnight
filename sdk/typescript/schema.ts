@@ -433,8 +433,8 @@ export interface OperationRequests {
   publishPostmortem: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "isPublic": boolean } };
   listPostmortemContributors: { "params": { "id": string } };
   replacePostmortemContributors: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR" }> } };
-  updatePostmortem: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "title"?: string; "summary"?: string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "impact"?: PostmortemImpact; "timeline"?: PostmortemTimeline; "contributingFactors"?: PostmortemFactors; "fiveWhys"?: PostmortemFiveWhys; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: boolean } & Record<string, unknown> };
-  deletePostmortem: { "params": { "id": string }; "headers": { "If-Match": string } };
+  updatePostmortem: { "params": { "id": string }; "headers"?: { "Idempotency-Key"?: string; "If-Match"?: string }; "body": { "title"?: string; "summary"?: string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "impact"?: PostmortemImpact; "timeline"?: PostmortemTimeline; "contributingFactors"?: PostmortemFactors; "fiveWhys"?: PostmortemFiveWhys; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: boolean } & Record<string, unknown> };
+  deletePostmortem: { "params": { "id": string }; "headers"?: { "If-Match"?: string } };
   listPostmortems: { "query"?: { "limit"?: number; "cursor"?: string; "incidentId"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED"; "isPublic"?: "true" | "false"; "search"?: string } };
   createPostmortem: { "headers"?: { "Idempotency-Key"?: string }; "body": { "incidentId": string; "title"?: string; "summary": string; "rootCause"?: string; "resolution"?: string; "mitigation"?: string; "impact"?: PostmortemImpact; "timeline"?: PostmortemTimeline; "contributingFactors"?: PostmortemFactors; "fiveWhys"?: PostmortemFiveWhys; "lessons"?: string; "status"?: "DRAFT" | "IN_REVIEW" | "PUBLISHED"; "isPublic"?: boolean } & Record<string, unknown> };
   getMetricsReport: { "query"?: { "serviceId"?: string; "days"?: number } };
@@ -3019,11 +3019,8 @@ export const OPERATIONS = {
     "method": "PATCH",
     "path": "/postmortems/{id}",
     "kind": "item",
-    "idempotency": "required",
-    "requiredHeaders": [
-      "Idempotency-Key",
-      "If-Match"
-    ],
+    "idempotency": "supported",
+    "requiredHeaders": [],
     "bodyRequired": true
   },
   "deletePostmortem": {
@@ -3031,9 +3028,7 @@ export const OPERATIONS = {
     "path": "/postmortems/{id}",
     "kind": "none",
     "idempotency": "natural",
-    "requiredHeaders": [
-      "If-Match"
-    ],
+    "requiredHeaders": [],
     "bodyRequired": false
   },
   "listPostmortems": {

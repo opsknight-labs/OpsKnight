@@ -2193,11 +2193,8 @@
     "method": "PATCH",
     "path": "/postmortems/{id}",
     "kind": "item",
-    "idempotency": "required",
-    "requiredHeaders": [
-      "Idempotency-Key",
-      "If-Match"
-    ],
+    "idempotency": "supported",
+    "requiredHeaders": [],
     "bodyRequired": true
   },
   "deletePostmortem": {
@@ -2205,9 +2202,7 @@
     "path": "/postmortems/{id}",
     "kind": "none",
     "idempotency": "natural",
-    "requiredHeaders": [
-      "If-Match"
-    ],
+    "requiredHeaders": [],
     "bodyRequired": false
   },
   "listPostmortems": {

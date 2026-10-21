@@ -21040,7 +21040,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "required": true,
+            "required": false,
             "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
             "schema": {
               "type": "string",
@@ -21051,8 +21051,8 @@
           {
             "name": "If-Match",
             "in": "header",
-            "required": true,
-            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "required": false,
+            "description": "ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.",
             "schema": {
               "type": "string"
             }
@@ -21190,16 +21190,6 @@
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
-          "428": {
-            "description": "RFC 9457 Problem Details error response",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           },
@@ -21210,7 +21200,7 @@
         "operationId": "updatePostmortem",
         "x-required-scope": "postmortems:write",
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
-        "x-idempotency": "required",
+        "x-idempotency": "supported",
         "x-concurrency": "etag"
       },
       "delete": {
@@ -21230,8 +21220,8 @@
           {
             "name": "If-Match",
             "in": "header",
-            "required": true,
-            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "required": false,
+            "description": "ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.",
             "schema": {
               "type": "string"
             }
@@ -21252,16 +21242,6 @@
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
-          },
-          "428": {
-            "description": "RFC 9457 Problem Details error response",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"

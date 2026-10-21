@@ -732,12 +732,12 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale: 'Exact parent revision fences a bounded replacement of active-user contributor roles. Rows, parent version, audit and replay receipt commit together.',
   },
   'PATCH /api/v2/postmortems/[id]': {
-    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
-    rationale: 'Monotonic postmortem revision fences edits from both UI and REST. Content, audit and replay receipt commit in the same transaction.',
+    idempotency: 'supported', concurrency: 'etag', preconditionRequired: false,
+    rationale: 'Legacy clients may omit both headers. A supplied strong ETag fences edits, and a supplied idempotency key binds the replay receipt to the credential.',
   },
   'DELETE /api/v2/postmortems/[id]': {
-    idempotency: 'natural', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
-    rationale: 'Exact postmortem revision fences deletion and its canonical audit; a repeat returns 404.',
+    idempotency: 'natural', concurrency: 'etag', preconditionRequired: false, responseEtag: false,
+    rationale: 'Legacy clients may omit If-Match. A supplied strong ETag fences deletion and its canonical audit; a repeat returns 404.',
   },
   'POST /api/v2/teams': supported('Creation.'),
   'PATCH /api/v2/teams/[id]': natural('Sets fields to the requested values.', 'etag'),

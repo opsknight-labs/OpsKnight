@@ -154,7 +154,9 @@ test('UI and REST share team membership, lead, revision and session-revocation o
         })
       )
     );
-    await page.goto(`/teams/${team.id}?tab=services`);
+    await expect(row()).toHaveCount(0);
+    await page.getByRole('tab', { name: /Services/ }).click();
+    await expect(page).toHaveURL(/tab=services/);
     await page.mouse.move(0, 0);
     await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Assign Services', exact: true }).click();

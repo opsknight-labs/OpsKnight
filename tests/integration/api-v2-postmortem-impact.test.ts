@@ -129,3 +129,23 @@ it('rejects a stale edit after another writer advances the postmortem revision',
   expect(staleDelete.status).toBe(412);
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).summary).toBe('A revision protected summary');
 });
+
+it('preserves PATCH and DELETE for existing clients that omit optional headers', async () => {
+  const writer = await createV2Credential(['postmortems:read', 'postmortems:write', 'incidents:read']);
+  const service = await createTestService('Legacy postmortem service');
+  const incident = await createTestIncident('Legacy postmortem incident', service.id, { status: 'RESOLVED' });
+  const created = await invokeV2(POST, writer.token, 'POST', '/postmortems', {}, {
+    incidentId: incident.id, summary: 'A summary from an existing client',
+  });
+  expect(created.status).toBe(201);
+  const id = (await created.json()).data.id as string;
+  const path = `/postmortems/${id}`;
+  const updated = await invokeV2(PATCH, writer.token, 'PATCH', path, { id }, {
+    lessons: 'Updated without new headers',
+  });
+  expect(updated.status).toBe(200);
+  expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).lessons).toBe('Updated without new headers');
+  const deleted = await invokeV2(DELETE, writer.token, 'DELETE', path, { id });
+  expect(deleted.status).toBe(204);
+  expect(await db.postmortem.findUnique({ where: { id } })).toBeNull();
+});

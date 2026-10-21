@@ -46,7 +46,7 @@ export default defineConfig({
             ...e2eSecrets,
             ENCRYPTION_KEY: '68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba',
             NEXTAUTH_COOKIE_SECURE: 'false',
-            OPSKNIGHT_PROCESS_ROLE: 'web',
+            OPSKNIGHT_PROCESS_ROLE: port === 3193 ? 'integrated' : 'web',
           },
         })),
 });

@@ -7,7 +7,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
-import { etagHeaders, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
+import { etagHeaders, ifMatchWhere, parseIfMatch } from '@/lib/api-v2/concurrency';
 
 export const GET = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
@@ -75,9 +75,7 @@ export const GET = defineV2Route<{ id: string }>({
 export const PATCH = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
   bodySchema: PostmortemUpdateV2Schema,
-  preconditionRequired: true,
   idempotent: true,
-  idempotencyRequired: true,
   replayAuthGuard: async ({ actor, params, tx }) => {
     const found = await tx!.postmortem.findFirst({ where: {
       AND: [{ OR: [{ id: params.id }, { incidentId: params.id }] }, postmortemReadWhere(actor)],
@@ -88,7 +86,7 @@ export const PATCH = defineV2Route<{ id: string }>({
     const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
     const db = tx ?? prisma;
-    const expectedRevision = requireRevisionIfMatch(req);
+    const expectedRevision = parseIfMatch(req);
 
     const existing = await db.postmortem.findFirst({
       where: {
@@ -123,7 +121,7 @@ export const PATCH = defineV2Route<{ id: string }>({
     }
 
     const updatedCount = await db.postmortem.updateMany({
-        where: { id: existing.id, revision: expectedRevision },
+        where: { id: existing.id, ...ifMatchWhere(expectedRevision) },
         data: {
           ...(body.title !== undefined ? { title: body.title } : {}),
           ...(body.summary !== undefined ? { summary: body.summary } : {}),
@@ -196,11 +194,10 @@ export const PATCH = defineV2Route<{ id: string }>({
 
 export const DELETE = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
-  preconditionRequired: true,
   handler: async ({ actor, apiKey, params, req }) => {
     const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
-    const expectedRevision = requireRevisionIfMatch(req);
+    const expectedRevision = parseIfMatch(req);
 
     const existing = await prisma.postmortem.findFirst({
       where: {
@@ -220,7 +217,7 @@ export const DELETE = defineV2Route<{ id: string }>({
 
     await prisma.$transaction(async tx => {
       const deleted = await tx.postmortem.deleteMany({
-        where: { id: existing.id, revision: expectedRevision },
+        where: { id: existing.id, ...ifMatchWhere(expectedRevision) },
       });
       if (deleted.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
 

@@ -323,6 +323,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /incidents/{id}/war-rooms [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "DELETE /incidents/{id}/watchers/{watcherId} [incidents:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
