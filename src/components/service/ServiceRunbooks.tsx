@@ -306,7 +306,7 @@ export default function ServiceRunbooks({
           </div>
           <div className="min-w-0">
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-              Service Automations &amp; Runbooks
+              Service Automations
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed max-w-2xl">
               Attach version-controlled runbooks to automatically recover from incidents or provide

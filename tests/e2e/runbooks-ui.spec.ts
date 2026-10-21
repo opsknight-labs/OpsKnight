@@ -729,7 +729,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     });
     if (width < 1024 && (await closeNavigation.isVisible())) await closeNavigation.click();
     await page
-      .getByRole('heading', { name: /^Service [Aa]utomations$/i })
+      .getByRole('heading', { name: /^Service [Aa]utomations/i })
       .evaluate(element => element.scrollIntoView({ block: 'start' }));
     await noOverflow(page);
     await page.screenshot({
