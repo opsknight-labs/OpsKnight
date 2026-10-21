@@ -139,3 +139,18 @@ it('reports actionable stored-policy issues without mutating the policy', async 
   });
   expect(invalid.headers.get('cache-control')).toBe('no-store');
 });
+
+it('rejects empty and archived policies in the validation snapshot', async () => {
+  const reader = await createV2Credential(['escalation-policies:read']);
+  const policy = await createTestEscalationPolicy('empty validation', []);
+  const path = `/escalation-policies/${policy.id}/validation`;
+  const empty = await invokeV2(GET_VALIDATION, reader.token, 'GET', path, { id: policy.id });
+  expect((await empty.json()).data).toMatchObject({
+    valid: false, issues: [{ code: 'NO_STEPS' }],
+  });
+  await testPrisma.escalationPolicy.update({ where: { id: policy.id }, data: { archivedAt: new Date() } });
+  const archived = await invokeV2(GET_VALIDATION, reader.token, 'GET', path, { id: policy.id });
+  const data = (await archived.json()).data;
+  expect(data.valid).toBe(false);
+  expect(data.issues.map((issue: { code: string }) => issue.code)).toEqual(['ARCHIVED', 'NO_STEPS']);
+});
