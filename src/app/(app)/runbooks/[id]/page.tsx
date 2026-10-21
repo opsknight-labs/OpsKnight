@@ -416,90 +416,122 @@ export default async function RunbookDetailPage({
       : '100%';
 
   const dangerZoneCard = hasManageCapability ? (
-    <SectionCard
-      tone="danger"
-      icon={ShieldAlert}
-      title="Danger zone"
-      description="Lifecycle changes that affect every service using this runbook."
-      bodyClassName="divide-y divide-border/60 py-0"
-    >
-      <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            {isArchived ? 'Restore to active library' : 'Archive runbook'}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {isArchived
-              ? 'Re-enables management. Bindings stay disabled until reviewed.'
-              : 'Disables all executions and bindings while preserving execution and audit history.'}
-          </p>
+    <div className="rounded-2xl border border-destructive/25 bg-card/60 dark:bg-card/30 backdrop-blur-xs overflow-hidden shadow-xs">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between border-b border-destructive/15 bg-destructive/[0.03] px-5 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 text-destructive">
+            <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div>
+            <h3 className="text-xs font-semibold text-foreground tracking-tight">Danger Zone</h3>
+            <p className="text-[11px] text-muted-foreground">
+              Lifecycle actions affecting all service bindings
+            </p>
+          </div>
         </div>
-        {isArchived ? (
-          <ConfirmAction
-            action={handleRestoreRunbook}
-            title={`Restore ${runbook.name}?`}
-            description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
-            label="Restore Runbook"
-            variant="outline"
-            successMessage="Runbook restored"
-          />
-        ) : (
-          <ConfirmAction
-            action={archiveRunbookAction.bind(null, runbook.id)}
-            title={`Archive ${runbook.name}?`}
-            description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
-            label="Archive Runbook"
-            variant="outline"
-          />
-        )}
+        <span className="hidden sm:inline-flex items-center rounded-md border border-destructive/20 bg-destructive/5 px-2 py-0.5 text-[10px] font-medium text-destructive">
+          Privileged
+        </span>
       </div>
 
-      <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-start">
-        <div className="max-w-xl space-y-1">
-          <p className="text-sm font-medium text-destructive">Permanently delete runbook</p>
-          <p className="text-xs text-muted-foreground">
-            {deleteEligibility?.canDelete
-              ? 'This runbook has no published versions and no executions. Deletion is permanent.'
-              : (deleteEligibility?.reason ??
-                'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.')}
-          </p>
+      {/* Compact Actions List */}
+      <div className="divide-y divide-border/60">
+        {/* Row 1: Archive / Restore */}
+        <div className="flex flex-col gap-2.5 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground">
+              {isArchived ? 'Restore to active library' : 'Archive runbook'}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isArchived
+                ? 'Re-enables editing and service bindings.'
+                : 'Disables active execution while preserving audit history.'}
+            </p>
+          </div>
+          <div className="shrink-0">
+            {isArchived ? (
+              <ConfirmAction
+                action={handleRestoreRunbook}
+                title={`Restore ${runbook.name}?`}
+                description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
+                label="Restore Runbook"
+                variant="outline"
+                className="h-8 rounded-lg px-3 text-xs font-medium border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                successMessage="Runbook restored"
+              />
+            ) : (
+              <ConfirmAction
+                action={archiveRunbookAction.bind(null, runbook.id)}
+                title={`Archive ${runbook.name}?`}
+                description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
+                label="Archive Runbook"
+                variant="outline"
+                className="h-8 rounded-lg px-3 text-xs font-medium border-border/80 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5 transition-colors"
+              />
+            )}
+          </div>
         </div>
-        {deleteEligibility?.canDelete && (
-          <ConfigureSheet
-            title={`Delete ${runbook.name}`}
-            description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
-            trigger={
-              <Button variant="destructive" size="sm" className="rounded-xl shadow-2xs">
-                Delete runbook
-              </Button>
-            }
-          >
-            <ActionForm
-              action={handleDeleteRunbook}
-              className="space-y-4"
-              successMessage="Runbook deleted"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="delete-confirmation" className="text-xs">
-                  Confirm runbook name or slug
-                </Label>
-                <Input
-                  id="delete-confirmation"
-                  name="confirmation"
-                  placeholder={runbook.slug}
-                  required
-                  autoComplete="off"
-                  className="font-mono text-xs rounded-xl"
-                />
-              </div>
-              <SubmitButton variant="destructive" pendingLabel="Deleting…">
-                Permanently delete runbook
-              </SubmitButton>
-            </ActionForm>
-          </ConfigureSheet>
-        )}
+
+        {/* Row 2: Delete */}
+        <div className="flex flex-col gap-2.5 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-xs font-semibold text-destructive">Permanently delete runbook</p>
+            <p className="text-[11px] text-muted-foreground">
+              {deleteEligibility?.canDelete
+                ? 'No executions or published versions exist. Deletion is irreversible.'
+                : (deleteEligibility?.reason ??
+                  'Cannot delete: Runbook has execution history. Archive it to preserve evidence.')}
+            </p>
+          </div>
+          <div className="shrink-0">
+            {deleteEligibility?.canDelete ? (
+              <ConfigureSheet
+                title={`Delete ${runbook.name}`}
+                description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
+                trigger={
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 rounded-lg px-3 text-xs font-medium shadow-2xs"
+                  >
+                    Delete runbook
+                  </Button>
+                }
+              >
+                <ActionForm
+                  action={handleDeleteRunbook}
+                  className="space-y-4"
+                  successMessage="Runbook deleted"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="delete-confirmation" className="text-xs">
+                      Confirm runbook name or slug
+                    </Label>
+                    <Input
+                      id="delete-confirmation"
+                      name="confirmation"
+                      placeholder={runbook.slug}
+                      required
+                      autoComplete="off"
+                      className="font-mono text-xs rounded-xl"
+                    />
+                  </div>
+                  <SubmitButton variant="destructive" pendingLabel="Deleting…">
+                    Permanently delete runbook
+                  </SubmitButton>
+                </ActionForm>
+              </ConfigureSheet>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground select-none">
+                <Lock className="h-3 w-3" aria-hidden="true" />
+                Deletion locked
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-    </SectionCard>
+    </div>
   ) : null;
 
   return (
