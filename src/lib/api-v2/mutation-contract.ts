@@ -718,6 +718,12 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Canonical SLA version lock, target validation, immutable version, attributed audit and replay receipt commit atomically.',
   },
+  'PUT /api/v2/settings/incident-sla': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale: 'Canonical workspace SLA version lock, target validation, immutable version, attributed audit and replay receipt commit atomically.',
+  },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
   'PATCH /api/v2/schedules/[id]': natural('Sets fields to the requested values.', 'etag'),

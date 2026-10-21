@@ -1079,6 +1079,39 @@ function buildBaseSpec(): Record<string, unknown> {
           responses: { '200': { description: 'New immutable SLA policy version' } },
         },
       },
+      '/settings/incident-sla': {
+        get: {
+          tags: ['Administration'],
+          summary: 'Read the current workspace incident SLA policy',
+          responses: { '200': { description: 'Current immutable policy or null, with version ETag' } },
+        },
+        put: {
+          tags: ['Administration'],
+          summary: 'Create the next immutable workspace incident SLA policy version',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: {
+              type: 'object', additionalProperties: false,
+              required: ['baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
+              properties: {
+                baseAckTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                baseResolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                rules: { type: 'array', maxItems: 5, items: {
+                  type: 'object', additionalProperties: false,
+                  required: ['priority', 'ackTargetMs', 'resolveTargetMs'],
+                  properties: {
+                    priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+                    ackTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                    resolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                    label: { type: 'string', maxLength: 120 },
+                  },
+                } },
+              },
+            } } },
+          },
+          responses: { '200': { description: 'New immutable workspace SLA policy version' } },
+        },
+      },
       '/teams': {
         get: {
           tags: ['Teams'],

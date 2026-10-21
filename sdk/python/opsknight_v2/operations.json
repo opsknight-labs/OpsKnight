@@ -2371,6 +2371,25 @@
     ],
     "bodyRequired": true
   },
+  "getWorkspaceSlaPolicy": {
+    "method": "GET",
+    "path": "/settings/incident-sla",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateWorkspaceSlaPolicy": {
+    "method": "PUT",
+    "path": "/settings/incident-sla",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "updateService": {
     "method": "PATCH",
     "path": "/services/{id}",

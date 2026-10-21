@@ -433,6 +433,8 @@ export interface OperationRequests {
   updateServiceClassificationPolicy: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "derivePriorityFromUrgency"?: boolean; "priorityFallbackMode"?: "INHERIT" | "ENABLED" | "DISABLED"; "rules": Array<{ "matchValue": "critical" | "error" | "warning" | "info"; "priorityMode"?: "INHERIT" | "FALLBACK" | "SET" | "CLEAR"; "priority": "P1" | "P2" | "P3" | "P4" | "P5" | null; "urgencyMode"?: "INHERIT" | "SET" | "DEFAULT"; "urgency": "HIGH" | "MEDIUM" | "LOW" | null }> } };
   getServiceSlaPolicy: { "params": { "id": string } };
   updateServiceSlaPolicy: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "inheritWorkspace": boolean; "baseAckTargetMs": number | null; "baseResolveTargetMs": number | null; "rules": Array<{ "priority": "P1" | "P2" | "P3" | "P4" | "P5"; "ackTargetMs": number; "resolveTargetMs": number; "label"?: string }> } };
+  getWorkspaceSlaPolicy: Record<string, never>;
+  updateWorkspaceSlaPolicy: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "baseAckTargetMs": number; "baseResolveTargetMs": number; "rules": Array<{ "priority": "P1" | "P2" | "P3" | "P4" | "P5"; "ackTargetMs": number; "resolveTargetMs": number; "label"?: string }> } };
   updateService: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "description"?: string | null; "teamId"?: string; "escalationPolicyId"?: string; "status"?: "OPERATIONAL" | "DEGRADED" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "MAINTENANCE" } & Record<string, unknown> };
   deleteService: { "params": { "id": string } };
   listServices: { "query"?: { "limit"?: number; "cursor"?: string; "teamId"?: string; "status"?: "OPERATIONAL" | "DEGRADED" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "MAINTENANCE"; "search"?: string } };
@@ -715,6 +717,8 @@ export interface OperationResponses {
   updateServiceClassificationPolicy: { "data": ServiceClassificationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getServiceSlaPolicy: { "data": ServiceSlaPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateServiceSlaPolicy: { "data": ServiceSlaPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getWorkspaceSlaPolicy: { "data": ServiceSlaPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateWorkspaceSlaPolicy: { "data": ServiceSlaPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateService: { "data": Service; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteService: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listServices: { "data": Array<Service>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -3098,6 +3102,25 @@ export const OPERATIONS = {
   "updateServiceSlaPolicy": {
     "method": "PUT",
     "path": "/services/{id}/response-policy/sla",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getWorkspaceSlaPolicy": {
+    "method": "GET",
+    "path": "/settings/incident-sla",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateWorkspaceSlaPolicy": {
+    "method": "PUT",
+    "path": "/settings/incident-sla",
     "kind": "item",
     "idempotency": "required",
     "requiredHeaders": [

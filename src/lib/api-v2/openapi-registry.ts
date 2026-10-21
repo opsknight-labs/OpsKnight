@@ -1453,6 +1453,8 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('put', '/services/{id}/response-policy/classification', 'updateServiceClassificationPolicy', 'response-policy:write', 'item', 'ServiceClassificationPolicy'),
   op('get', '/services/{id}/response-policy/sla', 'getServiceSlaPolicy', 'response-policy:read', 'item', 'ServiceSlaPolicy'),
   op('put', '/services/{id}/response-policy/sla', 'updateServiceSlaPolicy', 'response-policy:write', 'item', 'ServiceSlaPolicy'),
+  op('get', '/settings/incident-sla', 'getWorkspaceSlaPolicy', 'response-policy:read', 'item', 'ServiceSlaPolicy'),
+  op('put', '/settings/incident-sla', 'updateWorkspaceSlaPolicy', 'response-policy:write', 'item', 'ServiceSlaPolicy'),
   op('patch', '/services/{id}', 'updateService', 'services:write', 'item', 'Service'),
   op('delete', '/services/{id}', 'deleteService', 'services:write', 'item', 'ActionResult'),
   op('get', '/services', 'listServices', 'services:read', 'list', 'Service'),

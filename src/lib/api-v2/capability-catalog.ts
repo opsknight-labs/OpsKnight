@@ -470,10 +470,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'operational-settings',
     area: 'Administration',
     title: 'SLA, custom-field definitions, ChatOps and preferences',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'These customer-facing controls remain in the parity inventory; none is implicitly exposed by ordinary broad CRUD access.',
-    operationIds: [],
+      'Workspace SLA policies now share the UI versioned command with scoped, revision-protected REST reads and writes. Custom-field definitions, ChatOps and remaining preferences still require dedicated contracts.',
+    operationIds: ['getWorkspaceSlaPolicy', 'updateWorkspaceSlaPolicy'],
   },
   {
     id: 'sensitive-maintenance',
