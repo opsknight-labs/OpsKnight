@@ -1027,6 +1027,16 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
         )
       ),
       inputKeys: object({ added: array(string()), removed: array(string()) }, ['added', 'removed']),
+      inputDetails: object({
+        added: array(object({
+          key: string(), label: string(), type: string(), required: { type: 'boolean' },
+        }, ['key', 'label', 'type', 'required'])),
+        removed: array(object({
+          key: string(), label: string(), type: string(), required: { type: 'boolean' },
+        }, ['key', 'label', 'type', 'required'])),
+        baseCount: integer,
+        nextCount: integer,
+      }, ['added', 'removed', 'baseCount', 'nextCount']),
       rules: array(
         object(
           {
@@ -1037,6 +1047,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
             mode: string(),
             versionStrategy: string(),
             runbookVersionId: { type: ['string', 'null'] },
+            service: { anyOf: [object({ id, name: string() }, ['id', 'name']), { type: 'null' }] },
             impact: string(),
           },
           [
@@ -1055,7 +1066,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       rulesTruncated: { type: 'boolean' },
       warning: string(),
     },
-    ['base', 'next', 'steps', 'inputKeys', 'rules', 'rulesTruncated', 'warning']
+    ['base', 'next', 'steps', 'inputKeys', 'inputDetails', 'rules', 'rulesTruncated', 'warning']
   ),
   RunbookDiffStep: object(
     {

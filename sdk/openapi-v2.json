@@ -7843,6 +7843,80 @@
               "removed"
             ]
           },
+          "inputDetails": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "added": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              "removed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              "baseCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "nextCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "added",
+              "removed",
+              "baseCount",
+              "nextCount"
+            ]
+          },
           "rules": {
             "type": "array",
             "items": {
@@ -7875,6 +7949,30 @@
                     "null"
                   ]
                 },
+                "service": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "impact": {
                   "type": "string"
                 }
@@ -7904,6 +8002,7 @@
           "next",
           "steps",
           "inputKeys",
+          "inputDetails",
           "rules",
           "rulesTruncated",
           "warning"
