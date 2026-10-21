@@ -103,13 +103,14 @@ describe('accepted fields are stored or rejected, never silently dropped', () =>
     expect(StatusPageCreateV2Schema.parse({ name: 'Status', slug: 'status' })).toBeDefined();
   });
 
-  it('rejects postmortem impact, which is structured data the REST string cannot represent', () => {
+  it('accepts structured postmortem impact and rejects the legacy plain string', () => {
     expect(() =>
       PostmortemCreateV2Schema.parse({ incidentId: 'inc_1', summary: 'Long summary', impact: 'x' })
-    ).toThrow(/impact is not supported/);
-    expect(() => PostmortemUpdateV2Schema.parse({ impact: 'x' })).toThrow(
-      /impact is not supported/
-    );
+    ).toThrow();
+    expect(() => PostmortemUpdateV2Schema.parse({ impact: 'x' })).toThrow();
+    expect(PostmortemUpdateV2Schema.parse({ impact: { usersAffected: 12, errorRate: 2.5 } }).impact)
+      .toEqual({ usersAffected: 12, errorRate: 2.5 });
+    expect(() => PostmortemUpdateV2Schema.parse({ impact: { errorRate: 101 } })).toThrow();
   });
 });
 

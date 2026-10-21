@@ -30,6 +30,7 @@ export const GET = defineV2Route<{ id: string }>({
         rootCause: true,
         resolution: true,
         lessons: true,
+        impact: true,
         status: true,
         isPublic: true,
         publishedAt: true,
@@ -109,6 +110,7 @@ export const PATCH = defineV2Route<{ id: string }>({
               ? { resolution: body.mitigation }
               : {}),
           ...(body.lessons !== undefined ? { lessons: body.lessons } : {}),
+          ...(body.impact !== undefined ? { impact: body.impact } : {}),
           ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
           ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
         },
@@ -120,6 +122,7 @@ export const PATCH = defineV2Route<{ id: string }>({
           rootCause: true,
           resolution: true,
           lessons: true,
+          impact: true,
           status: true,
           isPublic: true,
           publishedAt: true,

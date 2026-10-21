@@ -490,6 +490,20 @@ function buildBaseSpec(): Record<string, unknown> {
           },
           required: ['windowDays', 'slaCompliancePercent', 'totalIncidents', 'resolvedIncidents'],
         },
+        PostmortemImpact: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            usersAffected: { type: 'integer', minimum: 0, maximum: 1000000000 },
+            downtimeMinutes: { type: 'integer', minimum: 0, maximum: 10000000 },
+            errorRate: { type: 'number', minimum: 0, maximum: 100 },
+            servicesAffected: { type: 'array', maxItems: 100, items: { type: 'string', minLength: 1, maxLength: 100 } },
+            slaBreaches: { type: 'integer', minimum: 0, maximum: 1000000000 },
+            revenueImpact: { type: 'number', minimum: 0, maximum: 1000000000000 },
+            apiErrors: { type: 'integer', minimum: 0, maximum: 1000000000 },
+            performanceDegradation: { type: 'number', minimum: 0, maximum: 100 },
+          },
+        },
         Postmortem: {
           type: 'object',
           properties: {
@@ -500,7 +514,7 @@ function buildBaseSpec(): Record<string, unknown> {
             rootCause: { type: 'string', nullable: true },
             resolution: { type: 'string', nullable: true },
             mitigation: { type: 'string', nullable: true },
-            impact: { type: 'string', nullable: true },
+            impact: { oneOf: [{ $ref: '#/components/schemas/PostmortemImpact' }, { type: 'null' }] },
             lessons: { type: 'string', nullable: true },
             status: { type: 'string', enum: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'] },
             isPublic: { type: 'boolean' },
@@ -2053,6 +2067,7 @@ function buildBaseSpec(): Record<string, unknown> {
                     rootCause: { type: 'string' },
                     resolution: { type: 'string' },
                     mitigation: { type: 'string' },
+                    impact: { $ref: '#/components/schemas/PostmortemImpact' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',
@@ -2101,6 +2116,7 @@ function buildBaseSpec(): Record<string, unknown> {
                     rootCause: { type: 'string' },
                     resolution: { type: 'string' },
                     mitigation: { type: 'string' },
+                    impact: { $ref: '#/components/schemas/PostmortemImpact' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',

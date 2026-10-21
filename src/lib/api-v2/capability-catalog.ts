@@ -398,10 +398,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'postmortem-workflows',
     area: 'Postmortems',
     title: 'Structured impact, contributors and action items',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Postmortem CRUD is available. Structured impact and collaboration require real schemas and shared commands; ignored plain-string impact remains rejected.',
-    operationIds: [],
+      'Postmortem CRUD now persists strictly validated structured impact metrics used by the UI. Factors, five-whys, contributors, action-item lifecycle and explicit publication still need shared contracts.',
+    operationIds: ['createPostmortem', 'getPostmortem', 'updatePostmortem'],
   },
   {
     id: 'report-exports',

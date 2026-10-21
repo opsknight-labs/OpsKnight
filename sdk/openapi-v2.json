@@ -1233,6 +1233,56 @@
           "resolvedIncidents"
         ]
       },
+      "PostmortemImpact": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "usersAffected": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "downtimeMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000
+          },
+          "errorRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "servicesAffected": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "slaBreaches": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "revenueImpact": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000000
+          },
+          "apiErrors": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "performanceDegradation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
       "Postmortem": {
         "type": "object",
         "properties": {
@@ -1270,9 +1320,13 @@
             ]
           },
           "impact": {
-            "type": [
-              "string",
-              "null"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PostmortemImpact"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "lessons": {
@@ -19710,6 +19764,9 @@
                   "mitigation": {
                     "type": "string"
                   },
+                  "impact": {
+                    "$ref": "#/components/schemas/PostmortemImpact"
+                  },
                   "lessons": {
                     "type": "string"
                   },
@@ -19946,6 +20003,9 @@
                   },
                   "mitigation": {
                     "type": "string"
+                  },
+                  "impact": {
+                    "$ref": "#/components/schemas/PostmortemImpact"
                   },
                   "lessons": {
                     "type": "string"

@@ -287,6 +287,17 @@ export const PostmortemListQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
 });
 
+export const PostmortemImpactV2Schema = z.object({
+  usersAffected: z.number().int().min(0).max(1_000_000_000).optional(),
+  downtimeMinutes: z.number().int().min(0).max(10_000_000).optional(),
+  errorRate: z.number().min(0).max(100).optional(),
+  servicesAffected: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
+  slaBreaches: z.number().int().min(0).max(1_000_000_000).optional(),
+  revenueImpact: z.number().min(0).max(1_000_000_000_000).optional(),
+  apiErrors: z.number().int().min(0).max(1_000_000_000).optional(),
+  performanceDegradation: z.number().min(0).max(100).optional(),
+}).strict();
+
 export const PostmortemCreateV2Schema = z.object({
   incidentId: z.string().trim().min(1),
   title: z.string().trim().min(2).max(200).optional(),
@@ -294,17 +305,11 @@ export const PostmortemCreateV2Schema = z.object({
   rootCause: z.string().trim().max(5000).optional(),
   resolution: z.string().trim().max(5000).optional(),
   mitigation: z.string().trim().max(5000).optional(),
-  // Accepting and then dropping a field would report success for data that was never stored.
-  impact: z
-    .never({
-      message:
-        'impact is not supported over REST: postmortem impact is structured data managed in the product UI.',
-    })
-    .optional(),
+  impact: PostmortemImpactV2Schema.optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED']).default('DRAFT'),
   isPublic: z.boolean().default(true),
-});
+}).strict();
 
 export const PostmortemUpdateV2Schema = z.object({
   title: z.string().trim().min(2).max(200).optional(),
@@ -312,14 +317,8 @@ export const PostmortemUpdateV2Schema = z.object({
   rootCause: z.string().trim().max(5000).optional(),
   resolution: z.string().trim().max(5000).optional(),
   mitigation: z.string().trim().max(5000).optional(),
-  // Accepting and then dropping a field would report success for data that was never stored.
-  impact: z
-    .never({
-      message:
-        'impact is not supported over REST: postmortem impact is structured data managed in the product UI.',
-    })
-    .optional(),
+  impact: PostmortemImpactV2Schema.optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
   isPublic: z.boolean().optional(),
-});
+}).strict();
