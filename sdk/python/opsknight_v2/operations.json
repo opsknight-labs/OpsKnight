@@ -1546,6 +1546,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "validateEscalationPolicy": {
+    "method": "GET",
+    "path": "/escalation-policies/{id}/validation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "updateEscalationPolicy": {
     "method": "PATCH",
     "path": "/escalation-policies/{id}",

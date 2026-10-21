@@ -95,6 +95,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /escalation-policies/{id}/validation [escalation-policies:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /escalation-policies [escalation-policies:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

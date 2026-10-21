@@ -241,6 +241,18 @@ const extraSchemas: Json = {
     },
     required: ['notificationId', 'events', 'truncated'],
   },
+  EscalationPolicyValidation: {
+    type: 'object',
+    properties: {
+      policyId: { type: 'string' }, revision: { type: 'integer' }, valid: { type: 'boolean' },
+      issues: { type: 'array', items: { type: 'object', properties: {
+        code: { type: 'string' }, stepId: { type: ['string', 'null'] },
+        field: { type: ['string', 'null'] }, message: { type: 'string' },
+      }, required: ['code', 'stepId', 'field', 'message'] } },
+      truncated: { type: 'boolean' },
+    },
+    required: ['policyId', 'revision', 'valid', 'issues', 'truncated'],
+  },
   EscalationPolicyDependencies: {
     type: 'object',
     properties: {

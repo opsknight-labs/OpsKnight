@@ -1503,6 +1503,14 @@ function buildBaseSpec(): Record<string, unknown> {
           responses: { '200': { description: 'Current dependency snapshot and target health' } },
         },
       },
+      '/escalation-policies/{id}/validation': {
+        get: {
+          tags: ['Escalation Policies'],
+          summary: 'Validate current policy steps and live target availability',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Bounded policy validation snapshot' } },
+        },
+      },
       '/integrations': {
         get: {
           tags: ['Integrations'],

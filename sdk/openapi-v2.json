@@ -9759,6 +9759,62 @@
           "truncated"
         ]
       },
+      "EscalationPolicyValidation": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "stepId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "field": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "stepId",
+                "field",
+                "message"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "policyId",
+          "revision",
+          "valid",
+          "issues",
+          "truncated"
+        ]
+      },
       "EscalationPolicyDependencies": {
         "type": "object",
         "properties": {
@@ -16210,6 +16266,85 @@
           }
         },
         "operationId": "getEscalationPolicyDependencies",
+        "x-required-scope": "escalation-policies:read",
+        "description": "Requires API scope `escalation-policies:read` (Escalation policies read)."
+      }
+    },
+    "/escalation-policies/{id}/validation": {
+      "get": {
+        "tags": [
+          "Escalation Policies"
+        ],
+        "summary": "Validate current policy steps and live target availability",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded policy validation snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EscalationPolicyValidation"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "validateEscalationPolicy",
         "x-required-scope": "escalation-policies:read",
         "description": "Requires API scope `escalation-policies:read` (Escalation policies read)."
       }

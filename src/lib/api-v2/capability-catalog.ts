@@ -186,8 +186,8 @@ const decisions: readonly ApiCapability[] = [
     title: 'Policy usage and validation workflows',
     status: 'partial',
     explanation:
-      'Escalation-policy CRUD validates steps. A bounded dependency snapshot reports live targets and deletion-blocking references; full validation and usage workflows remain pending.',
-    operationIds: ['getEscalationPolicyDependencies'],
+      'CRUD validates submitted steps. Bounded dependency and validation snapshots report usage, live target availability, stored-step issues and deletion-blocking references. Combined release certification remains pending.',
+    operationIds: ['getEscalationPolicyDependencies', 'validateEscalationPolicy'],
   },
   {
     id: 'team-membership',

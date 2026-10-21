@@ -153,6 +153,7 @@ export type IncidentResponseActivity = { "incident": { "id": string; "title": st
 export type RunbookExecutionSummary = { "id": string; "runbookId": string; "incidentId": string; "status": string; "triggeredByType": string; "startedAt": string | null; "completedAt": string | null; "createdAt": string; "recoveryOutcome": string | null; "runbook": { "id": string; "name": string; "slug": string } & Record<string, unknown> } & Record<string, unknown>;
 export type NotificationDeliveryAttempt = { "id": string; "notificationId": string; "ordinal": number; "outcome": string; "provider": string | null; "errorCode": string | null; "startedAt": string; "finishedAt": string | null; "reconciliationDeadline": string | null; "latencyMs": number | null } & Record<string, unknown>;
 export type NotificationFeedback = { "notificationId": string; "events": Array<{ "id": string; "provider": string; "eventType": string; "occurredAt": string; "processedAt": string | null; "quarantinedAt": string | null } & Record<string, unknown>>; "truncated": { "correlation": boolean; "events": boolean } & Record<string, unknown> } & Record<string, unknown>;
+export type EscalationPolicyValidation = { "policyId": string; "revision": number; "valid": boolean; "issues": Array<{ "code": string; "stepId": string | null; "field": string | null; "message": string } & Record<string, unknown>>; "truncated": boolean } & Record<string, unknown>;
 export type EscalationPolicyDependencies = { "policyId": string; "services": Array<{ "id": string; "name": string } & Record<string, unknown>>; "usage": { "services": number; "versionRefs": number; "decisions": number } & Record<string, unknown>; "truncated": { "services": boolean; "targets": boolean } & Record<string, unknown>; "targets": Array<{ "stepId": string; "stepOrder": number; "targetType": "USER" | "TEAM" | "SCHEDULE"; "targetId": string | null; "exists": boolean } & Record<string, unknown>>; "valid": boolean; "deletionAllowed": boolean } & Record<string, unknown>;
 export type ActionResult = { "success": boolean; "message"?: string } & Record<string, unknown>;
 export type IncidentTransition = { "id": string; "title": string; "status": "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "SNOOZED" | "SUPPRESSED"; "priority"?: string | null; "urgency": "LOW" | "MEDIUM" | "HIGH"; "acknowledgedAt"?: string | null; "resolvedAt"?: string | null; "updatedAt": string } & Record<string, unknown>;
@@ -335,6 +336,7 @@ export interface OperationRequests {
   listAuditLogs: { "query"?: { "limit"?: number; "cursor"?: string; "action"?: string; "entityType"?: string; "entityId"?: string; "actorId"?: string } };
   getEscalationPolicy: { "params": { "id": string } };
   getEscalationPolicyDependencies: { "params": { "id": string } };
+  validateEscalationPolicy: { "params": { "id": string } };
   updateEscalationPolicy: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "description"?: string | null; "steps"?: Array<Record<string, unknown>> } & Record<string, unknown> };
   deleteEscalationPolicy: { "params": { "id": string } };
   listEscalationPolicies: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string } };
@@ -616,6 +618,7 @@ export interface OperationResponses {
   listAuditLogs: { "data": Array<AuditLog>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getEscalationPolicy: { "data": EscalationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getEscalationPolicyDependencies: { "data": EscalationPolicyDependencies; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  validateEscalationPolicy: { "data": EscalationPolicyValidation; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateEscalationPolicy: { "data": EscalationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteEscalationPolicy: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listEscalationPolicies: { "data": Array<EscalationPolicy>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2273,6 +2276,14 @@ export const OPERATIONS = {
   "getEscalationPolicyDependencies": {
     "method": "GET",
     "path": "/escalation-policies/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "validateEscalationPolicy": {
+    "method": "GET",
+    "path": "/escalation-policies/{id}/validation",
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
