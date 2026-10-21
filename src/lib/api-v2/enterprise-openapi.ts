@@ -1235,6 +1235,25 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  {
+    method: 'get', path: '/postmortems/{id}/action-items',
+    summary: 'Read corrective actions from the same records as the postmortem UI',
+    description: 'Returns at most 100 actions and the parent postmortem revision. Legacy JSON actions are projected only when no relational records exist.',
+  },
+  {
+    method: 'put', path: '/postmortems/{id}/action-items',
+    summary: 'Replace all corrective actions using an exact postmortem revision',
+    description: 'The items array is a complete replacement. Omitting an existing item deletes it; a changed status advances its lifecycle. Requires If-Match and Idempotency-Key. Existing external-issue links on retained records are preserved.',
+    body: object({ items: array(object({
+      id: { type: 'string', minLength: 1, maxLength: 200 },
+      title: { type: 'string', minLength: 1, maxLength: 300 },
+      description: { type: 'string', maxLength: 5000 },
+      ownerId: { type: ['string', 'null'] },
+      dueDate: { type: ['string', 'null'], format: 'date' },
+      status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+      priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+    }, ['title']), 100) }, ['items']),
+  },
   { method: 'get', path: '/integrations/types', summary: 'List safe supported inbound provider types and configuration capabilities' },
   {
     method: 'post', path: '/services/{id}/integrations', summary: 'Create a service inbound integration and disclose its API key once',

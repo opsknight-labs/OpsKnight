@@ -1337,6 +1337,10 @@
           "id": {
             "type": "string"
           },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
           "incidentId": {
             "type": "string"
           },
@@ -1416,6 +1420,7 @@
         },
         "required": [
           "id",
+          "revision",
           "incidentId",
           "summary",
           "status",
@@ -8782,6 +8787,82 @@
         "required": [
           "id",
           "status"
+        ]
+      },
+      "PostmortemActionItemCollection": {
+        "type": "object",
+        "properties": {
+          "postmortemId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "dueDate": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "OPEN",
+                    "IN_PROGRESS",
+                    "COMPLETED",
+                    "BLOCKED"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "HIGH",
+                    "MEDIUM",
+                    "LOW"
+                  ]
+                },
+                "completedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "externalIssue": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "description",
+                "status",
+                "priority"
+              ]
+            }
+          }
+        },
+        "required": [
+          "postmortemId",
+          "revision",
+          "items"
         ]
       },
       "ServiceHealthSummary": {
@@ -20376,6 +20457,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -20477,6 +20578,12 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -20492,6 +20599,22 @@
           "404": {
             "$ref": "#/components/responses/ProblemError"
           },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           },
@@ -20502,8 +20625,8 @@
         "operationId": "updatePostmortem",
         "x-required-scope": "postmortems:write",
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
-        "x-idempotency": "natural",
-        "x-concurrency": "none"
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
       },
       "delete": {
         "tags": [
@@ -20515,6 +20638,15 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
             "schema": {
               "type": "string"
             }
@@ -20533,6 +20665,19 @@
           "404": {
             "$ref": "#/components/responses/ProblemError"
           },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           },
@@ -20544,7 +20689,306 @@
         "x-required-scope": "postmortems:write",
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
         "x-idempotency": "natural",
-        "x-concurrency": "none"
+        "x-concurrency": "etag"
+      }
+    },
+    "/postmortems/{id}/action-items": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read corrective actions from the same records as the postmortem UI",
+        "description": "Returns at most 100 actions and the parent postmortem revision. Legacy JSON actions are projected only when no relational records exist.\n\nRequires API scope `postmortems:read` (Postmortems read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PostmortemActionItemCollection"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listPostmortemActionItems",
+        "x-required-scope": "postmortems:read"
+      },
+      "put": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Replace all corrective actions using an exact postmortem revision",
+        "description": "The items array is a complete replacement. Omitting an existing item deletes it; a changed status advances its lifecycle. Requires If-Match and Idempotency-Key. Existing external-issue links on retained records are preserved.\n\nRequires API scope `postmortems:write` (Postmortems manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "description": {
+                          "type": "string",
+                          "maxLength": 5000
+                        },
+                        "ownerId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dueDate": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "OPEN",
+                            "IN_PROGRESS",
+                            "COMPLETED",
+                            "BLOCKED"
+                          ]
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "HIGH",
+                            "MEDIUM",
+                            "LOW"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "title"
+                      ]
+                    },
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PostmortemActionItemCollection"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "replacePostmortemActionItems",
+        "x-required-scope": "postmortems:write",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
       }
     },
     "/integrations/types": {

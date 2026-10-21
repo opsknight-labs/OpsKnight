@@ -51,6 +51,19 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  PostmortemActionItemCollection: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, revision: { type: 'integer' },
+      items: { type: 'array', maxItems: 100, items: { type: 'object', properties: {
+        id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' },
+        owner: { type: 'string' }, dueDate: { type: 'string', format: 'date' },
+        status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+        priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+        completedAt: { type: ['string', 'null'], format: 'date-time' },
+        externalIssue: { type: 'object', additionalProperties: true },
+      }, required: ['id', 'title', 'description', 'status', 'priority'] } },
+    }, required: ['postmortemId', 'revision', 'items'],
+  },
   ServiceHealthSummary: {
     type: 'object', properties: {
       service: { type: 'object', properties: {

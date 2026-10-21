@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from 'vitest';
-import { GET as GET_POSTMORTEM, PATCH } from '@/app/api/v2/postmortems/[id]/route';
+import { GET as GET_POSTMORTEM, PATCH, DELETE } from '@/app/api/v2/postmortems/[id]/route';
 import { POST } from '@/app/api/v2/postmortems/route';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 import { createTestIncident, createTestService, resetDatabase, testPrisma as db } from '../helpers/test-db';
@@ -21,6 +21,7 @@ it('stores and returns the structured impact metrics used by the postmortem UI',
   }, { 'Idempotency-Key': 'postmortem-impact-create' });
   expect(created.status).toBe(201);
   const id = (await created.json()).data.id as string;
+  const initialEtag = created.headers.get('etag')!;
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).impact).toMatchObject({
     usersAffected: 42, downtimeMinutes: 17,
   });
@@ -30,7 +31,7 @@ it('stores and returns the structured impact metrics used by the postmortem UI',
   expect((await read.json()).data.impact).toMatchObject({ usersAffected: 42 });
   const patched = await invokeV2(PATCH, writer.token, 'PATCH', path, { id }, {
     impact: { usersAffected: 51, errorRate: 3.5 },
-  });
+  }, { 'If-Match': initialEtag, 'Idempotency-Key': 'postmortem-impact-update' });
   expect(patched.status).toBe(200);
   expect((await patched.json()).data.impact).toMatchObject({ usersAffected: 51, errorRate: 3.5 });
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).impact).toMatchObject({
@@ -48,7 +49,7 @@ it('rejects invalid impact without changing stored data', async () => {
   const id = (await created.json()).data.id as string;
   const response = await invokeV2(PATCH, writer.token, 'PATCH', `/postmortems/${id}`, { id }, {
     impact: { errorRate: 200 },
-  });
+  }, { 'If-Match': created.headers.get('etag')!, 'Idempotency-Key': 'postmortem-impact-invalid-update' });
   expect(response.status).toBe(400);
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).impact).toBeNull();
 });
@@ -69,7 +70,8 @@ it('stores the UI-compatible structured timeline and rejects duplicate event ide
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).timeline).toEqual([first]);
   const path = `/postmortems/${id}`;
   expect((await (await invokeV2(GET_POSTMORTEM, writer.token, 'GET', path, { id })).json()).data.timeline).toEqual([first]);
-  const duplicate = await invokeV2(PATCH, writer.token, 'PATCH', path, { id }, { timeline: [first, first] });
+  const duplicate = await invokeV2(PATCH, writer.token, 'PATCH', path, { id }, { timeline: [first, first] },
+    { 'If-Match': created.headers.get('etag')!, 'Idempotency-Key': 'postmortem-timeline-duplicate' });
   expect(duplicate.status).toBe(400);
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).timeline).toEqual([first]);
 });
@@ -83,4 +85,25 @@ it('keeps REST postmortem creation aligned with the resolved-incident UI rule', 
   }, { 'Idempotency-Key': 'postmortem-active-rejection' });
   expect(response.status).toBe(400);
   expect(await db.postmortem.count({ where: { incidentId: incident.id } })).toBe(0);
+});
+
+it('rejects a stale edit after another writer advances the postmortem revision', async () => {
+  const writer = await createV2Credential(['postmortems:read', 'postmortems:write', 'incidents:read']);
+  const service = await createTestService('Revision service');
+  const incident = await createTestIncident('Revision incident', service.id, { status: 'RESOLVED' });
+  const created = await invokeV2(POST, writer.token, 'POST', '/postmortems', {}, {
+    incidentId: incident.id, summary: 'A revision protected summary',
+  }, { 'Idempotency-Key': 'postmortem-revision-create' });
+  expect(created.status).toBe(201);
+  const id = (await created.json()).data.id as string;
+  const etag = created.headers.get('etag')!;
+  await db.postmortem.update({ where: { id }, data: { lessons: 'Edited through another surface' } });
+  const response = await invokeV2(PATCH, writer.token, 'PATCH', `/postmortems/${id}`, { id }, {
+    summary: 'A stale summary should not overwrite the newer state',
+  }, { 'If-Match': etag, 'Idempotency-Key': 'postmortem-revision-stale' });
+  expect(response.status).toBe(412);
+  const staleDelete = await invokeV2(DELETE, writer.token, 'DELETE', `/postmortems/${id}`, { id }, undefined,
+    { 'If-Match': etag });
+  expect(staleDelete.status).toBe(412);
+  expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).summary).toBe('A revision protected summary');
 });

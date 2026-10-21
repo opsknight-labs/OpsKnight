@@ -7,6 +7,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
+import { etagHeaders, requireRevisionIfMatch } from '@/lib/api-v2/concurrency';
 
 export const GET = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
@@ -24,6 +25,7 @@ export const GET = defineV2Route<{ id: string }>({
       },
       select: {
         id: true,
+        revision: true,
         incidentId: true,
         title: true,
         summary: true,
@@ -64,18 +66,29 @@ export const GET = defineV2Route<{ id: string }>({
       });
     }
 
-    return { data: postmortem };
+    return { data: postmortem, headers: { ...etagHeaders(postmortem.revision), 'Cache-Control': 'no-store' } };
   },
 });
 
 export const PATCH = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
   bodySchema: PostmortemUpdateV2Schema,
-  handler: async ({ actor, apiKey, params, body }) => {
+  preconditionRequired: true,
+  idempotent: true,
+  idempotencyRequired: true,
+  replayAuthGuard: async ({ actor, params, tx }) => {
+    const found = await tx!.postmortem.findFirst({ where: {
+      AND: [{ OR: [{ id: params.id }, { incidentId: params.id }] }, postmortemReadWhere(actor)],
+    }, select: { id: true } });
+    if (!found) throw new AppError({ code: 'POSTMORTEM_NOT_FOUND' });
+  },
+  handler: async ({ actor, apiKey, params, body, req, tx }) => {
     const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
+    const db = tx ?? prisma;
+    const expectedRevision = requireRevisionIfMatch(req);
 
-    const existing = await prisma.postmortem.findFirst({
+    const existing = await db.postmortem.findFirst({
       where: {
         AND: [
           { OR: [{ id }, { incidentId: id }] },
@@ -98,9 +111,8 @@ export const PATCH = defineV2Route<{ id: string }>({
       publishedAt = null;
     }
 
-    const updated = await prisma.$transaction(async tx => {
-      const rec = await tx.postmortem.update({
-        where: { id: existing.id },
+    const updatedCount = await db.postmortem.updateMany({
+        where: { id: existing.id, revision: expectedRevision },
         data: {
           ...(body.title !== undefined ? { title: body.title } : {}),
           ...(body.summary !== undefined ? { summary: body.summary } : {}),
@@ -116,8 +128,13 @@ export const PATCH = defineV2Route<{ id: string }>({
           ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
           ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
         },
+    });
+    if (updatedCount.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
+    const rec = await db.postmortem.findUniqueOrThrow({
+        where: { id: existing.id },
         select: {
           id: true,
+          revision: true,
           incidentId: true,
           title: true,
           summary: true,
@@ -147,7 +164,6 @@ export const PATCH = defineV2Route<{ id: string }>({
           },
         },
       });
-
       await logV2Audit({
         action: 'postmortem.updated',
         entityType: 'INCIDENT',
@@ -158,18 +174,17 @@ export const PATCH = defineV2Route<{ id: string }>({
         tx,
       });
 
-      return rec;
-    });
-
-    return { data: updated };
+    return { data: rec, headers: { ...etagHeaders(rec.revision), 'Cache-Control': 'no-store' } };
   },
 });
 
 export const DELETE = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
-  handler: async ({ actor, apiKey, params }) => {
+  preconditionRequired: true,
+  handler: async ({ actor, apiKey, params, req }) => {
     const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
+    const expectedRevision = requireRevisionIfMatch(req);
 
     const existing = await prisma.postmortem.findFirst({
       where: {
@@ -188,9 +203,10 @@ export const DELETE = defineV2Route<{ id: string }>({
     }
 
     await prisma.$transaction(async tx => {
-      await tx.postmortem.delete({
-        where: { id: existing.id },
+      const deleted = await tx.postmortem.deleteMany({
+        where: { id: existing.id, revision: expectedRevision },
       });
+      if (deleted.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
 
       await logV2Audit({
         action: 'postmortem.deleted',

@@ -687,8 +687,18 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale: 'Starts executable work against production systems.',
   },
   'POST /api/v2/postmortems': supported('Creation.'),
-  'PATCH /api/v2/postmortems/[id]': natural('Sets fields to the requested values.'),
-  'DELETE /api/v2/postmortems/[id]': natural('A repeat returns 404.'),
+  'PUT /api/v2/postmortems/[id]/action-items': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Exact parent revision fences a bounded complete replacement; relational action items, legacy JSON, audit and replay receipt commit together.',
+  },
+  'PATCH /api/v2/postmortems/[id]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Monotonic postmortem revision fences edits from both UI and REST. Content, audit and replay receipt commit in the same transaction.',
+  },
+  'DELETE /api/v2/postmortems/[id]': {
+    idempotency: 'natural', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
+    rationale: 'Exact postmortem revision fences deletion and its canonical audit; a repeat returns 404.',
+  },
   'POST /api/v2/teams': supported('Creation.'),
   'PATCH /api/v2/teams/[id]': natural('Sets fields to the requested values.', 'etag'),
   'DELETE /api/v2/teams/[id]': natural('A repeat returns 404.'),

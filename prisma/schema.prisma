@@ -1574,6 +1574,7 @@ model IncidentNote {
 
 model Postmortem {
   id                String       @id @default(cuid())
+  revision          Int          @default(dbgenerated("1"))
   incidentId        String       @unique
   title             String
   summary           String?

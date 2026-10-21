@@ -46,6 +46,7 @@ export const GET = defineV2Route({
       take: pagination.limit + 1,
       select: {
         id: true,
+        revision: true,
         incidentId: true,
         title: true,
         summary: true,
@@ -143,6 +144,7 @@ export const POST = defineV2Route({
       },
       select: {
         id: true,
+        revision: true,
         incidentId: true,
         title: true,
         summary: true,
@@ -183,6 +185,6 @@ export const POST = defineV2Route({
       tx,
     });
 
-    return { status: 201, data: postmortem };
+    return { status: 201, data: postmortem, headers: { ETag: `"${postmortem.revision}"` } };
   },
 });

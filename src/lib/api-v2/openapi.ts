@@ -523,6 +523,7 @@ function buildBaseSpec(): Record<string, unknown> {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            revision: { type: 'integer', minimum: 1 },
             incidentId: { type: 'string' },
             title: { type: 'string', nullable: true },
             summary: { type: 'string' },
@@ -537,7 +538,7 @@ function buildBaseSpec(): Record<string, unknown> {
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
-          required: ['id', 'incidentId', 'summary', 'status', 'isPublic', 'createdAt', 'updatedAt'],
+          required: ['id', 'revision', 'incidentId', 'summary', 'status', 'isPublic', 'createdAt', 'updatedAt'],
         },
       },
       responses: {

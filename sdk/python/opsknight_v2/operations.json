@@ -1991,12 +1991,34 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listPostmortemActionItems": {
+    "method": "GET",
+    "path": "/postmortems/{id}/action-items",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "replacePostmortemActionItems": {
+    "method": "PUT",
+    "path": "/postmortems/{id}/action-items",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "updatePostmortem": {
     "method": "PATCH",
     "path": "/postmortems/{id}",
     "kind": "item",
-    "idempotency": "natural",
-    "requiredHeaders": [],
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
     "bodyRequired": true
   },
   "deletePostmortem": {
@@ -2004,7 +2026,9 @@
     "path": "/postmortems/{id}",
     "kind": "none",
     "idempotency": "natural",
-    "requiredHeaders": [],
+    "requiredHeaders": [
+      "If-Match"
+    ],
     "bodyRequired": false
   },
   "listPostmortems": {
