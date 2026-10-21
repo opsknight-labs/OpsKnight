@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { defineV2Route } from '@/lib/api-v2/endpoint';
+import { logV2Audit } from '@/lib/api-v2/audit';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { parseStatusPageLogo } from '@/lib/status-pages/assets';
 
@@ -14,7 +15,7 @@ export const POST = defineV2Route({
   paramsSchema,
   querySchema: z.object({}).strict(),
   bodySchema: z.object({ image: z.string().min(1).max(2_800_000) }).strict(),
-  handler: async ({ params, body }) => {
+  handler: async ({ params, body, actor, apiKey }) => {
     const parsed = parseStatusPageLogo(body.image);
     if (!parsed) throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Provide a valid PNG, JPEG, GIF, or WebP image up to 2 MiB.' });
     const assetId = createHash('sha256').update(params.id).update(parsed.buffer).digest('hex');
@@ -37,6 +38,12 @@ export const POST = defineV2Route({
         INSERT INTO "StatusPageAsset" ("id", "statusPageId", "contentType", "data")
         VALUES (${assetId}, ${params.id}, ${parsed.mime}, ${parsed.buffer})
       `;
+      await logV2Audit({
+        action: 'status_page.asset_uploaded',
+        entityType: 'STATUS_PAGE', entityId: params.id,
+        actorId: actor.id, apiKeyId: apiKey.id,
+        details: { assetId, contentType: parsed.mime }, tx,
+      });
     });
     return {
       data: {

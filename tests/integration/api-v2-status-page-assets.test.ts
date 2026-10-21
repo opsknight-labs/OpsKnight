@@ -29,6 +29,9 @@ it('validates, deduplicates and scopes uploaded branding bytes without publishin
     SELECT count(*)::bigint AS count FROM "StatusPageAsset" WHERE "statusPageId" = ${page.id}
   `;
   expect(count[0].count).toBe(BigInt(1));
+  const audits = await db.auditLog.findMany({ where: { action: 'status_page.asset_uploaded', entityId: page.id } });
+  expect(audits).toHaveLength(1);
+  expect(JSON.stringify(audits)).not.toContain(image);
   const unchanged = await db.statusPage.findUniqueOrThrow({ where: { id: page.id } });
   expect(unchanged.revision).toBe(page.revision);
   expect(unchanged.branding).toBeNull();
