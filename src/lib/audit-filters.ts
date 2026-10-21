@@ -14,6 +14,7 @@ export const AUDIT_ENTITY_TYPES = [
   'DASHBOARD',
   'SAVED_REPORT',
   'REPORT_EXPORT',
+  'AUDIT_EXPORT',
   'SYSTEM_CONFIG',
 ] as const satisfies readonly AuditEntityType[];
 

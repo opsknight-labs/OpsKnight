@@ -51,6 +51,17 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  AuditExport: {
+    type: 'object', properties: {
+      id: { type: 'string' }, status: { type: 'string' },
+      createdAt: { type: 'string', format: 'date-time' },
+      expiresAt: { type: 'string', format: 'date-time' },
+      filter: { type: 'object', additionalProperties: true },
+      checksum: { type: ['string', 'null'] },
+      sizeBytes: { type: ['integer', 'null'] },
+      recordCount: { type: ['integer', 'null'] },
+    }, required: ['id', 'status', 'createdAt', 'expiresAt', 'filter'],
+  },
   PostmortemVersionCollection: {
     type: 'object', properties: {
       postmortemId: { type: 'string' }, currentRevision: { type: 'integer' },

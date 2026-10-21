@@ -466,6 +466,11 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Read audit log records (details are redacted).',
     { issuableBy: ['ADMIN', 'AUDITOR'] }
   ),
+  [S.AUDIT_EXPORT]: def(
+    S.AUDIT_EXPORT, 'Audit evidence export', 'Governance',
+    'Request and download bounded, redacted audit evidence with integrity verification.',
+    { issuableBy: ['ADMIN', 'AUDITOR'], write: true }
+  ),
   [S.REPORTS_READ]: def(
     S.REPORTS_READ,
     'Reports read',

@@ -1,4 +1,30 @@
 {
+  "createAuditExport": {
+    "method": "POST",
+    "path": "/audit-exports",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getAuditExport": {
+    "method": "GET",
+    "path": "/audit-exports/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadAuditExport": {
+    "method": "GET",
+    "path": "/audit-exports/{id}/download",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listNotificationProviders": {
     "method": "GET",
     "path": "/notification-providers",

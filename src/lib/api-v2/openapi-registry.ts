@@ -29,6 +29,9 @@ const op = (
 ): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
+  op('post', '/audit-exports', 'createAuditExport', 'audit:export', 'item', 'AuditExport'),
+  op('get', '/audit-exports/{id}', 'getAuditExport', 'audit:export', 'item', 'AuditExport'),
+  op('get', '/audit-exports/{id}/download', 'downloadAuditExport', 'audit:export', 'binary', ''),
   op(
     'get',
     '/notification-providers',

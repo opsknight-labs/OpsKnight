@@ -48,6 +48,7 @@ enum AuditEntityType {
   DASHBOARD
   SAVED_REPORT
   REPORT_EXPORT
+  AUDIT_EXPORT
   SYSTEM_CONFIG
   PRIVACY_REQUEST
   PRIVACY_EXPORT_ARTIFACT
@@ -553,6 +554,7 @@ model User {
   dashboards                  Dashboard[]
   savedReports                SavedReport[]
   reportExports               ReportExport[]
+  auditExports                AuditExport[]
   assignedActionItems         ActionItem[]
   tokens                      UserToken[]
   privacyRequestsAssigned     PrivacyRequest[]             @relation("PrivacyRequestAssignedTo")
@@ -2093,6 +2095,7 @@ model ApiKey {
   expiresAt  DateTime?
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   reportExports ReportExport[]
+  auditExports AuditExport[]
 
   @@index([userId])
   @@index([tokenHash])
@@ -2170,6 +2173,7 @@ enum JobType {
   COMPLIANCE_DRIFT_PROJECT
   RUNBOOK
   REPORT_EXPORT
+  AUDIT_EXPORT
 }
 
 enum JobStatus {
@@ -2198,6 +2202,7 @@ model BackgroundJob {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   reportExport ReportExport?
+  auditExport AuditExport?
 
   @@index([type, status, scheduledAt])
   @@index([status, scheduledAt])
@@ -2972,6 +2977,26 @@ model ReportExport {
   job              BackgroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model AuditExport {
+  id               String   @id @default(cuid())
+  userId           String
+  apiKeyId         String
+  jobId            String   @unique
+  filter           Json
+  encryptedPayload String?
+  checksum         String?
+  sizeBytes        Int?
+  recordCount      Int?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey           ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  job              BackgroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId, createdAt])
   @@index([expiresAt])
 }
 

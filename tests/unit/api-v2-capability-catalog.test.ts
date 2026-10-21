@@ -22,7 +22,7 @@ describe('truthful capability inventory', () => {
     }
   });
   it('retains explicit security and product decisions for unfinished plan areas', () => {
-    for (const id of ['incident-collaboration', 'audit-export']) {
+    for (const id of ['incident-collaboration']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
         'not-supported'
       );
@@ -30,6 +30,10 @@ describe('truthful capability inventory', () => {
     expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'operational-settings')).toMatchObject({
       status: 'partial',
       operationIds: expect.arrayContaining(['getWorkspaceSlaPolicy', 'updateWorkspaceSlaPolicy']),
+    });
+    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'audit-export')).toMatchObject({
+      status: 'partial',
+      operationIds: ['createAuditExport', 'getAuditExport', 'downloadAuditExport'],
     });
     expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'postmortem-workflows')).toMatchObject({
       status: 'partial',

@@ -463,10 +463,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'audit-export',
     area: 'Administration',
     title: 'Audit export and integrity verification',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Redacted audit reads are available. Export jobs and integrity verification need separate permissions and result-retention contracts.',
-    operationIds: [],
+      'A separate audit:export scope permits bounded, redacted, encrypted background evidence generation, owned status and download, SHA-256 verification, 72-hour retention and request/download audits. Combined worker deployment and load certification remain pending.',
+    operationIds: ['createAuditExport', 'getAuditExport', 'downloadAuditExport'],
   },
   {
     id: 'operational-settings',

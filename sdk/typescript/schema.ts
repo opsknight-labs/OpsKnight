@@ -145,6 +145,7 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
+export type AuditExport = { "id": string; "status": string; "createdAt": string; "expiresAt": string; "filter": Record<string, unknown>; "checksum"?: string | null; "sizeBytes"?: number | null; "recordCount"?: number | null } & Record<string, unknown>;
 export type PostmortemVersionCollection = { "postmortemId": string; "currentRevision": number; "versions": Array<{ "revision": number; "createdAt": string; "snapshot": Record<string, unknown> } & Record<string, unknown>>; "nextBeforeRevision": number | null } & Record<string, unknown>;
 export type PostmortemContributors = { "postmortemId": string; "revision": number; "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR"; "name": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type PostmortemPublication = { "id": string; "revision": number; "status": "PUBLISHED"; "isPublic": boolean; "publishedAt": string } & Record<string, unknown>;
@@ -187,6 +188,9 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  createAuditExport: { "headers": { "Idempotency-Key": string }; "body": { "from": string; "to": string; "action"?: string; "entityType"?: string; "entityId"?: string; "actorId"?: string; "maxRecords"?: number } };
+  getAuditExport: { "params": { "id": string } };
+  downloadAuditExport: { "params": { "id": string } };
   listNotificationProviders: Record<string, never>;
   getNotificationProvider: { "params": { "provider": string } };
   configureNotificationProvider: { "params": { "provider": string }; "headers": { "Idempotency-Key": string; "If-Match"?: string }; "body": { "provider": "twilio" | "aws-sns" | "resend" | "sendgrid" | "smtp" | "ses" | "web-push"; "enabled": boolean; "config": Record<string, unknown> } };
@@ -490,6 +494,9 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  createAuditExport: { "data": AuditExport; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getAuditExport: { "data": AuditExport; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  downloadAuditExport: Uint8Array;
   listNotificationProviders: { "data": Array<NotificationProvider>; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getNotificationProvider: { "data": NotificationProvider; "requestId": string; "timestamp": string } & Record<string, unknown>;
   configureNotificationProvider: { "data": NotificationProvider; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -793,6 +800,32 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "createAuditExport": {
+    "method": "POST",
+    "path": "/audit-exports",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getAuditExport": {
+    "method": "GET",
+    "path": "/audit-exports/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadAuditExport": {
+    "method": "GET",
+    "path": "/audit-exports/{id}/download",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listNotificationProviders": {
     "method": "GET",
     "path": "/notification-providers",

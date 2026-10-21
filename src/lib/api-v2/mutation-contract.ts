@@ -51,6 +51,10 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'POST /api/v2/audit-exports': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Dedicated audit export authority, bounded immutable filter, queue job, owner, request audit and replay receipt commit together.',
+  },
   'PUT /api/v2/incidents/[id]/custom-fields/[fieldId]': {
     idempotency: 'required', concurrency: 'none',
     rationale: 'Canonical value validation, incident visibility, row locking, timeline event and credential audit commit with the replay receipt; identical values do not repeat side effects.',

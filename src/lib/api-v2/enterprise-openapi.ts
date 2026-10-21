@@ -1236,6 +1236,22 @@ interface Operation {
 }
 const operations: Operation[] = [
   {
+    method: 'post', path: '/audit-exports',
+    summary: 'Request a bounded redacted audit evidence export',
+    description: 'Requires the separately issuable audit:export scope and an Idempotency-Key. Maximum 31-day historical window, 5000 records and 2 MiB. Exceeding a bound fails the job rather than silently truncating evidence. Result is encrypted and retained for 72 hours.',
+    body: object({
+      from: { type: 'string', format: 'date-time' },
+      to: { type: 'string', format: 'date-time' },
+      action: { type: 'string', maxLength: 100 },
+      entityType: { type: 'string' }, entityId: { type: 'string' }, actorId: { type: 'string' },
+      maxRecords: { type: 'integer', minimum: 1, maximum: 5000 },
+    }, ['from', 'to']),
+    status: 201,
+  },
+  { method: 'get', path: '/audit-exports/{id}', summary: 'Read owned audit export job status and checksum' },
+  { method: 'get', path: '/audit-exports/{id}/download', summary: 'Download and verify owned audit evidence',
+    description: 'Rechecks the current credential and role, validates SHA-256 before returning bytes, and records a download audit event.' },
+  {
     method: 'get', path: '/postmortems/{id}/versions',
     summary: 'List retained postmortem revisions',
     description: 'Cursor over at most 50 descending revisions. Snapshots capture parent-row state on every insert and update, including UI and worker writes. Existing records begin with the state present when this feature was deployed; earlier revisions cannot be reconstructed. Incident visibility applies.',
