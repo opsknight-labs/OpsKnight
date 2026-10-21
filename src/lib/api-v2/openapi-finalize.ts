@@ -241,6 +241,32 @@ const extraSchemas: Json = {
     },
     required: ['notificationId', 'events', 'truncated'],
   },
+  ScheduleLayer: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' }, scheduleId: { type: 'string' }, name: { type: 'string' },
+      revision: { type: 'integer' }, start: { type: 'string', format: 'date-time' },
+      end: { type: ['string', 'null'], format: 'date-time' },
+      rotationLengthHours: { type: 'integer' }, shiftLengthHours: { type: ['integer', 'null'] },
+      restrictions: { type: ['object', 'null'] }, priority: { type: 'integer' },
+      createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
+      users: { type: 'array', maxItems: 100, items: { type: 'object', properties: {
+        userId: { type: 'string' }, position: { type: 'integer' },
+      }, required: ['userId', 'position'] } },
+      truncated: { type: 'boolean' },
+      _count: { type: 'object', properties: { users: { type: 'integer' } }, required: ['users'] },
+    },
+    required: ['id', 'scheduleId', 'name', 'revision', 'start', 'end', 'rotationLengthHours', 'shiftLengthHours', 'restrictions', 'priority', 'createdAt', 'updatedAt'],
+  },
+  ScheduleLayerCollection: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' },
+      layers: { type: 'array', maxItems: 100, items: { $ref: '#/components/schemas/ScheduleLayer' } },
+      truncated: { type: 'boolean' },
+    },
+    required: ['scheduleId', 'layers', 'truncated'],
+  },
   StatusPagePreview: {
     type: 'object',
     description: 'Current unpublished public projection. Null when the page is disabled.',

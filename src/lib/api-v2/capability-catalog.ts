@@ -177,8 +177,8 @@ const decisions: readonly ApiCapability[] = [
     title: 'Layer configuration, override cancellation and coverage previews',
     status: 'partial',
     explanation:
-      'Override cancellation, bounded effective coverage reads and participant management are available. Layer rotation configuration and unsaved-change previews still need shared domain contracts.',
-    operationIds: ['cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
+      'Override cancellation, bounded effective coverage reads, participant management and revision-protected layer CRUD use shared domain commands. Atomic precedence reordering and unsaved-change previews remain open.',
+    operationIds: ['listScheduleLayers', 'createScheduleLayer', 'getScheduleLayer', 'updateScheduleLayer', 'deleteScheduleLayer', 'cancelScheduleOverride', 'getScheduleCoverage', 'addScheduleParticipant', 'removeScheduleParticipant', 'moveScheduleParticipant'],
   },
   {
     id: 'escalation-validation',

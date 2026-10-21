@@ -1698,6 +1698,8 @@ model OnCallSchedule {
 }
 
 model OnCallLayer {
+  /// Monotonic version shared by UI and REST layer edits.
+  revision            Int               @default(dbgenerated("1"))
   id                  String            @id @default(cuid())
   scheduleId          String
   name                String

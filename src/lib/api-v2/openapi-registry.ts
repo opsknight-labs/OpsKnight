@@ -1197,6 +1197,11 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('get', '/escalation-policies/{id}/dependencies', 'getEscalationPolicyDependencies', 'escalation-policies:read', 'item', 'EscalationPolicyDependencies'),
   op('get', '/escalation-policies/{id}/validation', 'validateEscalationPolicy', 'escalation-policies:read', 'item', 'EscalationPolicyValidation'),
   op('get', '/status-pages/{id}/preview', 'previewStatusPage', 'status-pages:read', 'item', 'StatusPagePreview'),
+  op('get', '/schedules/{id}/layers', 'listScheduleLayers', 'schedules:read', 'item', 'ScheduleLayerCollection'),
+  op('post', '/schedules/{id}/layers', 'createScheduleLayer', 'schedules:write', 'item', 'ScheduleLayer'),
+  op('get', '/schedules/{id}/layers/{layerId}', 'getScheduleLayer', 'schedules:read', 'item', 'ScheduleLayer'),
+  op('patch', '/schedules/{id}/layers/{layerId}', 'updateScheduleLayer', 'schedules:write', 'item', 'ScheduleLayer'),
+  op('delete', '/schedules/{id}/layers/{layerId}', 'deleteScheduleLayer', 'schedules:write', 'none', ''),
   op(
     'patch',
     '/escalation-policies/{id}',

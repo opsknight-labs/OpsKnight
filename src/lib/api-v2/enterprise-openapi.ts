@@ -64,6 +64,19 @@ const lifecycle = object({
     enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'],
   },
 });
+const scheduleLayerProperties: Record<string, Schema> = {
+  name: { type: 'string', minLength: 1, maxLength: 200 },
+  start: date,
+  end: { type: ['string', 'null'], format: 'date-time' },
+  rotationLengthHours: { type: 'integer', minimum: 1, maximum: 8760 },
+  shiftLengthHours: { type: ['integer', 'null'], minimum: 1, maximum: 8760 },
+  restrictions: { oneOf: [object({
+    daysOfWeek: array({ type: 'integer', minimum: 0, maximum: 6 }, 7),
+    startHour: { type: 'integer', minimum: 0, maximum: 23 },
+    endHour: { type: 'integer', minimum: 0, maximum: 23 },
+  }), { type: 'null' }] },
+};
+const scheduleLayerRequired = ['name', 'start', 'end', 'rotationLengthHours', 'shiftLengthHours', 'restrictions'];
 
 const ruleConfigurationProperties: Record<string, Schema> = {
   runbookId: id,
@@ -1899,6 +1912,37 @@ const operations: Operation[] = [
     method: 'get', path: '/services/{id}/health-summary',
     summary: 'Read bounded service health, visible incidents, paging failures and latest objectives',
     description: 'Requires services:read, incidents:read, notifications:read, service-objectives:read, escalation-policies:read and schedules:read. On-call coverage is based on the current first unconditional escalation step; conditional steps are explicitly marked unevaluated.',
+  },
+  {
+    method: 'get',
+    path: '/schedules/{id}/layers',
+    summary: 'List bounded rotation-layer configuration',
+  },
+  {
+    method: 'post',
+    path: '/schedules/{id}/layers',
+    summary: 'Create a rotation layer with active, unassigned responders',
+    status: 201,
+    body: object({
+      ...scheduleLayerProperties,
+      responderIds: array({ ...id, maxLength: 100 }, 100),
+    }, [...scheduleLayerRequired, 'responderIds']),
+  },
+  {
+    method: 'get',
+    path: '/schedules/{id}/layers/{layerId}',
+    summary: 'Read a rotation layer and its current revision',
+  },
+  {
+    method: 'patch',
+    path: '/schedules/{id}/layers/{layerId}',
+    summary: 'Replace rotation-layer settings using an exact revision',
+    body: object(scheduleLayerProperties, scheduleLayerRequired),
+  },
+  {
+    method: 'delete',
+    path: '/schedules/{id}/layers/{layerId}',
+    summary: 'Delete a rotation layer and its participant assignments using an exact revision',
   },
   {
     method: 'post',

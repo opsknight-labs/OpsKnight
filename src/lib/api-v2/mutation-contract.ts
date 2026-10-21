@@ -724,6 +724,18 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     preconditionRequired: true,
     rationale: 'Canonical workspace SLA version lock, target validation, immutable version, attributed audit and replay receipt commit atomically.',
   },
+  'POST /api/v2/schedules/[id]/layers': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Schedule-scoped admission lock, responder validation, layer creation and attributed audit commit with replay receipt.',
+  },
+  'PATCH /api/v2/schedules/[id]/layers/[layerId]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Database-monotonic layer revision fences the shared UI/REST update; audit and replay receipt commit atomically.',
+  },
+  'DELETE /api/v2/schedules/[id]/layers/[layerId]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
+    rationale: 'Locked layer revision fences deletion, participant cleanup and attributed audit; replay returns only the prior empty result.',
+  },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
   'PATCH /api/v2/schedules/[id]': natural('Sets fields to the requested values.', 'etag'),

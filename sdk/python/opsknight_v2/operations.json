@@ -1562,6 +1562,54 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listScheduleLayers": {
+    "method": "GET",
+    "path": "/schedules/{id}/layers",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createScheduleLayer": {
+    "method": "POST",
+    "path": "/schedules/{id}/layers",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getScheduleLayer": {
+    "method": "GET",
+    "path": "/schedules/{id}/layers/{layerId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateScheduleLayer": {
+    "method": "PATCH",
+    "path": "/schedules/{id}/layers/{layerId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteScheduleLayer": {
+    "method": "DELETE",
+    "path": "/schedules/{id}/layers/{layerId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "updateEscalationPolicy": {
     "method": "PATCH",
     "path": "/escalation-policies/{id}",
