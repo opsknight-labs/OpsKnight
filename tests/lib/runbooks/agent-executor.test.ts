@@ -10,7 +10,7 @@ import {
   resolveCommandResult,
   sliceUtf8Safe,
 } from '../../../agent/src/executor';
-import type { AgentPolicy, ClaimedAttempt } from '../../../agent/src/types';
+import type { AgentPolicy, ClaimedAttempt, RiskClass, StepType } from '../../../agent/src/types';
 
 const policy: AgentPolicy = {
   allowedStepTypes: ['BASH'],
@@ -692,8 +692,8 @@ describe('runbook Agent executor', () => {
       step: {
         key: flattened[1].key,
         name: flattened[1].name,
-        type: flattened[1].type,
-        riskClass: flattened[1].riskClass,
+        type: flattened[1].type as StepType,
+        riskClass: flattened[1].riskClass as RiskClass,
         config: flattened[1].config,
         phase: flattened[1].config.phase as string,
         timeoutSeconds: 10,
