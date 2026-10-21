@@ -952,7 +952,7 @@ export default async function RunbookDetailPage({
                         return (
                           <li
                             key={execution.id}
-                            className="flex flex-col gap-3 px-6 py-4.5 sm:px-7 sm:py-5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between last:pb-6"
+                            className="flex flex-col gap-3 px-6 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:py-5 last:pb-6"
                           >
                             <div className="flex items-start gap-3.5 min-w-0">
                               <div
@@ -968,13 +968,13 @@ export default async function RunbookDetailPage({
                                 )}
                               >
                                 {isSucceeded ? (
-                                  <CheckCircle2 className="h-4.5 w-4.5" aria-hidden="true" />
+                                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                                 ) : isFailed ? (
-                                  <AlertCircle className="h-4.5 w-4.5" aria-hidden="true" />
+                                  <AlertCircle className="h-4 w-4" aria-hidden="true" />
                                 ) : isRunning ? (
-                                  <Activity className="h-4.5 w-4.5" aria-hidden="true" />
+                                  <Activity className="h-4 w-4" aria-hidden="true" />
                                 ) : (
-                                  <Clock className="h-4.5 w-4.5" aria-hidden="true" />
+                                  <Clock className="h-4 w-4" aria-hidden="true" />
                                 )}
                               </div>
                               <div className="min-w-0 space-y-1">
