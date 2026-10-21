@@ -207,7 +207,7 @@ export default function DetailHeroBanner({
               stats.length === 2 && 'grid-cols-2',
               stats.length === 3 && 'grid-cols-1 sm:grid-cols-3',
               stats.length === 4 && 'grid-cols-2 sm:grid-cols-4',
-              stats.length === 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+              stats.length === 5 && 'grid-cols-2 sm:grid-cols-5',
               stats.length === 6 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
               stats.length >= 7 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
             )}

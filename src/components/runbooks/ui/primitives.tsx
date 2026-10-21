@@ -51,7 +51,7 @@ export function SectionCard({
     <section
       id={id}
       className={cn(
-        'scroll-mt-24 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors',
+        'scroll-mt-24 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors overflow-hidden',
         tone === 'danger' && 'border-destructive/40 bg-destructive/[0.02]',
         tone === 'warning' && 'border-amber-500/40 bg-amber-500/[0.02]',
         className

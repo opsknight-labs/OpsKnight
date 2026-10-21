@@ -4,8 +4,11 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
   Activity,
+  AlertCircle,
   Archive,
+  ArrowRight,
   CheckCircle2,
+  Clock,
   FileX,
   Hash,
   History,
@@ -21,6 +24,7 @@ import {
 } from 'lucide-react';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { cn } from '@/lib/utils';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -411,6 +415,93 @@ export default async function RunbookDetailPage({
       ? `${Math.round((successMetric.succeeded / successMetric.completed) * 100)}%`
       : '100%';
 
+  const dangerZoneCard = hasManageCapability ? (
+    <SectionCard
+      tone="danger"
+      icon={ShieldAlert}
+      title="Danger zone"
+      description="Lifecycle changes that affect every service using this runbook."
+      bodyClassName="divide-y divide-border/60 py-0"
+    >
+      <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center">
+        <div>
+          <p className="text-sm font-medium text-foreground">
+            {isArchived ? 'Restore to active library' : 'Archive runbook'}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {isArchived
+              ? 'Re-enables management. Bindings stay disabled until reviewed.'
+              : 'Disables all executions and bindings while preserving execution and audit history.'}
+          </p>
+        </div>
+        {isArchived ? (
+          <ConfirmAction
+            action={handleRestoreRunbook}
+            title={`Restore ${runbook.name}?`}
+            description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
+            label="Restore Runbook"
+            variant="outline"
+            successMessage="Runbook restored"
+          />
+        ) : (
+          <ConfirmAction
+            action={archiveRunbookAction.bind(null, runbook.id)}
+            title={`Archive ${runbook.name}?`}
+            description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
+            label="Archive Runbook"
+            variant="outline"
+          />
+        )}
+      </div>
+
+      <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-start">
+        <div className="max-w-xl space-y-1">
+          <p className="text-sm font-medium text-destructive">Permanently delete runbook</p>
+          <p className="text-xs text-muted-foreground">
+            {deleteEligibility?.canDelete
+              ? 'This runbook has no published versions and no executions. Deletion is permanent.'
+              : (deleteEligibility?.reason ??
+                'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.')}
+          </p>
+        </div>
+        {deleteEligibility?.canDelete && (
+          <ConfigureSheet
+            title={`Delete ${runbook.name}`}
+            description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
+            trigger={
+              <Button variant="destructive" size="sm" className="rounded-xl shadow-2xs">
+                Delete runbook
+              </Button>
+            }
+          >
+            <ActionForm
+              action={handleDeleteRunbook}
+              className="space-y-4"
+              successMessage="Runbook deleted"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="delete-confirmation" className="text-xs">
+                  Confirm runbook name or slug
+                </Label>
+                <Input
+                  id="delete-confirmation"
+                  name="confirmation"
+                  placeholder={runbook.slug}
+                  required
+                  autoComplete="off"
+                  className="font-mono text-xs rounded-xl"
+                />
+              </div>
+              <SubmitButton variant="destructive" pendingLabel="Deleting…">
+                Permanently delete runbook
+              </SubmitButton>
+            </ActionForm>
+          </ConfigureSheet>
+        )}
+      </div>
+    </SectionCard>
+  ) : null;
+
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Canonical DetailHeroBanner */}
@@ -608,7 +699,12 @@ export default async function RunbookDetailPage({
             id: 'overview',
             label: 'Overview',
             icon: <LayoutDashboard className="h-4 w-4" />,
-            content: overview,
+            content: (
+              <div className="space-y-6">
+                {overview}
+                {dangerZoneCard}
+              </div>
+            ),
           },
           {
             id: 'builder',
@@ -728,155 +824,190 @@ export default async function RunbookDetailPage({
             icon: <PlayCircle className="h-4 w-4" />,
             count: runbook._count.executions,
             content: (
-              <SectionCard
-                title="Recent executions"
-                description="The latest 30 runs across all versions."
-                icon={PlayCircle}
-                bodyClassName="p-0"
-                actions={
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={`/runbooks/executions?runbook=${runbook.id}`}>
-                      View all executions
-                    </Link>
-                  </Button>
-                }
-              >
-                {runbook.executions.length > 0 ? (
-                  <ul className="divide-y">
-                    {runbook.executions.map(execution => (
-                      <li
-                        key={execution.id}
-                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
-                      >
-                        <div className="min-w-0 space-y-0.5">
-                          <Link
-                            className="block text-sm font-medium underline-offset-4 hover:underline"
-                            href={`/runbooks/executions/${execution.id}`}
-                          >
-                            {formatTimestamp(execution.createdAt)}
-                            <span className="sr-only"> · Open full execution</span>
-                          </Link>
-                          <p className="text-xs text-muted-foreground">
-                            {execution.runbookVersion
-                              ? `Version ${execution.runbookVersion.version}`
-                              : 'Version unknown'}
-                            {execution.incidentId && (
-                              <>
-                                {' · '}
-                                <Link
-                                  className="text-primary underline-offset-4 hover:underline"
-                                  href={`/incidents/${execution.incidentId}?tab=runbooks`}
-                                >
-                                  Inspect incident execution
-                                </Link>
-                              </>
-                            )}
-                          </p>
-                        </div>
-                        <StatusBadge status={execution.status} />
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="p-5">
-                    <EmptyHint
-                      icon={PlayCircle}
-                      title="No executions yet"
-                      description="Run history appears here after responders start this runbook."
-                    />
+              <div className="space-y-6">
+                {/* Executions KPI Summary Grid */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Total Runs
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-foreground">
+                        {runbook._count.executions}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">recorded</span>
+                    </div>
                   </div>
-                )}
-              </SectionCard>
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Succeeded
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                        {successMetric.succeeded}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">passed</span>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Failed / Timeout
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                        {
+                          runbook.executions.filter(
+                            e => e.status === 'FAILED' || e.status === 'TIMED_OUT'
+                          ).length
+                        }
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">errors</span>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Success Rate
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-foreground">
+                        {successRateDisplay}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">overall</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Executions List Card */}
+                <SectionCard
+                  title="Recent executions"
+                  description="The latest runs across all versions with execution status and incident linkage."
+                  icon={PlayCircle}
+                  bodyClassName="p-0"
+                  actions={
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl shadow-2xs font-medium"
+                    >
+                      <Link href={`/runbooks/executions?runbook=${runbook.id}`}>
+                        View all executions
+                        <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  }
+                >
+                  {runbook.executions.length > 0 ? (
+                    <ul className="divide-y divide-border/60">
+                      {runbook.executions.map(execution => {
+                        const isSucceeded = execution.status === 'SUCCEEDED';
+                        const isFailed =
+                          execution.status === 'FAILED' || execution.status === 'TIMED_OUT';
+                        const isRunning = [
+                          'RUNNING',
+                          'CLAIMED',
+                          'WAITING_APPROVAL',
+                          'WAITING_AGENT',
+                        ].includes(execution.status);
+
+                        return (
+                          <li
+                            key={execution.id}
+                            className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="flex items-start gap-3.5 min-w-0">
+                              <div
+                                className={cn(
+                                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border mt-0.5',
+                                  isSucceeded
+                                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                    : isFailed
+                                      ? 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                      : isRunning
+                                        ? 'border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-400 animate-pulse'
+                                        : 'border-border/60 bg-muted/60 text-muted-foreground'
+                                )}
+                              >
+                                {isSucceeded ? (
+                                  <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                                ) : isFailed ? (
+                                  <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                                ) : isRunning ? (
+                                  <Activity className="h-5 w-5" aria-hidden="true" />
+                                ) : (
+                                  <Clock className="h-5 w-5" aria-hidden="true" />
+                                )}
+                              </div>
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Link
+                                    href={`/runbooks/executions/${execution.id}`}
+                                    className="text-sm font-semibold text-foreground hover:text-primary transition-colors hover:underline underline-offset-4"
+                                  >
+                                    Run #{execution.id.slice(-8)}
+                                  </Link>
+                                  {execution.runbookVersion ? (
+                                    <span className="inline-flex items-center rounded-md border border-border/60 bg-muted/50 px-2 py-0.5 font-mono text-[11px] font-medium text-foreground">
+                                      v{execution.runbookVersion.version}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center rounded-md border border-border/40 bg-muted/30 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                                      v?
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-muted-foreground">
+                                    · {formatTimestamp(execution.createdAt)}
+                                  </span>
+                                </div>
+                                {execution.incidentId ? (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <span className="text-muted-foreground">Triggered for:</span>
+                                    <Link
+                                      href={`/incidents/${execution.incidentId}?tab=runbooks`}
+                                      className="inline-flex items-center gap-1 font-medium text-primary hover:underline underline-offset-4"
+                                    >
+                                      <ShieldAlert className="h-3 w-3 text-amber-500" />
+                                      Incident #{execution.incidentId.slice(-8)}
+                                    </Link>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">Manual run</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 sm:justify-end sm:shrink-0 pt-1 sm:pt-0 border-t border-border/40 sm:border-0">
+                              <StatusBadge status={execution.status} />
+                              <Button
+                                asChild
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                <Link href={`/runbooks/executions/${execution.id}`}>
+                                  <span>Inspect</span>
+                                  <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <div className="p-8">
+                      <EmptyHint
+                        icon={PlayCircle}
+                        title="No executions yet"
+                        description="Run history appears here after responders start this runbook."
+                      />
+                    </div>
+                  )}
+                </SectionCard>
+              </div>
             ),
           },
         ]}
       />
-      {hasManageCapability && (
-        <SectionCard
-          tone="danger"
-          icon={ShieldAlert}
-          title="Danger zone"
-          description="Lifecycle changes that affect every service using this runbook."
-          bodyClassName="divide-y divide-border/60 py-0"
-        >
-          <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {isArchived ? 'Restore to active library' : 'Archive runbook'}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {isArchived
-                  ? 'Re-enables management. Bindings stay disabled until reviewed.'
-                  : 'Disables all executions and bindings while preserving execution and audit history.'}
-              </p>
-            </div>
-            {isArchived ? (
-              <ConfirmAction
-                action={handleRestoreRunbook}
-                title={`Restore ${runbook.name}?`}
-                description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
-                label="Restore Runbook"
-                variant="outline"
-                successMessage="Runbook restored"
-              />
-            ) : (
-              <ConfirmAction
-                action={archiveRunbookAction.bind(null, runbook.id)}
-                title={`Archive ${runbook.name}?`}
-                description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
-                label="Archive Runbook"
-                variant="outline"
-              />
-            )}
-          </div>
-
-          <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-start">
-            <div className="max-w-xl space-y-1">
-              <p className="text-sm font-medium text-destructive">Permanently delete runbook</p>
-              <p className="text-xs text-muted-foreground">
-                {deleteEligibility?.canDelete
-                  ? 'This runbook has no published versions and no executions. Deletion is permanent.'
-                  : (deleteEligibility?.reason ??
-                    'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.')}
-              </p>
-            </div>
-            {deleteEligibility?.canDelete && (
-              <ConfigureSheet
-                title={`Delete ${runbook.name}`}
-                description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
-                trigger={
-                  <Button variant="destructive" size="sm" className="rounded-xl shadow-2xs">
-                    Delete runbook
-                  </Button>
-                }
-              >
-                <ActionForm
-                  action={handleDeleteRunbook}
-                  className="space-y-4"
-                  successMessage="Runbook deleted"
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="delete-confirmation" className="text-xs">
-                      Confirm runbook name or slug
-                    </Label>
-                    <Input
-                      id="delete-confirmation"
-                      name="confirmation"
-                      placeholder={runbook.slug}
-                      required
-                      autoComplete="off"
-                      className="font-mono text-xs rounded-xl"
-                    />
-                  </div>
-                  <SubmitButton variant="destructive" pendingLabel="Deleting…">
-                    Permanently delete runbook
-                  </SubmitButton>
-                </ActionForm>
-              </ConfigureSheet>
-            )}
-          </div>
-        </SectionCard>
-      )}
     </main>
   );
 }
