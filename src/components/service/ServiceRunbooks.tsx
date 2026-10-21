@@ -151,7 +151,7 @@ export default function ServiceRunbooks({
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState(rulesSearch);
   const [modeFilter, setModeFilter] = useState<ModeFilter>('ALL');
-  const [showScope, setShowScope] = useState(Boolean(catalogQuery || targetQuery));
+  const [showScope, setShowScope] = useState(true);
 
   const filteredBindings = useMemo(() => {
     const q = searchQuery.trim() === rulesSearch.trim() ? '' : searchQuery.trim().toLowerCase();
@@ -620,6 +620,7 @@ export default function ServiceRunbooks({
                 <Input
                   id={`${ids}-catalog`}
                   name="ruleCatalog"
+                  aria-label="Workflow search"
                   defaultValue={catalogQuery}
                   maxLength={100}
                   placeholder="Filter workflow creation list…"
@@ -636,6 +637,7 @@ export default function ServiceRunbooks({
                 <Input
                   id={`${ids}-targets`}
                   name="ruleTargets"
+                  aria-label="Agent / pool search"
                   defaultValue={targetQuery}
                   maxLength={100}
                   placeholder="Filter target agents/pools…"
@@ -647,9 +649,10 @@ export default function ServiceRunbooks({
                   type="submit"
                   variant="secondary"
                   size="sm"
+                  aria-label="Search options"
                   className="h-8.5 w-full text-xs font-semibold shadow-2xs"
                 >
-                  Apply
+                  Search options
                 </Button>
               </div>
             </form>
