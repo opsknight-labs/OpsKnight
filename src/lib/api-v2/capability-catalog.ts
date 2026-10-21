@@ -139,10 +139,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'incident-metadata',
     area: 'Incidents',
     title: 'Custom-field updates, tags and routing decisions',
-    status: 'partial',
+    status: 'available',
     explanation:
-      'Incident tags can be listed, added and removed through shared UI/REST commands with scoped authorization and transactional timeline events. A redacted incident routing decision requires automation scope and incident visibility. Custom-field updates remain pending.',
-    operationIds: ['listIncidentTags', 'addIncidentTag', 'removeIncidentTag', 'getIncidentRoutingDecision'],
+      'Incident custom-field values and tags can be read and updated with scoped authorization, canonical validation, durable replay and transactional timeline events. A redacted incident routing decision requires automation scope and incident visibility.',
+    operationIds: ['listIncidentCustomFields', 'getIncidentCustomField', 'setIncidentCustomField', 'listIncidentTags', 'addIncidentTag', 'removeIncidentTag', 'getIncidentRoutingDecision'],
   },
   {
     id: 'incident-diagnostics',

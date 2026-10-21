@@ -743,6 +743,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
     'removed',
   ]),
   IncidentTag: object({ id, incidentId: id, tagId: id, createdAt: date, tag: object({ name: string(100), color: { type: ['string', 'null'] } }, ['name', 'color']) }, ['id', 'incidentId', 'tagId', 'createdAt', 'tag']),
+  IncidentCustomField: object({ id, incidentId: id, customFieldId: id, value: { type: ['string', 'null'] }, createdAt: date, updatedAt: date, changed: { type: 'boolean' }, customField: object({ name: string(), key: string(), type: string() }, ['name', 'key', 'type']) }, ['id', 'incidentId', 'customFieldId', 'value', 'createdAt', 'updatedAt']),
   IncidentTagAdded: object({ id, incidentId: id, name: string(100), color: { type: ['string', 'null'] }, added: { type: 'boolean' } }, ['id', 'incidentId', 'name', 'color', 'added']),
   IncidentTagRemoved: object({ id, incidentId: id, removed: { type: 'boolean' } }, ['id', 'incidentId', 'removed']),
   RunbookCancellationRequested: object(
@@ -1765,6 +1766,9 @@ const operations: Operation[] = [
     paginated: true,
   },
   { method: 'get', path: '/incidents/{id}/tags', summary: 'List incident tags', paginated: true },
+  { method: 'get', path: '/incidents/{id}/custom-fields', summary: 'List incident custom-field values', paginated: true },
+  { method: 'get', path: '/incidents/{id}/custom-fields/{fieldId}', summary: 'Read an incident custom-field value' },
+  { method: 'put', path: '/incidents/{id}/custom-fields/{fieldId}', summary: 'Set an incident custom-field value', body: object({ value: { type: ['string', 'number', 'boolean', 'null'] } }, ['value']) },
   { method: 'post', path: '/incidents/{id}/tags', summary: 'Add a tag to an incident', body: object({ name: { ...string(100), minLength: 1 } }, ['name']) },
   { method: 'delete', path: '/incidents/{id}/tags/{tagId}', summary: 'Remove a tag from an incident' },
   { method: 'get', path: '/incidents/{id}/routing-decision', summary: 'Read the redacted routing decision for an accessible incident' },

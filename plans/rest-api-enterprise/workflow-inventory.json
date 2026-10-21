@@ -208,11 +208,15 @@
     {
       "capabilityId": "incident-metadata",
       "delivery": "API-13",
-      "workflow": "Custom-field updates pending; incident tags and redacted routing decision delivered",
+      "workflow": "Incident custom-field values, tags and redacted routing decisions through scoped REST contracts",
       "sources": [
         {
           "path": "src/lib/custom-fields.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/incidents/custom-fields.ts",
+          "branch": "feat/api-13-enterprise-contracts"
         }
       ],
       "reviewStatus": "pending-domain-review",

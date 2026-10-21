@@ -1226,6 +1226,30 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listIncidentCustomFields": {
+    "method": "GET",
+    "path": "/incidents/{id}/custom-fields",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentCustomField": {
+    "method": "GET",
+    "path": "/incidents/{id}/custom-fields/{fieldId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setIncidentCustomField": {
+    "method": "PUT",
+    "path": "/incidents/{id}/custom-fields/{fieldId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
   "addIncidentTag": {
     "method": "POST",
     "path": "/incidents/{id}/tags",

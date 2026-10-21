@@ -131,6 +131,24 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "GET /incidents/{id}/custom-fields/{fieldId} [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PUT /incidents/{id}/custom-fields/{fieldId} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /incidents/{id}/custom-fields [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /incidents/{id}/notes [incidents:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

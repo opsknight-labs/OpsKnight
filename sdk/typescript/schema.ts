@@ -106,6 +106,7 @@ export type AutomationSettings = { "automationEnabled": boolean; "automationRead
 export type IncidentWatcher = { "id": string; "incidentId": string; "userId": string; "role": string; "createdAt": string };
 export type IncidentWatcherRemoved = { "id": string; "incidentId": string; "removed": true };
 export type IncidentTag = { "id": string; "incidentId": string; "tagId": string; "createdAt": string; "tag": { "name": string; "color": string | null } };
+export type IncidentCustomField = { "id": string; "incidentId": string; "customFieldId": string; "value": string | null; "createdAt": string; "updatedAt": string; "changed"?: boolean; "customField"?: { "name": string; "key": string; "type": string } };
 export type IncidentTagAdded = { "id": string; "incidentId": string; "name": string; "color": string | null; "added": boolean };
 export type IncidentTagRemoved = { "id": string; "incidentId": string; "removed": boolean };
 export type RunbookCancellationRequested = { "executionId": string; "status": "CANCEL_REQUESTED"; "message": string };
@@ -298,6 +299,9 @@ export interface OperationRequests {
   updateAutomationSettings: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "automationEnabled": boolean; "automationStoreObservationPreviews"?: boolean; "automationReadinessPolicy"?: AutomationReadinessPolicy; "automationTraceRetentionDays": number } };
   listIncidentWatchers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentTags: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listIncidentCustomFields: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  getIncidentCustomField: { "params": { "id": string; "fieldId": string } };
+  setIncidentCustomField: { "params": { "id": string; "fieldId": string }; "body": { "value": string | number | boolean | null } };
   addIncidentTag: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "name": string } };
   removeIncidentTag: { "params": { "id": string; "tagId": string }; "headers": { "Idempotency-Key": string } };
   getIncidentRoutingDecision: { "params": { "id": string } };
@@ -571,6 +575,9 @@ export interface OperationResponses {
   updateAutomationSettings: { "data": AutomationSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentWatchers: { "data": Array<IncidentWatcher>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentTags: { "data": Array<IncidentTag>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIncidentCustomFields: { "data": Array<IncidentCustomField>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncidentCustomField: { "data": IncidentCustomField; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  setIncidentCustomField: { "data": IncidentCustomField; "requestId": string; "timestamp": string } & Record<string, unknown>;
   addIncidentTag: { "data": IncidentTagAdded; "requestId": string; "timestamp": string } & Record<string, unknown>;
   removeIncidentTag: { "data": IncidentTagRemoved; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getIncidentRoutingDecision: { "data": AutomationDecision; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1938,6 +1945,30 @@ export const OPERATIONS = {
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
+  },
+  "listIncidentCustomFields": {
+    "method": "GET",
+    "path": "/incidents/{id}/custom-fields",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentCustomField": {
+    "method": "GET",
+    "path": "/incidents/{id}/custom-fields/{fieldId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setIncidentCustomField": {
+    "method": "PUT",
+    "path": "/incidents/{id}/custom-fields/{fieldId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": true
   },
   "addIncidentTag": {
     "method": "POST",
