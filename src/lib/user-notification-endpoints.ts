@@ -43,21 +43,16 @@ export async function syncUserNotificationEndpoint(input: {
   // the endpoint-health migration. Preserve delivery until the new client is live.
   if (!prisma.userNotificationEndpoint) return { available: true, status: 'UNVERIFIED' };
   const addressHash = notificationEndpointAddressHash(input.channel, input.address);
-  const endpoint = await prisma.userNotificationEndpoint.findUnique({
+  const endpoint = await prisma.userNotificationEndpoint.upsert({
     where: { userId_channel: { userId: input.userId, channel: input.channel } },
+    create: {
+      userId: input.userId,
+      channel: input.channel,
+      addressHash,
+      status: 'UNVERIFIED',
+    },
+    update: {},
   });
-  if (!endpoint) {
-    const created = await prisma.userNotificationEndpoint.create({
-      data: {
-        userId: input.userId,
-        channel: input.channel,
-        addressHash,
-        status: 'UNVERIFIED',
-      },
-      select: { status: true },
-    });
-    return { available: true, status: created.status };
-  }
   if (endpoint.addressHash !== addressHash) {
     await prisma.userNotificationEndpoint.update({
       where: { id: endpoint.id },

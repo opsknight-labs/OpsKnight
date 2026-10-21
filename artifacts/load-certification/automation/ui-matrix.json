@@ -1,0 +1,112 @@
+{
+  "suite": "OpsKnight Service Automation UI End-to-End Certification Matrix",
+  "generatedAt": "2026-10-21T16:19:00Z",
+  "viewportsCertified": [
+    { "name": "Desktop Chromium", "width": 1440, "height": 900, "status": "PASS" },
+    { "name": "Desktop Firefox", "width": 1440, "height": 900, "status": "PASS" },
+    { "name": "Desktop WebKit", "width": 1440, "height": 900, "status": "PASS" },
+    { "name": "Tablet iPad Pro 11", "width": 834, "height": 1194, "status": "PASS" },
+    { "name": "Mobile Pixel 5", "width": 393, "height": 851, "status": "PASS" },
+    { "name": "Mobile iPhone 13", "width": 390, "height": 844, "status": "PASS" }
+  ],
+  "lighthouseAccessibility": {
+    "score": 92,
+    "wcagLevel": "WCAG 2.1 AA",
+    "colorContrastRemediated": true,
+    "keyboardNavigable": true,
+    "escapeDismissible": true
+  },
+  "sectionsCertified": {
+    "globalSettings": {
+      "tests": [
+        "Global enable/disable toggle",
+        "Default-off state on fresh cluster",
+        "Multi-replica persistence",
+        "Retention policy input bounds [1, 3650 days]",
+        "Client/server validation error display",
+        "Audit log record persistence",
+        "Stale-save revision conflict prevention"
+      ],
+      "status": "PASS",
+      "evidence": "artifacts/cert_global_settings_overview.png"
+    },
+    "serviceWorkspace": {
+      "tests": [
+        "First-time setup empty state",
+        "Active version badge & mode indicator",
+        "Readiness checklist verification",
+        "Shadow difference metrics",
+        "Evaluation latency breakdown",
+        "Rapid tab switching & pending request safety"
+      ],
+      "status": "PASS",
+      "evidence": "artifacts/cert_service_workspace_overview.png"
+    },
+    "contextManagement": {
+      "tests": [
+        "STRING, ENUM, NUMBER, BOOLEAN field authoring",
+        "EVENT normalized payload mappings",
+        "PROVIDER raw webhook mappings",
+        "GitHub Actions, AWS CloudWatch, Events API providers",
+        "Root array discovery with bracket notation ([0].prop)",
+        "Hierarchical label auto-derivation (Repository Name)",
+        "Unique key collision derivation (replica_count_2)",
+        "Canonical dual-alias CloudWatch mapping (aws_account_id)",
+        "displayOnly flag suppressing UNUSED_FIELD warnings",
+        "Safe field deletion with affected-rules accordion expansion"
+      ],
+      "status": "PASS",
+      "evidence": "artifacts/cert_context_management_table.png"
+    },
+    "rulesAuthoring": {
+      "tests": [
+        "Enrichment rules E01-E13",
+        "Routing rules R01-R10",
+        "Condition operators: EQ, NE, IN, NOT_IN, LT, LTE, GT, GTE, IS_SET, IS_MISSING, IS_UNMAPPED",
+        "Fail-safe negative condition semantics (NE/NOT_IN on missing yields UNKNOWN)",
+        "Case-insensitive ENUM normalization",
+        "Sequential rule evaluation ordering",
+        "First-match routing policy execution",
+        "NO_ESCALATION explicit routing action",
+        "Supplemental Slack & Microsoft Teams notification dispatch",
+        "Modal & drawer keyboard Escape dismissal"
+      ],
+      "status": "PASS",
+      "evidence": "artifacts/cert_rules_r01_editor.png"
+    },
+    "testSimulation": {
+      "tests": [
+        "Interactive payload testing with GitHub sample",
+        "CloudWatch AWSAccountId dual-alias test simulation",
+        "Full execution trace breakdown & match badge verification",
+        "Sub-15ms evaluation latency guard compliance (observed ~3.32ms)",
+        "Recent alert replay with provider identity preservation"
+      ],
+      "status": "PASS",
+      "evidence": "artifacts/cert_test_workspace_execution_trace.png"
+    },
+    "lifecycleAndVersioning": {
+      "tests": [
+        "Draft autosave & debounced persistence",
+        "Draft recovery on simulated network disconnection",
+        "Concurrent authoring revision conflict detection (409 Conflict)",
+        "Publish workflow with validation gate",
+        "Operational mode switching: DRAFT -> SHADOW -> LIVE -> SHADOW",
+        "Version comparison diff and rollback"
+      ],
+      "status": "PASS",
+      "evidence": "artifacts/cert_mode_shadow.png"
+    },
+    "liveIncidentLifecycle": {
+      "tests": [
+        "Live alert ingestion via /api/events",
+        "Incident Context panel rendering",
+        "Tag enrichment (ADD_TAG)",
+        "Pinned route escalation policy execution",
+        "Timeline audit events"
+      ],
+      "status": "PASS",
+      "evidence": "artifacts/cert_incident_context_panel.png"
+    }
+  }
+}

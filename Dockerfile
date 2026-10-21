@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# disabled: syntax=docker/dockerfile:1
 
 # Stage 1: Dependencies
 FROM node:20-alpine AS deps

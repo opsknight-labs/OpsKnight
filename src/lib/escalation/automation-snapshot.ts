@@ -29,7 +29,34 @@ export const responderSnapshotSchema = z.object({
     .max(MAX_ESCALATION_STEPS),
 });
 
-export async function captureResponderSnapshot(client: Prisma.TransactionClient, policyId: string) {
+type CachedResponderSnapshot = {
+  snapshot: z.infer<typeof responderSnapshotSchema>;
+  cachedAt: number;
+};
+
+const responderSnapshotCache = new Map<string, CachedResponderSnapshot>();
+const RESPONDER_SNAPSHOT_CACHE_TTL_MS = 5000;
+
+export function invalidateResponderSnapshot(policyId?: string) {
+  if (policyId) {
+    responderSnapshotCache.delete(policyId);
+  } else {
+    responderSnapshotCache.clear();
+  }
+}
+
+export async function captureResponderSnapshot(
+  client: Prisma.TransactionClient,
+  policyId: string,
+  options?: { bypassCache?: boolean }
+) {
+  if (!options?.bypassCache) {
+    const cached = responderSnapshotCache.get(policyId);
+    if (cached && Date.now() - cached.cachedAt < RESPONDER_SNAPSHOT_CACHE_TTL_MS) {
+      return cached.snapshot;
+    }
+  }
+
   // Prisma's relation reads use multiple statements under READ COMMITTED. A
   // concurrent edit can otherwise pair old steps with new/deleted conditions.
   // One SQL statement captures every level from the same PostgreSQL snapshot.
@@ -67,11 +94,13 @@ export async function captureResponderSnapshot(client: Prisma.TransactionClient,
       `Pinned escalation policy snapshot exceeds byte size limit of ${MAX_RESPONDER_SNAPSHOT_BYTES} bytes`
     );
   }
+  responderSnapshotCache.set(policyId, { snapshot: parsed, cachedAt: Date.now() });
   return parsed;
 }
 
 /** Serialize policy mutations before checking the resulting complete definition. */
 export async function lockResponderPolicy(client: Prisma.TransactionClient, policyId: string) {
+  invalidateResponderSnapshot(policyId);
   await client.$queryRaw`SELECT id FROM "EscalationPolicy" WHERE id=${policyId} FOR UPDATE`;
 }
 

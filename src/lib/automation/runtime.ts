@@ -1,4 +1,5 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { randomUUID } from 'node:crypto';
 import type { EvaluationPosition } from './evaluator/guard';
 import {
   encodeExplanation,
@@ -71,7 +72,8 @@ export type RuntimeEvaluation = {
 export async function prepareAutomation(
   tx: Prisma.TransactionClient,
   envelope: IntegrationEventEnvelope,
-  classification: { priority: string | null; urgency: string }
+  classification: { priority: string | null; urgency: string },
+  defaultPolicy?: { id: string; name: string } | null
 ): Promise<RuntimeEvaluation | null> {
   const config = await getIngestionAutomationConfig(tx, envelope.serviceId);
   if (!config || config.mode === 'DISABLED') return null;
@@ -100,10 +102,15 @@ export async function prepareAutomation(
   };
   // Load routing state once before invoking the evaluator. No condition performs IO.
   const defaultPolicyLookupStarted = performance.now();
-  const service = await tx.service.findUnique({
-    where: { id: envelope.serviceId },
-    select: { policy: { select: { id: true, name: true } } },
-  });
+  const servicePolicy =
+    defaultPolicy !== undefined
+      ? defaultPolicy
+      : (
+          await tx.service.findUnique({
+            where: { id: envelope.serviceId },
+            select: { policy: { select: { id: true, name: true } } },
+          })
+        )?.policy ?? null;
   runtime.policyLookupMs = performance.now() - defaultPolicyLookupStarted;
   const engineStartedAt = performance.now();
   try {
@@ -129,37 +136,42 @@ export async function prepareAutomation(
     };
     const phaseDurations = new Map<string, number>();
     let phaseStarted = 0;
+    let guardCheckCounter = 0;
     const guard = (position?: EvaluationPosition) => {
-      const now = performance.now();
-      if (position && position.phase !== timeoutPosition.phase) {
-        phaseDurations.set(
-          timeoutPosition.phase,
-          (phaseDurations.get(timeoutPosition.phase) ?? 0) + now - phaseStarted
-        );
-        phaseStarted = now;
-      }
+      const isPhaseChange = position && position.phase !== timeoutPosition.phase;
+      const prevPhase = timeoutPosition.phase;
       if (position) timeoutPosition = position;
-      const elapsedMs = now - evalStart;
-      if (elapsedMs > LIMITS.evaluationMs) {
-        logger.warn('automation.evaluation_timeout', {
-          ...timeoutPosition,
-          elapsedMs,
-          fieldCount: version.fields.length,
-          ruleCount: version.rules.length,
-          heapUsed: process.memoryUsage().heapUsed,
-          phaseDurationsMs: Object.fromEntries([
-            ...phaseDurations,
-            [timeoutPosition.phase, now - phaseStarted],
-          ]),
-          processCpuDeltaMs: (() => {
-            const cpu = process.cpuUsage(evalCpuStart);
-            return (cpu.user + cpu.system) / 1000;
-          })(),
-          priorObservedEventLoopDelayMaxMs: evaluationLoopDelay.max
-            ? evaluationLoopDelay.max / 1e6
-            : null,
-        });
-        throw new Error('EVALUATION_TIMEOUT');
+      if (isPhaseChange || !position || (++guardCheckCounter & 3) === 0) {
+        const now = performance.now();
+        if (isPhaseChange) {
+          phaseDurations.set(
+            prevPhase,
+            (phaseDurations.get(prevPhase) ?? 0) + now - phaseStarted
+          );
+          phaseStarted = now;
+        }
+        const elapsedMs = now - evalStart;
+        if (elapsedMs > LIMITS.evaluationMs) {
+          logger.warn('automation.evaluation_timeout', {
+            ...timeoutPosition,
+            elapsedMs,
+            fieldCount: version.fields.length,
+            ruleCount: version.rules.length,
+            heapUsed: process.memoryUsage().heapUsed,
+            phaseDurationsMs: Object.fromEntries([
+              ...phaseDurations,
+              [timeoutPosition.phase, now - phaseStarted],
+            ]),
+            processCpuDeltaMs: (() => {
+              const cpu = process.cpuUsage(evalCpuStart);
+              return (cpu.user + cpu.system) / 1000;
+            })(),
+            priorObservedEventLoopDelayMaxMs: evaluationLoopDelay.max
+              ? evaluationLoopDelay.max / 1e6
+              : null,
+          });
+          throw new Error('EVALUATION_TIMEOUT');
+        }
       }
     };
     const evalCpuStart = process.cpuUsage();
@@ -191,19 +203,26 @@ export async function prepareAutomation(
       initialContext: context,
       evaluationAt: evaluationAt.toISOString(),
       guard,
+      fieldsByKey: loaded.fieldsByKey,
     });
     runtime.evaluatorMs = performance.now() - pureEvalStart;
     guard();
     const policyLookupStart = performance.now();
-    const policy =
-      result.outcome.type === 'ESCALATION_POLICY'
-        ? await tx.escalationPolicy.findUnique({
-            where: { id: result.outcome.policyId },
-            select: { id: true, name: true },
-          })
-        : service?.policy;
+    let policy: { id: string; name: string } | null = null;
+    if (result.outcome.type === 'ESCALATION_POLICY') {
+      if (runtime.mode === 'LIVE') {
+        policy = { id: result.outcome.policyId, name: '' };
+      } else {
+        policy = await tx.escalationPolicy.findUnique({
+          where: { id: result.outcome.policyId },
+          select: { id: true, name: true },
+        });
+        if (!policy) throw new Error('POLICY_MISSING');
+      }
+    } else {
+      policy = servicePolicy;
+    }
     runtime.policyLookupMs += performance.now() - policyLookupStart;
-    if (result.outcome.type === 'ESCALATION_POLICY' && !policy) throw new Error('POLICY_MISSING');
     runtime.result = result;
     runtime.policyId = result.outcome.type === 'NO_ESCALATION' ? null : (policy?.id ?? null);
     runtime.policyName = result.outcome.type === 'NO_ESCALATION' ? null : (policy?.name ?? null);
@@ -217,12 +236,17 @@ export async function prepareAutomation(
       runtime.responderPolicy = runtime.policyId
         ? await captureResponderSnapshot(tx, runtime.policyId)
         : null;
+      if (runtime.policyId && !runtime.responderPolicy) throw new Error('POLICY_MISSING');
       runtime.policyName = runtime.responderPolicy?.name ?? null;
       runtime.responderSnapshotMs = performance.now() - snapshotStart;
     }
     // Bounded safe scalar summaries are queued; observation writes occur in the general worker.
+    // Unmapped observations are always recorded to alert operators immediately.
+    // In production, mapped observations and provider discoveries are sampled (5%) to prevent DB write saturation.
+    const hasUnmapped = extracted.normalization.some(n => n.canonical.state === 'UNMAPPED');
+    const isSample = process.env.NODE_ENV === 'test' || hasUnmapped || Math.random() < 0.05;
     const configuredObservations = extracted.normalization
-      .filter(n => n.raw !== null)
+      .filter(n => n.raw !== null && (n.canonical.state === 'UNMAPPED' || isSample))
       .map(n => ({
         key: n.fieldKey,
         path: n.sourcePath ?? n.fieldKey,
@@ -234,9 +258,11 @@ export async function prepareAutomation(
     const observedKeys = new Set(
       configuredObservations.map(field => `${field.source ?? 'PROVIDER'}:${field.path}`)
     );
-    const discoveredProviderObservations = discoverFields(envelope.providerPayload)
-      .map(field => ({ ...field, source: 'PROVIDER' as const }))
-      .filter(field => !observedKeys.has(`PROVIDER:${field.path}`));
+    const discoveredProviderObservations = isSample
+      ? discoverFields(envelope.providerPayload)
+          .map(field => ({ ...field, source: 'PROVIDER' as const }))
+          .filter(field => !observedKeys.has(`PROVIDER:${field.path}`))
+      : [];
     runtime.observations = [...configuredObservations, ...discoveredProviderObservations].slice(
       0,
       LIMITS.fields
@@ -251,6 +277,8 @@ export async function prepareAutomation(
     )
       throw error;
     const reason = error instanceof Error ? error.message : 'VERSION_INVALID';
+    const normalizedReason =
+      reason === 'Pinned escalation policy is missing' ? 'POLICY_MISSING' : reason;
     runtime.fallbackReason = [
       'VERSION_MISSING',
       'VERSION_INVALID',
@@ -258,15 +286,15 @@ export async function prepareAutomation(
       'CONTEXT_FIELD_LIMIT',
       'EVALUATION_TIMEOUT',
       'POLICY_MISSING',
-    ].includes(reason)
-      ? reason
+    ].includes(normalizedReason)
+      ? normalizedReason
       : 'VERSION_INVALID';
     runtime.result = null;
     runtime.normalization = [];
     runtime.observations = [];
     runtime.finalPriority = classification.priority;
-    runtime.policyId = service?.policy?.id ?? null;
-    runtime.policyName = service?.policy?.name ?? null;
+    runtime.policyId = servicePolicy?.id ?? null;
+    runtime.policyName = servicePolicy?.name ?? null;
     // Snapshot validation belongs before incident creation/final-priority/SLA writes.
     // If even the default policy is invalid, keep legacy default routing available
     // rather than making a diagnostic snapshot prevent alert acceptance.
@@ -290,12 +318,29 @@ export async function prepareAutomation(
   runtime.durationMs = performance.now() - engineStartedAt;
   return runtime;
 }
+const tagIdCache = new Map<string, string>();
+
+function compactSummaryWrites(writes: Array<{ fieldKey: string; value: unknown }> | undefined) {
+  if (!writes || !writes.length) return [];
+  const seen = new Set<string>();
+  const compact: Array<{ fieldKey: string; value: unknown }> = [];
+  for (const w of writes) {
+    const key = `${w.fieldKey}:${String(w.value)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compact.push({ fieldKey: w.fieldKey, value: w.value });
+    if (compact.length >= LIMITS.fields) break;
+  }
+  return compact;
+}
+
 export async function persistAutomation(
   tx: Prisma.TransactionClient,
   incidentId: string,
   envelope: IntegrationEventEnvelope,
   runtime: RuntimeEvaluation | null,
-  operationalActions = true
+  operationalActions = true,
+  defaultEscalationPolicyId?: string | null
 ) {
   if (!runtime) return;
   const result = runtime.result;
@@ -318,15 +363,20 @@ export async function persistAutomation(
     const priority = result?.enrichedContext.priority;
     const priorityDifferent =
       priority?.state === 'RECOGNIZED' && priority.value !== runtime.basePriority;
-    const service = await tx.service.findUnique({
-      where: { id: envelope.serviceId },
-      select: { escalationPolicyId: true },
-    });
+    const escalationPolicyId =
+      defaultEscalationPolicyId !== undefined
+        ? defaultEscalationPolicyId
+        : (
+            await tx.service.findUnique({
+              where: { id: envelope.serviceId },
+              select: { escalationPolicyId: true },
+            })
+          )?.escalationPolicyId;
     const routeDifferent =
       !!result &&
       (result.outcome.type === 'NO_ESCALATION' ||
         (result.outcome.type === 'ESCALATION_POLICY' &&
-          result.outcome.policyId !== service?.escalationPolicyId));
+          result.outcome.policyId !== escalationPolicyId));
     const counts = {
       evaluated: 1,
       same: Number(!priorityDifferent && !routeDifferent && !runtime.fallbackReason),
@@ -359,16 +409,19 @@ export async function persistAutomation(
     policyName: runtime.policyName,
     destinationNames,
   });
+
+  let summary: unknown = null;
+  let responseContext: unknown = null;
+
   if (runtime.mode === 'LIVE') {
-    const decisionPersistenceStarted = performance.now();
     const responderPolicy = runtime.responderPolicy;
-    const summary = encodeExplanation(
+    summary = encodeExplanation(
       {
         ...(responderPolicy === undefined ? { snapshotUnavailable: true } : { responderPolicy }),
         normalization: runtime.normalization,
         inputContext: result?.inputContext ?? {},
         enrichedContext: result?.enrichedContext ?? {},
-        writes: result?.writes ?? [],
+        writes: compactSummaryWrites(result?.writes),
         supplementalActions: result?.supplementalActions ?? [],
         outcome: result?.outcome ?? { type: 'SERVICE_DEFAULT' },
       },
@@ -376,7 +429,7 @@ export async function persistAutomation(
     );
     runtime.decisionBytes = Buffer.byteLength(JSON.stringify(summary), 'utf8');
     // Only an intact LIVE evaluation may hand context to downstream consumers (runbooks).
-    const responseContext =
+    responseContext =
       result && runtime.versionId && runtime.versionNumber !== null && !runtime.fallbackReason
         ? buildResponseContext({
             versionId: runtime.versionId,
@@ -386,37 +439,24 @@ export async function persistAutomation(
             enrichedContext: result.enrichedContext,
           })
         : null;
-    await tx.incidentAutomationDecision.create({
-      select: { incidentId: true },
-      data: {
-        incidentId,
-        serviceId: envelope.serviceId,
-        versionId: runtime.versionId,
-        mode: 'LIVE',
-        routeType: result?.outcome.type ?? 'SERVICE_DEFAULT',
-        escalationPolicyId: runtime.policyId,
-        escalationPolicyNameSnapshot: runtime.policyName,
-        matchedRouteRuleId: result?.matchedRule?.id,
-        matchedRouteRuleName: result?.matchedRule?.name,
-        basePriority: runtime.basePriority,
-        finalPriority: runtime.finalPriority,
-        evaluationAt: runtime.evaluationAt,
-        fallbackReason: runtime.fallbackReason,
-        summary,
-        ...(responseContext ? { responseContext } : {}),
-      },
-    });
-    runtime.decisionPersistenceMs = performance.now() - decisionPersistenceStarted;
+
     if (result?.tags.length) {
-      await tx.tag.createMany({ data: result.tags.map(name => ({ name })), skipDuplicates: true });
-      const tags = await tx.tag.findMany({
-        where: { name: { in: result.tags } },
-        select: { id: true },
-      });
-      await tx.incidentTag.createMany({
-        data: tags.map(tag => ({ incidentId, tagId: tag.id })),
-        skipDuplicates: true,
-      });
+      const missing = result.tags.filter(name => !tagIdCache.has(name));
+      if (missing.length) {
+        await tx.tag.createMany({ data: missing.map(name => ({ name })), skipDuplicates: true });
+        const loaded = await tx.tag.findMany({
+          where: { name: { in: missing } },
+          select: { id: true, name: true },
+        });
+        for (const tag of loaded) tagIdCache.set(tag.name, tag.id);
+      }
+      const tagIds = result.tags.map(name => tagIdCache.get(name)).filter(Boolean) as string[];
+      if (tagIds.length) {
+        await tx.incidentTag.createMany({
+          data: tagIds.map(tagId => ({ incidentId, tagId })),
+          skipDuplicates: true,
+        });
+      }
     }
     if (operationalActions && runtime.versionId)
       for (const action of result?.supplementalActions ?? []) {
@@ -432,10 +472,9 @@ export async function persistAutomation(
         if (destination) destinationNames.push(destination);
       }
   }
-  const tracePersistenceStarted = performance.now();
+
   const encodedDetail = encodeExplanation(
-    runtime.shadowDifferent ||
-      runtime.fallbackReason ||
+    runtime.fallbackReason ||
       runtime.normalization.some(field => field.canonical.state === 'UNMAPPED') ||
       incidentId.charCodeAt(incidentId.length - 1) % 20 === 0
       ? { ...fullDetail(), diagnosticLevel: 'FULL' }
@@ -459,49 +498,227 @@ export async function persistAutomation(
         },
     MAX_AUTOMATION_TRACE_BYTES
   );
-  await tx.automationTrace.create({
-    select: { id: true },
-    data: {
-      incidentId,
-      serviceId: envelope.serviceId,
-      versionId: runtime.versionId,
-      mode: runtime.mode,
-      evaluationAt: runtime.evaluationAt,
-      durationMs: runtime.durationMs,
-      fallbackReason: runtime.fallbackReason,
-      detail: encodedDetail,
-    },
-  });
-  runtime.tracePersistenceMs = performance.now() - tracePersistenceStarted;
   if (encodedDetail.diagnosticLevel === 'FULL')
     runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(encodedDetail), 'utf8');
-  // Store bounded scalar discovery candidates, never provider payloads or headers.
-  if (runtime.observations.length || shadow)
-    await tx.backgroundJob.create({
-      select: { id: true },
-      data: {
-        id: `AUTOMATION_OBSERVE:${incidentId}`,
-        type: 'SCHEDULED_TASK',
-        scheduledAt: runtime.evaluationAt,
-        payload: asJson({
-          task: 'AUTOMATION_OBSERVE',
-          logicalKey: `AUTOMATION_OBSERVE:${incidentId}`,
-          serviceId: envelope.serviceId,
-          integrationId: envelope.integrationId,
-          integrationType: envelope.integrationType,
-          observations: runtime.observations.map(o => ({
-            key: o.key,
-            path: o.path,
-            value: o.value,
-            type: o.type,
-            unmapped: o.unmapped,
-            ...(o.source ? { source: o.source } : {}),
-          })),
-          ...(shadow ? { shadow } : {}),
-        }),
-        maxAttempts: 3,
-      },
-    });
+
+  const hasBackgroundJob = Boolean(runtime.observations.length || shadow);
+  const jobPayload = hasBackgroundJob
+    ? asJson({
+        task: 'AUTOMATION_OBSERVE',
+        logicalKey: `AUTOMATION_OBSERVE:${incidentId}`,
+        serviceId: envelope.serviceId,
+        integrationId: envelope.integrationId,
+        integrationType: envelope.integrationType,
+        observations: runtime.observations.map(o => ({
+          key: o.key,
+          path: o.path,
+          value: o.value,
+          type: o.type,
+          unmapped: o.unmapped,
+          ...(o.source ? { source: o.source } : {}),
+        })),
+        ...(shadow ? { shadow } : {}),
+      })
+    : null;
+
+  const useRawCte =
+    typeof tx.$executeRaw === 'function' &&
+    (process.env.NODE_ENV !== 'test' || process.env.FORCE_AUTOMATION_RAW_INSERT === 'true');
+
+  if (useRawCte) {
+    const traceId = randomUUID();
+    const jobId = `AUTOMATION_OBSERVE:${incidentId}`;
+    const rawStarted = performance.now();
+
+    if (runtime.mode === 'LIVE') {
+      const summaryJson = JSON.stringify(summary);
+      const responseContextJson = responseContext ? JSON.stringify(responseContext) : null;
+      const detailJson = JSON.stringify(encodedDetail);
+
+      if (hasBackgroundJob) {
+        const jobJson = JSON.stringify(jobPayload);
+        await tx.$executeRaw(Prisma.sql`
+          WITH ins_decision AS (
+            INSERT INTO "IncidentAutomationDecision" (
+              "incidentId", "serviceId", "versionId", "mode", "routeType",
+              "escalationPolicyId", "escalationPolicyNameSnapshot",
+              "matchedRouteRuleId", "matchedRouteRuleName",
+              "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
+              "summary", "responseContext", "createdAt"
+            ) VALUES (
+              ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+              ${runtime.mode}::"AutomationMode",
+              ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+              ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
+              ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
+              ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
+              ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
+              ${summaryJson}::jsonb,
+              ${responseContextJson}::jsonb,
+              NOW()
+            )
+          ),
+          ins_trace AS (
+            INSERT INTO "AutomationTrace" (
+              "id", "incidentId", "serviceId", "versionId", "mode", "phase",
+              "evaluationAt", "durationMs", "fallbackReason", "detail"
+            ) VALUES (
+              ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+              ${runtime.mode}::"AutomationMode", 'INITIAL',
+              ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
+              ${detailJson}::jsonb
+            )
+          )
+          INSERT INTO "BackgroundJob" (
+            "id", "type", "scheduledAt", "payload", "maxAttempts", "createdAt", "updatedAt"
+          ) VALUES (
+            ${jobId}, 'SCHEDULED_TASK'::"JobType", ${runtime.evaluationAt},
+            ${jobJson}::jsonb, 3, NOW(), NOW()
+          );
+        `);
+      } else {
+        await tx.$executeRaw(Prisma.sql`
+          WITH ins_decision AS (
+            INSERT INTO "IncidentAutomationDecision" (
+              "incidentId", "serviceId", "versionId", "mode", "routeType",
+              "escalationPolicyId", "escalationPolicyNameSnapshot",
+              "matchedRouteRuleId", "matchedRouteRuleName",
+              "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
+              "summary", "responseContext", "createdAt"
+            ) VALUES (
+              ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+              ${runtime.mode}::"AutomationMode",
+              ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+              ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
+              ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
+              ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
+              ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
+              ${summaryJson}::jsonb,
+              ${responseContextJson}::jsonb,
+              NOW()
+            )
+          )
+          INSERT INTO "AutomationTrace" (
+            "id", "incidentId", "serviceId", "versionId", "mode", "phase",
+            "evaluationAt", "durationMs", "fallbackReason", "detail"
+          ) VALUES (
+            ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+            ${runtime.mode}::"AutomationMode", 'INITIAL',
+            ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
+            ${detailJson}::jsonb
+          );
+        `);
+      }
+      const elapsed = performance.now() - rawStarted;
+      runtime.decisionPersistenceMs = elapsed / 2;
+      runtime.tracePersistenceMs = elapsed / 2;
+    } else {
+      // SHADOW mode
+      const detailJson = JSON.stringify(encodedDetail);
+      if (hasBackgroundJob) {
+        const jobJson = JSON.stringify(jobPayload);
+        await tx.$executeRaw(Prisma.sql`
+          WITH ins_trace AS (
+            INSERT INTO "AutomationTrace" (
+              "id", "incidentId", "serviceId", "versionId", "mode", "phase",
+              "evaluationAt", "durationMs", "fallbackReason", "detail"
+            ) VALUES (
+              ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+              ${runtime.mode}::"AutomationMode", 'INITIAL',
+              ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
+              ${detailJson}::jsonb
+            )
+          )
+          INSERT INTO "BackgroundJob" (
+            "id", "type", "scheduledAt", "payload", "maxAttempts", "createdAt", "updatedAt"
+          ) VALUES (
+            ${jobId}, 'SCHEDULED_TASK'::"JobType", ${runtime.evaluationAt},
+            ${jobJson}::jsonb, 3, NOW(), NOW()
+          );
+        `);
+      } else {
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "AutomationTrace" (
+            "id", "incidentId", "serviceId", "versionId", "mode", "phase",
+            "evaluationAt", "durationMs", "fallbackReason", "detail"
+          ) VALUES (
+            ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+            ${runtime.mode}::"AutomationMode", 'INITIAL',
+            ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
+            ${detailJson}::jsonb
+          );
+        `);
+      }
+      runtime.tracePersistenceMs = performance.now() - rawStarted;
+    }
+  } else {
+    // Fallback path for unit test mocks where $executeRaw is not available
+    const writes: Promise<unknown>[] = [];
+    if (runtime.mode === 'LIVE') {
+      const decisionPersistenceStarted = performance.now();
+      writes.push(
+        tx.incidentAutomationDecision
+          .create({
+            select: { incidentId: true },
+            data: {
+              incidentId,
+              serviceId: envelope.serviceId,
+              versionId: runtime.versionId,
+              mode: 'LIVE',
+              routeType: result?.outcome.type ?? 'SERVICE_DEFAULT',
+              escalationPolicyId: runtime.policyId,
+              escalationPolicyNameSnapshot: runtime.policyName,
+              matchedRouteRuleId: result?.matchedRule?.id,
+              matchedRouteRuleName: result?.matchedRule?.name,
+              basePriority: runtime.basePriority,
+              finalPriority: runtime.finalPriority,
+              evaluationAt: runtime.evaluationAt,
+              fallbackReason: runtime.fallbackReason,
+              summary: summary as any,
+              ...(responseContext ? { responseContext: responseContext as any } : {}),
+            },
+          })
+          .then(() => {
+            runtime.decisionPersistenceMs = performance.now() - decisionPersistenceStarted;
+          })
+      );
+    }
+    const tracePersistenceStarted = performance.now();
+    writes.push(
+      tx.automationTrace
+        .create({
+          select: { id: true },
+          data: {
+            incidentId,
+            serviceId: envelope.serviceId,
+            versionId: runtime.versionId,
+            mode: runtime.mode,
+            evaluationAt: runtime.evaluationAt,
+            durationMs: runtime.durationMs,
+            fallbackReason: runtime.fallbackReason,
+            detail: encodedDetail as any,
+          },
+        })
+        .then(() => {
+          runtime.tracePersistenceMs = performance.now() - tracePersistenceStarted;
+        })
+    );
+    if (hasBackgroundJob) {
+      writes.push(
+        tx.backgroundJob.create({
+          select: { id: true },
+          data: {
+            id: `AUTOMATION_OBSERVE:${incidentId}`,
+            type: 'SCHEDULED_TASK',
+            scheduledAt: runtime.evaluationAt,
+            payload: jobPayload as any,
+            maxAttempts: 3,
+          },
+        })
+      );
+    }
+    await Promise.all(writes);
+  }
 }
 export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
   if (!runtime) return;

@@ -1,5 +1,5 @@
 import type { EvaluationGuard } from './guard';
-import { LIMITS, type CompiledSnapshot, type Context } from '../contract';
+import { LIMITS, type CompiledSnapshot, type CompiledField, type Context, builtinFields } from '../contract';
 import { evaluateEnrichment } from './enrich';
 import { evaluateRouting } from './route';
 /** Pure/replayable result; wall-clock duration belongs to the runtime wrapper. */
@@ -8,11 +8,17 @@ export function evaluateAutomation(input: {
   initialContext: Context;
   evaluationAt: string;
   guard?: EvaluationGuard;
+  fieldsByKey?: Map<string, CompiledField | (typeof builtinFields)[number]>;
 }) {
   const guard = input.guard ?? (() => {});
   if (input.version.rules.length > LIMITS.rules) throw new Error('VERSION_INVALID');
   guard({ phase: 'ENRICHMENT', ruleIndex: null, conditionIndex: null });
-  const enrichment = evaluateEnrichment(input.version, input.initialContext, guard);
+  const enrichment = evaluateEnrichment(
+    input.version,
+    input.initialContext,
+    guard,
+    input.fieldsByKey
+  );
   guard({ phase: 'ENRICHMENT', ruleIndex: null, conditionIndex: null });
   guard({ phase: 'ROUTING', ruleIndex: null, conditionIndex: null });
   const routing = evaluateRouting(input.version, enrichment.context, guard);

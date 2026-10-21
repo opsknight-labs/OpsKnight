@@ -23,6 +23,9 @@ import { resolveSupportHours } from './incidents/support-hours';
 import { resolveIncidentEngagement } from './incidents/engagement';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
 import { addOperationalMetric, observeOperationalHistogram } from './metrics/operational/registry';
+import { checkAlertFlapping } from './flapping';
+import { initializeEscalationExecution } from './escalation/repository';
+import { buildResponderRoutingFromAutomation } from './escalation/routing';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -192,6 +195,8 @@ export async function processEvent(
         id: true,
         name: true,
         defaultIncidentVisibility: true,
+        escalationPolicyId: true,
+        policy: { select: { id: true, name: true } },
       },
     });
 
@@ -236,7 +241,6 @@ export async function processEvent(
     let isFlapping = false;
     if (event_action === 'trigger' && !existingIncident) {
       try {
-        const { checkAlertFlapping } = await import('./flapping');
         const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
         isFlapping = flappingResult.isFlapping;
       } catch (_) {
@@ -357,7 +361,7 @@ export async function processEvent(
         alertSeverity: eventData.severity,
       });
       const urgency = classification.urgency;
-      const automation = await prepareAutomation(tx, envelope, classification);
+      const automation = await prepareAutomation(tx, envelope, classification, service.policy);
       const finalPriority = automation?.finalPriority ?? classification.priority;
 
       // Keep canonical text in persistence. React/email/API boundaries are
@@ -421,7 +425,14 @@ export async function processEvent(
           },
         });
 
-        await persistAutomation(tx, resolvedIncident.id, envelope, automation, false);
+        await persistAutomation(
+          tx,
+          resolvedIncident.id,
+          envelope,
+          automation,
+          false,
+          service.escalationPolicyId
+        );
         await enqueueIncidentCreatedRunbookEvaluation(tx, {
           incidentId: resolvedIncident.id,
           status: resolvedIncident.status,
@@ -556,12 +567,21 @@ export async function processEvent(
         }
       );
 
-      await persistAutomation(tx, newIncident.id, envelope, automation, !isFlapping);
-      // Connect alert to incident
-      await tx.alert.update({
-        where: { id: alert.id },
-        data: { incidentId: newIncident.id },
-      });
+      // Persist automation context/traces concurrently with alert attachment
+      await Promise.all([
+        persistAutomation(
+          tx,
+          newIncident.id,
+          envelope,
+          automation,
+          !isFlapping,
+          service.escalationPolicyId
+        ),
+        tx.alert.update({
+          where: { id: alert.id },
+          data: { incidentId: newIncident.id },
+        }),
+      ]);
 
       // Log timeline event
       await tx.incidentEvent.create({
@@ -576,18 +596,22 @@ export async function processEvent(
       if (!isFlapping) {
         // Escalation state and its first due job commit with the incident, so
         // an OPEN incident with a policy is never left with nothing scheduled.
-        const { initializeEscalationExecution } = await import('./escalation/repository');
+        const inMemoryRouting = automation ? buildResponderRoutingFromAutomation(automation) : null;
         await initializeEscalationExecution(tx, {
           incidentId: newIncident.id,
           serviceId,
           now: incidentCreatedAt,
           notBefore: engagement.earliestDeliveryAt,
+          generation: newIncident.escalationGeneration ?? 0,
+          routing: inMemoryRouting,
         });
         await enqueueEventSideEffects(
           tx,
           'triggered',
           newIncident.id,
-          engagement.earliestDeliveryAt
+          engagement.earliestDeliveryAt,
+          { escalationGeneration: newIncident.escalationGeneration ?? 0, status: newIncident.status },
+          automation ? { mode: automation.mode, routeType: automation.result?.outcome.type ?? 'SERVICE_DEFAULT' } : null
         );
       }
       // Same transaction as persistAutomation, so evaluation always sees the committed decision.

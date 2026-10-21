@@ -8,14 +8,11 @@ export function builtinContext(input: {
   integrationType: string;
   source: string;
 }): Context {
-  const values = new Map<string, string | null>([
-    ['priority', input.priority],
-    ['urgency', input.urgency],
-    ['severity', input.severity],
-    ['integration', input.integrationType],
-    ['source', input.source],
-  ]);
-  return Object.fromEntries(
-    builtinFields.map(field => [field.key, normalizeValue(values.get(field.key), field)])
-  );
+  return {
+    priority: normalizeValue(input.priority, builtinFields[0]),
+    urgency: normalizeValue(input.urgency, builtinFields[1]),
+    severity: normalizeValue(input.severity, builtinFields[2]),
+    integration: normalizeValue(input.integrationType, builtinFields[3]),
+    source: normalizeValue(input.source, builtinFields[4]),
+  };
 }

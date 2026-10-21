@@ -187,25 +187,43 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
   }
 }
 
+let cachedClockOffsetMs = 0;
+let lastClockSampleAt = 0;
 async function databaseClock(tx: Prisma.TransactionClient): Promise<Date> {
-  const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS "now"`;
-  return clock?.now ?? new Date();
+  const now = Date.now();
+  if (now - lastClockSampleAt > 5000) {
+    try {
+      const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS "now"`;
+      if (clock?.now) {
+        cachedClockOffsetMs = clock.now.getTime() - Date.now();
+        lastClockSampleAt = now;
+      }
+    } catch {
+      // Fall back to local time on error
+    }
+  }
+  return new Date(Date.now() + cachedClockOffsetMs);
 }
+
 async function enqueueSideEffects(
   tx: Prisma.TransactionClient,
   incidentId: string,
   effects: readonly EventSideEffect[],
   lifecycle?: LifecycleSideEffectContext,
   warRoom?: EventSideEffectPayload['warRoom'],
-  notBeforeByEffect?: ReadonlyMap<EventSideEffect, Date>
+  notBeforeByEffect?: ReadonlyMap<EventSideEffect, Date>,
+  incidentSnapshotInput?: { escalationGeneration?: number | null; status?: IncidentStatus | null } | null,
+  automationDecisionInput?: { mode: string; routeType: string } | null
 ): Promise<void> {
   const decision =
-    effects.includes('TRIGGER_ESCALATION_NOTIFICATIONS') && tx.incidentAutomationDecision
-      ? await tx.incidentAutomationDecision.findUnique({
-          where: { incidentId },
-          select: { routeType: true, mode: true },
-        })
-      : null;
+    automationDecisionInput !== undefined
+      ? automationDecisionInput
+      : effects.includes('TRIGGER_ESCALATION_NOTIFICATIONS') && tx.incidentAutomationDecision
+        ? await tx.incidentAutomationDecision.findUnique({
+            where: { incidentId },
+            select: { routeType: true, mode: true },
+          })
+        : null;
   if (decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION') {
     // NO_ESCALATION suppresses automatic responder paging, not later human
     // handoffs or lifecycle communication to explicitly assigned recipients.
@@ -214,10 +232,12 @@ async function enqueueSideEffects(
   if (effects.length === 0) return;
   const [eventOrderAt, incidentSnapshot] = await Promise.all([
     databaseClock(tx),
-    tx.incident.findUnique({
-      where: { id: incidentId },
-      select: { escalationGeneration: true, status: true },
-    }),
+    incidentSnapshotInput
+      ? Promise.resolve(incidentSnapshotInput)
+      : tx.incident.findUnique({
+          where: { id: incidentId },
+          select: { escalationGeneration: true, status: true },
+        }),
   ]);
   const eventOrderAtIso = eventOrderAt.toISOString();
   // One UUID per logical incident transition — every outbox row for this enqueue shares the same sourceEventId.
@@ -302,7 +322,9 @@ export async function enqueueEventSideEffects(
   tx: Prisma.TransactionClient,
   action: EventOutboxAction,
   incidentId: string,
-  responderNotBefore?: Date
+  responderNotBefore?: Date,
+  incidentSnapshot?: { escalationGeneration?: number | null; status?: IncidentStatus | null } | null,
+  automationDecision?: { mode: string; routeType: string } | null
 ): Promise<void> {
   await enqueueSideEffects(
     tx,
@@ -312,7 +334,9 @@ export async function enqueueEventSideEffects(
     undefined,
     responderNotBefore
       ? new Map<EventSideEffect, Date>([['TRIGGER_ESCALATION_NOTIFICATIONS', responderNotBefore]])
-      : undefined
+      : undefined,
+    incidentSnapshot,
+    automationDecision
   );
 }
 export async function enqueueIncidentUpdateSideEffects(

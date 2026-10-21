@@ -26,7 +26,7 @@ export async function persistObservationBatch(
     WHERE type = 'SCHEDULED_TASK'::"JobType" AND status = 'PENDING'::"JobStatus"
       AND "scheduledAt" <= NOW() AND payload->>'task' = 'AUTOMATION_OBSERVE'
       AND payload->>'serviceId' = ${current.serviceId}
-    ORDER BY "scheduledAt", id LIMIT 15 FOR UPDATE SKIP LOCKED`;
+    ORDER BY "scheduledAt", id LIMIT 25 FOR UPDATE SKIP LOCKED`;
   const siblings = pending.flatMap(row => {
     const job = parse(row.payload);
     return job ? [{ id: row.id, job }] : [];

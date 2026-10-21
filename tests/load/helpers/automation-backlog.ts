@@ -10,7 +10,7 @@ export async function countAutomationBacklog(
       where: {
         status: { in: ['PENDING', 'PROCESSING', 'PENDING_V2', 'PROCESSING_V2'] },
         NOT: [
-          { type: { in: ['ESCALATION', 'AUTO_UNSNOOZE'] } },
+          { type: { in: ['ESCALATION', 'AUTO_UNSNOOZE', 'RUNBOOK'] } },
           { type: 'COMPLIANCE_EVALUATION_SWEEP', scheduledAt: { gt: new Date() } },
         ],
       },

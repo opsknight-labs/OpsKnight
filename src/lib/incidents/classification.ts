@@ -45,12 +45,20 @@ function sourceFor(scopeKey: string): ClassificationProvenance['source'] {
   return 'WORKSPACE_POLICY';
 }
 
+const policyCache = new Map<string, { expiresAt: number; policies: LoadedPolicy[] }>();
+
 async function loadPolicies(
   tx: Prisma.TransactionClient,
   serviceId: string,
   integrationId?: string | null
 ) {
   if (!tx.incidentClassificationPolicy) return [];
+  const cacheKey = `${serviceId}:${integrationId ?? ''}`;
+  const now = Date.now();
+  const cached = policyCache.get(cacheKey);
+  if (cached && now < cached.expiresAt) {
+    return cached.policies;
+  }
   const keys = [
     ...(integrationId ? [`integration:${integrationId}`] : []),
     `service:${serviceId}`,
@@ -65,7 +73,9 @@ async function loadPolicies(
       })
     )
   );
-  return latest.filter((policy): policy is LoadedPolicy => policy !== null);
+  const loaded = latest.filter((policy): policy is LoadedPolicy => policy !== null);
+  policyCache.set(cacheKey, { expiresAt: now + 5000, policies: loaded });
+  return loaded;
 }
 
 function provenance(policy: LoadedPolicy, severity: AlertSeverity): ClassificationProvenance {

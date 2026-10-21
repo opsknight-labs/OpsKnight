@@ -1,16 +1,19 @@
 import type { EvaluationGuard } from './guard';
 /* eslint-disable security/detect-object-injection -- Keys are schema-validated or derived from compiled field definitions. */
-import { builtinFields, type CompiledSnapshot, type Context, type Scalar } from '../contract';
+import { builtinFields, type CompiledSnapshot, type CompiledField, type Context, type Scalar } from '../contract';
 import { normalizeValue } from '../context/normalize';
 import { evaluateConditions } from './conditions';
 export function evaluateEnrichment(
   version: CompiledSnapshot,
   initialContext: Context,
-  guard: EvaluationGuard
+  guard: EvaluationGuard,
+  precomputedFieldsByKey?: Map<string, CompiledField | (typeof builtinFields)[number]>
 ) {
-  const fieldsByKey = new Map(
-    [...builtinFields, ...version.fields].map(field => [field.key, field])
-  );
+  const fieldsByKey =
+    precomputedFieldsByKey ??
+    new Map<string, CompiledField | (typeof builtinFields)[number]>(
+      [...builtinFields, ...version.fields].map(field => [field.key, field])
+    );
   const context = { ...initialContext };
   const tags = new Set<string>();
   const writes: Array<{ ruleId: string; fieldKey: string; before: unknown; value: Scalar }> = [];

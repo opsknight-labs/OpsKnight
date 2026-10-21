@@ -447,6 +447,7 @@ async function main() {
             'web',
             'critical',
             'general',
+            'runbook',
             'scheduler',
           ],
       { maxBuffer: 100 * 1024 * 1024 }

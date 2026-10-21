@@ -5,6 +5,38 @@ export const MAX_AUTOMATION_TRACE_BYTES = 256 * 1024;
 
 /** Store long context scalars once; responder policy definitions remain directly readable. */
 export function encodeExplanation(input: unknown, maxBytes: number): Prisma.InputJsonObject {
+  // Fast path: if no string exceeds 256 bytes and total JSON fits in budget, avoid deep allocations
+  let hasLongString = false;
+  function scan(value: unknown): void {
+    if (hasLongString) return;
+    if (typeof value === 'string') {
+      if (value.length > 256) hasLongString = true;
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        scan(value[i]);
+        if (hasLongString) return;
+      }
+      return;
+    }
+    if (value && typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      for (const key in obj) {
+        if (key === 'responderPolicy') continue;
+        scan(obj[key]);
+        if (hasLongString) return;
+      }
+    }
+  }
+  scan(input);
+  if (!hasLongString) {
+    const json = JSON.stringify(input);
+    if (Buffer.byteLength(json, 'utf8') <= maxBytes) {
+      return input as Prisma.InputJsonObject;
+    }
+  }
+
   const values: Array<string | null> = [];
   const index = new Map<string, number>();
   function encode(value: unknown): unknown {
@@ -17,14 +49,21 @@ export function encodeExplanation(input: unknown, maxBytes: number): Prisma.Inpu
       }
       return { automationValueRef: position };
     }
-    if (Array.isArray(value)) return value.map(encode);
-    if (value && typeof value === 'object')
-      return Object.fromEntries(
-        Object.entries(value).map(([key, child]) => [
-          key,
-          key === 'responderPolicy' ? child : encode(child),
-        ])
-      );
+    if (Array.isArray(value)) {
+      const arr = new Array(value.length);
+      for (let i = 0; i < value.length; i++) {
+        arr[i] = encode(value[i]);
+      }
+      return arr;
+    }
+    if (value && typeof value === 'object') {
+      const src = value as Record<string, unknown>;
+      const target: Record<string, unknown> = {};
+      for (const key in src) {
+        target[key] = key === 'responderPolicy' ? src[key] : encode(src[key]);
+      }
+      return target;
+    }
     return value;
   }
   const encoded = encode(input) as Record<string, unknown>;

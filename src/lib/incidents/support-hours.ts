@@ -135,20 +135,33 @@ function findNext(policy: Policy, at: Date): Date | null {
   return null;
 }
 
+const supportPolicyCache = new Map<string, { expiresAt: number; policies: [Policy | null, Policy | null] }>();
+
 export async function resolveSupportHours(
   tx: Prisma.TransactionClient,
   input: { serviceId: string; at: Date }
 ): Promise<SupportHoursDecision> {
-  const keys = [`service:${input.serviceId}`, 'workspace'];
-  const [service, workspace] = await Promise.all(
-    keys.map(scopeKey =>
-      tx.responseSupportHoursPolicy.findFirst({
-        where: { scopeKey, sealedAt: { not: null } },
-        orderBy: { version: 'desc' },
-        include: { windows: true, exceptions: true },
-      })
-    )
-  );
+  const nowMs = Date.now();
+  const cached = supportPolicyCache.get(input.serviceId);
+  let service: Policy | null;
+  let workspace: Policy | null;
+  if (cached && nowMs < cached.expiresAt) {
+    [service, workspace] = cached.policies;
+  } else {
+    const keys = [`service:${input.serviceId}`, 'workspace'];
+    const loaded = await Promise.all(
+      keys.map(scopeKey =>
+        tx.responseSupportHoursPolicy.findFirst({
+          where: { scopeKey, sealedAt: { not: null } },
+          orderBy: { version: 'desc' },
+          include: { windows: true, exceptions: true },
+        })
+      )
+    );
+    service = loaded[0];
+    workspace = loaded[1];
+    supportPolicyCache.set(input.serviceId, { expiresAt: nowMs + 5000, policies: [service, workspace] });
+  }
   const serviceMode = service?.mode ?? (service?.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
   const policy = service && serviceMode !== 'INHERIT' ? service : workspace;
   if (!policy)
