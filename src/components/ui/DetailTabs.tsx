@@ -77,9 +77,16 @@ export default function DetailTabs({
   const [selectedTab, setSelectedTab] = useState(controlledActiveTab || initialTab);
   const selection = useRef(selectedTab);
 
-  useEffect(() => {
+  const [prevControlledActiveTab, setPrevControlledActiveTab] = useState(controlledActiveTab);
+  if (controlledActiveTab !== prevControlledActiveTab) {
+    setPrevControlledActiveTab(controlledActiveTab);
     if (controlledActiveTab) {
       setSelectedTab(controlledActiveTab);
+    }
+  }
+
+  useEffect(() => {
+    if (controlledActiveTab) {
       selection.current = controlledActiveTab;
     }
   }, [controlledActiveTab]);

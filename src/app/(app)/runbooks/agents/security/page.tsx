@@ -1,15 +1,4 @@
-import {
-  Archive,
-  Fingerprint,
-  Gauge,
-  ShieldCheck,
-  ShieldAlert,
-  Sparkles,
-  Activity,
-  Key,
-  Sliders,
-  AlertCircle,
-} from 'lucide-react';
+import { Archive, Fingerprint, Gauge, ShieldCheck } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -20,6 +9,7 @@ import { ActionForm, SubmitButton } from '@/components/runbooks/RunbookControls'
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
+import { cn } from '@/lib/utils';
 import {
   rotateExecutionSigningIdentityAction,
   updateIncidentRemediationBudgetAction,
@@ -276,7 +266,12 @@ function BudgetTile({
   highlightZero?: boolean;
 }) {
   return (
-    <div className="flex flex-col justify-between rounded-xl border border-border/80 dark:border-border/60 bg-muted/20 p-3 space-y-2">
+    <div
+      className={cn(
+        'flex flex-col justify-between rounded-xl border border-border/80 dark:border-border/60 bg-muted/20 p-3 space-y-2',
+        highlightZero && defaultValue === 0 && 'border-primary/40 bg-primary/5'
+      )}
+    >
       <div>
         <Label htmlFor={name} className="text-[11px] font-bold text-foreground">
           {label}

@@ -8,7 +8,7 @@ import { Activity, Server, ShieldCheck } from 'lucide-react';
 export function FleetPageShell({
   title,
   description,
-  section,
+  section: _section,
   icon: Icon,
   actions,
   navigation,

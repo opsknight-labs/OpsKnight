@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Prisma, RunbookInput } from '@prisma/client';
 import type { BindingReadiness } from '@/lib/runbooks/binding-readiness';
 import {
@@ -12,7 +13,6 @@ import {
   ChevronDown,
   Filter,
   Hand,
-  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -148,6 +148,7 @@ export default function ServiceRunbooks({
   canAuthorizeUnattendedWrites?: boolean;
 }) {
   const ids = useId();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState(rulesSearch);
   const [modeFilter, setModeFilter] = useState<ModeFilter>('ALL');
   const [showScope, setShowScope] = useState(Boolean(catalogQuery || targetQuery));
@@ -399,7 +400,7 @@ export default function ServiceRunbooks({
                 onClick={() => {
                   setSearchQuery('');
                   setModeFilter('ALL');
-                  window.location.href = `/services/${serviceId}?tab=runbooks`;
+                  router.push(`/services/${serviceId}?tab=runbooks`);
                 }}
               >
                 <X className="mr-1 h-3 w-3" /> Clear filters
@@ -422,8 +423,7 @@ export default function ServiceRunbooks({
               )}
               onClick={() => {
                 setModeFilter('ALL');
-                if (archived)
-                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
               }}
             >
               All rules ({bindings.length})
@@ -439,8 +439,7 @@ export default function ServiceRunbooks({
               )}
               onClick={() => {
                 setModeFilter(modeFilter === 'AUTOMATIC' ? 'ALL' : 'AUTOMATIC');
-                if (archived)
-                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
               }}
             >
               <Zap className="mr-1 h-3 w-3" /> Automatic ({countMode('AUTOMATIC')})
@@ -456,8 +455,7 @@ export default function ServiceRunbooks({
               )}
               onClick={() => {
                 setModeFilter(modeFilter === 'SUGGESTED' ? 'ALL' : 'SUGGESTED');
-                if (archived)
-                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
               }}
             >
               <Sparkles className="mr-1 h-3 w-3" /> Suggested ({countMode('SUGGESTED')})
@@ -473,8 +471,7 @@ export default function ServiceRunbooks({
               )}
               onClick={() => {
                 setModeFilter(modeFilter === 'MANUAL' ? 'ALL' : 'MANUAL');
-                if (archived)
-                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=active`;
+                if (archived) router.push(`/services/${serviceId}?tab=runbooks&rulesState=active`);
               }}
             >
               <Hand className="mr-1 h-3 w-3" /> Manual ({countMode('MANUAL')})
@@ -489,7 +486,9 @@ export default function ServiceRunbooks({
                   : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
               onClick={() => {
-                window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=${archived ? 'active' : 'archived'}`;
+                router.push(
+                  `/services/${serviceId}?tab=runbooks&rulesState=${archived ? 'active' : 'archived'}`
+                );
               }}
             >
               <Archive className="mr-1 h-3 w-3" /> Archived
@@ -547,7 +546,7 @@ export default function ServiceRunbooks({
               <Select
                 value={rulesState}
                 onValueChange={val => {
-                  window.location.href = `/services/${serviceId}?tab=runbooks&rulesState=${val}`;
+                  router.push(`/services/${serviceId}?tab=runbooks&rulesState=${val}`);
                 }}
               >
                 <SelectTrigger className="h-9 w-full rounded-xl border border-input/80 bg-background/80 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 transition-colors">

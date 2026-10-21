@@ -12,7 +12,6 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getAppUrl } from '@/lib/app-url';
-import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import { AgentFleetTable } from '@/components/runbooks/agents/AgentFleetTable';
 import { AgentFilterBar } from '@/components/runbooks/agents/AgentFilterBar';
 import { EnrollAgentSheet } from '@/components/runbooks/agents/EnrollAgentSheet';
@@ -30,31 +29,6 @@ import {
 } from '@/components/runbooks/RunbookPagination';
 
 export const revalidate = 0;
-
-const STATUS_CARDS = [
-  { status: 'ONLINE', key: 'online', label: 'Online', subtext: 'Fresh heartbeat', tone: 'success' },
-  {
-    status: 'DEGRADED',
-    key: 'degraded',
-    label: 'Degraded',
-    subtext: 'Reporting faults',
-    tone: 'warning',
-  },
-  {
-    status: 'OFFLINE',
-    key: 'offline',
-    label: 'Offline',
-    subtext: 'Missed heartbeats',
-    tone: 'danger',
-  },
-  {
-    status: 'ENROLLING',
-    key: 'enrolling',
-    label: 'Enrolling',
-    subtext: 'Awaiting handshake',
-    tone: 'info',
-  },
-] as const;
 
 const ENROLLMENT_STEPS = [
   {

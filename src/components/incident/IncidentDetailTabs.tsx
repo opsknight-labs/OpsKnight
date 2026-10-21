@@ -40,17 +40,16 @@ export default function IncidentDetailTabs({
   postmortemStatus,
   className,
 }: IncidentDetailTabsProps) {
-  const [tab, setTab] = useState(defaultTab);
-  const hasRunbooks = !!runbooksContent;
-
-  useEffect(() => {
+  const [tab, setTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search).get('tab');
       if (p && VALID_TABS.includes(p)) {
-        setTab(p);
+        return p;
       }
     }
-  }, []);
+    return defaultTab;
+  });
+  const hasRunbooks = !!runbooksContent;
 
   useEffect(() => {
     const handlePopState = () => {

@@ -105,7 +105,6 @@ export default async function RunbookExecutionsPage({
   const lastDay = (value: string) =>
     lastDayCounts.find(row => row.status === value)?._count.id ?? 0;
   const failedLastDay = lastDay('FAILED');
-  const timedOutLastDay = lastDay('TIMED_OUT');
   const succeededLastDay = lastDay('SUCCEEDED');
   const activeCount = statusCounts
     .filter(r => (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(r.status))
@@ -156,10 +155,6 @@ export default async function RunbookExecutionsPage({
       },
     },
   });
-  const successRate =
-    summary.successRate.percent === null
-      ? 'No completed runs in 7 days'
-      : `${summary.successRate.percent}% success over 7 days`;
 
   const executionListData = executions.map(item => {
     return {
@@ -202,7 +197,8 @@ export default async function RunbookExecutionsPage({
         subtitle={
           <p className="text-xs text-primary-foreground/85 leading-relaxed">
             Every runbook run across services and incidents, with live status, approvals, and
-            outcomes.
+            outcomes. As of{' '}
+            {formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })}.
           </p>
         }
         actions={

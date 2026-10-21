@@ -83,7 +83,7 @@ function DiffPane({
   emptyLabel,
   tone,
   versionNumber,
-  stepKey,
+  stepKey: _stepKey,
 }: {
   heading: string;
   side: StepDiffSide;
@@ -324,7 +324,6 @@ export function VersionStepDiff({
   nextVersion: number;
 }) {
   const [filter, setFilter] = useState<'ALL' | 'CHANGED' | 'UNCHANGED'>('ALL');
-  const [showUnchanged, setShowUnchanged] = useState(false);
 
   const changed = steps.filter(step => step.change !== 'UNCHANGED');
   const unchanged = steps.filter(step => step.change === 'UNCHANGED');

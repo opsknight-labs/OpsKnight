@@ -15,7 +15,6 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
 import { ImportRunbookDialog } from '@/components/runbooks/detail/ImportRunbookDialog';

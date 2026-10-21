@@ -1,4 +1,4 @@
-import { AlertTriangle, Filter, Radio, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Radio, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { describeCondition, eventLabel } from './rule-presentation';
 

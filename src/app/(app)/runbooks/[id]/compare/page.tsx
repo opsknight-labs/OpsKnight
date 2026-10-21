@@ -9,7 +9,6 @@ import { redactRunbookDisplayName, redactRunbookConfiguration } from '@/lib/runb
 import {
   ArrowLeft,
   ArrowLeftRight,
-  ArrowRight,
   CheckCircle2,
   ChevronDown,
   GitCompare,

@@ -645,6 +645,7 @@ export default async function IncidentRunbooks({
                                 aria-hidden="true"
                                 className={cn(
                                   'flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-inset shadow-2xs',
+                                  // eslint-disable-next-line security/detect-object-injection -- tone is a typed enum of known tokens
                                   TONE_SURFACE[tone]
                                 )}
                               >
@@ -1040,14 +1041,6 @@ const PENDING_RECOVERY_NOTE = new Map<string, string>([
   ['RUNNING', 'Not evaluated yet. Paging continues while the runbook runs.'],
   ['QUEUED', 'Not evaluated yet. Paging continues while the runbook runs.'],
 ]);
-
-function SectionHint({ children }: { children: ReactNode }) {
-  return (
-    <p className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
-      {children}
-    </p>
-  );
-}
 
 function formatStepActionSummary(type: string, config: unknown): string {
   if (!config || typeof config !== 'object') return type.replaceAll('_', ' ');

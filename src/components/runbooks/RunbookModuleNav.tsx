@@ -21,7 +21,7 @@ export function isRunbookSectionActive(pathname: string, href: string) {
   return within(href) && !SECTION_ROOTS.some(within);
 }
 
-export function RunbookModuleNav({ summary, className, actions }: RunbookModuleNavProps) {
+export function RunbookModuleNav({ summary, className, actions: _actions }: RunbookModuleNavProps) {
   const pathname = usePathname() ?? '';
   const activeExecutions = summary?.activeExecutions;
   const health = summary?.health ?? 'UNKNOWN';

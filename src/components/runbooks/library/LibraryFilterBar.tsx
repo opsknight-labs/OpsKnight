@@ -19,7 +19,6 @@ import { SearchableRunbookSelect } from '../SearchableRunbookSelect';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Card,
   CardContent,
@@ -51,8 +50,6 @@ const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'archived', label: 'Archived' },
 ] as const;
-
-type StatusValue = (typeof STATUS_OPTIONS)[number]['value'];
 
 const SEARCH_DEBOUNCE_MS = 300;
 const MAX_TAG_CHIPS = 12;

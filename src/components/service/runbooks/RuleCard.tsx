@@ -15,7 +15,6 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
-  Target,
   Zap,
 } from 'lucide-react';
 import {
@@ -28,7 +27,6 @@ import RunbookSelectorBuilder from '@/components/runbooks/RunbookSelectorBuilder
 import AutomaticTargetGuard from '@/components/runbooks/AutomaticTargetGuard';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import Field from '@/components/runbooks/RunbookField';
-import { Pill } from '@/components/runbooks/ui/primitives';
 import {
   checkRulePolicyAction,
   configureRunbookTriggerAction,

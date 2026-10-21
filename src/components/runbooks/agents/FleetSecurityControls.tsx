@@ -5,11 +5,9 @@ import {
   Check,
   Copy,
   Key,
-  Shield,
   Terminal,
   Clock,
   AlertTriangle,
-  ArrowRight,
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
@@ -27,7 +25,7 @@ import type {
 
 export function ActiveKeyBox({
   publicKey,
-  keyId,
+  keyId: _keyId,
   activeSince,
 }: {
   publicKey: string;
