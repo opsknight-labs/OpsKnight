@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { flattenSteps } from '../../../src/lib/runbooks/shared-definition';
+import type { RunbookDefinition } from '../../../src/lib/runbooks/types';
 import {
   containerHealthPassed,
   executeAttempt,
@@ -648,6 +650,59 @@ describe('runbook Agent executor', () => {
     expect(result.exitCode).toBe(3);
     expect(result.errorCode).toBe('SERVICE_INACTIVE');
     expect(result.errorMessage).toContain('Verification expecting active state failed');
+  });
+
+  it('preserves phase: verification on nested verification steps through flattenSteps and fails inactive status', () => {
+    const runbookDef: RunbookDefinition = {
+      steps: [
+        {
+          key: 'action_step',
+          name: 'Action',
+          type: 'SYSTEMD',
+          riskClass: 'NON_IDEMPOTENT',
+          config: { action: 'restart', unit: 'payments.service' },
+          verification: {
+            steps: [
+              {
+                key: 'check_status',
+                name: 'Check status',
+                type: 'SYSTEMD',
+                riskClass: 'READ_ONLY',
+                config: { action: 'status', unit: 'payments.service' },
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const flattened = flattenSteps(runbookDef);
+    expect(flattened[0].config.phase).toBeUndefined();
+    expect(flattened[1].config.phase).toBe('verification');
+
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-nested-verif',
+      leaseToken: 'tok-nested-verif',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-nested-verif',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: flattened[1].key,
+        name: flattened[1].name,
+        type: flattened[1].type,
+        riskClass: flattened[1].riskClass,
+        config: flattened[1].config,
+        phase: flattened[1].config.phase as string,
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(attemptObj, 3, 'inactive (dead)', false);
+    expect(result.status).toBe('FAILED');
+    expect(result.errorCode).toBe('SERVICE_INACTIVE');
   });
 
   it('fails systemctl status with UNIT_NOT_FOUND when exit code is 4', () => {
