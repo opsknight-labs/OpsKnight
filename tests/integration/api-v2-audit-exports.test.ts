@@ -36,7 +36,7 @@ it('exports redacted immutable evidence with a verified checksum and owner acces
   const id = (await created.json()).data.id as string;
   expect((await invokeV2(POST, owner.token, 'POST', '/audit-exports', {}, body, headers))
     .headers.get('idempotency-replayed')).toBe('true');
-  await db.backgroundJob.updateMany({ where: { type: 'AUDIT_EXPORT' }, data: { maxAttempts: 1 } });
+  await db.backgroundJob.updateMany({ where: { type: 'AUDIT_EXPORT' }, data: { maxAttempts: 1, scheduledAt: new Date(Date.now() - 60_000) } });
   expect((await processPendingJobsByType('AUDIT_EXPORT', 1, 1)).processed).toBe(1);
   const path = `/audit-exports/${id}`;
   expect((await (await invokeV2(status, owner.token, 'GET', path, { id })).json()).data.status).toBe('COMPLETED');
@@ -66,7 +66,7 @@ it('fails the job on overflow and rechecks credential authority in the worker', 
   const first = await invokeV2(POST, owner.token, 'POST', '/audit-exports', {},
     { ...filter(), maxRecords: 1 }, { 'Idempotency-Key': 'audit-overflow' });
   expect(first.status).toBe(201);
-  await db.backgroundJob.updateMany({ where: { type: 'AUDIT_EXPORT' }, data: { maxAttempts: 1 } });
+  await db.backgroundJob.updateMany({ where: { type: 'AUDIT_EXPORT' }, data: { maxAttempts: 1, scheduledAt: new Date(Date.now() - 60_000) } });
   expect((await processPendingJobsByType('AUDIT_EXPORT', 1, 1)).failed).toBe(1);
   expect((await db.auditExport.findFirstOrThrow()).encryptedPayload).toBeNull();
   const second = await invokeV2(POST, owner.token, 'POST', '/audit-exports', {},
