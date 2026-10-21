@@ -268,7 +268,6 @@ export default async function IncidentRunbooks({
                       )}
                     </div>
                   </div>
-                  </div>
                   {canExecute && (
                     <div className="flex items-center gap-2 shrink-0 pl-9 sm:pl-0">
                       <ActionForm
