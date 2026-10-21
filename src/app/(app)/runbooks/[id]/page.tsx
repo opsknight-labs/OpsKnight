@@ -693,7 +693,14 @@ export default async function RunbookDetailPage({
         }
       />
       <DetailTabs
-        defaultTab={runbook.draftVersion ? 'builder' : 'overview'}
+        defaultTab={
+          typeof query.tab === 'string' &&
+          ['overview', 'builder', 'versions', 'bindings', 'executions'].includes(query.tab)
+            ? query.tab
+            : runbook.draftVersion
+              ? 'builder'
+              : 'overview'
+        }
         tabs={[
           {
             id: 'overview',
@@ -913,12 +920,12 @@ export default async function RunbookDetailPage({
                         return (
                           <li
                             key={execution.id}
-                            className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
+                            className="flex flex-col gap-3 px-6 py-4.5 sm:px-7 sm:py-5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between last:pb-6"
                           >
                             <div className="flex items-start gap-3.5 min-w-0">
                               <div
                                 className={cn(
-                                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border mt-0.5',
+                                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border mt-0.5 shadow-2xs',
                                   isSucceeded
                                     ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                                     : isFailed
@@ -929,13 +936,13 @@ export default async function RunbookDetailPage({
                                 )}
                               >
                                 {isSucceeded ? (
-                                  <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                                  <CheckCircle2 className="h-4.5 w-4.5" aria-hidden="true" />
                                 ) : isFailed ? (
-                                  <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                                  <AlertCircle className="h-4.5 w-4.5" aria-hidden="true" />
                                 ) : isRunning ? (
-                                  <Activity className="h-5 w-5" aria-hidden="true" />
+                                  <Activity className="h-4.5 w-4.5" aria-hidden="true" />
                                 ) : (
-                                  <Clock className="h-5 w-5" aria-hidden="true" />
+                                  <Clock className="h-4.5 w-4.5" aria-hidden="true" />
                                 )}
                               </div>
                               <div className="min-w-0 space-y-1">

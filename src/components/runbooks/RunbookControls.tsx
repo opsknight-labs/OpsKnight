@@ -314,7 +314,7 @@ export function FormSelect({
               key={option.value}
               value={option.value}
               disabled={option.disabled}
-              className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer transition-colors focus:bg-primary/10 focus:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
+              className="rounded-xl pl-3 pr-8 py-2 text-xs font-medium cursor-pointer transition-colors focus:bg-primary/10 focus:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
             >
               {option.label}
             </SelectItem>
