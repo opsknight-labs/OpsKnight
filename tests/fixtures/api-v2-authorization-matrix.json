@@ -299,6 +299,36 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /incidents/templates/{templateId} [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PATCH /incidents/templates/{templateId} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /incidents/templates/{templateId} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /incidents/templates [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /incidents/templates [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /integrations/{id}/credentials [integrations:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

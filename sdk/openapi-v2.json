@@ -6538,6 +6538,109 @@
           "updatedAt"
         ]
       },
+      "IncidentTemplate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "descriptionText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "defaultUrgency": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ]
+          },
+          "defaultPriority": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "defaultServiceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdById": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "name",
+          "description",
+          "title",
+          "descriptionText",
+          "defaultUrgency",
+          "defaultPriority",
+          "defaultServiceId",
+          "createdById",
+          "isPublic",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "IncidentTemplateDeletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "deleted": {
+            "const": true
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
+        ]
+      },
       "IncidentTagAdded": {
         "type": "object",
         "additionalProperties": false,
@@ -37674,6 +37777,682 @@
         "description": "Requires API scope `incidents:read` (Incidents read)."
       }
     },
+    "/incidents/templates": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List accessible incident templates",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IncidentTemplate"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listIncidentTemplates",
+        "x-required-scope": "incidents:read",
+        "description": "Requires API scope `incidents:read` (Incidents read)."
+      },
+      "post": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Create an incident template",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "descriptionText": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "defaultUrgency": {
+                    "type": "string",
+                    "enum": [
+                      "HIGH",
+                      "MEDIUM",
+                      "LOW"
+                    ]
+                  },
+                  "defaultPriority": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "defaultServiceId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "isPublic": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentTemplate"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "createIncidentTemplate",
+        "x-required-scope": "incidents:write",
+        "description": "Requires API scope `incidents:write` (Incidents manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/incidents/templates/{templateId}": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read an accessible incident template",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentTemplate"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getIncidentTemplate",
+        "x-required-scope": "incidents:read",
+        "description": "Requires API scope `incidents:read` (Incidents read)."
+      },
+      "patch": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Update an owned incident template",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "descriptionText": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "defaultUrgency": {
+                    "type": "string",
+                    "enum": [
+                      "HIGH",
+                      "MEDIUM",
+                      "LOW"
+                    ]
+                  },
+                  "defaultPriority": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "defaultServiceId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "isPublic": {
+                    "type": "boolean"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentTemplate"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateIncidentTemplate",
+        "x-required-scope": "incidents:write",
+        "description": "Requires API scope `incidents:write` (Incidents manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      },
+      "delete": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Delete an owned incident template",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentTemplateDeletion"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "deleteIncidentTemplate",
+        "x-required-scope": "incidents:write",
+        "description": "Requires API scope `incidents:write` (Incidents manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "etag"
+      }
+    },
     "/incidents/{id}/custom-fields/{fieldId}": {
       "get": {
         "tags": [
@@ -37797,6 +38576,17 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -37883,6 +38673,9 @@
           "404": {
             "$ref": "#/components/responses/ProblemError"
           },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
           "413": {
             "$ref": "#/components/responses/ProblemError"
           },
@@ -37895,7 +38688,9 @@
         },
         "operationId": "setIncidentCustomField",
         "x-required-scope": "incidents:write",
-        "description": "Requires API scope `incidents:write` (Incidents manage)."
+        "description": "Requires API scope `incidents:write` (Incidents manage).",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
       }
     },
     "/incidents/{id}/tags/{tagId}": {

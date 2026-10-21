@@ -296,11 +296,15 @@
     {
       "capabilityId": "incident-templates",
       "delivery": "API-13",
-      "workflow": "Template authoring and ownership",
+      "workflow": "Template create, list, read, revision-protected edit and deletion with ownership",
       "sources": [
         {
           "path": "src/app/(app)/incidents/template-actions.ts",
           "branch": "baseline"
+        },
+        {
+          "path": "src/lib/incidents/templates.ts",
+          "branch": "feat/api-13-enterprise-contracts"
         }
       ],
       "reviewStatus": "pending-domain-review",

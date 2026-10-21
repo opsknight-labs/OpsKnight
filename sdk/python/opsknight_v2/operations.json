@@ -1234,6 +1234,54 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listIncidentTemplates": {
+    "method": "GET",
+    "path": "/incidents/templates",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createIncidentTemplate": {
+    "method": "POST",
+    "path": "/incidents/templates",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getIncidentTemplate": {
+    "method": "GET",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateIncidentTemplate": {
+    "method": "PATCH",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteIncidentTemplate": {
+    "method": "DELETE",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "getIncidentCustomField": {
     "method": "GET",
     "path": "/incidents/{id}/custom-fields/{fieldId}",
@@ -1246,8 +1294,10 @@
     "method": "PUT",
     "path": "/incidents/{id}/custom-fields/{fieldId}",
     "kind": "item",
-    "idempotency": null,
-    "requiredHeaders": [],
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
     "bodyRequired": true
   },
   "addIncidentTag": {

@@ -38,6 +38,7 @@ enum AuditEntityType {
   TEAM_MEMBER
   SERVICE
   INCIDENT
+  INCIDENT_TEMPLATE
   ESCALATION_POLICY
   API_KEY
   SSO_CONFIG
@@ -1512,6 +1513,7 @@ model IncidentTag {
 
 model IncidentTemplate {
   id               String          @id @default(cuid())
+  revision         Int             @default(1)
   name             String          @unique
   description      String?
   title            String

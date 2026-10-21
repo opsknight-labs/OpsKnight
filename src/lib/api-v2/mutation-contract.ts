@@ -51,6 +51,10 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PUT /api/v2/incidents/[id]/custom-fields/[fieldId]': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Canonical value validation, incident visibility, row locking, timeline event and credential audit commit with the replay receipt; identical values do not repeat side effects.',
+  },
   'POST /api/v2/escalation-policies/[id]/preview': {
     idempotency: 'natural', concurrency: 'none',
     rationale: 'Read-only bounded escalation evaluation; repeated previews never enqueue notifications or edit policy state.',
@@ -78,6 +82,18 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'DELETE /api/v2/reports/saved/[id]': {
     idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
     rationale: 'Exact saved-report revision and ownership fence deletion; audit and receipt commit together and deleted resources are not replay-disclosed.',
+  },
+  'POST /api/v2/incidents/templates': {
+    idempotency: 'required', concurrency: 'none',
+    rationale: 'Template name, owner, accessible default service, canonical audit and replay receipt commit together.',
+  },
+  'PATCH /api/v2/incidents/templates/[templateId]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'An exact template revision fences edits; current owner authority and default-service access are rechecked before audit and receipt commit.',
+  },
+  'DELETE /api/v2/incidents/templates/[templateId]': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
+    rationale: 'An exact template revision and owner authority fence deletion; the audit and replay receipt commit atomically.',
   },
   'POST /api/v2/dashboards': {
     idempotency: 'required', concurrency: 'none',

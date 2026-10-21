@@ -107,6 +107,8 @@ export type IncidentWatcher = { "id": string; "incidentId": string; "userId": st
 export type IncidentWatcherRemoved = { "id": string; "incidentId": string; "removed": true };
 export type IncidentTag = { "id": string; "incidentId": string; "tagId": string; "createdAt": string; "tag": { "name": string; "color": string | null } };
 export type IncidentCustomField = { "id": string; "incidentId": string; "customFieldId": string; "value": string | null; "createdAt": string; "updatedAt": string; "changed"?: boolean; "customField"?: { "name": string; "key": string; "type": string } };
+export type IncidentTemplate = { "id": string; "revision": number; "name": string; "description": string | null; "title": string; "descriptionText": string | null; "defaultUrgency": "HIGH" | "MEDIUM" | "LOW"; "defaultPriority": string | null; "defaultServiceId": string | null; "createdById": string | null; "isPublic": boolean; "createdAt": string; "updatedAt": string };
+export type IncidentTemplateDeletion = { "id": string; "deleted": true };
 export type IncidentTagAdded = { "id": string; "incidentId": string; "name": string; "color": string | null; "added": boolean };
 export type IncidentTagRemoved = { "id": string; "incidentId": string; "removed": boolean };
 export type RunbookCancellationRequested = { "executionId": string; "status": "CANCEL_REQUESTED"; "message": string };
@@ -300,8 +302,13 @@ export interface OperationRequests {
   listIncidentWatchers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentTags: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   listIncidentCustomFields: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
+  listIncidentTemplates: { "query"?: { "limit"?: number; "cursor"?: string } };
+  createIncidentTemplate: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "title": string; "description"?: string | null; "descriptionText"?: string | null; "defaultUrgency"?: "HIGH" | "MEDIUM" | "LOW"; "defaultPriority"?: string | null; "defaultServiceId"?: string | null; "isPublic"?: boolean } };
+  getIncidentTemplate: { "params": { "templateId": string } };
+  updateIncidentTemplate: { "params": { "templateId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "title"?: string; "description"?: string | null; "descriptionText"?: string | null; "defaultUrgency"?: "HIGH" | "MEDIUM" | "LOW"; "defaultPriority"?: string | null; "defaultServiceId"?: string | null; "isPublic"?: boolean } };
+  deleteIncidentTemplate: { "params": { "templateId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
   getIncidentCustomField: { "params": { "id": string; "fieldId": string } };
-  setIncidentCustomField: { "params": { "id": string; "fieldId": string }; "body": { "value": string | number | boolean | null } };
+  setIncidentCustomField: { "params": { "id": string; "fieldId": string }; "headers": { "Idempotency-Key": string }; "body": { "value": string | number | boolean | null } };
   addIncidentTag: { "params": { "id": string }; "headers": { "Idempotency-Key": string }; "body": { "name": string } };
   removeIncidentTag: { "params": { "id": string; "tagId": string }; "headers": { "Idempotency-Key": string } };
   getIncidentRoutingDecision: { "params": { "id": string } };
@@ -576,6 +583,11 @@ export interface OperationResponses {
   listIncidentWatchers: { "data": Array<IncidentWatcher>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentTags: { "data": Array<IncidentTag>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listIncidentCustomFields: { "data": Array<IncidentCustomField>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listIncidentTemplates: { "data": Array<IncidentTemplate>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  createIncidentTemplate: { "data": IncidentTemplate; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  getIncidentTemplate: { "data": IncidentTemplate; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateIncidentTemplate: { "data": IncidentTemplate; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteIncidentTemplate: { "data": IncidentTemplateDeletion; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getIncidentCustomField: { "data": IncidentCustomField; "requestId": string; "timestamp": string } & Record<string, unknown>;
   setIncidentCustomField: { "data": IncidentCustomField; "requestId": string; "timestamp": string } & Record<string, unknown>;
   addIncidentTag: { "data": IncidentTagAdded; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1954,6 +1966,54 @@ export const OPERATIONS = {
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listIncidentTemplates": {
+    "method": "GET",
+    "path": "/incidents/templates",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createIncidentTemplate": {
+    "method": "POST",
+    "path": "/incidents/templates",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getIncidentTemplate": {
+    "method": "GET",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateIncidentTemplate": {
+    "method": "PATCH",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteIncidentTemplate": {
+    "method": "DELETE",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "getIncidentCustomField": {
     "method": "GET",
     "path": "/incidents/{id}/custom-fields/{fieldId}",
@@ -1966,8 +2026,10 @@ export const OPERATIONS = {
     "method": "PUT",
     "path": "/incidents/{id}/custom-fields/{fieldId}",
     "kind": "item",
-    "idempotency": null,
-    "requiredHeaders": [],
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
     "bodyRequired": true
   },
   "addIncidentTag": {

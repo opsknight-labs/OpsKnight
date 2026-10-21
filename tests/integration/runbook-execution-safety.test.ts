@@ -67,33 +67,41 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
       ? await testPrisma.serviceAutomationRule.findUnique({ where: { id: input.bindingId } })
       : null;
   if (binding) {
-    const trigger = input.triggerId
-      ? { id: input.triggerId }
-      : ((await testPrisma.runbookTrigger.findUnique({ where: { id: binding.id } })) ??
-        (await testPrisma.runbookTrigger.create({
-          data: { id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' },
-        })));
+    if (!input.triggerId) {
+      await testPrisma.runbookTrigger.createMany({
+        data: [{ id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' }],
+        skipDuplicates: true,
+      });
+    }
+    const trigger = { id: input.triggerId ?? binding.id };
     // This helper provisions legitimate active Automatic fixtures before exercising runtime safety.
     // Trigger/configuration writes now pause rules and advance their database-owned revisions.
     const currentBinding = await testPrisma.serviceAutomationRule.findUniqueOrThrow({
       where: { id: binding.id },
     });
-    const configuredBinding = currentBinding.enabled
-      ? currentBinding
-      : await testPrisma.serviceAutomationRule.update({
-          where: { id: binding.id },
-          data: { enabled: true },
-        });
-    // The fixture's approval covers the rule as it stands once its trigger exists.
-    if (binding.unattendedWritesAuthorizedAt)
-      await testPrisma.serviceAutomationRule.update({
-        where: { id: binding.id },
-        data: { unattendedWritesScopeHash: await computeRuleUnattendedScope(testPrisma, binding) },
+    if (!currentBinding.enabled) {
+      await testPrisma.serviceAutomationRule.updateMany({
+        where: { id: binding.id, enabled: false },
+        data: { enabled: true },
       });
-    const currentRevision = binding.unattendedWritesAuthorizedAt
-      ? (await testPrisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } }))
-          .configurationRevision
-      : configuredBinding.configurationRevision;
+    }
+    // The fixture's approval covers the rule as it stands once its trigger exists.
+    if (binding.unattendedWritesAuthorizedAt) {
+      const scopeHash = await computeRuleUnattendedScope(testPrisma, binding);
+      await testPrisma.serviceAutomationRule.updateMany({
+        where: {
+          id: binding.id,
+          OR: [
+            { unattendedWritesScopeHash: null },
+            { unattendedWritesScopeHash: { not: scopeHash } },
+          ],
+        },
+        data: { unattendedWritesScopeHash: scopeHash },
+      });
+    }
+    const currentRevision = (await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+      where: { id: binding.id },
+    })).configurationRevision;
     const incidentId =
       input.incidentId ??
       (await createTestIncident('Automatic safety fixture', binding.serviceId)).id;

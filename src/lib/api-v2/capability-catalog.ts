@@ -166,10 +166,10 @@ const decisions: readonly ApiCapability[] = [
     id: 'incident-templates',
     area: 'Incidents',
     title: 'Incident templates',
-    status: 'not-supported',
+    status: 'partial',
     explanation:
-      'Template authoring and ownership checks still need extraction from server actions before REST exposure.',
-    operationIds: [],
+      'Template create, list, read, revision-protected update and delete use owner checks, scoped REST credentials, transactional audit and shared UI mutation commands. Combined UI/REST certification remains pending.',
+    operationIds: ['listIncidentTemplates', 'createIncidentTemplate', 'getIncidentTemplate', 'updateIncidentTemplate', 'deleteIncidentTemplate'],
   },
   {
     id: 'schedule-layers',
