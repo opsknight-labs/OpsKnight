@@ -144,12 +144,17 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
 
       <CardContent className="space-y-2.5 pt-0 px-3.5 sm:px-4 pb-3 sm:pb-3.5">
         {/* Quick Status Filters matching Services and Incidents */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge
-            variant={status === 'all' ? 'default' : 'outline'}
-            size="sm"
+        <div
+          role="group"
+          aria-label="Filter by status"
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          <button
+            type="button"
+            role="button"
+            aria-pressed={status === 'all'}
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
+              'inline-flex items-center justify-center gap-1 border tracking-wide focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'all'
                 ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
@@ -157,12 +162,13 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
             onClick={() => navigate({ status: 'all' })}
           >
             All active
-          </Badge>
-          <Badge
-            variant={status === 'published' ? 'success' : 'outline'}
-            size="sm"
+          </button>
+          <button
+            type="button"
+            role="button"
+            aria-pressed={status === 'published'}
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
+              'inline-flex items-center justify-center gap-1 border tracking-wide focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'published'
                 ? 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/30'
@@ -170,12 +176,13 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
             onClick={() => navigate({ status: status === 'published' ? 'all' : 'published' })}
           >
             <CheckCircle2 className="mr-1 h-3 w-3" /> Published
-          </Badge>
-          <Badge
-            variant={status === 'draft' ? 'warning' : 'outline'}
-            size="sm"
+          </button>
+          <button
+            type="button"
+            role="button"
+            aria-pressed={status === 'draft'}
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
+              'inline-flex items-center justify-center gap-1 border tracking-wide focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'draft'
                 ? 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 hover:bg-amber-700'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/30'
@@ -183,12 +190,13 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
             onClick={() => navigate({ status: status === 'draft' ? 'all' : 'draft' })}
           >
             <PencilLine className="mr-1 h-3 w-3" /> Draft
-          </Badge>
-          <Badge
-            variant={status === 'archived' ? 'secondary' : 'outline'}
-            size="sm"
+          </button>
+          <button
+            type="button"
+            role="button"
+            aria-pressed={status === 'archived'}
             className={cn(
-              'cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
+              'inline-flex items-center justify-center gap-1 border tracking-wide focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer transition-colors shadow-2xs font-medium py-0.5 px-2.5 text-xs rounded-lg',
               status === 'archived'
                 ? 'bg-slate-700 text-white border-slate-700 hover:bg-slate-800'
                 : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
@@ -196,18 +204,19 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
             onClick={() => navigate({ status: status === 'archived' ? 'all' : 'archived' })}
           >
             <Archive className="mr-1 h-3 w-3" /> Archived
-          </Badge>
+          </button>
         </div>
 
-        {/* Inputs Grid: Search, Service, Team */}
+        {/* Inputs Grid: Search, Service, Team, Apply */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-3 items-end">
           {/* Search */}
-          <div className="space-y-1 md:col-span-2 lg:col-span-6">
+          <div className="space-y-1 md:col-span-2 lg:col-span-4">
             <Label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Search className="h-3 w-3" /> Search
             </Label>
             <div className="relative">
               <Input
+                aria-label="Search runbooks"
                 placeholder="Search by name, slug or purpose…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -251,7 +260,10 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
               <Users className="h-3 w-3" /> Team
             </Label>
             <Select value={teamId} onValueChange={val => navigate({ team: val })}>
-              <SelectTrigger className="h-8.5 w-full rounded-lg border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors">
+              <SelectTrigger
+                aria-label="Filter by team"
+                className="h-8.5 w-full rounded-lg border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium focus:ring-2 focus:ring-primary/40 transition-colors"
+              >
                 <div className="flex items-center gap-1.5 min-w-0 truncate">
                   <SelectValue placeholder="All teams" />
                 </div>
@@ -274,6 +286,20 @@ export function LibraryFilterBar({ query, teams = [], popularTags = [] }: Librar
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Apply Filters */}
+          <div className="md:col-span-2 lg:col-span-2">
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label="Apply filters"
+              onClick={() => navigate({})}
+              className="h-8.5 w-full gap-1.5 rounded-lg text-xs font-medium shadow-2xs cursor-pointer border-border/80 bg-background/80 hover:bg-accent/40"
+            >
+              <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Apply filters</span>
+            </Button>
           </div>
         </div>
 

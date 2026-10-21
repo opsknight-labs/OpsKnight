@@ -458,44 +458,32 @@ export function VersionStepDiff({
           ))}
 
           {unchanged.length > 0 && (
-            <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowUnchanged(!showUnchanged)}
-                aria-expanded={showUnchanged}
-                className="flex w-full items-center justify-between px-5 py-3.5 text-left text-xs font-medium text-foreground hover:bg-accent/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
+            <details className="group rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex w-full cursor-pointer select-none items-center justify-between px-5 py-3.5 text-left text-xs font-medium text-foreground hover:bg-accent/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <div className="flex items-center gap-2">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
-                    {showUnchanged ? (
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    )}
+                    <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                   </span>
                   <span>
-                    {showUnchanged ? 'Hide' : 'Show'} {unchanged.length} unchanged{' '}
-                    {unchanged.length === 1 ? 'step' : 'steps'}
+                    Show {unchanged.length} unchanged {unchanged.length === 1 ? 'step' : 'steps'}
                   </span>
                 </div>
                 <span className="font-mono text-[11px] text-muted-foreground">
                   v{baseVersion} = v{nextVersion}
                 </span>
-              </button>
+              </summary>
 
-              {showUnchanged && (
-                <div className="border-t border-border/60 p-4 space-y-3 bg-muted/10">
-                  {unchanged.map(step => (
-                    <StepDiffCard
-                      key={step.key}
-                      step={step}
-                      baseVersion={baseVersion}
-                      nextVersion={nextVersion}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+              <div className="border-t border-border/60 p-4 space-y-3 bg-muted/10">
+                {unchanged.map(step => (
+                  <StepDiffCard
+                    key={step.key}
+                    step={step}
+                    baseVersion={baseVersion}
+                    nextVersion={nextVersion}
+                  />
+                ))}
+              </div>
+            </details>
           )}
         </>
       )}

@@ -14,7 +14,7 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
-import { getUserTimeZone } from '@/lib/timezone';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { FleetPageShell } from '@/components/runbooks/agents/FleetPageShell';
 import { ActionForm, SubmitButton } from '@/components/runbooks/RunbookControls';
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
@@ -64,7 +64,7 @@ export default async function RunbookFleetSecurityPage() {
     canManage
       ? prisma.runbookExecutionSigningKey.findMany({
           where: { state: { not: 'RETIRED' } },
-          select: { id: true, publicKey: true, state: true, retiredAt: true },
+          select: { id: true, publicKey: true, state: true, retiredAt: true, createdAt: true },
           orderBy: { createdAt: 'asc' },
         })
       : Promise.resolve([]),
@@ -117,7 +117,14 @@ export default async function RunbookFleetSecurityPage() {
             bodyClassName="space-y-6 p-5 sm:p-6"
           >
             {activeKey ? (
-              <ActiveKeyBox publicKey={activeKey.publicKey} keyId={activeKey.id} />
+              <ActiveKeyBox
+                publicKey={activeKey.publicKey}
+                keyId={activeKey.id}
+                activeSince={formatDateTime(activeKey.createdAt, userTimeZone, {
+                  format: 'datetime',
+                  includeTimeZone: true,
+                })}
+              />
             ) : (
               <div className="rounded-2xl border border-dashed border-border/80 p-5 text-center text-xs text-muted-foreground">
                 No active execution signing key is configured yet.

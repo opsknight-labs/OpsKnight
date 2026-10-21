@@ -220,16 +220,8 @@ export function RuleCard({
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <div className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 px-2 py-0.5 text-muted-foreground text-[11px] shadow-2xs">
             <Server className="h-3 w-3 text-primary shrink-0" />
-            <span>
-              Target:{' '}
-              <strong className="text-foreground font-semibold">{presentation.target}</strong>
-            </span>
-          </div>
-          <div className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 px-2 py-0.5 text-muted-foreground text-[11px] shadow-2xs">
-            <Zap className="h-3 w-3 text-amber-500 shrink-0" />
-            <span>
-              Trigger:{' '}
-              <strong className="text-foreground font-semibold">{presentation.trigger}</strong>
+            <span className="min-w-0 break-words">
+              Target: {presentation.target} · Trigger: {presentation.trigger}
             </span>
           </div>
         </div>
@@ -371,7 +363,7 @@ export function RuleCard({
         >
           <Link href={`/runbooks/${binding.runbookId}`}>
             <BookOpen className="h-3.5 w-3.5" aria-hidden />
-            <span>Master Runbook</span>
+            <span>View Runbook</span>
           </Link>
         </Button>
         {canManage && configurationAvailable && (

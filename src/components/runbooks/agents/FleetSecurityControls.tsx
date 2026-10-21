@@ -25,7 +25,15 @@ import type {
   updateRunbookArtifactRetentionAction,
 } from '@/app/(app)/runbooks/actions';
 
-export function ActiveKeyBox({ publicKey, keyId }: { publicKey: string; keyId?: string }) {
+export function ActiveKeyBox({
+  publicKey,
+  keyId,
+  activeSince,
+}: {
+  publicKey: string;
+  keyId?: string;
+  activeSince?: string;
+}) {
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedEnv, setCopiedEnv] = useState(false);
 
@@ -71,6 +79,9 @@ export function ActiveKeyBox({ publicKey, keyId }: { publicKey: string; keyId?: 
               Required on every Agent via{' '}
               <code className="font-mono text-foreground">OPSKNIGHT_EXECUTION_PUBLIC_KEY</code>
             </p>
+            {activeSince && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">Active since {activeSince}</p>
+            )}
           </div>
         </div>
 

@@ -204,9 +204,9 @@ export function HealthAttentionPanel({
 
                 {/* Card Title & Description */}
                 <div className="mt-4 space-y-1.5">
-                  <h3 className="text-sm font-bold tracking-tight text-foreground">
+                  <h4 className="text-sm font-bold tracking-tight text-foreground">
                     {issue.title}
-                  </h3>
+                  </h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     {issue.description}
                   </p>

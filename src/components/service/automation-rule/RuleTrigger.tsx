@@ -60,7 +60,7 @@ export function RuleTrigger({ triggers }: { triggers: RuleTriggerView[] }) {
               </span>
             ) : (
               <span className={cn(chip, 'border-border/80 bg-muted/40 text-foreground font-mono')}>
-                {trigger.conditionLogic === 'OR' ? 'Match Any Condition' : 'Match All Conditions'}
+                {trigger.conditionLogic === 'OR' ? 'Match any' : 'Match all'}
               </span>
             )}
           </div>
