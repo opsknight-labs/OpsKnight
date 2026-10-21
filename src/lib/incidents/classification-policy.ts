@@ -8,6 +8,7 @@ import { emitAuditEvent } from '@/lib/audit';
 import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import type { AuthorizedPolicyActor, PolicyAuditSource } from './policy-actor';
+import type { Prisma } from '@prisma/client';
 
 export const classificationPolicyInput = z
   .object({
@@ -85,7 +86,8 @@ export async function saveWorkspaceClassificationPolicy(rawInput: unknown) {
 export async function saveClassificationPolicy(
   rawInput: unknown,
   source: PolicyAuditSource = 'UI',
-  authorizedActor?: AuthorizedPolicyActor
+  authorizedActor?: AuthorizedPolicyActor,
+  client?: Prisma.TransactionClient
 ) {
   const input = classificationPolicyInput.parse(rawInput);
   const priorityFallbackMode =
@@ -121,8 +123,8 @@ export async function saveClassificationPolicy(
     throw new IncidentResponsePolicyError('UNAUTHORIZED');
   }
 
-  const result = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-classification:${input.scopeKey}`}, 0))`;
+  const save = async (tx: Prisma.TransactionClient) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-classification:${input.scopeKey}`}, 0))::text`;
     if (input.scopeKey.startsWith('service:')) {
       const id = input.scopeKey.slice(8);
       if (!(await tx.service.findUnique({ where: { id }, select: { id: true } })))
@@ -191,14 +193,19 @@ export async function saveClassificationPolicy(
           })),
           futureIncidentsOnly: true,
           operation: source,
+          apiClientId: authorizedActor?.apiClientId ?? null,
         },
       },
       tx
     );
     return sealed;
-  });
+  };
 
-  for (const path of ['/settings/incident-sla', '/settings', '/services', '/audit'])
-    revalidatePath(path);
+  const result = client ? await save(client) : await prisma.$transaction(save);
+
+  if (!client) {
+    for (const path of ['/settings/incident-sla', '/settings', '/services', '/audit'])
+      revalidatePath(path);
+  }
   return result;
 }

@@ -137,6 +137,7 @@ describe('RunbookDetailsSheet', () => {
     render(
       <RunbookDetailsSheet
         runbook={{
+          revision: 5,
           name: 'DB failover',
           slug: 'db-failover',
           description: '',

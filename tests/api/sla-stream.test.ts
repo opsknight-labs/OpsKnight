@@ -13,6 +13,11 @@ vi.mock('next-auth', () => ({
   getServerSession: vi.fn(),
 }));
 
+// Authentication expiry and recovery policies are covered in recovery-stream-policy.test.ts.
+vi.mock('@/lib/authentication-policy', () => ({
+  checkAuthenticationPolicy: vi.fn().mockResolvedValue({ allowed: true }),
+}));
+
 // Mock auth
 vi.mock('@/lib/auth', () => ({
   getAuthOptions: vi.fn().mockResolvedValue({}),

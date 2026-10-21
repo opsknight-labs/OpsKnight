@@ -417,8 +417,8 @@ export const ERROR_REGISTRY = {
   ESCALATION_POLICY_IN_USE: {
     status: 409,
     category: 'conflict',
-    userMessage: 'Cannot delete escalation policy because it is linked to active services.',
-    action: 'Reassign all linked services before deleting this escalation policy.',
+    userMessage: 'Cannot delete escalation policy while it is referenced by services or automation history.',
+    action: 'Reassign linked services and retire historical automation references before deleting this policy.',
     retryable: false,
     exposure: 'public',
   },

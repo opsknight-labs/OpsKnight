@@ -4,6 +4,72 @@
  */
 
 export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
+  'POST /services/{id}/integrations': { name: 'Production alert source', type: 'EVENTS_API_V2' },
+  'POST /integrations/{id}/credentials': { credential: 'routing-key', overlapSeconds: 3600 },
+  'POST /integrations/{id}/test': {
+    payload: { event_action: 'trigger', dedup_key: 'sample-event', payload: { summary: 'Sample alert', source: 'api-example', severity: 'warning' } },
+  },
+  'PUT /notification-providers/{provider}': {
+    provider: 'resend',
+    enabled: true,
+    config: { apiKey: 'replace-with-provider-secret', fromEmail: 'alerts@example.com' },
+  },
+  'POST /notification-providers/{provider}/test': {},
+  'POST /notification-providers/web-push/rotate': {
+    subject: 'mailto:admin@example.com',
+    keepPrevious: true,
+  },
+  'PATCH /users/me/notification-preferences': {
+    emailEnabled: false,
+    smsEnabled: false,
+    pushEnabled: false,
+    voiceEnabled: false,
+    whatsappEnabled: false,
+    timeZone: 'UTC',
+  },
+  'PUT /teams/{id}/services/{serviceId}': {},
+  'PUT /teams/{id}/members/{userId}': { role: 'MEMBER', receiveTeamNotifications: true },
+  'POST /users/invitations': {
+    name: 'Automation user',
+    email: 'automation-user@example.com',
+    role: 'RESPONDER',
+    authenticationMode: 'PASSWORD',
+    delivery: 'MANUAL',
+    expectedPolicyVersion: 1,
+    expectedOidcConfigVersion: null,
+  },
+  'POST /users/{id}/invitation': {
+    authenticationMode: 'PASSWORD',
+    delivery: 'MANUAL',
+    expectedPolicyVersion: 1,
+    expectedOidcConfigVersion: null,
+    expectedLinkingApprovalRevision: null,
+  },
+  'PATCH /users/{id}/administration': { operation: 'set-role', role: 'RESPONDER' },
+  'PUT /teams/{id}/lead': { userId: 'cm123456789012345678901234' },
+  'POST /services/{id}/automation/validate': {
+    snapshot: { schemaVersion: 1, fields: [], rules: [] },
+  },
+  'POST /services/{id}/automation/simulate': {
+    snapshot: { schemaVersion: 1, fields: [], rules: [] },
+    integrationType: 'events',
+    event: {
+      event_action: 'trigger',
+      dedup_key: 'simulation',
+      payload: { summary: 'Example', source: 'api', severity: 'info' },
+    },
+  },
+  'POST /services/{id}/automation/restore': { sourceVersionId: 'cm123456789012345678901234' },
+  'PATCH /services/{id}/automation/mode': { mode: 'DISABLED', expectedActiveVersionId: null },
+  'POST /services/{id}/automation/publish': { expectedActiveVersionId: null },
+  'DELETE /services/{id}/automation/candidate': {
+    expectedCandidateVersionId: 'cm111111111111111111111111',
+  },
+  'POST /services/{id}/automation/candidates/activate': {
+    expectedCandidateVersionId: 'cm111111111111111111111111',
+  },
+  'PUT /services/{id}/automation/draft': { snapshot: { schemaVersion: 1, fields: [], rules: [] } },
+  'PATCH /settings/automation': { automationEnabled: false, automationTraceRetentionDays: 90 },
   'POST /incidents/{id}/watchers': { userId: 'usr_789012', role: 'FOLLOWER' },
   'POST /runbooks/{id}/executions/preview': { parameters: {} },
   'POST /runbooks/executions/{id}/cancel': {

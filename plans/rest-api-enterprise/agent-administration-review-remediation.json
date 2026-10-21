@@ -1,0 +1,76 @@
+{
+  "sourceParent": "1a7d0e06aeb7c499120c7912118e907afec96fc7",
+  "updatedAt": "2026-10-19T11:55:08.158280+00:00",
+  "status": "local_verification_passed_final_image_and_release_gates_open",
+  "registeredOperationCount": 190,
+  "addedOperations": [
+    "retireRunbookAgentPool",
+    "listRunbookSecretUsage",
+    "listRunbookSigningIdentities",
+    "stageRunbookSigningIdentity",
+    "activateRunbookSigningIdentity",
+    "retireRunbookSigningIdentity"
+  ],
+  "remediations": [
+    "Claims take a shared fleet fence before identity/membership/secret reads; configuration and grants take it exclusively",
+    "A real database authority-row write invalidates stale SERIALIZABLE snapshots after waiting; retries observe committed grants",
+    "Subtractive selectors are allowed without grant scope; actual additions to secret-granted pools require explicit authority",
+    "UI permission is explicitly checked and passed; actor ID representation no longer grants secret expansion",
+    "Single-Agent label edits and revocation use two set-based membership statements, without querying matching Agents for every pool",
+    "Terminal pool retirement preserves evidence, disables rules, blocks new database assignments, readiness, previews, claims and pre-execution",
+    "Exact indexed secret-reference usage returns identifiers only, with bounded cursor pagination and statement budget",
+    "Signing rotation reuses shared transactional commands with credential attribution, pin acknowledgement, reviewed active key, and existing 24-hour grace",
+    "Explicit membership removal cannot report success while a matching selector would immediately restore dynamic secret access"
+  ],
+  "checks": {
+    "unitContractsAndRunbookRegression": {
+      "passed": 720,
+      "files": 55
+    },
+    "postgresAdministrationFleetSigningAndFullSafety": {
+      "passed": 107,
+      "files": 5,
+      "agentSafetyCases": 69,
+      "coverage": "All claim, write-outcome, multi-member local-host, signing, disconnect/ack and administration cases in the selected complete suites; no test-name filter."
+    },
+    "focusedStaleSnapshotGrantRace": "passed after real database authority fence was added",
+    "typecheck": "passed",
+    "changedSourceLint": "passed with zero warnings",
+    "typescriptSdkBuildAndDrift": "passed",
+    "pythonSdk": {
+      "passed": 9
+    },
+    "browserDiscovery": {
+      "discovered": 45,
+      "executed": 0,
+      "note": "WebKit navigation fix awaits actual browser confirmation; discovery is not execution evidence."
+    },
+    "migrations": "Applied to isolated api_completion_test; concurrent usage indexes validated ready/valid"
+  },
+  "benchmarkEvidence": "plans/rest-api-enterprise/runbook-fleet-targeted-benchmark.json",
+  "failedAttempts": [
+    "Initial retirement migration used the Prisma model name instead of its mapped physical table. Only new objects were rolled back in the owned local test DB, the unpublished migration was corrected and made atomic, and deployment succeeded.",
+    "An early race assertion used ASSIGNED instead of the actual CLAIMED attempt state; corrected without relaxing its lock barrier.",
+    "Adversarial grant-versus-label test initially reproduced a stale-snapshot authorization race. Added the database write fence; the unchanged denial expectation now passes.",
+    "Benchmark CommonJS entry point required an async main wrapper; a later fixture collision with non-benchmark labels was fixed by isolated benchmark labels."
+  ],
+  "open": [
+    "No physical final-image Agent command/signature/cancellation/restart certification yet",
+    "No latest-image Kind certification for these changes yet",
+    "The WebKit navigation correction has not been executed locally against a current application build",
+    "No production load, HA, mixed-version or recovery certification claimed",
+    "Integrations, identity, notifications, incident collaboration, schedules, status domains/assets, reports and exports remain incomplete"
+  ],
+  "sourceSha256": {
+    "src/lib/runbooks/pool-labels.ts": "d995b680bffd91ee1eb48aa615d791fc1daa8c23a0f188853bfa26a58186f4cd",
+    "src/lib/runbooks/pool-commands.ts": "fd6acf81b121f1f4cdf055c28be41301a8249eb6c58c8188a69660d30bbe20e2",
+    "src/lib/runbooks/secrets.ts": "c2c8995203b1f00ace18ef50a7b5efc8b7a4102ceb5660af3106725f06e5cab6",
+    "src/lib/runbooks/agent-claims.ts": "e84a8c16d138fa366d71970f1d601a8131e71f155b81aebce9989fc7d34dab34",
+    "src/lib/runbooks/execution-signing.ts": "422ca515e2816e4a8fcea59acdc8c0966dfa2b2c291ab9c5cc470a7be27e25af",
+    "src/lib/runbooks/binding-readiness.ts": "81ada95b93fe785b6024a67850fa92cf3e3228cc20f5d7a449b2f27901296412",
+    "src/lib/runbooks/orchestrator.ts": "8148f6e2421c2244dc781b510f2b9bf3a515df22b6e4c38f1c24e44bdc61e6c8",
+    "tests/integration/api-v2-runbook-pools.test.ts": "e438cee794c773834d28b0e0f3988b69dad5e32c0d4c4c82567b056518e4a240",
+    "tests/integration/api-v2-runbook-signing.test.ts": "1bfde74420418409bd55c6b6542854c9d4429011fff903d8b2f9b5d6b8bf5f2f",
+    "tests/integration/runbook-execution-safety.test.ts": "a59343eaf8455ab3eb69c7810d647facb874b358b7a325062b86345c984c34e5"
+  }
+}

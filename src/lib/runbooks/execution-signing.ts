@@ -7,18 +7,26 @@ import {
   type KeyObject,
 } from 'node:crypto';
 import prisma from '@/lib/prisma';
-import { logAudit } from '@/lib/audit';
+import {
+  runRunbookCommand,
+  logRunbookCommandAudit,
+  type RunbookCommandActor,
+  type RunbookCommandClient,
+} from './command-context';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { canonicalEnvelope } from '../../../agent/src/envelope';
+
+const signingActorId = (actor: RunbookCommandActor) =>
+  typeof actor === 'string' ? actor : actor.id;
 
 let parsedKeyCache: { fingerprint: string; privateKey: KeyObject } | undefined;
 
 export class RunbookSigningRotationError extends Error {}
 
-export async function getExecutionSigningKey() {
-  const existing = await prisma.runbookExecutionSigningKey.findUnique({ where: { id: 'default' } });
+export async function getExecutionSigningKey(client: RunbookCommandClient = prisma) {
+  const existing = await client.runbookExecutionSigningKey.findUnique({ where: { id: 'default' } });
   if (existing?.state === 'ACTIVE') return existing;
-  const active = await prisma.runbookExecutionSigningKey.findFirst({ where: { state: 'ACTIVE' } });
+  const active = await client.runbookExecutionSigningKey.findFirst({ where: { state: 'ACTIVE' } });
   if (active) return active;
   if (existing) throw new Error('No active Runbook signing identity.');
   const keys = generateKeyPairSync('ed25519');
@@ -27,14 +35,14 @@ export async function getExecutionSigningKey() {
     keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
   );
   try {
-    return await prisma.runbookExecutionSigningKey.upsert({
+    return await client.runbookExecutionSigningKey.upsert({
       where: { id: 'default' },
       update: {},
       create: { id: 'default', publicKey, privateKeyEncrypted },
     });
   } catch (error) {
     if ((error as { code?: string }).code !== 'P2002') throw error;
-    return prisma.runbookExecutionSigningKey.findUniqueOrThrow({ where: { id: 'default' } });
+    return client.runbookExecutionSigningKey.findUniqueOrThrow({ where: { id: 'default' } });
   }
 }
 
@@ -72,14 +80,17 @@ export async function signExecutionEnvelope<T extends object>(payload: T) {
   };
 }
 
-export async function stageExecutionSigningKey(actorId: string) {
+export async function stageExecutionSigningKey(
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
   const keys = generateKeyPairSync('ed25519');
   const privateKeyEncrypted = await encrypt(
     keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
   );
-  await getExecutionSigningKey();
-  return prisma.$transaction(async tx => {
+  return runRunbookCommand(client, async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('runbook-signing-rotation'))`;
+    await getExecutionSigningKey(tx);
     if (await tx.runbookExecutionSigningKey.findFirst({ where: { state: 'NEXT' } }))
       throw new RunbookSigningRotationError('A next signing identity already exists.');
     if ((await tx.runbookExecutionSigningKey.count({ where: { state: { not: 'RETIRED' } } })) >= 8)
@@ -94,16 +105,26 @@ export async function stageExecutionSigningKey(actorId: string) {
         privateKeyEncrypted,
       },
     });
-    await logAudit(
-      { action: 'runbook.signing.staged', entityType: 'SYSTEM_CONFIG', entityId: next.id, actorId },
+    await logRunbookCommandAudit(
+      actor,
+      {
+        action: 'runbook.signing.staged',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: next.id,
+        actorId: signingActorId(actor),
+      },
       tx
     );
     return { id: next.id, publicKey: next.publicKey };
   });
 }
 
-export async function activateExecutionSigningKey(keyId: string, actorId?: string) {
-  return prisma.$transaction(async tx => {
+export async function activateExecutionSigningKey(
+  keyId: string,
+  actor?: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  return runRunbookCommand(client, async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('runbook-signing-rotation'))`;
     const next = await tx.runbookExecutionSigningKey.findFirst({
       where: { id: keyId, state: 'NEXT' },
@@ -137,21 +158,26 @@ export async function activateExecutionSigningKey(keyId: string, actorId?: strin
       where: { id: keyId },
       data: { state: 'ACTIVE', activatedAt: new Date() },
     });
-    if (actorId)
-      await logAudit(
+    if (actor)
+      await logRunbookCommandAudit(
+        actor,
         {
           action: 'runbook.signing.activate',
           entityType: 'SYSTEM_CONFIG',
           entityId: keyId,
-          actorId,
+          actorId: signingActorId(actor),
         },
         tx
       );
   });
 }
 
-export async function retireExecutionSigningKey(keyId: string, actorId?: string) {
-  await prisma.$transaction(async tx => {
+export async function retireExecutionSigningKey(
+  keyId: string,
+  actor?: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  await runRunbookCommand(client, async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('runbook-signing-rotation'))`;
     const changed = await tx.runbookExecutionSigningKey.updateMany({
       where: { id: keyId, state: 'RETIRING', retiredAt: { lte: new Date() } },
@@ -161,9 +187,15 @@ export async function retireExecutionSigningKey(keyId: string, actorId?: string)
       throw new RunbookSigningRotationError(
         'Signing identity retirement requires RETIRING state and a completed 24-hour grace period.'
       );
-    if (actorId)
-      await logAudit(
-        { action: 'runbook.signing.retire', entityType: 'SYSTEM_CONFIG', entityId: keyId, actorId },
+    if (actor)
+      await logRunbookCommandAudit(
+        actor,
+        {
+          action: 'runbook.signing.retire',
+          entityType: 'SYSTEM_CONFIG',
+          entityId: keyId,
+          actorId: signingActorId(actor),
+        },
         tx
       );
   });

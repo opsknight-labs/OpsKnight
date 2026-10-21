@@ -51,6 +51,422 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  ChatOpsConfiguration: {
+    type: 'object', properties: {
+      revision: { type: 'integer' }, updatedAt: { type: ['string', 'null'], format: 'date-time' },
+      enabled: { type: 'boolean' }, channelPrefix: { type: 'string' },
+      autoCreateOnUrgency: { type: 'array', items: { type: 'string' } },
+      autoCreateOnPriority: { type: 'array', items: { type: 'string' } },
+      archiveOnResolve: { type: 'boolean' }, defaultVideoBridge: { type: 'string' },
+      customBridgeUrlTemplate: { type: 'string' },
+      defaultProviders: { type: 'array', items: { type: 'string' } },
+    }, required: ['revision', 'updatedAt', 'enabled', 'channelPrefix',
+      'autoCreateOnUrgency', 'autoCreateOnPriority', 'archiveOnResolve',
+      'defaultVideoBridge', 'customBridgeUrlTemplate', 'defaultProviders'],
+  },
+  StatusPageAssetCollection: {
+    type: 'object', properties: {
+      statusPageId: { type: 'string' },
+      assets: { type: 'array', maxItems: 20, items: { type: 'object', properties: {
+        assetId: { type: 'string' }, contentType: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' }, url: { type: 'string' },
+      }, required: ['assetId', 'contentType', 'createdAt', 'url'] } },
+    }, required: ['statusPageId', 'assets'],
+  },
+  CustomFieldDefinition: {
+    type: 'object', properties: {
+      id: { type: 'string' }, revision: { type: 'integer' }, name: { type: 'string' },
+      key: { type: 'string' }, type: { type: 'string', enum: ['TEXT', 'NUMBER', 'DATE', 'SELECT', 'BOOLEAN', 'URL', 'EMAIL'] },
+      required: { type: 'boolean' }, defaultValue: { type: ['string', 'null'] },
+      options: { type: ['array', 'null'], items: { type: 'string' } },
+      order: { type: 'integer' }, showInList: { type: 'boolean' },
+      usageCount: { type: 'integer' },
+    }, required: ['id', 'revision', 'name', 'key', 'type', 'required', 'order', 'showInList'],
+  },
+  CustomFieldDefinitionCollection: {
+    type: 'object', properties: {
+      fields: { type: 'array', maxItems: 100, items: { $ref: '#/components/schemas/CustomFieldDefinition' } },
+      nextCursor: { type: ['string', 'null'] },
+    }, required: ['fields', 'nextCursor'],
+  },
+  AuditExport: {
+    type: 'object', properties: {
+      id: { type: 'string' }, status: { type: 'string' },
+      createdAt: { type: 'string', format: 'date-time' },
+      expiresAt: { type: 'string', format: 'date-time' },
+      filter: { type: 'object', additionalProperties: true },
+      checksum: { type: ['string', 'null'] },
+      sizeBytes: { type: ['integer', 'null'] },
+      recordCount: { type: ['integer', 'null'] },
+    }, required: ['id', 'status', 'createdAt', 'expiresAt', 'filter'],
+  },
+  PostmortemVersionCollection: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, currentRevision: { type: 'integer' },
+      versions: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        revision: { type: 'integer' }, createdAt: { type: 'string', format: 'date-time' },
+        snapshot: { type: 'object', additionalProperties: true },
+      }, required: ['revision', 'createdAt', 'snapshot'] } },
+      nextBeforeRevision: { type: ['integer', 'null'] },
+    }, required: ['postmortemId', 'currentRevision', 'versions', 'nextBeforeRevision'],
+  },
+  PostmortemContributors: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, revision: { type: 'integer' },
+      contributors: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        userId: { type: 'string' }, role: { type: 'string', enum: ['AUTHOR', 'REVIEWER', 'CONTRIBUTOR'] },
+        name: { type: 'string' },
+      }, required: ['userId', 'role', 'name'] } },
+    }, required: ['postmortemId', 'revision', 'contributors'],
+  },
+  PostmortemPublication: {
+    type: 'object', properties: {
+      id: { type: 'string' }, revision: { type: 'integer' },
+      status: { type: 'string', enum: ['PUBLISHED'] }, isPublic: { type: 'boolean' },
+      publishedAt: { type: 'string', format: 'date-time' },
+    }, required: ['id', 'revision', 'status', 'isPublic', 'publishedAt'],
+  },
+  PostmortemActionItemCollection: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, revision: { type: 'integer' },
+      items: { type: 'array', maxItems: 100, items: { type: 'object', properties: {
+        id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' },
+        owner: { type: 'string' }, dueDate: { type: 'string', format: 'date' },
+        status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] },
+        priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+        completedAt: { type: ['string', 'null'], format: 'date-time' },
+        externalIssue: { type: 'object', additionalProperties: true },
+      }, required: ['id', 'title', 'description', 'status', 'priority'] } },
+    }, required: ['postmortemId', 'revision', 'items'],
+  },
+  PostmortemActionItemChange: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, revision: { type: 'integer' },
+      item: { type: 'object', additionalProperties: true },
+    }, required: ['postmortemId', 'revision', 'item'],
+  },
+  PostmortemActionItemDeletion: {
+    type: 'object', properties: {
+      postmortemId: { type: 'string' }, revision: { type: 'integer' }, deletedId: { type: 'string' },
+    }, required: ['postmortemId', 'revision', 'deletedId'],
+  },
+  ServiceHealthSummary: {
+    type: 'object', properties: {
+      service: { type: 'object', properties: {
+        id: { type: 'string' }, name: { type: 'string' }, status: { type: 'string' },
+        escalationPolicyId: { type: ['string', 'null'] },
+      }, required: ['id', 'name', 'status', 'escalationPolicyId'] },
+      observedAt: { type: 'string', format: 'date-time' },
+      activeIncidentCount: { type: 'integer' },
+      recentIncidents: { type: 'array', maxItems: 5, items: { type: 'object', properties: {
+        id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' },
+      }, required: ['id', 'title', 'status', 'createdAt'] } },
+      last24Hours: { type: 'object', properties: {
+        linkedAlertCount: { type: 'integer' }, failedNotificationCount: { type: 'integer' },
+      }, required: ['linkedAlertCount', 'failedNotificationCount'] },
+      onCallCoverage: { type: 'object', properties: {
+        state: { type: 'string' }, eligibleResponderCount: { type: ['integer', 'null'] },
+        basis: { type: 'string' },
+      }, required: ['state', 'eligibleResponderCount', 'basis'] },
+      objectives: { type: 'array', maxItems: 10, items: { type: 'object', properties: {
+        id: { type: 'string' }, name: { type: 'string' }, metricType: { type: 'string' },
+        target: { type: 'number' }, latestSnapshot: { type: ['object', 'null'], properties: {
+          periodEnd: { type: 'string', format: 'date-time' }, value: { type: ['number', 'null'] },
+          breached: { type: ['boolean', 'null'] }, dataState: { type: 'string' },
+        }, required: ['periodEnd', 'value', 'breached', 'dataState'] },
+      }, required: ['id', 'name', 'metricType', 'target', 'latestSnapshot'] } },
+      truncated: { type: 'object', properties: {
+        objectives: { type: 'boolean' }, recentIncidents: { type: 'boolean' },
+      }, required: ['objectives', 'recentIncidents'] },
+    }, required: ['service', 'observedAt', 'activeIncidentCount', 'recentIncidents', 'last24Hours', 'onCallCoverage', 'objectives', 'truncated'],
+  },
+  EscalationPolicyPreview: {
+    type: 'object', properties: {
+      policyId: { type: 'string' }, policyRevision: { type: 'integer' },
+      incidentId: { type: 'string' }, evaluatedAt: { type: 'string', format: 'date-time' },
+      supportHoursState: { type: 'string' },
+      steps: { type: 'array', maxItems: 100, items: { type: 'object', properties: {
+        stepId: { type: 'string' }, stepOrder: { type: 'integer' }, delayMinutes: { type: 'integer' },
+        targetType: { type: 'string' }, applicable: { type: 'boolean' }, outcome: { type: 'string' },
+        recipientUserIds: { type: 'array', items: { type: 'string' } },
+      }, required: ['stepId', 'stepOrder', 'delayMinutes', 'targetType', 'applicable', 'outcome', 'recipientUserIds'] } },
+      truncated: { type: 'boolean' }, timingAssumption: { type: 'string' }, advisory: { type: 'boolean' },
+    }, required: ['policyId', 'policyRevision', 'incidentId', 'evaluatedAt', 'supportHoursState', 'steps', 'truncated', 'timingAssumption', 'advisory'],
+  },
+  ServiceChangeEvent: {
+    type: 'object', properties: {
+      id: { type: 'string' }, action: { type: 'string' }, entityId: { type: ['string', 'null'] },
+      createdAt: { type: 'string', format: 'date-time' },
+      source: { type: 'string', enum: ['AUDIT_LOG'] },
+    }, required: ['id', 'action', 'entityId', 'createdAt', 'source'],
+  },
+  OperationalEvent: {
+    type: 'object', properties: {
+      id: { type: 'string' }, incidentId: { type: 'string' },
+      type: { type: ['string', 'null'] }, createdAt: { type: 'string', format: 'date-time' },
+      incident: { type: 'object', properties: {
+        status: { type: 'string' }, serviceId: { type: 'string' },
+      }, required: ['status', 'serviceId'] },
+    }, required: ['id', 'incidentId', 'type', 'createdAt', 'incident'],
+  },
+  RelatedIncidents: {
+    type: 'object', properties: {
+      incidentId: { type: 'string' }, evidence: { type: 'string', enum: ['ALERT_DEDUP_KEY'] },
+      related: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        incident: { type: 'object', properties: {
+          id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+          serviceId: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' },
+        }, required: ['id', 'title', 'status', 'serviceId', 'createdAt'] },
+        matchedAt: { type: 'string', format: 'date-time' },
+        correlationHashes: { type: 'array', items: { type: 'string' } },
+      }, required: ['incident', 'matchedAt', 'correlationHashes'] } },
+      truncated: { type: 'object', properties: {
+        sourceKeys: { type: 'boolean' }, matches: { type: 'boolean' },
+      }, required: ['sourceKeys', 'matches'] },
+    }, required: ['incidentId', 'evidence', 'related', 'truncated'],
+  },
+  IncidentAvailableActions: {
+    type: 'object', properties: {
+      incidentId: { type: 'string' }, incidentStatus: { type: 'string' },
+      observedAt: { type: 'string', format: 'date-time' }, advisory: { type: 'boolean' },
+      actions: { type: 'array', items: { type: 'object', properties: {
+        operationId: { type: 'string' }, method: { type: 'string' }, path: { type: 'string' },
+        allowed: { type: 'boolean' }, stateEligible: { type: 'boolean' },
+      }, required: ['operationId', 'method', 'path', 'allowed', 'stateEligible'] } },
+      runbookExecution: { type: 'object', properties: {
+        requiresRunbookSelection: { type: 'boolean' }, previewPath: { type: 'string' },
+        allowedToAttemptPreview: { type: 'boolean' },
+      }, required: ['requiresRunbookSelection', 'previewPath', 'allowedToAttemptPreview'] },
+    }, required: ['incidentId', 'incidentStatus', 'observedAt', 'advisory', 'actions', 'runbookExecution'],
+  },
+  IncidentAlertSummary: {
+    type: 'object', properties: {
+      id: { type: 'string' }, incidentId: { type: ['string', 'null'] }, serviceId: { type: 'string' },
+      status: { type: 'string' }, correlationHash: { type: ['string', 'null'] },
+      createdAt: { type: 'string', format: 'date-time' },
+    }, required: ['id', 'incidentId', 'serviceId', 'status', 'correlationHash', 'createdAt'],
+  },
+  IncidentWarRoom: {
+    type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string' }, incidentId: { type: 'string' }, provider: { type: 'string' },
+      generation: { type: 'integer' }, state: { type: 'string' }, health: { type: 'string' },
+      providerChannelName: { type: ['string', 'null'] },
+      providerChannelUrl: { type: ['string', 'null'] },
+      createdAt: { type: 'string', format: 'date-time' },
+      readyAt: { type: ['string', 'null'], format: 'date-time' },
+      closedAt: { type: ['string', 'null'], format: 'date-time' },
+      archivedAt: { type: ['string', 'null'], format: 'date-time' },
+      participantCount: { type: 'integer', minimum: 0 },
+    },
+    required: ['id', 'incidentId', 'provider', 'generation', 'state', 'health',
+      'providerChannelName', 'providerChannelUrl', 'createdAt', 'readyAt',
+      'closedAt', 'archivedAt', 'participantCount'],
+  },
+  IncidentNotificationAttempt: {
+    allOf: [
+      { $ref: '#/components/schemas/NotificationDeliveryAttempt' },
+      { type: 'object', properties: { notification: {
+        type: 'object', properties: { channel: { type: 'string' }, status: { type: 'string' } },
+        required: ['channel', 'status'],
+      } }, required: ['notification'] },
+    ],
+  },
+  IncidentResponseActivity: {
+    type: 'object',
+    properties: {
+      incident: { type: 'object', properties: {
+        id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' },
+        serviceId: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' },
+        acknowledgedAt: { type: ['string', 'null'], format: 'date-time' },
+        resolvedAt: { type: ['string', 'null'], format: 'date-time' },
+        resolutionKind: { type: ['string', 'null'] },
+        automationDecision: { type: ['object', 'null'], properties: {
+          mode: { type: 'string' }, routeType: { type: 'string' },
+          escalationPolicyId: { type: ['string', 'null'] }, matchedRouteRuleId: { type: ['string', 'null'] },
+          evaluationAt: { type: 'string', format: 'date-time' },
+        } },
+      }, required: ['id', 'title', 'status', 'serviceId', 'createdAt', 'acknowledgedAt', 'resolvedAt', 'resolutionKind', 'automationDecision'] },
+      alerts: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, status: { type: 'string' }, correlationHash: { type: ['string', 'null'] },
+        createdAt: { type: 'string', format: 'date-time' },
+      }, required: ['id', 'status', 'correlationHash', 'createdAt'] } },
+      events: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, type: { type: ['string', 'null'] }, createdAt: { type: 'string', format: 'date-time' },
+      }, required: ['id', 'type', 'createdAt'] } },
+      notifications: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, channel: { type: 'string' }, status: { type: 'string' }, attempts: { type: 'integer' },
+        createdAt: { type: 'string', format: 'date-time' }, sentAt: { type: ['string', 'null'], format: 'date-time' },
+        deliveredAt: { type: ['string', 'null'], format: 'date-time' }, failedAt: { type: ['string', 'null'], format: 'date-time' },
+      }, required: ['id', 'channel', 'status', 'attempts', 'createdAt', 'sentAt', 'deliveredAt', 'failedAt'] } },
+      executions: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, runbookId: { type: 'string' }, status: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' }, startedAt: { type: ['string', 'null'], format: 'date-time' },
+        completedAt: { type: ['string', 'null'], format: 'date-time' }, recoveryOutcome: { type: ['string', 'null'] },
+        runbook: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      }, required: ['id', 'runbookId', 'status', 'createdAt', 'startedAt', 'completedAt', 'recoveryOutcome', 'runbook'] } },
+      truncated: { type: 'object', properties: {
+        alerts: { type: 'boolean' }, events: { type: 'boolean' }, notifications: { type: 'boolean' }, executions: { type: 'boolean' },
+      }, required: ['alerts', 'events', 'notifications', 'executions'] },
+    },
+    required: ['incident', 'alerts', 'events', 'notifications', 'executions', 'truncated'],
+  },
+  RunbookExecutionSummary: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' }, runbookId: { type: 'string' }, incidentId: { type: 'string' },
+      status: { type: 'string' }, triggeredByType: { type: 'string' },
+      startedAt: { type: ['string', 'null'], format: 'date-time' },
+      completedAt: { type: ['string', 'null'], format: 'date-time' },
+      createdAt: { type: 'string', format: 'date-time' },
+      recoveryOutcome: { type: ['string', 'null'] },
+      runbook: { type: 'object', properties: {
+        id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' },
+      }, required: ['id', 'name', 'slug'] },
+    },
+    required: ['id', 'runbookId', 'incidentId', 'status', 'triggeredByType', 'startedAt', 'completedAt', 'createdAt', 'recoveryOutcome', 'runbook'],
+  },
+  NotificationDeliveryAttempt: {
+    type: 'object',
+    description: 'Delivery metadata. Provider message IDs and raw error text are intentionally omitted.',
+    properties: {
+      id: { type: 'string' }, notificationId: { type: 'string' }, ordinal: { type: 'integer' },
+      outcome: { type: 'string' }, provider: { type: ['string', 'null'] },
+      errorCode: { type: ['string', 'null'] },
+      startedAt: { type: 'string', format: 'date-time' },
+      finishedAt: { type: ['string', 'null'], format: 'date-time' },
+      reconciliationDeadline: { type: ['string', 'null'], format: 'date-time' },
+      latencyMs: { type: ['integer', 'null'] },
+    },
+    required: ['id', 'notificationId', 'ordinal', 'outcome', 'provider', 'errorCode', 'startedAt', 'finishedAt', 'reconciliationDeadline', 'latencyMs'],
+  },
+  NotificationFeedback: {
+    type: 'object',
+    properties: {
+      notificationId: { type: 'string' },
+      events: { type: 'array', maxItems: 50, items: { type: 'object', properties: {
+        id: { type: 'string' }, provider: { type: 'string' }, eventType: { type: 'string' },
+        occurredAt: { type: 'string', format: 'date-time' },
+        processedAt: { type: ['string', 'null'], format: 'date-time' },
+        quarantinedAt: { type: ['string', 'null'], format: 'date-time' },
+      }, required: ['id', 'provider', 'eventType', 'occurredAt', 'processedAt', 'quarantinedAt'] } },
+      truncated: { type: 'object', properties: {
+        correlation: { type: 'boolean' }, events: { type: 'boolean' },
+      }, required: ['correlation', 'events'] },
+    },
+    required: ['notificationId', 'events', 'truncated'],
+  },
+  ScheduleLayerPreview: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' }, revision: { type: 'integer' }, layerId: { type: 'string' },
+      advisory: { type: 'boolean' },
+      start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' },
+      shifts: { type: 'array', items: { type: 'object', properties: {
+        userId: { type: 'string' }, start: { type: 'string', format: 'date-time' },
+        end: { type: 'string', format: 'date-time' },
+      }, required: ['userId', 'start', 'end'] } },
+      gaps: { type: 'array', items: { type: 'object', properties: {
+        start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' },
+      }, required: ['start', 'end'] } },
+    },
+    required: ['scheduleId', 'revision', 'layerId', 'advisory', 'start', 'end', 'shifts', 'gaps'],
+  },
+  ScheduleLayerOrder: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' }, revision: { type: 'integer' },
+      orderedIds: { type: 'array', maxItems: 100, items: { type: 'string' } },
+    },
+    required: ['scheduleId', 'revision', 'orderedIds'],
+  },
+  ScheduleLayer: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' }, scheduleId: { type: 'string' }, name: { type: 'string' },
+      revision: { type: 'integer' }, start: { type: 'string', format: 'date-time' },
+      end: { type: ['string', 'null'], format: 'date-time' },
+      rotationLengthHours: { type: 'integer' }, shiftLengthHours: { type: ['integer', 'null'] },
+      restrictions: { type: ['object', 'null'] }, priority: { type: 'integer' },
+      createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
+      users: { type: 'array', maxItems: 100, items: { type: 'object', properties: {
+        userId: { type: 'string' }, position: { type: 'integer' },
+      }, required: ['userId', 'position'] } },
+      truncated: { type: 'boolean' },
+      _count: { type: 'object', properties: { users: { type: 'integer' } }, required: ['users'] },
+    },
+    required: ['id', 'scheduleId', 'name', 'revision', 'start', 'end', 'rotationLengthHours', 'shiftLengthHours', 'restrictions', 'priority', 'createdAt', 'updatedAt'],
+  },
+  ScheduleLayerCollection: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' },
+      layers: { type: 'array', maxItems: 100, items: { $ref: '#/components/schemas/ScheduleLayer' } },
+      truncated: { type: 'boolean' },
+    },
+    required: ['scheduleId', 'layers', 'truncated'],
+  },
+  ScheduleDependencies: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' }, revision: { type: 'integer' }, total: { type: 'integer' },
+      truncated: { type: 'boolean' },
+      escalationSteps: { type: 'array', maxItems: 100, items: {
+        type: 'object', properties: {
+          id: { type: 'string' }, policyId: { type: 'string' }, policyName: { type: 'string' },
+          policyArchived: { type: 'boolean' }, stepOrder: { type: 'integer' },
+        }, required: ['id', 'policyId', 'policyName', 'policyArchived', 'stepOrder'],
+      } },
+    },
+    required: ['scheduleId', 'revision', 'total', 'truncated', 'escalationSteps'],
+  },
+  StatusPagePreview: {
+    type: 'object',
+    description: 'Current unpublished public projection. Null when the page is disabled.',
+    properties: {
+      pageId: { type: 'string' }, revision: { type: 'integer' },
+      available: { type: 'boolean' },
+      snapshot: { type: ['object', 'null'], additionalProperties: true },
+    },
+    required: ['pageId', 'revision', 'available', 'snapshot'],
+  },
+  StatusPageAssetUpload: {
+    type: 'object',
+    properties: {
+      assetId: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+      url: { type: 'string' },
+      contentType: { type: 'string', enum: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] },
+    },
+    required: ['assetId', 'url', 'contentType'],
+  },
+  EscalationPolicyValidation: {
+    type: 'object',
+    properties: {
+      policyId: { type: 'string' }, revision: { type: 'integer' }, valid: { type: 'boolean' },
+      issues: { type: 'array', items: { type: 'object', properties: {
+        code: { type: 'string' }, stepId: { type: ['string', 'null'] },
+        field: { type: ['string', 'null'] }, message: { type: 'string' },
+      }, required: ['code', 'stepId', 'field', 'message'] } },
+      truncated: { type: 'boolean' },
+    },
+    required: ['policyId', 'revision', 'valid', 'issues', 'truncated'],
+  },
+  EscalationPolicyDependencies: {
+    type: 'object',
+    properties: {
+      policyId: { type: 'string' },
+      services: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } }, required: ['id', 'name'] } },
+      usage: { type: 'object', properties: { services: { type: 'integer' }, versionRefs: { type: 'integer' }, decisions: { type: 'integer' } }, required: ['services', 'versionRefs', 'decisions'] },
+      truncated: { type: 'object', properties: { services: { type: 'boolean' }, targets: { type: 'boolean' } }, required: ['services', 'targets'] },
+      targets: { type: 'array', items: { type: 'object', properties: {
+        stepId: { type: 'string' }, stepOrder: { type: 'integer' }, targetType: { type: 'string', enum: ['USER', 'TEAM', 'SCHEDULE'] },
+        targetId: { type: ['string', 'null'] }, exists: { type: 'boolean' },
+      }, required: ['stepId', 'stepOrder', 'targetType', 'targetId', 'exists'] } },
+      valid: { type: 'boolean' },
+      deletionAllowed: { type: 'boolean' },
+    },
+    required: ['policyId', 'services', 'usage', 'truncated', 'targets', 'valid', 'deletionAllowed'],
+  },
   ActionResult: {
     type: 'object',
     properties: { success: { type: 'boolean' }, message: { type: 'string' } },
@@ -135,6 +551,176 @@ const extraSchemas: Json = {
       createdAt: { type: 'string', format: 'date-time' },
     },
     required: ['id', 'scheduleId', 'userId', 'startDate', 'endDate'],
+  },
+  ScheduleOverrideCancellation: {
+    type: 'object',
+    properties: { id: { type: 'string' }, cancelled: { type: 'boolean', const: true } },
+    required: ['id', 'cancelled'],
+  },
+  ScheduleCoverage: {
+    type: 'object',
+    properties: {
+      schedule: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          timeZone: { type: 'string' },
+          revision: { type: 'integer' },
+        },
+        required: ['id', 'name', 'timeZone', 'revision'],
+      },
+      start: { type: 'string', format: 'date-time' },
+      end: { type: 'string', format: 'date-time' },
+      shifts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            userId: { type: 'string' },
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+          },
+          required: ['userId', 'start', 'end'],
+        },
+      },
+      gaps: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+          },
+          required: ['start', 'end'],
+        },
+      },
+    },
+    required: ['schedule', 'start', 'end', 'shifts', 'gaps'],
+  },
+  ServiceNotificationSettings: {
+    type: 'object',
+    properties: {
+      serviceId: { type: 'string' },
+      revision: { type: 'integer' },
+      serviceNotificationChannels: {
+        type: 'array',
+        items: { type: 'string', enum: ['SLACK', 'WEBHOOK', 'EMAIL', 'SMS', 'PUSH', 'WHATSAPP', 'MICROSOFT_TEAMS'] },
+      },
+      serviceNotifyOnTriggered: { type: 'boolean' },
+      serviceNotifyOnAck: { type: 'boolean' },
+      serviceNotifyOnResolved: { type: 'boolean' },
+      serviceNotifyOnSlaBreach: { type: 'boolean' },
+    },
+    required: ['serviceId', 'revision', 'serviceNotificationChannels', 'serviceNotifyOnTriggered', 'serviceNotifyOnAck', 'serviceNotifyOnResolved', 'serviceNotifyOnSlaBreach'],
+  },
+  ServiceSupportHours: {
+    type: 'object',
+    properties: {
+      policy: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              scopeKey: { type: 'string' },
+              version: { type: 'integer' },
+              timezone: { type: 'string' },
+              inheritWorkspace: { type: 'boolean' },
+              mode: { type: 'string', enum: ['INHERIT', 'ALWAYS', 'SCHEDULED'] },
+              windows: {
+                type: 'array',
+                items: { type: 'object', properties: {
+                  dayOfWeek: { type: 'integer' }, startMinute: { type: 'integer' }, endMinute: { type: 'integer' },
+                }, required: ['dayOfWeek', 'startMinute', 'endMinute'] },
+              },
+              exceptions: {
+                type: 'array',
+                items: { type: 'object', properties: {
+                  localDate: { type: 'string', format: 'date' }, available: { type: 'boolean' },
+                  startMinute: { type: ['integer', 'null'] }, endMinute: { type: ['integer', 'null'] },
+                  label: { type: ['string', 'null'] },
+                }, required: ['localDate', 'available', 'startMinute', 'endMinute', 'label'] },
+              },
+            },
+            required: ['scopeKey', 'version', 'timezone', 'inheritWorkspace', 'mode', 'windows', 'exceptions'],
+          },
+        ],
+      },
+    },
+    required: ['policy'],
+  },
+  ServiceClassificationPolicy: {
+    type: 'object',
+    properties: {
+      policy: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              scopeKey: { type: 'string' },
+              version: { type: 'integer' },
+              derivePriorityFromUrgency: { type: 'boolean' },
+              priorityFallbackMode: { type: 'string', enum: ['INHERIT', 'ENABLED', 'DISABLED'] },
+              rules: {
+                type: 'array',
+                minItems: 4,
+                maxItems: 4,
+                items: {
+                  type: 'object',
+                  properties: {
+                    matchValue: { type: 'string', enum: ['critical', 'error', 'warning', 'info'] },
+                    priorityMode: { type: 'string', enum: ['INHERIT', 'FALLBACK', 'SET', 'CLEAR'] },
+                    priority: { type: ['string', 'null'], enum: ['P1', 'P2', 'P3', 'P4', 'P5', null] },
+                    urgencyMode: { type: 'string', enum: ['INHERIT', 'SET', 'DEFAULT'] },
+                    urgency: { type: ['string', 'null'], enum: ['HIGH', 'MEDIUM', 'LOW', null] },
+                  },
+                  required: ['matchValue', 'priorityMode', 'priority', 'urgencyMode', 'urgency'],
+                },
+              },
+            },
+            required: ['scopeKey', 'version', 'derivePriorityFromUrgency', 'priorityFallbackMode', 'rules'],
+          },
+        ],
+      },
+    },
+    required: ['policy'],
+  },
+  ServiceSlaPolicy: {
+    type: 'object',
+    properties: {
+      policy: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              scopeKey: { type: 'string' },
+              version: { type: 'integer' },
+              inheritWorkspace: { type: 'boolean' },
+              baseAckTargetMs: { type: ['integer', 'null'] },
+              baseResolveTargetMs: { type: ['integer', 'null'] },
+              rules: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+                    ackTargetMs: { type: 'integer' },
+                    resolveTargetMs: { type: 'integer' },
+                    label: { type: ['string', 'null'] },
+                  },
+                  required: ['priority', 'ackTargetMs', 'resolveTargetMs', 'label'],
+                },
+              },
+            },
+            required: ['scopeKey', 'version', 'inheritWorkspace', 'baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
+          },
+        ],
+      },
+    },
+    required: ['policy'],
   },
   RunbookExecutionStarted: {
     type: 'object',
@@ -295,6 +881,27 @@ export function finalizeOpenApiSpec(base: Json): Json {
 
     operation.operationId = definition.operationId;
     operation['x-required-scope'] = definition.scope;
+    if (definition.operationId === 'getIncidentResponseActivity') {
+      operation['x-additional-required-scopes'] = ['notifications:read', 'runbooks:read'];
+    }
+    if (definition.operationId === 'listRunbookExecutions') {
+      operation['x-additional-required-scopes'] = ['incidents:read'];
+    }
+    if (definition.operationId === 'listIncidentRunbookExecutions') {
+      operation['x-additional-required-scopes'] = ['runbooks:read'];
+    }
+    if (definition.operationId === 'listIncidentNotificationAttempts') {
+      operation['x-additional-required-scopes'] = ['notifications:read'];
+    }
+    if (definition.operationId === 'listServiceChangeEvents') {
+      operation['x-additional-required-scopes'] = ['audit:read'];
+    }
+    if (definition.operationId === 'previewEscalationPolicy') {
+      operation['x-additional-required-scopes'] = ['incidents:read', 'users:read', 'schedules:read'];
+    }
+    if (definition.operationId === 'getServiceHealthSummary') {
+      operation['x-additional-required-scopes'] = ['incidents:read', 'notifications:read', 'service-objectives:read', 'escalation-policies:read', 'schedules:read'];
+    }
     operation.description = [
       operation.description,
       `Requires API scope \`${definition.scope}\` (${API_SCOPE_REGISTRY[definition.scope as ApiScope]?.title ?? definition.scope}).`,
@@ -328,7 +935,7 @@ export function finalizeOpenApiSpec(base: Json): Json {
           in: 'header',
           required: contract.preconditionRequired ?? false,
           description: contract.preconditionRequired
-            ? 'Concrete strong revision ETag from the draft read. Wildcards are rejected (400); stale or weak validators return 412.'
+            ? 'Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.'
             : 'ETag from a previous read. The change is applied only if the resource is unchanged; otherwise 412.',
           schema: { type: 'string' },
         });
@@ -345,7 +952,14 @@ export function finalizeOpenApiSpec(base: Json): Json {
     if (okCode && definition.kind !== 'none') {
       // eslint-disable-next-line security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name
       const ok = responses[okCode] as Json;
-      if (!ok.content) {
+      if (definition.kind === 'binary') {
+        ok.content = { 'application/json': { schema: { type: 'string', format: 'binary' } } };
+        ok.headers = {
+          ...(ok.headers ?? {}),
+          'Content-Disposition': { description: 'Attachment filename.', schema: { type: 'string' } },
+          'X-Content-SHA256': { description: 'SHA-256 checksum of the downloaded bytes.', schema: { type: 'string' } },
+        };
+      } else if (!ok.content) {
         const paginated = definition.kind === 'list' && hasParam(operation, 'limit', 'query');
         ok.content = {
           'application/json': { schema: successEnvelope(definition, paginated) },
@@ -354,10 +968,13 @@ export function finalizeOpenApiSpec(base: Json): Json {
       ok.headers = {
         ...(ok.headers ?? {}),
         ...rateLimitHeaders,
-        ...(definition.method === 'get' && contractIsEtagResource(definition)
+        ...((definition.method === 'get' && contractIsEtagResource(definition)) ||
+        (definition.method === 'post' && definition.path === '/users/invitations')
           ? { ETag: etagHeader }
           : {}),
-        ...(contract?.concurrency === 'etag' ? { ETag: etagHeader } : {}),
+        ...(contract?.concurrency === 'etag' && contract.responseEtag !== false
+          ? { ETag: etagHeader }
+          : {}),
       };
     }
 
@@ -395,6 +1012,21 @@ const etagHeader = {
 };
 
 const ETAG_RESOURCES = new Set([
+  '/users/{id}/administration',
+  '/users/{id}/invitation',
+  '/teams/{id}/lead',
+  '/teams/{id}/members',
+  '/service-objectives/{id}',
+  '/status-pages/{id}/publication',
+  '/status-pages/{id}/services',
+  '/status-pages/{id}/appearance',
+  '/status-pages/{id}/privacy',
+  '/status-pages/{id}/content',
+  '/status-pages/{id}/settings',
+  '/services/{id}/runbook-rules/{ruleId}',
+  '/runbooks/{id}',
+  '/runbooks/{id}/metadata',
+  '/services/{id}/automation',
   '/teams/{id}',
   '/services/{id}',
   '/schedules/{id}',

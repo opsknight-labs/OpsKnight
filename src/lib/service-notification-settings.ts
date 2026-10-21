@@ -1,6 +1,6 @@
 import type { NotificationChannel } from '@prisma/client';
 
-const SERVICE_NOTIFICATION_CHANNELS = new Set<NotificationChannel>([
+export const SERVICE_NOTIFICATION_CHANNEL_VALUES = [
   'SLACK',
   'WEBHOOK',
   'EMAIL',
@@ -8,7 +8,9 @@ const SERVICE_NOTIFICATION_CHANNELS = new Set<NotificationChannel>([
   'PUSH',
   'WHATSAPP',
   'MICROSOFT_TEAMS',
-]);
+] as const satisfies readonly NotificationChannel[];
+
+const SERVICE_NOTIFICATION_CHANNELS = new Set<NotificationChannel>(SERVICE_NOTIFICATION_CHANNEL_VALUES);
 
 export function parseServiceNotificationChannels(formData: FormData): NotificationChannel[] {
   const serializedChannels = formData.get('serviceNotificationChannelsJson');

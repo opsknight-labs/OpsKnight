@@ -1,0 +1,93 @@
+{
+  "sourceParent": "10673104ac6a7c48c6dc233d4bf303b8ca4e29de",
+  "updatedAt": "2026-10-19T13:16:02.324483+00:00",
+  "status": "local_verification_passed_remote_ci_pending",
+  "originalCi": {
+    "tests": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39252113458",
+    "runbooks": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39252104438"
+  },
+  "rootCause": {
+    "before": "Two membership INSERT transactions hold pool FOR SHARE locks from the active-pool guard. Their AFTER triggers both UPDATE that pool revision and wait for each other to release shared locks.",
+    "after": "An earlier BEFORE trigger takes FOR NO KEY UPDATE on both affected pool IDs, in sorted order, before the shared retirement guard. Parent revision writes and retirement rejection are retained. Direct database writers use the same trigger.",
+    "originalReproduction": "The unchanged 10-Agent policy case failed locally with the same PrismaClientUnknownRequestError SQLSTATE 40P01 before migration.",
+    "unchangedFleetScenarios": [
+      1,
+      10,
+      50,
+      100
+    ],
+    "testTimeoutsUnchanged": true,
+    "testConcurrencyUnchanged": true
+  },
+  "retirement": {
+    "provenance": [
+      "attempt.targetAgentPoolId",
+      "execution.targetSelection.sourcePoolId"
+    ],
+    "states": [
+      "PENDING",
+      "CLAIMED with expired lease",
+      "CLAIMED with live lease",
+      "RUNNING with expired lease"
+    ],
+    "coverage": "All four states tested for direct pool and individually selected local-host write targets. Pending/expired unstarted work fails without retry; live claims remain until expiry; running outcomes remain unknown.",
+    "fixtureCorrection": "A read-only local-host pool does not select an individual Agent. Changed the new selected-Agent fixture to a real idempotent write; retained the assertions proving the target pool is null and source provenance is present."
+  },
+  "errorHandling": {
+    "actualDriverRegression": "A deliberate recreation of the old shared-lock upgrade state produces the actual PrismaClientUnknownRequestError and verifies retryable HTTP 409.",
+    "compatibility": "Prisma 5.22 omits structured SQLSTATE for this nested-write error. Only the typed error and first canonical engine SQLSTATE header are accepted. Server-message prose, generic errors and embedded lookalikes are not classification inputs.",
+    "unknownFrame": "Generic error handling retained for unrecognized engine formats.",
+    "retryBudget": "Unchanged"
+  },
+  "checks": {
+    "postgres": {
+      "testsPassed": 270,
+      "filesPassed": 20,
+      "scope": "Entire Runbook workflow database list plus REST Agent, pool, secret and signing suites and direct membership concurrency regression"
+    },
+    "unit": {
+      "testsPassed": 408,
+      "filesPassed": 49
+    },
+    "focusedFinalErrorChecks": {
+      "testsPassed": 26,
+      "filesPassed": 2
+    },
+    "typecheck": "passed",
+    "changedSourceLint": "passed with zero warnings",
+    "workflowLint": "passed",
+    "productionBuild": "passed",
+    "browser": {
+      "passed": 3,
+      "projects": [
+        "chromium",
+        "firefox",
+        "webkit"
+      ],
+      "scope": "Previously failing Agent enrollment, pool membership, scoped secret grants and rotation journey against fresh production build; not the full 45-case matrix"
+    }
+  },
+  "browserFinding": {
+    "cause": "Firefox pointer stayed over success toasts which overlapped the next top-right Enroll agent control; Sonner paused dismissal while hovered.",
+    "change": "Move pointer outside the toast region and await normal toast dismissal before starting the next enrollment. No forced click, hidden overlay, larger timeout or skipped assertion."
+  },
+  "open": [
+    "Current-head remote CI must complete successfully",
+    "Global fleet write contention remains outside the demonstrated eight-writer conflict-free envelope",
+    "Current-image real-Agent, signing, cancellation and recovery certification remains open",
+    "Complete API parity and enterprise load/HA/mixed-version gates remain open"
+  ],
+  "sourceSha256": {
+    "prisma/migrations/20261019164000_runbook_membership_parent_lock_order/migration.sql": "ab1abbb46b45d8e0586cbe9b9cb0971ca67d7493f3708bf5a5979b2c4f7a8b79",
+    "src/lib/runbooks/reconciler.ts": "a8dc927390a65378f14e7b2f8c818a71188081ad3df95edbb7f17511dd3acc7b",
+    "src/lib/postgres-error.ts": "eda317377d84d3a24c7e02cb154b0d7a5be79e5bdd626befea2a360bb1626e45",
+    "src/lib/api-v2/database-errors.ts": "0fe6940a5cc6940597d21035e90b03e1017da071c3f86f0b2bce9975b24b6a42",
+    "src/lib/db-utils.ts": "01358430b7b30bf232a2b178951f4cdc32a5a52ecb311832a28776afb817eaf4",
+    "tests/integration/runbook-pool-membership-concurrency.test.ts": "6ea5f75caff7f354f0dd55ce35856a5f2592f8996eb14bac33c2643aa9ebe0d0",
+    "tests/integration/runbook-execution-safety.test.ts": "d81c266bd5a9b81f602cf422b78b285c5ade6d935d2904032382f59bced24fa6",
+    "tests/unit/api-v2-database-errors.test.ts": "b990471906a2bacf8f891d176a4bc6b1cfed741c8cd5cd51fc2e7c8a72f87773",
+    "tests/lib/db-utils.test.ts": "9aa8283576a5308e3b6393024342793e14215237a3dac4a88d925d29ae6597c4",
+    "tests/e2e/runbooks-ui.spec.ts": "accc5e95a77c639cecf60a3561ab26a908c7bd6bd10ebce65938290f20e9318c",
+    ".github/workflows/runbook-validation.yml": "6d211b4a57a23f41523907d648fcea65e087cc84570f533d277b9a50d263643f"
+  }
+}

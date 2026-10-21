@@ -59,6 +59,141 @@ function def(
 const S = API_SCOPES;
 
 export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
+  [S.RUNBOOK_AGENTS_WRITE]: def(
+    S.RUNBOOK_AGENTS_WRITE,
+    'Agent metadata',
+    'Runbooks',
+    'Edit administrator-owned Agent names and scheduling labels.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_AGENT_POOLS_WRITE]: def(
+    S.RUNBOOK_AGENT_POOLS_WRITE,
+    'Agent pools',
+    'Runbooks',
+    'Manage Agent pools, selectors and explicit membership with revision fences.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_SECRETS_READ]: def(
+    S.RUNBOOK_SECRETS_READ,
+    'Secret metadata',
+    'Runbooks',
+    'Read references, grants and bounded usage metadata; never plaintext values.',
+    { issuableBy: ADMINS, write: false }
+  ),
+  [S.RUNBOOK_SECRETS_WRITE]: def(
+    S.RUNBOOK_SECRETS_WRITE,
+    'Secret rotation',
+    'Runbooks',
+    'Create and rotate encrypted Runbook secret values; never retrieve plaintext.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_SECRETS_GRANT]: def(
+    S.RUNBOOK_SECRETS_GRANT,
+    'Secret grants',
+    'Runbooks',
+    'Grant or revoke Agent/pool secret access and authorize transitive pool-access expansion.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_SIGNING_READ]: def(
+    S.RUNBOOK_SIGNING_READ,
+    'Signing identity metadata',
+    'Runbooks',
+    'Read execution-signing public identity and state metadata only.',
+    { issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_SIGNING_WRITE]: def(
+    S.RUNBOOK_SIGNING_WRITE,
+    'Signing identity rotation',
+    'Runbooks',
+    'Stage, activate and retire identities with Agent pin acknowledgement and grace-period guards.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.RUNBOOK_SETTINGS_READ]: def(
+    S.RUNBOOK_SETTINGS_READ,
+    'Runbook settings read',
+    'Runbooks',
+    'Read safe Runbook retention and incident execution budgets.',
+    { issuableBy: ADMINS, write: false }
+  ),
+  [S.RUNBOOK_SETTINGS_WRITE]: def(
+    S.RUNBOOK_SETTINGS_WRITE,
+    'Runbook settings change',
+    'Runbooks',
+    'Change safe Runbook settings with revision checks and explicit retention confirmation.',
+    { issuableBy: ADMINS, write: true }
+  ),
+
+  [S.RUNBOOK_AGENTS_READ]: def(
+    S.RUNBOOK_AGENTS_READ,
+    'Agent fleet read',
+    'Runbooks',
+    'Read safe Agent fleet health and enrollment status without credentials.',
+    { issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_AGENTS_ENROLL]: def(
+    S.RUNBOOK_AGENTS_ENROLL,
+    'Agent enrollment',
+    'Runbooks',
+    'Issue one-time Agent enrollment material. Replays return metadata only.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_AGENTS_REVOKE]: def(
+    S.RUNBOOK_AGENTS_REVOKE,
+    'Agent revocation',
+    'Runbooks',
+    'Revoke Agent identity and future assignments.',
+    { write: true, issuableBy: ADMINS }
+  ),
+
+  [S.STATUS_PAGE_SUBSCRIBERS_READ]: def(
+    S.STATUS_PAGE_SUBSCRIBERS_READ,
+    'Status page subscribers read',
+    'Status pages',
+    'Read subscriber contact addresses and delivery eligibility. Administrator-only explicit privacy scope.',
+    { issuableBy: ADMINS }
+  ),
+  [S.STATUS_PAGE_SUBSCRIBERS_WRITE]: def(
+    S.STATUS_PAGE_SUBSCRIBERS_WRITE,
+    'Status page subscribers remove',
+    'Status pages',
+    'Revoke status page subscriptions and pending notifications. Does not enroll, verify or reactivate recipients.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.AUTOMATION_PUBLISH]: def(
+    S.AUTOMATION_PUBLISH,
+    'Automation publish',
+    'Automation',
+    'Publish validated immutable service automation versions with explicit administrator privilege.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.AUTOMATION_READ]: def(
+    S.AUTOMATION_READ,
+    'Automation read',
+    'Automation',
+    'Read permitted service automation drafts.',
+    { issuableBy: NON_USER }
+  ),
+  [S.AUTOMATION_WRITE]: def(
+    S.AUTOMATION_WRITE,
+    'Automation drafts',
+    'Automation',
+    'Edit service automation drafts. Responders must belong to the service team.',
+    { write: true, issuableBy: OPERATORS }
+  ),
+  [S.AUTOMATION_SETTINGS_READ]: def(
+    S.AUTOMATION_SETTINGS_READ,
+    'Automation settings read',
+    'Automation',
+    'Read administrative automation settings with explicit administrator privilege.',
+    { issuableBy: ADMINS }
+  ),
+  [S.AUTOMATION_SETTINGS_WRITE]: def(
+    S.AUTOMATION_SETTINGS_WRITE,
+    'Automation settings manage',
+    'Automation',
+    'Change the global kill switch and trace retention with revision protection.',
+    { write: true, issuableBy: ADMINS }
+  ),
   [S.EVENTS_WRITE]: def(
     S.EVENTS_WRITE,
     'Events ingestion',
@@ -97,16 +232,28 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.SCHEDULES_WRITE,
     'Schedules manage',
     'Schedules',
-    'Create and update schedules, manage rotation participants, and create overrides. Layer configuration editing is not available over REST.',
+    'Create and update schedules, manage rotation participants, and create or cancel overrides. Layer configuration editing is not available over REST.',
     { write: true }
   ),
-  [S.TEAMS_READ]: def(S.TEAMS_READ, 'Teams read', 'Teams', 'List and read teams.', {
-    issuableBy: NON_USER,
-  }),
-  [S.TEAMS_WRITE]: def(S.TEAMS_WRITE, 'Teams manage', 'Teams', 'Create, update and delete teams.', {
-    write: true,
-    issuableBy: ADMINS,
-  }),
+  [S.TEAMS_READ]: def(
+    S.TEAMS_READ,
+    'Teams read',
+    'Teams',
+    'Read teams allowed by the actor role, including scoped membership and lead reads.',
+    {
+      issuableBy: ALL_ROLES,
+    }
+  ),
+  [S.TEAMS_WRITE]: def(
+    S.TEAMS_WRITE,
+    'Teams manage',
+    'Teams',
+    'Administrators manage teams. Current team owners may manage membership and lead on their own teams.',
+    {
+      write: true,
+      issuableBy: ['ADMIN', 'RESPONDER', 'USER'],
+    }
+  ),
   [S.USERS_READ]: def(S.USERS_READ, 'Users read', 'Users', 'List and read users.', {
     issuableBy: NON_USER,
   }),
@@ -114,8 +261,8 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.USERS_WRITE,
     'Users manage',
     'Users',
-    'Reserved: no REST v2 endpoint modifies users yet.',
-    { write: true, issuableBy: ADMINS, status: 'reserved' }
+    'Administer invitations, user roles, lifecycle and session revocation with current administrator authorization.',
+    { write: true, issuableBy: ADMINS }
   ),
   [S.ESCALATION_POLICIES_READ]: def(
     S.ESCALATION_POLICIES_READ,
@@ -141,7 +288,35 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.INTEGRATIONS_WRITE,
     'Integrations update',
     'Integrations',
-    'Rename and enable or disable existing integrations. Creating integrations and editing connector configuration is not available over REST.',
+    'Rename, enable or disable integrations and update supported allow-listed configuration such as CloudWatch SNS topics.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_CREATE]: def(
+    S.INTEGRATIONS_CREATE,
+    'Integration creation',
+    'Integrations',
+    'Create inbound integrations. The routing key is disclosed once and stored encrypted at rest.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_CREDENTIALS_WRITE]: def(
+    S.INTEGRATIONS_CREDENTIALS_WRITE,
+    'Integration credential rotation',
+    'Integrations',
+    'Rotate inbound routing or signing credentials with a bounded overlap window; replacement plaintext is disclosed once.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_TEST]: def(
+    S.INTEGRATIONS_TEST,
+    'Integration diagnostics',
+    'Integrations',
+    'Run bounded, local payload validation and delivery health diagnostics without creating incidents.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.INTEGRATIONS_DELETE]: def(
+    S.INTEGRATIONS_DELETE,
+    'Integration deletion',
+    'Integrations',
+    'Disable and safely remove integrations after dependency and in-flight delivery checks.',
     { write: true, issuableBy: ADMINS }
   ),
   [S.NOTIFICATIONS_READ]: def(
@@ -158,6 +333,41 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Retry failed notification deliveries.',
     { write: true }
   ),
+  [S.NOTIFICATION_PREFERENCES_READ]: def(
+    S.NOTIFICATION_PREFERENCES_READ,
+    'Notification preferences read',
+    'Notifications',
+    'Read only the credential owner’s personal notification channel preferences.',
+    { issuableBy: ALL_ROLES }
+  ),
+  [S.NOTIFICATION_PREFERENCES_WRITE]: def(
+    S.NOTIFICATION_PREFERENCES_WRITE,
+    'Notification preferences update',
+    'Notifications',
+    'Update only the credential owner’s personal notification channel preferences and verified contact availability.',
+    { write: true, issuableBy: ALL_ROLES }
+  ),
+  [S.NOTIFICATION_PROVIDERS_READ]: def(
+    S.NOTIFICATION_PROVIDERS_READ,
+    'Notification provider read',
+    'Notifications',
+    'Read notification provider state, configuration completeness and redacted diagnostics.',
+    { issuableBy: ADMINS }
+  ),
+  [S.NOTIFICATION_PROVIDERS_WRITE]: def(
+    S.NOTIFICATION_PROVIDERS_WRITE,
+    'Notification provider configuration',
+    'Notifications',
+    'Configure notification providers and rotate Web Push VAPID keys. Secrets are never returned.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.NOTIFICATION_PROVIDERS_TEST]: def(
+    S.NOTIFICATION_PROVIDERS_TEST,
+    'Notification provider test',
+    'Notifications',
+    'Queue an idempotent, administrator-directed provider test notification.',
+    { issuableBy: ADMINS, write: true }
+  ),
   [S.STATUS_PAGES_READ]: def(
     S.STATUS_PAGES_READ,
     'Status pages read',
@@ -169,8 +379,29 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.STATUS_PAGES_WRITE,
     'Status pages manage',
     'Status pages',
-    'Create status pages, update name, slug, enabled and default state, and post announcements. Components, subscribers and branding are not available over REST.',
+    'Create status pages, configure supported sections and service components, post announcements and request durable publication retry. Subscriber contacts and revocation require separate explicit subscriber scopes; domain proof and asset upload remain unfinished.',
     { write: true, issuableBy: ADMINS }
+  ),
+  [S.SERVICE_OBJECTIVES_READ]: def(
+    S.SERVICE_OBJECTIVES_READ,
+    'Service objectives read',
+    'Reports',
+    'Read authorized objective definitions, immutable versions and evaluation jobs. Shared snapshot/history reads require global metrics visibility; scoped readers can request actor-filtered evaluations.',
+    { issuableBy: ALL_ROLES }
+  ),
+  [S.SERVICE_OBJECTIVES_WRITE]: def(
+    S.SERVICE_OBJECTIVES_WRITE,
+    'Service objectives configure',
+    'Reports',
+    'Create, version or archive service objectives. Explicit administrator scope; changes retain immutable historical definitions.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.SERVICE_OBJECTIVES_EVALUATE]: def(
+    S.SERVICE_OBJECTIVES_EVALUATE,
+    'Service objectives evaluate',
+    'Reports',
+    'Request quota-bound asynchronous evaluation of an authorized immutable definition. Does not modify scheduled shared history.',
+    { write: true, issuableBy: ALL_ROLES }
   ),
   [S.RUNBOOKS_READ]: def(
     S.RUNBOOKS_READ,
@@ -179,12 +410,40 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'List runbooks, read step summaries (never step configuration) and read execution state.',
     { issuableBy: NON_USER }
   ),
+  [S.RUNBOOKS_APPROVE]: def(
+    S.RUNBOOKS_APPROVE,
+    'Runbooks approve',
+    'Runbooks',
+    'Inspect reviewed step plans and approve or reject waiting execution steps. Requires an execution approver role; read access and resource visibility remain separate.',
+    { write: true, issuableBy: OPERATORS }
+  ),
   [S.RUNBOOKS_EXECUTE]: def(
     S.RUNBOOKS_EXECUTE,
     'Runbooks execute',
     'Runbooks',
     'Start runbook executions. Linking an execution to an incident also requires `incidents:read` and access to that incident.',
     { write: true }
+  ),
+  [S.RUNBOOK_RULES_READ]: def(
+    S.RUNBOOK_RULES_READ,
+    'Runbook rules read',
+    'Runbooks',
+    'Read administrative service rule configuration, readiness and safe policy-check metadata. Requires an explicit scope and administrator capability.',
+    { issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_RULES_WRITE]: def(
+    S.RUNBOOK_RULES_WRITE,
+    'Runbook rules configure',
+    'Runbooks',
+    'Create, edit, pause, duplicate or detach service runbook rules with revision protection. Requires an explicit scope; automatic activation and policy-check requests require runbook-rules:activate.',
+    { write: true, issuableBy: ADMINS }
+  ),
+  [S.RUNBOOK_RULES_ACTIVATE]: def(
+    S.RUNBOOK_RULES_ACTIVATE,
+    'Runbook rules activate',
+    'Runbooks',
+    'Request bounded Agent policy checks and activate reviewed automatic rules. Requires an explicit scope and administrator capability.',
+    { write: true, issuableBy: ADMINS }
   ),
   [S.RUNBOOKS_WRITE]: def(
     S.RUNBOOKS_WRITE,
@@ -207,11 +466,39 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Read audit log records (details are redacted).',
     { issuableBy: ['ADMIN', 'AUDITOR'] }
   ),
+  [S.AUDIT_EXPORT]: def(
+    S.AUDIT_EXPORT, 'Audit evidence export', 'Governance',
+    'Request and download bounded, redacted audit evidence with integrity verification.',
+    { issuableBy: ['ADMIN', 'AUDITOR'], write: true }
+  ),
+  [S.CUSTOM_FIELDS_READ]: def(
+    S.CUSTOM_FIELDS_READ, 'Custom-field definitions', 'Administration',
+    'Read administrator-managed incident custom-field definitions and usage counts.',
+    { issuableBy: ADMINS }
+  ),
+  [S.CUSTOM_FIELDS_WRITE]: def(
+    S.CUSTOM_FIELDS_WRITE, 'Custom-field administration', 'Administration',
+    'Create, edit, and safely delete incident custom-field definitions.',
+    { issuableBy: ADMINS, write: true }
+  ),
+  [S.CHATOPS_READ]: def(S.CHATOPS_READ, 'ChatOps configuration', 'Administration',
+    'Read global incident collaboration triggers, room naming and provider policy.',
+    { issuableBy: ADMINS }),
+  [S.CHATOPS_WRITE]: def(S.CHATOPS_WRITE, 'ChatOps administration', 'Administration',
+    'Change global incident collaboration policy with a revision fence.',
+    { issuableBy: ADMINS, write: true }),
   [S.REPORTS_READ]: def(
     S.REPORTS_READ,
     'Reports read',
     'Governance',
     'Read operational metrics and reports.'
+  ),
+  [S.REPORTS_WRITE]: def(
+    S.REPORTS_WRITE,
+    'Saved dashboards manage',
+    'Governance',
+    'Create and manage owned saved dashboards, with team sharing restricted to memberships.',
+    { write: true, issuableBy: ALL_ROLES }
   ),
   [S.POSTMORTEMS_READ]: def(
     S.POSTMORTEMS_READ,
@@ -244,14 +531,14 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.RESPONSE_POLICY_READ,
     'Response policy read',
     'Administration',
-    'Read response policy through the response-policy API.',
+    'Read versioned response policy, including service support hours.',
     { issuableBy: ADMINS }
   ),
   [S.RESPONSE_POLICY_WRITE]: def(
     S.RESPONSE_POLICY_WRITE,
     'Response policy write',
     'Administration',
-    'Change response policy through the response-policy API.',
+    'Change versioned response policy, including service support hours.',
     { write: true, issuableBy: ADMINS }
   ),
   [S.ADMIN_MANAGE]: def(

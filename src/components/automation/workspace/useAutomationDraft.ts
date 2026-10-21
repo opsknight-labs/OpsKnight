@@ -50,14 +50,16 @@ export function usesField(rule: Rule, key: string) {
  */
 export function useAutomationDraft({
   serviceId,
+  ownerId,
   canEdit,
   onError,
 }: {
   serviceId: string;
+  ownerId: string | null;
   canEdit: boolean;
   onError: (message: string) => void;
 }) {
-  const storageKey = draftStorageKey(serviceId);
+  const storageKey = ownerId ? draftStorageKey(ownerId, serviceId) : null;
   const [draft, setDraft] = useState<Snapshot>(emptySnapshot);
   const draftRef = useRef<Snapshot>(emptySnapshot);
   const revision = useRef(0);
@@ -68,7 +70,14 @@ export function useAutomationDraft({
   const [saveState, setSaveState] = useState<SaveState>('Saved');
   const [dirty, setDirty] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const [localCopy, setLocalCopy] = useState<string | null>(() => readStorage(storageKey));
+  const [localCopy, setLocalCopy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!storageKey) return;
+    removeStorage(`automation-draft:${serviceId}`);
+    const recoveryCopy = readStorage(storageKey);
+    const timer = window.setTimeout(() => setLocalCopy(recoveryCopy), 0);
+    return () => window.clearTimeout(timer);
+  }, [storageKey, serviceId]);
   const [undo, setUndo] = useState<UndoEntry | null>(null);
 
   const edit = useCallback((next: Snapshot) => {
@@ -104,7 +113,7 @@ export function useAutomationDraft({
         setDirty(false);
         setSaveState('Saved');
         setLocalCopy(null);
-        removeStorage(storageKey);
+        if (storageKey) removeStorage(storageKey);
       } else setSaveState('Unsaved');
     },
     [storageKey]
@@ -176,7 +185,7 @@ export function useAutomationDraft({
   }, [draft, dirty, conflict, canEdit, save, saveState]);
 
   useEffect(() => {
-    if (!initialized.current || !dirty) return;
+    if (!storageKey || !initialized.current || !dirty) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify(draft));
     } catch {
@@ -237,7 +246,7 @@ export function useAutomationDraft({
   }, [localCopy, edit, onError]);
 
   const dismissLocalCopy = useCallback(() => {
-    removeStorage(storageKey);
+    if (storageKey) removeStorage(storageKey);
     setLocalCopy(null);
   }, [storageKey]);
 

@@ -1,7 +1,15 @@
 # syntax=docker/dockerfile:1
 
+# Shared, digest-pinned OS packages prevent independently drifting package levels
+# and duplicate repository fetches in the dependency, builder and runtime stages.
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS base
+COPY scripts/docker/install-alpine-packages.sh /usr/local/bin/opsknight-install-alpine-packages
+RUN sh /usr/local/bin/opsknight-install-alpine-packages libc6-compat openssl openssl-dev curl && \
+    mkdir -p /usr/local/share/opsknight && \
+    apk info -vv > /usr/local/share/opsknight/alpine-packages.txt
+
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM base AS deps
 WORKDIR /app
 
 # Make npm installs more resilient in CI/buildx (esp. arm64)
@@ -12,11 +20,6 @@ ENV NPM_CONFIG_FETCH_RETRIES=5 \
     NPM_CONFIG_NETWORK_TIMEOUT=600000 \
     NPM_CONFIG_AUDIT=false \
     NPM_CONFIG_FUND=false
-
-# Install security updates and required packages
-RUN apk update && apk upgrade && \
-    apk add --no-cache libc6-compat openssl openssl-dev && \
-    rm -rf /var/cache/apk/*
 
 # Copy package files
 COPY package*.json ./
@@ -35,7 +38,7 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     rm -rf /tmp/*
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
+FROM base AS builder
 WORKDIR /app
 
 # Make npm installs more resilient in CI/buildx (esp. arm64)
@@ -46,11 +49,6 @@ ENV NPM_CONFIG_FETCH_RETRIES=5 \
     NPM_CONFIG_NETWORK_TIMEOUT=600000 \
     NPM_CONFIG_AUDIT=false \
     NPM_CONFIG_FUND=false
-
-# Install security updates
-RUN apk update && apk upgrade && \
-    apk add --no-cache libc6-compat openssl openssl-dev && \
-    rm -rf /var/cache/apk/*
 
 # Copy package files
 COPY package*.json ./
@@ -84,20 +82,15 @@ ENV NEXT_PUBLIC_SOURCE_CODE_URL=$SOURCE_CODE_URL
 
 # Build Next.js application with production optimizations
 # Pages that need database access are marked as dynamic, so build works without DB
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ARG BUILD_NODE_MAX_OLD_SPACE_SIZE=4096
+ENV NODE_OPTIONS="--max-old-space-size=${BUILD_NODE_MAX_OLD_SPACE_SIZE}"
 RUN npm run build
 # Compile helper scripts for production (where ts-node is not available)
 RUN npm run build:scripts
 
 # Stage 3: Production Runner
-FROM node:20-alpine AS runner
+FROM base AS runner
 WORKDIR /app
-
-# Install security updates and required runtime packages
-RUN apk update && apk upgrade && \
-    apk add --no-cache curl openssl openssl-dev && \
-    rm -rf /var/cache/apk/* && \
-    rm -rf /tmp/*
 
 # Set environment to production
 ENV NODE_ENV=production

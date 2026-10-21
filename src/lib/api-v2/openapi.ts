@@ -29,7 +29,10 @@ function buildBaseSpec(): Record<string, unknown> {
       { name: 'Incidents', description: 'Incident lifecycle, assignment, notes, and timeline' },
       { name: 'Services', description: 'Service inventory, configuration, and dependencies' },
       { name: 'Teams', description: 'Team organization and memberships' },
-      { name: 'Users', description: 'Safe directory and user details' },
+      {
+        name: 'Users',
+        description: 'User directory, role/lifecycle administration and invitations',
+      },
       {
         name: 'Schedules',
         description: 'On-call rotations, layers, overrides, and live on-call lookups',
@@ -43,6 +46,11 @@ function buildBaseSpec(): Record<string, unknown> {
       {
         name: 'Status Pages',
         description: 'Status pages, components, and public incident announcements',
+      },
+      {
+        name: 'Service Objectives',
+        description:
+          'Versioned measurement contracts, authorized history and bounded asynchronous evaluations',
       },
       { name: 'Runbooks', description: 'Automated remediation workflows and execution tracking' },
       {
@@ -307,6 +315,7 @@ function buildBaseSpec(): Record<string, unknown> {
             name: { type: 'string' },
             type: { type: 'string' },
             enabled: { type: 'boolean' },
+            snsTopicArn: { type: ['string', 'null'], description: 'Configured CloudWatch SNS topic; absent for other provider types.' },
             serviceId: { type: 'string' },
             service: {
               type: 'object',
@@ -481,24 +490,74 @@ function buildBaseSpec(): Record<string, unknown> {
           },
           required: ['windowDays', 'slaCompliancePercent', 'totalIncidents', 'resolvedIncidents'],
         },
+        PostmortemImpact: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            usersAffected: { type: 'integer', minimum: 0, maximum: 1000000000 },
+            downtimeMinutes: { type: 'integer', minimum: 0, maximum: 10000000 },
+            errorRate: { type: 'number', minimum: 0, maximum: 100 },
+            servicesAffected: { type: 'array', maxItems: 100, items: { type: 'string', minLength: 1, maxLength: 100 } },
+            slaBreaches: { type: 'integer', minimum: 0, maximum: 1000000000 },
+            revenueImpact: { type: 'number', minimum: 0, maximum: 1000000000000 },
+            apiErrors: { type: 'integer', minimum: 0, maximum: 1000000000 },
+            performanceDegradation: { type: 'number', minimum: 0, maximum: 100 },
+          },
+        },
+        PostmortemTimeline: {
+          type: 'array', maxItems: 100,
+          items: {
+            type: 'object', additionalProperties: false,
+            properties: {
+              id: { type: 'string', minLength: 1, maxLength: 100 },
+              timestamp: { type: 'string', format: 'date-time' },
+              type: { type: 'string', enum: ['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION'] },
+              title: { type: 'string', minLength: 1, maxLength: 200 },
+              description: { type: 'string', maxLength: 2000 },
+              actor: { type: 'string', maxLength: 200 },
+            },
+            required: ['id', 'timestamp', 'type', 'title', 'description'],
+          },
+        },
+        PostmortemFactors: {
+          type: 'array', maxItems: 30,
+          items: { type: 'object', additionalProperties: false, properties: {
+            id: { type: 'string', minLength: 1, maxLength: 100 },
+            category: { type: 'string', enum: ['TECHNICAL', 'PROCESS', 'HUMAN', 'EXTERNAL', 'OTHER'] },
+            description: { type: 'string', minLength: 1, maxLength: 2000 },
+            evidence: { type: 'array', maxItems: 10, items: { type: 'string', minLength: 1, maxLength: 500 } },
+          }, required: ['id', 'category', 'description', 'evidence'] },
+        },
+        PostmortemFiveWhys: {
+          type: 'array', maxItems: 10,
+          items: { type: 'object', additionalProperties: false, properties: {
+            id: { type: 'string', minLength: 1, maxLength: 100 },
+            question: { type: 'string', minLength: 1, maxLength: 500 },
+            answer: { type: 'string', minLength: 1, maxLength: 2000 },
+          }, required: ['id', 'question', 'answer'] },
+        },
         Postmortem: {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            revision: { type: 'integer', minimum: 1 },
             incidentId: { type: 'string' },
             title: { type: 'string', nullable: true },
             summary: { type: 'string' },
             rootCause: { type: 'string', nullable: true },
             resolution: { type: 'string', nullable: true },
             mitigation: { type: 'string', nullable: true },
-            impact: { type: 'string', nullable: true },
+            impact: { oneOf: [{ $ref: '#/components/schemas/PostmortemImpact' }, { type: 'null' }] },
+            timeline: { oneOf: [{ $ref: '#/components/schemas/PostmortemTimeline' }, { type: 'null' }] },
+            contributingFactors: { oneOf: [{ $ref: '#/components/schemas/PostmortemFactors' }, { type: 'null' }] },
+            fiveWhys: { oneOf: [{ $ref: '#/components/schemas/PostmortemFiveWhys' }, { type: 'null' }] },
             lessons: { type: 'string', nullable: true },
             status: { type: 'string', enum: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'] },
             isPublic: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
-          required: ['id', 'incidentId', 'summary', 'status', 'isPublic', 'createdAt', 'updatedAt'],
+          required: ['id', 'revision', 'incidentId', 'summary', 'status', 'isPublic', 'createdAt', 'updatedAt'],
         },
       },
       responses: {
@@ -917,6 +976,192 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/services/{id}/notification-settings': {
+        get: {
+          tags: ['Services'],
+          summary: 'Read service notification policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Service notification policy' } },
+        },
+        patch: {
+          tags: ['Services'],
+          summary: 'Update service notification policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    serviceNotificationChannels: { type: 'array', uniqueItems: true, maxItems: 7, items: { type: 'string', enum: ['SLACK', 'WEBHOOK', 'EMAIL', 'SMS', 'PUSH', 'WHATSAPP', 'MICROSOFT_TEAMS'] } },
+                    serviceNotifyOnTriggered: { type: 'boolean' },
+                    serviceNotifyOnAck: { type: 'boolean' },
+                    serviceNotifyOnResolved: { type: 'boolean' },
+                    serviceNotifyOnSlaBreach: { type: 'boolean' },
+                  },
+                  minProperties: 1,
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Updated service notification policy' } },
+        },
+      },
+      '/services/{id}/support-hours': {
+        get: {
+          tags: ['Services'],
+          summary: 'Read versioned service support-hours policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Current policy or null, with version ETag' } },
+        },
+        put: {
+          tags: ['Services'],
+          summary: 'Create the next immutable service support-hours policy version',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['timezone', 'inheritWorkspace', 'windows', 'exceptions'],
+                  properties: {
+                    timezone: { type: 'string', maxLength: 100 },
+                    inheritWorkspace: { type: 'boolean' },
+                    mode: { type: 'string', enum: ['INHERIT', 'ALWAYS', 'SCHEDULED'] },
+                    windows: { type: 'array', maxItems: 28, items: { type: 'object', additionalProperties: false, required: ['dayOfWeek', 'startMinute', 'endMinute'], properties: { dayOfWeek: { type: 'integer', minimum: 0, maximum: 6 }, startMinute: { type: 'integer', minimum: 0, maximum: 1439 }, endMinute: { type: 'integer', minimum: 1, maximum: 1440 } } } },
+                    exceptions: { type: 'array', maxItems: 366, items: { type: 'object', additionalProperties: false, required: ['localDate', 'available', 'startMinute', 'endMinute'], properties: { localDate: { type: 'string', format: 'date' }, available: { type: 'boolean' }, startMinute: { type: ['integer', 'null'] }, endMinute: { type: ['integer', 'null'] }, label: { type: ['string', 'null'], maxLength: 120 } } } },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'New immutable policy version' } },
+        },
+      },
+      '/services/{id}/response-policy/classification': {
+        get: {
+          tags: ['Services'],
+          summary: 'Read versioned service incident classification policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Current policy or null, with version ETag' } },
+        },
+        put: {
+          tags: ['Services'],
+          summary: 'Create the next immutable classification policy version',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['rules'],
+                  properties: {
+                    derivePriorityFromUrgency: { type: 'boolean' },
+                    priorityFallbackMode: { type: 'string', enum: ['INHERIT', 'ENABLED', 'DISABLED'] },
+                    rules: {
+                      type: 'array', minItems: 4, maxItems: 4,
+                      items: { type: 'object', additionalProperties: false,
+                        required: ['matchValue', 'priority', 'urgency'],
+                        properties: {
+                          matchValue: { type: 'string', enum: ['critical', 'error', 'warning', 'info'] },
+                          priorityMode: { type: 'string', enum: ['INHERIT', 'FALLBACK', 'SET', 'CLEAR'] },
+                          priority: { type: ['string', 'null'], enum: ['P1', 'P2', 'P3', 'P4', 'P5', null] },
+                          urgencyMode: { type: 'string', enum: ['INHERIT', 'SET', 'DEFAULT'] },
+                          urgency: { type: ['string', 'null'], enum: ['HIGH', 'MEDIUM', 'LOW', null] },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'New immutable classification policy version' } },
+        },
+      },
+      '/services/{id}/response-policy/sla': {
+        get: {
+          tags: ['Services'],
+          summary: 'Read versioned service SLA policy',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Current policy or null, with version ETag' } },
+        },
+        put: {
+          tags: ['Services'],
+          summary: 'Create the next immutable service SLA policy version',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['inheritWorkspace', 'baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
+                  properties: {
+                    inheritWorkspace: { type: 'boolean' },
+                    baseAckTargetMs: { type: ['integer', 'null'], minimum: 1, maximum: 2073600000 },
+                    baseResolveTargetMs: { type: ['integer', 'null'], minimum: 1, maximum: 2073600000 },
+                    rules: {
+                      type: 'array', maxItems: 5,
+                      items: {
+                        type: 'object', additionalProperties: false,
+                        required: ['priority', 'ackTargetMs', 'resolveTargetMs'],
+                        properties: {
+                          priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+                          ackTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                          resolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                          label: { type: 'string', maxLength: 120 },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'New immutable SLA policy version' } },
+        },
+      },
+      '/settings/incident-sla': {
+        get: {
+          tags: ['Administration'],
+          summary: 'Read the current workspace incident SLA policy',
+          responses: { '200': { description: 'Current immutable policy or null, with version ETag' } },
+        },
+        put: {
+          tags: ['Administration'],
+          summary: 'Create the next immutable workspace incident SLA policy version',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: {
+              type: 'object', additionalProperties: false,
+              required: ['baseAckTargetMs', 'baseResolveTargetMs', 'rules'],
+              properties: {
+                baseAckTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                baseResolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                rules: { type: 'array', maxItems: 5, items: {
+                  type: 'object', additionalProperties: false,
+                  required: ['priority', 'ackTargetMs', 'resolveTargetMs'],
+                  properties: {
+                    priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+                    ackTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                    resolveTargetMs: { type: 'integer', minimum: 1, maximum: 2073600000 },
+                    label: { type: 'string', maxLength: 120 },
+                  },
+                } },
+              },
+            } } },
+          },
+          responses: { '200': { description: 'New immutable workspace SLA policy version' } },
+        },
+      },
       '/teams': {
         get: {
           tags: ['Teams'],
@@ -1191,6 +1436,40 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/schedules/{id}/overrides/{overrideId}': {
+        delete: {
+          tags: ['Schedules'],
+          summary: 'Cancel a schedule override',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'overrideId', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': { description: 'Schedule override cancelled' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
+      '/schedules/{id}/coverage': {
+        get: {
+          tags: ['Schedules'],
+          summary: 'Calculate bounded effective coverage and gaps',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'start', in: 'query', required: true, schema: { type: 'string', format: 'date-time' } },
+            { name: 'end', in: 'query', required: true, schema: { type: 'string', format: 'date-time' } },
+          ],
+          responses: {
+            '200': { description: 'Effective shifts and uncovered intervals' },
+            '400': { $ref: '#/components/responses/ProblemError' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
       '/escalation-policies': {
         get: {
           tags: ['Escalation Policies'],
@@ -1297,6 +1576,22 @@ function buildBaseSpec(): Record<string, unknown> {
             '403': { $ref: '#/components/responses/ProblemError' },
             '404': { $ref: '#/components/responses/ProblemError' },
           },
+        },
+      },
+      '/escalation-policies/{id}/dependencies': {
+        get: {
+          tags: ['Escalation Policies'],
+          summary: 'Inspect service usage and live step target references',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Current dependency snapshot and target health' } },
+        },
+      },
+      '/escalation-policies/{id}/validation': {
+        get: {
+          tags: ['Escalation Policies'],
+          summary: 'Validate current policy steps and live target availability',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Bounded policy validation snapshot' } },
         },
       },
       '/integrations': {
@@ -1808,6 +2103,10 @@ function buildBaseSpec(): Record<string, unknown> {
                     rootCause: { type: 'string' },
                     resolution: { type: 'string' },
                     mitigation: { type: 'string' },
+                    impact: { $ref: '#/components/schemas/PostmortemImpact' },
+                    timeline: { $ref: '#/components/schemas/PostmortemTimeline' },
+                    contributingFactors: { $ref: '#/components/schemas/PostmortemFactors' },
+                    fiveWhys: { $ref: '#/components/schemas/PostmortemFiveWhys' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',
@@ -1856,6 +2155,10 @@ function buildBaseSpec(): Record<string, unknown> {
                     rootCause: { type: 'string' },
                     resolution: { type: 'string' },
                     mitigation: { type: 'string' },
+                    impact: { $ref: '#/components/schemas/PostmortemImpact' },
+                    timeline: { $ref: '#/components/schemas/PostmortemTimeline' },
+                    contributingFactors: { $ref: '#/components/schemas/PostmortemFactors' },
+                    fiveWhys: { $ref: '#/components/schemas/PostmortemFiveWhys' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',

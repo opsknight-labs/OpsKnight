@@ -99,6 +99,13 @@ function fixture(options: { mode?: 'LIVE' | 'SHADOW'; corrupt?: boolean } = {}) 
       })),
     },
     automationVersion: { findUnique: versionFind },
+    systemSettings: { findUnique: vi.fn(async () => ({
+      automationEnabled: true,
+      automationTraceRetentionDays: 90,
+      automationSettingsRevision: 0,
+      automationStoreObservationPreviews: false,
+      automationReadinessPolicy: null,
+    })) },
     escalationPolicy: { findUnique: vi.fn() },
     incidentAutomationDecision: { create: decisionCreate },
     automationTrace: { create: vi.fn(async () => ({})) },

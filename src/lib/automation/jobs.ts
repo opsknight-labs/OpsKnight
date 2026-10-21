@@ -1,3 +1,4 @@
+import { processPrivacyCleanup } from './privacy-cleanup';
 import { getAutomationSettings } from './settings';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
@@ -12,12 +13,28 @@ const observationSchema = z
     key: z.string().max(64),
     path: z.string().max(512),
     value: z.string().max(256),
+    valueHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     type: z.string().max(16),
     unmapped: z.boolean(),
     source: z.enum(['PROVIDER', 'EVENT']).optional(),
   })
   .strict();
 export const jobSchema = z.discriminatedUnion('task', [
+  z
+    .object({
+      task: z.literal('AUTOMATION_PRIVACY_CLEANUP'),
+      cleanupId: z.string().min(1).max(200).optional(),
+      batch: z.number().int().nonnegative().optional(),
+      completed: z.boolean().optional(),
+      observationsCleared: z.number().int().nonnegative().optional(),
+      jobsCleared: z.number().int().nonnegative().optional(),
+      more: z.boolean().optional(),
+      superseded: z.boolean().optional(),
+    })
+    .strict(),
   z
     .object({
       task: z.literal('AUTOMATION_NOTIFY'),
@@ -60,8 +77,12 @@ export const jobSchema = z.discriminatedUnion('task', [
     .strict(),
 ]);
 export type ObservationJob = Extract<z.infer<typeof jobSchema>, { task: 'AUTOMATION_OBSERVE' }>;
-export async function processAutomationJob(payload: unknown) {
+export async function processAutomationJob(payload: unknown, workerJobId?: string) {
   const job = jobSchema.parse(payload);
+  if (job.task === 'AUTOMATION_PRIVACY_CLEANUP') {
+    await processPrivacyCleanup(job, workerJobId);
+    return;
+  }
   if (job.task === 'AUTOMATION_RETENTION') {
     const requested = (await getAutomationSettings()).automationTraceRetentionDays;
     const days = Number.isFinite(requested) ? Math.max(1, Math.min(3650, requested)) : 90;

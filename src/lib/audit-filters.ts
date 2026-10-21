@@ -11,6 +11,10 @@ export const AUDIT_ENTITY_TYPES = [
   'SCHEDULE',
   'CUSTOM_FIELD',
   'STATUS_PAGE',
+  'DASHBOARD',
+  'SAVED_REPORT',
+  'REPORT_EXPORT',
+  'AUDIT_EXPORT',
   'SYSTEM_CONFIG',
 ] as const satisfies readonly AuditEntityType[];
 

@@ -697,15 +697,18 @@ export async function revokeRegisteredSession(input: {
 /**
  * Bulk-revokes all active sessions in a single atomic transaction.
  */
-export async function revokeAllRegisteredSessions(userId: string): Promise<number> {
+export async function revokeAllRegisteredSessions(
+  userId: string,
+  client?: Prisma.TransactionClient
+): Promise<number> {
   const policies: RegisteredSessionPolicy[] = ['STANDARD', 'TRUSTED_PWA', 'OIDC'];
-  const results = await prisma.$transaction(
-    policies.map(policy =>
-      prisma.userDevice.updateMany({
-        where: { userId, platform: activePlatform(policy) },
-        data: { platform: revokedPlatform(policy), lastUsed: new Date() },
-      })
-    )
+  const store = client ?? prisma;
+  const writes = policies.map(policy =>
+    store.userDevice.updateMany({
+      where: { userId, platform: activePlatform(policy) },
+      data: { platform: revokedPlatform(policy), lastUsed: new Date() },
+    })
   );
+  const results = client ? await Promise.all(writes) : await prisma.$transaction(writes);
   return results.reduce((sum, r) => sum + r.count, 0);
 }

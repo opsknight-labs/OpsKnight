@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { TypedValueInput, parseAuthoringScalar } from '@/components/automation/TypedValueInput';
 import AutomationWorkspace from '@/components/automation/AutomationWorkspace';
@@ -16,6 +16,7 @@ vi.mock('@/app/(app)/services/[id]/automation/actions', () => ({
   getAutomationArea: api.area,
 }));
 const data = {
+  recoveryOwnerId: 'actor',
   enabled: true,
   mode: 'SHADOW' as const,
   canPublish: true,
@@ -23,6 +24,11 @@ const data = {
   canEdit: true,
   activeVersionId: null,
   activeVersion: null,
+  candidateVersionId: null,
+  candidateVersion: null,
+  candidateAggregates: [],
+  candidateReadiness: null,
+  candidateEvidenceFreshness: null,
   draft: { snapshot: emptySnapshot, revision: 0 },
   aggregates: [],
   traces: [],
@@ -75,7 +81,7 @@ it('publication awaits an autosave in flight and clears recovery only after pers
   await waitFor(() =>
     expect(api.action).toHaveBeenCalledWith(expect.objectContaining({ action: 'save' }))
   );
-  expect(localStorage.getItem('automation-draft:service')).not.toBeNull();
+  expect(localStorage.getItem('automation-draft:actor:service')).not.toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm publication' }));
   expect(api.action.mock.calls.some(([input]) => input.action === 'publish')).toBe(false);
@@ -85,7 +91,7 @@ it('publication awaits an autosave in flight and clears recovery only after pers
       expect.objectContaining({ action: 'publish', expectedRevision: 1 })
     )
   );
-  expect(localStorage.getItem('automation-draft:service')).toBeNull();
+  expect(localStorage.getItem('automation-draft:actor:service')).toBeNull();
 });
 it('loads Shadow readiness before LIVE and keeps the mode unchanged when review is cancelled', async () => {
   api.area.mockResolvedValue({
@@ -1227,4 +1233,139 @@ it('disambiguates persisted observations with identical field keys, paths, and v
   expect(providerOption).toBeDefined();
   expect(eventOption).toHaveTextContent('Status — status (EVENTS_API)');
   expect(providerOption).toHaveTextContent('Status — status (GITHUB)');
+});
+
+it('allows publishing a candidate version while LIVE without leaving LIVE', async () => {
+  api.area.mockResolvedValue({ ...data, mode: 'LIVE' });
+  render(<AutomationWorkspace serviceId="service" />);
+  const publishCandidateBtn = await screen.findByRole('button', { name: /^Publish candidate$/ });
+  expect(publishCandidateBtn).not.toBeDisabled();
+  expect(
+    screen.getByText(
+      'Publishing while LIVE stages a candidate version for parallel shadow evaluation without interrupting routing.'
+    )
+  ).toBeVisible();
+});
+
+it('separates candidate errors and fallbacks and requires approval of material differences', async () => {
+  const candidateData = {
+    ...data,
+    mode: 'LIVE',
+    candidateVersionId: 'candidate',
+    candidateVersion: {
+      id: 'candidate',
+      versionNumber: 2,
+      snapshot: emptySnapshot,
+      checksum: 'fixture-checksum',
+      publishedAt: new Date().toISOString(),
+    },
+    candidateAggregates: [
+      {
+        evaluated: 1,
+        same: 0,
+        routeDifferent: 0,
+        priorityDifferent: 1,
+        noEscalationDifferent: 0,
+        errors: 1,
+        fallbacks: 1,
+      },
+    ],
+  };
+  api.area.mockImplementation(async (_serviceId: string, area: string) => ({
+    ...candidateData,
+    candidateVersion: {
+      ...candidateData.candidateVersion,
+      snapshot: area === 'overview' ? undefined : emptySnapshot,
+    },
+  }));
+  render(<AutomationWorkspace serviceId="service" />);
+  expect(await screen.findByText('1 / 1')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Activate candidate (LIVE cutover)' }));
+  expect(await screen.findByText('1 evaluations · 1 errors · 1 fallbacks')).toBeVisible();
+  const confirm = screen.getByRole('button', { name: 'Confirm LIVE' });
+  expect(confirm).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /I explicitly accept enabling LIVE/ }));
+  expect(confirm).toBeDisabled();
+  fireEvent.click(
+    screen.getByRole('checkbox', {
+      name: 'I approve the observed routing, priority and suppression differences.',
+    })
+  );
+  expect(confirm).toBeEnabled();
+});
+
+it('sends only the candidate precondition when discarding through the UI', async () => {
+  api.area.mockResolvedValue({
+    ...data,
+    mode: 'LIVE',
+    candidateVersionId: 'candidate',
+    candidateVersion: {
+      id: 'candidate',
+      versionNumber: 3,
+      snapshot: emptySnapshot,
+      checksum: 'fixture-checksum',
+      publishedAt: new Date().toISOString(),
+    },
+    candidateAggregates: [],
+  });
+  api.action.mockResolvedValue({ ok: true, data: {} });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Discard candidate' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Discard candidate' })
+  );
+  await waitFor(() =>
+    expect(api.action).toHaveBeenCalledWith({
+      action: 'discardCandidate',
+      serviceId: 'service',
+      expectedCandidateVersionId: 'candidate',
+    })
+  );
+});
+it('restores history into an editable draft without publication or a mode change', async () => {
+  const version = {
+    id: 'historical-version',
+    versionNumber: 1,
+    publishedAt: new Date().toISOString(),
+    publishedBy: 'publisher',
+    publisherName: 'Publisher',
+    checksum: 'checksum',
+    sourceVersionId: null,
+  };
+  let restored = false;
+  api.area.mockImplementation(async () => ({
+    ...data,
+    mode: 'LIVE',
+    activeVersionId: 'current-version',
+    draft: { snapshot: emptySnapshot, revision: restored ? 8 : 7 },
+    versions: [version],
+    versionTotal: 1,
+  }));
+  api.action.mockImplementation(async (input: { action: string }) => {
+    if (input.action === 'restoreDraft') restored = true;
+    return { ok: true, data: { revision: 8 } };
+  });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Activity' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Restore as draft' }));
+  await waitFor(() =>
+    expect(api.action).toHaveBeenCalledWith({
+      serviceId: 'service',
+      action: 'restoreDraft',
+      sourceVersionId: version.id,
+      expectedRevision: 7,
+    })
+  );
+  await waitFor(() => expect(api.area).toHaveBeenLastCalledWith('service', 'rules', 1));
+  expect(api.action.mock.calls.map(([input]) => input.action)).toEqual(['restoreDraft']);
+});
+
+it('does not offer recovery drafts belonging to a different actor or the legacy service-only key', async () => {
+  localStorage.setItem('automation-draft:other-actor:service', JSON.stringify(emptySnapshot));
+  localStorage.setItem('automation-draft:service', JSON.stringify(emptySnapshot));
+  render(<AutomationWorkspace serviceId="service" />);
+  await screen.findByRole('button', { name: 'Edit automation' });
+  expect(screen.queryByText('A local recovery copy is available.')).not.toBeInTheDocument();
+  expect(localStorage.getItem('automation-draft:service')).toBeNull();
+  expect(localStorage.getItem('automation-draft:other-actor:service')).not.toBeNull();
 });

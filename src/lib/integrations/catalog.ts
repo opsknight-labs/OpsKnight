@@ -1,0 +1,8 @@
+/** Supported inbound providers. Keep route schemas and the public type catalog derived from this list. */
+export const INTEGRATION_TYPES = [
+  'EVENTS_API_V2', 'CLOUDWATCH', 'AZURE', 'DATADOG', 'GITHUB', 'GRAFANA', 'PROMETHEUS',
+  'NEWRELIC', 'SENTRY', 'GOOGLE_CLOUD_MONITORING', 'SPLUNK_ONCALL', 'SPLUNK_OBSERVABILITY',
+  'DYNATRACE', 'APPDYNAMICS', 'ELASTIC', 'HONEYCOMB', 'BITBUCKET', 'UPTIMEROBOT',
+  'PINGDOM', 'BETTER_UPTIME', 'UPTIME_KUMA', 'NAGIOS', 'ICINGA', 'ZABBIX', 'MANAGEENGINE',
+  'PAGERDUTY', 'GITLAB', 'VERCEL', 'WEBHOOK',
+] as const;

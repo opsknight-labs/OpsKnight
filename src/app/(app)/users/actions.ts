@@ -1,18 +1,19 @@
 'use server';
 
 import {
-  getAuthenticationPolicy,
-  assertPasswordOperationAllowed,
-} from '@/lib/authentication-policy';
+  issueUserInvitation,
+  renewUserInvitation,
+  prepareUserInvitation,
+} from '@/lib/users/invitations';
+import { readInvitationPolicy, readUserInvitation } from '@/lib/users/invitation-policy';
+import { getControlActor, lockControlActor } from '@/lib/auth-control/actor';
+import { administerUser } from '@/lib/users/administration';
+import { setTeamMembership, teamMemberInput } from '@/lib/teams/administration';
 
 import prisma from '@/lib/prisma';
-import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
-import { randomBytes, createHash } from 'crypto';
 import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf, getCurrentUser } from '@/lib/rbac';
-import { buildInviteUrl, issueUserInviteToken } from '@/lib/invitations';
-import { logger } from '@/lib/logger';
 import { isAppRole } from '@/lib/authorization';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
@@ -22,97 +23,6 @@ import {
   type UserDependencyReport,
 } from '@/lib/users/dependencies';
 import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
-import { requireOperationalUser } from '@/lib/users/operational-eligibility';
-
-type EmailInviteResult = {
-  sent: boolean;
-  queued?: boolean;
-  providerConfigured: boolean;
-  providerName?: string | null;
-};
-
-function inviteEventKey(inviteUrl: string): string {
-  // Never persist the plaintext invite capability as a dedup/event key.
-  return createHash('sha256').update(inviteUrl).digest('hex');
-}
-
-async function sendInviteEmailIfConfigured(data: {
-  userId: string;
-  email: string;
-  name: string;
-  inviteUrl: string;
-  invitedBy?: string;
-  ssoOnly?: boolean;
-  generation?: number;
-}): Promise<EmailInviteResult> {
-  try {
-    const { getEmailConfig } = await import('@/lib/notification-providers');
-    const emailConfig = await getEmailConfig();
-
-    if (!emailConfig.enabled || !emailConfig.provider) {
-      return { sent: false, providerConfigured: false, providerName: null };
-    }
-
-    const providerLabels: Record<string, string> = {
-      resend: 'Resend',
-      sendgrid: 'SendGrid',
-      ses: 'Amazon SES',
-      smtp: 'Custom SMTP',
-    };
-    const providerName = providerLabels[emailConfig.provider] || emailConfig.provider;
-
-    const { getUserInviteEmailTemplate } = await import('@/lib/user-invite-email-template');
-    const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
-    const template = getUserInviteEmailTemplate({
-      userName: data.name,
-      inviteUrl: data.inviteUrl,
-      invitedBy: data.invitedBy,
-      ssoOnly: data.ssoOnly,
-    });
-
-    const result = await enqueueCentralNotification(
-      {
-        category: 'ADMINISTRATION',
-        channel: 'EMAIL',
-        recipientType: 'USER',
-        recipientId: data.userId,
-        recipientAddress: data.email,
-        userId: data.userId,
-        templateKey: 'user-invitation',
-        sourceType: 'USER_INVITATION',
-        sourceId: data.userId,
-        eventKey: `${inviteEventKey(data.inviteUrl)}${data.generation ? `:${data.generation}` : ''}`,
-        displayMessage: 'Workspace invitation',
-        priority: 2,
-        payload: {
-          kind: 'EMAIL',
-          to: data.email,
-          subject: template.subject,
-          html: template.html,
-          text: template.text,
-        },
-      },
-      { dispatchImmediately: data.ssoOnly ? false : undefined }
-    );
-    return {
-      sent: result.delivered === true,
-      queued: !result.skipped && result.delivered !== true && !result.error,
-      providerConfigured: true,
-      providerName,
-    };
-  } catch (error) {
-    logger.warn('Failed to send invite email', {
-      component: 'users-actions',
-      error,
-      email: data.email,
-    });
-    return {
-      sent: false,
-      providerConfigured: true,
-      providerName: null,
-    };
-  }
-}
 
 export async function assertUserIsNotSoleOwner(userId: string) {
   const ownedMemberships = await prisma.teamMember.findMany({
@@ -243,165 +153,65 @@ export async function getUserDependencyReport(
   }
 }
 
-async function createInviteToken(userId: string, email: string) {
-  const { inviteUrl } = await issueUserInviteToken(userId, email);
-  return inviteUrl;
-}
-
 export async function addUser(
   _prevState: UserFormState,
   formData: FormData
 ): Promise<UserFormState> {
-  let admin: { id: string; email: string; name: string | null } | null = null;
   try {
-    admin = await assertAdmin();
-  } catch {
-    return { error: 'Unauthorized. Admin access required.' };
-  }
-
-  const name = (formData.get('name') as string | null)?.trim() ?? '';
-  const email = (formData.get('email') as string | null)?.trim().toLowerCase() ?? '';
-  const role = formData.get('role') as string;
-
-  if (!name || !email) {
-    return { error: 'Name and email are required.' };
-  }
-  if (!isAppRole(role)) {
-    return { error: 'Select a valid user role.' };
-  }
-
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return { error: 'Please enter a valid email address (e.g., name@company.com).' };
-  }
-
-  try {
-    const existing = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    // Rate Limit (Admin Abuse Protection)
+    const admin = await assertAdmin();
+    const actor = await getControlActor();
+    if (actor.kind !== 'admin' || actor.id !== admin.id)
+      throw new Error('Ordinary administrator access required for user invitations.');
+    const name = String(formData.get('name') ?? '').trim();
+    const email = String(formData.get('email') ?? '')
+      .trim()
+      .toLowerCase();
+    const role = formData.get('role');
+    if (!isAppRole(role)) return { error: 'Select a valid user role.' };
     const { headers } = await import('next/headers');
     const headerList = await headers();
-    const realIp = headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown';
-
     const { checkRateLimit } = await import('@/lib/password-reset');
-    // Limit admin creating users
-    if (admin) {
-      await checkRateLimit(email, realIp, 'user.invited');
-    }
-
-    if (existing?.status === 'DISABLED') {
-      return { error: 'User is disabled. Reactivate before adding again.' };
-    }
-
-    if (existing) {
-      return { error: 'A user with that email already exists.' };
-    }
-
-    const policy = await getAuthenticationPolicy();
-    if (policy.mode === 'SSO_REQUIRED' || formData.get('ssoOnly') === 'on') {
-      const result = await inviteSsoUser({ name, email, role });
-      const delivery = await sendInviteEmailIfConfigured({
-        userId: result.userId,
-        email,
+    await checkRateLimit(
+      email,
+      headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown',
+      'user.invited'
+    );
+    const [policy, prepared] = await Promise.all([
+      prisma.$transaction(tx => readInvitationPolicy(tx, actor)),
+      prepareUserInvitation(),
+    ]);
+    const result = await issueUserInvitation(
+      {
         name,
-        inviteUrl: result.inviteUrl,
-        invitedBy: admin?.name || admin?.email || undefined,
-        ssoOnly: true,
-        generation: result.generation,
-      });
-      revalidatePath('/users');
-      revalidatePath('/audit');
-      return {
-        ...result,
-        emailSent: delivery.sent,
-        emailQueued: delivery.queued,
-        providerConfigured: delivery.providerConfigured,
-        providerName: delivery.providerName,
-      };
-    }
-    await assertPasswordOperationAllowed();
-    let inviteToken = '';
-    const user = await prisma.$transaction(async tx => {
-      await assertPasswordOperationAllowed(tx);
-      const newUser = await tx.user.create({
-        data: {
-          name,
-          email,
-          role,
-          status: 'INVITED',
-          invitedAt: new Date(),
-          invitationGeneration: 1,
-        },
-      });
-
-      // Inline token creation to use TX
-      const token = randomBytes(32).toString('base64url');
-      const tokenHash = createHash('sha256').update(token).digest('hex');
-      const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      const identifier = email.toLowerCase();
-
-      await tx.userToken.deleteMany({
-        where: {
-          identifier,
-          type: { in: ['INVITE', 'PASSWORD_RESET'] },
-          usedAt: null,
-        },
-      });
-
-      await tx.userToken.create({
-        data: {
-          identifier,
-          userId: newUser.id,
-          generation: newUser.invitationGeneration,
-          type: 'INVITE',
-          tokenHash,
-          expiresAt: expires,
-        },
-      });
-
-      inviteToken = token;
-
-      return newUser;
-    });
-
-    const inviteUrl = await buildInviteUrl(inviteToken);
-
-    await logAudit({
-      action: 'user.invited',
-      entityType: 'USER',
-      entityId: user.id,
-      actorId: admin?.id || null,
-      details: { email, role: role || 'USER' },
-      targetEmail: email,
-    });
-
+        email,
+        role,
+        authenticationMode:
+          policy.mode === 'SSO_REQUIRED' || formData.get('ssoOnly') === 'on' ? 'SSO' : 'PASSWORD',
+        delivery: prepared.emailProviders.length ? 'EMAIL' : 'MANUAL',
+        expectedPolicyVersion: policy.policyVersion,
+        expectedOidcConfigVersion: policy.oidcConfigVersion,
+      },
+      actor,
+      {
+        prepared,
+        allowManualDisclosure: true,
+        beforeWrite: tx => lockControlActor(tx, actor, false),
+      }
+    );
     revalidatePath('/users');
     revalidatePath('/audit');
-
-    const emailResult = await sendInviteEmailIfConfigured({
-      userId: user.id,
-      email,
-      name,
-      inviteUrl,
-      invitedBy: admin?.name || admin?.email || undefined,
-    });
-
     return {
       success: true,
-      inviteUrl,
-      emailSent: emailResult.sent,
-      providerConfigured: emailResult.providerConfigured,
-      providerName: emailResult.providerName,
-      recipientEmail: email,
+      ssoOnly: result.authenticationMode === 'SSO',
+      inviteUrl: result.inviteUrl,
+      emailSent: false,
+      emailQueued: Boolean(result.notificationId),
+      providerConfigured: Boolean(prepared.emailProviders.length),
+      providerName: prepared.emailProviders[0] ?? null,
+      recipientEmail: result.recipientEmail,
     };
   } catch (error) {
-    logger.error('Failed to add user', { component: 'users-actions', error, email, name, role });
-    return {
-      error: error instanceof Error ? error.message : 'Failed to create user or generate invite.',
-    };
+    return { error: error instanceof Error ? error.message : 'Failed to create user invitation.' };
   }
 }
 
@@ -429,19 +239,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
     }
   }
 
-  await updateUserSecurityState(
-    userId,
-    { role, roleSource: 'MANUAL' },
-    { tokenVersion: { increment: 1 } }
-  );
-
-  await logAudit({
-    action: 'user.role.updated',
-    entityType: 'USER',
-    entityId: userId,
-    actorId: currentUser?.id || null,
-    details: { role },
-  });
+  await administerUser(userId, { operation: 'set-role', role }, { id: currentUser.id });
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -462,32 +260,12 @@ export async function addUserToTeam(userId: string, formData: FormData) {
           : 'Unauthorized. Admin or team owner access required.',
     };
   }
-  const requestedRole = (formData.get('role') as string) || 'MEMBER';
-  const role = ['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole) ? requestedRole : 'MEMBER';
-
-  const existing = await prisma.teamMember.findFirst({
-    where: { teamId, userId },
-  });
-
-  if (existing) return;
-
-  await prisma.$transaction(
-    async tx => {
-      await requireOperationalUser(tx, userId);
-      await tx.teamMember.create({
-        data: { userId, teamId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
-      });
-    },
-    { isolationLevel: 'Serializable' }
+  await setTeamMembership(
+    teamId,
+    userId,
+    teamMemberInput.parse({ role: formData.get('role') || 'MEMBER' }),
+    { id: currentUser.id }
   );
-
-  await logAudit({
-    action: 'team.member.added',
-    entityType: 'TEAM_MEMBER',
-    entityId: `${teamId}:${userId}`,
-    actorId: currentUser?.id || null,
-    details: { teamId, userId, role: role || 'MEMBER' },
-  });
 
   revalidatePath('/users');
   revalidatePath('/teams');
@@ -496,15 +274,7 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 
 export async function removeUserFromTeam(memberId: string) {
   const currentUser = await assertAdmin();
-  const member = await removeTeamMembership(memberId);
-
-  await logAudit({
-    action: 'team.member.removed',
-    entityType: 'TEAM_MEMBER',
-    entityId: memberId,
-    actorId: currentUser.id,
-    details: { teamId: member.teamId, userId: member.userId },
-  });
+  await removeTeamMembership(memberId, currentUser);
 
   revalidatePath('/users');
   revalidatePath('/teams');
@@ -522,37 +292,7 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  await updateUserSecurityState(
-    userId,
-    { status: 'DISABLED' },
-    {
-      deactivatedAt: new Date(),
-      tokenVersion: { increment: 1 },
-      invitationGeneration: { increment: 1 },
-    },
-    async tx => {
-      const revokedAt = new Date();
-      await tx.userToken.updateMany({
-        where: { userId, usedAt: null, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.apiKey.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.oidcLinkingApproval.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.userDevice.deleteMany({ where: { userId } });
-    }
-  );
-  await logAudit({
-    action: 'user.deactivated',
-    entityType: 'USER',
-    entityId: userId,
-    actorId: currentUser?.id || null,
-  });
+  await administerUser(userId, { operation: 'deactivate' }, { id: currentUser.id });
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -567,30 +307,11 @@ export async function reactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  const target = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { status: true, passwordHash: true },
-  });
-  if (!target) return { error: 'User not found.' };
-  if (target.status !== 'DISABLED') return { error: 'Only disabled users can be reactivated.' };
-
-  await updateUserSecurityState(
-    userId,
-    {
-      status: target.passwordHash ? 'ACTIVE' : 'INVITED',
-      tokenVersion: { increment: 1 },
-    },
-    {
-      deactivatedAt: null,
-    }
-  );
-
-  await logAudit({
-    action: 'user.reactivated',
-    entityType: 'USER',
-    entityId: userId,
-    actorId: currentUser?.id || null,
-  });
+  try {
+    await administerUser(userId, { operation: 'reactivate' }, { id: currentUser.id });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to reactivate user.' };
+  }
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -599,96 +320,69 @@ export async function reactivateUser(userId: string, _formData?: FormData) {
 export async function generateInvite(
   userId: string,
   _prevState: UserFormState,
-  _formData: FormData
+  formData: FormData
 ): Promise<UserFormState> {
-  let admin: { id: string; email: string; name: string | null } | null = null;
   try {
-    admin = await assertAdmin();
-  } catch {
-    return { error: 'Unauthorized. Admin access required.' };
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-
-  if (!user) {
-    return { error: 'User not found.' };
-  }
-
-  if (user.status !== 'INVITED') {
-    return {
-      error:
-        user.status === 'DISABLED'
-          ? 'User is disabled. Reactivate before inviting.'
-          : 'Active users must use password recovery instead of an invitation.',
-    };
-  }
-
-  const { headers } = await import('next/headers');
-  const headerList = await headers();
-  const realIp = headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown';
-  const { checkRateLimit } = await import('@/lib/password-reset');
-  await checkRateLimit(user.email, realIp, 'user.invite.resent');
-
-  const policy = await getAuthenticationPolicy();
-  const existingApproval = await prisma.oidcLinkingApproval.findUnique({ where: { userId } });
-  if (policy.mode === 'SSO_REQUIRED' || existingApproval || _formData.get('ssoOnly') === 'on') {
-    const result = await inviteSsoUser({
+    const admin = await assertAdmin();
+    const actor = await getControlActor();
+    if (actor.kind !== 'admin' || actor.id !== admin.id)
+      throw new Error('Ordinary administrator access required for user invitations.');
+    const [snapshot, prepared] = await Promise.all([
+      prisma.$transaction(
+        async tx => ({
+          policy: await readInvitationPolicy(tx, actor),
+          invitation: await readUserInvitation(tx, userId, actor),
+          user: await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } }),
+        }),
+        { isolationLevel: 'Serializable' }
+      ),
+      prepareUserInvitation(),
+    ]);
+    const { headers } = await import('next/headers');
+    const headerList = await headers();
+    const { checkRateLimit } = await import('@/lib/password-reset');
+    await checkRateLimit(
+      snapshot.user.email,
+      headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown',
+      'user.invite.resent'
+    );
+    const result = await renewUserInvitation(
       userId,
-      name: user.name || user.email,
-      email: user.email,
-      role: user.role,
-    });
-    const delivery = await sendInviteEmailIfConfigured({
-      userId: result.userId,
-      email: user.email,
-      name: user.name || user.email,
-      inviteUrl: result.inviteUrl,
-      invitedBy: admin?.name || admin?.email || undefined,
-      ssoOnly: true,
-      generation: result.generation,
-    });
+      {
+        authenticationMode:
+          snapshot.policy.mode === 'SSO_REQUIRED' ||
+          snapshot.invitation.linkingApprovalRevision ||
+          formData.get('ssoOnly') === 'on'
+            ? 'SSO'
+            : 'PASSWORD',
+        delivery: prepared.emailProviders.length ? 'EMAIL' : 'MANUAL',
+        expectedPolicyVersion: snapshot.policy.policyVersion,
+        expectedOidcConfigVersion: snapshot.policy.oidcConfigVersion,
+        expectedLinkingApprovalRevision: snapshot.invitation.linkingApprovalRevision,
+      },
+      actor,
+      {
+        prepared,
+        expectedRevision: snapshot.invitation.revision,
+        allowManualDisclosure: true,
+        beforeWrite: tx => lockControlActor(tx, actor, false),
+      }
+    );
     revalidatePath('/users');
     revalidatePath('/audit');
     return {
-      ...result,
-      emailSent: delivery.sent,
-      emailQueued: delivery.queued,
-      providerConfigured: delivery.providerConfigured,
-      providerName: delivery.providerName,
+      success: true,
+      ssoOnly: result.authenticationMode === 'SSO',
+      inviteUrl: result.inviteUrl,
+      emailSent: false,
+      emailQueued: Boolean(result.notificationId),
+      providerConfigured: Boolean(prepared.emailProviders.length),
+      providerName: prepared.emailProviders[0] ?? null,
+      recipientEmail: result.recipientEmail,
     };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to renew user invitation.' };
   }
-  const inviteUrl = await createInviteToken(user.id, user.email);
-
-  await logAudit({
-    action: 'user.invite.resent',
-    entityType: 'USER',
-    entityId: user.id,
-    actorId: admin?.id || null,
-    details: { email: user.email },
-    targetEmail: user.email,
-  });
-
-  revalidatePath('/users');
-  revalidatePath('/audit');
-
-  const emailResult = await sendInviteEmailIfConfigured({
-    userId: user.id,
-    email: user.email,
-    name: user.name || user.email,
-    inviteUrl,
-    invitedBy: admin?.name || admin?.email || undefined,
-  });
-
-  return {
-    success: true,
-    inviteUrl,
-    emailSent: emailResult.sent,
-    providerConfigured: emailResult.providerConfigured,
-    providerName: emailResult.providerName,
-    recipientEmail: user.email,
-  };
 }
 
 export async function deleteUser(

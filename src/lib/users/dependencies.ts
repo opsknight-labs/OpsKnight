@@ -2,6 +2,35 @@ import 'server-only';
 
 import prisma from '@/lib/prisma';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import type { Prisma } from '@prisma/client';
+
+/** Bounded, detail-free snapshot for administrator lifecycle review. */
+export async function countUserDependencies(userId: string, client: Prisma.TransactionClient) {
+  const now = new Date();
+  const values = await Promise.all([
+    client.teamMember.count({ where: { userId } }),
+    client.team.count({ where: { teamLeadId: userId } }),
+    client.escalationRule.count({ where: { targetUserId: userId } }),
+    client.onCallLayerUser.count({ where: { userId } }),
+    client.onCallOverride.count({ where: { OR: [{ userId }, { replacesUserId: userId }], end: { gte: now } } }),
+    client.onCallShift.count({ where: { userId, end: { gte: now } } }),
+    client.incident.count({ where: { assigneeId: userId, status: { in: activeIncidentStatuses() } } }),
+    client.actionItem.count({ where: { ownerId: userId, status: { not: 'COMPLETED' } } }),
+    client.dashboard.count({ where: { userId } }),
+  ]);
+  const counts = {
+    teams: values[0],
+    teamsLed: values[1],
+    escalationPolicies: values[2],
+    scheduleLayers: values[3],
+    overrides: values[4],
+    shifts: values[5],
+    incidents: values[6],
+    actionItems: values[7],
+    dashboards: values[8],
+  };
+  return { asOf: now.toISOString(), counts, total: values.reduce((sum, count) => sum + count, 0) };
+}
 
 export type UserDependencyReport = {
   teams: Array<{ membershipId: string; teamId: string; teamName: string; role: string }>;

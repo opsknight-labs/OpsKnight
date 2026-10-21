@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "2799a70ab8ac6d3ee08a87a93ff9527d74bca105",
+  "releaseStatus": "not_certified",
+  "pr": 886,
+  "scope": "Complete enterprise plan in one draft PR; no intermediate merge.",
+  "automationRuntime": {
+    "includedInScope": true,
+    "sourceBranch": "main (PR #896)",
+    "status": "combined-certification-pending",
+    "wholesaleMergeAllowed": false
+  },
+  "baselineCI": {
+    "Runbook protocol validation": {
+      "runId": 39258961278,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961278",
+      "conclusion": "success"
+    },
+    "Docker Swarm Validation": {
+      "runId": 39258961141,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961141",
+      "conclusion": "success"
+    },
+    "Tests": {
+      "runId": 39258961206,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961206",
+      "conclusion": "success"
+    },
+    "Service automation validation": {
+      "runId": 39258961167,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961167",
+      "conclusion": "success"
+    },
+    "Docker Image (build + push)": {
+      "runId": 39259057500,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39259057500",
+      "conclusion": "success"
+    },
+    "SBOM artifact validation": {
+      "runId": 39258961247,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961247",
+      "conclusion": "success"
+    },
+    "Deployment manifests": {
+      "runId": 39258961139,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961139",
+      "conclusion": "success"
+    },
+    "Security Suite": {
+      "runId": 39258961065,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961065",
+      "conclusion": "success"
+    },
+    "Integration control-plane certification": {
+      "runId": 39258961178,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961178",
+      "conclusion": "success"
+    },
+    "Enterprise SSO certification": {
+      "runId": 39258961335,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258961335",
+      "conclusion": "success"
+    },
+    "Microsoft Teams Contract + DB Integration": {
+      "runId": 39258963147,
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39258963147",
+      "conclusion": "success"
+    }
+  },
+  "kindBaseline": {
+    "namespace": "opsknight-api-886-072b69f",
+    "applicationImage": "opsknight-pr886:2799a70ab",
+    "readyApplicationRoles": 7,
+    "migrationUpgrade": "passed",
+    "combinedAgentLifecycle": "pending",
+    "physicalNodeHA": "not_certifiable_on_single_kind_node"
+  },
+  "coverageCommand": "npm run --silent api:coverage",
+  "coverageArtifact": "rest-api-coverage-<source-sha> in Tests workflow",
+  "remainingGates": "plans/rest-api-enterprise/workflow-inventory.json",
+  "teamAdministration": {
+    "operations": 5,
+    "postgresTests": 38,
+    "freshInstallMigrationCount": 271,
+    "populatedUpgradeFrom": "2799a70ab8ac6d3ee08a87a93ff9527d74bca105",
+    "publishedMigrationChecksums": "unchanged",
+    "latestCI": "pending",
+    "browserCertification": "Local production build: Chromium, Firefox and WebKit passed; exact-head CI pending",
+    "remainingWorkflow": "Managed services, activity, and complete identity lifecycle",
+    "postgresCoverage": "17 new team/parity scenarios and 21 existing REST runtime scenarios",
+    "localContractChecks": 420,
+    "scopeIssuanceChecks": 109,
+    "fullTypecheck": "passed without incremental caching",
+    "productionBuild": "passed",
+    "broadUnitRun": {
+      "filesPassedInitially": 902,
+      "testsPassedInitially": 8530,
+      "skipped": 4,
+      "correctedFailures": [
+        "Two architecture assertions updated to the new shared security boundary",
+        "Generated API reference regenerated from scope/mutation registries"
+      ],
+      "correctedSuites": "Targeted rerun passed"
+    }
+  },
+  "teamServiceActivityFollowUp": {
+    "sourceParentCommit": "e14545b94529b2c3216d353eb180f058a91e7f1e",
+    "operations": [
+      "listTeamServices",
+      "assignTeamService",
+      "listTeamActivity"
+    ],
+    "domainCommands": [
+      "src/lib/teams/service-commands.ts",
+      "src/lib/teams/activity.ts"
+    ],
+    "postgresTests": 29,
+    "focusedContractTests": 395,
+    "freshInstallAndPopulatedUpgradeMigrations": 275,
+    "existingMigrationChecksums": "preserved",
+    "scope": "Shared UI/REST service ownership and bounded owner-only team activity; no full user lifecycle claim",
+    "status": "local_verification_passed_latest_ci_pending",
+    "browser": "Production build passed in Chromium, Firefox and WebKit, including UI/REST assignment and first/cursor activity pages.",
+    "latestCI": "pending",
+    "populatedTargetTables": {
+      "serviceRowsPreserved": 1000,
+      "auditRowsPreserved": 3000
+    },
+    "productionRegression": "Activity queries use complete tagged first-page/cursor SQL. Production browser and PostgreSQL both verify these query paths."
+  },
+  "userAdministration": {
+    "sourceParentCommit": "38beab49b8b5695b3e002978c6355645abc5153f",
+    "operations": [
+      "getUserAdministration",
+      "administerUser"
+    ],
+    "sharedCommands": [
+      "src/lib/users/administration.ts",
+      "src/lib/users/admin-invariants.ts",
+      "src/lib/session-registry.ts:revokeAllRegisteredSessions"
+    ],
+    "scope": "Role, deactivate/reactivate and session revocation share UI commands. Invitations, dependencies and bulk/profile parity remain unfinished.",
+    "postgresTests": 12,
+    "postgresRegressions": {
+      "teamAndServiceActivity": 29,
+      "sessionRegistry": 10
+    },
+    "contractTests": 190,
+    "sessionUnitTests": 45,
+    "pythonSdkTests": 9,
+    "manualRoleSourceCompatibility": "OIDC-origin role can be explicitly overridden by an administrator, matching existing UI MANUAL-source semantics. Provider mappings may reassert roles.",
+    "credentialScope": "users:write must be explicit; admin:manage alone grants no new destructive operation.",
+    "freshInstallAndPopulatedUpgradeMigrations": 276,
+    "usersPreservedOnUpgrade": 500,
+    "existingMigrationChecksums": "preserved",
+    "productionBuild": "passed",
+    "browser": "Production Chromium, Firefox and WebKit passed; actual UI role/deactivation and REST reactivation/session tombstones/replay.",
+    "fullTypecheck": "passed without incremental caching",
+    "changedSourceLint": "zero errors and warnings",
+    "latestCI": "pending",
+    "releaseCertified": false,
+    "parentCI": {
+      "commit": "38beab49b8b5695b3e002978c6355645abc5153f",
+      "workflowFamilies": 11,
+      "runs": [
+        {
+          "workflow": "Security Suite",
+          "runId": 39292962150,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Enterprise SSO certification",
+          "runId": 39292962196,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Deployment manifests",
+          "runId": 39292962230,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "SBOM artifact validation",
+          "runId": 39292962232,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Microsoft Teams Contract + DB Integration",
+          "runId": 39292962316,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Docker Image (build + push)",
+          "runId": 39292962328,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Integration control-plane certification",
+          "runId": 39292962198,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Service automation validation",
+          "runId": 39292962371,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Tests",
+          "runId": 39292962253,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Docker Swarm Validation",
+          "runId": 39292962126,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Runbook protocol validation",
+          "runId": 39292962197,
+          "conclusion": "success"
+        },
+        {
+          "workflow": "Runbook protocol validation",
+          "runId": 39292952915,
+          "conclusion": "success"
+        }
+      ]
+    }
+  }
+}

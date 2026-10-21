@@ -1,3 +1,4 @@
+import { observationValueHash } from '@/lib/automation/observation-privacy';
 /* eslint-disable security/detect-object-injection -- Field names are a fixed typed test list. */
 import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import {
@@ -7,7 +8,13 @@ import {
   createTestNotificationProvider,
 } from '../helpers/test-db';
 import { processEvent, processIntegrationEvent, type EventPayload } from '@/lib/events';
-import { saveDraft, publishVersion, changeMode } from '@/lib/automation/versioning';
+import {
+  saveDraft,
+  publishVersion,
+  changeMode,
+  activateCandidate,
+  discardCandidate,
+} from '@/lib/automation/versioning';
 import { resolveIncidentResponderRouting } from '@/lib/escalation/routing';
 import { executeEscalation } from '@/lib/escalation';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
@@ -99,6 +106,22 @@ async function setup(policy: Snapshot = snapshot, mode: 'SHADOW' | 'LIVE' = 'LIV
     expectedActiveVersionId: version.id,
   });
   return { service, actor, draft, version };
+}
+// Fixture cutovers promote candidates atomically when operating in LIVE mode.
+async function publishReviewedReplacement(input: Parameters<typeof publishVersion>[0]) {
+  const version = await publishVersion(input);
+  const config = await db.serviceAutomationConfig.findUnique({
+    where: { serviceId: input.serviceId },
+  });
+  if (config?.mode === 'LIVE' && config.candidateVersionId === version.id) {
+    await activateCandidate({
+      serviceId: input.serviceId,
+      actorId: input.actorId,
+      expectedCandidateVersionId: version.id,
+      acknowledgeNoShadow: true,
+    });
+  }
+  return version;
 }
 async function ingest(serviceId: string, incoming: EventPayload = event) {
   return processIntegrationEvent({
@@ -316,7 +339,9 @@ describe('service automation transaction certification', () => {
     expect((await changeMode({ ...input, acknowledgeShadowErrors: true })).mode).toBe('LIVE');
   });
   it('protects inactive published policy references even before any incident exists', async () => {
-    const policy = await db.escalationPolicy.create({ data: { name: 'Historical dependency' } });
+    const historicalPolicy = await db.escalationPolicy.create({
+      data: { name: 'Historical dependency' },
+    });
     const { service, actor, version, draft } = await setup({
       ...emptySnapshot,
       rules: [
@@ -326,24 +351,88 @@ describe('service automation transaction certification', () => {
           phase: 'ROUTE',
           enabled: true,
           conditions: [],
-          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: historicalPolicy.id }],
         },
       ],
     });
+
+    // 1. Policy referenced by active version cannot be deleted
+    await expect(
+      db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })
+    ).rejects.toThrow();
+
+    // Publish candidate referencing a candidate policy
+    const candidatePolicy = await db.escalationPolicy.create({
+      data: { name: 'Candidate dependency' },
+    });
+    const candidateDraft = await saveDraft({
+      serviceId: service.id,
+      actorId: actor.id,
+      snapshot: {
+        ...emptySnapshot,
+        rules: [
+          {
+            id: 'candidate-route',
+            name: 'Candidate route',
+            phase: 'ROUTE',
+            enabled: true,
+            conditions: [],
+            actions: [{ type: 'USE_ESCALATION_POLICY', policyId: candidatePolicy.id }],
+          },
+        ],
+      },
+      expectedRevision: draft.revision,
+    });
+    const candidateVersion = await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: candidateDraft.revision,
+      expectedActiveVersionId: version.id,
+      expectedCandidateVersionId: null,
+    });
+
+    // 2. Policy referenced by candidate version cannot be deleted
+    await expect(
+      db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })
+    ).rejects.toThrow();
+
+    // Discard candidate
+    await discardCandidate({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedCandidateVersionId: candidateVersion.id,
+    });
+
+    // 3. Policy referenced by discarded candidate version remains immutable history and cannot be deleted
+    await expect(
+      db.escalationPolicy.delete({ where: { id: candidatePolicy.id } })
+    ).rejects.toThrow();
+
+    // Deactivate version so historicalPolicy becomes purely historical
     const nextDraft = await saveDraft({
       serviceId: service.id,
       actorId: actor.id,
       snapshot: emptySnapshot,
-      expectedRevision: draft.revision,
+      expectedRevision: candidateDraft.revision,
     });
-    await publishVersion({
+    await publishReviewedReplacement({
       serviceId: service.id,
       actorId: actor.id,
       expectedRevision: nextDraft.revision,
       expectedActiveVersionId: version.id,
     });
-    await expect(db.escalationPolicy.delete({ where: { id: policy.id } })).rejects.toThrow();
+
+    // 4. Policy referenced by historical version cannot be deleted
+    await expect(
+      db.escalationPolicy.delete({ where: { id: historicalPolicy.id } })
+    ).rejects.toThrow();
     await expect(db.automationVersion.delete({ where: { id: version.id } })).rejects.toThrow();
+
+    // 5. Unreferenced policy can be deleted cleanly
+    const unreferencedPolicy = await db.escalationPolicy.create({
+      data: { name: 'Unreferenced policy' },
+    });
+    await db.escalationPolicy.delete({ where: { id: unreferencedPolicy.id } });
     expect(await db.incidentAutomationDecision.count()).toBe(0);
   });
   it('rejects direct decision deletion but permits incident lifecycle cleanup', async () => {
@@ -776,7 +865,7 @@ describe('service automation transaction certification', () => {
       snapshot: emptySnapshot,
       expectedRevision: draft.revision,
     });
-    await publishVersion({
+    await publishReviewedReplacement({
       serviceId: service.id,
       actorId: actor.id,
       expectedRevision: next.revision,
@@ -877,6 +966,22 @@ describe('service automation transaction certification', () => {
     expect(restored.id).not.toBe(version.id);
     expect(restored.sourceVersionId).toBe(version.id);
     expect(restored.versionNumber).toBe(2);
+    const configAfterPublish = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(configAfterPublish.activeVersionId).toBe(version.id);
+    expect(configAfterPublish.candidateVersionId).toBe(restored.id);
+    await activateCandidate({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedCandidateVersionId: restored.id,
+      acknowledgeNoShadow: true,
+    });
+    const configAfterActivate = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(configAfterActivate.activeVersionId).toBe(restored.id);
+    expect(configAfterActivate.candidateVersionId).toBeNull();
     await expect(
       saveDraft({ serviceId: service.id, actorId: actor.id, snapshot, expectedRevision: 0 })
     ).rejects.toThrow('Another version');
@@ -982,7 +1087,7 @@ describe('service automation transaction certification', () => {
     expect(await db.incident.count()).toBe(1);
     expect(await db.incidentAutomationDecision.count()).toBe(1);
   });
-  it('publishes while alerts arrive without mixing versions inside a decision', async () => {
+  it('rejects LIVE publication during ingestion and preserves the qualified routing version', async () => {
     const { service, actor, draft, version } = await setup();
     const updated = {
       ...snapshot,
@@ -1004,18 +1109,18 @@ describe('service automation transaction certification', () => {
       expectedRevision: saved.revision,
       expectedActiveVersionId: version.id,
     });
-    await Promise.all([
+    const [publishedCandidate] = await Promise.all([
       publish,
       ...Array.from({ length: 30 }, (_, i) =>
         ingest(service.id, { ...event, dedup_key: `publish-race-${i}` })
       ),
     ]);
-    const next = await publish;
+    expect(publishedCandidate.id).not.toBe(version.id);
     const decisions = await db.incidentAutomationDecision.findMany();
     expect(decisions).toHaveLength(30);
     for (const decision of decisions) {
-      expect([version.id, next.id]).toContain(decision.versionId);
-      expect(decision.finalPriority).toBe(decision.versionId === version.id ? 'P1' : 'P3');
+      expect(decision.versionId).toBe(version.id);
+      expect(decision.finalPriority).toBe('P1');
       expect(decision.routeType).toBe('NO_ESCALATION');
     }
   });
@@ -1148,7 +1253,7 @@ describe('service automation transaction certification', () => {
       snapshot: updated,
       expectedRevision: draft.revision,
     });
-    await publishVersion({
+    await publishReviewedReplacement({
       serviceId: service.id,
       actorId: actor.id,
       expectedRevision: saved.revision,
@@ -1231,7 +1336,7 @@ describe('service automation transaction certification', () => {
           ),
         },
       });
-      await publishVersion({
+      await publishReviewedReplacement({
         serviceId: service.id,
         actorId: actor.id,
         expectedRevision: saved.revision,
@@ -1587,7 +1692,10 @@ describe('service automation transaction certification', () => {
     expect(
       (
         await db.automationContextObservation.findFirstOrThrow({
-          where: { rawValuePreview: 'unknown-0' },
+          where: {
+            serviceId: service.id,
+            normalizedRawValueHash: observationValueHash(service.id, 'unknown-0')!,
+          },
         })
       ).count
     ).toBe(2);
@@ -1604,5 +1712,157 @@ describe('service automation transaction certification', () => {
     const trace = await db.automationTrace.findFirstOrThrow();
     expect(JSON.stringify(trace.detail)).not.toContain('never-persist-me');
     expect(JSON.stringify(decision.summary)).not.toContain('never-persist-me');
+  });
+
+  it('protects candidate lifecycle against silent replacement, competing administrators, and unverified state', async () => {
+    const { service, actor, version: version1 } = await setup(snapshot, 'LIVE');
+
+    // Admin 1 publishes a candidate version while LIVE
+    const candidateDraft1 = await saveDraft({
+      serviceId: service.id,
+      actorId: actor.id,
+      snapshot: {
+        ...snapshot,
+        rules: [
+          ...snapshot.rules,
+          {
+            id: 'extra-rule',
+            name: 'Extra rule',
+            phase: 'ENRICH',
+            enabled: true,
+            conditions: [],
+            actions: [{ type: 'ADD_TAG', value: 'candidate-tag' }],
+          },
+        ],
+      },
+      expectedRevision: 1,
+    });
+
+    const candidate1 = await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: candidateDraft1.revision,
+      expectedActiveVersionId: version1.id,
+      expectedCandidateVersionId: null,
+    });
+
+    let config = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(config.activeVersionId).toBe(version1.id);
+    expect(config.candidateVersionId).toBe(candidate1.id);
+
+    // Competing Admin 2 attempts to publish without knowing candidate 1 exists (stale expectedCandidateVersionId: null)
+    await expect(
+      publishVersion({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedRevision: candidateDraft1.revision,
+        expectedActiveVersionId: version1.id,
+        expectedCandidateVersionId: null,
+      })
+    ).rejects.toThrow();
+
+    // Verify candidate was NOT silently replaced
+    config = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(config.candidateVersionId).toBe(candidate1.id);
+
+    // Ingest incident while candidate is staged: verify LIVE routes, and candidate shadow evaluated
+    await ingest(service.id, {
+      ...event,
+      payload: { ...event.payload, summary: 'Candidate parallel evaluation check' },
+    });
+
+    // Discarding candidate with wrong expected ID fails
+    await expect(
+      discardCandidate({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedCandidateVersionId: 'wrong-candidate-id',
+      })
+    ).rejects.toThrow();
+
+    // Explicit candidate discard clears candidateVersionId under service lock
+    await discardCandidate({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedCandidateVersionId: candidate1.id,
+    });
+
+    config = await db.serviceAutomationConfig.findUniqueOrThrow({
+      where: { serviceId: service.id },
+    });
+    expect(config.candidateVersionId).toBeNull();
+    expect(config.activeVersionId).toBe(version1.id);
+
+    // Re-publish candidate 2
+    const candidate2 = await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: candidateDraft1.revision,
+      expectedActiveVersionId: version1.id,
+      expectedCandidateVersionId: null,
+    });
+
+    // Activating candidate requires service to be LIVE; if mode is changed to DISABLED, activation is rejected
+    await changeMode({
+      serviceId: service.id,
+      actorId: actor.id,
+      mode: 'DISABLED',
+      expectedActiveVersionId: version1.id,
+    });
+
+    await expect(
+      activateCandidate({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedCandidateVersionId: candidate2.id,
+        expectedActiveVersionId: version1.id,
+        acknowledgeNoShadow: true,
+      })
+    ).rejects.toThrow();
+
+    // Restore to LIVE
+    await changeMode({
+      serviceId: service.id,
+      actorId: actor.id,
+      mode: 'LIVE',
+      expectedActiveVersionId: version1.id,
+      acknowledgeNoShadow: true,
+    });
+
+    await db.automationShadowAggregate.create({
+      data: {
+        serviceId: service.id,
+        versionId: candidate2.id,
+        bucketDate: new Date(new Date().toISOString().slice(0, 10)),
+        evaluated: 1,
+        priorityDifferent: 1,
+      },
+    });
+    await expect(
+      activateCandidate({
+        serviceId: service.id,
+        actorId: actor.id,
+        expectedCandidateVersionId: candidate2.id,
+        expectedActiveVersionId: version1.id,
+        acknowledgeNoShadow: true,
+      })
+    ).rejects.toThrow('Explicitly acknowledge candidate routing');
+    // Activating candidate cutover atomically updates activeVersionId and clears candidateVersionId
+    const promoted = await activateCandidate({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedCandidateVersionId: candidate2.id,
+      expectedActiveVersionId: version1.id,
+      acknowledgeNoShadow: true,
+      acknowledgeMaterialDifferences: true,
+    });
+
+    expect(promoted.activeVersionId).toBe(candidate2.id);
+    expect(promoted.candidateVersionId).toBeNull();
+    expect(promoted.mode).toBe('LIVE');
   });
 });

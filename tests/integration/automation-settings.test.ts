@@ -1,3 +1,4 @@
+import { DEFAULT_AUTOMATION_READINESS_POLICY } from '@/lib/automation/readiness-policy';
 import { beforeEach, afterAll, expect, it, vi } from 'vitest';
 import {
   testPrisma as db,
@@ -40,6 +41,7 @@ it('reads ingestion configuration without caching the shared emergency switch', 
   expect(await getIngestionAutomationConfig(db, service.id)).toEqual({
     mode: 'DISABLED',
     activeVersionId: null,
+    candidateVersionId: null,
   });
   // Invalid legacy configurations must still reach the VERSION_MISSING fallback.
   await db.serviceAutomationConfig.update({
@@ -49,6 +51,7 @@ it('reads ingestion configuration without caching the shared emergency switch', 
   expect(await getIngestionAutomationConfig(db, service.id)).toEqual({
     mode: 'SHADOW',
     activeVersionId: null,
+    candidateVersionId: null,
   });
   await saveAutomationSettings({
     automationEnabled: false,
@@ -60,10 +63,13 @@ it('reads ingestion configuration without caching the shared emergency switch', 
 it('defaults off with 90 days and ignores deployment environment values', async () => {
   vi.stubEnv('OPSKNIGHT_AUTOMATION_ENABLED', 'true');
   vi.stubEnv('OPSKNIGHT_AUTOMATION_TRACE_RETENTION_DAYS', '2');
-  expect(await getAutomationSettings()).toEqual({
+  expect(await getAutomationSettings()).toMatchObject({
     automationEnabled: false,
     automationTraceRetentionDays: 90,
     automationSettingsRevision: 0,
+    automationStoreObservationPreviews: false,
+    automationReadinessPolicy: DEFAULT_AUTOMATION_READINESS_POLICY,
+    automationReadinessPolicyValid: true,
   });
   expect(await automationEnabled()).toBe(false);
   vi.unstubAllEnvs();
@@ -125,7 +131,7 @@ it('returns ACTIVE_SERVICES without enabling while services are staged', async (
     code: 'ACTIVE_SERVICES',
     message: expect.stringContaining('Services are already configured SHADOW or LIVE.'),
   });
-  expect(await getAutomationSettings()).toEqual({
+  expect(await getAutomationSettings()).toMatchObject({
     automationEnabled: false,
     automationTraceRetentionDays: 90,
     automationSettingsRevision: 0,

@@ -1,4 +1,7 @@
 'use server';
+import { readableObservationPreviews } from '@/lib/automation/observation-read-privacy';
+import { readAutomationReadiness } from '@/lib/automation/readiness';
+import { candidateEvidenceFreshness } from '@/lib/automation/evidence-freshness';
 import { decodeExplanation } from '@/lib/automation/explanation';
 import { z, ZodError } from 'zod';
 import { AppError } from '@/lib/errors/app-error';
@@ -9,31 +12,34 @@ import {
   saveDraft,
   publishVersion,
   changeMode,
+  activateCandidate,
+  discardCandidate,
   AutomationConflict,
 } from '@/lib/automation/versioning';
 import { emptySnapshot, snapshotSchema } from '@/lib/automation/contract';
 import { automationEnabled } from '@/lib/automation/runtime';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { discoverFields } from '@/lib/automation/discovery';
-import { testAutomation } from '@/lib/automation/testing';
+import {
+  assertAutomationPayloadSize,
+  validateAutomationSnapshot,
+  simulateAutomationSnapshot,
+  restoreAutomationDraft,
+} from '@/lib/automation/authoring';
+import { automationSimulationEventSchema as eventSchema } from '@/lib/automation/authoring-contract';
+import { readAutomationVersion } from '@/lib/automation/history';
 import { hasCapability } from '@/lib/authorization';
 import { normalizeValue } from '@/lib/automation/context/normalize';
 const id = z.string().min(1).max(100);
-const eventSchema = z
-  .object({
-    event_action: z.enum(['trigger', 'resolve', 'acknowledge']),
-    dedup_key: z.string().max(512),
-    payload: z
-      .object({
-        summary: z.string().min(1).max(500),
-        source: z.string().min(1).max(500),
-        severity: z.enum(['critical', 'error', 'warning', 'info']),
-        custom_details: z.unknown().optional(),
-      })
-      .strict(),
-  })
-  .strict();
 const actionSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('restoreDraft'),
+      serviceId: id,
+      sourceVersionId: id,
+      expectedRevision: z.number().int().nonnegative(),
+    })
+    .strict(),
   z
     .object({
       action: z.literal('save'),
@@ -48,7 +54,27 @@ const actionSchema = z.discriminatedUnion('action', [
       serviceId: id,
       expectedRevision: z.number().int().nonnegative(),
       expectedActiveVersionId: id.nullable(),
+      expectedCandidateVersionId: id.nullable().optional(),
       sourceVersionId: id.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('activateCandidate'),
+      serviceId: id,
+      expectedCandidateVersionId: id,
+      expectedActiveVersionId: id.nullable().optional(),
+      expectedReadinessPolicyRevision: z.number().int().nonnegative().optional(),
+      acknowledgeNoShadow: z.boolean().optional(),
+      acknowledgeShadowErrors: z.boolean().optional(),
+      acknowledgeMaterialDifferences: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('discardCandidate'),
+      serviceId: id,
+      expectedCandidateVersionId: id,
     })
     .strict(),
   z
@@ -79,25 +105,37 @@ const actionSchema = z.discriminatedUnion('action', [
 ]);
 export async function automationAction(raw: unknown) {
   try {
-    const serialized = JSON.stringify(raw);
-    if (serialized && Buffer.byteLength(serialized, 'utf8') > 256 * 1024)
-      throw new Error('Sample or draft is too large');
+    assertAutomationPayloadSize(raw);
     const input = actionSchema.parse(raw);
     const capability =
-      input.action === 'save'
+      input.action === 'save' || input.action === 'restoreDraft'
         ? 'automation.edit'
-        : ['publish', 'mode'].includes(input.action)
+        : ['publish', 'mode', 'activateCandidate', 'discardCandidate'].includes(input.action)
           ? 'automation.publish'
           : 'automation.read';
     const user = await assertAutomationAccess(input.serviceId, capability);
+    if (input.action === 'restoreDraft')
+      return {
+        ok: true as const,
+        data: await restoreAutomationDraft({ ...input, actorId: user.id }),
+      };
     if (input.action === 'save')
       return { ok: true as const, data: await saveDraft({ ...input, actorId: user.id }) };
     if (input.action === 'publish')
       return { ok: true as const, data: await publishVersion({ ...input, actorId: user.id }) };
+    if (input.action === 'activateCandidate')
+      return { ok: true as const, data: await activateCandidate({ ...input, actorId: user.id }) };
+    if (input.action === 'discardCandidate')
+      return { ok: true as const, data: await discardCandidate({ ...input, actorId: user.id }) };
     if (input.action === 'mode')
       return { ok: true as const, data: await changeMode({ ...input, actorId: user.id }) };
     if (input.action === 'lint')
-      return { ok: true as const, data: compileAutomation(input.snapshot) };
+      return {
+        ok: true as const,
+        data: await prisma.$transaction(tx =>
+          validateAutomationSnapshot(tx, input.serviceId, input.snapshot)
+        ),
+      };
     if (input.action === 'discoverRecent') {
       if (!hasCapability(user.role, 'incident.sensitive.read'))
         throw new Error('Sensitive incident access is required to discover recent alert values');
@@ -143,17 +181,10 @@ export async function automationAction(raw: unknown) {
     }
     if (input.action === 'discover')
       return { ok: true as const, data: discoverFields(input.sample) };
-    if (
-      input.integrationId &&
-      !(await prisma.integration.findFirst({
-        where: { id: input.integrationId, serviceId: input.serviceId },
-      }))
-    )
-      throw new Error('Integration belongs to another service');
     return {
       ok: true as const,
       data: await prisma.$transaction(tx =>
-        testAutomation(tx, {
+        simulateAutomationSnapshot(tx, {
           ...input,
           event: input.event,
           providerPayload: input.providerPayload,
@@ -230,7 +261,7 @@ export async function getAutomationArea(
   }
   const config = await prisma.serviceAutomationConfig.findUnique({
     where: { serviceId },
-    select: { mode: true, activeVersionId: true, updatedAt: true },
+    select: { mode: true, activeVersionId: true, candidateVersionId: true, updatedAt: true },
   });
   const draftRevision = await prisma.automationDraft.findUnique({
     where: { serviceId },
@@ -262,6 +293,21 @@ export async function getAutomationArea(
     area === 'context'
       ? await prisma.automationContextObservation.findMany({
           where: { serviceId },
+          select: {
+            id: true,
+            serviceId: true,
+            integrationId: true,
+            integrationType: true,
+            fieldKey: true,
+            sourcePath: true,
+            source: true,
+            fieldType: true,
+            rawValuePreview: true,
+            count: true,
+            unmapped: true,
+            firstSeenAt: true,
+            lastSeenAt: true,
+          },
           orderBy: { lastSeenAt: 'desc' },
           take: 200,
         })
@@ -352,6 +398,31 @@ export async function getAutomationArea(
         },
       })
     : null;
+  const candidateVersion = config?.candidateVersionId
+    ? await prisma.automationVersion.findUnique({
+        where: { id: config.candidateVersionId },
+        select: {
+          id: true,
+          versionNumber: true,
+          publishedAt: true,
+          publishedBy: true,
+          checksum: true,
+          lintReport: true,
+          snapshot: true,
+        },
+      })
+    : null;
+  const candidateAggregates = config?.candidateVersionId
+    ? await prisma.automationShadowAggregate.findMany({
+        where: {
+          serviceId,
+          versionId: config.candidateVersionId,
+          bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
+        },
+        take: 100,
+        orderBy: { bucketDate: 'desc' },
+      })
+    : [];
   let unmappedCount = 0;
   if (area === 'overview' && activeVersion) {
     const parsed = snapshotSchema.safeParse(activeVersion.snapshot);
@@ -361,13 +432,17 @@ export async function getAutomationArea(
     const observedValues = await prisma.automationContextObservation.findMany({
       where: { serviceId },
       take: 5000,
-      select: { fieldKey: true, rawValuePreview: true },
+      select: { fieldKey: true, rawValuePreview: true, unmapped: true },
     });
     for (const observation of observedValues) {
       const field = fields.find(candidate => candidate.key === observation.fieldKey);
       if (!field) continue;
       try {
-        if (normalizeValue(observation.rawValuePreview, field).state === 'UNMAPPED')
+        if (
+          observation.rawValuePreview
+            ? normalizeValue(observation.rawValuePreview, field).state === 'UNMAPPED'
+            : observation.unmapped
+        )
           unmappedCount++;
       } catch {
         unmappedCount++;
@@ -384,6 +459,8 @@ export async function getAutomationArea(
     enabled: await automationEnabled(),
     mode: config?.mode ?? 'DISABLED',
     activeVersionId: config?.activeVersionId ?? null,
+    candidateVersionId: config?.candidateVersionId ?? null,
+    recoveryOwnerId: user.id,
     canEdit,
     canPublish: user.role === 'ADMIN',
     canReadSensitive,
@@ -397,6 +474,23 @@ export async function getAutomationArea(
       activeVersion && area === 'overview'
         ? { ...activeVersion, snapshot: undefined }
         : activeVersion,
+    candidateVersion:
+      candidateVersion && area === 'overview'
+        ? { ...candidateVersion, snapshot: undefined }
+        : candidateVersion,
+    candidateAggregates,
+    candidateReadiness:
+      config?.candidateVersionId && ['overview', 'rules'].includes(area)
+        ? await readAutomationReadiness(prisma, serviceId, config.candidateVersionId)
+        : null,
+    candidateEvidenceFreshness: config?.candidateVersionId
+      ? await candidateEvidenceFreshness(
+          prisma,
+          serviceId,
+          config.candidateVersionId,
+          candidateAggregates[0]?.bucketDate ?? null
+        )
+      : null,
     versions: versions.map(version => ({
       ...version,
       publisherName:
@@ -404,12 +498,7 @@ export async function getAutomationArea(
         'Former administrator',
     })),
     versionTotal,
-    observations: canReadSensitive
-      ? observations
-      : observations.map(observation => ({
-          ...observation,
-          rawValuePreview: '[redacted]',
-        })),
+    observations: await readableObservationPreviews(observations, canReadSensitive),
     unmappedCount,
     aggregates,
     traces: canReadSensitive
@@ -440,15 +529,5 @@ export async function getAutomationVersionSnapshot(serviceIdRaw: string, version
   const serviceId = id.parse(serviceIdRaw),
     versionId = id.parse(versionIdRaw);
   await assertAutomationAccess(serviceId, 'automation.read');
-  const version = await prisma.automationVersion.findFirst({
-    where: { id: versionId, serviceId },
-    select: { snapshot: true, versionNumber: true },
-  });
-  if (!version) throw new Error('Automation version not found');
-  const parsed = snapshotSchema.safeParse(version.snapshot);
-  if (!parsed.success)
-    throw new Error(
-      `Version ${version.versionNumber} failed integrity validation and cannot be rendered`
-    );
-  return parsed.data;
+  return (await readAutomationVersion(prisma, serviceId, versionId)).snapshot;
 }

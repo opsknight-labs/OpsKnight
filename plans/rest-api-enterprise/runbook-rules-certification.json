@@ -1,0 +1,69 @@
+{
+  "sourceParent": "417b8d2ae0d59f3eb5b7b672afc8372d4057fe9c",
+  "measuredAt": "2026-10-18T12:46:24.589054+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Twelve service-rule operations in plan section 3B; not complete enterprise certification.",
+  "registeredOperationCount": 121,
+  "addedOperationCount": 12,
+  "productionBuild": "passed",
+  "typecheck": "passed",
+  "changedSourceLint": "passed, zero warnings",
+  "generatedClientsCheck": "passed",
+  "documentationSync": {
+    "passed": 2
+  },
+  "unit": {
+    "passed": 1583,
+    "files": 76
+  },
+  "postgresRegression": {
+    "passed": 75,
+    "files": 6,
+    "checkpoint": "Before additive policy-request IDs/status and EXISTS-null follow-up"
+  },
+  "finalPolicyAndRuleRegression": {
+    "passed": 29,
+    "files": 3,
+    "newRuleCases": 16,
+    "mode": "Serial files sharing isolated disposable database"
+  },
+  "browser": {
+    "passed": 6,
+    "projects": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "scope": "REST rule/UI parity plus existing independent rule wizard lifecycle",
+    "skipped": 0,
+    "flaky": 0,
+    "checkpoint": "Before additive policy-request IDs/status; browser paths unchanged"
+  },
+  "sdk": {
+    "typescript": "passed",
+    "python": "passed",
+    "scope": "All twelve operations against production build and PostgreSQL, including durable policy-check IDs/status"
+  },
+  "upgradeEvidence": "plans/rest-api-enterprise/runbook-rules-upgrade.json",
+  "verificationCorrection": "An accidental parallel-file invocation collided in shared test-database resets. Correct serial invocation passed all 29 cases; no product fix or assertion relaxation.",
+  "limits": [
+    "Latest pushed commit CI must finish before readiness.",
+    "Private Agent policy-result protocol is unchanged.",
+    "No production SLO, mixed-version, rolling upgrade or HA acceptance is claimed.",
+    "Remaining enterprise endpoint families and combined release gates remain open."
+  ],
+  "sha256": {
+    "src/lib/api-v2/runbook-rules.ts": "afd19e97efce6e47423abf0d7768bb4ae5c844ef9cf4909a7a07352eba025960",
+    "src/lib/runbooks/bindings.ts": "38beefccab170be80f2c09e954b6d7727aedb86a1a034667d4f6c641dbdcd887",
+    "src/lib/runbooks/policy-checks.ts": "71892669eb7555d3911441c69fc3ece55f0bb9fd4b0a1141fe1c7419e029e68e",
+    "src/lib/runbooks/schemas.ts": "8e3d330804a26f8f80f0e7e810904884c7b0d556e8855196b2561d36330be77f",
+    "prisma/migrations/20261018105000_runbook_rule_revision_fence/migration.sql": "ab22f88ff0e4b368d0a38711adebd83dcd51b1d73d55aed122af3845c74b73c6",
+    "tests/integration/api-v2-runbook-rules.test.ts": "0e744bacec1b4e3223251492c864cc7d5b740e1ac520a149ca315a160789a72d",
+    "tests/e2e/runbooks-ui.spec.ts": "e6a8aea042f30b50e7d71d10a42fc3e28b5339d426dfc262cc68b600667cb761",
+    "tests/sdk/live-workflows.mjs": "5a0f68ebc2e781981724c49306ab4be44e110d1546963ad003ab6ca91ced7ff5",
+    "tests/sdk/live-workflow.py": "f9e112b60e6c02a6fe7c9d1746d69406f5b76b6d8af4e19ce7877ee6374a4202",
+    "sdk/openapi-v2.json": "e29dd49eff6c0f9612871748a46db1f976436b3c80da0db93164132c1971258b",
+    "sdk/typescript/schema.ts": "7fd35faa9ea1ecf1fae5078ff79dbe9f91245dff7152dc686f3014f910828f3b",
+    "sdk/python/opsknight_v2/models.py": "3f32cae57cd3ff927af5fa74db2729d43eea81daa09c672b8c460aedd07c84e0"
+  }
+}

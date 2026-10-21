@@ -147,6 +147,28 @@ suite('canonical service rule readiness', () => {
     expect(readiness.state).toBe('PAUSED');
     expect(readiness.eligibleAgents).toBeNull();
   });
+  it('explains a retired target on a paused rule without claiming execution readiness', async () => {
+    const { binding } = await fixture();
+    const pool = await testPrisma.runbookAgentPool.create({ data: { name: 'Retired target' } });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: binding.id },
+      data: { enabled: false, defaultAgentId: null, defaultAgentPoolId: pool.id },
+    });
+    await testPrisma.runbookAgentPool.update({
+      where: { id: pool.id },
+      data: { lifecycle: 'RETIRED', retiredAt: new Date() },
+    });
+    const readiness = await getBindingReadiness(await load(binding.id));
+    expect(readiness.state).toBe('PAUSED');
+    expect(readiness.armed).toBe(false);
+    expect(readiness.eligibleAgents).toBeNull();
+    expect(readiness.checks).toContainEqual({
+      code: 'TARGET_POOL_RETIRED',
+      state: 'blocked',
+      message:
+        'The selected Agent pool is retired. Select an active pool before enabling this rule.',
+    });
+  });
   it('duplicates trigger configuration into a paused identity and permits pausing broken configuration', async () => {
     const actor = await createTestUser();
     const { binding, agent } = await fixture();

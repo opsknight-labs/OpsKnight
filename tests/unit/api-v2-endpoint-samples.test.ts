@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- arbitrary JSON documents / erased generic route plumbing */
 import { describe, expect, it } from 'vitest';
+import { teamMemberInput, teamLeadInput } from '@/lib/teams/administration';
 import { ENDPOINT_SAMPLES, getVerifiedSampleBody } from '@/lib/api-v2/endpoint-samples';
 import {
   IncidentCreateV2Schema,
@@ -18,6 +19,9 @@ import {
   EscalationPolicyCreateV2Schema,
   EscalationPolicyUpdateV2Schema,
   IntegrationUpdateV2Schema,
+  IntegrationCreateV2Schema,
+  IntegrationCredentialRotateV2Schema,
+  IntegrationTestV2Schema,
   StatusPageCreateV2Schema,
   StatusPageUpdateV2Schema,
   StatusPageAnnouncementV2Schema,
@@ -39,6 +43,8 @@ describe('API v2 Endpoint Verified Samples', () => {
     'POST /services': ServiceCreateV2Schema,
     'PATCH /services/{id}': ServiceUpdateV2Schema,
     'POST /teams': TeamCreateV2Schema,
+    'PUT /teams/{id}/members/{userId}': teamMemberInput,
+    'PUT /teams/{id}/lead': teamLeadInput,
     'PATCH /teams/{id}': TeamUpdateV2Schema,
     'POST /schedules': ScheduleCreateV2Schema,
     'PATCH /schedules/{id}': ScheduleUpdateV2Schema,
@@ -46,6 +52,9 @@ describe('API v2 Endpoint Verified Samples', () => {
     'POST /escalation-policies': EscalationPolicyCreateV2Schema,
     'PATCH /escalation-policies/{id}': EscalationPolicyUpdateV2Schema,
     'PATCH /integrations/{id}': IntegrationUpdateV2Schema,
+    'POST /services/{id}/integrations': IntegrationCreateV2Schema,
+    'POST /integrations/{id}/credentials': IntegrationCredentialRotateV2Schema,
+    'POST /integrations/{id}/test': IntegrationTestV2Schema,
     'POST /status-pages': StatusPageCreateV2Schema,
     'PATCH /status-pages/{id}': StatusPageUpdateV2Schema,
     'POST /status-pages/{id}/announcements': StatusPageAnnouncementV2Schema,

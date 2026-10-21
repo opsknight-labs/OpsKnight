@@ -76,6 +76,26 @@ describe('pre-migration authentication cutover gate', () => {
       })
     ).rejects.toThrow('replicas must be zero');
   });
+  it('keeps correctly classified PgBouncer running while verifying all application roles are stopped', async () => {
+    await expect(
+      checkCutover({
+        deployments: ['web'],
+        getDeployment: async () => stopped,
+        listDeployments: async () => [
+          {
+            metadata: { name: 'pooler', labels: { 'app.kubernetes.io/component': 'pgbouncer' } },
+            spec: { replicas: 2 },
+          },
+        ],
+        listPods: async () => [
+          {
+            metadata: { labels: { release: 'sso', component: 'pgbouncer' } },
+            status: { phase: 'Running' },
+          },
+        ],
+      })
+    ).resolves.toBeUndefined();
+  });
   it('propagates API failure instead of declaring the release safe', async () => {
     await expect(
       checkCutover({

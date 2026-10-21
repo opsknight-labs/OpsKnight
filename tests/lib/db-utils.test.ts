@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { Prisma } from '@prisma/client';
 
 const transaction = vi.hoisted(() => vi.fn());
 
@@ -11,9 +12,40 @@ describe('transaction retry helpers', () => {
     transaction.mockReset();
   });
 
+  it('retries the typed Prisma nested-write engine deadlock without using server prose', async () => {
+    const failure = new Prisma.PrismaClientUnknownRequestError(
+      'ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "40P01", message: "private detail" }), transient: false })',
+      { clientVersion: '5.22.0' }
+    );
+    transaction
+      .mockRejectedValueOnce(failure)
+      .mockImplementationOnce(async (operation: (tx: object) => Promise<string>) => operation({}));
+    await expect(runSerializableTransaction(async () => 'committed', 2)).resolves.toBe('committed');
+    expect(transaction).toHaveBeenCalledTimes(2);
+    expect(
+      isRetryableTransactionError(
+        new Prisma.PrismaClientUnknownRequestError(
+          'Unrecognized driver frame with deadlock prose only',
+          { clientVersion: '5.22.0' }
+        )
+      )
+    ).toBe(false);
+    expect(
+      isRetryableTransactionError(
+        new Prisma.PrismaClientUnknownRequestError(
+          'ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "23514", message: "deadlock detected" }), transient: false })',
+          { clientVersion: '5.22.0' }
+        )
+      )
+    ).toBe(false);
+  });
+
   it('retries structural Prisma write-conflict errors from a generated client', async () => {
     transaction
-      .mockRejectedValueOnce({ code: 'P2034', message: 'Transaction failed due to a write conflict.' })
+      .mockRejectedValueOnce({
+        code: 'P2034',
+        message: 'Transaction failed due to a write conflict.',
+      })
       .mockImplementationOnce(async (operation: (tx: object) => Promise<string>) => operation({}));
 
     await expect(runSerializableTransaction(async () => 'committed', 2)).resolves.toBe('committed');
@@ -25,7 +57,8 @@ describe('transaction retry helpers', () => {
       .mockRejectedValueOnce({
         code: 'P2010',
         meta: { code: '40001', message: 'could not serialize access due to concurrent update' },
-        message: 'Raw query failed. Code: 40001. Message: could not serialize access due to concurrent update',
+        message:
+          'Raw query failed. Code: 40001. Message: could not serialize access due to concurrent update',
       })
       .mockImplementationOnce(async (operation: (tx: object) => Promise<string>) => operation({}));
 
@@ -90,7 +123,9 @@ describe('transaction retry helpers', () => {
 
     it('classifies message containing serialization or deadlock as retryable', () => {
       expect(
-        isRetryableTransactionError(new Error('could not serialize access due to concurrent update'))
+        isRetryableTransactionError(
+          new Error('could not serialize access due to concurrent update')
+        )
       ).toBe(true);
       expect(isRetryableTransactionError(new Error('deadlock detected'))).toBe(true);
       expect(isRetryableTransactionError(new Error('write conflict'))).toBe(true);

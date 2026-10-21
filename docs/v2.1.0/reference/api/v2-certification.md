@@ -18,6 +18,8 @@ verification:
 
 Status of the audit of PR #863 (commit `c92c651`), written against the working tree. "Evidence" names the check that was actually run; items that need a production-like environment are marked **Not yet run** rather than assumed.
 
+This is historical evidence for PR #863, not certification of the current enterprise expansion. The current [API reference](./v2.md) and runtime capability catalog supersede its operation and scope inventory: `runbooks:write` and `users:write` now gate implemented operations. Full enterprise release gates remain in `plans/rest-api-enterprise/workflow-inventory.json` and require final-candidate evidence.
+
 ## Phase 1: abuse protection and authentication
 
 | Item | State | Evidence |

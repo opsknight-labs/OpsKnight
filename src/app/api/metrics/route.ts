@@ -361,6 +361,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
     const degraded =
       value.automationJobs === null ||
       value.providerFeedback === null ||
+      value.automationJobs === null ||
       value.jobStats === null ||
       value.jobTypeStats === null ||
       value.incidentCount === null ||

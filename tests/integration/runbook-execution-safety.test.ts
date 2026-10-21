@@ -67,19 +67,41 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
       ? await testPrisma.serviceAutomationRule.findUnique({ where: { id: input.bindingId } })
       : null;
   if (binding) {
-    const trigger = input.triggerId
-      ? { id: input.triggerId }
-      : await testPrisma.runbookTrigger.upsert({
-          where: { id: binding.id },
-          update: {},
-          create: { id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' },
-        });
-    // The fixture's approval covers the rule as it stands once its trigger exists.
-    if (binding.unattendedWritesAuthorizedAt)
-      await testPrisma.serviceAutomationRule.update({
-        where: { id: binding.id },
-        data: { unattendedWritesScopeHash: await computeRuleUnattendedScope(testPrisma, binding) },
+    if (!input.triggerId) {
+      await testPrisma.runbookTrigger.createMany({
+        data: [{ id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' }],
+        skipDuplicates: true,
       });
+    }
+    const trigger = { id: input.triggerId ?? binding.id };
+    // This helper provisions legitimate active Automatic fixtures before exercising runtime safety.
+    // Trigger/configuration writes now pause rules and advance their database-owned revisions.
+    const currentBinding = await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+      where: { id: binding.id },
+    });
+    if (!currentBinding.enabled) {
+      await testPrisma.serviceAutomationRule.updateMany({
+        where: { id: binding.id, enabled: false },
+        data: { enabled: true },
+      });
+    }
+    // The fixture's approval covers the rule as it stands once its trigger exists.
+    if (binding.unattendedWritesAuthorizedAt) {
+      const scopeHash = await computeRuleUnattendedScope(testPrisma, binding);
+      await testPrisma.serviceAutomationRule.updateMany({
+        where: {
+          id: binding.id,
+          OR: [
+            { unattendedWritesScopeHash: null },
+            { unattendedWritesScopeHash: { not: scopeHash } },
+          ],
+        },
+        data: { unattendedWritesScopeHash: scopeHash },
+      });
+    }
+    const currentRevision = (await testPrisma.serviceAutomationRule.findUniqueOrThrow({
+      where: { id: binding.id },
+    })).configurationRevision;
     const incidentId =
       input.incidentId ??
       (await createTestIncident('Automatic safety fixture', binding.serviceId)).id;
@@ -93,7 +115,7 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
       runbookVersionId,
       sourceEventId,
       triggerId: trigger.id,
-      expectedRuleRevision: binding.configurationRevision,
+      expectedRuleRevision: currentRevision,
       triggerFingerprint: computeTriggerFingerprint({
         sourceEventId,
         bindingId: binding.id,
@@ -216,6 +238,106 @@ async function createAgentTarget(
 
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase(), 30000);
+
+  it.each(
+    (['PENDING', 'CLAIMED', 'RUNNING', 'CLAIMED_LIVE'] as const).flatMap(state =>
+      (['DIRECT_POOL', 'SELECTED_AGENT'] as const).map(target => ({ state, target }))
+    )
+  )(
+    'converges $state work from $target after pool retirement without assigning a retry',
+    async ({ state, target: selection }) => {
+      const target = await createAgentTarget({
+        description: 'Retirement convergence',
+        steps: [
+          {
+            key: 'status',
+            name: 'Status',
+            type: 'SYSTEMD',
+            riskClass: selection === 'SELECTED_AGENT' ? 'IDEMPOTENT_WRITE' : 'READ_ONLY',
+            config: {
+              action: selection === 'SELECTED_AGENT' ? 'start' : 'status',
+              unit: 'api.service',
+            },
+          },
+        ],
+      });
+      if (selection === 'SELECTED_AGENT')
+        await testPrisma.runbookAgentPool.update({
+          where: { id: target.pool.id },
+          data: { mode: 'LOCAL_HOSTS' },
+        });
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        serviceId: target.service.id,
+        bindingId: target.binding.id,
+      });
+      await advanceExecution(execution.id);
+      const attempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
+        where: { executionStep: { executionId: execution.id } },
+      });
+      if (selection === 'SELECTED_AGENT') {
+        expect(attempt.targetAgentId).toBe(target.agent.id);
+        expect(attempt.targetAgentPoolId).toBeNull();
+        const pinned = await testPrisma.runbookExecution.findUniqueOrThrow({
+          where: { id: execution.id },
+        });
+        expect(pinned.targetSelection).toMatchObject({ sourcePoolId: target.pool.id });
+      }
+      await testPrisma.runbookExecutionStep.update({
+        where: { id: attempt.executionStepId },
+        data: { maxRetries: 3 },
+      });
+      if (state !== 'PENDING') {
+        const claim = await claimAgentAttempt(target.agent.id);
+        expect(claim?.attemptId).toBe(attempt.id);
+        if (state === 'RUNNING')
+          await fenceAgentAttempt({
+            attemptId: attempt.id,
+            agentId: target.agent.id,
+            leaseToken: claim!.leaseToken,
+          });
+        if (state !== 'CLAIMED_LIVE')
+          await testPrisma.runbookStepAttempt.update({
+            where: { id: attempt.id },
+            data: { leaseExpiresAt: new Date(Date.now() - 1000) },
+          });
+      }
+      const { retireRunbookAgentPool } = await import('@/lib/runbooks/pool-commands');
+      await retireRunbookAgentPool(target.pool.id, target.actor.id);
+      await reconcileRunbooks();
+      if (state === 'CLAIMED_LIVE') {
+        expect(
+          await testPrisma.runbookStepAttempt.findUniqueOrThrow({ where: { id: attempt.id } })
+        ).toMatchObject({ status: 'CLAIMED', completedAt: null });
+        await testPrisma.runbookStepAttempt.update({
+          where: { id: attempt.id },
+          data: { leaseExpiresAt: new Date(Date.now() - 1000) },
+        });
+        await reconcileRunbooks();
+      }
+      const result = await testPrisma.runbookStepAttempt.findUniqueOrThrow({
+        where: { id: attempt.id },
+      });
+      expect(result.status).toBe(state === 'RUNNING' ? 'UNKNOWN' : 'FAILED');
+      expect(result.errorCode).toBe(
+        state === 'RUNNING' ? 'AGENT_LEASE_EXPIRED' : 'TARGET_POOL_RETIRED'
+      );
+      expect(
+        await testPrisma.runbookStepAttempt.count({
+          where: { executionStepId: attempt.executionStepId },
+        })
+      ).toBe(1);
+      const jobs = await testPrisma.backgroundJob.count({
+        where: { type: 'RUNBOOK', payload: { path: ['executionId'], equals: execution.id } },
+      });
+      await reconcileRunbooks();
+      expect(
+        await testPrisma.backgroundJob.count({
+          where: { type: 'RUNBOOK', payload: { path: ['executionId'], equals: execution.id } },
+        })
+      ).toBe(jobs);
+    }
+  );
   afterAll(async () => testPrisma.$disconnect());
 
   it.each(['pause', 'start'] as const)(
@@ -236,6 +358,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       const trigger = await testPrisma.runbookTrigger.create({
         data: { bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
       });
+      const activeRule = await testPrisma.serviceAutomationRule.update({
+        where: { id: target.binding.id },
+        data: { enabled: true },
+      });
       const sourceEventId = crypto.randomUUID();
       const request = {
         runbookId: target.runbook.id,
@@ -244,7 +370,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         bindingId: target.binding.id,
         incidentId: incident.id,
         triggerId: trigger.id,
-        expectedRuleRevision: target.binding.configurationRevision,
+        expectedRuleRevision: activeRule.configurationRevision,
         sourceEventId,
         triggerFingerprint: computeTriggerFingerprint({
           sourceEventId,
@@ -390,6 +516,13 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { bindingId: target.binding.id },
       data: { revision: 3 },
     });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
+    const reviewedTrigger = await testPrisma.runbookTrigger.findFirstOrThrow({
+      where: { bindingId: target.binding.id },
+    });
     expect(await evaluateIncidentTriggers(incident.id, 'budget-event')).toMatchObject({
       matched: 1,
       started: 0,
@@ -403,7 +536,9 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         where: { incidentId: incident.id, type: 'RUNBOOK_SUGGESTED' },
       })
     ).toBe(1);
-    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(
+      reviewedTrigger.revision
+    );
     expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).planSnapshot).toMatchObject({
       agentSelector: { env: 'prod' },
       definitionChecksum: target.version.checksum,
@@ -421,7 +556,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     });
     expect(await testPrisma.runbookSuggestion.count()).toBe(1);
     const execution = await testPrisma.runbookExecution.findFirstOrThrow();
-    expect(execution.triggerRevision).toBe(3);
+    expect(execution.triggerRevision).toBe(reviewedTrigger.revision);
     await testPrisma.runbookTrigger.updateMany({
       where: { bindingId: target.binding.id },
       data: { revision: 4 },
@@ -429,8 +564,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(
       (await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } }))
         .triggerRevision
-    ).toBe(3);
-    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(3);
+    ).toBe(reviewedTrigger.revision);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).triggerRevision).toBe(
+      reviewedTrigger.revision
+    );
   });
 
   it('resolves incident label targeting and fences removal of the pinned source-pool member', async () => {
@@ -459,6 +596,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { agentSelector: { host: '${{ incident.labels.host }}' } },
+    });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
     });
     const execution = await startRunbookExecution({
       runbookId: target.runbook.id,
@@ -574,6 +715,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       triggeredByUserId: target.actor.id,
       inputValues,
     };
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     const preview = await previewRunbookExecution(request);
     expect(preview.steps[0]?.name).toBe('Inspect [REDACTED] for Payments');
     const execution = await startAuthorizedExecution({
@@ -640,6 +785,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       serviceId: target.service.id,
       incidentId: incident.id,
     };
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     const results = await Promise.allSettled([
       startRunbookExecution(input),
       startRunbookExecution(input),
@@ -735,6 +884,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       serviceId: target.service.id,
       triggeredByUserId: target.actor.id,
     };
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     expect(await startRunbookExecution(input)).toMatchObject({
       resolvedTargetAgentId: target.agent.id,
     });
@@ -944,6 +1097,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         'Invalid trigger must not start',
         target.service.id
       );
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: target.binding.id },
+        data: { enabled: true },
+      });
       const result = await evaluateIncidentTriggers(incident.id, `typo-${operator}`);
       expect(result).toMatchObject({ matched: 0, started: 0, suppressed: 1 });
       expect(await testPrisma.runbookExecution.count()).toBe(0);
@@ -1322,6 +1479,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         },
       });
     }
+    await testPrisma.serviceAutomationRule.updateMany({
+      where: { serviceId: service.id },
+      data: { enabled: true },
+    });
     expect(await evaluateIncidentTriggers(incident.id, 'isolation-event')).toMatchObject({
       matched: 2,
       started: 1,
@@ -1400,6 +1561,109 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(secureClaim?.secretInputKeys).toEqual(['unit']);
   });
 
+  it.each(['membership', 'grant', 'agent', 'pool'] as const)(
+    'fences secret disclosure behind a committing %s removal',
+    async kind => {
+      const { setRunbookPoolMember, retireRunbookAgentPool } =
+        await import('@/lib/runbooks/pool-commands');
+      const { revokeRunbookSecretGrant } = await import('@/lib/runbooks/secrets');
+      const { revokeRunbookAgent } = await import('@/lib/runbooks/fleet-commands');
+      const target = await createAgentTarget(
+        {
+          steps: [
+            {
+              key: 'status',
+              name: 'Status',
+              type: 'SYSTEMD',
+              riskClass: 'READ_ONLY',
+              config: {
+                action: 'status',
+                unit: 'api.service',
+                environment: { TOKEN: '${{ inputs.token }}' },
+              },
+            },
+          ],
+        },
+        [{ key: 'token', label: 'Token', type: 'SECRET_REF', required: true }]
+      );
+      const secret = await testPrisma.runbookSecret.create({
+        data: {
+          name: 'claim-race-secret',
+          valueEncrypted: await encrypt('never-disclose-after-removal'),
+          grants: { create: { agentPoolId: target.pool.id } },
+        },
+        include: { grants: true },
+      });
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: target.binding.id },
+        data: { inputValues: { token: 'secret://claim-race-secret' } },
+      });
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+      });
+      await advanceExecution(execution.id);
+      let ready!: () => void;
+      let release!: () => void;
+      const locked = new Promise<void>(resolve => {
+        ready = resolve;
+      });
+      const unlock = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const mutation = testPrisma.$transaction(
+        async tx => {
+          if (kind === 'membership')
+            await setRunbookPoolMember(target.pool.id, target.agent.id, false, target.actor.id, {
+              client: tx,
+            });
+          else if (kind === 'grant')
+            await revokeRunbookSecretGrant(secret.grants[0].id, target.actor.id, { client: tx });
+          else if (kind === 'agent') await revokeRunbookAgent(target.agent.id, target.actor.id, tx);
+          else await retireRunbookAgentPool(target.pool.id, target.actor.id, { client: tx });
+          ready();
+          await unlock;
+        },
+        { timeout: 10000 }
+      );
+      await Promise.race([
+        locked,
+        mutation.then(() => {
+          throw new Error('Mutation ended before barrier');
+        }),
+      ]);
+      const claim = claimAgentAttempt(target.agent.id, true).then(
+        value => ({ value }),
+        error => ({ error })
+      );
+      try {
+        let blocked = false;
+        for (let attempt = 0; attempt < 30; attempt++) {
+          const rows = await testPrisma.$queryRaw<
+            Array<{ waiting: boolean }>
+          >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event = 'advisory' AND query LIKE '%pg_advisory_xact_lock_shared%') AS waiting`;
+          if (rows[0]?.waiting) {
+            blocked = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(blocked).toBe(true);
+      } finally {
+        release();
+        await mutation;
+      }
+      const result = await claim;
+      expect('value' in result ? result.value : null).toBeNull();
+      expect(
+        await testPrisma.runbookStepAttempt.count({
+          where: { executionStep: { executionId: execution.id }, status: 'CLAIMED' },
+        })
+      ).toBe(0);
+    }
+  );
+
   it('rejects a published definition with a corrupted checksum', async () => {
     const target = await createAgentTarget({
       description: 'Checksum',
@@ -1429,6 +1693,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await testPrisma.serviceAutomationRule.update({
       where: { id: target.binding.id },
       data: { versionStrategy: 'LATEST_PUBLISHED', runbookVersionId: null },
+    });
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
     });
     await expect(
       startRunbookExecution({
@@ -1820,6 +2088,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       }),
     ]);
 
+    await testPrisma.serviceAutomationRule.update({
+      where: { id: target.binding.id },
+      data: { enabled: true },
+    });
     const execution = await startRunbookExecution({
       runbookId: target.runbook.id,
       runbookVersionId: suggestion.runbookVersionId,

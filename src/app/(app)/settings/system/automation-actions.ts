@@ -1,56 +1,32 @@
 'use server';
-import { z } from 'zod';
-import prisma from '@/lib/prisma';
+import {
+  getAutomationPrivacyCleanupStatus,
+  retryAutomationPrivacyCleanup,
+} from '@/lib/automation/privacy-cleanup';
 import { assertAdmin } from '@/lib/rbac';
-import { logAudit } from '@/lib/audit';
 import { revalidatePath } from 'next/cache';
-import { getAutomationSettings } from '@/lib/automation/settings';
-import { AppError } from '@/lib/errors/app-error';
+import {
+  automationSettingsSchema,
+  updateAutomationSettings,
+} from '@/lib/automation/settings-command';
+import { AppError } from '@/lib/errors';
 
-const RETENTION_MESSAGE = 'Enter a whole number of days from 1 to 3650.';
-const schema = z
-  .object({
-    automationEnabled: z.boolean({ message: 'Choose whether automation is on or off.' }),
-    automationTraceRetentionDays: z
-      .number({ message: RETENTION_MESSAGE })
-      .int(RETENTION_MESSAGE)
-      .min(1, RETENTION_MESSAGE)
-      .max(3650, RETENTION_MESSAGE),
-    expectedRevision: z.number().int().nonnegative(),
-  })
-  .strict();
-
-export type AutomationSettingsValues = {
-  automationEnabled: boolean;
-  automationTraceRetentionDays: number;
-  automationSettingsRevision: number;
-};
-export type AutomationSettingsErrorCode =
-  | 'CONFLICT'
-  | 'ACTIVE_SERVICES'
-  | 'VALIDATION'
-  | 'FORBIDDEN';
 export type SaveAutomationSettingsResult =
-  | { ok: true; settings: AutomationSettingsValues }
+  | {
+      ok: true;
+      settings: {
+        automationEnabled: boolean;
+        automationTraceRetentionDays: number;
+        automationSettingsRevision: number;
+      };
+    }
   | {
       ok: false;
-      code: AutomationSettingsErrorCode;
+      code: 'CONFLICT' | 'ACTIVE_SERVICES' | 'VALIDATION' | 'FORBIDDEN';
       message: string;
       fieldErrors?: Partial<Record<'automationEnabled' | 'automationTraceRetentionDays', string>>;
     };
 
-const CONFLICT_MESSAGE =
-  'Another administrator changed these settings. Reload to see the latest values, then save again.';
-const ACTIVE_SERVICES_MESSAGE =
-  'Services are already configured SHADOW or LIVE. Save global OFF to reset their modes before enabling; then activate services individually.';
-
-class SettingsRejection extends Error {
-  constructor(readonly code: 'CONFLICT' | 'ACTIVE_SERVICES') {
-    super(code);
-  }
-}
-
-// Expected failures are returned because Next.js masks thrown Server Action messages in production.
 export async function saveAutomationSettings(
   input: unknown
 ): Promise<SaveAutomationSettingsResult> {
@@ -69,87 +45,62 @@ export async function saveAutomationSettings(
       };
     throw error;
   }
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    const issueFor = (field: string) =>
-      result.error.issues.find(issue => issue.path[0] === field)?.message;
+  const parsed = automationSettingsSchema.safeParse(input);
+  if (!parsed.success) {
     const fieldErrors: Partial<
       Record<'automationEnabled' | 'automationTraceRetentionDays', string>
     > = {};
-    const enabledError = issueFor('automationEnabled');
-    const retentionError = issueFor('automationTraceRetentionDays');
-    if (enabledError) fieldErrors.automationEnabled = enabledError;
-    if (retentionError) fieldErrors.automationTraceRetentionDays = retentionError;
+    for (const issue of parsed.error.issues) {
+      if (issue.path[0] === 'automationEnabled') fieldErrors.automationEnabled = issue.message;
+      if (issue.path[0] === 'automationTraceRetentionDays')
+        fieldErrors.automationTraceRetentionDays = 'Enter a whole number of days from 1 to 3650.';
+    }
     return {
       ok: false,
       code: 'VALIDATION',
-      message: Object.keys(fieldErrors).length
-        ? 'Check the highlighted settings and try again.'
-        : 'These settings could not be saved. Reload this page and try again.',
+      message: 'Check the highlighted settings and try again.',
       fieldErrors,
     };
   }
-  const parsed = result.data;
   try {
-    const settings = await persist(parsed, actor);
+    const settings = await updateAutomationSettings(parsed.data, {
+      actorId: actor.id,
+      source: 'UI',
+    });
     revalidatePath('/settings/system');
-    return { ok: true, settings };
+    return {
+      ok: true,
+      settings: {
+        automationEnabled: settings.automationEnabled,
+        automationTraceRetentionDays: settings.automationTraceRetentionDays,
+        automationSettingsRevision: settings.automationSettingsRevision,
+      },
+    };
   } catch (error) {
-    if (!(error instanceof SettingsRejection)) throw error;
-    return error.code === 'CONFLICT'
-      ? { ok: false, code: 'CONFLICT', message: CONFLICT_MESSAGE }
-      : { ok: false, code: 'ACTIVE_SERVICES', message: ACTIVE_SERVICES_MESSAGE };
+    if (error instanceof AppError && error.code === 'PRECONDITION_FAILED')
+      return {
+        ok: false,
+        code: 'CONFLICT',
+        message:
+          'Another administrator changed these settings. Reload to see the latest values, then save again.',
+      };
+    if (error instanceof AppError && error.code === 'RESOURCE_CONFLICT')
+      return {
+        ok: false,
+        code: 'ACTIVE_SERVICES',
+        message:
+          'Services are already configured SHADOW or LIVE. Save global OFF to reset their modes before enabling; then activate services individually.',
+      };
+    throw error;
   }
 }
 
-function persist(parsed: z.infer<typeof schema>, actor: { id: string }) {
-  return prisma.$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('automation-system-settings', 0))`;
-    const previous = await getAutomationSettings(tx);
-    if (previous.automationSettingsRevision !== parsed.expectedRevision)
-      throw new SettingsRejection('CONFLICT');
-    if (
-      parsed.automationEnabled &&
-      !previous.automationEnabled &&
-      (await tx.serviceAutomationConfig.count({ where: { mode: { not: 'DISABLED' } } }))
-    )
-      throw new SettingsRejection('ACTIVE_SERVICES');
-    // OFF is an emergency stop and resets operational modes. Enabling again
-    // cannot surprise-activate previously LIVE services behind the switch.
-    if (!parsed.automationEnabled)
-      await tx.serviceAutomationConfig.updateMany({
-        where: { mode: { not: 'DISABLED' } },
-        data: { mode: 'DISABLED', updatedBy: actor.id },
-      });
-    const next = await tx.systemSettings.upsert({
-      where: { id: 'default' },
-      create: {
-        automationEnabled: parsed.automationEnabled,
-        automationTraceRetentionDays: parsed.automationTraceRetentionDays,
-        automationSettingsRevision: 1,
-      },
-      update: {
-        automationEnabled: parsed.automationEnabled,
-        automationTraceRetentionDays: parsed.automationTraceRetentionDays,
-        automationSettingsRevision: { increment: 1 },
-      },
-      select: {
-        automationEnabled: true,
-        automationTraceRetentionDays: true,
-        automationSettingsRevision: true,
-      },
-    });
-    await logAudit(
-      {
-        action: 'automation.settings.updated',
-        entityType: 'SYSTEM_CONFIG',
-        entityId: 'system',
-        actorId: actor.id,
-        oldValue: previous,
-        newValue: next,
-      },
-      tx
-    );
-    return next;
-  });
+export async function readAutomationPrivacyCleanupStatus() {
+  await assertAdmin();
+  return getAutomationPrivacyCleanupStatus();
+}
+
+export async function retryAutomationPrivacyCleanupAction() {
+  const actor = await assertAdmin();
+  return retryAutomationPrivacyCleanup(actor.id);
 }

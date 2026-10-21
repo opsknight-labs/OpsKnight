@@ -179,6 +179,8 @@ describe('automation semantics', () => {
   it('validates actual runtime-created payload from persistAutomation against jobSchema', async () => {
     let persistedJobData: { payload: unknown } | null = null;
     const mockTx = {
+      $queryRaw: vi.fn(async () => [{ id: 'default' }]),
+      systemSettings: { findUnique: vi.fn(async () => ({ automationStoreObservationPreviews: false })) },
       backgroundJob: {
         create: vi.fn(async ({ data }: { data: { payload: unknown } }) => {
           persistedJobData = data;
@@ -270,13 +272,14 @@ describe('automation semantics', () => {
       expect(parseResult.data.serviceId).toBe('srv-omega');
       expect(parseResult.data.integrationId).toBe('int-gh-42');
       expect(parseResult.data.observations).toHaveLength(2);
-      expect(parseResult.data.observations[0]).toEqual({
+      expect(parseResult.data.observations[0]).toEqual(expect.objectContaining({
         key: 'repository_name',
         path: 'repository.name',
-        value: 'opsknight',
+        value: '',
         type: 'STRING',
         unmapped: false,
-      });
+      }));
+      expect(parseResult.data.observations[0].valueHash).toMatch(/^[a-f0-9]{64}$/);
     }
   });
 
@@ -313,6 +316,7 @@ describe('automation semantics', () => {
 
     const mockTx = {
       $queryRaw: vi.fn(async () => [{ mode: 'LIVE', activeVersionId: versionId }]),
+      systemSettings: { findUnique: vi.fn(async () => ({ automationStoreObservationPreviews: false })) },
       automationVersion: {
         findUnique: vi.fn(async () => stored),
       },
@@ -398,22 +402,22 @@ describe('automation semantics', () => {
       expect(parseResult.data.observations).toHaveLength(2);
       expect(parseResult.data.observations).toEqual(
         expect.arrayContaining([
-          {
+          expect.objectContaining({
             key: 'status',
             path: 'status',
-            value: 'open',
+            value: '',
             type: 'STRING',
             unmapped: false,
             source: 'EVENT',
-          },
-          {
+          }),
+          expect.objectContaining({
             key: 'status',
             path: 'status',
-            value: 'open',
+            value: '',
             type: 'STRING',
             unmapped: false,
             source: 'PROVIDER',
-          },
+          }),
         ])
       );
     }

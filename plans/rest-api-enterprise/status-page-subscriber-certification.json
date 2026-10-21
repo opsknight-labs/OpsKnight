@@ -1,0 +1,47 @@
+{
+  "sourceParent": "997d18f49079239048641de2be5512bb97dccaae",
+  "measuredAt": "2026-10-18T20:54:15.650078+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Five status-page subscriber operations in section 8B; not complete status-page or enterprise coverage.",
+  "registeredOperationCount": 126,
+  "addedOperations": 5,
+  "productionBuild": "passed; subsequent OpenAPI tag-only correction verified by contract tests",
+  "typecheck": "passed on final source after response-schema test typing correction",
+  "changedSourceLint": "passed zero warnings, including explicit no-ignore check of browser config",
+  "generatedClients": "Both live SDKs passed all five operations; generated drift check passed.",
+  "unitContract": {
+    "passed": 156,
+    "files": 6
+  },
+  "postgres": {
+    "newCases": 11,
+    "publicSubscriptionRegression": 15,
+    "note": "Initial nine new cases plus 15 public cases passed together; final eleven-case suite includes concurrency/audit rollback and schema validation."
+  },
+  "browser": {
+    "passed": 3,
+    "projects": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "skipped": 0,
+    "flaky": 0,
+    "scope": "REST removal visible in administrator subscriber UI and narrow viewport"
+  },
+  "verificationCorrection": "Initial browser fixture used a different API signing secret than the application; shared config secret corrected, all three reruns passed. Initial notification fixtures omitted required recipient hashes; corrected fixtures respect database constraints.",
+  "limits": [
+    "Other status-page configuration/publication/domains/assets remain unfinished.",
+    "Integrations and other remaining enterprise families remain unfinished.",
+    "No production load/HA, rolling upgrade or full release certification claimed."
+  ],
+  "sha256": {
+    "src/lib/status-pages/subscriber-administration.ts": "e6f7926d0a797d1c2f93b0fb3c291c610bb8fb0669fc51e92bec4489423cf33a",
+    "src/lib/api-v2/status-page-subscribers.ts": "38fa4dddf65b8b8f703900378bc10c224114534ffd5e9c9967f6cf2696dd64e5",
+    "src/app/api/status-page/subscribers/route.ts": "a40adfd00966e311031056933257e7deee4af78121ccce68e39d6ca422f4bc76",
+    "tests/integration/api-v2-status-page-subscribers.test.ts": "3985eaa0a2375f553b32467e87f22a271982a1a99f7dc1673a9d06707b5f90f5",
+    "tests/e2e/status-page-administration.spec.ts": "b03c64173ee32b2b767096273f0ef5c6ba62978f7cc3043034c7b581a50127a9",
+    "prisma/migrations/20261019010000_status_subscriber_cursor_index/migration.sql": "c8c93bae397df32ba4113cf7fd5b835df9fdd9ce03f851e4888c1a6d4cab10ca",
+    "sdk/openapi-v2.json": "bcdb7360e8f9013f99962ad4a685a298f291ea2bcd4f6d4ad27ddf291a2eda80"
+  }
+}

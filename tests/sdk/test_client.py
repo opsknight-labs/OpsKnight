@@ -32,7 +32,7 @@ class Handler(BaseHTTPRequestHandler):
         for key, value in headers.items():
             self.send_header(key, value)
         self.end_headers()
-        self.wfile.write(json.dumps(payload).encode())
+        self.wfile.write(payload if isinstance(payload, bytes) else json.dumps(payload).encode())
 
 
 class ClientTest(unittest.TestCase):
@@ -57,6 +57,12 @@ class ClientTest(unittest.TestCase):
     def test_generated_models_import(self):
         import opsknight_v2.models
         self.assertTrue(hasattr(opsknight_v2.models, "RunbookAuthoringVersion"))
+
+    def test_report_export_download_returns_file_bytes(self):
+        payload = b'{"metrics":{"totalIncidents":1}}'
+        Handler.responses.append((200, payload, {}))
+        self.assertEqual(self.client.call("downloadReportExport", {"params": {"id": "report"}}), payload)
+        self.assertEqual(Handler.requests[0][1], "/api/v2/reports/exports/report/download")
 
     def test_credentials_and_path_encoding(self):
         Handler.responses.append((200, {"data": {"id": "incident"}}, {}))

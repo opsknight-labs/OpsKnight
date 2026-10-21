@@ -79,12 +79,16 @@ export const AutomationOverview = memo(function AutomationOverview({
   traceFilter,
   setTraceFilter,
   setArea,
+  onActivateCandidate,
+  onDiscardCandidate,
 }: {
   data: Data;
   counts?: Counts;
   traceFilter: string;
   setTraceFilter: (value: string) => void;
   setArea: (area: Area) => void;
+  onActivateCandidate?: () => void;
+  onDiscardCandidate?: () => void;
 }) {
   const filterId = useId();
   const differences = useMemo(
@@ -115,6 +119,18 @@ export const AutomationOverview = memo(function AutomationOverview({
   ];
   return (
     <>
+      {data.candidateVersion && (
+        <Panel icon={GitCompare} title={`Pending candidate · Version ${data.candidateVersion.versionNumber}`}
+          action={data.canPublish ? <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={onActivateCandidate}>Activate candidate (LIVE cutover)</Button>
+            <Button size="sm" variant="outline" onClick={onDiscardCandidate}>Discard candidate</Button>
+          </div> : undefined}>
+          <p className="text-sm">This candidate is evaluating live incident traffic in parallel shadow mode without applying side effects.</p>
+          <p className="text-sm font-medium tabular-nums">
+            Errors / fallbacks: <span>{(data.candidateAggregates ?? []).reduce((sum, row) => sum + row.errors, 0)} / {(data.candidateAggregates ?? []).reduce((sum, row) => sum + row.fallbacks, 0)}</span>
+          </p>
+        </Panel>
+      )}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Panel icon={ListChecks} title="LIVE readiness · active version">

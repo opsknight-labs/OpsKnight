@@ -1,3 +1,4 @@
+import { removeStatusPageSubscribers } from '@/lib/status-pages/subscriber-administration';
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -135,7 +136,7 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    await assertAdmin();
+    const actor = await assertAdmin();
 
     let targetIds: string[] = [];
     let pageId: string | null = null;
@@ -236,24 +237,7 @@ export async function DELETE(req: NextRequest) {
 
     const validIds = existing.map(sub => sub.id);
 
-    await prisma.$transaction([
-      prisma.statusPageSubscription.updateMany({
-        where: { id: { in: validIds }, statusPageId: pageId },
-        data: { unsubscribedAt: new Date(), state: 'UNSUBSCRIBED' },
-      }),
-      prisma.notification.updateMany({
-        where: {
-          recipientType: 'SUBSCRIBER',
-          recipientId: { in: validIds },
-          status: { in: ['PENDING', 'FAILED'] },
-        },
-        data: {
-          status: 'SKIPPED',
-          payloadEncrypted: null,
-          errorMsg: 'Subscription was revoked before delivery.',
-        },
-      }),
-    ]);
+    await removeStatusPageSubscribers(statusPageId, validIds, actor.id);
 
     logger.info('api.status_page.subscriber.bulk_unsubscribed', {
       count: validIds.length,

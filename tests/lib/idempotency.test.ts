@@ -93,6 +93,28 @@ describe('persistent idempotency journal', () => {
     expect(tx.backgroundJob.create).toHaveBeenCalledTimes(1);
   });
 
+  it('delivers a one-time secret only in memory and persists safe retry metadata', async () => {
+    const execute = vi.fn().mockResolvedValue({
+      id: 'enrollment-1',
+      token: 'one-time-enrollment-material' as string | null,
+    });
+    const input = {
+      scope: 'AGENT_ENROLLMENT',
+      context: { key: 'once', principalId: 'admin-key' },
+      payload: { name: 'Production worker' },
+      execute,
+      persistResult: (value: { id: string; token: string | null }) => ({ ...value, token: null }),
+    };
+    const initial = await executeIdempotentOperation(asTransactionClient(tx), input);
+    expect(initial.value.token).toBe('one-time-enrollment-material');
+    const payload = tx.backgroundJob.create.mock.calls[0]?.[0]?.data?.payload;
+    expect(JSON.stringify(payload)).not.toContain('one-time-enrollment-material');
+    tx.backgroundJob.findUnique.mockResolvedValue({ payload });
+    const replay = await executeIdempotentOperation(asTransactionClient(tx), input);
+    expect(replay).toEqual({ value: { id: 'enrollment-1', token: null }, replayed: true });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it('rejects reuse of the same key with a different payload', async () => {
     await executeIdempotentOperation(asTransactionClient(tx), {
       scope: 'INCIDENT_REST_PATCH',

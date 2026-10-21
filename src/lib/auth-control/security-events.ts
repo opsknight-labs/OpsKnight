@@ -15,7 +15,8 @@ export async function securityEvent(
   action: string,
   actorId: string,
   context: Prisma.InputJsonObject = {},
-  outcome = 'success'
+  outcome = 'success',
+  apiAttribution?: { userId: string; apiClientId: string }
 ) {
   const event = await tx.emergencyAccessEvent.create({
     data: {
@@ -30,8 +31,14 @@ export async function securityEvent(
       action,
       entityType: 'SYSTEM_CONFIG',
       entityId: actorId || 'authentication',
-      source: 'AUTH',
-      details: { principalId: actorId || null, outcome, ...context },
+      source: apiAttribution ? 'API' : 'AUTH',
+      ...(apiAttribution ? { actorId: apiAttribution.userId } : {}),
+      details: {
+        principalId: actorId || null,
+        outcome,
+        ...context,
+        ...(apiAttribution ? { apiClientId: apiAttribution.apiClientId } : {}),
+      },
     },
     tx
   );

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Existing dynamic scheduler mocks and parsed deployment fixtures use heterogeneous test-only shapes. */
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -26,7 +27,6 @@ const runtimeSecretFiles = [
   'ALLOW_INSECURE_SECRETS',
 ] as const;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Parsed YAML manifests are untyped.
 type AnyMap = Record<string, any>;
 
 function yaml(file: string): AnyMap {
@@ -222,6 +222,34 @@ describe('deployment secret matrix', () => {
     ]) {
       expect(migrationRunner).toContain(token);
     }
+  });
+
+  it('identifies PgBouncer infrastructure to the pre-migration cutover guard without changing immutable selectors', () => {
+    const docs = helmTemplate([
+      '--set',
+      'image.tag=2.0.0',
+      '--set',
+      'runtime.mode=split',
+      '--set',
+      'pgbouncer.enabled=true',
+      '--set-string',
+      'postgresql.password=isolated-pool-test',
+    ]);
+    if (!docs) {
+      const source = read('deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml');
+      expect(source.match(/app\.kubernetes\.io\/component: pgbouncer/g)).toHaveLength(2);
+      expect(
+        source.slice(source.indexOf('  selector:'), source.indexOf('  template:'))
+      ).not.toContain('app.kubernetes.io/component');
+      return;
+    }
+    const pooler = docs.find(
+      doc => doc.kind === 'Deployment' && doc.metadata.name.endsWith('-pgbouncer')
+    );
+    if (!pooler) throw new Error('PgBouncer Deployment missing from rendered chart.');
+    expect(pooler.metadata.labels['app.kubernetes.io/component']).toBe('pgbouncer');
+    expect(pooler.spec.template.metadata.labels['app.kubernetes.io/component']).toBe('pgbouncer');
+    expect(pooler.spec.selector.matchLabels).not.toHaveProperty('app.kubernetes.io/component');
   });
 
   it('keeps Prisma compatibility selectable without changing worker database routing', () => {

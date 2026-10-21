@@ -21,7 +21,7 @@ describe('API scope registry', () => {
     const issuable = issuableScopesForRole('ADMIN').map(d => d.scope);
     expect(issuable).toContain(API_SCOPES.RUNBOOKS_WRITE);
     expect(issuable).toContain(API_SCOPES.RUNBOOKS_PUBLISH);
-    expect(issuable).not.toContain(API_SCOPES.USERS_WRITE);
+    expect(issuable).toContain(API_SCOPES.USERS_WRITE);
     expect(issuable).toContain(API_SCOPES.RUNBOOKS_EXECUTE);
   });
 
@@ -34,6 +34,11 @@ describe('API scope registry', () => {
       API_SCOPES.ADMIN_MANAGE,
     ]);
     expect(disallowedScopesForRole('AUDITOR', [API_SCOPES.AUDIT_READ])).toEqual([]);
+    for (const role of ['USER', 'RESPONDER', 'AUDITOR'] as const) {
+      expect(disallowedScopesForRole(role, [API_SCOPES.USERS_WRITE])).toEqual([
+        API_SCOPES.USERS_WRITE,
+      ]);
+    }
     expect(disallowedScopesForRole('AUDITOR', [API_SCOPES.INCIDENTS_WRITE])).toHaveLength(1);
   });
 });

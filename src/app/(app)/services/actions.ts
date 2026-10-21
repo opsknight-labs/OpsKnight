@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
 import { encrypt } from '@/lib/encryption';
+import { integrationKeyFingerprint } from '@/lib/integrations/credentials';
 import { logAudit } from '@/lib/audit';
 import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
@@ -52,7 +53,8 @@ export async function createIntegration(formData: FormData) {
       name,
       serviceId,
       type,
-      key,
+      key: await encrypt(key),
+      keyFingerprint: integrationKeyFingerprint(key),
       snsTopicArn: type === 'CLOUDWATCH' ? snsTopicArn : null,
     },
   });

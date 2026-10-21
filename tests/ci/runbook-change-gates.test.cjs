@@ -21,6 +21,10 @@ test('Runbook code, Agent code and browser journeys run only Runbook jobs', () =
     'monitoring/prometheus/opsknight-alerts.yaml',
     'monitoring/prometheus/runbook-maintenance.test.yml',
     'tests/e2e/runbooks-ui.spec.ts',
+    'tests/e2e/team-administration.spec.ts',
+    'src/app/(app)/teams/actions.ts',
+    'src/app/(app)/users/actions.ts',
+    'src/components/teams/TeamMemberRosterTable.tsx',
     'src/components/runbooks/RunbookControls.tsx',
   ]) {
     assert.deepEqual(classifyChanges([path]), { runbooks: true, deployment: false, swarm: false });

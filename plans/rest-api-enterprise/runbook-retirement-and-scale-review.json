@@ -1,0 +1,49 @@
+{
+  "sourceParent": "22e554be2fc0ab801d58b3ec3f0ac777084e3daa",
+  "updatedAt": "2026-10-19T12:16:49.281678+00:00",
+  "status": "reference_verification_passed_enterprise_certification_open",
+  "changes": [
+    "Retired-pool pending and expired unstarted claims converge atomically without retry assignment",
+    "Live claimed leases remain intact until expiry; running unknown outcomes are preserved and cannot retry into retired pools",
+    "Actual bounded SQL cancellation returns private retryable 503; exhausted raw SQL serialization/deadlock conflicts return retryable 409",
+    "API and 100k-execution scale harness share the same query builder"
+  ],
+  "checks": {
+    "postgresSafetyAndSecretAdministration": {
+      "tests": 82,
+      "files": 2,
+      "agentSafetyCases": 73,
+      "secretAdministrationCases": 9
+    },
+    "runbookAndDatabaseErrorUnit": {
+      "tests": 371,
+      "files": 47
+    },
+    "apiContractRegression": {
+      "tests": 206,
+      "files": 3
+    },
+    "typecheck": "passed",
+    "changedSourceLint": "passed with zero warnings"
+  },
+  "evidence": [
+    "plans/rest-api-enterprise/runbook-fleet-concurrent-benchmark.json",
+    "plans/rest-api-enterprise/runbook-secret-usage-scale-benchmark.json",
+    "docs/automation/runbook-administration-capacity.md"
+  ],
+  "limitations": [
+    "Eight simultaneous fleet writers exhaust retries for some requests; this is outside the demonstrated conflict-free capacity envelope",
+    "Shared local measurements are not production p95/p99, load or HA certification",
+    "No physical current-image Agent retirement/signing/recovery certification",
+    "Remaining integration, identity, notification, schedule, status-page, reporting and collaboration APIs remain incomplete",
+    "Latest remote PR check reported base conflicts; not merge-ready"
+  ],
+  "sourceSha256": {
+    "src/lib/runbooks/reconciler.ts": "026ad1ecb39636d792da7fe687e10491e07acaf5c8a8727c2fa9a09b9a436d93",
+    "src/lib/runbooks/secret-usage.ts": "3c39cb975f492cc4ac82568f346706f08eccf5b619c4061368fe5ddb02109aa8",
+    "src/lib/api-v2/database-errors.ts": "7b00f42818cbe0eb2e29dc18779d98caa16cbf0d2bbbdde34944c8567f5dbb6d",
+    "src/app/api/v2/runbooks/secrets/[id]/usage/route.ts": "384be495041eb465920714f71daecebbd2ec0c3b9741a57b072317d7bb929520",
+    "tests/integration/runbook-execution-safety.test.ts": "54e16f02972066b27ffd3ac4382831ddc7152e4b06822e0690771254d166435b",
+    "tests/integration/api-v2-runbook-secret-administration.test.ts": "6866ebfe0d457f8ddd3c38e32c113de2bed9c65a34280b7f28799142d89122eb"
+  }
+}

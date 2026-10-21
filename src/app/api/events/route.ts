@@ -70,7 +70,9 @@ async function postEvent(req: NextRequest) {
     } else {
       const apiKey = await authenticateApiKey(req);
       if (!apiKey) {
-        return jsonError(new AppError({ code: 'API_KEY_INVALID' }));
+        return jsonError(
+          new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+        );
       }
       apiKeyIdentity = apiKey;
       apiKeyId = apiKey.id;

@@ -55,6 +55,9 @@ describe('persistObservationBatch', () => {
     const { receiptExists = false, pendingRows = [], existingReceipts = [] } = options ?? {};
 
     return {
+      systemSettings: {
+        findUnique: vi.fn().mockResolvedValue({ automationStoreObservationPreviews: false }),
+      },
       $executeRaw: vi.fn().mockResolvedValue(0),
       $queryRaw: vi.fn().mockResolvedValue(pendingRows),
       backgroundJob: {
@@ -112,7 +115,7 @@ describe('persistObservationBatch', () => {
     // If sibling 1 was already completed by another thread/transaction
     const { createHash } = await import('crypto');
     const sibling1Receipt = `AUTOMATION_OBSERVATION_RECEIPT:${createHash('sha256')
-      .update(JSON.stringify(siblingJob1))
+      .update(JSON.stringify([siblingJob1.serviceId, siblingJob1.logicalKey]))
       .digest('hex')}`;
 
     const pendingRows = [
@@ -232,7 +235,8 @@ describe('persistObservationBatch', () => {
     expect(sql.values).toHaveLength(24);
     expect(sql.values).toContain('EVENT');
     expect(sql.values).toContain('PROVIDER');
-    expect(sql.values.filter(v => v === 'open')).toHaveLength(2);
+    expect(sql.values).not.toContain('open');
+    expect(sql.values.filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v))).toHaveLength(2);
     expect(sql.values.filter(v => v === 'status')).toHaveLength(4);
   });
 

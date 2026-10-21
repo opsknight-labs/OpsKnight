@@ -1,0 +1,59 @@
+{
+  "sourceParent": "e71b4c9ae4ce3ab0e7c519b5ae3a64c174f90771",
+  "measuredAt": "2026-10-19T02:57:27.014126+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "registeredOperationCount": 140,
+  "findings": {
+    "componentRewrite": "Shared publication command applies membership additions/removals/changed presentation in place. Retained IDs/timestamps survive edits and cursor traversal. A real conditional parent write fences mapping-only changes.",
+    "explicitPreviewOptOut": "Settings enqueue the existing bounded durable cleanup and commit immediately. Shared uncached settings gate UI preview disclosure and worker storage until physical cleanup completes.",
+    "ciFirefoxSelector": "Actual CI trace showed a pool option selected during a debounced refresh. Stale options are now disabled immediately, and aborted responses cannot replace newer options."
+  },
+  "postgres": {
+    "combinedPassed": 62,
+    "files": 5,
+    "finalComponentSuitePassed": 17,
+    "note": "Final component file adds concurrency coverage after the 62-test combined regression run; these counts overlap and are not additive.",
+    "newCases": 4,
+    "scope": [
+      "Stable mapping IDs/timestamps and cursor continuation",
+      "Bulk deltas and minimal configuration revision changes",
+      "Concurrent mapping-only changes reject stale revisions",
+      "403 observations and 403 queued payloads during active automation opt-out, cleanup failure/retry, immediate UI redaction and API metadata safety"
+    ]
+  },
+  "unit": {
+    "auditRegressionPassed": 74,
+    "auditRegressionFiles": 7,
+    "selectorAndPreviewPassed": 4,
+    "selectorAndPreviewFiles": 2
+  },
+  "browser": {
+    "automationOptOutAndRetry": 8,
+    "statusAdministration": 6,
+    "agentEnrollmentPoolSecretJourney": 3,
+    "skipped": 0,
+    "flaky": 0,
+    "topology": "Automation uses two production web processes and a real general worker; separate status/runbook browser matrices use the production web build."
+  },
+  "liveSdks": "TypeScript and Python passed existing automation/runbook/status workflows against production build and PostgreSQL.",
+  "productionBuild": "passed after selector fix",
+  "typecheck": "clean non-incremental passed for audit changes; final production build also passed TypeScript with selector changes",
+  "changedSourceLint": "passed zero warnings",
+  "generatedDrift": "passed",
+  "limits": [
+    "No new endpoint families are claimed by this remediation.",
+    "Fresh preview opt-in retains the existing explicit supersession policy for older cleanup jobs.",
+    "Final-commit GitHub CI and whole-plan enterprise parity, production load/HA remain pending."
+  ],
+  "sha256": {
+    "src/lib/status-pages/publish-configuration.ts": "6d4c09ff83c5ca9265a6f65beea80ae44d5bbc346be01825fa1e2c8c146966fb",
+    "src/lib/automation/settings-command.ts": "f8199879f8d5c299726a1544f6a53c492d0a63674abf0147af57ec8d088799e8",
+    "src/lib/automation/observation-read-privacy.ts": "50d4222f4c6382d0023ae5fa9d3ddb2dcf56711e261847f85a0bbdcde3d9347c",
+    "src/app/(app)/services/[id]/automation/actions.ts": "9d47d39add12f3704f8259ce9c5418df4d6a922e80895425c9872e0712a28f04",
+    "src/components/runbooks/SearchableRunbookSelect.tsx": "409f7040646c96272ed618c247c0205c71fdb56edcdf206608df50b54add78a0",
+    "tests/components/SearchableRunbookSelect.test.tsx": "e24b915ea7a00832f17858f66c96413b0c15e8e81727e4320f37aaf2aa6e228c",
+    "tests/integration/api-v2-status-page-settings.test.ts": "e686ee663d4c2394eb7d9a2f0af921555096d3d741db2b4434d886b3ba9ee82d",
+    "tests/integration/automation-observation-privacy.test.ts": "32be33f6710ae583101cd260802cdae281ba950ac592c7bf3e69b8592acd4096",
+    "tests/e2e/automation.spec.ts": "c0975b312c962d8e9fcdb932bbb69ce60b646ff9b90aa6de880fec83e09757cd"
+  }
+}

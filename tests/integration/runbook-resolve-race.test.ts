@@ -84,12 +84,13 @@ async function createFixture() {
     },
     admin.id
   );
+  const trigger = await testPrisma.runbookTrigger.create({
+    data: { bindingId: created.id, event: 'INCIDENT_CREATED' },
+  });
+  // Trigger creation pauses AUTOMATIC bindings by database invariant.
   const binding = await testPrisma.serviceAutomationRule.update({
     where: { id: created.id },
     data: { enabled: true },
-  });
-  const trigger = await testPrisma.runbookTrigger.create({
-    data: { bindingId: binding.id, event: 'INCIDENT_CREATED' },
   });
   return { runbook, version, service, binding, trigger };
 }

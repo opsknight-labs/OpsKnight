@@ -1,0 +1,47 @@
+{
+  "measuredAt": "2026-10-18T12:23:12.742563+00:00",
+  "sourceParent": "38a22a745f969529b6bf357172c0a705bc58bc69",
+  "reviewedReportCommit": "c8dfb154",
+  "status": "local_verification_passed_latest_ci_pending",
+  "productionBuild": "passed",
+  "typecheck": "passed",
+  "changedSourceLint": "passed with zero warnings",
+  "postgres": {
+    "passed": 76,
+    "skipped": 1,
+    "files": 5,
+    "schema": "Fresh api_review_test database migrated from committed HEAD; excludes the in-progress rule fence migration."
+  },
+  "unitComponents": {
+    "passed": 130,
+    "files": 19
+  },
+  "recoveryIsolationSubset": {
+    "passed": 14,
+    "files": 1,
+    "note": "Includes the additional cross-account recovery test after the broader run."
+  },
+  "browser": {
+    "startTime": "2026-10-18T12:21:42.847Z",
+    "duration": 19865.112999999998,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "browserScope": "Privacy opt-in/opt-out settings in desktop/mobile/iPhone/tablet; not a full browser matrix rerun.",
+  "fixes": [
+    "Stable service/logicalKey observation receipt survives payload scrubbing and retry without repeating aggregate or observation counts.",
+    "Emergency ON-to-OFF transition queues retryable diagnostic cleanup; cleanup failure cannot roll back OFF.",
+    "Unrelated retention save with previews already OFF does not rewrite history.",
+    "Invalid global enablement returns RESOURCE_CONFLICT.",
+    "Creation returns final runbook revision; UI metadata supplies a stale-write precondition.",
+    "UI observations exclude internal HMACs and hide previews when storage is disabled.",
+    "Browser recovery is scoped to actor and service; legacy entries are discarded."
+  ],
+  "limitations": [
+    "Historical evidence already double-counted by old workers is not repaired.",
+    "Complete worker upgrades before relying on the new receipt identity; mixed-version behavior remains uncertified.",
+    "Remaining enterprise API coverage and production candidate isolation/load/HA remain incomplete."
+  ]
+}

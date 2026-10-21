@@ -2,8 +2,8 @@
 x-app-environment: &app-env
   NODE_ENV: production
   PROMETHEUS_SCRAPE_TOKEN: automation-local-cert-metrics-token
-  DATABASE_URL: postgresql://automation:automation-cert-only@db:5432/automation_cert?connection_limit=12
-  DIRECT_DATABASE_URL: postgresql://automation:automation-cert-only@db:5432/automation_cert
+  DATABASE_URL: postgresql://automation:${AUTOMATION_CERT_DB_PASSWORD:?Set a URL-safe isolated certification database password}@db:5432/automation_cert?connection_limit=12
+  DIRECT_DATABASE_URL: postgresql://automation:${AUTOMATION_CERT_DB_PASSWORD:?Set a URL-safe isolated certification database password}@db:5432/automation_cert
   NEXTAUTH_URL: http://127.0.0.1:3339
   NEXT_PUBLIC_APP_URL: http://127.0.0.1:3339
   NEXTAUTH_SECRET: automation-cert-nextauth-secret-at-least-32-characters

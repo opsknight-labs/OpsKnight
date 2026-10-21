@@ -1,0 +1,20 @@
+{
+  "measuredAt": "2026-10-18T09:48:23.423562+00:00",
+  "baseline": "35938aeb3a0245c66a9fa16d87a246343760b569",
+  "database": "isolated PostgreSQL 16 disposable fixture",
+  "result": {
+    "remainingLegacySamples": 0,
+    "previewOptIn": false,
+    "activeVersionId": "privacy-upgrade-version",
+    "mode": "LIVE",
+    "aggregateEvaluated": 7,
+    "jobPayload": {
+      "task": "AUTOMATION_OBSERVE",
+      "shadow": {
+        "evaluated": 7
+      },
+      "observations": []
+    }
+  },
+  "scope": "Populated existing discovery samples and durable job payloads removed; operational configuration and aggregate evidence preserved."
+}

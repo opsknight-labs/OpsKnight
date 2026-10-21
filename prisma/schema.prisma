@@ -38,12 +38,17 @@ enum AuditEntityType {
   TEAM_MEMBER
   SERVICE
   INCIDENT
+  INCIDENT_TEMPLATE
   ESCALATION_POLICY
   API_KEY
   SSO_CONFIG
   SCHEDULE
   CUSTOM_FIELD
   STATUS_PAGE
+  DASHBOARD
+  SAVED_REPORT
+  REPORT_EXPORT
+  AUDIT_EXPORT
   SYSTEM_CONFIG
   PRIVACY_REQUEST
   PRIVACY_EXPORT_ARTIFACT
@@ -507,6 +512,7 @@ model User {
   escalationRules             EscalationRule[]
   incidentNotes               IncidentNote[]
   postmortems                 Postmortem[]
+  postmortemContributions     PostmortemContributor[]
   notifications               Notification[]
   notificationEndpoints       UserNotificationEndpoint[]
   inAppNotifications          InAppNotification[]
@@ -546,6 +552,9 @@ model User {
   oidcLinkingApproval         OidcLinkingApproval?
   avatar                      UserAvatar?
   dashboards                  Dashboard[]
+  savedReports                SavedReport[]
+  reportExports               ReportExport[]
+  auditExports                AuditExport[]
   assignedActionItems         ActionItem[]
   tokens                      UserToken[]
   privacyRequestsAssigned     PrivacyRequest[]             @relation("PrivacyRequestAssignedTo")
@@ -558,6 +567,7 @@ model User {
   @@index([email])
   @@index([role, status])
   @@index([status])
+  revision                     Int        @default(1)
 }
 
 model UserAvatar {
@@ -607,6 +617,7 @@ model Team {
   incidentTemplates IncidentTemplate[]
   incidents         Incident[]
   dashboards        Dashboard[]
+  savedReports      SavedReport[]
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
@@ -623,6 +634,8 @@ model TeamMember {
 
   @@unique([userId, teamId])
   @@index([teamId])
+  createdAt                DateTime @default(now())
+  @@index([teamId, createdAt, id], map: "TeamMember_team_page_idx")
 }
 
 model Service {
@@ -684,6 +697,7 @@ model Service {
   @@index([teamId])
   @@index([escalationPolicyId])
   @@index([slackIntegrationId])
+  @@index([teamId, createdAt, id], map: "Service_team_page_idx")
 }
 
 model EscalationPolicy {
@@ -755,6 +769,12 @@ model Integration {
 
   @@index([serviceId])
   @@index([type, snsTopicArn])
+  keyFingerprint String? @unique
+  previousKey String?
+  previousKeyFingerprint String?
+  previousKeyExpiresAt DateTime?
+  previousSignatureSecret String?
+  previousSignatureSecretExpiresAt DateTime?
 }
 
 model InboundDelivery {
@@ -1208,7 +1228,9 @@ model Alert {
 
   @@index([serviceId, status])
   @@index([incidentId])
+  @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_alert_incident_cursor")
   @@index([dedupKey, status])
+  @@index([dedupKey, createdAt(sort: Desc), id(sort: Desc)], map: "idx_alert_correlation_recent")
   @@index([createdAt])
   @@index([createdAt, incidentId], name: "idx_alert_retention")
   @@index([serviceId, createdAt], name: "idx_alert_by_service")
@@ -1494,6 +1516,7 @@ model IncidentTag {
 
 model IncidentTemplate {
   id               String          @id @default(cuid())
+  revision         Int             @default(1)
   name             String          @unique
   description      String?
   title            String
@@ -1537,6 +1560,7 @@ model IncidentEvent {
   @@index([incidentId, message, createdAt], name: "idx_event_ack_search")
   @@index([incidentId, type], name: "idx_event_type")
   @@index([createdAt], name: "idx_event_global_created_at")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "idx_event_operational_cursor")
 }
 
 model IncidentNote {
@@ -1553,11 +1577,14 @@ model IncidentNote {
 
 model Postmortem {
   id                String       @id @default(cuid())
+  revision          Int          @default(dbgenerated("1"))
   incidentId        String       @unique
   title             String
   summary           String?
   timeline          Json?
   impact            Json?
+  contributingFactors Json?
+  fiveWhys          Json?
   rootCause         String?
   resolution        String?
   actionItems       Json?
@@ -1571,10 +1598,41 @@ model Postmortem {
   incident          Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   actionItemRecords ActionItem[]
+  contributors      PostmortemContributor[]
+  versions          PostmortemVersion[]
 
   @@index([incidentId])
   @@index([status, createdAt])
   @@index([createdById])
+}
+
+model PostmortemVersion {
+  postmortemId String
+  revision     Int
+  snapshot     Json
+  createdAt    DateTime @default(now())
+  postmortem   Postmortem @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
+
+  @@id([postmortemId, revision])
+  @@index([postmortemId, createdAt(sort: Desc)])
+}
+
+enum PostmortemContributorRole {
+  AUTHOR
+  REVIEWER
+  CONTRIBUTOR
+}
+
+model PostmortemContributor {
+  postmortemId String
+  userId       String
+  role         PostmortemContributorRole
+  createdAt    DateTime @default(now())
+  postmortem   Postmortem @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postmortemId, userId])
+  @@index([userId])
 }
 
 model ActionItem {
@@ -1677,6 +1735,8 @@ model OnCallSchedule {
 }
 
 model OnCallLayer {
+  /// Monotonic version shared by UI and REST layer edits.
+  revision            Int               @default(dbgenerated("1"))
   id                  String            @id @default(cuid())
   scheduleId          String
   name                String
@@ -1885,6 +1945,8 @@ model NotificationDeliveryAttempt {
 
   @@unique([notificationId, ordinal])
   @@index([notificationId, startedAt])
+  @@index([notificationId, startedAt(sort: Desc), id(sort: Desc)], map: "idx_notification_attempt_cursor")
+  @@index([startedAt(sort: Desc), id(sort: Desc)], map: "idx_notification_attempt_global_cursor")
   @@index([outcome, startedAt])
 }
 
@@ -1972,6 +2034,7 @@ model AuditLog {
   actor       User?           @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
+  @@index([entityType, entityId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_audit_service_change_cursor")
   @@index([actorId, createdAt])
   @@index([createdAt])
   @@index([entityType, createdAt])
@@ -2031,6 +2094,8 @@ model ApiKey {
   revokedAt  DateTime?
   expiresAt  DateTime?
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportExports ReportExport[]
+  auditExports AuditExport[]
 
   @@index([userId])
   @@index([tokenHash])
@@ -2082,6 +2147,7 @@ model NotificationProvider {
   updatedByUser User?    @relation(fields: [updatedBy], references: [id])
 
   @@index([provider])
+  revision      Int      @default(1)
 }
 
 enum JobType {
@@ -2106,6 +2172,8 @@ enum JobType {
   COMPLIANCE_EVALUATION_SWEEP
   COMPLIANCE_DRIFT_PROJECT
   RUNBOOK
+  REPORT_EXPORT
+  AUDIT_EXPORT
 }
 
 enum JobStatus {
@@ -2133,6 +2201,8 @@ model BackgroundJob {
   payload     Json
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  reportExport ReportExport?
+  auditExport AuditExport?
 
   @@index([type, status, scheduledAt])
   @@index([status, scheduledAt])
@@ -2316,6 +2386,7 @@ model StatusPage {
 
   @@index([enabled])
   @@index([isDefault, enabled])
+  revision Int @default(1)
 }
 
 model StatusPageRouteOperation {
@@ -2445,6 +2516,7 @@ model StatusPageSubscription {
   @@unique([statusPageId, email])
   @@index([statusPageId, verified])
   @@index([token])
+  @@index([statusPageId, subscribedAt, id])
 }
 
 model StatusPageSubscriptionService {
@@ -2485,6 +2557,7 @@ model StatusPageWebhook {
 
 model CustomField {
   id           String             @id @default(cuid())
+  revision     Int                @default(dbgenerated("1"))
   name         String
   key          String             @unique
   type         CustomFieldType
@@ -2545,6 +2618,7 @@ model MetricRollup {
 }
 
 model SystemSettings {
+  runbookSettingsRevision Int @default(1)
   automationEnabled                    Boolean  @default(false)
   automationTraceRetentionDays         Int      @default(90)
   automationSettingsRevision           Int      @default(0)
@@ -2566,6 +2640,8 @@ model SystemSettings {
   unsubscribedSubscriberRetentionDays  Int      @default(30)
   createdAt                            DateTime @default(now())
   updatedAt                            DateTime @updatedAt
+  automationStoreObservationPreviews Boolean @default(false)
+  automationReadinessPolicy Json @default("{\"minimumEvaluations\":100,\"maximumEvidenceAgeHours\":48,\"maximumPendingObservations\":0,\"maximumErrorRate\":0}")
 }
 
 model IncidentMetricRollup {
@@ -2828,6 +2904,7 @@ model CronSchedulerState {
 
 model Dashboard {
   id          String              @id @default(cuid())
+  revision    Int                 @default(1)
   name        String
   description String?
   visibility  DashboardVisibility @default(PRIVATE)
@@ -2865,6 +2942,65 @@ model DashboardWidget {
   @@index([dashboardId])
 }
 
+model SavedReport {
+  id          String              @id @default(cuid())
+  revision    Int                 @default(1)
+  name        String
+  description String?
+  metricKeys  String[]
+  windowDays  Int                 @default(30)
+  serviceId   String?
+  visibility  DashboardVisibility @default(PRIVATE)
+  userId      String
+  teamId      String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team        Team?               @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt, id])
+  @@index([teamId, createdAt, id])
+}
+
+model ReportExport {
+  id               String   @id @default(cuid())
+  userId           String
+  apiKeyId         String
+  jobId            String   @unique
+  query            Json
+  encryptedPayload String?
+  checksum         String?
+  sizeBytes        Int?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey           ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  job              BackgroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model AuditExport {
+  id               String   @id @default(cuid())
+  userId           String
+  apiKeyId         String
+  jobId            String   @unique
+  filter           Json
+  encryptedPayload String?
+  checksum         String?
+  sizeBytes        Int?
+  recordCount      Int?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey           ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  job              BackgroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId, createdAt])
+  @@index([expiresAt])
+}
+
 model RateLimit {
   key       String   @id
   count     Int      @default(0)
@@ -2890,6 +3026,7 @@ model SlackPinnedMessage {
 
 model ChatOpsConfig {
   id                      String   @id @default("default")
+  revision                Int      @default(dbgenerated("1"))
   enabled                 Boolean  @default(false)
   autoCreateOnUrgency     String[] @default(["HIGH"])
   autoCreateOnPriority    String[] @default(["P1", "P2"])
@@ -3500,6 +3637,7 @@ model Runbook {
 
   @@index([ownerTeamId])
   @@index([tags], type: Gin)
+  revision Int @default(1)
 }
 
 model RunbookVersion {
@@ -3739,6 +3877,7 @@ model RunbookExecution {
   @@index([status, updatedAt])
   @@index([status, deadlineAt])
   @@index([incidentId])
+  @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_runbook_execution_incident_cursor")
   @@index([serviceId])
   @@index([runbookId])
   @@index([runbookVersionId])
@@ -3875,6 +4014,8 @@ model RunbookAgent {
   @@index([status])
   @@index([lastHeartbeatAt])
   @@index([enrollmentTokenHash])
+  configurationRevision Int @default(0)
+  @@index([createdAt, id])
 }
 
 model RunbookAgentRequestNonce {
@@ -3905,6 +4046,10 @@ model RunbookAgentPool {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  lifecycle String @default("ACTIVE")
+  retiredAt DateTime?
+  revision    Int                  @default(0)
+  @@index([createdAt, id])
 }
 
 model RunbookAgentPoolMember {
@@ -3921,6 +4066,7 @@ model RunbookAgentPoolMember {
   @@unique([poolId, agentId])
   @@index([poolId])
   @@index([agentId])
+  @@index([poolId, createdAt, id])
 }
 
 model RunbookSecret {
@@ -3935,6 +4081,9 @@ model RunbookSecret {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  revision       Int     @default(0)
+  lastRotatedAt DateTime? @default(now())
+  @@index([createdAt, id])
 }
 
 model RunbookSecretGrant {
@@ -3953,6 +4102,7 @@ model RunbookSecretGrant {
   @@unique([secretId, agentPoolId])
   @@index([agentId])
   @@index([agentPoolId])
+  @@index([secretId, createdAt, id])
 }
 
 model RunbookArtifact {
@@ -4016,6 +4166,9 @@ model ServiceAutomationConfig {
   service         Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   activeVersion   AutomationVersion? @relation("ActiveAutomationVersion", fields: [activeVersionId], references: [id], onDelete: Restrict)
   draft           AutomationDraft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  revision           Int                @default(1)
+  candidateVersionId String?            @unique
+  candidateVersion   AutomationVersion? @relation("CandidateAutomationVersion", fields: [candidateVersionId], references: [id], onDelete: Restrict)
 }
 
 model AutomationDraft {
@@ -4028,6 +4181,7 @@ model AutomationDraft {
   updatedAt     DateTime                 @updatedAt
   service       Service                  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   config        ServiceAutomationConfig?
+  restoredFromVersionId String?
 }
 
 model AutomationVersion {
@@ -4051,6 +4205,7 @@ model AutomationVersion {
 
   @@unique([serviceId, versionNumber])
   @@index([serviceId, publishedAt])
+  candidateConfig  ServiceAutomationConfig?     @relation("CandidateAutomationVersion")
 }
 
 model AutomationVersionPolicyRef {
@@ -4146,6 +4301,7 @@ model AutomationContextObservation {
 
   @@unique([serviceId, integrationId, fieldKey, sourcePath, normalizedRawValueHash, source], map: "AutomationContextObservation_provenance_key")
   @@index([serviceId, lastSeenAt])
+  @@index([serviceId, firstSeenAt, id])
 }
 
 // Recovery principals deliberately have no relation to User, teams or SCIM.
@@ -4375,4 +4531,10 @@ model RunbookPolicyCheck {
 
   @@index([agentId, status, expiresAt])
   @@index([ruleId, createdAt])
+  @@index([ruleId, createdAt, id])
+}
+
+model RunbookFleetAuthority {
+  id String @id @default("default")
+  revision BigInt @default(0)
 }
