@@ -3026,6 +3026,7 @@ model SlackPinnedMessage {
 
 model ChatOpsConfig {
   id                      String   @id @default("default")
+  revision                Int      @default(dbgenerated("1"))
   enabled                 Boolean  @default(false)
   autoCreateOnUrgency     String[] @default(["HIGH"])
   autoCreateOnPriority    String[] @default(["P1", "P2"])

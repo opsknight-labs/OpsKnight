@@ -8884,6 +8884,66 @@
           "status"
         ]
       },
+      "ChatOpsConfiguration": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "channelPrefix": {
+            "type": "string"
+          },
+          "autoCreateOnUrgency": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "autoCreateOnPriority": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "archiveOnResolve": {
+            "type": "boolean"
+          },
+          "defaultVideoBridge": {
+            "type": "string"
+          },
+          "customBridgeUrlTemplate": {
+            "type": "string"
+          },
+          "defaultProviders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "revision",
+          "updatedAt",
+          "enabled",
+          "channelPrefix",
+          "autoCreateOnUrgency",
+          "autoCreateOnPriority",
+          "archiveOnResolve",
+          "defaultVideoBridge",
+          "customBridgeUrlTemplate",
+          "defaultProviders"
+        ]
+      },
       "StatusPageAssetCollection": {
         "type": "object",
         "properties": {
@@ -21134,6 +21194,275 @@
         "x-required-scope": "postmortems:write",
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
         "x-idempotency": "natural",
+        "x-concurrency": "etag"
+      }
+    },
+    "/settings/chatops": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Read global ChatOps and incident collaboration policy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatOpsConfiguration"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getChatOpsConfiguration",
+        "x-required-scope": "chatops:read",
+        "description": "Requires API scope `chatops:read` (ChatOps configuration)."
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Replace global ChatOps policy",
+        "description": "Uses the same command as the settings UI. Requires exact If-Match revision and Idempotency-Key; configuration, provider policy and canonical audit commit together.\n\nRequires API scope `chatops:write` (ChatOps administration).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Concrete strong revision ETag from the resource read documented for this operation. Wildcards are rejected (400); stale or weak validators return 412.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "channelPrefix": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "autoCreateOnUrgency": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 3
+                  },
+                  "autoCreateOnPriority": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  },
+                  "archiveOnResolve": {
+                    "type": "boolean"
+                  },
+                  "defaultVideoBridge": {
+                    "type": "string"
+                  },
+                  "customBridgeUrlTemplate": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "defaultProviders": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 2
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "channelPrefix",
+                  "autoCreateOnUrgency",
+                  "autoCreateOnPriority",
+                  "archiveOnResolve",
+                  "defaultVideoBridge",
+                  "customBridgeUrlTemplate",
+                  "defaultProviders"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatOpsConfiguration"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "ETag": {
+                "description": "Version of the resource. Send it back as If-Match to make a later change conditional.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "428": {
+            "description": "RFC 9457 Problem Details error response",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateChatOpsConfiguration",
+        "x-required-scope": "chatops:write",
+        "x-idempotency": "required",
         "x-concurrency": "etag"
       }
     },

@@ -130,6 +130,8 @@ export const API_SCOPES = {
   AUDIT_EXPORT: 'audit:export',
   CUSTOM_FIELDS_READ: 'custom-fields:read',
   CUSTOM_FIELDS_WRITE: 'custom-fields:write',
+  CHATOPS_READ: 'chatops:read',
+  CHATOPS_WRITE: 'chatops:write',
   REPORTS_READ: 'reports:read',
   REPORTS_WRITE: 'reports:write',
   SERVICE_OBJECTIVES_READ: 'service-objectives:read',

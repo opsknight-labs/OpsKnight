@@ -51,6 +51,19 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  ChatOpsConfiguration: {
+    type: 'object', properties: {
+      revision: { type: 'integer' }, updatedAt: { type: ['string', 'null'], format: 'date-time' },
+      enabled: { type: 'boolean' }, channelPrefix: { type: 'string' },
+      autoCreateOnUrgency: { type: 'array', items: { type: 'string' } },
+      autoCreateOnPriority: { type: 'array', items: { type: 'string' } },
+      archiveOnResolve: { type: 'boolean' }, defaultVideoBridge: { type: 'string' },
+      customBridgeUrlTemplate: { type: 'string' },
+      defaultProviders: { type: 'array', items: { type: 'string' } },
+    }, required: ['revision', 'updatedAt', 'enabled', 'channelPrefix',
+      'autoCreateOnUrgency', 'autoCreateOnPriority', 'archiveOnResolve',
+      'defaultVideoBridge', 'customBridgeUrlTemplate', 'defaultProviders'],
+  },
   StatusPageAssetCollection: {
     type: 'object', properties: {
       statusPageId: { type: 'string' },

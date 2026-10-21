@@ -29,6 +29,8 @@ const op = (
 ): V2OperationDefinition => ({ method, path, operationId, scope, kind, schema });
 
 export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
+  op('get', '/settings/chatops', 'getChatOpsConfiguration', 'chatops:read', 'item', 'ChatOpsConfiguration'),
+  op('put', '/settings/chatops', 'updateChatOpsConfiguration', 'chatops:write', 'item', 'ChatOpsConfiguration'),
   op('get', '/custom-fields', 'listCustomFieldDefinitions', 'custom-fields:read', 'item', 'CustomFieldDefinitionCollection'),
   op('post', '/custom-fields', 'createCustomFieldDefinition', 'custom-fields:write', 'item', 'CustomFieldDefinition'),
   op('get', '/custom-fields/{id}', 'getCustomFieldDefinition', 'custom-fields:read', 'item', 'CustomFieldDefinition'),

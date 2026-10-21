@@ -1,4 +1,23 @@
 {
+  "getChatOpsConfiguration": {
+    "method": "GET",
+    "path": "/settings/chatops",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateChatOpsConfiguration": {
+    "method": "PUT",
+    "path": "/settings/chatops",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listCustomFieldDefinitions": {
     "method": "GET",
     "path": "/custom-fields",

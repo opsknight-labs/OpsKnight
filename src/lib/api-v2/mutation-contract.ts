@@ -51,6 +51,10 @@ const supported = (rationale: string): MutationContract => ({
 });
 
 export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
+  'PUT /api/v2/settings/chatops': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'A shared UI/REST command locks global policy, checks the exact revision, updates ChatOps and provider policy, and commits one attributed audit with the replay receipt.',
+  },
   'POST /api/v2/custom-fields': {
     idempotency: 'required', concurrency: 'none',
     rationale: 'Shared order lock serializes creation; strict type/default validation, definition, audit and replay receipt commit atomically.',

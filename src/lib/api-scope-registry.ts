@@ -481,6 +481,12 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     'Create, edit, and safely delete incident custom-field definitions.',
     { issuableBy: ADMINS, write: true }
   ),
+  [S.CHATOPS_READ]: def(S.CHATOPS_READ, 'ChatOps configuration', 'Administration',
+    'Read global incident collaboration triggers, room naming and provider policy.',
+    { issuableBy: ADMINS }),
+  [S.CHATOPS_WRITE]: def(S.CHATOPS_WRITE, 'ChatOps administration', 'Administration',
+    'Change global incident collaboration policy with a revision fence.',
+    { issuableBy: ADMINS, write: true }),
   [S.REPORTS_READ]: def(
     S.REPORTS_READ,
     'Reports read',

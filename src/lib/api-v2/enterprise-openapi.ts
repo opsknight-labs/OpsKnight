@@ -1235,6 +1235,17 @@ interface Operation {
   paginated?: boolean;
 }
 const operations: Operation[] = [
+  { method: 'get', path: '/settings/chatops', summary: 'Read global ChatOps and incident collaboration policy' },
+  { method: 'put', path: '/settings/chatops', summary: 'Replace global ChatOps policy',
+    description: 'Uses the same command as the settings UI. Requires exact If-Match revision and Idempotency-Key; configuration, provider policy and canonical audit commit together.',
+    body: object({ enabled: { type: 'boolean' }, channelPrefix: string(20),
+      autoCreateOnUrgency: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+      autoCreateOnPriority: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+      archiveOnResolve: { type: 'boolean' }, defaultVideoBridge: { type: 'string' },
+      customBridgeUrlTemplate: string(2048),
+      defaultProviders: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 2 },
+    }, ['enabled', 'channelPrefix', 'autoCreateOnUrgency', 'autoCreateOnPriority', 'archiveOnResolve',
+      'defaultVideoBridge', 'customBridgeUrlTemplate', 'defaultProviders']) },
   { method: 'get', path: '/custom-fields', summary: 'Page through incident custom-field definitions and usage counts' },
   { method: 'get', path: '/custom-fields/{id}', summary: 'Read one custom-field definition and exact revision' },
   { method: 'post', path: '/custom-fields', summary: 'Create a validated incident custom-field definition',

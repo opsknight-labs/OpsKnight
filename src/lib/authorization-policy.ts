@@ -80,6 +80,8 @@ export const AUTHORIZATION_ACTIONS = {
   AUDIT_EXPORT: 'audit.export',
   CUSTOM_FIELD_READ: 'custom_field.read',
   CUSTOM_FIELD_MANAGE: 'custom_field.manage',
+  CHATOPS_READ: 'chatops.read',
+  CHATOPS_MANAGE: 'chatops.manage',
   REPORT_READ: 'report.read',
   REPORT_MANAGE: 'report.manage',
   SERVICE_OBJECTIVE_READ: 'service_objective.read',
@@ -197,6 +199,8 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.AUDIT_EXPORT]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.CUSTOM_FIELD_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.CUSTOM_FIELD_MANAGE]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.CHATOPS_READ]?: AuthorizationResource;
+  [AUTHORIZATION_ACTIONS.CHATOPS_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.REPORT_READ]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.REPORT_MANAGE]?: AuthorizationResource;
   [AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_READ]?: AuthorizationResource;
@@ -636,6 +640,14 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
   [
     AUTHORIZATION_ACTIONS.CUSTOM_FIELD_MANAGE,
     { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.CUSTOM_FIELDS_WRITE },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.CHATOPS_READ,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.CHATOPS_READ },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.CHATOPS_MANAGE,
+    { global: CAPABILITIES.ADMIN_MANAGE, apiScope: API_SCOPES.CHATOPS_WRITE },
   ],
   [
     AUTHORIZATION_ACTIONS.SERVICE_OBJECTIVE_READ,

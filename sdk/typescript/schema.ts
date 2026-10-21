@@ -145,6 +145,7 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
+export type ChatOpsConfiguration = { "revision": number; "updatedAt": string | null; "enabled": boolean; "channelPrefix": string; "autoCreateOnUrgency": Array<string>; "autoCreateOnPriority": Array<string>; "archiveOnResolve": boolean; "defaultVideoBridge": string; "customBridgeUrlTemplate": string; "defaultProviders": Array<string> } & Record<string, unknown>;
 export type StatusPageAssetCollection = { "statusPageId": string; "assets": Array<{ "assetId": string; "contentType": string; "createdAt": string; "url": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type CustomFieldDefinition = { "id": string; "revision": number; "name": string; "key": string; "type": "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN" | "URL" | "EMAIL"; "required": boolean; "defaultValue"?: string | null; "options"?: Array<string> | null; "order": number; "showInList": boolean; "usageCount"?: number } & Record<string, unknown>;
 export type CustomFieldDefinitionCollection = { "fields": Array<CustomFieldDefinition>; "nextCursor": string | null } & Record<string, unknown>;
@@ -191,6 +192,8 @@ export type RunbookExecutionStarted = { "executionId": string; "status": string;
 export type RunbookStep = { "key": string; "name": string; "type": string; "riskClass"?: string | null; "description"?: string | null; "requiresApproval": boolean; "requiresAgent": boolean; "timeoutSeconds"?: number | null; "maxRetries"?: number | null; "precheckSteps"?: Array<RunbookStep>; "verificationSteps"?: Array<RunbookStep> } & Record<string, unknown>;
 export type ServiceAccountTokenIssued = { "token": string; "apiKey": { "id": string; "name": string; "prefix": string; "scopes": Array<string>; "createdAt": string; "expiresAt"?: string | null } & Record<string, unknown> } & Record<string, unknown>;
 export interface OperationRequests {
+  getChatOpsConfiguration: Record<string, never>;
+  updateChatOpsConfiguration: { "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "enabled": boolean; "channelPrefix": string; "autoCreateOnUrgency": Array<string>; "autoCreateOnPriority": Array<string>; "archiveOnResolve": boolean; "defaultVideoBridge": string; "customBridgeUrlTemplate": string; "defaultProviders": Array<string> } };
   listCustomFieldDefinitions: Record<string, never>;
   createCustomFieldDefinition: { "headers": { "Idempotency-Key": string }; "body": { "name": string; "key": string; "type": string; "required"?: boolean; "defaultValue"?: string | null; "options"?: Array<string> | null; "showInList"?: boolean } };
   getCustomFieldDefinition: { "params": { "id": string } };
@@ -504,6 +507,8 @@ export interface OperationRequests {
   listUsers: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string; "role"?: string } };
 }
 export interface OperationResponses {
+  getChatOpsConfiguration: { "data": ChatOpsConfiguration; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  updateChatOpsConfiguration: { "data": ChatOpsConfiguration; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listCustomFieldDefinitions: { "data": CustomFieldDefinitionCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   createCustomFieldDefinition: { "data": CustomFieldDefinition; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getCustomFieldDefinition: { "data": CustomFieldDefinition; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -817,6 +822,25 @@ export interface OperationResponses {
   listUsers: { "data": Array<User>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
 }
 export const OPERATIONS = {
+  "getChatOpsConfiguration": {
+    "method": "GET",
+    "path": "/settings/chatops",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateChatOpsConfiguration": {
+    "method": "PUT",
+    "path": "/settings/chatops",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listCustomFieldDefinitions": {
     "method": "GET",
     "path": "/custom-fields",
