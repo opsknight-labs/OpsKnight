@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { cn } from '@/lib/utils';
 import { LIMITS, type Snapshot, type Rule, type Field } from '@/lib/automation/contract';
+import { newRule } from './workspace/constants';
 
 import { RuleConditionsEditor } from './RuleConditionsEditor';
 import { RuleActionsEditor } from './RuleActionsEditor';
@@ -131,12 +132,15 @@ const RuleRow = memo(
       onMove(rule.id, direction);
       requestAnimationFrame(() => target.focus());
     };
+
     return (
       <li
         className={cn(
-          'rounded-lg border bg-card transition-colors',
-          expanded ? 'border-primary/40 shadow-sm' : 'border-border/70 hover:border-border',
-          !rule.enabled && 'bg-muted/30'
+          'overflow-hidden rounded-xl border bg-card transition-all duration-150',
+          expanded
+            ? 'border-primary/50 shadow-xs ring-1 ring-primary/20'
+            : 'border-border/70 hover:border-border hover:shadow-2xs',
+          !rule.enabled && 'bg-muted/20 opacity-80'
         )}
         onDragOver={canEdit ? event => event.preventDefault() : undefined}
         onDrop={event => {
@@ -149,18 +153,22 @@ const RuleRow = memo(
           aria-expanded={expanded}
           aria-controls={expanded ? `${id}-panel` : undefined}
           aria-label={`Configure ${rule.name}`}
-          className="flex min-h-12 w-full items-start gap-3 rounded-lg p-3 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-11 w-full items-center gap-3 p-3 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
           onClick={() => onToggle(rule.id)}
         >
-          <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-muted px-1.5 text-xs font-semibold tabular-nums text-foreground">
+          <span className="flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/60 font-mono text-[11px] font-semibold text-muted-foreground">
             {position}
           </span>
+
           <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-1.5">
-              <span className="min-w-0 break-words text-sm font-semibold">{rule.name}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-xs sm:text-sm font-semibold tracking-tight text-foreground">
+                {rule.name}
+              </span>
+
               <span
                 className={cn(
-                  'rounded-md border px-1.5 py-px text-[11px] font-medium',
+                  'rounded-md border px-1.5 py-px text-[10px] font-medium tracking-wide',
                   rule.enabled
                     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
                     : 'border-border bg-muted text-muted-foreground'
@@ -168,47 +176,54 @@ const RuleRow = memo(
               >
                 {rule.enabled ? 'Enabled' : 'Disabled'}
               </span>
+
               {errors > 0 && (
-                <span className="rounded-md border border-destructive/40 bg-destructive/10 px-1.5 py-px text-[11px] font-medium text-destructive">
+                <span className="rounded-md border border-destructive/40 bg-destructive/10 px-1.5 py-px text-[10px] font-medium text-destructive">
                   {errors} {errors === 1 ? 'error' : 'errors'}
                 </span>
               )}
               {warnings > 0 && (
-                <span className="rounded-md border border-amber-500/40 bg-amber-50 px-1.5 py-px text-[11px] font-medium text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <span className="rounded-md border border-amber-500/40 bg-amber-50 px-1.5 py-px text-[10px] font-medium text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                   Review warnings
                 </span>
               )}
             </span>
-            <span className="mt-1 line-clamp-2 block break-words text-xs text-muted-foreground">
+
+            <span className="mt-0.5 line-clamp-1 block text-xs text-muted-foreground">
               {ruleSummary(rule, fieldsByKey, policies, destinations)}
             </span>
           </span>
+
           <ChevronDown
             className={cn(
-              'mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+              'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-180'
             )}
             aria-hidden="true"
           />
         </button>
+
         {expanded && (
-          <div id={`${id}-panel`} className="space-y-4 border-t border-border/70 p-3 sm:p-4">
+          <div
+            id={`${id}-panel`}
+            className="space-y-3.5 border-t border-border/70 bg-card p-3.5 sm:p-4"
+          >
             {issues.length > 0 && (
               <ul aria-label="Issues in this rule" className="space-y-1.5">
                 {issues.map((issue, index) => (
                   <li
                     key={index}
                     className={cn(
-                      'flex items-start gap-2 rounded-md border px-3 py-2 text-sm',
+                      'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
                       issue.level === 'ERROR'
                         ? 'border-destructive/40 bg-destructive/5 text-destructive'
                         : 'border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
                     )}
                   >
                     {issue.level === 'ERROR' ? (
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     ) : (
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     )}
                     <span>
                       <span className="sr-only">
@@ -220,17 +235,22 @@ const RuleRow = memo(
                 ))}
               </ul>
             )}
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-0 flex-1 basis-56 space-y-1.5">
-                <Label htmlFor={`${id}-name`}>Rule name</Label>
+
+            <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 p-3">
+              <div className="min-w-0 flex-1 basis-64 space-y-1">
+                <Label htmlFor={`${id}-name`} className="text-xs font-medium text-foreground">
+                  Rule name
+                </Label>
                 <Input
                   id={`${id}-name`}
                   disabled={!canEdit}
                   maxLength={100}
+                  className="h-8.5 text-xs"
                   value={rule.name}
                   onChange={e => onUpdate(rule.id, { name: e.target.value })}
                 />
               </div>
+
               {canEdit && (
                 <div
                   role="group"
@@ -241,7 +261,7 @@ const RuleRow = memo(
                     variant="ghost"
                     size="icon"
                     draggable
-                    className="cursor-grab text-muted-foreground active:cursor-grabbing"
+                    className="h-8.5 w-8.5 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
                     aria-label={`Reorder rule ${position}`}
                     aria-keyshortcuts="ArrowUp ArrowDown"
                     title="Drag to reorder, or focus and press ↑ / ↓"
@@ -257,54 +277,64 @@ const RuleRow = memo(
                       moveAndKeepFocus(event.currentTarget, event.key === 'ArrowUp' ? -1 : 1);
                     }}
                   >
-                    <GripVertical aria-hidden="true" />
+                    <GripVertical className="h-4 w-4" aria-hidden="true" />
                   </Button>
                   <Button
                     aria-label="Move rule up"
                     variant="ghost"
                     size="icon"
+                    className="h-8.5 w-8.5 text-muted-foreground hover:text-foreground"
                     onClick={event => moveAndKeepFocus(event.currentTarget, -1)}
                   >
-                    <ArrowUp aria-hidden="true" />
+                    <ArrowUp className="h-4 w-4" aria-hidden="true" />
                   </Button>
                   <Button
                     aria-label="Move rule down"
                     variant="ghost"
                     size="icon"
+                    className="h-8.5 w-8.5 text-muted-foreground hover:text-foreground"
                     onClick={event => moveAndKeepFocus(event.currentTarget, 1)}
                   >
-                    <ArrowDown aria-hidden="true" />
+                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
                   </Button>
                   <Button
-                    aria-label="Delete rule"
+                    aria-label={`Delete ${rule.name}`}
                     variant="ghost"
                     size="icon"
-                    className="text-muted-foreground hover:text-destructive"
+                    className="h-8.5 w-8.5 text-destructive/80 hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => onRemove(rule.id)}
                   >
-                    <Trash2 aria-hidden="true" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
               )}
             </div>
-            <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1">
-              <Switch
-                id={`${id}-enabled`}
-                disabled={!canEdit}
-                checked={rule.enabled}
-                onCheckedChange={enabled => onUpdate(rule.id, { enabled })}
-              />
-              <Label htmlFor={`${id}-enabled`}>Enabled</Label>
-              <span className="text-xs text-muted-foreground">
-                {rule.enabled ? 'Evaluated for new alerts.' : 'Skipped during evaluation.'}
-              </span>
+
+            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
+              <span className="font-medium text-foreground">Rule evaluation status</span>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id={`${id}-enabled`}
+                  disabled={!canEdit}
+                  checked={rule.enabled}
+                  onCheckedChange={checked => onUpdate(rule.id, { enabled: checked })}
+                />
+                <Label
+                  htmlFor={`${id}-enabled`}
+                  className="cursor-pointer text-xs font-medium text-muted-foreground"
+                >
+                  Enabled
+                </Label>
+              </div>
             </div>
+
             <RuleConditionsEditor
               rule={rule}
               fields={fields}
               canEdit={canEdit}
               onChange={update => onUpdate(rule.id, update)}
             />
+
             <RuleActionsEditor
               rule={rule}
               fields={fields}
@@ -318,74 +348,92 @@ const RuleRow = memo(
       </li>
     );
   },
-  (previous, next) =>
-    (Object.keys(next) as Array<keyof RuleRowProps>).every(key =>
-      key === 'issues' ? sameIssues(previous.issues, next.issues) : previous[key] === next[key]
-    )
+  (prev, next) =>
+    prev.rule === next.rule &&
+    prev.position === next.position &&
+    prev.expanded === next.expanded &&
+    prev.canEdit === next.canEdit &&
+    prev.fields === next.fields &&
+    prev.fieldsByKey === next.fieldsByKey &&
+    prev.policies === next.policies &&
+    prev.destinations === next.destinations &&
+    sameIssues(prev.issues, next.issues)
 );
 
 export function AutomationRules({
   data,
   draft,
-  fields,
+  issues = [],
   ruleSearch,
   setRuleSearch,
   ruleStateFilter,
   setRuleStateFilter,
   expandedRules,
   setExpandedRules,
-  draggedRule: draggedRuleRef,
-  edit,
   updateRule,
-  move,
   removeRule,
-  mobile,
+  move,
+  edit,
   createTemplate,
-  newRule,
-  issues,
+  draggedRuleRef,
+  draggedRule,
+  rootRef: _rootRef,
+  mobile,
+  newRule: propNewRule,
 }: {
   data: Data;
   draft: Snapshot;
-  fields: Field[];
+  fields?: Field[];
+  issues?: LintIssue[];
   ruleSearch: string;
   setRuleSearch: (value: string) => void;
   ruleStateFilter: string;
   setRuleStateFilter: (value: string) => void;
   expandedRules: Set<string>;
   setExpandedRules: Dispatch<SetStateAction<Set<string>>>;
-  draggedRule: RefObject<string | null>;
-  edit: (snapshot: Snapshot) => void;
   updateRule: (id: string, update: Partial<Rule>) => void;
-  move: (index: number, direction: number) => void;
   removeRule: (rule: Rule) => void;
+  move: (fromIndex: number, direction: number) => void;
+  edit: (snapshot: Snapshot) => void;
+  createTemplate: (template: string) => void;
+  draggedRuleRef?: RefObject<string | null>;
+  draggedRule?: RefObject<string | null>;
+  rootRef?: RefObject<HTMLElement | null>;
   mobile: boolean;
-  createTemplate: (kind: string) => void;
-  newRule: (phase: Rule['phase']) => Rule;
-  issues: LintIssue[];
+  newRule?: (phase: Rule['phase']) => Rule;
 }) {
   const headingId = useId();
   const [announcement, setAnnouncement] = useState('');
-  const stableFields = useShallowStableArray(fields);
+  const query = ruleSearch.trim().toLowerCase();
+  const activeDraggedRuleRef = draggedRuleRef ?? draggedRule;
+  const generateRule = propNewRule ?? newRule;
+
+  const stableFields = useShallowStableArray(draft.fields);
   const fieldsByKey = useMemo(
-    () => new Map(stableFields.map(field => [field.key, field])),
-    [stableFields]
+    () => new Map(draft.fields.map(field => [field.key, field])),
+    [draft.fields]
   );
   const issuesByRule = useMemo(() => {
-    const grouped = new Map<string, LintIssue[]>();
+    const map = new Map<string, LintIssue[]>();
     for (const issue of issues) {
-      if (!issue.ruleId) continue;
-      const list = grouped.get(issue.ruleId);
-      if (list) list.push(issue);
-      else grouped.set(issue.ruleId, [issue]);
+      if (issue.ruleId) {
+        const list = map.get(issue.ruleId) ?? [];
+        list.push(issue);
+        map.set(issue.ruleId, list);
+      }
     }
-    return grouped;
+    return map;
   }, [issues]);
+
   const { phaseIndexes, phaseTotals } = useMemo(() => {
-    const counters = { ENRICH: 0, ROUTE: 0 };
-    const indexes = new Map(draft.rules.map(rule => [rule.id, counters[rule.phase]++]));
-    return { phaseIndexes: indexes, phaseTotals: counters };
+    const phaseIndexes = new Map<string, number>();
+    const phaseTotals: Record<Rule['phase'], number> = { ENRICH: 0, ROUTE: 0 };
+    for (const rule of draft.rules) {
+      phaseIndexes.set(rule.id, phaseTotals[rule.phase]);
+      phaseTotals[rule.phase] += 1;
+    }
+    return { phaseIndexes, phaseTotals };
   }, [draft.rules]);
-  const query = ruleSearch.toLowerCase();
 
   const onToggle = useStableCallback((id: string) =>
     setExpandedRules(previous => {
@@ -414,13 +462,17 @@ export function AutomationRules({
     if (rule) removeRule(rule);
   });
   const onDragStart = useStableCallback((id: string) => {
-    draggedRuleRef.current = id;
+    // eslint-disable-next-line react-hooks/immutability
+    if (activeDraggedRuleRef) activeDraggedRuleRef.current = id;
   });
   const onDragEnd = useStableCallback(() => {
-    draggedRuleRef.current = null;
+    // eslint-disable-next-line react-hooks/immutability
+    if (activeDraggedRuleRef) activeDraggedRuleRef.current = null;
   });
   const onDrop = useStableCallback((targetId: string) => {
-    const source = draft.rules.findIndex(candidate => candidate.id === draggedRuleRef.current);
+    const source = draft.rules.findIndex(
+      candidate => candidate.id === activeDraggedRuleRef?.current
+    );
     const index = draft.rules.findIndex(candidate => candidate.id === targetId);
     if (
       !data.canEdit ||
@@ -433,14 +485,16 @@ export function AutomationRules({
     const [moved] = rules.splice(source, 1);
     rules.splice(index, 0, moved);
     edit({ ...draft, rules });
-    draggedRuleRef.current = null;
+    // eslint-disable-next-line react-hooks/immutability
+    if (activeDraggedRuleRef) activeDraggedRuleRef.current = null;
     setAnnouncement(
       `${moved.name} moved to ${PHASES[moved.phase].noun} position ${(phaseIndexes.get(targetId) ?? 0) + 1}.`
     );
   });
+
   const addRule = (phase: Rule['phase']) => {
     if (draft.rules.length >= LIMITS.rules) return;
-    const rule = newRule(phase);
+    const rule = generateRule(phase);
     setExpandedRules(previous => (mobile ? new Set([rule.id]) : new Set([...previous, rule.id])));
     edit({
       ...draft,
@@ -454,23 +508,27 @@ export function AutomationRules({
           : [...draft.rules, rule],
     });
   };
+
   const atRuleLimit = draft.rules.length >= LIMITS.rules;
 
   return (
-    <>
+    <div className="space-y-3.5">
       {mobile && expandedRules.size > 0 && (
         <Button
           variant="outline"
-          className="self-start"
+          size="sm"
+          className="self-start text-xs"
           onClick={() => setExpandedRules(new Set())}
         >
           ← Back to rules
         </Button>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-40 flex-1">
+
+      {/* High-density toolbar */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/80 bg-card p-2 shadow-xs">
+        <div className="relative min-w-44 flex-1">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
           <Input
@@ -478,12 +536,13 @@ export function AutomationRules({
             placeholder="Search rules…"
             value={ruleSearch}
             onChange={event => setRuleSearch(event.target.value)}
-            className="pl-9"
+            className="h-8 pl-8 text-xs bg-background"
           />
         </div>
         <NativeSelect
           aria-label="Filter rules"
-          className="w-auto"
+          wrapperClassName="w-auto shrink-0"
+          className="h-8 min-w-[7.5rem] text-xs font-medium bg-background"
           value={ruleStateFilter}
           onChange={event => setRuleStateFilter(event.target.value)}
         >
@@ -495,6 +554,7 @@ export function AutomationRules({
           <Button
             variant="outline"
             size="sm"
+            className="h-8 text-xs font-medium"
             onClick={() => setExpandedRules(new Set(draft.rules.map(rule => rule.id)))}
           >
             Expand all
@@ -503,21 +563,25 @@ export function AutomationRules({
         <Button
           variant="outline"
           size="sm"
-          className="h-10 sm:h-9"
+          className="h-8 text-xs font-medium"
           onClick={() => setExpandedRules(new Set())}
         >
           Collapse all
         </Button>
         <LimitCounter count={draft.rules.length} limit={LIMITS.rules} noun="rules" />
       </div>
+
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
+
       {draft.rules.length === 0 && data.canEdit && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">What would you like to automate?</CardTitle>
-            <p className="text-sm text-muted-foreground">
+        <Card className="border-border/80 shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">
+              What would you like to automate?
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
               Start from a template — each creates an editable rule and any context field it needs.
             </p>
           </CardHeader>
@@ -532,7 +596,8 @@ export function AutomationRules({
             ].map(([key, label]) => (
               <Button
                 variant="outline"
-                className="justify-start"
+                size="sm"
+                className="h-9 justify-start text-xs font-medium"
                 key={key}
                 onClick={() => createTemplate(key)}
               >
@@ -542,7 +607,9 @@ export function AutomationRules({
           </CardContent>
         </Card>
       )}
+
       <ConfigurationHealth issues={issues} />
+
       {(['ENRICH', 'ROUTE'] as const).map(phase => {
         const visible = draft.rules
           .filter(r => r.phase === phase)
@@ -556,13 +623,16 @@ export function AutomationRules({
           <section
             key={phase}
             aria-labelledby={`${headingId}-${phase}`}
-            className="min-w-0 space-y-3"
+            className="min-w-0 space-y-2.5 rounded-xl border border-border/80 bg-card/60 p-3 shadow-xs"
           >
-            <div className="space-y-1">
-              <h3 id={`${headingId}-${phase}`} className="font-semibold tracking-tight">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between border-b border-border/60 pb-2">
+              <h3
+                id={`${headingId}-${phase}`}
+                className="text-xs font-semibold uppercase tracking-wider text-foreground"
+              >
                 {PHASES[phase].title}
               </h3>
-              <p className="text-xs text-muted-foreground">{PHASES[phase].explanation}</p>
+              <p className="text-[11px] text-muted-foreground">{PHASES[phase].explanation}</p>
             </div>
             {visible.length > 0 ? (
               <ol className="space-y-2">
@@ -589,7 +659,7 @@ export function AutomationRules({
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
+              <p className="rounded-lg border border-dashed border-border/70 py-4 text-center text-xs text-muted-foreground">
                 {phaseTotals[phase] === 0
                   ? `No ${PHASES[phase].noun} rules yet.`
                   : `No ${PHASES[phase].noun} rules match the current search or filter.`}
@@ -599,20 +669,17 @@ export function AutomationRules({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 sm:h-9"
+                className="h-8.5 w-full justify-center gap-1.5 border-dashed text-xs font-medium hover:border-primary/50"
                 disabled={atRuleLimit}
                 onClick={() => addRule(phase)}
               >
-                <Plus aria-hidden="true" />
-                Add {phase === 'ENRICH' ? 'enrichment' : 'routing'} rule
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Add {PHASES[phase].noun} rule
               </Button>
             )}
           </section>
         );
       })}
-      <p className="rounded-lg border border-border/70 bg-muted/40 p-3 text-sm">
-        Fallback: service default escalation when no routing rule matches or evaluation fails.
-      </p>
-    </>
+    </div>
   );
 }

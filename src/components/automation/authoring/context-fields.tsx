@@ -42,27 +42,38 @@ export const FieldCatalogRow = memo(function FieldCatalogRow({
         aria-pressed={selected}
         onClick={() => onSelect(field.key)}
         className={cn(
-          'grid min-h-12 w-full gap-x-3 gap-y-1 px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center',
-          selected ? 'bg-primary/5' : 'hover:bg-muted/50'
+          'grid min-h-10.5 w-full gap-x-3 gap-y-1 px-3.5 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center',
+          selected ? 'bg-primary/5 ring-1 ring-primary/30' : 'hover:bg-muted/40'
         )}
       >
         <span className="min-w-0">
-          <span className="block truncate font-medium">{field.label}</span>
-          <span className="block truncate font-mono text-xs text-muted-foreground">
+          <span className="block truncate font-medium text-foreground">{field.label}</span>
+          <span className="block truncate font-mono text-[11px] text-muted-foreground">
             {field.key}
           </span>
         </span>
         <span>
-          <span className="rounded-md border border-border/70 px-1.5 py-px text-[11px] font-medium text-muted-foreground">
+          <span
+            className={cn(
+              'rounded border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
+              field.type === 'ENUM'
+                ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300'
+                : field.type === 'BOOLEAN'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : field.type === 'NUMBER'
+                    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                    : 'border-border/70 bg-muted/60 text-muted-foreground'
+            )}
+          >
             {FIELD_TYPE_LABELS[field.type]}
           </span>
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-[11px] text-muted-foreground">
           {field.mappings.length} {field.mappings.length === 1 ? 'mapping' : 'mappings'}
           {field.type === 'ENUM' && ` · ${field.allowedValues?.length ?? 0} choices`}
           {aliasCount > 0 && ` · ${aliasCount} ${aliasCount === 1 ? 'alias' : 'aliases'}`}
         </span>
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate font-mono text-[11px] text-muted-foreground">
           {sources.length ? sources.join(', ') : 'No source mapped'}
         </span>
       </button>
