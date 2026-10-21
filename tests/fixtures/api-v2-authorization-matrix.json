@@ -5,6 +5,78 @@
     "AUDITOR": "allow:global",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /dashboards/{id}/data [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "POST /dashboards/{id}/duplicate [reports:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /dashboards/{id}/export [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /dashboards/{id} [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "PATCH /dashboards/{id} [reports:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "DELETE /dashboards/{id} [reports:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /dashboards/{id}/widgets [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "PUT /dashboards/{id}/widgets [reports:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /dashboards [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "POST /dashboards [reports:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /escalation-policies/{id}/dependencies [escalation-policies:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /escalation-policies/{id}/preview [escalation-policies:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /escalation-policies/{id} [escalation-policies:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -41,11 +113,23 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /incidents/{id}/alerts [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "POST /incidents/{id}/assign [incidents:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /incidents/{id}/available-actions [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
   },
   "GET /incidents/{id}/notes [incidents:read]": {
     "ADMIN": "allow:global",
@@ -59,6 +143,18 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /incidents/{id}/notification-attempts [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "GET /incidents/{id}/related-incidents [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "POST /incidents/{id}/reopen [incidents:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -70,6 +166,12 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /incidents/{id}/response-activity [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
   },
   "GET /incidents/{id} [incidents:read]": {
     "ADMIN": "allow:global",
@@ -83,6 +185,18 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /incidents/{id}/routing-decision [automation:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /incidents/{id}/runbook-executions [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "POST /incidents/{id}/snooze [incidents:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -90,6 +204,24 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "POST /incidents/{id}/suppress [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /incidents/{id}/tags/{tagId} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /incidents/{id}/tags [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /incidents/{id}/tags [incidents:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
@@ -149,6 +281,24 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /integrations/{id}/credentials [integrations:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /integrations/{id}/credentials [integrations:credentials:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /integrations/{id}/diagnostics [integrations:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /integrations/{id} [integrations:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -161,11 +311,89 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "DELETE /integrations/{id} [integrations:delete]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /integrations/{id}/test [integrations:test]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /integrations/{id}/usage [integrations:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /integrations/{id}/validate [integrations:test]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /integrations [integrations:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
+  },
+  "GET /integrations/types [integrations:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "GET /notification-providers/{provider}/diagnostics [notification-providers:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /notification-providers/{provider} [notification-providers:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /notification-providers/{provider} [notification-providers:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /notification-providers/{provider}/test [notification-providers:test]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /notification-providers [notification-providers:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /notification-providers/web-push/rotate [notification-providers:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /notifications/{id}/attempts [notifications:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:resource",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /notifications/{id}/feedback [notifications:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:resource",
+    "USER": "deny:MISSING_CAPABILITY"
   },
   "POST /notifications/{id}/retry [notifications:write]": {
     "ADMIN": "allow:global",
@@ -178,6 +406,12 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:resource",
     "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /operational-events [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
   },
   "GET /postmortems/{id} [postmortems:read]": {
     "ADMIN": "allow:global",
@@ -209,7 +443,73 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /reports/catalog [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "POST /reports/exports/{id}/cancel [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /reports/exports/{id}/download [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /reports/exports/{id} [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "POST /reports/exports [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
   "GET /reports/metrics [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "POST /reports/query [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /reports/saved/{id} [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "PATCH /reports/saved/{id} [reports:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "DELETE /reports/saved/{id} [reports:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "GET /reports/saved [reports:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:global"
+  },
+  "POST /reports/saved [reports:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
@@ -479,6 +779,12 @@
     "AUDITOR": "allow:global",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /runbooks/executions [runbooks:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /runbooks [runbooks:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -563,6 +869,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /schedules/{id}/coverage [schedules:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "PATCH /schedules/{id}/layers/{layerId}/participants/{userId} [schedules:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -586,6 +898,12 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
+  },
+  "DELETE /schedules/{id}/overrides/{overrideId} [schedules:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
   },
   "GET /schedules/{id}/overrides [schedules:read]": {
     "ADMIN": "allow:global",
@@ -821,6 +1139,60 @@
     "AUDITOR": "allow:global",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /services/{id}/change-events [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "GET /services/{id}/health-summary [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /services/{id}/integrations [integrations:create]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /services/{id}/notification-settings [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PATCH /services/{id}/notification-settings [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /services/{id}/response-policy/classification [response-policy:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /services/{id}/response-policy/classification [response-policy:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /services/{id}/response-policy/sla [response-policy:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /services/{id}/response-policy/sla [response-policy:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /services/{id} [services:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -906,6 +1278,18 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "POST /services/{id}/runbook-rules [runbook-rules:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /services/{id}/support-hours [response-policy:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /services/{id}/support-hours [response-policy:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",
@@ -1182,6 +1566,12 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "PATCH /users/{id}/administration [users:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /users/{id}/dependencies [users:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",

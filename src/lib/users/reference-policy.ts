@@ -48,6 +48,8 @@ export const USER_REFERENCE_POLICY = {
   oidcLinkingApproval: { deactivate: 'REVOKE', delete: 'CASCADE' },
   avatar: { deactivate: 'KEEP', delete: 'CASCADE' },
   dashboards: { deactivate: 'REPORT', delete: 'BLOCK' },
+  savedReports: { deactivate: 'KEEP', delete: 'CASCADE' },
+  reportExports: { deactivate: 'KEEP', delete: 'CASCADE' },
   assignedActionItems: { deactivate: 'REPORT', delete: 'BLOCK' },
   tokens: { deactivate: 'REVOKE', delete: 'SET_NULL' },
   privacyRequestsAssigned: { deactivate: 'KEEP', delete: 'SET_NULL' },

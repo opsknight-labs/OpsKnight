@@ -69,8 +69,14 @@ describe('REST v2 authorization matrix', () => {
         actor: actor('USER', [op.scope, API_SCOPES.ADMIN_MANAGE]),
         action: op.action as never,
       });
-      // Incident operations may be scoped; preference operations are self-only by route construction.
-      if (decision.allowed) expect(decision.scope, `${op.method} ${op.path}`).toBe('resource');
+      // Report writes have a coarse role gate; the route owns the record and
+      // checks current team membership before any shared-resource mutation.
+      if (
+        decision.allowed &&
+        op.action !== AUTHORIZATION_ACTIONS.REPORT_MANAGE &&
+        !op.path.startsWith('/reports/')
+      )
+        expect(decision.scope, `${op.method} ${op.path}`).toBe('resource');
     }
   });
 

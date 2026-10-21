@@ -90,6 +90,10 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
         where: { id: binding.id },
         data: { unattendedWritesScopeHash: await computeRuleUnattendedScope(testPrisma, binding) },
       });
+    const currentRevision = binding.unattendedWritesAuthorizedAt
+      ? (await testPrisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } }))
+          .configurationRevision
+      : configuredBinding.configurationRevision;
     const incidentId =
       input.incidentId ??
       (await createTestIncident('Automatic safety fixture', binding.serviceId)).id;
@@ -103,7 +107,7 @@ async function startRunbookExecution(input: RunbookExecutionRequest) {
       runbookVersionId,
       sourceEventId,
       triggerId: trigger.id,
-      expectedRuleRevision: configuredBinding.configurationRevision,
+      expectedRuleRevision: currentRevision,
       triggerFingerprint: computeTriggerFingerprint({
         sourceEventId,
         bindingId: binding.id,

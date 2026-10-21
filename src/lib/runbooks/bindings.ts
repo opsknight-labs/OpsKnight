@@ -21,6 +21,7 @@ import {
   type CreateRunbookTriggerInput,
 } from './schemas';
 import { computeDefinitionChecksum, flattenSteps, parseRunbookDefinition } from './definition';
+import { conditionValueType, validateConditionComparison } from './conditions';
 import { RunbookDefinitionError, RunbookVersionNotFoundError } from './errors';
 import { lockRunbookForUpdate, lockServiceRuleForUpdate } from './locking';
 import {
@@ -256,6 +257,14 @@ async function normalizeTriggerConditions<
     throw new RunbookDefinitionError(
       `${misplaced.operator} is only available for automation.<field> conditions.`
     );
+  for (const condition of conditions) {
+    if (isAutomationConditionField(condition.field)) continue;
+    const issue = validateConditionComparison(
+      { operator: condition.operator, value: condition.value },
+      conditionValueType(condition.field, [])
+    );
+    if (issue) throw new RunbookDefinitionError(issue);
+  }
   return conditions;
 }
 
@@ -1002,9 +1011,10 @@ export async function pauseServiceRule(
       where: { id: ruleId, serviceId, detachedAt: null },
     });
     if (!rule) throw new RunbookDefinitionError('Service automation rule not found.');
+    if (!rule.enabled) return;
     await tx.serviceAutomationRule.update({
       where: { id: ruleId },
-      data: { enabled: false, configurationRevision: { increment: 1 } },
+      data: { enabled: false },
     });
     await logRunbookCommandAudit(
       actor,

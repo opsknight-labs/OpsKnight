@@ -245,6 +245,8 @@
       "reviewStatus": "local-evidence-passed-final-ci-pending",
       "requiredEvidence": [
         "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
         "postgres-integration",
         "contract-sdk",
         "final-candidate-ci"
