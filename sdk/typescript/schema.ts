@@ -159,6 +159,7 @@ export type ScheduleLayerOrder = { "scheduleId": string; "revision": number; "or
 export type ScheduleLayer = { "id": string; "scheduleId": string; "name": string; "revision": number; "start": string; "end": string | null; "rotationLengthHours": number; "shiftLengthHours": number | null; "restrictions": Record<string, unknown> | null; "priority": number; "createdAt": string; "updatedAt": string; "users"?: Array<{ "userId": string; "position": number } & Record<string, unknown>>; "truncated"?: boolean; "_count"?: { "users": number } & Record<string, unknown> } & Record<string, unknown>;
 export type ScheduleLayerCollection = { "scheduleId": string; "layers": Array<ScheduleLayer>; "truncated": boolean } & Record<string, unknown>;
 export type StatusPagePreview = { "pageId": string; "revision": number; "available": boolean; "snapshot": Record<string, unknown> | null } & Record<string, unknown>;
+export type StatusPageAssetUpload = { "assetId": string; "url": string; "contentType": "image/png" | "image/jpeg" | "image/gif" | "image/webp" } & Record<string, unknown>;
 export type EscalationPolicyValidation = { "policyId": string; "revision": number; "valid": boolean; "issues": Array<{ "code": string; "stepId": string | null; "field": string | null; "message": string } & Record<string, unknown>>; "truncated": boolean } & Record<string, unknown>;
 export type EscalationPolicyDependencies = { "policyId": string; "services": Array<{ "id": string; "name": string } & Record<string, unknown>>; "usage": { "services": number; "versionRefs": number; "decisions": number } & Record<string, unknown>; "truncated": { "services": boolean; "targets": boolean } & Record<string, unknown>; "targets": Array<{ "stepId": string; "stepOrder": number; "targetType": "USER" | "TEAM" | "SCHEDULE"; "targetId": string | null; "exists": boolean } & Record<string, unknown>>; "valid": boolean; "deletionAllowed": boolean } & Record<string, unknown>;
 export type ActionResult = { "success": boolean; "message"?: string } & Record<string, unknown>;
@@ -263,6 +264,7 @@ export interface OperationRequests {
   getStatusPageContent: { "params": { "id": string } };
   updateStatusPageContent: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "showServices"?: boolean; "showIncidents"?: boolean; "showMetrics"?: boolean; "showSubscribe"?: boolean; "footerText"?: string | null; "contactEmail"?: string | null; "contactUrl"?: string | null; "showChangelog"?: boolean; "showRegionHeatmap"?: boolean; "showPostIncidentReview"?: boolean; "uptimeExcellentThreshold"?: number; "uptimeGoodThreshold"?: number; "branding"?: Record<string, unknown> | null; "showRecentIncidents"?: boolean; "showServiceMetrics"?: boolean } };
   getStatusPageSettings: { "params": { "id": string } };
+  uploadStatusPageAsset: { "params": { "id": string }; "body": { "image": string } };
   updateStatusPageSettings: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "slug"?: string | null; "organizationName"?: string | null; "enabled"?: boolean; "requireAuth"?: boolean; "contactEmail"?: string | null; "contactUrl"?: string | null } };
   listStatusPageSubscribers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   getStatusPageSubscriber: { "params": { "id": string; "subscriberId": string } };
@@ -555,6 +557,7 @@ export interface OperationResponses {
   getStatusPageContent: { "data": StatusPageContent; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateStatusPageContent: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPageSettings: { "data": StatusPageSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  uploadStatusPageAsset: { "data": StatusPageAssetUpload; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateStatusPageSettings: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listStatusPageSubscribers: { "data": Array<StatusPageSubscriber>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPageSubscriber: { "data": StatusPageSubscriber; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1564,6 +1567,14 @@ export const OPERATIONS = {
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
+  },
+  "uploadStatusPageAsset": {
+    "method": "POST",
+    "path": "/status-pages/{id}/assets",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
   },
   "updateStatusPageSettings": {
     "method": "PATCH",

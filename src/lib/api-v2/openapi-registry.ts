@@ -672,6 +672,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'StatusPageSettings'
   ),
+  op('post', '/status-pages/{id}/assets', 'uploadStatusPageAsset', 'status-pages:write', 'item', 'StatusPageAssetUpload'),
   op(
     'patch',
     '/status-pages/{id}/settings',

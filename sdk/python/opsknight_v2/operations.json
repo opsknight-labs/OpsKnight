@@ -804,6 +804,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "uploadStatusPageAsset": {
+    "method": "POST",
+    "path": "/status-pages/{id}/assets",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
   "updateStatusPageSettings": {
     "method": "PATCH",
     "path": "/status-pages/{id}/settings",

@@ -401,6 +401,10 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Absolute settings replacement uses the shared publication command. New keys with stale configuration revisions return 412; matching keys replay committed metadata. Canonical API-attributed audit commits with configuration and serving-state changes; persistence and public publication status are reported separately. The mandatory Idempotency-Key record commits in the same shared transaction as configuration and canonical audit. Publication is read after commit; replays do not repeat configuration changes.',
   },
+  'POST /api/v2/status-pages/[id]/assets': {
+    idempotency: 'natural', concurrency: 'none', responseEtag: false,
+    rationale: 'Content-addressed upload validates raster bytes and deduplicates under a page lock. Upload only stores an asset; the revision-protected appearance command publishes its URL.',
+  },
   'DELETE /api/v2/status-pages/[id]/subscribers/[subscriberId]': {
     idempotency: 'required',
     concurrency: 'none',

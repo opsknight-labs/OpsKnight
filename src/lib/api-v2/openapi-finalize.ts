@@ -301,6 +301,15 @@ const extraSchemas: Json = {
     },
     required: ['pageId', 'revision', 'available', 'snapshot'],
   },
+  StatusPageAssetUpload: {
+    type: 'object',
+    properties: {
+      assetId: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+      url: { type: 'string' },
+      contentType: { type: 'string', enum: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] },
+    },
+    required: ['assetId', 'url', 'contentType'],
+  },
   EscalationPolicyValidation: {
     type: 'object',
     properties: {

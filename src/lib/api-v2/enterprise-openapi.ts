@@ -1328,6 +1328,14 @@ const operations: Operation[] = [
     summary: 'Read status-page appearance with a strong configuration revision',
   },
   {
+    method: 'post',
+    path: '/status-pages/{id}/assets',
+    summary: 'Upload a validated content-addressed branding image',
+    description: 'Accepts a PNG, JPEG, GIF or WebP data URL up to 2 MiB. Repeating the same bytes returns the same asset URL. Upload does not publish or change appearance; submit the returned URL through the revision-protected appearance endpoint. At most 20 distinct assets are retained per page.',
+    status: 201,
+    body: object({ image: { type: 'string', maxLength: 2800000 } }, ['image']),
+  },
+  {
     method: 'patch',
     path: '/status-pages/{id}/appearance',
     summary: 'Update reviewed status-page appearance through the canonical publication command',
