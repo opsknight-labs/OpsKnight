@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
+import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
@@ -93,64 +95,66 @@ export default async function RunbookDetailPage({
     Math.max(1, Math.ceil(runbookMeta._count.bindings / 20))
   );
 
-  const [permissions, user, runbook, serviceCount, topServiceGroups] = await Promise.all([
-    permissionsPromise,
-    userPromise,
-    prisma.runbook.findUnique({
-      where: { id },
-      include: {
-        ownerTeam: { select: { id: true, name: true } },
-        draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        versions: {
-          orderBy: { version: 'desc' },
-          skip: (versionPage - 1) * 20,
-          take: 20,
-          select: {
-            id: true,
-            version: true,
-            state: true,
-            publishedAt: true,
-            createdAt: true,
-            checksum: true,
-            publishedBy: { select: { name: true, email: true } },
-            _count: {
-              select: {
-                executions: true,
-                bindings: { where: { versionStrategy: 'PINNED', detachedAt: null } },
+  const [permissions, user, runbook, serviceCount, topServiceGroups, navigation] =
+    await Promise.all([
+      permissionsPromise,
+      userPromise,
+      prisma.runbook.findUnique({
+        where: { id },
+        include: {
+          ownerTeam: { select: { id: true, name: true } },
+          draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+          publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+          versions: {
+            orderBy: { version: 'desc' },
+            skip: (versionPage - 1) * 20,
+            take: 20,
+            select: {
+              id: true,
+              version: true,
+              state: true,
+              publishedAt: true,
+              createdAt: true,
+              checksum: true,
+              publishedBy: { select: { name: true, email: true } },
+              _count: {
+                select: {
+                  executions: true,
+                  bindings: { where: { versionStrategy: 'PINNED', detachedAt: null } },
+                },
               },
             },
           },
-        },
-        bindings: {
-          include: { service: { select: { id: true, name: true } } },
-          orderBy: { createdAt: 'desc' },
-          skip: (bindingPage - 1) * 20,
-          take: 20,
-        },
-        executions: {
-          orderBy: { createdAt: 'desc' },
-          take: 30,
-          select: {
-            id: true,
-            status: true,
-            incidentId: true,
-            createdAt: true,
-            runbookVersion: { select: { version: true } },
+          bindings: {
+            include: { service: { select: { id: true, name: true } } },
+            orderBy: { createdAt: 'desc' },
+            skip: (bindingPage - 1) * 20,
+            take: 20,
           },
+          executions: {
+            orderBy: { createdAt: 'desc' },
+            take: 30,
+            select: {
+              id: true,
+              status: true,
+              incidentId: true,
+              createdAt: true,
+              runbookVersion: { select: { version: true } },
+            },
+          },
+          _count: { select: { executions: true, bindings: true, versions: true } },
         },
-        _count: { select: { executions: true, bindings: true, versions: true } },
-      },
-    }),
-    prisma.service.count({ where: { runbookBindings: { some: { runbookId: id } } } }),
-    prisma.serviceAutomationRule.groupBy({
-      by: ['serviceId'],
-      where: { runbookId: id },
-      _count: { _all: true },
-      orderBy: { _count: { serviceId: 'desc' } },
-      take: 5,
-    }),
-  ]);
+      }),
+      prisma.service.count({ where: { runbookBindings: { some: { runbookId: id } } } }),
+      prisma.serviceAutomationRule.groupBy({
+        by: ['serviceId'],
+        where: { runbookId: id },
+        _count: { _all: true },
+        orderBy: { _count: { serviceId: 'desc' } },
+        take: 5,
+      }),
+      getRunbookNavigationSummary(),
+    ]);
   if (!runbook) notFound();
   const userTimeZone = getUserTimeZone(user);
   const isArchived = Boolean(runbook.archivedAt);
@@ -724,6 +728,7 @@ export default async function RunbookDetailPage({
           ) : undefined
         }
       />
+      <RunbookModuleNav summary={navigation} />
       <DetailTabs
         defaultTab={
           typeof query.tab === 'string' &&
