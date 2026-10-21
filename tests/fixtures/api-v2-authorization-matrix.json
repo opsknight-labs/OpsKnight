@@ -1433,6 +1433,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /status-pages/{id}/preview [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /status-pages/{id}/privacy [status-pages:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

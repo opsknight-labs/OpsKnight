@@ -1250,6 +1250,12 @@ const operations: Operation[] = [
   ...SERVICE_OBJECTIVE_OPERATIONS,
   {
     method: 'get',
+    path: '/status-pages/{id}/preview',
+    summary: 'Preview the current unpublished public projection without publishing it',
+    description: 'Returns the same privacy-filtered projection used by the status-page editor. A disabled page has no public preview snapshot. This read never changes publication state.',
+  },
+  {
+    method: 'get',
     path: '/status-pages/{id}/publication',
     summary: 'Inspect current persisted publication state separately from configuration',
   },

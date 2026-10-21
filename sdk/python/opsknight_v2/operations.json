@@ -1554,6 +1554,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "previewStatusPage": {
+    "method": "GET",
+    "path": "/status-pages/{id}/preview",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "updateEscalationPolicy": {
     "method": "PATCH",
     "path": "/escalation-policies/{id}",

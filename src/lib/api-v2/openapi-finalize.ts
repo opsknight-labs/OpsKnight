@@ -241,6 +241,16 @@ const extraSchemas: Json = {
     },
     required: ['notificationId', 'events', 'truncated'],
   },
+  StatusPagePreview: {
+    type: 'object',
+    description: 'Current unpublished public projection. Null when the page is disabled.',
+    properties: {
+      pageId: { type: 'string' }, revision: { type: 'integer' },
+      available: { type: 'boolean' },
+      snapshot: { type: ['object', 'null'], additionalProperties: true },
+    },
+    required: ['pageId', 'revision', 'available', 'snapshot'],
+  },
   EscalationPolicyValidation: {
     type: 'object',
     properties: {

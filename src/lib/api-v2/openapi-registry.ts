@@ -1196,6 +1196,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op('get', '/escalation-policies/{id}/dependencies', 'getEscalationPolicyDependencies', 'escalation-policies:read', 'item', 'EscalationPolicyDependencies'),
   op('get', '/escalation-policies/{id}/validation', 'validateEscalationPolicy', 'escalation-policies:read', 'item', 'EscalationPolicyValidation'),
+  op('get', '/status-pages/{id}/preview', 'previewStatusPage', 'status-pages:read', 'item', 'StatusPagePreview'),
   op(
     'patch',
     '/escalation-policies/{id}',

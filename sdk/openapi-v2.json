@@ -9813,6 +9813,34 @@
           "truncated"
         ]
       },
+      "StatusPagePreview": {
+        "type": "object",
+        "description": "Current unpublished public projection. Null when the page is disabled.",
+        "properties": {
+          "pageId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "snapshot": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "pageId",
+          "revision",
+          "available",
+          "snapshot"
+        ]
+      },
       "EscalationPolicyValidation": {
         "type": "object",
         "properties": {
@@ -30249,6 +30277,98 @@
         "operationId": "getServiceObjectiveEvaluation",
         "x-required-scope": "service-objectives:read",
         "description": "Requires API scope `service-objectives:read` (Service objectives read)."
+      }
+    },
+    "/status-pages/{id}/preview": {
+      "get": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Preview the current unpublished public projection without publishing it",
+        "description": "Returns the same privacy-filtered projection used by the status-page editor. A disabled page has no public preview snapshot. This read never changes publication state.\n\nRequires API scope `status-pages:read` (Status pages read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPagePreview"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "previewStatusPage",
+        "x-required-scope": "status-pages:read"
       }
     },
     "/status-pages/{id}/publication": {
