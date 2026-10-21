@@ -63,13 +63,15 @@ const CHANGE_CONFIG = {
   },
 } as const;
 
-function getRiskTone(risk?: string | null) {
+export function getRiskTone(risk?: string | null) {
   if (!risk) return 'border-border text-muted-foreground bg-muted/30';
   switch (risk.toUpperCase()) {
     case 'READ_ONLY':
       return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300';
+    case 'IDEMPOTENT_WRITE':
     case 'REVERSIBLE_CHANGE':
       return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+    case 'NON_IDEMPOTENT':
     case 'IRREVERSIBLE_ACTION':
       return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300';
     default:

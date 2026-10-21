@@ -583,6 +583,73 @@ describe('runbook Agent executor', () => {
     expect(result.errorCode).toBeUndefined();
   });
 
+  it('fails systemctl status with SERVICE_INACTIVE when step.phase is verification and exit code is 3', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-verif-phase',
+      leaseToken: 'tok-sys-verif-1',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-verif-1',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'check_recovered',
+        name: 'Check service is running',
+        phase: 'verification',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'payments.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      3,
+      '○ payments.service - Inactive Service\n   Active: inactive (dead)',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBe('SERVICE_INACTIVE');
+    expect(result.errorMessage).toContain('Verification expecting active state failed');
+  });
+
+  it('fails systemctl status with SERVICE_INACTIVE when verification phase was lost but step indicates verification', () => {
+    const attemptObj: ClaimedAttempt = {
+      attemptId: 'att-systemd-lost-phase',
+      leaseToken: 'tok-sys-verif-2',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-sys-verif-2',
+      inputValues: {},
+      secretInputKeys: [],
+      step: {
+        key: 'verify_payments_running',
+        name: 'Verify payments service',
+        type: 'SYSTEMD',
+        riskClass: 'READ_ONLY',
+        config: { action: 'status', unit: 'payments.service' },
+        timeoutSeconds: 10,
+      },
+    };
+
+    const result = resolveCommandResult(
+      attemptObj,
+      3,
+      '○ payments.service - Inactive Service\n   Active: inactive (dead)',
+      false
+    );
+
+    expect(result.status).toBe('FAILED');
+    expect(result.exitCode).toBe(3);
+    expect(result.errorCode).toBe('SERVICE_INACTIVE');
+    expect(result.errorMessage).toContain('Verification expecting active state failed');
+  });
+
   it('fails systemctl status with UNIT_NOT_FOUND when exit code is 4', () => {
     const attemptObj: ClaimedAttempt = {
       attemptId: 'att-systemd-status-notfound',

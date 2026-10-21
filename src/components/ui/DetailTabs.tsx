@@ -15,13 +15,20 @@ function TabUrlSync({
   onUrlTabChange: (tab: string) => void;
 }) {
   const searchParams = useSearchParams();
+  const lastParamRef = useRef<string | null>(null);
+  const onUrlTabChangeRef = useRef(onUrlTabChange);
+  useEffect(() => {
+    onUrlTabChangeRef.current = onUrlTabChange;
+  }, [onUrlTabChange]);
+
   useEffect(() => {
     if (!searchParams) return;
     const urlTab = searchParams.get(urlParamName);
-    if (urlTab && validTabIds.has(urlTab)) {
-      onUrlTabChange(urlTab);
+    if (urlTab && validTabIds.has(urlTab) && urlTab !== lastParamRef.current) {
+      lastParamRef.current = urlTab;
+      onUrlTabChangeRef.current(urlTab);
     }
-  }, [searchParams, urlParamName, validTabIds, onUrlTabChange]);
+  }, [searchParams, urlParamName, validTabIds]);
   return null;
 }
 
@@ -99,23 +106,25 @@ export default function DetailTabs({
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const urlTab = urlParams.get(urlParamName);
-        if (urlTab && validTabIds.has(urlTab)) {
-          selection.current = urlTab;
-          setSelectedTab(urlTab);
-        } else {
-          selection.current = initialTab;
-          setSelectedTab(initialTab);
+        const targetTab = urlTab && validTabIds.has(urlTab) ? urlTab : initialTab;
+        selection.current = targetTab;
+        setSelectedTab(targetTab);
+        if (onTabChange) {
+          onTabChange(targetTab);
         }
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [syncWithUrl, urlParamName, validTabIds, initialTab]);
+  }, [syncWithUrl, urlParamName, validTabIds, initialTab, onTabChange]);
+
+  const currentTab = controlledActiveTab || selectedTab;
 
   const handleTabChange = (nextTabId: string) => {
-    // Mouse/focus activation can arrive before React commits the selected value.
-    if (nextTabId === selection.current) return;
+    if (nextTabId === currentTab) return;
+    // Debounce duplicate in-flight activations for the same pending tab
+    if (nextTabId === selection.current && nextTabId !== currentTab) return;
     if (syncWithUrl && typeof window !== 'undefined') {
       const change = new CustomEvent('opsknight:settings-navigation', {
         cancelable: true,
@@ -150,11 +159,9 @@ export default function DetailTabs({
     }
   };
 
-  const currentTab = controlledActiveTab || selectedTab;
-
   return (
     <>
-      {syncWithUrl && (
+      {syncWithUrl && controlledActiveTab === undefined && (
         <Suspense fallback={null}>
           <TabUrlSync
             urlParamName={urlParamName}
@@ -162,6 +169,9 @@ export default function DetailTabs({
             onUrlTabChange={tab => {
               selection.current = tab;
               setSelectedTab(tab);
+              if (onTabChange) {
+                onTabChange(tab);
+              }
             }}
           />
         </Suspense>

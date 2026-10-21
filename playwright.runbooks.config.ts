@@ -52,6 +52,7 @@ export default defineConfig({
       ENCRYPTION_KEY: '68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba',
       NEXTAUTH_COOKIE_SECURE: 'false',
       TRUST_PROXY_HEADERS: 'false',
+      ALLOW_INSECURE_SECRETS: 'true',
     },
   },
 });
