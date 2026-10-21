@@ -1929,6 +1929,14 @@ const operations: Operation[] = [
     }, [...scheduleLayerRequired, 'responderIds']),
   },
   {
+    method: 'put',
+    path: '/schedules/{id}/layers/order',
+    summary: 'Atomically replace rotation-layer precedence using the schedule revision',
+    body: object({
+      orderedIds: array({ ...id, maxLength: 100 }, 100),
+    }, ['orderedIds']),
+  },
+  {
     method: 'get',
     path: '/schedules/{id}/layers/{layerId}',
     summary: 'Read a rotation layer and its current revision',

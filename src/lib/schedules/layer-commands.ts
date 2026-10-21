@@ -136,3 +136,41 @@ export async function deleteScheduleLayer(
   if (result.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
   return existing;
 }
+
+export async function reorderScheduleLayers(
+  tx: Prisma.TransactionClient,
+  scheduleId: string,
+  orderedIds: string[],
+  expectedScheduleRevision?: number
+) {
+  if (orderedIds.length > 100 || new Set(orderedIds).size !== orderedIds.length) {
+    throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Layer order must contain at most 100 distinct IDs.' });
+  }
+  await tx.$queryRaw`SELECT "id" FROM "OnCallSchedule" WHERE "id" = ${scheduleId} FOR UPDATE`;
+  const schedule = await tx.onCallSchedule.findUnique({
+    where: { id: scheduleId }, select: { id: true, revision: true },
+  });
+  if (!schedule) throw new AppError({ code: 'SCHEDULE_NOT_FOUND' });
+  if (expectedScheduleRevision !== undefined && schedule.revision !== expectedScheduleRevision) {
+    throw new AppError({ code: 'PRECONDITION_FAILED' });
+  }
+  const layers = await tx.onCallLayer.findMany({
+    where: { scheduleId },
+    orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+    select: { id: true, priority: true },
+  });
+  if (layers.length !== orderedIds.length || layers.some(layer => !orderedIds.includes(layer.id))) {
+    throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Layer order must include every current layer exactly once.' });
+  }
+  for (const [index, id] of orderedIds.entries()) {
+    const priority = orderedIds.length - index;
+    const current = layers.find(layer => layer.id === id);
+    if (current?.priority !== priority) {
+      await tx.onCallLayer.update({ where: { id }, data: { priority } });
+    }
+  }
+  const updated = await tx.onCallSchedule.findUniqueOrThrow({
+    where: { id: scheduleId }, select: { revision: true },
+  });
+  return { scheduleId, revision: updated.revision, orderedIds };
+}

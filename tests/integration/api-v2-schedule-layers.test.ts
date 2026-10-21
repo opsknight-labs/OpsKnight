@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from 'vitest';
 import { GET as listLayers, POST as createLayer } from '@/app/api/v2/schedules/[id]/layers/route';
 import { GET as getLayer, PATCH as updateLayer, DELETE as removeLayer } from '@/app/api/v2/schedules/[id]/layers/[layerId]/route';
+import { PUT as reorderLayers } from '@/app/api/v2/schedules/[id]/layers/order/route';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 import { createTestUser, resetDatabase, testPrisma as db } from '../helpers/test-db';
 
@@ -105,4 +106,33 @@ it('serializes simultaneous layer creation so one responder cannot be placed twi
   const responses = await Promise.all(calls);
   expect(responses.map(response => response.status).sort()).toEqual([201, 409]);
   expect(await db.onCallLayerUser.count({ where: { userId: responder.id } })).toBe(1);
+});
+
+it('reorders every layer atomically and rejects stale schedule revisions', async () => {
+  const admin = await createV2Credential(['schedules:write']);
+  const schedule = await db.onCallSchedule.create({ data: {
+    name: 'Layer order',
+    layers: { create: [
+      { name: 'Primary', start: new Date(body.start), rotationLengthHours: 24, priority: 2 },
+      { name: 'Fallback', start: new Date(body.start), rotationLengthHours: 24, priority: 1 },
+    ] },
+  } });
+  const layers = await db.onCallLayer.findMany({
+    where: { scheduleId: schedule.id }, orderBy: { priority: 'desc' },
+  });
+  const revision = (await db.onCallSchedule.findUniqueOrThrow({ where: { id: schedule.id } })).revision;
+  const path = `/schedules/${schedule.id}/layers/order`;
+  const params = { id: schedule.id };
+  const request = (key: string) => invokeV2(reorderLayers, admin.token, 'PUT', path, params, {
+    orderedIds: [layers[1].id, layers[0].id],
+  }, { 'If-Match': `"${revision}"`, 'Idempotency-Key': key });
+  const first = await request('layer-order-1');
+  expect(first.status).toBe(200);
+  expect((await first.json()).data.revision).toBeGreaterThan(revision);
+  expect((await request('layer-order-1')).headers.get('idempotency-replayed')).toBe('true');
+  expect((await request('layer-order-2')).status).toBe(412);
+  expect((await db.onCallLayer.findMany({
+    where: { scheduleId: schedule.id }, orderBy: { priority: 'desc' }, select: { id: true },
+  })).map(layer => layer.id)).toEqual([layers[1].id, layers[0].id]);
+  expect(await db.auditLog.count({ where: { action: 'schedule.layer.precedence_updated', entityId: schedule.id } })).toBe(1);
 });

@@ -26,7 +26,7 @@ import {
   type ScheduleDependency,
 } from '@/lib/schedules/mutations';
 import { runSerializableTransaction } from '@/lib/db-utils';
-import { createScheduleLayer, updateScheduleLayer, deleteScheduleLayer } from '@/lib/schedules/layer-commands';
+import { createScheduleLayer, updateScheduleLayer, deleteScheduleLayer, reorderScheduleLayers } from '@/lib/schedules/layer-commands';
 
 type ScheduleFormState = ScheduleActionState;
 
@@ -527,7 +527,7 @@ export async function moveLayerPrecedence(
   }
 
   try {
-    const result = await prisma.$transaction(async tx => {
+    const result = await runSerializableTransaction(async tx => {
       const layer = await tx.onCallLayer.findUnique({
         where: { id: layerId },
         select: { scheduleId: true },
@@ -539,6 +539,7 @@ export async function moveLayerPrecedence(
           details: { layerId },
         });
       }
+      await tx.$queryRaw`SELECT "id" FROM "OnCallSchedule" WHERE "id" = ${layer.scheduleId} FOR UPDATE`;
 
       const layers = await tx.onCallLayer.findMany({
         where: { scheduleId: layer.scheduleId },
@@ -558,24 +559,15 @@ export async function moveLayerPrecedence(
       const reordered = [...layers];
       const [movedLayer] = reordered.splice(currentIndex, 1);
       reordered.splice(targetIndex, 0, movedLayer);
-      await Promise.all(
-        reordered.map((candidate, index) =>
-          tx.onCallLayer.update({
-            where: { id: candidate.id },
-            data: { priority: reordered.length - index },
-          })
-        )
-      );
-
-      return { scheduleId: layer.scheduleId };
-    });
-
-    await logAudit({
-      action: 'schedule.layer.precedence_updated',
-      entityType: 'SCHEDULE',
-      entityId: result.scheduleId,
-      actorId,
-      details: { layerId, direction },
+      const result = await reorderScheduleLayers(tx, layer.scheduleId, reordered.map(candidate => candidate.id));
+      await logAudit({
+        action: 'schedule.layer.precedence_updated',
+        entityType: 'SCHEDULE',
+        entityId: result.scheduleId,
+        actorId,
+        details: { layerId, direction },
+      }, tx);
+      return result;
     });
     revalidatePath(`/schedules/${result.scheduleId}`);
     revalidatePath('/schedules');

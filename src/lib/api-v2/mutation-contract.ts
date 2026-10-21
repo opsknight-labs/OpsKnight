@@ -736,6 +736,10 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required', concurrency: 'etag', preconditionRequired: true, responseEtag: false,
     rationale: 'Locked layer revision fences deletion, participant cleanup and attributed audit; replay returns only the prior empty result.',
   },
+  'PUT /api/v2/schedules/[id]/layers/order': {
+    idempotency: 'required', concurrency: 'etag', preconditionRequired: true,
+    rationale: 'Locked schedule revision fences an exact complete layer order; shared UI/REST precedence changes and audit commit with replay receipt.',
+  },
   'DELETE /api/v2/services/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/schedules': supported('Creation.'),
   'PATCH /api/v2/schedules/[id]': natural('Sets fields to the requested values.', 'etag'),

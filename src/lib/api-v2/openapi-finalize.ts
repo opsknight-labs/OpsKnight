@@ -241,6 +241,14 @@ const extraSchemas: Json = {
     },
     required: ['notificationId', 'events', 'truncated'],
   },
+  ScheduleLayerOrder: {
+    type: 'object',
+    properties: {
+      scheduleId: { type: 'string' }, revision: { type: 'integer' },
+      orderedIds: { type: 'array', maxItems: 100, items: { type: 'string' } },
+    },
+    required: ['scheduleId', 'revision', 'orderedIds'],
+  },
   ScheduleLayer: {
     type: 'object',
     properties: {

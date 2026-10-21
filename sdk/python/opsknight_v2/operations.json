@@ -1610,6 +1610,17 @@
     ],
     "bodyRequired": false
   },
+  "reorderScheduleLayers": {
+    "method": "PUT",
+    "path": "/schedules/{id}/layers/order",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "updateEscalationPolicy": {
     "method": "PATCH",
     "path": "/escalation-policies/{id}",

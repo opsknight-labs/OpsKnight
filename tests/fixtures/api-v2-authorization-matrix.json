@@ -965,6 +965,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "PUT /schedules/{id}/layers/order [schedules:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /schedules/{id}/layers [schedules:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

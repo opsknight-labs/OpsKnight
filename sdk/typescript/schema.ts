@@ -154,6 +154,7 @@ export type IncidentResponseActivity = { "incident": { "id": string; "title": st
 export type RunbookExecutionSummary = { "id": string; "runbookId": string; "incidentId": string; "status": string; "triggeredByType": string; "startedAt": string | null; "completedAt": string | null; "createdAt": string; "recoveryOutcome": string | null; "runbook": { "id": string; "name": string; "slug": string } & Record<string, unknown> } & Record<string, unknown>;
 export type NotificationDeliveryAttempt = { "id": string; "notificationId": string; "ordinal": number; "outcome": string; "provider": string | null; "errorCode": string | null; "startedAt": string; "finishedAt": string | null; "reconciliationDeadline": string | null; "latencyMs": number | null } & Record<string, unknown>;
 export type NotificationFeedback = { "notificationId": string; "events": Array<{ "id": string; "provider": string; "eventType": string; "occurredAt": string; "processedAt": string | null; "quarantinedAt": string | null } & Record<string, unknown>>; "truncated": { "correlation": boolean; "events": boolean } & Record<string, unknown> } & Record<string, unknown>;
+export type ScheduleLayerOrder = { "scheduleId": string; "revision": number; "orderedIds": Array<string> } & Record<string, unknown>;
 export type ScheduleLayer = { "id": string; "scheduleId": string; "name": string; "revision": number; "start": string; "end": string | null; "rotationLengthHours": number; "shiftLengthHours": number | null; "restrictions": Record<string, unknown> | null; "priority": number; "createdAt": string; "updatedAt": string; "users"?: Array<{ "userId": string; "position": number } & Record<string, unknown>>; "truncated"?: boolean; "_count"?: { "users": number } & Record<string, unknown> } & Record<string, unknown>;
 export type ScheduleLayerCollection = { "scheduleId": string; "layers": Array<ScheduleLayer>; "truncated": boolean } & Record<string, unknown>;
 export type StatusPagePreview = { "pageId": string; "revision": number; "available": boolean; "snapshot": Record<string, unknown> | null } & Record<string, unknown>;
@@ -347,6 +348,7 @@ export interface OperationRequests {
   getScheduleLayer: { "params": { "id": string; "layerId": string } };
   updateScheduleLayer: { "params": { "id": string; "layerId": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name": string; "start": string; "end": string | null; "rotationLengthHours": number; "shiftLengthHours": number | null; "restrictions": { "daysOfWeek"?: Array<number>; "startHour"?: number; "endHour"?: number } | null } };
   deleteScheduleLayer: { "params": { "id": string; "layerId": string }; "headers": { "Idempotency-Key": string; "If-Match": string } };
+  reorderScheduleLayers: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "orderedIds": Array<string> } };
   updateEscalationPolicy: { "params": { "id": string }; "headers"?: { "If-Match"?: string }; "body": { "name"?: string; "description"?: string | null; "steps"?: Array<Record<string, unknown>> } & Record<string, unknown> };
   deleteEscalationPolicy: { "params": { "id": string } };
   listEscalationPolicies: { "query"?: { "limit"?: number; "cursor"?: string; "search"?: string } };
@@ -637,6 +639,7 @@ export interface OperationResponses {
   getScheduleLayer: { "data": ScheduleLayer; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateScheduleLayer: { "data": ScheduleLayer; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteScheduleLayer: null;
+  reorderScheduleLayers: { "data": ScheduleLayerOrder; "requestId": string; "timestamp": string } & Record<string, unknown>;
   updateEscalationPolicy: { "data": EscalationPolicy; "requestId": string; "timestamp": string } & Record<string, unknown>;
   deleteEscalationPolicy: { "data": ActionResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listEscalationPolicies: { "data": Array<EscalationPolicy>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2364,6 +2367,17 @@ export const OPERATIONS = {
       "If-Match"
     ],
     "bodyRequired": false
+  },
+  "reorderScheduleLayers": {
+    "method": "PUT",
+    "path": "/schedules/{id}/layers/order",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
   },
   "updateEscalationPolicy": {
     "method": "PATCH",
