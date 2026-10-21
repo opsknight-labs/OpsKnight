@@ -667,23 +667,10 @@ export function validateInputKeyUniqueness(inputs: Array<{ key: string }>): void
  */
 export function flattenSteps(definition: RunbookDefinition): RunbookStepDefinition[] {
   const result: RunbookStepDefinition[] = [];
-  const append = (
-    step: RunbookStepDefinition,
-    inheritedPhase?: 'precheck' | 'action' | 'verification'
-  ) => {
-    for (const precheck of step.precheck?.steps ?? []) append(precheck, 'precheck');
-    const phase =
-      inheritedPhase ??
-      (step.config?.phase as 'precheck' | 'action' | 'verification' | undefined) ??
-      'action';
-    result.push({
-      ...step,
-      config: {
-        ...(phase ? { phase } : {}),
-        ...step.config,
-      },
-    });
-    for (const verification of step.verification?.steps ?? []) append(verification, 'verification');
+  const append = (step: RunbookStepDefinition) => {
+    for (const precheck of step.precheck?.steps ?? []) append(precheck);
+    result.push(step);
+    for (const verification of step.verification?.steps ?? []) append(verification);
   };
   for (const step of definition.steps) append(step);
   return result;
