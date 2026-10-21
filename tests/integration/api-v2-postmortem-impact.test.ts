@@ -73,3 +73,14 @@ it('stores the UI-compatible structured timeline and rejects duplicate event ide
   expect(duplicate.status).toBe(400);
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).timeline).toEqual([first]);
 });
+
+it('keeps REST postmortem creation aligned with the resolved-incident UI rule', async () => {
+  const writer = await createV2Credential(['postmortems:write']);
+  const service = await createTestService('Active incident service');
+  const incident = await createTestIncident('Still active', service.id, { status: 'OPEN' });
+  const response = await invokeV2(POST, writer.token, 'POST', '/postmortems', {}, {
+    incidentId: incident.id, summary: 'This should not be published yet',
+  }, { 'Idempotency-Key': 'postmortem-active-rejection' });
+  expect(response.status).toBe(400);
+  expect(await db.postmortem.count({ where: { incidentId: incident.id } })).toBe(0);
+});

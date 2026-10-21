@@ -106,6 +106,12 @@ export const POST = defineV2Route({
         userMessage: `Incident with id '${body.incidentId}' not found.`,
       });
     }
+    if (incident.status !== 'RESOLVED') {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'Postmortems can only be created for resolved incidents.',
+      });
+    }
 
     const existing = await db.postmortem.findUnique({
       where: { incidentId: body.incidentId },
@@ -144,6 +150,7 @@ export const POST = defineV2Route({
         resolution: true,
         lessons: true,
         impact: true,
+        timeline: true,
         status: true,
         isPublic: true,
         publishedAt: true,
