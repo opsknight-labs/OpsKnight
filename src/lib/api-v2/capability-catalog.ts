@@ -402,7 +402,7 @@ const decisions: readonly ApiCapability[] = [
     title: 'Structured impact, contributors and action items',
     status: 'partial',
     explanation:
-      'Postmortem CRUD now persists strictly validated structured impact metrics used by the UI. Factors, five-whys, contributors, action-item lifecycle and explicit publication still need shared contracts.',
+      'Postmortem CRUD now persists strictly validated structured impact metrics and timeline events used by the UI. Factors, five-whys, contributors, action-item lifecycle and explicit publication still need shared contracts.',
     operationIds: ['createPostmortem', 'getPostmortem', 'updatePostmortem'],
   },
   {

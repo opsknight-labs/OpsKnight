@@ -52,3 +52,24 @@ it('rejects invalid impact without changing stored data', async () => {
   expect(response.status).toBe(400);
   expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).impact).toBeNull();
 });
+
+it('stores the UI-compatible structured timeline and rejects duplicate event identifiers', async () => {
+  const writer = await createV2Credential(['postmortems:read', 'postmortems:write', 'incidents:read']);
+  const service = await createTestService('Timeline service');
+  const incident = await createTestIncident('Timeline incident', service.id, { status: 'RESOLVED' });
+  const first = {
+    id: 'detected', timestamp: '2026-10-21T01:00:00.000Z', type: 'DETECTION',
+    title: 'Alert fired', description: 'Synthetic check failed',
+  };
+  const created = await invokeV2(POST, writer.token, 'POST', '/postmortems', {}, {
+    incidentId: incident.id, summary: 'A structured timeline summary', timeline: [first],
+  }, { 'Idempotency-Key': 'postmortem-timeline-create' });
+  expect(created.status).toBe(201);
+  const id = (await created.json()).data.id as string;
+  expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).timeline).toEqual([first]);
+  const path = `/postmortems/${id}`;
+  expect((await (await invokeV2(GET_POSTMORTEM, writer.token, 'GET', path, { id })).json()).data.timeline).toEqual([first]);
+  const duplicate = await invokeV2(PATCH, writer.token, 'PATCH', path, { id }, { timeline: [first, first] });
+  expect(duplicate.status).toBe(400);
+  expect((await db.postmortem.findUniqueOrThrow({ where: { id } })).timeline).toEqual([first]);
+});

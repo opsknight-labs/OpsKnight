@@ -298,6 +298,18 @@ export const PostmortemImpactV2Schema = z.object({
   performanceDegradation: z.number().min(0).max(100).optional(),
 }).strict();
 
+export const PostmortemTimelineV2Schema = z.array(z.object({
+  id: z.string().trim().min(1).max(100),
+  timestamp: z.string().datetime(),
+  type: z.enum(['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION']),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000),
+  actor: z.string().trim().max(200).optional(),
+}).strict()).max(100).refine(
+  events => new Set(events.map(event => event.id)).size === events.length,
+  'Timeline event IDs must be unique.'
+);
+
 export const PostmortemCreateV2Schema = z.object({
   incidentId: z.string().trim().min(1),
   title: z.string().trim().min(2).max(200).optional(),
@@ -306,6 +318,7 @@ export const PostmortemCreateV2Schema = z.object({
   resolution: z.string().trim().max(5000).optional(),
   mitigation: z.string().trim().max(5000).optional(),
   impact: PostmortemImpactV2Schema.optional(),
+  timeline: PostmortemTimelineV2Schema.optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED']).default('DRAFT'),
   isPublic: z.boolean().default(true),
@@ -318,6 +331,7 @@ export const PostmortemUpdateV2Schema = z.object({
   resolution: z.string().trim().max(5000).optional(),
   mitigation: z.string().trim().max(5000).optional(),
   impact: PostmortemImpactV2Schema.optional(),
+  timeline: PostmortemTimelineV2Schema.optional(),
   lessons: z.string().trim().max(5000).optional(),
   status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
   isPublic: z.boolean().optional(),

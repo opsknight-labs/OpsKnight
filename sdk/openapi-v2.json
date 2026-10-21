@@ -1283,6 +1283,54 @@
           }
         }
       },
+      "PostmortemTimeline": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "DETECTION",
+                "ESCALATION",
+                "MITIGATION",
+                "RESOLUTION"
+              ]
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "actor": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "type",
+            "title",
+            "description"
+          ]
+        }
+      },
       "Postmortem": {
         "type": "object",
         "properties": {
@@ -1323,6 +1371,16 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/PostmortemImpact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeline": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PostmortemTimeline"
               },
               {
                 "type": "null"
@@ -20102,6 +20160,9 @@
                   "impact": {
                     "$ref": "#/components/schemas/PostmortemImpact"
                   },
+                  "timeline": {
+                    "$ref": "#/components/schemas/PostmortemTimeline"
+                  },
                   "lessons": {
                     "type": "string"
                   },
@@ -20341,6 +20402,9 @@
                   },
                   "impact": {
                     "$ref": "#/components/schemas/PostmortemImpact"
+                  },
+                  "timeline": {
+                    "$ref": "#/components/schemas/PostmortemTimeline"
                   },
                   "lessons": {
                     "type": "string"

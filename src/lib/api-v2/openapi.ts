@@ -504,6 +504,21 @@ function buildBaseSpec(): Record<string, unknown> {
             performanceDegradation: { type: 'number', minimum: 0, maximum: 100 },
           },
         },
+        PostmortemTimeline: {
+          type: 'array', maxItems: 100,
+          items: {
+            type: 'object', additionalProperties: false,
+            properties: {
+              id: { type: 'string', minLength: 1, maxLength: 100 },
+              timestamp: { type: 'string', format: 'date-time' },
+              type: { type: 'string', enum: ['DETECTION', 'ESCALATION', 'MITIGATION', 'RESOLUTION'] },
+              title: { type: 'string', minLength: 1, maxLength: 200 },
+              description: { type: 'string', maxLength: 2000 },
+              actor: { type: 'string', maxLength: 200 },
+            },
+            required: ['id', 'timestamp', 'type', 'title', 'description'],
+          },
+        },
         Postmortem: {
           type: 'object',
           properties: {
@@ -515,6 +530,7 @@ function buildBaseSpec(): Record<string, unknown> {
             resolution: { type: 'string', nullable: true },
             mitigation: { type: 'string', nullable: true },
             impact: { oneOf: [{ $ref: '#/components/schemas/PostmortemImpact' }, { type: 'null' }] },
+            timeline: { oneOf: [{ $ref: '#/components/schemas/PostmortemTimeline' }, { type: 'null' }] },
             lessons: { type: 'string', nullable: true },
             status: { type: 'string', enum: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'] },
             isPublic: { type: 'boolean' },
@@ -2068,6 +2084,7 @@ function buildBaseSpec(): Record<string, unknown> {
                     resolution: { type: 'string' },
                     mitigation: { type: 'string' },
                     impact: { $ref: '#/components/schemas/PostmortemImpact' },
+                    timeline: { $ref: '#/components/schemas/PostmortemTimeline' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',
@@ -2117,6 +2134,7 @@ function buildBaseSpec(): Record<string, unknown> {
                     resolution: { type: 'string' },
                     mitigation: { type: 'string' },
                     impact: { $ref: '#/components/schemas/PostmortemImpact' },
+                    timeline: { $ref: '#/components/schemas/PostmortemTimeline' },
                     lessons: { type: 'string' },
                     status: {
                       type: 'string',
