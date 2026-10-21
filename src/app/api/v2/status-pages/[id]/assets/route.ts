@@ -9,6 +9,26 @@ import { parseStatusPageLogo } from '@/lib/status-pages/assets';
 
 const paramsSchema = z.object({ id: z.string().cuid() }).strict();
 
+export const GET = defineV2Route({
+  action: AUTHORIZATION_ACTIONS.STATUS_PAGE_READ,
+  rateLimitTier: 'SEARCH_EXPORT',
+  paramsSchema,
+  querySchema: z.object({}).strict(),
+  handler: async ({ params }) => {
+    const page = await prisma.statusPage.findUnique({ where: { id: params.id }, select: { id: true } });
+    if (!page) throw new AppError({ code: 'STATUS_PAGE_NOT_FOUND' });
+    const assets = await prisma.statusPageAsset.findMany({
+      where: { statusPageId: params.id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 21,
+      select: { id: true, contentType: true, createdAt: true },
+    });
+    return { data: { statusPageId: page.id, assets: assets.map(asset => ({
+      assetId: asset.id, contentType: asset.contentType, createdAt: asset.createdAt,
+      url: `/api/status-page/logo/${encodeURIComponent(page.id)}?asset=${asset.id}`,
+    })) }, headers: { 'Cache-Control': 'private, no-store' } };
+  },
+});
+
 export const POST = defineV2Route({
   action: AUTHORIZATION_ACTIONS.STATUS_PAGE_MANAGE,
   rateLimitTier: 'SEARCH_EXPORT',

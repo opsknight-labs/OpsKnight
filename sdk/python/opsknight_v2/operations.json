@@ -886,6 +886,24 @@
     "requiredHeaders": [],
     "bodyRequired": true
   },
+  "listStatusPageAssets": {
+    "method": "GET",
+    "path": "/status-pages/{id}/assets",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteStatusPageAsset": {
+    "method": "DELETE",
+    "path": "/status-pages/{id}/assets/{assetId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
   "updateStatusPageSettings": {
     "method": "PATCH",
     "path": "/status-pages/{id}/settings",

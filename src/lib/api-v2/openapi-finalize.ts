@@ -51,6 +51,15 @@ function convertNullable(node: unknown): unknown {
 }
 
 const extraSchemas: Json = {
+  StatusPageAssetCollection: {
+    type: 'object', properties: {
+      statusPageId: { type: 'string' },
+      assets: { type: 'array', maxItems: 20, items: { type: 'object', properties: {
+        assetId: { type: 'string' }, contentType: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' }, url: { type: 'string' },
+      }, required: ['assetId', 'contentType', 'createdAt', 'url'] } },
+    }, required: ['statusPageId', 'assets'],
+  },
   CustomFieldDefinition: {
     type: 'object', properties: {
       id: { type: 'string' }, revision: { type: 'integer' }, name: { type: 'string' },

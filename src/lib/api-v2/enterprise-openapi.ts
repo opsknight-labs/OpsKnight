@@ -1426,6 +1426,11 @@ const operations: Operation[] = [
     status: 201,
     body: object({ image: { type: 'string', maxLength: 2800000 } }, ['image']),
   },
+  { method: 'get', path: '/status-pages/{id}/assets',
+    summary: 'List uploaded status-page branding assets without image bytes' },
+  { method: 'delete', path: '/status-pages/{id}/assets/{assetId}',
+    summary: 'Delete an unused status-page branding asset',
+    description: 'Requires Idempotency-Key. Rejects assets referenced by draft branding or the published snapshot. Successful deletion is audited and replay-safe.' },
   {
     method: 'patch',
     path: '/status-pages/{id}/appearance',

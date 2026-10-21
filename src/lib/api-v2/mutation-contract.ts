@@ -421,6 +421,10 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'natural', concurrency: 'none', responseEtag: false,
     rationale: 'Content-addressed upload validates raster bytes and deduplicates under a page lock. Upload only stores an asset; the revision-protected appearance command publishes its URL.',
   },
+  'DELETE /api/v2/status-pages/[id]/assets/[assetId]': {
+    idempotency: 'required', concurrency: 'none', responseEtag: false,
+    rationale: 'Page-row lock serializes reference checks against draft and published snapshot; deletion, audit and replay receipt commit together.',
+  },
   'DELETE /api/v2/status-pages/[id]/subscribers/[subscriberId]': {
     idempotency: 'required',
     concurrency: 'none',

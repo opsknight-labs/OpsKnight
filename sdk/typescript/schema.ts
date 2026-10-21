@@ -145,6 +145,7 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
+export type StatusPageAssetCollection = { "statusPageId": string; "assets": Array<{ "assetId": string; "contentType": string; "createdAt": string; "url": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type CustomFieldDefinition = { "id": string; "revision": number; "name": string; "key": string; "type": "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN" | "URL" | "EMAIL"; "required": boolean; "defaultValue"?: string | null; "options"?: Array<string> | null; "order": number; "showInList": boolean; "usageCount"?: number } & Record<string, unknown>;
 export type CustomFieldDefinitionCollection = { "fields": Array<CustomFieldDefinition>; "nextCursor": string | null } & Record<string, unknown>;
 export type AuditExport = { "id": string; "status": string; "createdAt": string; "expiresAt": string; "filter": Record<string, unknown>; "checksum"?: string | null; "sizeBytes"?: number | null; "recordCount"?: number | null } & Record<string, unknown>;
@@ -286,6 +287,8 @@ export interface OperationRequests {
   updateStatusPageContent: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "showServices"?: boolean; "showIncidents"?: boolean; "showMetrics"?: boolean; "showSubscribe"?: boolean; "footerText"?: string | null; "contactEmail"?: string | null; "contactUrl"?: string | null; "showChangelog"?: boolean; "showRegionHeatmap"?: boolean; "showPostIncidentReview"?: boolean; "uptimeExcellentThreshold"?: number; "uptimeGoodThreshold"?: number; "branding"?: Record<string, unknown> | null; "showRecentIncidents"?: boolean; "showServiceMetrics"?: boolean } };
   getStatusPageSettings: { "params": { "id": string } };
   uploadStatusPageAsset: { "params": { "id": string }; "body": { "image": string } };
+  listStatusPageAssets: { "params": { "id": string } };
+  deleteStatusPageAsset: { "params": { "id": string; "assetId": string }; "headers": { "Idempotency-Key": string } };
   updateStatusPageSettings: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "name"?: string; "slug"?: string | null; "organizationName"?: string | null; "enabled"?: boolean; "requireAuth"?: boolean; "contactEmail"?: string | null; "contactUrl"?: string | null } };
   listStatusPageSubscribers: { "params": { "id": string }; "query"?: { "limit"?: number; "cursor"?: string } };
   getStatusPageSubscriber: { "params": { "id": string; "subscriberId": string } };
@@ -597,6 +600,8 @@ export interface OperationResponses {
   updateStatusPageContent: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPageSettings: { "data": StatusPageSettings; "requestId": string; "timestamp": string } & Record<string, unknown>;
   uploadStatusPageAsset: { "data": StatusPageAssetUpload; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listStatusPageAssets: { "data": StatusPageAssetCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  deleteStatusPageAsset: null;
   updateStatusPageSettings: { "data": StatusPageConfigurationResult; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listStatusPageSubscribers: { "data": Array<StatusPageSubscriber>; "pagination"?: Pagination; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getStatusPageSubscriber: { "data": StatusPageSubscriber; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -1698,6 +1703,24 @@ export const OPERATIONS = {
     "idempotency": "natural",
     "requiredHeaders": [],
     "bodyRequired": true
+  },
+  "listStatusPageAssets": {
+    "method": "GET",
+    "path": "/status-pages/{id}/assets",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteStatusPageAsset": {
+    "method": "DELETE",
+    "path": "/status-pages/{id}/assets/{assetId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
   },
   "updateStatusPageSettings": {
     "method": "PATCH",

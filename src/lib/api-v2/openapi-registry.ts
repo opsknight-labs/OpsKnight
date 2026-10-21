@@ -681,6 +681,8 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'StatusPageSettings'
   ),
   op('post', '/status-pages/{id}/assets', 'uploadStatusPageAsset', 'status-pages:write', 'item', 'StatusPageAssetUpload'),
+  op('get', '/status-pages/{id}/assets', 'listStatusPageAssets', 'status-pages:read', 'item', 'StatusPageAssetCollection'),
+  op('delete', '/status-pages/{id}/assets/{assetId}', 'deleteStatusPageAsset', 'status-pages:write', 'none', ''),
   op(
     'patch',
     '/status-pages/{id}/settings',

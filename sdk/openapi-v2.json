@@ -8884,6 +8884,46 @@
           "status"
         ]
       },
+      "StatusPageAssetCollection": {
+        "type": "object",
+        "properties": {
+          "statusPageId": {
+            "type": "string"
+          },
+          "assets": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "properties": {
+                "assetId": {
+                  "type": "string"
+                },
+                "contentType": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "assetId",
+                "contentType",
+                "createdAt",
+                "url"
+              ]
+            }
+          }
+        },
+        "required": [
+          "statusPageId",
+          "assets"
+        ]
+      },
       "CustomFieldDefinition": {
         "type": "object",
         "properties": {
@@ -34540,6 +34580,169 @@
         "operationId": "uploadStatusPageAsset",
         "x-required-scope": "status-pages:write",
         "x-idempotency": "natural",
+        "x-concurrency": "none"
+      },
+      "get": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "List uploaded status-page branding assets without image bytes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageAssetCollection"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listStatusPageAssets",
+        "x-required-scope": "status-pages:read",
+        "description": "Requires API scope `status-pages:read` (Status pages read)."
+      }
+    },
+    "/status-pages/{id}/assets/{assetId}": {
+      "delete": {
+        "tags": [
+          "Status Pages"
+        ],
+        "summary": "Delete an unused status-page branding asset",
+        "description": "Requires Idempotency-Key. Rejects assets referenced by draft branding or the published snapshot. Successful deletion is audited and replay-safe.\n\nRequires API scope `status-pages:write` (Status pages manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed"
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "deleteStatusPageAsset",
+        "x-required-scope": "status-pages:write",
+        "x-idempotency": "required",
         "x-concurrency": "none"
       }
     },

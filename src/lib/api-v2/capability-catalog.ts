@@ -371,10 +371,12 @@ const decisions: readonly ApiCapability[] = [
     title: 'Components, subscribers and branding',
     status: 'partial',
     explanation:
-      'Page CRUD and announcements are available. Subscriber administration uses explicit privacy scopes and shared revocation/suppression commands. Appearance, privacy, content and general settings use the shared publication command with all-writer revision fencing. Component membership/presentation, unpublished public-projection preview, validated branding-asset upload and durable publication retry/status are available. Custom domains and full publication parity remain in progress.',
+      'Page CRUD and announcements are available. Subscriber administration uses explicit privacy scopes and shared revocation/suppression commands. Appearance, privacy, content and general settings use the shared publication command with all-writer revision fencing. Component membership/presentation, unpublished public-projection preview, validated branding-asset upload/list/safe deletion and durable publication retry/status are available. Custom domains and full publication parity remain in progress.',
     operationIds: [
       'previewStatusPage',
       'uploadStatusPageAsset',
+      'listStatusPageAssets',
+      'deleteStatusPageAsset',
       'getStatusPagePublication',
       'retryStatusPagePublication',
       'getStatusPagePublicationJob',
