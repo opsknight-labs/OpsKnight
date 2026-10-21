@@ -145,6 +145,7 @@ export type ReportDashboardData = { "dashboardId": string; "windowDays": number;
 export type ReportDashboardWidgets = { "dashboardId": string; "widgets": Array<ReportDashboardWidget> };
 export type ReportExport = { "id": string; "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"; "query": { "metrics": Array<string>; "windowDays": number; "serviceId"?: string }; "createdAt": string; "expiresAt": string; "completedAt"?: string | null; "failedAt"?: string | null; "checksum"?: string | null; "sizeBytes"?: number | null };
 export type ReportExportCancellation = { "id": string; "status": "CANCELLED" };
+export type PostmortemVersionCollection = { "postmortemId": string; "currentRevision": number; "versions": Array<{ "revision": number; "createdAt": string; "snapshot": Record<string, unknown> } & Record<string, unknown>>; "nextBeforeRevision": number | null } & Record<string, unknown>;
 export type PostmortemContributors = { "postmortemId": string; "revision": number; "contributors": Array<{ "userId": string; "role": "AUTHOR" | "REVIEWER" | "CONTRIBUTOR"; "name": string } & Record<string, unknown>> } & Record<string, unknown>;
 export type PostmortemPublication = { "id": string; "revision": number; "status": "PUBLISHED"; "isPublic": boolean; "publishedAt": string } & Record<string, unknown>;
 export type PostmortemActionItemCollection = { "postmortemId": string; "revision": number; "items": Array<{ "id": string; "title": string; "description": string; "owner"?: string; "dueDate"?: string; "status": "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority": "HIGH" | "MEDIUM" | "LOW"; "completedAt"?: string | null; "externalIssue"?: Record<string, unknown> } & Record<string, unknown>> } & Record<string, unknown>;
@@ -403,6 +404,7 @@ export interface OperationRequests {
   previewEscalationPolicy: { "params": { "id": string }; "body": { "incidentId": string; "at"?: string } };
   getServiceHealthSummary: { "params": { "id": string } };
   getPostmortem: { "params": { "id": string } };
+  listPostmortemVersions: { "params": { "id": string } };
   listPostmortemActionItems: { "params": { "id": string } };
   replacePostmortemActionItems: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "items": Array<{ "id"?: string; "title": string; "description"?: string; "ownerId"?: string | null; "dueDate"?: string | null; "status"?: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"; "priority"?: "HIGH" | "MEDIUM" | "LOW" }> } };
   publishPostmortem: { "params": { "id": string }; "headers": { "Idempotency-Key": string; "If-Match": string }; "body": { "isPublic": boolean } };
@@ -703,6 +705,7 @@ export interface OperationResponses {
   previewEscalationPolicy: { "data": EscalationPolicyPreview; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getServiceHealthSummary: { "data": ServiceHealthSummary; "requestId": string; "timestamp": string } & Record<string, unknown>;
   getPostmortem: { "data": Postmortem; "requestId": string; "timestamp": string } & Record<string, unknown>;
+  listPostmortemVersions: { "data": PostmortemVersionCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   listPostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   replacePostmortemActionItems: { "data": PostmortemActionItemCollection; "requestId": string; "timestamp": string } & Record<string, unknown>;
   publishPostmortem: { "data": PostmortemPublication; "requestId": string; "timestamp": string } & Record<string, unknown>;
@@ -2771,6 +2774,14 @@ export const OPERATIONS = {
   "getPostmortem": {
     "method": "GET",
     "path": "/postmortems/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listPostmortemVersions": {
+    "method": "GET",
+    "path": "/postmortems/{id}/versions",
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],

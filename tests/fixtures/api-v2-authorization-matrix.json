@@ -515,6 +515,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /postmortems/{id}/versions [postmortems:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /postmortems [postmortems:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

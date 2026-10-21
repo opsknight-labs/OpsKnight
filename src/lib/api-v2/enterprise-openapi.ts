@@ -1236,6 +1236,11 @@ interface Operation {
 }
 const operations: Operation[] = [
   {
+    method: 'get', path: '/postmortems/{id}/versions',
+    summary: 'List retained postmortem revisions',
+    description: 'Cursor over at most 50 descending revisions. Snapshots capture parent-row state on every insert and update, including UI and worker writes. Existing records begin with the state present when this feature was deployed; earlier revisions cannot be reconstructed. Incident visibility applies.',
+  },
+  {
     method: 'get', path: '/postmortems/{id}/action-items',
     summary: 'Read corrective actions from the same records as the postmortem UI',
     description: 'Returns at most 100 actions and the parent postmortem revision. Legacy JSON actions are projected only when no relational records exist.',

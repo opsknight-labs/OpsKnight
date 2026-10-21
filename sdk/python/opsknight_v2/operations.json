@@ -1991,6 +1991,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listPostmortemVersions": {
+    "method": "GET",
+    "path": "/postmortems/{id}/versions",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listPostmortemActionItems": {
     "method": "GET",
     "path": "/postmortems/{id}/action-items",

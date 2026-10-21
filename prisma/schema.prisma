@@ -1597,10 +1597,22 @@ model Postmortem {
   createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   actionItemRecords ActionItem[]
   contributors      PostmortemContributor[]
+  versions          PostmortemVersion[]
 
   @@index([incidentId])
   @@index([status, createdAt])
   @@index([createdById])
+}
+
+model PostmortemVersion {
+  postmortemId String
+  revision     Int
+  snapshot     Json
+  createdAt    DateTime @default(now())
+  postmortem   Postmortem @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
+
+  @@id([postmortemId, revision])
+  @@index([postmortemId, createdAt(sort: Desc)])
 }
 
 enum PostmortemContributorRole {

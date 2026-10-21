@@ -8884,6 +8884,54 @@
           "status"
         ]
       },
+      "PostmortemVersionCollection": {
+        "type": "object",
+        "properties": {
+          "postmortemId": {
+            "type": "string"
+          },
+          "currentRevision": {
+            "type": "integer"
+          },
+          "versions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "revision": {
+                  "type": "integer"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "snapshot": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "revision",
+                "createdAt",
+                "snapshot"
+              ]
+            }
+          },
+          "nextBeforeRevision": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "postmortemId",
+          "currentRevision",
+          "versions",
+          "nextBeforeRevision"
+        ]
+      },
       "PostmortemContributors": {
         "type": "object",
         "properties": {
@@ -20872,6 +20920,98 @@
         "description": "Requires API scope `postmortems:write` (Postmortems manage).",
         "x-idempotency": "natural",
         "x-concurrency": "etag"
+      }
+    },
+    "/postmortems/{id}/versions": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "List retained postmortem revisions",
+        "description": "Cursor over at most 50 descending revisions. Snapshots capture parent-row state on every insert and update, including UI and worker writes. Existing records begin with the state present when this feature was deployed; earlier revisions cannot be reconstructed. Incident visibility applies.\n\nRequires API scope `postmortems:read` (Postmortems read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PostmortemVersionCollection"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "requestId",
+                    "timestamp"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listPostmortemVersions",
+        "x-required-scope": "postmortems:read"
       }
     },
     "/postmortems/{id}/action-items": {

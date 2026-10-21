@@ -1318,6 +1318,7 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   op('post', '/escalation-policies/{id}/preview', 'previewEscalationPolicy', 'escalation-policies:read', 'item', 'EscalationPolicyPreview'),
   op('get', '/services/{id}/health-summary', 'getServiceHealthSummary', 'services:read', 'item', 'ServiceHealthSummary'),
   op('get', '/postmortems/{id}', 'getPostmortem', 'postmortems:read', 'item', 'Postmortem'),
+  op('get', '/postmortems/{id}/versions', 'listPostmortemVersions', 'postmortems:read', 'item', 'PostmortemVersionCollection'),
   op('get', '/postmortems/{id}/action-items', 'listPostmortemActionItems', 'postmortems:read', 'item', 'PostmortemActionItemCollection'),
   op('put', '/postmortems/{id}/action-items', 'replacePostmortemActionItems', 'postmortems:write', 'item', 'PostmortemActionItemCollection'),
   op('post', '/postmortems/{id}/publish', 'publishPostmortem', 'postmortems:write', 'item', 'PostmortemPublication'),
