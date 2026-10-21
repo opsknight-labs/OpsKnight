@@ -1,21 +1,10 @@
 import { createHmac } from 'node:crypto';
-import { isSensitiveValue } from './context/privacy';
+import { isSensitiveObservation } from './observation-sensitivity';
+export { isSensitiveObservation } from './observation-sensitivity';
 
 /** Discovery is diagnostic: personal/contact fields are excluded even if routing
  * is intentionally configured to consume them. This is not a general PII classifier.
  */
-export function isSensitiveObservation(observation: { key: string; path: string; value: string }) {
-  const field = `${observation.key}.${observation.path}`;
-  return (
-    /(?:email|e_mail|phone|mobile|ssn|social.?security|passport|password|secret|token|credential|authorization|cookie)/i.test(
-      field
-    ) ||
-    isSensitiveValue(observation.value) ||
-    /[^\s@]+@[^\s@]+\.[^\s@]+/.test(observation.value) ||
-    /^\+?[\d\s().-]{7,25}$/.test(observation.value)
-  );
-}
-
 /** Domain-separated service-scoped keyed identity prevents offline enumeration
  * of predictable values from a database-only compromise. Rotation starts a new
  * identity space; previous rows expire under ordinary observation retention.

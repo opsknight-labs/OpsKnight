@@ -1,4 +1,4 @@
-import { isSensitiveObservation } from './observation-privacy';
+import { isSensitiveObservation } from './observation-sensitivity';
 import { forbiddenSegment } from './context/extract';
 export type Observation = {
   key: string;

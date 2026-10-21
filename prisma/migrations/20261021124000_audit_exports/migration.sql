@@ -1,5 +1,3 @@
-ALTER TYPE "AuditEntityType" ADD VALUE IF NOT EXISTS 'AUDIT_EXPORT';
-
 CREATE TABLE "AuditExport" (
   "id" TEXT NOT NULL,
   "userId" TEXT NOT NULL,
