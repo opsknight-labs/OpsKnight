@@ -2,10 +2,12 @@
 
 import { logger } from '@/lib/logger';
 import { useState } from 'react';
+import { Check, Copy } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type CopyButtonProps = {
   text: string;
-  className?: string; // Add className prop
+  className?: string;
 };
 
 export default function CopyButton({ text, className }: CopyButtonProps) {
@@ -27,22 +29,18 @@ export default function CopyButton({ text, className }: CopyButtonProps) {
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      className={className} // Apply className
-      style={{
-        padding: '0.5rem 0.75rem',
-        background: copied ? 'var(--success)' : 'var(--primary-color)',
-        color: 'white',
-        border: 'none',
-        borderRadius: '0px',
-        cursor: 'pointer',
-        fontSize: '0.75rem',
-        fontWeight: '500',
-        whiteSpace: 'nowrap',
-        transition: 'background 0.2s',
-      }}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold transition-all cursor-pointer select-none',
+        copied
+          ? 'bg-emerald-600 text-white'
+          : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/70',
+        className
+      )}
     >
-      {copied ? '✓ Copied' : 'Copy'}
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      <span>{copied ? 'Copied' : 'Copy'}</span>
     </button>
   );
 }

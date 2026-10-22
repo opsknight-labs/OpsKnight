@@ -66,6 +66,7 @@ import {
   Webhook,
   Bell,
   Info,
+  ChevronDown,
 } from 'lucide-react';
 
 // Custom Components
@@ -764,14 +765,14 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
   // --- TAB 3: INTEGRATIONS & WEBHOOKS CONTENT ---
   const integrationsContent = (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+          <h3 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />
             Configured Ingest Integrations ({service.integrations?.length || 0})
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
             Connect your monitoring tools, APM providers, and alert sources to trigger incidents
             automatically.
           </p>
@@ -779,12 +780,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       </div>
 
       {service.integrations && service.integrations.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {service.integrations.map(integration => {
             const integrationType = integration.type as IntegrationType;
             const typeInfo = INTEGRATION_TYPES.find(t => t.value === integrationType) || {
               label: integration.type,
-              icon: <Webhook className="h-5 w-5 text-white" />,
+              icon: <Webhook className="h-4 w-4 text-white" />,
               category: 'Other' as const,
               iconBg: '#475569',
             };
@@ -797,21 +798,32 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 key={integration.id}
                 className="border-border shadow-xs flex flex-col justify-between overflow-hidden"
               >
-                <CardHeader className="pb-3 border-b bg-muted/20">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
+                <CardHeader className="px-3 py-2.5 sm:px-3.5 sm:py-2.5 border-b bg-muted/20">
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <div
-                        className="w-10 h-10 flex items-center justify-center rounded-xl shadow-xs ring-1 ring-black/5 shrink-0"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg shadow-2xs ring-1 ring-black/5 shrink-0"
                         style={{ backgroundColor: typeInfo.iconBg }}
                       >
                         {typeInfo.icon}
                       </div>
                       <div className="space-y-0.5 min-w-0">
-                        <CardTitle className="text-sm font-bold truncate" title={integration.name}>
-                          {integration.name}
-                        </CardTitle>
-                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <span className="font-mono font-medium">{typeInfo.label}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <CardTitle
+                            className="text-xs sm:text-sm font-bold truncate"
+                            title={integration.name}
+                          >
+                            {integration.name}
+                          </CardTitle>
+                          <Badge
+                            variant="outline"
+                            className="text-[9.5px] px-1.5 py-0 h-4 shrink-0 font-normal text-muted-foreground"
+                          >
+                            {typeInfo.category}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1 text-[10.5px] text-muted-foreground font-mono">
+                          <span>{typeInfo.label}</span>
                           <span>•</span>
                           <span>
                             {formatDateTime(integration.createdAt, userTimeZone, {
@@ -822,7 +834,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <IntegrationStatusToggle
                         integrationId={integration.id}
                         serviceId={id}
@@ -843,34 +855,15 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-4 space-y-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
-                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-0.5">
-                          Type
-                        </span>
-                        <span className="font-medium text-foreground text-xs">
-                          {typeInfo.label}
-                        </span>
-                      </div>
-                      <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
-                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-0.5">
-                          Category
-                        </span>
-                        <span className="font-medium text-foreground text-xs">
-                          {typeInfo.category}
-                        </span>
-                      </div>
-                    </div>
-
+                <CardContent className="p-3 sm:p-3.5 space-y-2.5 flex-1 flex flex-col justify-between text-xs">
+                  <div className="space-y-2">
                     {!canManageService ? (
-                      <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                      <p className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs text-muted-foreground">
                         Integration connection details are visible to service managers only.
                       </p>
                     ) : integrationType === 'EVENTS_API_V2' && webhookUrl ? (
-                      <div className="space-y-3 pt-1">
-                        <div className="space-y-1.5">
+                      <div className="space-y-2">
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                               Events API Endpoint
@@ -880,63 +873,70 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           <Input
                             readOnly
                             value={webhookUrl}
-                            className="font-mono text-xs bg-muted/40 h-8 text-ellipsis"
+                            className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
                           />
                         </div>
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between">
-                            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                              <Key className="h-3 w-3" /> Routing Key (Service-Bound)
+                            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                              <Key className="h-2.5 w-2.5" /> Routing Key
                             </Label>
                             <CopyButton text={integration.key} />
                           </div>
                           <Input
                             readOnly
                             value={integration.key}
-                            className="font-mono text-xs bg-muted/40 h-8"
+                            className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
                           />
-                          <p className="text-[11px] text-muted-foreground leading-tight">
-                            Pass in request header as{' '}
-                            <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px] text-foreground font-medium">
+                          <p className="text-[10.5px] text-muted-foreground leading-tight">
+                            Pass as{' '}
+                            <code className="px-1 py-0.2 rounded bg-muted font-mono text-[10px] text-foreground font-medium">
                               Authorization: Token token=&lt;ROUTING_KEY&gt;
                             </code>
                           </p>
                         </div>
 
-                        <div className="space-y-1.5 pt-1">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                              <Terminal className="h-3 w-3" /> Quick Test (Working cURL)
+                        <details className="group rounded-lg border border-border/70 bg-card overflow-hidden">
+                          <summary className="flex min-h-7 cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/30 select-none [&::-webkit-details-marker]:hidden">
+                            <div className="flex items-center gap-1.5">
+                              <Terminal className="h-3 w-3 text-primary" />
+                              <span>Quick Test (Working cURL)</span>
                             </div>
-                            <CopyButton
-                              text={`curl -X POST ${webhookUrl} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Token token=${integration.key}" \\\n  -d '{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
-                            />
+                            <div className="flex items-center gap-2">
+                              <CopyButton
+                                text={`curl -X POST ${webhookUrl} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Token token=${integration.key}" \\\n  -d '{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
+                                className="h-5 px-1.5 text-[10px]"
+                              />
+                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+                            </div>
+                          </summary>
+                          <div className="border-t border-border/70 bg-slate-950 p-2 text-slate-200">
+                            <pre className="overflow-x-auto text-[10px] font-mono leading-relaxed select-all">
+                              <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
+                              <br />
+                              &nbsp; -H{' '}
+                              <span className="text-blue-300">
+                                &quot;Content-Type: application/json&quot;
+                              </span>{' '}
+                              \<br />
+                              &nbsp; -H{' '}
+                              <span className="text-green-400">
+                                &quot;Authorization: Token token={integration.key.substring(0, 10)}
+                                ...&quot;
+                              </span>{' '}
+                              \<br />
+                              &nbsp; -d{' '}
+                              <span className="text-yellow-400">
+                                {`'{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
+                              </span>
+                            </pre>
                           </div>
-                          <pre className="bg-slate-950 text-slate-200 p-2.5 rounded-lg overflow-x-auto text-[10px] font-mono leading-relaxed border border-slate-800 shadow-inner select-all">
-                            <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
-                            <br />
-                            &nbsp; -H{' '}
-                            <span className="text-blue-300">
-                              &quot;Content-Type: application/json&quot;
-                            </span>{' '}
-                            \<br />
-                            &nbsp; -H{' '}
-                            <span className="text-green-400">
-                              &quot;Authorization: Token token={integration.key.substring(0, 10)}
-                              ...&quot;
-                            </span>{' '}
-                            \<br />
-                            &nbsp; -d{' '}
-                            <span className="text-yellow-400">
-                              {`'{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
-                            </span>
-                          </pre>
-                        </div>
+                        </details>
                       </div>
                     ) : webhookUrl ? (
-                      <div className="space-y-3 pt-1">
-                        <div className="space-y-1.5">
+                      <div className="space-y-2">
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                               Webhook Ingest URL
@@ -946,11 +946,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           <Input
                             readOnly
                             value={webhookUrl}
-                            className="font-mono text-xs bg-muted/40 h-8 text-ellipsis"
+                            className="font-mono text-[11px] bg-muted/40 h-7 text-ellipsis"
                           />
                         </div>
 
-                        <div className="pt-2 border-t border-dashed border-border/80">
+                        <div className="pt-1.5 border-t border-dashed border-border/80">
                           <IntegrationSecretControl
                             integrationId={integration.id}
                             serviceId={id}
@@ -962,11 +962,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                     ) : null}
                   </div>
                   {canManageResponsePolicy && (
-                    <details className="border-t pt-3">
-                      <summary className="cursor-pointer text-xs font-semibold">
-                        Classification overrides
+                    <details className="border-t border-border/70 pt-2 text-xs">
+                      <summary className="cursor-pointer text-[11px] font-semibold text-muted-foreground hover:text-foreground flex items-center justify-between select-none">
+                        <span>Classification overrides</span>
+                        <ChevronDown className="h-3 w-3 text-muted-foreground transition-transform group-open:rotate-180" />
                       </summary>
-                      <div className="mt-3">
+                      <div className="mt-2">
                         {(() => {
                           const policy =
                             integrationClassificationPolicies.find(
@@ -1021,16 +1022,16 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       {/* Add New Integration Grid */}
       {canManageService && (
         <Card className="border-border shadow-xs">
-          <CardHeader className="pb-3 border-b bg-muted/20">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
+          <CardHeader className="px-3.5 py-2.5 border-b bg-muted/20">
+            <CardTitle className="text-xs sm:text-sm font-bold flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
               Add Monitoring Integration
             </CardTitle>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-[11px]">
               Choose a provider to generate a unique webhook endpoint for this service.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-5">
+          <CardContent className="p-3 sm:p-4">
             <AddIntegrationGrid serviceId={id} />
           </CardContent>
         </Card>
@@ -1105,7 +1106,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
   // --- TAB 5: SERVICE SETTINGS CONTENT ---
   const settingsContent = (
-    <div className="space-y-6">
+    <div className="space-y-3.5 sm:space-y-4">
       {(isSaved || errorCode === 'duplicate-service') && (
         <ServiceSettingsFlashToast serviceId={id} />
       )}
@@ -1114,18 +1115,6 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           A service with this name already exists. Please choose a unique name.
         </InlineNotice>
       )}
-
-      {/* Top Informative Notice Banner */}
-      <Alert className="border-primary/20 bg-primary/5 dark:bg-primary/10 text-primary">
-        <Info className="h-4 w-4 shrink-0 text-primary" />
-        <AlertTitle className="text-xs font-bold text-foreground">
-          Service Settings & Policies
-        </AlertTitle>
-        <AlertDescription className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-          Manage core service configuration, SLA response targets, incident classification
-          overrides, and external issue tracking integrations.
-        </AlertDescription>
-      </Alert>
 
       {canManageService ? (
         <>
@@ -1177,27 +1166,24 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
           {/* Card 5: Danger Zone: Delete Service */}
           {canDeleteService && (
-            <Card className="rounded-2xl border border-destructive/30 bg-destructive/5 shadow-xs">
-              <CardHeader className="pb-4 border-b border-destructive/20 bg-destructive/10 dark:bg-destructive/10">
-                <CardTitle className="text-sm font-bold text-destructive flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-destructive/10 text-destructive shrink-0 border border-destructive/20 shadow-2xs">
-                    <AlertTriangle className="h-4 w-4" />
+            <Card className="rounded-xl border border-destructive/30 bg-destructive/5 shadow-xs">
+              <div className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-destructive/10 text-destructive shrink-0 border border-destructive/20 mt-0.5">
+                    <AlertTriangle className="h-3.5 w-3.5" />
                   </div>
                   <div>
-                    <span className="text-destructive/70 font-mono mr-1.5 text-xs">5.</span>
-                    <span>Danger Zone</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-destructive">Danger Zone</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        · Permanent Deletion
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Permanently remove <strong>{service.name}</strong>, along with its webhooks,
+                      routing policies, and configuration.
+                    </p>
                   </div>
-                </CardTitle>
-                <CardDescription className="text-xs text-destructive/80 mt-1">
-                  Permanently delete this service. This action cannot be undone.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-foreground">Delete {service.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Requires typing the exact service name to confirm permanent removal.
-                  </p>
                 </div>
                 <DeleteConfirmDialog
                   title={`Delete Service ${service.name}`}
@@ -1210,12 +1196,16 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                   requireMatchText={service.name}
                   onConfirm={boundDeleteService}
                   trigger={
-                    <Button variant="destructive" size="sm" className="text-xs shrink-0">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-8 text-xs font-semibold px-3.5 shrink-0"
+                    >
                       Delete Service
                     </Button>
                   }
                 />
-              </CardContent>
+              </div>
             </Card>
           )}
         </>

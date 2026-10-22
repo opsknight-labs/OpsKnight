@@ -161,7 +161,7 @@ export default function DetailTabs({
 
   return (
     <>
-      {syncWithUrl && controlledActiveTab === undefined && (
+      {syncWithUrl && navigationMode !== 'server' && controlledActiveTab === undefined && (
         <Suspense fallback={null}>
           <TabUrlSync
             urlParamName={urlParamName}
@@ -186,7 +186,7 @@ export default function DetailTabs({
           <div className="overflow-x-auto pb-1 scrollbar-none flex-1 min-w-0 w-full">
             <TabsList
               className={cn(
-                'h-auto w-full rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
+                'h-auto w-full rounded-xl border border-border/80 bg-muted/60 p-1 sm:p-1.5 backdrop-blur-xs shadow-2xs gap-1 sm:gap-1.5',
                 layout === 'grid' && [
                   'flex sm:grid min-w-max sm:min-w-0',
                   tabs.length === 2 && 'sm:grid-cols-2',
@@ -195,7 +195,7 @@ export default function DetailTabs({
                   tabs.length === 5 && 'sm:grid-cols-5',
                   tabs.length >= 6 && 'sm:grid-cols-6',
                 ],
-                layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 flex-wrap sm:flex-nowrap',
+                layout === 'auto' && 'inline-flex min-w-max items-center justify-start flex-nowrap',
                 listClassName
               )}
             >
@@ -205,7 +205,7 @@ export default function DetailTabs({
                   value={tab.id}
                   disabled={tab.disabled}
                   className={cn(
-                    'group relative flex flex-1 sm:flex-initial items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-2 sm:py-2.5 px-3 sm:px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap shrink-0',
+                    'group relative flex flex-initial items-center justify-center gap-1.5 rounded-lg py-1.5 sm:py-2 px-2.5 sm:px-3 text-xs font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap shrink-0',
                     'border border-border/40 bg-background/50 text-muted-foreground/90 shadow-2xs',
                     'hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]',
                     'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20'
