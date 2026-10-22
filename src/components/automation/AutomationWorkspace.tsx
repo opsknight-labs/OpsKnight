@@ -705,6 +705,8 @@ export default function AutomationWorkspace({
               createTemplate={createTemplate}
               newRule={newRule}
               issues={issues}
+              onOpenRule={openRule}
+              onOpenContext={openContext}
             />
           )}
           {data && area === 'test' && (

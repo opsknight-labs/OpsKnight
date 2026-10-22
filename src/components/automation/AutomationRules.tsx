@@ -432,6 +432,8 @@ export function AutomationRules({
   rootRef: _rootRef,
   mobile,
   newRule: propNewRule,
+  onOpenRule: propOnOpenRule,
+  onOpenContext,
 }: {
   data: Data;
   draft: Snapshot;
@@ -453,6 +455,8 @@ export function AutomationRules({
   rootRef?: RefObject<HTMLElement | null>;
   mobile: boolean;
   newRule?: (phase: Rule['phase']) => Rule;
+  onOpenRule?: (ruleId: string) => void;
+  onOpenContext?: () => void;
 }) {
   const headingId = useId();
   const [announcement, setAnnouncement] = useState('');
@@ -515,6 +519,17 @@ export function AutomationRules({
       return next;
     })
   );
+  const handleOpenRule = useStableCallback((ruleId: string) => {
+    if (propOnOpenRule) {
+      propOnOpenRule(ruleId);
+    } else {
+      setExpandedRules(previous => (mobile ? new Set([ruleId]) : new Set([...previous, ruleId])));
+      const targetRule = draft.rules.find(r => r.id === ruleId);
+      if (targetRule) {
+        setAnnouncement(`Expanded rule ${targetRule.name}`);
+      }
+    }
+  });
   const onUpdate = useStableCallback((id: string, update: Partial<Rule>) => updateRule(id, update));
   const onMove = useStableCallback((id: string, direction: number) => {
     const index = draft.rules.findIndex(rule => rule.id === id);
@@ -727,7 +742,12 @@ export function AutomationRules({
         </Card>
       )}
 
-      <ConfigurationHealth issues={issues} />
+      <ConfigurationHealth
+        issues={issues}
+        rules={draft.rules}
+        onOpenRule={handleOpenRule}
+        onOpenContext={onOpenContext}
+      />
 
       {(['ENRICH', 'ROUTE'] as const).map(phase => {
         const visible = draft.rules
