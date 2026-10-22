@@ -938,8 +938,10 @@ export async function persistAutomation(
               finalPriority: runtime.finalPriority,
               evaluationAt: runtime.evaluationAt,
               fallbackReason: runtime.fallbackReason,
-              summary: summary as any,
-              ...(responseContext ? { responseContext: responseContext as any } : {}),
+              summary: summary as Prisma.InputJsonValue,
+              ...(responseContext
+                ? { responseContext: responseContext as Prisma.InputJsonValue }
+                : {}),
             },
           })
           .then(() => {
@@ -960,7 +962,7 @@ export async function persistAutomation(
             evaluationAt: runtime.evaluationAt,
             durationMs: runtime.durationMs,
             fallbackReason: runtime.fallbackReason,
-            detail: encodedDetail as any,
+            detail: encodedDetail as Prisma.InputJsonValue,
           },
         })
         .then(() => {
@@ -975,7 +977,7 @@ export async function persistAutomation(
             id: `AUTOMATION_OBSERVE:${incidentId}`,
             type: 'SCHEDULED_TASK',
             scheduledAt: runtime.evaluationAt,
-            payload: jobPayload as any,
+            payload: jobPayload as Prisma.InputJsonValue,
             maxAttempts: 3,
           },
         })

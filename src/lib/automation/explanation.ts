@@ -14,17 +14,17 @@ export function encodeExplanation(input: unknown, maxBytes: number): Prisma.Inpu
       return;
     }
     if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) {
-        scan(value[i]);
+      for (const item of value) {
+        scan(item);
         if (hasLongString) return;
       }
       return;
     }
     if (value && typeof value === 'object') {
       const obj = value as Record<string, unknown>;
-      for (const key in obj) {
+      for (const [key, prop] of Object.entries(obj)) {
         if (key === 'responderPolicy') continue;
-        scan(obj[key]);
+        scan(prop);
         if (hasLongString) return;
       }
     }
@@ -50,19 +50,16 @@ export function encodeExplanation(input: unknown, maxBytes: number): Prisma.Inpu
       return { automationValueRef: position };
     }
     if (Array.isArray(value)) {
-      const arr = new Array(value.length);
-      for (let i = 0; i < value.length; i++) {
-        arr[i] = encode(value[i]);
-      }
-      return arr;
+      return value.map(encode);
     }
     if (value && typeof value === 'object') {
       const src = value as Record<string, unknown>;
-      const target: Record<string, unknown> = {};
-      for (const key in src) {
-        target[key] = key === 'responderPolicy' ? src[key] : encode(src[key]);
-      }
-      return target;
+      return Object.fromEntries(
+        Object.entries(src).map(([key, prop]) => [
+          key,
+          key === 'responderPolicy' ? prop : encode(prop),
+        ])
+      );
     }
     return value;
   }
