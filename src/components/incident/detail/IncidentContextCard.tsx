@@ -38,7 +38,7 @@ function Chip({ tone, children }: { tone: ResponseTone; children: ReactNode }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.25 text-[9.5px] font-semibold uppercase tracking-wider',
         toneChipClass(tone)
       )}
     >
@@ -52,7 +52,7 @@ function StateChip({ state }: { state: IncidentContextFieldView['state'] }) {
   if (!presentation) return <Chip tone="neutral">{state}</Chip>;
   return (
     <Chip tone={presentation.tone}>
-      <presentation.Icon className="h-3 w-3" aria-hidden="true" />
+      <presentation.Icon className="h-2.5 w-2.5" aria-hidden="true" />
       <span className="sr-only">State: </span>
       {presentation.label}
     </Chip>
@@ -92,7 +92,7 @@ export default function IncidentContextCard({
         className
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3.5 py-2.5 sm:px-4">
         <h2
           id="incident-context-heading"
           className="flex items-center gap-2 text-sm font-semibold tracking-tight"
@@ -116,29 +116,31 @@ export default function IncidentContextCard({
             : incidentContextReasonLabel(context.reason)}
         </span>
       </div>
-      <div className="space-y-3 p-4">
-        <p className="text-xs text-muted-foreground">
+      <div className="space-y-2.5 p-3 sm:p-3.5">
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
           {available
             ? 'Verified field states that runbook triggers and Agent targeting act on. Only recognized fields are used.'
             : 'Context-based runbook triggers and targeting are skipped for this incident.'}
         </p>
         {available && context.visibility === 'REDACTED' && (
-          <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground">
             Context values are restricted. Field names, states and sources remain visible.
           </p>
         )}
         {available &&
           (context.fields.length ? (
-            <dl className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
+            <dl className="grid min-w-0 gap-1.5 sm:grid-cols-2 lg:grid-cols-1">
               {context.fields.map(field => (
                 <div
                   key={field.key}
-                  className="min-w-0 rounded-lg border border-border/70 px-3 py-2"
+                  className="min-w-0 rounded-lg border border-border/70 bg-card p-2 sm:p-2.5 transition-colors hover:border-border"
                   data-testid={`context-field-${field.key}`}
                 >
                   <dt className="flex flex-wrap items-center justify-between gap-1.5">
-                    <span className="break-all font-mono text-xs font-semibold">{field.key}</span>
-                    <span className="flex flex-wrap gap-1">
+                    <span className="break-all font-mono text-xs font-semibold text-foreground">
+                      {field.key}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-1">
                       <Chip tone="neutral">
                         <span className="sr-only">Type: </span>
                         {TYPE_LABEL.get(field.type) ?? field.type}
@@ -157,7 +159,7 @@ export default function IncidentContextCard({
                       'mt-1 break-words text-xs',
                       field.redacted || field.state !== 'RECOGNIZED'
                         ? 'italic text-muted-foreground'
-                        : 'text-foreground'
+                        : 'font-medium text-foreground'
                     )}
                   >
                     {displayValue(field)}

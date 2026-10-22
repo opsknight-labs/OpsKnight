@@ -494,8 +494,6 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
-      {presentation === 'mobile' && <IncidentAutomationCard incidentId={id} />}
-
       {presentation === 'mobile' && (
         <div id="automation-decision" className="scroll-mt-24">
           <IncidentAutomationCard incidentId={id} />
