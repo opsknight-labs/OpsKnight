@@ -25,7 +25,7 @@ on:
 jobs:
   certify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16
@@ -62,7 +62,7 @@ jobs:
       - run: npm run certify:scim:baseline
       - run: npx tsc --noEmit
       - run: npx eslint src/lib/scim.ts src/lib/scim src/lib/auth.ts src/lib/oidc-identity-resolution.ts src/lib/teams/administration.ts src/lib/microsoft-teams/identity.ts src/app/api/scim/v2 'src/app/(app)/settings/system/scim-actions.ts' src/components/settings/ScimSettingsSection.tsx --max-warnings 0
-      - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/scim.test.ts tests/lib/scim-protocol.test.ts tests/lib/oidc-identity-resolution.test.ts tests/lib/auth-control-actor.test.ts tests/lib/microsoft-teams-identity.test.ts tests/api/scim-users.test.ts tests/api/scim-groups.test.ts tests/api/scim-metadata.test.ts
+      - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/scim.test.ts tests/lib/scim-protocol.test.ts tests/lib/oidc-identity-resolution.test.ts tests/lib/auth-control-actor.test.ts tests/lib/session-security-projection.test.ts tests/lib/microsoft-teams-identity.test.ts tests/api/scim-users.test.ts tests/api/scim-groups.test.ts tests/api/scim-metadata.test.ts
       - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/api/metrics.test.ts tests/api/status-rss-guid.test.ts tests/unit/api-v2-endpoint.test.ts tests/unit/api-v2-enterprise-platform.test.ts tests/unit/api-v2-observability.test.ts
       - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/scim-lifecycle-database.test.ts tests/integration/scim-capacity-database.test.ts
         env: { VITEST_USE_REAL_DB: '1', SCIM_LOAD_TEST: '1' }
@@ -77,6 +77,20 @@ jobs:
           }
           throw new Error('SCIM fixture did not start.');
           JS
+      - run: npm run certify:scim:http
+      - run: |
+          BUILD_DIR=.next-scim-replica NEXTAUTH_URL=http://localhost:3029 npm run dev -- --port 3029 > /tmp/scim-replica.log 2>&1 &
+      - run: |
+          node --input-type=module <<'JS'
+          for (let attempt = 0; attempt < 120; attempt++) {
+            try { if ((await fetch('http://localhost:3029/login')).ok) process.exit(0); } catch {}
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          throw new Error('SCIM replica did not start.');
+          JS
+      - run: npm run certify:scim:replicas && npm run certify:scim:sessions
+        env:
+          SCIM_CERT_REPLICA_URLS: http://localhost:3028,http://localhost:3029
       - run: npx playwright test --config playwright.scim.config.ts
       - uses: actions/upload-artifact@v4
         if: always()
@@ -86,4 +100,5 @@ jobs:
             test-results/
             playwright-report/
             /tmp/scim-server.log
+            /tmp/scim-replica.log
           retention-days: 7

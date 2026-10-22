@@ -206,3 +206,47 @@ preserving the manual owner and service assignment. This is a local engineering
 measurement, not a production SLA. The optimized production build also passed
 for the access-policy revision. CI installation follows the existing repository
 `npm ci --legacy-peer-deps` policy for its lockfile's optional peer dependencies.
+
+## Final hardening follow-up
+
+Profile PUT without active now preserves disabled state. DELETE clears directory
+membership intent and derived grants in its security transaction; rehire requires
+fresh provider membership synchronization. Explicit per-member legacy adoption
+uses a pinned preview and fresh administrator approval. Credential rotation
+preserves disabled connectors. Collection PATCH/PUT/DELETE return SCIM 405 with
+Allow. Group collection paging shares a 10,000-member budget; full representations
+are never truncated and serialized responses are bounded to 8 MiB.
+
+JWT session evaluation now bypasses the process-local security projection cache.
+A two-app HTTP harness warmed sessions before deactivation, role downgrade and
+group-grant revocation; it checked rejected sessions on both apps and rejected
+team API access. The measured sequential observations were 2203/117/1563 ms,
+within the 5000 ms harness budget. That measures local request completion, not an
+upper bound on production network latency. Authorization reads committed state;
+already executing requests remain outside the guarantee.
+
+A separate HTTP harness populated 100 groups with 10,000 members each. Thirty
+HTTP full-member collection samples returned one complete group per page, with
+p50 382 ms, p95 573 ms and p99 1346 ms; max response was 1,727,158 bytes. Metadata
+paging returned 100 groups without members, and full-group GET/rename passed.
+Client RSS delta was about 76 MiB with six database connections and zero HTTP
+errors. This is client memory, not server RSS. Server CPU/RSS, aggregate database
+time and production connection-pool behavior remain deployment certification
+items; do not relabel these local measurements as production capacity evidence.
+
+Browser journeys exercise confirmation cancellation and approval for credential
+revocation and binding detachment. The UI guards concurrent mutations and
+connection switching, explains trusted Entra claims, exposes selected legacy
+adoption, and distinguishes independent manual memberships from unexpected
+directory grants. The verification guide requires actual create/update/disable
+activity rather than treating Test Connection as lifecycle certification.
+
+Live Entra/Okta group-entitled environments remain unavailable. Rolling deployment,
+real provider retries/SSO, real deployment failover/rollback and server resource
+budgets are still external release gates. This branch must not be called fully
+10/10 externally certified until those gates have independent evidence.
+
+Final local regression pass: 97 unit/API/security tests, 38 PostgreSQL
+lifecycle/capacity scenarios, 50 adjacent API/auth tests and three browser
+journeys passed. Baseline, staged upgrade, restored-snapshot upgrade,
+two-replica credentials, warmed sessions and outage/restart harnesses passed.

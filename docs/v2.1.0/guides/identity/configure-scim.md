@@ -235,3 +235,54 @@ not automatically dropping identity or audit tables.
 Authoritative compatibility inputs: [RFC 7644](https://www.rfc-editor.org/rfc/rfc7644),
 [Microsoft Entra SCIM guidance](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups),
 and [Okta SCIM 2.0 guidance](https://developer.okta.com/docs/api/openapi/okta-scim/guides/scim-20/).
+
+## Lifecycle and revocation policy
+
+Creation defaults to active when `active` is omitted. Existing users retain their
+current status on profile-only PUT/PATCH. Only an explicit `active: true` from the
+approved lifecycle connector restores ordinary access. `active: false` retains
+directory membership intent while denying ordinary sign-in and authorization.
+DELETE disables and tombstones the identity, clears its directory memberships,
+and revokes derived team grants atomically. Manual memberships and owners remain.
+Restoration approval followed by reactivation does not restore old directory
+team permissions: the provider must send new group membership assignments.
+
+Ordinary session refresh reads PostgreSQL security state on every request;
+process-local projection caching is bypassed for JWT security decisions. API
+credential validation and resource permissions also read current database state.
+There is no five-second cache allowance for these paths. Requests authorized
+before a revocation commits may already be executing. Infrastructure latency,
+replication configuration and non-SCIM authentication surfaces still require
+production certification.
+
+Credential creation/rotation preserves connection enablement. Enable/disable is
+a separately audited connection update. Credential last-use writes are coalesced
+to approximately one minute, while validity/revocation is checked each request.
+`SCIM_CONNECTOR_REQUESTS_PER_MINUTE` defaults to 600 and is bounded to 1–1200.
+Pre-authentication admission is process-local and bounded to 4096 pseudonymous
+keys; repeated unknown tokens are negatively cached for at most five seconds.
+It does not cache successful credential authorization. Network-wide abuse control
+remains an ingress deployment responsibility.
+
+## Upgrading legacy membership ownership
+
+Imported legacy groups have no automatic operational team authority. Select the
+imported group and its matching original team in **Users & Groups**. Preview the
+binding to see eligible existing MEMBER rows, protected owners and routing usage.
+Individually select only memberships independently verified as directory-owned,
+then preview again and approve the pinned impact. Unselected manual memberships,
+ADMIN/OWNER roles and existing grants remain unchanged. Adoption changes grant
+provenance without deleting or recreating team memberships. Subsequent directory
+removal can revoke only adopted or newly created directory grants.
+
+## Large-group responses
+
+Group collections default to 10 resources and at most 100 requested resources.
+Full-member pages have a shared budget of 10,000 member entries; `itemsPerPage`
+may therefore be less than `count`. Continue with `startIndex + itemsPerPage`.
+Every returned group includes its entire membership; membership is never silently
+truncated. Request `excludedAttributes=members` to enumerate metadata for up to
+100 groups without loading member collections. Individual full representations
+support up to 10,000 members. Oversized representations return SCIM 413; responses
+also have an 8 MiB serialized byte limit. Reduce count or exclude members when
+requested by the error. `count=0` still returns totals without representations.

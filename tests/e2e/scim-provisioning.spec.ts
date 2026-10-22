@@ -106,6 +106,13 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   const memberAccess = () =>
     request.get(`/api/v2/teams/${operationalTeamId}/members`, { headers: memberHeaders });
   expect((await memberAccess()).status()).toBe(200);
+  page.once('dialog', dialog => dialog.dismiss());
+  await section.getByRole('button', { name: 'Detach binding', exact: true }).click();
+  await expect(
+    section.getByRole('alert').filter({ hasText: 'Detachment cancelled' })
+  ).toBeVisible();
+  expect((await memberAccess()).status()).toBe(200);
+  page.once('dialog', dialog => dialog.accept());
   await section.getByRole('button', { name: 'Detach binding', exact: true }).click();
   await expect(
     section.getByRole('status').filter({ hasText: 'Directory-owned access revoked' })
@@ -151,6 +158,13 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   );
   await db.apiKey.update({ where: { id: memberKey.id }, data: { revokedAt: new Date() } });
   await section.getByRole('button', { name: 'Security', exact: true }).click();
+  page.once('dialog', dialog => dialog.dismiss());
+  await section.getByRole('button', { name: 'Revoke credential', exact: true }).click();
+  await expect(
+    section.getByRole('alert').filter({ hasText: 'Revocation cancelled' })
+  ).toBeVisible();
+  expect((await request.get('/api/scim/v2/Users', { headers })).status()).toBe(200);
+  page.once('dialog', dialog => dialog.accept());
   await section.getByRole('button', { name: 'Revoke credential', exact: true }).click();
   await expect(
     section.getByRole('status').filter({ hasText: 'Credential revoked immediately.' })

@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable no-alert -- Native confirmations provide blocking, keyboard-accessible decisions for security-changing actions. */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
@@ -58,6 +59,8 @@ export default function ScimSettingsSection({
   const [selected, setSelected] = useState('legacy');
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
+  const operationPending = useRef(false);
+  const connectionEpoch = useRef(0);
   const [loading, setLoading] = useState(true);
   const [observedAt, setObservedAt] = useState(0);
   const [error, setError] = useState('');
@@ -72,6 +75,8 @@ export default function ScimSettingsSection({
   const [teamId, setTeamId] = useState('');
   const [teamQuery, setTeamQuery] = useState('');
   const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
+  const [adoptMemberIds, setAdoptMemberIds] = useState<string[]>([]);
+  const [verification, setVerification] = useState(false);
   const [impact, setImpact] = useState<Impact | null>(null);
   const connector = connectors.find(c => c.id === selected);
   useEffect(() => {
@@ -146,16 +151,22 @@ export default function ScimSettingsSection({
     return () => clearTimeout(timer);
   }, [secret]);
   async function run(operation: () => Promise<unknown>, message: string) {
+    if (operationPending.current) return;
+    operationPending.current = true;
+    const epoch = connectionEpoch.current;
     setBusy(true);
     setError('');
     setNotice('');
     try {
       await operation();
+      if (epoch !== connectionEpoch.current) return;
       setNotice(message);
       setReload(v => v + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Operation failed. Try again.');
+      if (epoch === connectionEpoch.current)
+        setError(e instanceof Error ? e.message : 'Operation failed. Try again.');
     } finally {
+      operationPending.current = false;
       setBusy(false);
     }
   }
@@ -203,11 +214,16 @@ export default function ScimSettingsSection({
       <label className="block text-sm">
         Connection
         <select
+          disabled={busy}
           aria-label="SCIM connection"
           className={fieldClass}
           value={selected}
           onChange={e => {
+            connectionEpoch.current++;
             setSelected(e.target.value);
+            setVerification(false);
+            setAdoptMemberIds([]);
+            setImpact(null);
             setPage(1);
             setSecret(null);
             setGroupId('');
@@ -279,6 +295,14 @@ export default function ScimSettingsSection({
             onSubmit={e => {
               e.preventDefault();
               const form = new FormData(e.currentTarget);
+              if (connector?.enabled && form.get('enabled') !== 'on' && form.get('new') !== 'on') {
+                if (
+                  !window.confirm(
+                    'Disable provisioning? All credentials for this connector will be rejected until it is explicitly enabled again. Existing users are not deleted.'
+                  )
+                )
+                  return;
+              }
               void run(
                 () =>
                   result(
@@ -364,6 +388,13 @@ export default function ScimSettingsSection({
                 Save as a new connection
               </label>
             </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Trusted first linking requires Microsoft Entra, the exact tenant issuer
+              https://login.microsoftonline.com/TENANT-ID/v2.0 and the client ID registered for
+              OpsKnight SSO. Immutable oid and tid claims must match; email alone never links
+              accounts. Keep this disabled when those claims cannot be verified and use explicit
+              account approval.
+            </p>
             <fieldset className="space-y-2 text-sm sm:col-span-2">
               <legend>Profile attributes managed by this connection</legend>
               {['name', 'email', 'title', 'department', 'photos'].map(field => (
@@ -455,6 +486,7 @@ export default function ScimSettingsSection({
                     size="sm"
                     onClick={() => {
                       setGroupId(row.id);
+                      setAdoptMemberIds([]);
                       setTeamId('');
                       setImpact(null);
                     }}
@@ -521,6 +553,7 @@ export default function ScimSettingsSection({
                   aria-label="Operational team"
                   onChange={e => {
                     setTeamId(e.target.value);
+                    setAdoptMemberIds([]);
                     setImpact(null);
                   }}
                 >
@@ -537,7 +570,10 @@ export default function ScimSettingsSection({
                 variant="outline"
                 onClick={() =>
                   void run(
-                    () => result(previewScimBindingAction({ groupId, teamId })).then(setImpact),
+                    () =>
+                      result(previewScimBindingAction({ groupId, teamId, adoptMemberIds })).then(
+                        setImpact
+                      ),
                     'Impact preview ready.'
                   )
                 }
@@ -553,6 +589,36 @@ export default function ScimSettingsSection({
                     {impact.additions} members added; {impact.removals} existing memberships
                     removed; {impact.protectedOwners} owners protected.
                   </p>
+                  {impact.legacyCandidates.length > 0 && (
+                    <fieldset className="space-y-2">
+                      <legend>Legacy ownership adoption (optional)</legend>
+                      <p>
+                        Select only memberships verified as directory-managed. Unselected members
+                        and owners remain independently managed. Preview again after changing
+                        selections.
+                      </p>
+                      {impact.legacyCandidates.map(member => (
+                        <label key={member.id} className="flex gap-2">
+                          <input
+                            type="checkbox"
+                            checked={adoptMemberIds.includes(member.id)}
+                            onChange={event => {
+                              setAdoptMemberIds(ids =>
+                                event.target.checked
+                                  ? [...ids, member.id]
+                                  : ids.filter(id => id !== member.id)
+                              );
+                            }}
+                          />{' '}
+                          Adopt directory ownership for {member.userId}
+                        </label>
+                      ))}
+                      <p>
+                        {impact.adoptedMemberships} memberships approved for adoption;{' '}
+                        {impact.retainedManualMemberships} manual memberships retained.
+                      </p>
+                    </fieldset>
+                  )}
                   <p>
                     {impact.services} services and {impact.escalations} escalation rules use this
                     team.
@@ -567,8 +633,12 @@ export default function ScimSettingsSection({
                               groupId,
                               teamId,
                               revision: impact.revision,
+                              adoptMemberIds,
                             })
-                          ).then(() => setImpact(null)),
+                          ).then(() => {
+                            setImpact(null);
+                            setAdoptMemberIds([]);
+                          }),
                         'Binding approved and memberships reconciled.'
                       )
                     }
@@ -585,10 +655,15 @@ export default function ScimSettingsSection({
                 variant="outline"
                 disabled={busy || !teamId}
                 onClick={() =>
-                  void run(
-                    () => result(detachScimBindingAction({ groupId, teamId })),
-                    'Binding detached. Directory-owned access revoked; manual access retained.'
-                  )
+                  void run(async () => {
+                    if (
+                      !window.confirm(
+                        'Detach this binding and revoke its directory-owned team access? Manual owners and independent grants remain.'
+                      )
+                    )
+                      throw new Error('Detachment cancelled. No access changed.');
+                    return result(detachScimBindingAction({ groupId, teamId }));
+                  }, 'Binding detached. Directory-owned access revoked; manual access retained.')
                 }
               >
                 Detach binding
@@ -712,10 +787,15 @@ export default function ScimSettingsSection({
                   size="sm"
                   disabled={busy || Boolean(credential.revokedAt)}
                   onClick={() =>
-                    void run(
-                      () => result(revokeScimCredentialAction(credential.id)),
-                      'Credential revoked immediately.'
-                    )
+                    void run(async () => {
+                      if (
+                        !window.confirm(
+                          'Revoke this credential immediately? Provider requests using it will fail. Verify a replacement before continuing.'
+                        )
+                      )
+                        throw new Error('Revocation cancelled. Credential remains active.');
+                      return result(revokeScimCredentialAction(credential.id));
+                    }, 'Credential revoked immediately.')
                   }
                 >
                   Revoke credential
@@ -732,6 +812,30 @@ export default function ScimSettingsSection({
       )}
       {tab === 'Diagnostics' && (
         <div className="space-y-3 text-sm">
+          <h4 className="font-semibold">Provisioning verification</h4>
+          <p>
+            Credential connectivity only proves authentication. In your provider, create a
+            disposable assigned user, update its profile, disable it and verify the corresponding
+            Activity events. Use fresh group assignments to verify team access. Provider Test
+            Connection alone is insufficient.
+          </p>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setVerification(true);
+              setTab('Activity');
+              setQuery('user.');
+            }}
+          >
+            Review provisioning evidence
+          </Button>
+          {verification && (
+            <p role="status">
+              Verification in progress: inspect created, updated and disabled events for the same
+              disposable user. This does not certify a live provider.
+            </p>
+          )}
           <h4 className="font-semibold">Directory drift and account mapping</h4>
           <Button
             variant="outline"
@@ -748,7 +852,9 @@ export default function ScimSettingsSection({
           <ul className="space-y-2">
             {drift.map(item => (
               <li key={item.groupId + item.teamId}>
-                {item.group} → {item.team}: {item.missingMembers} missing operational members.{' '}
+                {item.group} → {item.team}: {item.missingMembers} missing operational members;{' '}
+                {item.unexpectedDirectoryGrants} unexpected directory grants;{' '}
+                {item.independentManualMembers} independent manual members.{' '}
                 <Button
                   size="sm"
                   variant="outline"
