@@ -67,7 +67,22 @@ jobs:
       - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/scim-lifecycle-database.test.ts tests/integration/scim-capacity-database.test.ts
         env: { VITEST_USE_REAL_DB: '1', SCIM_LOAD_TEST: '1' }
       - run: npx ts-node --project tsconfig.script.json scripts/scim/seed-certification.ts
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Configure bounded Ubuntu package downloads
+        run: |
+          sudo python3 - <<'PYTHON'
+          from pathlib import Path
+          sources = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.sources'), *Path('/etc/apt/sources.list.d').glob('*.list')]
+          for source in sources:
+              if source.exists():
+                  text = source.read_text()
+                  text = text.replace('http://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+                  text = text.replace('https://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+                  source.write_text(text)
+          Path('/etc/apt/apt.conf.d/80-scim-download-bounds').write_text('Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n')
+          PYTHON
+      - name: Install browser dependencies
+        timeout-minutes: 8
+        run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run dev -- --port 3028 > /tmp/scim-server.log 2>&1 &
       - run: |
           node --input-type=module <<'JS'
