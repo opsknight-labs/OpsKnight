@@ -15,7 +15,7 @@ vi.mock('@/lib/auth-control/actor', () => ({
 import prisma from '@/lib/prisma';
 import { authorize } from '@/lib/scim/security/credentials';
 import { ScimFailure } from '@/lib/scim/protocol/validation';
-import { GET, POST } from '@/app/api/scim/v2/Users/route';
+import { GET, POST, PATCH, PUT, DELETE } from '@/app/api/scim/v2/Users/route';
 import { GET as resource } from '@/app/api/scim/v2/Users/[id]/route';
 const principal = {
   connectorId: 'source-a',
@@ -23,6 +23,13 @@ const principal = {
   scopes: ['users:read', 'users:write'],
 };
 describe('SCIM Users HTTP boundary', () => {
+  it('rejects collection mutation methods without authorizing or writing', () => {
+    for (const handler of [PATCH, PUT, DELETE]) {
+      const response = handler();
+      expect(response.status).toBe(405);
+      expect(response.headers.get('allow')).toBe('GET, POST');
+    }
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(authorize).mockResolvedValue(principal);

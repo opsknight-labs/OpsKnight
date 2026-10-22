@@ -5,7 +5,14 @@ import { AppError } from '@/lib/errors';
 import { ScimFailure } from './validation';
 
 export function json(body: unknown, status = 200, location?: string) {
-  return Response.json(body, {
+  const serialized = JSON.stringify(body);
+  if (Buffer.byteLength(serialized, 'utf8') > 8 * 1024 * 1024)
+    throw new ScimFailure(
+      413,
+      'SCIM response exceeds 8 MiB. Reduce count or request excludedAttributes=members.',
+      'tooLarge'
+    );
+  return new Response(serialized, {
     status,
     headers: {
       'Content-Type': 'application/scim+json; charset=utf-8',
@@ -56,5 +63,14 @@ export async function handle(
     response.status,
     performance.now() - started
   );
+  return response;
+}
+
+export function collectionMethodNotAllowed() {
+  const response = scimError(
+    405,
+    'Use GET or POST on this collection; mutations require a resource URL.'
+  );
+  response.headers.set('Allow', 'GET, POST');
   return response;
 }

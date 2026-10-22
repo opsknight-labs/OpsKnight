@@ -11,11 +11,21 @@ import { json } from '../protocol/http';
 import { event } from './events';
 import { reconcileTeam } from './membership';
 
+export const GROUP_MEMBER_RESPONSE_BUDGET = 10000;
 const include = {
-  memberships: { include: { user: { select: { id: true, name: true, email: true } } } },
+  memberships: {
+    take: GROUP_MEMBER_RESPONSE_BUDGET + 1,
+    include: { user: { select: { id: true, name: true, email: true } } },
+  },
 } as const;
 type Group = Prisma.ScimGroupGetPayload<{ include: typeof include }>;
 function serialize(group: Group, origin: string, exclude: boolean) {
+  if (!exclude && group.memberships.length > GROUP_MEMBER_RESPONSE_BUDGET)
+    throw new ScimFailure(
+      413,
+      'Group exceeds the 10,000-member representation limit. Use excludedAttributes=members.',
+      'tooLarge'
+    );
   const result = serializeScimGroup({ ...group, members: group.memberships }, origin);
   if (exclude) {
     const { members: _members, ...without } = result;
@@ -24,6 +34,18 @@ function serialize(group: Group, origin: string, exclude: boolean) {
   return result;
 }
 export async function groups(request: NextRequest, id?: string) {
+  if (!id && !['GET', 'POST'].includes(request.method)) {
+    const response = json(
+      {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
+        status: '405',
+        detail: 'Use a resource URL for mutations.',
+      },
+      405
+    );
+    response.headers.set('Allow', 'GET, POST');
+    return response;
+  }
   const principal = await authorize(
     request,
     request.method === 'GET' ? 'groups:read' : 'groups:write'
@@ -49,6 +71,7 @@ export async function groups(request: NextRequest, id?: string) {
       );
     }
     const { startIndex, count } = pagination(request.nextUrl.searchParams);
+    const pageSize = request.nextUrl.searchParams.has('count') ? count : Math.min(count, 10);
     let filter;
     try {
       filter = parseScimGroupFilter(request.nextUrl.searchParams.get('filter'));
@@ -64,16 +87,43 @@ export async function groups(request: NextRequest, id?: string) {
       ...filter,
       ...(filter?.name ? { name: { equals: filter.name, mode: 'insensitive' as const } } : {}),
     };
-    const [rows, totalResults] = await prisma.$transaction([
-      prisma.scimGroup.findMany({
-        where,
-        include: selection,
-        skip: startIndex - 1,
-        take: count,
-        orderBy: { id: 'asc' },
-      }),
-      prisma.scimGroup.count({ where }),
-    ]);
+    // Count first in one repeatable snapshot. Never fetch a million member objects
+    // merely to discover that the requested collection exceeds its response budget.
+    const [rows, totalResults] = await prisma.$transaction(
+      async tx => {
+        const candidates = await tx.scimGroup.findMany({
+          where,
+          skip: startIndex - 1,
+          take: pageSize,
+          orderBy: { id: 'asc' },
+          include: { _count: { select: { memberships: true } } },
+        });
+        let memberCount = 0;
+        const selected = [];
+        for (const group of candidates) {
+          if (!exclude && memberCount + group._count.memberships > GROUP_MEMBER_RESPONSE_BUDGET) {
+            if (!selected.length)
+              throw new ScimFailure(
+                413,
+                'Group exceeds the member response budget. Use excludedAttributes=members and review its provider assignments.',
+                'tooLarge'
+              );
+            break;
+          }
+          memberCount += exclude ? 0 : group._count.memberships;
+          selected.push(group.id);
+        }
+        const rows = selected.length
+          ? await tx.scimGroup.findMany({
+              where: { connectorId: principal.connectorId, id: { in: selected } },
+              include: selection,
+              orderBy: { id: 'asc' },
+            })
+          : [];
+        return [rows, await tx.scimGroup.count({ where })] as const;
+      },
+      { isolationLevel: 'RepeatableRead' }
+    );
     return json({
       schemas: [SCIM_LIST_SCHEMA],
       totalResults,

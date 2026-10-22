@@ -19,9 +19,16 @@ vi.mock('@/lib/auth-control/actor', () => ({
 }));
 import prisma from '@/lib/prisma';
 import { authorize } from '@/lib/scim/security/credentials';
-import { GET } from '@/app/api/scim/v2/Groups/route';
+import { GET, PATCH, PUT, DELETE } from '@/app/api/scim/v2/Groups/route';
 import { GET as resource } from '@/app/api/scim/v2/Groups/[id]/route';
 describe('SCIM Groups directory boundary', () => {
+  it('rejects collection mutation methods without authorizing or writing', () => {
+    for (const handler of [PATCH, PUT, DELETE]) {
+      const response = handler();
+      expect(response.status).toBe(405);
+      expect(response.headers.get('allow')).toBe('GET, POST');
+    }
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(authorize).mockResolvedValue({
@@ -42,10 +49,15 @@ describe('SCIM Groups directory boundary', () => {
     );
   });
   it('does not load or serialize excluded membership collections', async () => {
-    vi.mocked(prisma.$transaction).mockResolvedValue([
-      [{ id: 'g1', name: 'Directory group', createdAt: new Date(), updatedAt: new Date() }],
-      1,
-    ] as never);
+    vi.mocked(prisma.scimGroup.findMany)
+      .mockResolvedValueOnce([{ id: 'g1', _count: { memberships: 10000 } }] as never)
+      .mockResolvedValueOnce([
+        { id: 'g1', name: 'Directory group', createdAt: new Date(), updatedAt: new Date() },
+      ] as never);
+    vi.mocked(prisma.scimGroup.count).mockResolvedValue(1);
+    vi.mocked(prisma.$transaction).mockImplementation(async operation =>
+      (operation as (tx: typeof prisma) => Promise<unknown>)(prisma)
+    );
     const response = await GET(
       new NextRequest('https://ops.test/api/scim/v2/Groups?excludedAttributes=members')
     );
@@ -53,7 +65,7 @@ describe('SCIM Groups directory boundary', () => {
     expect(prisma.scimGroup.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         include: { memberships: false },
-        where: { connectorId: 'source-a' },
+        where: { connectorId: 'source-a', id: { in: ['g1'] } },
       })
     );
     expect((await response.json()).Resources[0]).not.toHaveProperty('members');
