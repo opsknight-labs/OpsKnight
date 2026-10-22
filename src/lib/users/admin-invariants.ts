@@ -110,3 +110,20 @@ export async function bulkUpdateUserSecurityState(
   invalidateSessionSecurityProjections(ids);
   return updated;
 }
+
+/**
+ * Revoke sessions with the caller's access mutation, taking User locks before Team locks.
+ * This changes only session versions, so the last-admin role/status invariant is unaffected.
+ * Callers invalidate returned users after commit; never populate the cache inside a transaction.
+ */
+export async function advanceUserSessionVersions(
+  tx: Prisma.TransactionClient,
+  userIds: readonly string[]
+) {
+  const ids = [...new Set(userIds)];
+  if (!ids.length) return;
+  await tx.user.updateMany({
+    where: { id: { in: ids } },
+    data: { tokenVersion: { increment: 1 } },
+  });
+}

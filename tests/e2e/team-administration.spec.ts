@@ -154,6 +154,8 @@ test('UI and REST share team membership, lead, revision and session-revocation o
         })
       )
     );
+    // DB fixture writes do not invalidate the page's prefetched RSC service list.
+    await page.reload();
     await expect(row()).toHaveCount(0);
     await page.getByRole('tab', { name: /Services/ }).click();
     await expect(page).toHaveURL(/tab=services/);
@@ -211,7 +213,11 @@ test('UI and REST share team membership, lead, revision and session-revocation o
     expect(nextActivityPage.status()).toBe(200);
     expect((await nextActivityPage.json()).data[0].id).not.toBe(firstActivity.data[0].id);
     await page.goto(`/teams/${team.id}?tab=activity`);
-    await expect(page.getByRole('tabpanel', { name: 'Activity', exact: true }).getByText('Team Audit Trail', { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('tabpanel', { name: 'Activity', exact: true })
+        .getByText('Team Audit Trail', { exact: true })
+    ).toBeVisible();
   } finally {
     await db.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
   }

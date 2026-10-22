@@ -56,6 +56,29 @@ describe('SCIM protocol helpers', () => {
     expect(await authenticate(token)).toBeNull();
     expect(vi.mocked(prisma.scimCredential.findUnique).mock.calls.length - before).toBe(1);
   });
+  it('admits valid credentials after unrelated token keys saturate the bounded map', async () => {
+    const { authenticate, hashToken } = await import('@/lib/scim/security/credentials');
+    // Malformed headers fill admission history without any database traffic.
+    const before = vi.mocked(prisma.scimCredential.findUnique).mock.calls.length;
+    for (let index = 0; index < 4200; index++)
+      expect(await authenticate(`invalid-header-${index}`)).toBeNull();
+    expect(vi.mocked(prisma.scimCredential.findUnique).mock.calls.length).toBe(before);
+    const token = 'new-valid-credential-after-admission-saturation';
+    vi.mocked(prisma.scimCredential.findUnique).mockResolvedValueOnce({
+      id: 'saturation-key',
+      connectorId: 'source',
+      tokenHash: hashToken(token),
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60000),
+      lastUsedAt: new Date(),
+      scopes: ['users:read'],
+      connector: { enabled: true, credentialAuthority: 'REGISTRY' },
+    } as never);
+    expect(await authenticate(`Bearer ${token}`)).toMatchObject({ credentialId: 'saturation-key' });
+    // A successful check is never cached: immediate revocation must still be authoritative.
+    vi.mocked(prisma.scimConnector.findUnique).mockResolvedValueOnce(null);
+    expect(await authenticate(`Bearer ${token}`)).toBeNull();
+  });
   it('revalidates active credentials while coalescing last-used writes', async () => {
     const { authenticate, hashToken } = await import('@/lib/scim/security/credentials');
     const token = 'active-credential-last-used-certification-only';

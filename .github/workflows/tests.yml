@@ -311,12 +311,9 @@ jobs:
           run-smoke: 'false'
           run-validation: 'false'
 
-      - name: Install mobile browser engines
-        run: npx playwright install --with-deps chromium webkit
-
       - name: Run Android and iPhone browser contracts + responsive matrix
         run: >-
-          npx playwright test
+          bash scripts/ci/playwright-in-container.sh
           tests/e2e/mobile-pwa.spec.ts
           tests/e2e/mobile-responsive-matrix.spec.ts
           --project=mobile-chromium
@@ -324,7 +321,7 @@ jobs:
 
       - name: Run production PWA service-worker contract
         run: >-
-          npx playwright test
+          bash scripts/ci/playwright-in-container.sh
           -c playwright.pwa.config.ts
           --project=pwa-production-chromium
           --project=pwa-production-webkit

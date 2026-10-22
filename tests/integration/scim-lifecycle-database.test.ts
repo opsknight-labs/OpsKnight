@@ -21,7 +21,10 @@ import { preserveScimOwnedOidcFields } from '@/lib/scim/lifecycle/oidc-profile';
 import { reconcileTeam } from '@/lib/scim/lifecycle/membership';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 
-const suite = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
+const suite =
+  process.env.SCIM_CERTIFICATION === '1' && process.env.VITEST_USE_REAL_DB === '1'
+    ? describe
+    : describe.skip;
 // Ordinary HTTP authorization and PostgreSQL mutations remain real; UI actor checks are tested separately.
 vi.mock('@/lib/auth-control/actor', () => ({
   getControlActor: vi.fn(),

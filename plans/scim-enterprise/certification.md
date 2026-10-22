@@ -262,3 +262,31 @@ The final idle-compiler capacity rerun passed all 39 PostgreSQL scenarios;
 10,000-member DELETE took 2.29 seconds. The final optimized production build
 passed. Expanded SCIM CI also passed on `b867d5af1` before the invited-account
 refinement; the final commit is independently rerun by branch CI.
+
+### PR 906 integration follow-up
+
+General database CI does not opt into the isolated SCIM suites. Direct invocation requires
+`SCIM_CERTIFICATION=1` and `VITEST_USE_REAL_DB=1`; the `certify:scim:db` command sets the
+former explicitly. The dedicated database-name guard remains mandatory even when opted in.
+SCIM User relations retain inactive directory state on deactivation and cascade on hard
+delete. Session-version increments for grant reconciliation pass through the approved
+user-security module in the same transaction, with existing post-commit invalidation.
+
+Admission history saturation evicts bounded history instead of rejecting unrelated new
+credentials. Repeated invalid-token negative caching and per-token admission limits remain;
+this process-local protection is not a global network flood limiter. Keep perimeter request
+limits for distributed unique-token floods. Successful credentials are never cached.
+
+CodeQL alert 5531 (`js/insufficient-password-hash`) points to the API-key fixture in
+`certify-session-replicas.mjs`, not a user password or imported SCIM secret. The fixture
+is generated locally from `randomBytes(32)` (256 random bits) with an `ok_test_` prefix,
+then stored using the same keyed, domain-separated SHA-256 HMAC as production API keys.
+The fixture accepts no caller-supplied token. Password KDF guidance does not apply to
+this random verifier; this reasoning is specific to this finding and does not certify
+entropy of historical environment tokens. Registry SCIM credentials are independently
+generated from 32 random bytes; historical credentials must be rotated during cutover.
+
+Runbook history browser assertions follow the current custom select, search and archived
+evidence text. The team parity journey reloads after out-of-band service fixture writes
+so a previously prefetched service list cannot hide the new services. Mobile/PWA CI uses
+the version-matched Playwright image to avoid the observed Ubuntu package-download hang.

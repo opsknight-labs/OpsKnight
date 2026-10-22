@@ -34,8 +34,9 @@ function preauthenticate(authorization: string | null) {
   const now = Date.now();
   if (localAdmission.size >= 4096) {
     for (const [key, entry] of localAdmission) if (entry.until <= now) localAdmission.delete(key);
+    // Evict history, never deny an unseen credential because unrelated keys filled the map.
     if (localAdmission.size >= 4096 && !localAdmission.has(key))
-      throw new ScimFailure(429, 'Authentication admission is busy. Retry in one minute.');
+      localAdmission.delete(localAdmission.keys().next().value!);
   }
   const entry = localAdmission.get(key);
   if (entry && entry.until > now) {
@@ -86,7 +87,7 @@ export async function authenticate(authorization: string | null): Promise<ScimPr
   }
   const legacy = await prisma.scimConnector.findUnique({ where: { id: 'legacy' } });
   if (!legacy?.enabled || legacy.credentialAuthority !== 'LEGACY') {
-    if (invalidTokens.size >= 4096) invalidTokens.clear();
+    if (invalidTokens.size >= 4096) invalidTokens.delete(invalidTokens.keys().next().value!);
     invalidTokens.set(invalidKey, Date.now() + 5000);
     return denied('unknown', 'unknown_credential');
   }

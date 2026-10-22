@@ -115,6 +115,8 @@ try {
       name: 'Disposable replica access',
       userId: user.id,
       prefix: apiToken.slice(0, 12),
+      // Same domain-separated verifier as src/lib/api-keys.ts; apiToken has 256 CSPRNG bits.
+      // codeql[js/insufficient-password-hash] Disposable random bearer token, not a password.
       tokenHash: createHmac('sha256', signing)
         .update(`opsknight:api-key:v2:${apiToken}`)
         .digest('hex'),

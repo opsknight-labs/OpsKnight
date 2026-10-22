@@ -13,7 +13,9 @@ vi.mock('@/lib/auth-control/actor', () => ({
   lockControlActor: vi.fn(),
 }));
 const suite =
-  process.env.SCIM_LOAD_TEST === '1' && process.env.VITEST_USE_REAL_DB === '1'
+  process.env.SCIM_LOAD_TEST === '1' &&
+  process.env.SCIM_CERTIFICATION === '1' &&
+  process.env.VITEST_USE_REAL_DB === '1'
     ? describe
     : describe.skip;
 const token = 'isolated-scim-load-certification-00000000000000001';

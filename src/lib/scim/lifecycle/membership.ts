@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { advanceUserSessionVersions } from '@/lib/users/admin-invariants';
 
 /** Reconcile the union of directory grants; pre-existing/manual and promoted rows survive. */
 export async function reconcileTeam(
@@ -49,11 +50,7 @@ export async function reconcileTeam(
   const additions = [...desired.keys()].filter(userId => !existingUsers.has(userId));
   additions.forEach(userId => changedUserIds.add(userId));
   // Lock User before Team, matching local administration. Session and grant writes commit together.
-  if (changedUserIds.size)
-    await tx.user.updateMany({
-      where: { id: { in: [...changedUserIds] } },
-      data: { tokenVersion: { increment: 1 } },
-    });
+  await advanceUserSessionVersions(tx, [...changedUserIds]);
   for (const transfer of transfers.values())
     await tx.scimTeamGrant.updateMany({
       where: { bindingId: transfer.from, userId: { in: transfer.users } },
