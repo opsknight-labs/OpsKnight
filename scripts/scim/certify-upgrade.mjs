@@ -27,6 +27,7 @@ try {
     '20261021170000_scim_profile_authority',
     '20261022100000_scim_grant_revocation_policy',
     '20261022150000_scim_case_insensitive_lookup',
+    '20261023010000_user_canonical_email_reservation',
   ]
     .map(name => readFileSync(`prisma/migrations/${name}/migration.sql`, 'utf8'))
     .join('\n');
@@ -36,8 +37,21 @@ INSERT INTO "OidcIdentity" (id,issuer,subject,"userId","updatedAt") VALUES ('oid
 INSERT INTO "Team" (id,name,"scimExternalId","updatedAt") VALUES ('legacy-team','Legacy team','directory-group',CURRENT_TIMESTAMP),('manual-team','Operational team',NULL,CURRENT_TIMESTAMP);
 INSERT INTO "TeamMember" (id,"userId","teamId",role) VALUES ('owner-membership','owner','legacy-team','OWNER'),('directory-membership','directory-user','legacy-team','MEMBER');
 INSERT INTO "Service" (id,name,"teamId","updatedAt") VALUES ('service','Production service','legacy-team',CURRENT_TIMESTAMP);
+INSERT INTO "User" (id,name,email,"updatedAt") VALUES ('historical-upper','Historical upper','Historical@upgrade.example.test',CURRENT_TIMESTAMP),('historical-lower','Historical lower','historical@upgrade.example.test',CURRENT_TIMESTAMP);
 ${migrations}
 DO $$ BEGIN
+ IF (SELECT count(*) FROM "User" WHERE lower(email)='historical@upgrade.example.test') <> 2 OR (SELECT "holders" FROM "UserEmailReservation" WHERE "canonicalEmail"='historical@upgrade.example.test') <> 2 THEN RAISE EXCEPTION 'Historical canonical identities changed'; END IF;
+ UPDATE "User" SET email='HISTORICAL@upgrade.example.test' WHERE id='historical-upper';
+ BEGIN
+  INSERT INTO "User" (id,name,email,"updatedAt") VALUES ('blocked-third','Blocked','historical@UPGRADE.example.test',CURRENT_TIMESTAMP);
+  RAISE EXCEPTION 'New canonical duplicate was accepted';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ DELETE FROM "User" WHERE id='historical-upper';
+ IF (SELECT "holders" FROM "UserEmailReservation" WHERE "canonicalEmail"='historical@upgrade.example.test') <> 1 THEN RAISE EXCEPTION 'Historical reservation released early'; END IF;
+ DELETE FROM "User" WHERE id='historical-lower';
+ IF EXISTS (SELECT 1 FROM "UserEmailReservation" WHERE "canonicalEmail"='historical@upgrade.example.test') THEN RAISE EXCEPTION 'Final reservation not released'; END IF;
+ INSERT INTO "User" (id,name,email,"updatedAt") VALUES ('reused-historical','Reused','historical@upgrade.example.test',CURRENT_TIMESTAMP);
  IF (SELECT count(*) FROM "ScimIdentity" WHERE "userId"='directory-user' AND "externalId"='directory-object') <> 1 THEN RAISE EXCEPTION 'Identity backfill failed'; END IF;
  IF (SELECT count(*) FROM "ScimGroup" WHERE id='legacy-team') <> 1 OR (SELECT count(*) FROM "ScimGroup" WHERE id='manual-team') <> 0 THEN RAISE EXCEPTION 'Group namespace changed'; END IF;
  IF (SELECT count(*) FROM "ScimGroupTeamBinding") <> 0 THEN RAISE EXCEPTION 'Implicit team authority granted'; END IF;

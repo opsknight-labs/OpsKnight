@@ -228,13 +228,15 @@ export async function groups(request: NextRequest, id?: string) {
     await event(tx, principal, existing ? 'group.updated' : 'group.created', group.id, {
       members: ids.length,
     });
-    return tx.scimGroup.findUniqueOrThrow({ where: { id: group.id }, include });
+    const saved = await tx.scimGroup.findUniqueOrThrow({ where: { id: group.id }, include });
+    // Serialization and its byte budget must succeed before any mutation commits.
+    return json(
+      serialize(saved, origin, exclude),
+      request.method === 'POST' ? 201 : 200,
+      `${origin}/api/scim/v2/Groups/${saved.id}`
+    );
   });
   invalidateSessionSecurityProjections([...changedUserIds]);
   if (!result) return new Response(null, { status: 204 });
-  return json(
-    serialize(result, origin, exclude),
-    request.method === 'POST' ? 201 : 200,
-    `${origin}/api/scim/v2/Groups/${result.id}`
-  );
+  return result;
 }

@@ -103,6 +103,74 @@ suite('SCIM indexed capacity certification', () => {
     expect(durations[94]).toBeLessThan(2000);
     expect(durations[98]).toBeLessThan(5000);
   }, 120000);
+  it('rolls back oversized multibyte group responses before writes and audit events commit', async () => {
+    const send = (method: string, body: unknown, id = '', query = '') => {
+      const req = new NextRequest(
+        `https://capacity.test/api/scim/v2/Groups${id ? `/${id}` : ''}${query}`,
+        {
+          method,
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/scim+json' },
+          body: JSON.stringify(body),
+        }
+      );
+      return handle(() => groups(req, id || undefined), req);
+    };
+    const id = 'scim-load-group-1';
+    const original = await prisma.scimGroup.findUniqueOrThrow({ where: { id } });
+    const externalId = `oversized-${Date.now()}`;
+    try {
+      await prisma.$executeRaw`UPDATE "User" SET name = repeat('界', 256) WHERE id IN (SELECT 'scim-load-user-' || i FROM generate_series(1, 10000) i)`;
+      const events = await prisma.scimEvent.count({ where: { connectorId: 'scim-load' } });
+      const patched = await send(
+        'PATCH',
+        {
+          Operations: [
+            { op: 'replace', path: 'displayName', value: 'Must roll back' },
+            { op: 'remove', path: 'members[value eq "scim-load-user-1"]' },
+          ],
+        },
+        id
+      );
+      expect(patched.status).toBe(413);
+      expect(await prisma.scimGroupMembership.count({ where: { groupId: id } })).toBe(10000);
+      expect(
+        await prisma.scimGroupMembership.findUnique({
+          where: { groupId_userId: { groupId: id, userId: 'scim-load-user-1' } },
+        })
+      ).not.toBeNull();
+      expect((await prisma.scimGroup.findUniqueOrThrow({ where: { id } })).name).toBe(
+        original.name
+      );
+      expect(await prisma.scimEvent.count({ where: { connectorId: 'scim-load' } })).toBe(events);
+      const created = await send('POST', {
+        displayName: 'Oversized new group',
+        externalId,
+        members: Array.from({ length: 10000 }, (_, i) => ({ value: `scim-load-user-${i + 1}` })),
+      });
+      expect(created.status).toBe(413);
+      expect(
+        await prisma.scimGroup.count({
+          where: { connectorId: 'scim-load', scimExternalId: externalId },
+        })
+      ).toBe(0);
+      expect(await prisma.scimEvent.count({ where: { connectorId: 'scim-load' } })).toBe(events);
+      const bounded = await send(
+        'PATCH',
+        { Operations: [{ op: 'replace', path: 'displayName', value: 'Bounded success' }] },
+        id,
+        '?excludedAttributes=members'
+      );
+      expect(bounded.status).toBe(200);
+      expect(await bounded.json()).toMatchObject({ id, displayName: 'Bounded success' });
+      expect((await prisma.scimGroup.findUniqueOrThrow({ where: { id } })).name).toBe(
+        'Bounded success'
+      );
+    } finally {
+      await prisma.$executeRaw`UPDATE "User" SET name = 'Capacity user ' || substring(id from length('scim-load-user-') + 1) WHERE id IN (SELECT 'scim-load-user-' || i FROM generate_series(1, 10000) i)`;
+      await prisma.scimGroup.update({ where: { id }, data: { name: original.name } });
+    }
+  }, 120000);
+
   it('uses the connector/externalId unique index for equality searches', async () => {
     const plan = await prisma.$queryRaw<
       Array<{ 'QUERY PLAN': string }>

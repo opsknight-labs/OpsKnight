@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { getControlActor } from '@/lib/auth-control/actor';
+import { resolveOidcIdentityForSignIn } from '@/lib/oidc-identity-resolution';
 import {
   createScimCredentialAction,
   bindExistingScimUserAction,
@@ -115,6 +116,130 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
   afterAll(async () => {
     await prisma.$disconnect();
   });
+  it('serializes SCIM creation against an uncommitted ordinary invitation with a case variant', async () => {
+    const email = `race-${Date.now()}@example.test`;
+    let ready!: () => void;
+    const inserted = new Promise<void>(resolve => {
+      ready = resolve;
+    });
+    const ordinary = prisma.$transaction(async tx => {
+      const user = await tx.user.create({
+        data: { email: email.toUpperCase(), name: 'Ordinary invitation', status: 'INVITED' },
+      });
+      ids.push(user.id);
+      ready();
+      await tx.$executeRaw`SELECT pg_sleep(0.5)`;
+      return user;
+    });
+    await inserted;
+    const [invited, response] = await Promise.all([
+      ordinary,
+      call('users', 'POST', { userName: email, externalId: email, active: true }),
+    ]);
+    expect(response.status).toBe(409);
+    expect(
+      await prisma.user.count({ where: { email: { equals: email, mode: 'insensitive' } } })
+    ).toBe(1);
+    expect(await prisma.scimIdentity.count({ where: { userId: invited.id } })).toBe(0);
+  });
+
+  it('shares canonical reservations with real OIDC JIT and releases them after rename and deletion', async () => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const email = `jit-race-${Date.now()}-${attempt}@example.test`;
+      const [jit, scim] = await Promise.all([
+        resolveOidcIdentityForSignIn({
+          issuer: 'https://jit.example.test',
+          subject: email,
+          email: email.toUpperCase(),
+          displayName: 'JIT user',
+          providerType: 'GENERIC',
+          emailVerifiedClaim: true,
+          requireEmailVerifiedClaim: true,
+          autoProvision: true,
+          allowedDomains: [],
+        }),
+        call('users', 'POST', { userName: email, externalId: email }),
+      ]);
+      expect(jit.ok || scim.status === 201).toBe(true);
+      expect([201, 409]).toContain(scim.status);
+      expect(
+        await prisma.user.count({ where: { email: { equals: email, mode: 'insensitive' } } })
+      ).toBe(1);
+    }
+    const oldEmail = `reservation-${Date.now()}@example.test`;
+    const newEmail = `renamed-${oldEmail}`;
+    const owner = await prisma.user.create({
+      data: { email: oldEmail, name: 'Reservation owner' },
+    });
+    await prisma.user.update({ where: { id: owner.id }, data: { email: newEmail } });
+    const reused = await prisma.user.create({
+      data: { email: oldEmail.toUpperCase(), name: 'Reused old address' },
+    });
+    await expect(
+      prisma.user.update({ where: { id: reused.id }, data: { email: newEmail.toUpperCase() } })
+    ).rejects.toMatchObject({ code: 'P2002' });
+    await prisma.user.delete({ where: { id: owner.id } });
+    const replacement = await prisma.user.create({
+      data: { email: newEmail.toUpperCase(), name: 'Reused deleted address' },
+    });
+    await prisma.user.deleteMany({ where: { id: { in: [reused.id, replacement.id] } } });
+  });
+
+  it('preserves custom local photos on name-only PATCH while refreshing default initials', async () => {
+    const response = await call('users', 'POST', {
+      userName: `avatar-${Date.now()}@example.test`,
+      externalId: `avatar-${Date.now()}`,
+      displayName: 'Before Name',
+      active: true,
+    });
+    const created = await response.json();
+    ids.push(created.id);
+    const custom = `/api/users/${created.id}/avatar`;
+    await prisma.user.update({ where: { id: created.id }, data: { avatarUrl: custom } });
+    const updated = await call(
+      'users',
+      'PATCH',
+      patch({ op: 'replace', path: 'displayName', value: 'After Name' }),
+      created.id
+    );
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({ id: created.id, displayName: 'After Name' });
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).avatarUrl).toBe(
+      custom
+    );
+    await prisma.user.update({
+      where: { id: created.id },
+      data: { avatarUrl: '/api/avatar?style=initials&seed=AN&radius=50' },
+    });
+    expect(
+      (
+        await call(
+          'users',
+          'PATCH',
+          patch({ op: 'replace', path: 'displayName', value: 'Fresh Person' }),
+          created.id
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).avatarUrl
+    ).toContain('seed=FP');
+    const photo = 'https://example.test/explicit-avatar.png';
+    expect(
+      (
+        await call(
+          'users',
+          'PATCH',
+          patch({ op: 'replace', path: 'photos', value: [{ value: photo }] }),
+          created.id
+        )
+      ).status
+    ).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).avatarUrl).toBe(
+      photo
+    );
+  });
+
   it('creates and serializes a directory identity without exposing local accounts', async () => {
     const response = await call('users', 'POST', {
       userName: `cert-${Date.now()}@example.test`,
@@ -189,18 +314,11 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
       role: 'RESPONDER',
       roleSource: 'OIDC',
     });
-    // Historical local case-duplicates are retained, but cannot gain a second SCIM name binding.
-    const historical = await prisma.user.create({
-      data: { email: email.toLowerCase(), name: 'Historical duplicate' },
-    });
-    expect(
-      await bindExistingScimUserAction({
-        connectorId: 'cert-a',
-        externalId: `historical-${historical.id}`,
-        userId: historical.id,
-      })
-    ).toMatchObject({ scimError: expect.stringContaining('case-insensitive') });
-    expect(await prisma.scimIdentity.count({ where: { userId: historical.id } })).toBe(0);
+    // Historical duplicates are exercised by the pre-migration upgrade fixture.
+    // Once migrated, even non-SCIM writers cannot introduce another case variant.
+    await expect(
+      prisma.user.create({ data: { email: email.toLowerCase(), name: 'New duplicate' } })
+    ).rejects.toMatchObject({ code: 'P2002' });
   });
   it('accepts User member types and removes displayName with structured-name fallback while retaining security authority', async () => {
     const created = await call('users', 'POST', {

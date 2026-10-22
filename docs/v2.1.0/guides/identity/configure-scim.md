@@ -314,3 +314,17 @@ Drift diagnostics return up to 25 binding summaries using PostgreSQL counts and 
 They do not return directory/team member arrays to the application. Desired team access is
 the union of every bound source; manual memberships are counted separately. Changing legacy
 adoption selections invalidates the preview and disables approval until it is refreshed.
+
+New user inserts and email renames share a PostgreSQL canonical-email reservation,
+including invitations, OIDC JIT and SQL writes. Historical case variants remain
+unchanged; their reservation lasts until the last holder changes address or is
+deleted. Case-only edits do not merge accounts. The seventh migration backfills
+reservation counts under a User-table write lock; rehearse its duration on a
+production-sized restored snapshot before scheduling the upgrade. Backups and
+restores must include the reservation table and its database trigger.
+
+Name-only PATCH requests preserve local custom avatars when photos are not
+explicitly modified; generated default avatars can refresh their initials. Group
+mutation responses are serialized and checked against the byte budget before
+commit. A 413 rolls back directory changes and their audit events. Providers can
+request `excludedAttributes=members` for a bounded success representation.

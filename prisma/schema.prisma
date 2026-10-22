@@ -472,6 +472,13 @@ model ProviderWorkerLease {
   @@index([expiresAt])
 }
 
+// SQL trigger maintains counts, retaining historical casing duplicates while
+// reserving canonical emails atomically across all new identity writers.
+model UserEmailReservation {
+  canonicalEmail String @id
+  holders        Int
+}
+
 model User {
   scimGivenName String?
   scimFamilyName String?

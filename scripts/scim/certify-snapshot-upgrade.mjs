@@ -78,6 +78,7 @@ INSERT INTO "SystemConfig" (key,value,"updatedAt") VALUES ('scim_configuration',
     '20261021170000_scim_profile_authority',
     '20261022100000_scim_grant_revocation_policy',
     '20261022150000_scim_case_insensitive_lookup',
+    '20261023010000_user_canonical_email_reservation',
   ]
     .map(name => readFileSync(`prisma/migrations/${name}/migration.sql`, 'utf8'))
     .join('\n');
@@ -85,6 +86,7 @@ INSERT INTO "SystemConfig" (key,value,"updatedAt") VALUES ('scim_configuration',
     restoredDb,
     `BEGIN; ${migrations}
 DO $$ BEGIN
+ IF (SELECT sum("holders") FROM "UserEmailReservation") <> (SELECT count(*) FROM "User") THEN RAISE EXCEPTION 'Canonical reservation snapshot mismatch'; END IF;
  IF (SELECT count(*) FROM "ScimIdentity") <> 100000 THEN RAISE EXCEPTION 'Identity snapshot lost'; END IF;
  IF (SELECT count(*) FROM "ScimGroup") <> 10000 THEN RAISE EXCEPTION 'Group snapshot lost'; END IF;
  IF (SELECT count(*) FROM "ScimGroupMembership") <> 100000 THEN RAISE EXCEPTION 'Membership snapshot lost'; END IF;

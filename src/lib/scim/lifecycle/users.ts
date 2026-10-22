@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
-import { getDefaultAvatar } from '@/lib/avatar';
+import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';
 import { SCIM_LIST_SCHEMA, parseScimFilter, serializeScimUser } from '@/lib/scim';
 import { authorize, recheck } from '../security/credentials';
 import {
@@ -260,15 +260,18 @@ export async function users(request: NextRequest, id?: string) {
             : 'DISABLED';
     const active = status === 'ACTIVE';
     const nextProfile = profile(document);
-    if (!document.photos && nextProfile.name === existing.name)
+    const touched =
+      request.method === 'DELETE'
+        ? new Set<string>()
+        : requestedProfileFields(body, request.method);
+    if (request.method === 'PATCH' && !touched.has('photos')) {
+      nextProfile.avatarUrl = isDefaultAvatar(existing.avatarUrl)
+        ? getDefaultAvatar(nextProfile.name, identity.externalId)
+        : existing.avatarUrl;
+    } else if (!document.photos && nextProfile.name === existing.name)
       nextProfile.avatarUrl = existing.avatarUrl ?? nextProfile.avatarUrl;
     if (request.method !== 'DELETE')
-      applyProfileAuthority(
-        nextProfile,
-        existing,
-        connector.profileFields,
-        requestedProfileFields(body, request.method)
-      );
+      applyProfileAuthority(nextProfile, existing, connector.profileFields, touched);
     // A case-only representation change is not a new login identity.
     if (nextProfile.email.toLowerCase() === existing.email.toLowerCase())
       nextProfile.email = existing.email;

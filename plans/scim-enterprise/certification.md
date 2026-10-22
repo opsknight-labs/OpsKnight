@@ -345,3 +345,38 @@ passed. The earlier optimized production build and three-browser production
 journeys cover the preceding deep-audit implementation; final-head CI recompiles
 and exercises the readiness guard against its isolated development server; the
 general workflow separately builds the production application.
+
+
+## Latest focused review: avatar, response atomicity and shared email reservations
+
+The ordinary-invitation race was reproduced against the preceding code: an
+uncommitted upper-case User insert and lower-case SCIM create both succeeded
+(SCIM HTTP 201). A seventh migration now reserves PostgreSQL lower(email) through
+an AFTER row trigger shared by all User writers. Reservation counters preserve
+historical duplicates, case-only edits and atomic address reuse after the last
+holder renames or is deleted. The staged legacy upgrade verifies historical
+case variants before installation, rejection of a new variant, retention after
+one deletion and reuse after the final deletion. Installation holds a User-table
+write lock; real rollout timing remains unverified.
+
+PATCH now preserves an existing custom avatar when photos are untouched and
+refreshes generated defaults after a name change. Group POST/PUT/PATCH responses
+are serialized inside their serializable transaction, including the byte check;
+rejected representations cannot follow a committed directory or grant mutation.
+The 10,000-member fixture uses 256 multibyte characters per display name and
+verifies POST/PATCH 413 rollback, no committed audit event, and successful bounded
+PATCH with excludedAttributes=members.
+
+Local verification so far: all 169 unit/API/auth/UI tests and all 47 PostgreSQL
+lifecycle/capacity tests pass. This includes real OIDC JIT/SCIM races and ordinary
+invitation collisions, avatar preservation and explicit photo updates, reservation
+reuse, and the large multibyte response fixture. The earlier form-readiness fix
+already passed both SCIM push/PR CI runs on b407c8fc4; repeated browser certification
+and exact-head checks for this focused pass are recorded in the PR evidence.
+
+The focused pass also completed an optimized production build and nine full
+browser journeys against that compiled application: Chromium, Firefox and WebKit
+three times each (9 passed, 1.2 minutes), with native checkbox interactions,
+no forced clicks, no retries and unchanged timeouts. TypeScript and lint passed.
+The final 256-character multibyte group fixture confirms that oversized rejection
+also preserves a membership removed by the pending PATCH, not only its group name.
