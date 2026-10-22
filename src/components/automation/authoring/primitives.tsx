@@ -517,18 +517,34 @@ export function LimitCounter({
   );
 }
 
-export function InlineError({ id, children }: { id?: string; children: ReactNode }) {
+export function InlineError({
+  id,
+  children,
+  className,
+}: {
+  id?: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <p id={id} className="flex items-start gap-1.5 text-xs text-destructive">
+    <p id={id} className={cn('flex items-start gap-1.5 text-xs text-destructive', className)}>
       <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span>{children}</span>
     </p>
   );
 }
 
-export function Hint({ id, children }: { id?: string; children: ReactNode }) {
+export function Hint({
+  id,
+  children,
+  className,
+}: {
+  id?: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <p id={id} className="text-xs text-muted-foreground">
+    <p id={id} className={cn('text-xs text-muted-foreground', className)}>
       {children}
     </p>
   );
@@ -541,21 +557,43 @@ export function AuthoringFieldset({
   aside,
   children,
   className,
+  compact = false,
 }: {
   legend: ReactNode;
   description?: ReactNode;
   aside?: ReactNode;
   children: ReactNode;
   className?: string;
+  compact?: boolean;
 }) {
   return (
-    <fieldset className={cn('min-w-0 rounded-lg border border-border/70 p-3 sm:p-4', className)}>
-      <legend className="float-left flex w-full flex-wrap items-center justify-between gap-2 text-sm font-semibold tracking-tight">
+    <fieldset
+      className={cn(
+        'min-w-0 rounded-lg border border-border/70',
+        compact ? 'p-2.5 sm:p-3 bg-muted/10' : 'p-3 sm:p-4',
+        className
+      )}
+    >
+      <legend
+        className={cn(
+          'float-left flex w-full flex-wrap items-center justify-between gap-1.5 font-semibold tracking-tight',
+          compact ? 'text-xs text-foreground' : 'text-sm'
+        )}
+      >
         <span className="min-w-0">{legend}</span>
         {aside}
       </legend>
-      <div className="clear-both space-y-3 pt-1">
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      <div className={cn('clear-both pt-1', compact ? 'space-y-2' : 'space-y-3')}>
+        {description && (
+          <p
+            className={cn(
+              'text-muted-foreground',
+              compact ? 'text-[11px] leading-snug' : 'text-xs'
+            )}
+          >
+            {description}
+          </p>
+        )}
         {children}
       </div>
     </fieldset>

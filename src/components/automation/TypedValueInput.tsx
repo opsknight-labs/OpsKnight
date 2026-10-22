@@ -17,6 +17,7 @@ function TypedValueInputComponent({
   list = false,
   label,
   disabled,
+  compact = false,
   onChange,
 }: {
   type?: Field['type'];
@@ -25,6 +26,7 @@ function TypedValueInputComponent({
   list?: boolean;
   label: string;
   disabled?: boolean;
+  compact?: boolean;
   onChange: (value: Scalar | Scalar[]) => void;
 }) {
   const errorId = useId();
@@ -51,9 +53,12 @@ function TypedValueInputComponent({
                 <label
                   key={item}
                   className={cn(
-                    'inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring sm:min-h-8',
+                    'inline-flex cursor-pointer items-center gap-1.5 border transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+                    compact
+                      ? 'min-h-7 rounded-md px-2.5 py-0.5 text-xs'
+                      : 'min-h-10 rounded-full px-3 text-sm sm:min-h-8',
                     checked
-                      ? 'border-primary/50 bg-primary/10 text-foreground'
+                      ? 'border-primary/50 bg-primary/10 text-foreground font-medium'
                       : 'border-border bg-background text-muted-foreground hover:bg-muted',
                     disabled && 'cursor-not-allowed opacity-60'
                   )}
@@ -84,6 +89,7 @@ function TypedValueInputComponent({
             aria-describedby={staleChoice !== null ? errorId : undefined}
             disabled={disabled}
             value={text}
+            className={compact ? 'h-7.5 text-xs px-2' : undefined}
             onChange={event => onChange(event.target.value)}
           >
             <option value="">Choose canonical value…</option>
@@ -104,6 +110,7 @@ function TypedValueInputComponent({
           aria-describedby={invalid ? errorId : undefined}
           disabled={disabled}
           value={text}
+          className={compact ? 'h-7.5 text-xs px-2' : undefined}
           onChange={event => onChange(parseAuthoringScalar(event.target.value, type))}
         >
           <option value="">Choose true or false…</option>
@@ -115,7 +122,10 @@ function TypedValueInputComponent({
           aria-label={label}
           aria-invalid={invalid}
           aria-describedby={invalid ? errorId : undefined}
-          className="aria-[invalid=true]:border-destructive"
+          className={cn(
+            'aria-[invalid=true]:border-destructive',
+            compact ? 'h-7.5 text-xs' : undefined
+          )}
           inputMode={type === 'NUMBER' ? 'decimal' : undefined}
           placeholder={list ? 'Comma-separated values' : undefined}
           disabled={disabled}

@@ -48,7 +48,7 @@ export function RuleActionsEditor({
       <Button
         size="sm"
         variant="outline"
-        className="h-10 sm:h-9"
+        className="h-7.5 px-2.5 text-xs gap-1 border-dashed hover:border-primary/50"
         disabled={atLimit || (rule.phase === 'ROUTE' && !destinations.length)}
         onClick={() =>
           onChange([
@@ -63,7 +63,7 @@ export function RuleActionsEditor({
           ])
         }
       >
-        <Plus aria-hidden="true" />
+        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         {rule.phase === 'ROUTE' ? 'Add notification' : 'Add enrichment'}
       </Button>
       {atLimit && <Hint>Action limit reached. Remove one to add another.</Hint>}
@@ -73,6 +73,7 @@ export function RuleActionsEditor({
     return (
       <AuthoringFieldset
         legend="Then enrich this incident"
+        compact
         aside={counter}
         description="Actions run in order when the conditions match."
       >
@@ -81,9 +82,10 @@ export function RuleActionsEditor({
       </AuthoringFieldset>
     );
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <AuthoringFieldset
         legend="Route to"
+        compact
         description="Exactly one responder route. Used only if this is the first routing rule to match."
       >
         <ActionEditor
@@ -100,10 +102,10 @@ export function RuleActionsEditor({
         {route.type === 'NO_ESCALATION' && (
           <div
             role="note"
-            className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 px-3 py-2 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+            className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
           >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p className="text-sm">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <p>
               No escalation stops personal paging only. Ordinary service and integration
               notifications still apply. Disable those separately if this rule should notify only
               its selected channels.
@@ -124,6 +126,7 @@ export function RuleActionsEditor({
       </AuthoringFieldset>
       <AuthoringFieldset
         legend="Also notify"
+        compact
         aside={counter}
         description="Optional channels that receive a copy. They never change who is paged."
       >

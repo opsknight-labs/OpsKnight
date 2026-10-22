@@ -154,10 +154,10 @@ const RuleRow = memo(
           aria-expanded={expanded}
           aria-controls={expanded ? `${id}-panel` : undefined}
           aria-label={`Configure ${rule.name}`}
-          className="flex min-h-11 w-full items-center gap-3 p-3 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+          className="flex min-h-10 w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
           onClick={() => onToggle(rule.id)}
         >
-          <span className="flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/60 font-mono text-[11px] font-semibold text-muted-foreground">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/60 font-mono text-[10.5px] font-semibold text-muted-foreground">
             {position}
           </span>
 
@@ -207,7 +207,7 @@ const RuleRow = memo(
         {expanded && (
           <div
             id={`${id}-panel`}
-            className="space-y-3.5 border-t border-border/70 bg-card p-3.5 sm:p-4"
+            className="space-y-2.5 border-t border-border/60 bg-muted/5 p-2.5 sm:p-3"
           >
             {issues.length > 0 && (
               <ul aria-label="Issues in this rule" className="space-y-1.5">
@@ -215,7 +215,7 @@ const RuleRow = memo(
                   <li
                     key={index}
                     className={cn(
-                      'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
+                      'flex items-start gap-2 rounded-lg border px-2.5 py-1.5 text-xs',
                       issue.level === 'ERROR'
                         ? 'border-destructive/40 bg-destructive/5 text-destructive'
                         : 'border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
@@ -237,95 +237,98 @@ const RuleRow = memo(
               </ul>
             )}
 
-            <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div className="min-w-0 flex-1 basis-64 space-y-1">
-                <Label htmlFor={`${id}-name`} className="text-xs font-medium text-foreground">
+            {/* Compact Header Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-1.5">
+              <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+                <Label
+                  htmlFor={`${id}-name`}
+                  className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0"
+                >
                   Rule name
                 </Label>
                 <Input
                   id={`${id}-name`}
                   disabled={!canEdit}
                   maxLength={100}
-                  className="h-8.5 text-xs"
+                  className="h-7.5 text-xs font-medium bg-background/90"
                   value={rule.name}
                   onChange={e => onUpdate(rule.id, { name: e.target.value })}
                 />
               </div>
 
-              {canEdit && (
-                <div
-                  role="group"
-                  aria-label="Order and removal"
-                  className="flex items-center gap-1"
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    draggable
-                    className="h-8.5 w-8.5 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-                    aria-label={`Reorder rule ${position}`}
-                    aria-keyshortcuts="ArrowUp ArrowDown"
-                    title="Drag to reorder, or focus and press ↑ / ↓"
-                    onDragStart={event => {
-                      event.dataTransfer.effectAllowed = 'move';
-                      event.dataTransfer.setData('text/plain', rule.id);
-                      onDragStart(rule.id);
-                    }}
-                    onDragEnd={onDragEnd}
-                    onKeyDown={event => {
-                      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                      event.preventDefault();
-                      moveAndKeepFocus(event.currentTarget, event.key === 'ArrowUp' ? -1 : 1);
-                    }}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 pr-2 border-r border-border/60">
+                  <Switch
+                    id={`${id}-enabled`}
+                    disabled={!canEdit}
+                    checked={rule.enabled}
+                    onCheckedChange={checked => onUpdate(rule.id, { enabled: checked })}
+                  />
+                  <Label
+                    htmlFor={`${id}-enabled`}
+                    className="cursor-pointer text-[11px] font-medium text-muted-foreground select-none"
                   >
-                    <GripVertical className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    aria-label="Move rule up"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8.5 w-8.5 text-muted-foreground hover:text-foreground"
-                    onClick={event => moveAndKeepFocus(event.currentTarget, -1)}
-                  >
-                    <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    aria-label="Move rule down"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8.5 w-8.5 text-muted-foreground hover:text-foreground"
-                    onClick={event => moveAndKeepFocus(event.currentTarget, 1)}
-                  >
-                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    aria-label={`Delete ${rule.name}`}
-                    variant="ghost"
-                    size="icon"
-                    className="h-8.5 w-8.5 text-destructive/80 hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => onRemove(rule.id)}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </Button>
+                    Enabled
+                  </Label>
                 </div>
-              )}
-            </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
-              <span className="font-medium text-foreground">Rule evaluation status</span>
-              <div className="flex items-center gap-2">
-                <Switch
-                  id={`${id}-enabled`}
-                  disabled={!canEdit}
-                  checked={rule.enabled}
-                  onCheckedChange={checked => onUpdate(rule.id, { enabled: checked })}
-                />
-                <Label
-                  htmlFor={`${id}-enabled`}
-                  className="cursor-pointer text-xs font-medium text-muted-foreground"
-                >
-                  Enabled
-                </Label>
+                {canEdit && (
+                  <div
+                    role="group"
+                    aria-label="Order and removal"
+                    className="flex items-center gap-0.5"
+                  >
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      draggable
+                      className="h-7 w-7 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                      aria-label={`Reorder rule ${position}`}
+                      aria-keyshortcuts="ArrowUp ArrowDown"
+                      title="Drag to reorder, or focus and press ↑ / ↓"
+                      onDragStart={event => {
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', rule.id);
+                        onDragStart(rule.id);
+                      }}
+                      onDragEnd={onDragEnd}
+                      onKeyDown={event => {
+                        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                        event.preventDefault();
+                        moveAndKeepFocus(event.currentTarget, event.key === 'ArrowUp' ? -1 : 1);
+                      }}
+                    >
+                      <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label="Move rule up"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={event => moveAndKeepFocus(event.currentTarget, -1)}
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label="Move rule down"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={event => moveAndKeepFocus(event.currentTarget, 1)}
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      aria-label={`Delete ${rule.name}`}
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive/80 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => onRemove(rule.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 

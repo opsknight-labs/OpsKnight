@@ -65,11 +65,11 @@ const ConditionRow = memo(function ConditionRow({
     <div
       role="group"
       aria-label={`Condition ${index + 1}`}
-      className="grid items-start gap-2 rounded-md border border-border/70 bg-background/60 p-2 sm:grid-cols-[2.75rem_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem]"
+      className="grid items-center gap-1.5 rounded-lg border border-border/60 bg-background/70 px-2 py-1.5 sm:grid-cols-[2.5rem_minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,1.2fr)_1.75rem]"
     >
       <span
         aria-hidden="true"
-        className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:pt-3"
+        className="flex items-center justify-center rounded bg-muted/60 px-1 py-0.5 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground select-none"
       >
         {index === 0 ? 'When' : 'and'}
       </span>
@@ -77,6 +77,7 @@ const ConditionRow = memo(function ConditionRow({
         aria-label="Condition field"
         disabled={!canEdit}
         value={condition.fieldKey}
+        className="h-7.5 text-xs px-2"
         onChange={event => onFieldChange(index, event.target.value)}
       >
         {!field && <option value={condition.fieldKey}>{condition.fieldKey} (missing field)</option>}
@@ -101,6 +102,7 @@ const ConditionRow = memo(function ConditionRow({
         aria-label="Condition operator"
         disabled={!canEdit}
         value={condition.operator}
+        className="h-7.5 text-xs px-2"
         onChange={event => onOperatorChange(index, event.target.value as Condition['operator'])}
       >
         {!operatorKnown && (
@@ -124,6 +126,7 @@ const ConditionRow = memo(function ConditionRow({
           disabled={!canEdit}
           value={condition.value}
           list={isListOperator(condition.operator)}
+          compact
           onChange={value => onValueChange(index, value)}
         />
       )}
@@ -132,15 +135,17 @@ const ConditionRow = memo(function ConditionRow({
           aria-label={`Remove condition ${index + 1}`}
           variant="ghost"
           size="icon"
-          className="justify-self-end text-muted-foreground hover:text-destructive"
+          className="h-7 w-7 justify-self-end text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           onClick={() => onRemove(index)}
         >
-          <Trash2 aria-hidden="true" />
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       )}
       {(condition.operator === 'NE' || condition.operator === 'NOT_IN') && (
-        <p className="px-1 text-[11px] text-muted-foreground sm:col-span-5">
-          Does not equal and not in only match recognized values. Missing or unmapped values evaluate to unknown and do not match; use “is missing” or “is unmapped” to match them explicitly.
+        <p className="px-1 text-[10.5px] leading-tight text-muted-foreground sm:col-span-5">
+          Does not equal and not in only match recognized values. Missing or unmapped values
+          evaluate to unknown and do not match; use “is missing” or “is unmapped” to match them
+          explicitly.
         </p>
       )}
     </div>
@@ -192,13 +197,14 @@ export function RuleConditionsEditor({
   return (
     <AuthoringFieldset
       legend="Conditions"
+      compact
       aside={
         <LimitCounter count={rule.conditions.length} limit={LIMITS.conditions} noun="conditions" />
       }
       description={
         rule.conditions.length === 0
           ? 'No conditions — this rule applies to every alert.'
-          : 'All conditions must match. Missing or unmapped values never satisfy value or negative comparisons; use “is missing” or “is unmapped” to match them.'
+          : 'All conditions must match. Missing or unmapped values evaluate to unknown.'
       }
     >
       {rule.conditions.map((condition, n) => (
@@ -220,7 +226,7 @@ export function RuleConditionsEditor({
           <Button
             size="sm"
             variant="outline"
-            className="h-10 sm:h-9"
+            className="h-7.5 px-2.5 text-xs gap-1 border-dashed hover:border-primary/50"
             disabled={atLimit || !fields.length}
             onClick={() =>
               onChange({
@@ -228,7 +234,7 @@ export function RuleConditionsEditor({
               })
             }
           >
-            <Plus aria-hidden="true" />
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Add condition
           </Button>
           {atLimit && <Hint>Condition limit reached. Remove one to add another.</Hint>}
