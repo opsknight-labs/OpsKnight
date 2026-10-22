@@ -166,9 +166,7 @@ export async function prepareAutomation(
           phaseStarted = now;
         }
         const elapsedMs = now - evalStart;
-        const evaluationTimeoutLimit =
-          Number(process.env.AUTOMATION_EVALUATION_TIMEOUT_MS) || LIMITS.evaluationMs;
-        if (elapsedMs > evaluationTimeoutLimit) {
+        if (elapsedMs > LIMITS.evaluationMs) {
           logger.warn('automation.evaluation_timeout', {
             ...timeoutPosition,
             elapsedMs,

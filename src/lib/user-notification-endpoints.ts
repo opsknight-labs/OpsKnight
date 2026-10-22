@@ -42,16 +42,29 @@ export async function syncUserNotificationEndpoint(
   // the endpoint-health migration. Preserve delivery until the new client is live.
   if (!store.userNotificationEndpoint) return { available: true, status: 'UNVERIFIED' };
   const addressHash = notificationEndpointAddressHash(input.channel, input.address);
-  const endpoint = await store.userNotificationEndpoint.upsert({
-    where: { userId_channel: { userId: input.userId, channel: input.channel } },
-    create: {
-      userId: input.userId,
-      channel: input.channel,
-      addressHash,
-      status: 'UNVERIFIED',
-    },
-    update: {},
-  });
+  const endpoint =
+    typeof store.userNotificationEndpoint.upsert === 'function'
+      ? await store.userNotificationEndpoint.upsert({
+          where: { userId_channel: { userId: input.userId, channel: input.channel } },
+          create: {
+            userId: input.userId,
+            channel: input.channel,
+            addressHash,
+            status: 'UNVERIFIED',
+          },
+          update: {},
+        })
+      : (await store.userNotificationEndpoint.findUnique({
+          where: { userId_channel: { userId: input.userId, channel: input.channel } },
+        })) ??
+        (await store.userNotificationEndpoint.create({
+          data: {
+            userId: input.userId,
+            channel: input.channel,
+            addressHash,
+            status: 'UNVERIFIED',
+          },
+        }));
   if (endpoint.addressHash !== addressHash) {
     await store.userNotificationEndpoint.update({
       where: { id: endpoint.id },
