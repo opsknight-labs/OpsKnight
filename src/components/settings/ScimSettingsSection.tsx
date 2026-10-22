@@ -63,6 +63,7 @@ export default function ScimSettingsSection({
   const operationPending = useRef(false);
   const connectionEpoch = useRef(0);
   const [loading, setLoading] = useState(true);
+  const [overviewLoading, setOverviewLoading] = useState(true);
   const [observedAt, setObservedAt] = useState(0);
   const [error, setError] = useState('');
   const [drift, setDrift] = useState<Data<ReturnType<typeof scimDriftAction>>>([]);
@@ -99,7 +100,10 @@ export default function ScimSettingsSection({
         if (current) setError(e instanceof Error ? e.message : 'Cannot load connections.');
       })
       .finally(() => {
-        if (current) setLoading(false);
+        if (current) {
+          setLoading(false);
+          setOverviewLoading(false);
+        }
       });
     return () => {
       current = false;
@@ -168,6 +172,7 @@ export default function ScimSettingsSection({
       await operation();
       if (epoch !== connectionEpoch.current) return;
       setNotice(message);
+      setOverviewLoading(true);
       setReload(v => v + 1);
     } catch (e) {
       if (epoch === connectionEpoch.current)
@@ -244,7 +249,7 @@ export default function ScimSettingsSection({
           ))}
         </select>
       </label>
-      {loading && (
+      {(overviewLoading || (loading && (tab === 'Users & Groups' || tab === 'Activity'))) && (
         <p role="status" className="text-sm text-muted-foreground">
           Loading provisioning data…
         </p>
@@ -301,7 +306,7 @@ export default function ScimSettingsSection({
             sign-in within the last two hours.
           </p>
           <form
-            key={selected + reload}
+            key={`${selected}:${reload}:${Boolean(connector)}`}
             className="grid gap-3 sm:grid-cols-2"
             onSubmit={e => {
               e.preventDefault();
@@ -333,96 +338,106 @@ export default function ScimSettingsSection({
               );
             }}
           >
-            <label className="text-sm">
-              Connection name
-              <input
-                name="name"
-                className={fieldClass}
-                required
-                maxLength={100}
-                defaultValue={connector?.name}
-              />
-            </label>
-            <label className="text-sm">
-              Provider
-              <select
-                name="provider"
-                aria-label="Provider"
-                className={fieldClass}
-                defaultValue={connector?.provider ?? 'GENERIC'}
-              >
-                <option value="ENTRA">Microsoft Entra</option>
-                <option value="OKTA">Okta</option>
-                <option value="GENERIC">Generic SCIM 2.0</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              Entra tenant ID
-              <input
-                name="tenantId"
-                className={fieldClass}
-                defaultValue={connector?.tenantId ?? ''}
-              />
-            </label>
-            <label className="text-sm">
-              Registered OIDC issuer
-              <input
-                name="issuer"
-                type="url"
-                className={fieldClass}
-                defaultValue={connector?.oidcIssuer ?? ''}
-              />
-            </label>
-            <label className="text-sm">
-              Registered OIDC client ID
-              <input
-                name="client"
-                className={fieldClass}
-                defaultValue={connector?.oidcClientId ?? ''}
-              />
-            </label>
-            <div className="space-y-2 text-sm">
-              <label className="flex gap-2">
-                <input type="checkbox" name="enabled" defaultChecked={connector?.enabled ?? true} />
-                Enable provisioning
-              </label>
-              <label className="flex gap-2">
+            <fieldset
+              disabled={busy || overviewLoading || !connector}
+              className="col-span-full grid min-w-0 gap-3 border-0 p-0 sm:grid-cols-2"
+            >
+              <legend className="sr-only">Connection configuration</legend>
+              <label className="text-sm">
+                Connection name
                 <input
-                  type="checkbox"
-                  name="trusted"
-                  defaultChecked={connector?.trustedLinkEnabled}
+                  name="name"
+                  className={fieldClass}
+                  required
+                  maxLength={100}
+                  defaultValue={connector?.name}
                 />
-                Trust immutable Entra object and tenant identity for first SSO linking
               </label>
-              <label className="flex gap-2">
-                <input type="checkbox" name="new" />
-                Save as a new connection
+              <label className="text-sm">
+                Provider
+                <select
+                  name="provider"
+                  aria-label="Provider"
+                  className={fieldClass}
+                  defaultValue={connector?.provider ?? 'GENERIC'}
+                >
+                  <option value="ENTRA">Microsoft Entra</option>
+                  <option value="OKTA">Okta</option>
+                  <option value="GENERIC">Generic SCIM 2.0</option>
+                </select>
               </label>
-            </div>
-            <p className="text-xs text-muted-foreground sm:col-span-2">
-              Trusted first linking requires Microsoft Entra, the exact tenant issuer
-              https://login.microsoftonline.com/TENANT-ID/v2.0 and the client ID registered for
-              OpsKnight SSO. Immutable oid and tid claims must match; email alone never links
-              accounts. Keep this disabled when those claims cannot be verified and use explicit
-              account approval.
-            </p>
-            <fieldset className="space-y-2 text-sm sm:col-span-2">
-              <legend>Profile attributes managed by this connection</legend>
-              {['name', 'email', 'title', 'department', 'photos'].map(field => (
-                <label key={field} className="mr-3 inline-flex gap-2">
+              <label className="text-sm">
+                Entra tenant ID
+                <input
+                  name="tenantId"
+                  className={fieldClass}
+                  defaultValue={connector?.tenantId ?? ''}
+                />
+              </label>
+              <label className="text-sm">
+                Registered OIDC issuer
+                <input
+                  name="issuer"
+                  type="url"
+                  className={fieldClass}
+                  defaultValue={connector?.oidcIssuer ?? ''}
+                />
+              </label>
+              <label className="text-sm">
+                Registered OIDC client ID
+                <input
+                  name="client"
+                  className={fieldClass}
+                  defaultValue={connector?.oidcClientId ?? ''}
+                />
+              </label>
+              <div className="space-y-2 text-sm">
+                <label className="flex gap-2">
                   <input
-                    name="profileField"
                     type="checkbox"
-                    value={field}
-                    defaultChecked={connector?.profileFields.includes(field) ?? true}
+                    name="enabled"
+                    defaultChecked={connector?.enabled ?? true}
                   />
-                  {field}
+                  Enable provisioning
                 </label>
-              ))}
+                <label className="flex gap-2">
+                  <input
+                    type="checkbox"
+                    name="trusted"
+                    defaultChecked={connector?.trustedLinkEnabled}
+                  />
+                  Trust immutable Entra object and tenant identity for first SSO linking
+                </label>
+                <label className="flex gap-2">
+                  <input type="checkbox" name="new" />
+                  Save as a new connection
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Trusted first linking requires Microsoft Entra, the exact tenant issuer
+                https://login.microsoftonline.com/TENANT-ID/v2.0 and the client ID registered for
+                OpsKnight SSO. Immutable oid and tid claims must match; email alone never links
+                accounts. Keep this disabled when those claims cannot be verified and use explicit
+                account approval.
+              </p>
+              <fieldset className="space-y-2 text-sm sm:col-span-2">
+                <legend>Profile attributes managed by this connection</legend>
+                {['name', 'email', 'title', 'department', 'photos'].map(field => (
+                  <label key={field} className="mr-3 inline-flex gap-2">
+                    <input
+                      name="profileField"
+                      type="checkbox"
+                      value={field}
+                      defaultChecked={connector?.profileFields.includes(field) ?? true}
+                    />
+                    {field}
+                  </label>
+                ))}
+              </fieldset>
+              <Button type="submit" disabled={busy}>
+                Save connection
+              </Button>
             </fieldset>
-            <Button type="submit" disabled={busy}>
-              Save connection
-            </Button>
           </form>
           <div className="rounded-lg border p-4 text-sm space-y-2">
             <h4 className="font-semibold">Provider setup</h4>

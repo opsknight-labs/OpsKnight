@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 const actions = vi.hoisted(() => ({
   scimOverviewAction: vi.fn(),
@@ -117,4 +117,39 @@ it('requires a refreshed preview after legacy membership selections change', asy
     })
   );
   await waitFor(() => expect(approval).toBeEnabled());
+});
+
+it('keeps connection inputs disabled until their initial defaults are loaded', async () => {
+  let resolveOverview!: (value: unknown) => void;
+  actions.scimOverviewAction.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        resolveOverview = resolve;
+      })
+  );
+  render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  expect(screen.getByLabelText('Connection name')).toBeDisabled();
+  expect(screen.getByLabelText('Save as a new connection')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save connection' })).toBeDisabled();
+  await act(async () =>
+    resolveOverview([
+      { ...base, id: 'legacy', name: 'Loaded connection', legacyCredentialSource: 'ENV' },
+    ])
+  );
+  expect(screen.getByLabelText('Connection name')).toBeEnabled();
+  expect(screen.getByLabelText('Connection name')).toHaveValue('Loaded connection');
+  fireEvent.click(screen.getByLabelText('Save as a new connection'));
+  expect(screen.getByLabelText('Save as a new connection')).toBeChecked();
+});
+
+it('does not keep connection editing blocked by a cancelled directory request', async () => {
+  actions.scimDirectoryAction.mockImplementationOnce(() => new Promise(() => {}));
+  render(<ScimSettingsSection initialConfig={config} tenantUrl="https://ops.test/api/scim/v2" />);
+  await screen.findByRole('option', { name: 'Legacy (GENERIC)' });
+  fireEvent.click(screen.getByRole('button', { name: 'Users & Groups' }));
+  await waitFor(() => expect(actions.scimDirectoryAction).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+  expect(screen.getByLabelText('Connection name')).toBeEnabled();
+  expect(screen.queryByText('Loading provisioning data…')).not.toBeInTheDocument();
 });

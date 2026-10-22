@@ -22,6 +22,7 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
   const section = page.getByRole('region', { name: 'SCIM Provisioning', exact: true });
   await expect(section.getByRole('heading', { name: 'SCIM Provisioning' })).toBeVisible();
   await section.getByRole('button', { name: 'Connections', exact: true }).click();
+  await expect(section.getByLabel('Connection name', { exact: true })).toBeEnabled();
   const name = `Browser SCIM ${info.project.name} ${Date.now()}`;
   await section.getByLabel('Connection name', { exact: true }).fill(name);
   await section.getByLabel('Provider', { exact: true }).selectOption('ENTRA');

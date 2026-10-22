@@ -327,3 +327,20 @@ Client RSS delta was 52,084,736 bytes with 10 database connections. The two-app
 PostgreSQL stop/restart check returned retryable 503s without fallback or partial
 writes and recovered successfully. The baseline harness again observed its three
 expected old-route failures and three passing current-route regressions.
+
+A subsequent Firefox CI run reported a native checkbox interaction failure.
+Inspection found that the initial connector fetch could still update an editable
+form's defaults/layout; the failed run did not include a trace proving the exact cause. The connection fieldset
+is now disabled until that fetch completes (and during writes). A deferred-fetch UI
+regression verifies that edits cannot begin early and that the new-connection checkbox
+retains its checked state after loading. A separate regression verifies that cancelling
+a directory fetch does not disable the connection form. All 169 unit/API/auth/UI
+tests pass. Browser assertions remain native clicks and
+state checks; no forced clicks or broad retries are added.
+
+The final source passed Chromium, Firefox and WebKit against a warmed isolated
+development server (three journeys, 1.7 minutes). A preceding cold-server Chromium
+run timed out during login before reaching SCIM; its Firefox and WebKit journeys
+passed. The earlier optimized production build and three-browser production
+journeys cover the preceding deep-audit implementation; final-head CI recompiles
+and exercises the readiness guard against the production server.
