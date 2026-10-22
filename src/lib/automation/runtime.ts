@@ -549,17 +549,12 @@ export async function persistAutomation(
         const jobJson = JSON.stringify(jobPayload);
         if (tags.length) {
           await tx.$executeRaw(Prisma.sql`
-            WITH ins_tags_def AS (
+            WITH all_tags AS (
               INSERT INTO "Tag" ("id", "name")
               SELECT gen_random_uuid()::text, name
-              FROM unnest(${tags}::text[]) AS name
-              ON CONFLICT ("name") DO NOTHING
-              RETURNING id, name
-            ),
-            all_tags AS (
-              SELECT id FROM ins_tags_def
-              UNION
-              SELECT id FROM "Tag" WHERE name = ANY(${tags}::text[])
+              FROM (SELECT DISTINCT unnest(${tags}::text[]) AS name ORDER BY name) AS sorted_tags
+              ON CONFLICT ("name") DO UPDATE SET "name" = EXCLUDED."name"
+              RETURNING id
             ),
             ins_tags AS (
               INSERT INTO "IncidentTag" ("id", "incidentId", "tagId")
@@ -648,17 +643,12 @@ export async function persistAutomation(
       } else {
         if (tags.length) {
           await tx.$executeRaw(Prisma.sql`
-            WITH ins_tags_def AS (
+            WITH all_tags AS (
               INSERT INTO "Tag" ("id", "name")
               SELECT gen_random_uuid()::text, name
-              FROM unnest(${tags}::text[]) AS name
-              ON CONFLICT ("name") DO NOTHING
-              RETURNING id, name
-            ),
-            all_tags AS (
-              SELECT id FROM ins_tags_def
-              UNION
-              SELECT id FROM "Tag" WHERE name = ANY(${tags}::text[])
+              FROM (SELECT DISTINCT unnest(${tags}::text[]) AS name ORDER BY name) AS sorted_tags
+              ON CONFLICT ("name") DO UPDATE SET "name" = EXCLUDED."name"
+              RETURNING id
             ),
             ins_tags AS (
               INSERT INTO "IncidentTag" ("id", "incidentId", "tagId")

@@ -45,7 +45,7 @@ export const options = {
     http_req_failed: [
       __ENV.AUTOMATION_RECOVERY_DRILL === 'true' && __ENV.AUTOMATION_LOAD_PROFILE === 'live-small'
         ? 'rate<0.25'
-        : 'rate<0.05',
+        : 'rate<0.01',
     ],
     dropped_iterations: ['count==0'],
   },
