@@ -241,6 +241,72 @@ export const AutomationOverview = memo(function AutomationOverview({
         </div>
       </dl>
 
+      {/* Comparative Parity / Alignment Bar */}
+      {evaluated > 0 && (
+        <section
+          aria-label="Behavior alignment and routing parity"
+          className="rounded-xl border border-border/80 bg-card p-3.5 shadow-xs space-y-2.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="flex items-center gap-1.5 font-semibold text-foreground">
+              <GitCompare className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              Routing Parity &amp; Behavior Alignment
+            </span>
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {parityPct ?? '0'}% aligned · {same.toLocaleString()} identical /{' '}
+              {diffRoutes.toLocaleString()} divergent routes
+            </span>
+          </div>
+
+          <div
+            className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted/80"
+            role="progressbar"
+            aria-valuenow={parseFloat(parityPct ?? '0')}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Routing parity: ${parityPct ?? '0'}%`}
+          >
+            <div
+              className="bg-emerald-500 transition-all duration-300"
+              style={{ width: `${Math.min(100, Math.max(0, (same / evaluated) * 100))}%` }}
+              title={`Identical: ${same} (${parityPct}%)`}
+            />
+            <div
+              className="bg-indigo-500 transition-all duration-300"
+              style={{ width: `${Math.min(100, Math.max(0, (diffRoutes / evaluated) * 100))}%` }}
+              title={`Divergent routes: ${diffRoutes}`}
+            />
+            {errors > 0 && (
+              <div
+                className="bg-amber-500 transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.max(0, (errors / evaluated) * 100))}%` }}
+                title={`Errors/fallbacks: ${errors}`}
+              />
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
+                <span>Identical routes ({same.toLocaleString()})</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-indigo-500 inline-block" />
+                <span>Divergent routes ({diffRoutes.toLocaleString()})</span>
+              </span>
+              {errors > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />
+                  <span>Errors / fallbacks ({errors})</span>
+                </span>
+              )}
+            </div>
+            <span>Based on {evaluated.toLocaleString()} shadow evaluations</span>
+          </div>
+        </section>
+      )}
+
       {/* Main Split: Readiness & Governance vs Action Hub */}
       <div className="grid gap-3.5 lg:grid-cols-3">
         <div className="lg:col-span-2">

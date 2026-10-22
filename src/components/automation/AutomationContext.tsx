@@ -1,6 +1,6 @@
 'use client';
 import { useId, useMemo, useState } from 'react';
-import { ChevronDown, Database, Plus, Search, Sparkles } from 'lucide-react';
+import { ChevronDown, Database, Plus, RotateCcw, Search, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -136,6 +136,23 @@ export function AutomationContext({
       ),
     [draft.fields, contextSearch]
   );
+  const ruleCountsByFieldKey = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const field of draft.fields) {
+      let count = 0;
+      for (const rule of draft.rules) {
+        const conditionMatch = rule.conditions.some(c => c.fieldKey === field.key);
+        const actionMatch = rule.actions.some(
+          a => 'fieldKey' in a && (a as { fieldKey?: string }).fieldKey === field.key
+        );
+        if (conditionMatch || actionMatch) {
+          count++;
+        }
+      }
+      map.set(field.key, count);
+    }
+    return map;
+  }, [draft.fields, draft.rules]);
   const selected = visibleFields.find(field => field.key === selectedKey) ?? visibleFields[0];
   const stableUpdateField = useStableCallback(updateField);
   const stableDeleteField = useStableCallback(setDeleteField);
@@ -272,18 +289,46 @@ export function AutomationContext({
         )}
       >
         <div className="min-w-0 space-y-3.5">
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              aria-label="Search context fields"
-              placeholder="Search context fields…"
-              value={contextSearch}
-              onChange={event => setContextSearch(event.target.value)}
-              className="search-input h-8.5 !pl-8 text-xs bg-background"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                aria-label="Search context fields"
+                placeholder="Search context fields…"
+                value={contextSearch}
+                onChange={event => setContextSearch(event.target.value)}
+                className="search-input h-8.5 !pl-8 !pr-8 text-xs bg-background"
+              />
+              {contextSearch && (
+                <button
+                  type="button"
+                  aria-label="Clear context search"
+                  onClick={() => setContextSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            {data.canEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="New context field"
+                className="h-8.5 gap-1.5 text-xs font-medium shrink-0"
+                onClick={() => {
+                  const formEl = document.getElementById(`${formId}-title`);
+                  formEl?.scrollIntoView({ behavior: 'smooth' });
+                  document.getElementById(`${formId}-label`)?.focus();
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                New field
+              </Button>
+            )}
           </div>
           {draft.fields.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/70 p-8 text-center bg-card">
@@ -312,14 +357,24 @@ export function AutomationContext({
                     key={field.key}
                     field={field}
                     selected={selected?.key === field.key}
+                    ruleCount={ruleCountsByFieldKey.get(field.key) ?? 0}
                     onSelect={setSelectedKey}
                   />
                 ))}
               </ul>
               {!visibleFields.length && (
-                <p className="px-3.5 py-4 text-xs text-muted-foreground">
-                  No matching context fields.
-                </p>
+                <div className="flex flex-col items-center justify-center gap-2 p-6 text-center text-xs text-muted-foreground">
+                  <p>No matching context fields for &ldquo;{contextSearch}&rdquo;.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs font-medium gap-1.5"
+                    onClick={() => setContextSearch('')}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Clear search
+                  </Button>
+                </div>
               )}
             </div>
           )}

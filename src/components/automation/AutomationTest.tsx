@@ -1,11 +1,12 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { ChevronDown, FlaskConical, Play, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Code2, FlaskConical, Play, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 
 import { ManualSample } from './ManualSample';
 import { TraceDetail } from './TraceDetail';
@@ -13,6 +14,94 @@ import { Hint, NativeSelect, textareaClass } from './authoring/primitives';
 
 import type { testAutomation } from '@/lib/automation/testing';
 import type { Data } from './presentation-types';
+
+const SIMULATION_PRESETS = [
+  {
+    id: 'k8s-crashloop',
+    name: 'K8s CrashLoopBackOff',
+    description: 'Production pod crashloop in payment-service',
+    sample: {
+      event_action: 'trigger',
+      dedup_key: 'k8s-pod-crashloop-payment-0',
+      payload: {
+        summary: 'Pod payment-service-worker in CrashLoopBackOff',
+        severity: 'critical',
+        source: 'kubernetes',
+        custom_details: {
+          component: 'payment-service',
+          environment: 'production',
+          cluster: 'prod-us-east-1',
+          tier: 'backend',
+          team: 'payments',
+          restart_count: 14,
+          exit_code: 137,
+          reason: 'OOMKilled',
+        },
+      },
+    },
+    providerSample: {
+      event: 'pod_failed',
+      namespace: 'payments',
+      pod_name: 'payment-service-worker-7d9f8c6b-x9z2a',
+      cluster: 'prod-us-east-1',
+    },
+  },
+  {
+    id: 'datadog-latency',
+    name: 'Datadog Latency Spike (P1)',
+    description: 'p99 latency > 2.5s on checkout API endpoint',
+    sample: {
+      event_action: 'trigger',
+      dedup_key: 'datadog-checkout-p99-latency',
+      payload: {
+        summary: 'High latency detected: p99 > 2500ms on POST /api/v1/checkout',
+        severity: 'error',
+        source: 'datadog',
+        custom_details: {
+          component: 'checkout-api',
+          environment: 'production',
+          priority: 'P1',
+          tier: 'frontend',
+          team: 'checkout',
+          metric: 'trace.http.request.duration.p99',
+          value: 2840,
+          threshold: 2500,
+        },
+      },
+    },
+    providerSample: {
+      alert_type: 'error',
+      metric: 'trace.http.request.duration.p99',
+      tags: ['env:production', 'service:checkout-api', 'team:checkout'],
+    },
+  },
+  {
+    id: 'staging-worker',
+    name: 'Staging Memory Warning',
+    description: 'Staging async worker memory usage reached 85%',
+    sample: {
+      event_action: 'trigger',
+      dedup_key: 'staging-worker-memory-warning',
+      payload: {
+        summary: 'Staging async worker memory usage reached 85%',
+        severity: 'warning',
+        source: 'cloudwatch',
+        custom_details: {
+          component: 'async-worker',
+          environment: 'staging',
+          tier: 'worker',
+          team: 'platform',
+          memory_used_percent: 85.4,
+        },
+      },
+    },
+    providerSample: {
+      AlarmName: 'staging-worker-memory-high',
+      Namespace: 'AWS/ECS',
+      Trigger: { MetricName: 'MemoryUtilization', Threshold: 80 },
+    },
+  },
+] as const;
 
 function recentAlertLabel(alert: Data['alerts'][number]) {
   const payload = (
@@ -61,6 +150,18 @@ export function AutomationTest({
       : null;
   const errors = result?.issues.filter(issue => issue.level === 'ERROR').length ?? 0;
 
+  const formatJson = (text: string, setter: (val: string) => void, label: string) => {
+    try {
+      const parsed = JSON.parse(text);
+      setter(JSON.stringify(parsed, null, 2));
+      notify.success(`Formatted ${label} JSON`);
+    } catch {
+      notify.error(`Invalid ${label} JSON`, {
+        description: 'Please check JSON syntax before formatting.',
+      });
+    }
+  };
+
   return (
     <div className="grid min-w-0 gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section
@@ -94,6 +195,36 @@ export function AutomationTest({
             provide below.
           </p>
         )}
+
+        {/* Quick Simulation Presets */}
+        <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-foreground">Simulation Presets</span>
+            <span className="text-[10px] text-muted-foreground">1-click test events</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {SIMULATION_PRESETS.map(preset => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[11px] font-medium gap-1.5 bg-background shadow-2xs hover:border-primary/50"
+                onClick={() => {
+                  setSelectedAlertId('');
+                  setSample(JSON.stringify(preset.sample, null, 2));
+                  setProviderSample(JSON.stringify(preset.providerSample, null, 2));
+                  notify.info(`Loaded preset: ${preset.name}`, {
+                    description: preset.description,
+                  });
+                }}
+              >
+                <Sparkles className="h-3 w-3 text-primary" aria-hidden="true" />
+                {preset.name}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         <div className="grid gap-2.5 sm:grid-cols-2">
           <div className="space-y-1">
@@ -200,12 +331,24 @@ export function AutomationTest({
           </summary>
           <div className="grid gap-3 border-t border-border/70 p-3 xl:grid-cols-2">
             <div className="min-w-0 space-y-1">
-              <Label
-                htmlFor={`${id}-event`}
-                className="text-[11px] font-medium text-muted-foreground"
-              >
-                Paste sample event · Normalized event
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor={`${id}-event`}
+                  className="text-[11px] font-medium text-muted-foreground"
+                >
+                  Normalized event JSON
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  onClick={() => formatJson(sample, setSample, 'Normalized event')}
+                >
+                  <Code2 className="mr-1 h-3 w-3" />
+                  Format JSON
+                </Button>
+              </div>
               <textarea
                 id={`${id}-event`}
                 spellCheck={false}
@@ -215,12 +358,24 @@ export function AutomationTest({
               />
             </div>
             <div className="min-w-0 space-y-1">
-              <Label
-                htmlFor={`${id}-provider`}
-                className="text-[11px] font-medium text-muted-foreground"
-              >
-                Provider input
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor={`${id}-provider`}
+                  className="text-[11px] font-medium text-muted-foreground"
+                >
+                  Provider input JSON
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  onClick={() => formatJson(providerSample, setProviderSample, 'Provider')}
+                >
+                  <Code2 className="mr-1 h-3 w-3" />
+                  Format JSON
+                </Button>
+              </div>
               <textarea
                 id={`${id}-provider`}
                 spellCheck={false}
@@ -280,6 +435,64 @@ export function AutomationTest({
               {result.goldenResults.filter(f => f.expected === f.actual).length}/
               {result.goldenResults.length} semantic fixtures passed
             </p>
+
+            {result.result && (
+              <div className="overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-b from-primary/10 via-card to-card p-3.5 shadow-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Simulation Decision
+                      </h4>
+                      <p className="text-sm font-bold text-foreground">
+                        {policyName ??
+                          (outcome?.type === 'NO_ESCALATION'
+                            ? 'No Escalation (Suppressed)'
+                            : 'Service Default Escalation')}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="border-primary/30 bg-primary/10 text-primary font-mono text-[10px]"
+                  >
+                    {result.durationMs.toFixed(2)} ms
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                      Routing Match
+                    </span>
+                    <span className="font-medium text-foreground truncate block mt-0.5">
+                      {result.result.matchedRule?.name ?? 'Default Fallback'}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                      Priority / Urgency
+                    </span>
+                    <span className="font-medium text-foreground truncate block mt-0.5">
+                      {result.classification?.priority ?? 'Unset'} ·{' '}
+                      {result.classification?.urgency ?? 'Normal'}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/60 p-2 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                      Context Writes
+                    </span>
+                    <span className="font-medium text-foreground truncate block mt-0.5">
+                      {result.result.writes.length}{' '}
+                      {result.result.writes.length === 1 ? 'write' : 'writes'} applied
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <dl className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs">

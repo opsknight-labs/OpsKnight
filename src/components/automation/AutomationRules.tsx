@@ -4,6 +4,8 @@ import {
   memo,
   useId,
   useMemo,
+  useRef,
+  useEffect,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -16,8 +18,10 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  Copy,
   GripVertical,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
 } from 'lucide-react';
@@ -93,6 +97,7 @@ type RuleRowProps = {
   position: number;
   expanded: boolean;
   canEdit: boolean;
+  query?: string;
   fields: Field[];
   fieldsByKey: Map<string, Field>;
   policies: Data['policies'];
@@ -100,6 +105,7 @@ type RuleRowProps = {
   issues: LintIssue[];
   onToggle: (id: string) => void;
   onUpdate: (id: string, update: Partial<Rule>) => void;
+  onDuplicate: (id: string) => void;
   onMove: (id: string, direction: number) => void;
   onRemove: (id: string) => void;
   onDragStart: (id: string) => void;
@@ -107,12 +113,39 @@ type RuleRowProps = {
   onDrop: (targetId: string) => void;
 };
 
+function HighlightText({ text, query }: { text: string; query?: string }) {
+  if (!query || !query.trim()) return <>{text}</>;
+  const trimmed = query.trim();
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // eslint-disable-next-line security/detect-non-literal-regexp -- query is regex-escaped
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  const parts = text.split(regex);
+  if (parts.length <= 1) return <>{text}</>;
+  return (
+    <>
+      {parts.map((part, index) =>
+        regex.test(part) ? (
+          <mark
+            key={index}
+            className="rounded-xs bg-amber-400/30 px-0.5 font-medium text-inherit dark:bg-amber-400/20"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
 const RuleRow = memo(
   function RuleRow({
     rule,
     position,
     expanded,
     canEdit,
+    query,
     fields,
     fieldsByKey,
     policies,
@@ -120,6 +153,7 @@ const RuleRow = memo(
     issues,
     onToggle,
     onUpdate,
+    onDuplicate,
     onMove,
     onRemove,
     onDragStart,
@@ -164,7 +198,7 @@ const RuleRow = memo(
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
               <span className="text-xs sm:text-sm font-semibold tracking-tight text-foreground">
-                {rule.name}
+                <HighlightText text={rule.name} query={query} />
               </span>
 
               <span
@@ -191,7 +225,10 @@ const RuleRow = memo(
             </span>
 
             <span className="mt-0.5 line-clamp-1 block text-xs text-muted-foreground">
-              {ruleSummary(rule, fieldsByKey, policies, destinations)}
+              <HighlightText
+                text={ruleSummary(rule, fieldsByKey, policies, destinations)}
+                query={query}
+              />
             </span>
           </span>
 
@@ -319,6 +356,16 @@ const RuleRow = memo(
                       <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                     <Button
+                      aria-label={`Duplicate ${rule.name}`}
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Duplicate rule"
+                      onClick={() => onDuplicate(rule.id)}
+                    >
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
                       aria-label={`Delete ${rule.name}`}
                       variant="ghost"
                       size="icon"
@@ -357,6 +404,7 @@ const RuleRow = memo(
     prev.position === next.position &&
     prev.expanded === next.expanded &&
     prev.canEdit === next.canEdit &&
+    prev.query === next.query &&
     prev.fields === next.fields &&
     prev.fieldsByKey === next.fieldsByKey &&
     prev.policies === next.policies &&
@@ -411,6 +459,26 @@ export function AutomationRules({
   const query = ruleSearch.trim().toLowerCase();
   const activeDraggedRuleRef = draggedRuleRef ?? draggedRule;
   const generateRule = propNewRule ?? newRule;
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName;
+      const isInputActive =
+        activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT';
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (event.key === '/' && !isInputActive) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const stableFields = useShallowStableArray(draft.fields);
   const fieldsByKey = useMemo(
@@ -464,6 +532,34 @@ export function AutomationRules({
   const onRemove = useStableCallback((id: string) => {
     const rule = draft.rules.find(candidate => candidate.id === id);
     if (rule) removeRule(rule);
+  });
+  const onDuplicate = useStableCallback((id: string) => {
+    if (draft.rules.length >= LIMITS.rules) {
+      notify.error('Rule limit reached', {
+        description: `Maximum limit of ${LIMITS.rules} rules reached.`,
+      });
+      return;
+    }
+    const index = draft.rules.findIndex(rule => rule.id === id);
+    if (index < 0) return;
+    const source = draft.rules[index];
+    const newId = `rule_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const clonedRule: Rule = {
+      ...source,
+      id: newId,
+      name: `${source.name} (Copy)`,
+      conditions: source.conditions.map(condition => ({ ...condition })),
+      actions: source.actions.map(action => ({ ...action })),
+    };
+    const rules = [...draft.rules];
+    rules.splice(index + 1, 0, clonedRule);
+    edit({ ...draft, rules });
+    setExpandedRules(previous =>
+      mobile ? new Set([clonedRule.id]) : new Set([...previous, clonedRule.id])
+    );
+    notify.success(`Duplicated "${source.name}"`, {
+      description: 'New copy created and expanded below.',
+    });
   });
   const onDragStart = useStableCallback((id: string) => {
     // eslint-disable-next-line react-hooks/immutability
@@ -540,12 +636,27 @@ export function AutomationRules({
             aria-hidden="true"
           />
           <Input
+            ref={searchInputRef}
             aria-label="Search rules"
-            placeholder="Search rules…"
+            placeholder="Search rules… (⌘K)"
             value={ruleSearch}
             onChange={event => setRuleSearch(event.target.value)}
-            className="search-input h-8 !pl-8 text-xs bg-background"
+            className="search-input h-8 !pl-8 !pr-9 text-xs bg-background"
           />
+          {!ruleSearch ? (
+            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-border/80 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground hidden sm:inline-block">
+              ⌘K
+            </kbd>
+          ) : (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setRuleSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          )}
         </div>
         <NativeSelect
           aria-label="Filter rules"
@@ -651,6 +762,7 @@ export function AutomationRules({
                     position={(phaseIndexes.get(rule.id) ?? 0) + 1}
                     expanded={expandedRules.has(rule.id)}
                     canEdit={data.canEdit}
+                    query={query}
                     fields={stableFields}
                     fieldsByKey={fieldsByKey}
                     policies={data.policies}
@@ -658,6 +770,7 @@ export function AutomationRules({
                     issues={issuesByRule.get(rule.id) ?? NO_ISSUES}
                     onToggle={onToggle}
                     onUpdate={onUpdate}
+                    onDuplicate={onDuplicate}
                     onMove={onMove}
                     onRemove={onRemove}
                     onDragStart={onDragStart}
@@ -667,11 +780,27 @@ export function AutomationRules({
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg border border-dashed border-border/70 py-4 text-center text-xs text-muted-foreground">
-                {phaseTotals[phase] === 0
-                  ? `No ${PHASES[phase].noun} rules yet.`
-                  : `No ${PHASES[phase].noun} rules match the current search or filter.`}
-              </p>
+              <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 py-6 text-center text-xs text-muted-foreground">
+                <p>
+                  {phaseTotals[phase] === 0
+                    ? `No ${PHASES[phase].noun} rules yet.`
+                    : `No ${PHASES[phase].noun} rules match the current search or filter.`}
+                </p>
+                {phaseTotals[phase] > 0 && (query || ruleStateFilter !== 'all') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs font-medium gap-1.5"
+                    onClick={() => {
+                      setRuleSearch('');
+                      setRuleStateFilter('all');
+                    }}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset filters
+                  </Button>
+                )}
+              </div>
             )}
             {data.canEdit && (
               <Button

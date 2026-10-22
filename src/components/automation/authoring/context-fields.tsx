@@ -28,10 +28,12 @@ export function fieldSources(field: Field) {
 export const FieldCatalogRow = memo(function FieldCatalogRow({
   field,
   selected,
+  ruleCount,
   onSelect,
 }: {
   field: Field;
   selected: boolean;
+  ruleCount?: number;
   onSelect: (key: string) => void;
 }) {
   const aliasCount = Object.keys(field.aliases).length;
@@ -71,10 +73,24 @@ export const FieldCatalogRow = memo(function FieldCatalogRow({
             {FIELD_TYPE_LABELS[field.type]}
           </span>
         </span>
-        <span className="text-[11px] text-muted-foreground">
-          {field.mappings.length} {field.mappings.length === 1 ? 'mapping' : 'mappings'}
-          {field.type === 'ENUM' && ` · ${field.allowedValues?.length ?? 0} choices`}
-          {aliasCount > 0 && ` · ${aliasCount} ${aliasCount === 1 ? 'alias' : 'aliases'}`}
+        <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span>
+            {field.mappings.length} {field.mappings.length === 1 ? 'mapping' : 'mappings'}
+            {field.type === 'ENUM' && ` · ${field.allowedValues?.length ?? 0} choices`}
+            {aliasCount > 0 && ` · ${aliasCount} ${aliasCount === 1 ? 'alias' : 'aliases'}`}
+          </span>
+          {ruleCount !== undefined && (
+            <span
+              className={cn(
+                'inline-flex items-center rounded px-1.5 py-px text-[10px] font-medium tracking-tight',
+                ruleCount > 0
+                  ? 'border border-primary/30 bg-primary/10 text-primary'
+                  : 'border border-border/70 bg-muted/60 text-muted-foreground'
+              )}
+            >
+              {ruleCount > 0 ? `Used in ${ruleCount} rule${ruleCount === 1 ? '' : 's'}` : 'Unused'}
+            </span>
+          )}
         </span>
         <span className="truncate font-mono text-[11px] text-muted-foreground">
           {sources.length ? sources.join(', ') : 'No source mapped'}
