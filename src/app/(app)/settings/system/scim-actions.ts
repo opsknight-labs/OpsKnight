@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { adminFailure } from '@/lib/scim/security/admin-errors';
 import prisma from '@/lib/prisma';
+import { getScimConfig } from '@/lib/scim';
 import { invalidateSessionSecurityProjections } from '@/lib/session-security-projection';
 import { assertAdmin } from '@/lib/rbac';
 import { getControlActor, lockControlActor } from '@/lib/auth-control/actor';
@@ -45,6 +46,7 @@ const credentialSchema = z
     scopes: z.array(z.enum(scopes)).min(1).max(4),
     lifetimeDays: z.number().int().min(1).max(365),
     overlapMinutes: z.number().int().min(0).max(1440),
+    acknowledgeLegacyCutover: z.boolean().default(false),
   })
   .strict();
 const pageSchema = z
@@ -82,8 +84,14 @@ export async function scimOverviewAction() {
         },
       },
     });
-    return JSON.parse(JSON.stringify(connectors)) as Array<
+    const { legacyCredentialSource } = await getScimConfig();
+    const summaries = connectors.map(connector => ({
+      ...connector,
+      legacyCredentialSource: connector.id === 'legacy' ? legacyCredentialSource : null,
+    }));
+    return JSON.parse(JSON.stringify(summaries)) as Array<
       Omit<(typeof connectors)[number], 'createdAt' | 'updatedAt' | 'credentials'> & {
+        legacyCredentialSource: 'DATABASE' | 'ENV' | null;
         createdAt: string;
         updatedAt: string;
         credentials: Array<
@@ -467,6 +475,14 @@ export async function bindExistingScimUserAction(input: unknown) {
     await runSerializableTransaction(async tx => {
       await lockControlActor(tx, actor);
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+      const collisions = await tx.$queryRaw<{ userId: string }[]>`
+        SELECT identity."userId" FROM "ScimIdentity" identity
+        JOIN "User" account ON account.id = identity."userId"
+        WHERE identity."connectorId" = ${connectorId} AND lower(account.email) = lower(${user.email}) LIMIT 1`;
+      if (collisions.length)
+        throw new Error(
+          'Administrator binding conflicts with an existing case-insensitive directory userName. Review the existing identity.'
+        );
       await tx.scimIdentity.create({ data: { connectorId, externalId, userId } });
       await tx.scimEvent.create({
         data: {
@@ -495,39 +511,47 @@ export async function scimDriftAction(input: unknown) {
       .object({ connectorId: idSchema, page: z.number().int().min(1).max(1000000) })
       .strict()
       .parse(input);
-    const bindings = await prisma.scimGroupTeamBinding.findMany({
-      where: { group: { connectorId } },
-      skip: (page - 1) * 25,
-      take: 25,
-      orderBy: { id: 'asc' },
-      include: {
-        group: { include: { memberships: { select: { userId: true } } } },
-        team: { include: { members: { select: { userId: true, scimGrant: true } } } },
-      },
-    });
-    const teamBindings = await prisma.scimGroupTeamBinding.findMany({
-      where: { teamId: { in: bindings.map(binding => binding.teamId) } },
-      include: { group: { include: { memberships: { select: { userId: true } } } } },
-    });
-    return bindings.map(binding => {
-      const actual = new Set(binding.team.members.map(m => m.userId));
-      const desired = new Set(
-        teamBindings
-          .filter(other => other.teamId === binding.teamId)
-          .flatMap(other => other.group.memberships.map(member => member.userId))
-      );
-      return {
-        unexpectedDirectoryGrants: binding.team.members.filter(
-          member => member.scimGrant && !desired.has(member.userId)
-        ).length,
-        independentManualMembers: binding.team.members.filter(member => !member.scimGrant).length,
-        groupId: binding.groupId,
-        teamId: binding.teamId,
-        group: binding.group.name,
-        team: binding.team.name,
-        missingMembers: binding.group.memberships.filter(m => !actual.has(m.userId)).length,
-      };
-    });
+    return await prisma.$queryRaw<
+      {
+        groupId: string;
+        teamId: string;
+        group: string;
+        team: string;
+        missingMembers: number;
+        unexpectedDirectoryGrants: number;
+        independentManualMembers: number;
+      }[]
+    >`
+      WITH page AS MATERIALIZED (
+        SELECT binding.id, binding."groupId", binding."teamId", directory.name AS "group", team.name AS team
+        FROM "ScimGroupTeamBinding" binding
+        JOIN "ScimGroup" directory ON directory.id = binding."groupId"
+        JOIN "Team" team ON team.id = binding."teamId"
+        WHERE directory."connectorId" = ${connectorId}
+        ORDER BY binding.id LIMIT 25 OFFSET ${(page - 1) * 25}
+      ), team_stats AS (
+        SELECT selected."teamId",
+          count(*) FILTER (WHERE grant_row."teamMemberId" IS NULL)::integer AS manual,
+          count(*) FILTER (WHERE grant_row."teamMemberId" IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM "ScimGroupTeamBinding" desired_binding
+            JOIN "ScimGroupMembership" desired ON desired."groupId" = desired_binding."groupId"
+            WHERE desired_binding."teamId" = selected."teamId" AND desired."userId" = member."userId"
+          ))::integer AS unexpected
+        FROM (SELECT DISTINCT "teamId" FROM page) selected
+        JOIN "TeamMember" member ON member."teamId" = selected."teamId"
+        LEFT JOIN "ScimTeamGrant" grant_row ON grant_row."teamMemberId" = member.id
+        GROUP BY selected."teamId"
+      )
+      SELECT page."groupId", page."teamId", page."group", page.team,
+        (SELECT count(*)::integer FROM "ScimGroupMembership" desired
+          WHERE desired."groupId" = page."groupId" AND NOT EXISTS (
+            SELECT 1 FROM "TeamMember" actual
+            WHERE actual."teamId" = page."teamId" AND actual."userId" = desired."userId"
+          )) AS "missingMembers",
+        coalesce(team_stats.unexpected, 0)::integer AS "unexpectedDirectoryGrants",
+        coalesce(team_stats.manual, 0)::integer AS "independentManualMembers"
+      FROM page LEFT JOIN team_stats ON team_stats."teamId" = page."teamId"
+      ORDER BY page.id`;
   } catch (error) {
     return await adminFailure(error);
   }

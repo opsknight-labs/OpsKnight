@@ -1,4 +1,5 @@
 /* eslint-disable security/detect-object-injection -- Attribute keys are restricted by strict SCIM schemas and explicit path allowlists. */
+import { Prisma } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
@@ -86,22 +87,48 @@ export async function users(request: NextRequest, id?: string) {
     const where = {
       connectorId: principal.connectorId,
       deletedAt: null,
-      ...(filter && 'scimExternalId' in filter
-        ? { externalId: filter.scimExternalId }
-        : filter
-          ? { user: { email: filter.email } }
-          : {}),
+      ...(filter && 'scimExternalId' in filter ? { externalId: filter.scimExternalId } : {}),
     };
-    const [rows, totalResults] = await prisma.$transaction([
-      prisma.scimIdentity.findMany({
-        where,
-        include: { user: true },
-        skip: startIndex - 1,
-        take: count,
-        orderBy: { userId: 'asc' },
-      }),
-      prisma.scimIdentity.count({ where }),
-    ]);
+    // Equality on lower(email) uses the expression index even for mixed-case local accounts.
+    // Page IDs in PostgreSQL: historical case-duplicates never create an unbounded JS list.
+    const [rows, totalResults] =
+      filter && 'email' in filter
+        ? await prisma.$transaction(
+            async tx => {
+              const predicate = Prisma.sql`FROM "ScimIdentity" identity
+            JOIN "User" account ON account.id = identity."userId"
+            WHERE identity."connectorId" = ${principal.connectorId}
+              AND identity."deletedAt" IS NULL AND lower(account.email) = lower(${filter.email})`;
+              const totals = await tx.$queryRaw<{ total: bigint }[]>(
+                Prisma.sql`SELECT count(*) AS total ${predicate}`
+              );
+              const ids =
+                count === 0
+                  ? []
+                  : await tx.$queryRaw<{ userId: string }[]>(Prisma.sql`
+            SELECT identity."userId" ${predicate} ORDER BY identity."userId"
+            LIMIT ${count} OFFSET ${startIndex - 1}`);
+              const resources = ids.length
+                ? await tx.scimIdentity.findMany({
+                    where: { ...where, userId: { in: ids.map(row => row.userId) } },
+                    include: { user: true },
+                    orderBy: { userId: 'asc' },
+                  })
+                : [];
+              return [resources, Number(totals[0].total)] as const;
+            },
+            { isolationLevel: 'RepeatableRead' }
+          )
+        : await prisma.$transaction([
+            prisma.scimIdentity.findMany({
+              where,
+              include: { user: true },
+              skip: startIndex - 1,
+              take: count,
+              orderBy: { userId: 'asc' },
+            }),
+            prisma.scimIdentity.count({ where }),
+          ]);
     return json({
       schemas: [SCIM_LIST_SCHEMA],
       totalResults,
@@ -148,6 +175,14 @@ export async function users(request: NextRequest, id?: string) {
           bound.deletedAt
             ? 'This identity was deleted. An administrator must approve restoration.'
             : 'Directory identity already exists. Query externalId and update the existing resource.',
+          'uniqueness'
+        );
+      const collisions = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "User" WHERE lower(email) = lower(${document.userName}) LIMIT 1`;
+      if (collisions.length)
+        throw new ScimFailure(
+          409,
+          'An account with this userName already exists. Explicit administrator binding is required.',
           'uniqueness'
         );
       const user = await tx.user.create({
@@ -224,8 +259,6 @@ export async function users(request: NextRequest, id?: string) {
             ? 'ACTIVE'
             : 'DISABLED';
     const active = status === 'ACTIVE';
-    const revoke =
-      (existing.status !== status && status === 'DISABLED') || existing.email !== document.userName;
     const nextProfile = profile(document);
     if (!document.photos && nextProfile.name === existing.name)
       nextProfile.avatarUrl = existing.avatarUrl ?? nextProfile.avatarUrl;
@@ -236,6 +269,17 @@ export async function users(request: NextRequest, id?: string) {
         connector.profileFields,
         requestedProfileFields(body, request.method)
       );
+    // A case-only representation change is not a new login identity.
+    if (nextProfile.email.toLowerCase() === existing.email.toLowerCase())
+      nextProfile.email = existing.email;
+    if (request.method !== 'DELETE' && nextProfile.email !== existing.email) {
+      const collisions = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "User" WHERE lower(email) = lower(${nextProfile.email}) AND id <> ${id} LIMIT 1`;
+      if (collisions.length)
+        throw new ScimFailure(409, 'An account with this userName already exists.', 'uniqueness');
+    }
+    const revoke =
+      (existing.status !== status && status === 'DISABLED') || existing.email !== nextProfile.email;
     // Profile updates never write role or roleSource. Security state and event commit together.
     const user = await updateUserSecurityState(
       id,

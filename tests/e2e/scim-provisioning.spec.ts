@@ -43,11 +43,18 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
       userName: `${Date.now()}-${info.project.name}@example.test`,
       externalId: `browser-user-${Date.now()}`,
       displayName: 'Browser directory user',
+      name: { givenName: 'Browser', familyName: 'User' },
       active: true,
     },
   });
   expect(createdUser.status()).toBe(201);
   const user = await createdUser.json();
+  const removedName = await request.patch(`/api/scim/v2/Users/${user.id}`, {
+    headers,
+    data: { Operations: [{ op: 'remove', path: 'displayName' }] },
+  });
+  expect(removedName.status()).toBe(200);
+  expect(await removedName.json()).toMatchObject({ displayName: 'Browser User', active: true });
   const groupName = `Browser directory group ${Date.now()}`;
   const createdGroup = await request.post('/api/scim/v2/Groups', {
     headers,
@@ -55,7 +62,7 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
       schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
       displayName: groupName,
       externalId: `browser-group-${Date.now()}`,
-      members: [{ value: user.id }],
+      members: [{ value: user.id, type: 'User' }],
     },
   });
   expect(createdGroup.status()).toBe(201);

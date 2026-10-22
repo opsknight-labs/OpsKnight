@@ -7,6 +7,8 @@ import prisma from '@/lib/prisma';
 import { getControlActor } from '@/lib/auth-control/actor';
 import {
   createScimCredentialAction,
+  bindExistingScimUserAction,
+  scimDriftAction,
   detachScimBindingAction,
   restoreScimIdentityAction,
   previewScimBindingAction,
@@ -128,6 +130,120 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
     expect(response.headers.get('location')).toBe(data.meta.location);
     expect(await prisma.scimIdentity.count({ where: { userId } })).toBe(1);
     expect((await call('users', 'GET', undefined, ids[0])).status).toBe(404);
+  });
+  it('links a mixed-case local account, finds it case-insensitively and prevents duplicate creates and renames', async () => {
+    const email = `MixedCase-${Date.now()}@Example.test`;
+    const local = await prisma.user.create({
+      data: { email, name: 'Local name', role: 'RESPONDER', roleSource: 'OIDC' },
+    });
+    vi.mocked(getControlActor).mockResolvedValue({ kind: 'admin', id: ids[0] } as Awaited<
+      ReturnType<typeof getControlActor>
+    >);
+    expect(
+      await bindExistingScimUserAction({
+        connectorId: 'cert-a',
+        externalId: `mixed-${local.id}`,
+        userId: local.id,
+      })
+    ).toBeUndefined();
+    const found = await call(
+      'users',
+      'GET',
+      undefined,
+      undefined,
+      `?filter=${encodeURIComponent(`userName eq "${email.toLowerCase()}"`)}`
+    );
+    expect(found.status).toBe(200);
+    expect(await found.json()).toMatchObject({ totalResults: 1, Resources: [{ id: local.id }] });
+    const countOnly = await call(
+      'users',
+      'GET',
+      undefined,
+      undefined,
+      `?count=0&filter=${encodeURIComponent(`userName eq "${email.toUpperCase()}"`)}`
+    );
+    expect(await countOnly.json()).toMatchObject({ totalResults: 1, itemsPerPage: 0 });
+    expect(
+      (
+        await call('users', 'POST', {
+          userName: email.toLowerCase(),
+          externalId: `duplicate-${local.id}`,
+        })
+      ).status
+    ).toBe(409);
+    expect(
+      (
+        await call(
+          'users',
+          'PATCH',
+          patch({ op: 'replace', path: 'userName', value: email }),
+          userId
+        )
+      ).status
+    ).toBe(409);
+    expect(
+      await prisma.user.count({ where: { email: { equals: email, mode: 'insensitive' } } })
+    ).toBe(1);
+    expect(await prisma.user.findUnique({ where: { id: local.id } })).toMatchObject({
+      email,
+      role: 'RESPONDER',
+      roleSource: 'OIDC',
+    });
+    // Historical local case-duplicates are retained, but cannot gain a second SCIM name binding.
+    const historical = await prisma.user.create({
+      data: { email: email.toLowerCase(), name: 'Historical duplicate' },
+    });
+    expect(
+      await bindExistingScimUserAction({
+        connectorId: 'cert-a',
+        externalId: `historical-${historical.id}`,
+        userId: historical.id,
+      })
+    ).toMatchObject({ scimError: expect.stringContaining('case-insensitive') });
+    expect(await prisma.scimIdentity.count({ where: { userId: historical.id } })).toBe(0);
+  });
+  it('accepts User member types and removes displayName with structured-name fallback while retaining security authority', async () => {
+    const created = await call('users', 'POST', {
+      userName: `optional-${Date.now()}@example.test`,
+      externalId: `optional-${Date.now()}`,
+      displayName: 'Display override',
+      name: { givenName: 'Alice', familyName: 'Ng' },
+    });
+    const user = await created.json();
+    expect(created.status).toBe(201);
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const removed = await call(
+      'users',
+      'PATCH',
+      patch({ op: 'remove', path: 'displayName' }),
+      user.id
+    );
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toMatchObject({ displayName: 'Alice Ng', active: true });
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).toMatchObject({
+      role: before.role,
+      roleSource: before.roleSource,
+      tokenVersion: before.tokenVersion,
+    });
+    const group = await call('groups', 'POST', {
+      displayName: `Typed members ${Date.now()}`,
+      members: [{ value: user.id, type: 'User' }],
+    });
+    expect(group.status).toBe(201);
+    const directory = await group.json();
+    expect(
+      (
+        await call(
+          'groups',
+          'PATCH',
+          patch({ op: 'replace', path: 'members', value: [{ value: user.id, type: 'User' }] }),
+          directory.id
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      await prisma.scimGroupMembership.count({ where: { groupId: directory.id, userId: user.id } })
+    ).toBe(1);
   });
   it('isolates connectors even when an internal user ID is known', async () => {
     expect((await call('users', 'GET', undefined, userId, '', tokenB)).status).toBe(404);
@@ -617,6 +733,70 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
       await prisma.teamMember.count({ where: { teamId: team.id, userId: directoryUsers[1].id } })
     ).toBe(1);
     expect(await prisma.teamMember.count({ where: { teamId: team.id, role: 'OWNER' } })).toBe(1);
+  });
+  it('aggregates drift against every bound source without classifying manual members as directory grants', async () => {
+    const connector = await prisma.scimConnector.create({
+      data: { name: 'Aggregate drift semantics' },
+    });
+    const members = await Promise.all(
+      ['manual', 'unexpected', 'other-source', 'missing'].map(label =>
+        prisma.user.create({
+          data: { email: `${label}-${connector.id}@example.test`, name: label },
+        })
+      )
+    );
+    const team = await prisma.team.create({
+      data: {
+        name: `Aggregate drift ${connector.id}`,
+        members: {
+          create: [
+            { userId: ids[0], role: 'OWNER' },
+            ...members.slice(0, 3).map(user => ({ userId: user.id, role: 'MEMBER' as const })),
+          ],
+        },
+      },
+      include: { members: true },
+    });
+    const group = await prisma.scimGroup.create({
+      data: {
+        connectorId: connector.id,
+        name: 'Primary source',
+        memberships: { create: [members[0], members[3]].map(user => ({ userId: user.id })) },
+      },
+    });
+    const other = await prisma.scimGroup.create({
+      data: {
+        connectorId: 'cert-b',
+        name: 'Other source',
+        memberships: { create: { userId: members[2].id } },
+      },
+    });
+    const binding = await prisma.scimGroupTeamBinding.create({
+      data: { groupId: group.id, teamId: team.id, approvedBy: ids[0] },
+    });
+    await prisma.scimGroupTeamBinding.create({
+      data: { groupId: other.id, teamId: team.id, approvedBy: ids[0] },
+    });
+    await prisma.scimTeamGrant.createMany({
+      data: [members[1], members[2]].map(user => ({
+        bindingId: binding.id,
+        userId: user.id,
+        teamMemberId: team.members.find(member => member.userId === user.id)!.id,
+      })),
+    });
+    expect(await scimDriftAction({ connectorId: connector.id, page: 1 })).toMatchObject([
+      {
+        groupId: group.id,
+        missingMembers: 1,
+        unexpectedDirectoryGrants: 1,
+        independentManualMembers: 2,
+      },
+    ]);
+    await prisma.scimGroupMembership.deleteMany({ where: { groupId: other.id } });
+    expect(await scimDriftAction({ connectorId: connector.id, page: 1 })).toMatchObject([
+      { unexpectedDirectoryGrants: 2 },
+    ]);
+    expect(await scimDriftAction({ connectorId: connector.id, page: 2 })).toEqual([]);
   });
   it('preserves a disabled connector while issuing a fresh credential', async () => {
     const connector = await prisma.scimConnector.create({
@@ -1191,8 +1371,25 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
       update: { value: { enabled: true, secretTokenHash: hashToken(legacySecret) } },
     });
     expect(await authenticate(`Bearer ${legacySecret}`)).toMatchObject({ connectorId: 'legacy' });
+    const priorCredentials = await prisma.scimCredential.count({
+      where: { connectorId: 'legacy' },
+    });
+    expect(
+      await createScimCredentialAction({
+        connectorId: 'legacy',
+        name: 'Unacknowledged cutover',
+        scopes: ['users:read'],
+        lifetimeDays: 30,
+        overlapMinutes: 60,
+      })
+    ).toMatchObject({ scimError: expect.stringContaining('acknowledgement') });
+    expect(await prisma.scimCredential.count({ where: { connectorId: 'legacy' } })).toBe(
+      priorCredentials
+    );
+    expect(await authenticate(`Bearer ${legacySecret}`)).not.toBeNull();
     const replacement = await createScimCredentialAction({
       connectorId: 'legacy',
+      acknowledgeLegacyCutover: true,
       name: 'Legacy migration',
       scopes: ['users:read'],
       lifetimeDays: 30,

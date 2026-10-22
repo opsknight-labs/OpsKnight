@@ -41,27 +41,42 @@ export async function getScimConfig() {
     },
     orderBy: { createdAt: 'desc' },
   });
-  if (credential || connector?.credentialAuthority === 'REGISTRY')
-    return {
-      enabled: Boolean(credential),
-      hasSecretToken: Boolean(credential),
-      tokenHint: credential?.tokenHint ?? null,
-      source: 'DATABASE' as const,
-      createdAt: credential?.createdAt.toISOString() ?? null,
-      updatedAt: credential?.createdAt.toISOString() ?? null,
-    };
-  const record = await prisma.systemConfig.findUnique({ where: { key: SCIM_CONFIG_KEY } });
+  const record =
+    connector?.enabled && connector.credentialAuthority === 'LEGACY'
+      ? await prisma.systemConfig.findUnique({ where: { key: SCIM_CONFIG_KEY } })
+      : null;
   const config = record?.value as ScimConfigRecord | null;
   const env = !record && (process.env.SCIM_BEARER_TOKEN?.trim().length ?? 0) >= 32;
+  const legacyCredentialSource =
+    connector?.enabled && connector.credentialAuthority === 'LEGACY'
+      ? config?.enabled === true && config.secretTokenHash
+        ? ('DATABASE' as const)
+        : !record && env
+          ? ('ENV' as const)
+          : null
+      : null;
   return {
-    enabled: connector?.enabled === true && (config?.enabled === true || Boolean(env)),
-    hasSecretToken: Boolean(config?.secretTokenHash || env),
-    tokenHint: config?.tokenHint ?? null,
-    source: record ? ('DATABASE' as const) : env ? ('ENV' as const) : ('NONE' as const),
-    createdAt: config?.createdAt ?? null,
-    updatedAt: config?.updatedAt ?? null,
+    enabled: Boolean(credential || legacyCredentialSource),
+    hasSecretToken: Boolean(credential || legacyCredentialSource),
+    tokenHint: legacyCredentialSource
+      ? (config?.tokenHint ?? null)
+      : (credential?.tokenHint ?? null),
+    source:
+      legacyCredentialSource ??
+      (credential || connector?.credentialAuthority === 'REGISTRY'
+        ? ('DATABASE' as const)
+        : ('NONE' as const)),
+    // Independent of other connectors and of the connection currently selected in the UI.
+    legacyCredentialSource,
+    createdAt: legacyCredentialSource
+      ? (config?.createdAt ?? null)
+      : (credential?.createdAt.toISOString() ?? null),
+    updatedAt: legacyCredentialSource
+      ? (config?.updatedAt ?? null)
+      : (credential?.createdAt.toISOString() ?? null),
   };
 }
+
 export async function generateAndSaveScimToken(_actorId?: string) {
   return createCredential({
     connectorId: 'legacy',
@@ -288,7 +303,9 @@ export function getScimSchemas(baseUrl = '') {
   const complex = (
     name: string,
     multiValued: boolean,
-    subAttributes: Array<ReturnType<typeof string> & { referenceTypes?: string[] }>
+    subAttributes: Array<
+      ReturnType<typeof string> & { referenceTypes?: string[]; canonicalValues?: string[] }
+    >
   ) => ({
     name,
     type: 'complex',
@@ -340,6 +357,7 @@ export function getScimSchemas(baseUrl = '') {
         { ...string('externalId'), mutability: 'immutable', caseExact: true },
         complex('members', true, [
           { ...string('value', true), mutability: 'immutable' },
+          { ...string('type'), canonicalValues: ['User'], mutability: 'immutable' },
           {
             ...string('$ref'),
             type: 'reference',

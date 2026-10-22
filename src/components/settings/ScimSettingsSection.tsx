@@ -24,6 +24,7 @@ export type ScimConfigProps = {
   hasSecretToken: boolean;
   tokenHint: string | null;
   source: 'DATABASE' | 'ENV' | 'NONE';
+  legacyCredentialSource?: 'DATABASE' | 'ENV' | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -77,8 +78,14 @@ export default function ScimSettingsSection({
   const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
   const [adoptMemberIds, setAdoptMemberIds] = useState<string[]>([]);
   const [verification, setVerification] = useState(false);
+  const [impactStale, setImpactStale] = useState(false);
+  const [legacyCutoverAcknowledged, setLegacyCutoverAcknowledged] = useState(false);
   const [impact, setImpact] = useState<Impact | null>(null);
   const connector = connectors.find(c => c.id === selected);
+  const legacyConnector = connectors.find(c => c.id === 'legacy');
+  const legacyCredentialSource = legacyConnector
+    ? legacyConnector.legacyCredentialSource
+    : initialConfig.legacyCredentialSource;
   useEffect(() => {
     let current = true;
     result(scimOverviewAction())
@@ -222,6 +229,7 @@ export default function ScimSettingsSection({
             connectionEpoch.current++;
             setSelected(e.target.value);
             setVerification(false);
+            setLegacyCutoverAcknowledged(false);
             setAdoptMemberIds([]);
             setImpact(null);
             setPage(1);
@@ -241,6 +249,16 @@ export default function ScimSettingsSection({
           Loading provisioning data…
         </p>
       )}
+      {legacyCredentialSource &&
+        connectors.some(
+          c => c.id === 'legacy' && c.enabled && c.credentialAuthority === 'LEGACY'
+        ) && (
+          <p role="status" className="text-sm text-amber-700 dark:text-amber-300">
+            Legacy {legacyCredentialSource === 'ENV' ? 'environment' : 'database'} authentication is
+            active on the legacy connection, independently of other connections. Switching that
+            connection to registry credentials retires its old token immediately.
+          </p>
+        )}
       {tab === 'Overview' && (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
@@ -273,13 +291,6 @@ export default function ScimSettingsSection({
             requires an administrator impact preview and approval. Directory deletion revokes its
             directory-owned team access while preserving manual grants, owners and routing.
           </p>
-          {initialConfig.source === 'ENV' && connector?.credentialAuthority === 'LEGACY' && (
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              Legacy environment authentication is active. Create a replacement credential,
-              configure the provider, then verify provisioning. Switching to registry credentials
-              retires the environment token immediately.
-            </p>
-          )}
         </div>
       )}
       {tab === 'Connections' && (
@@ -551,6 +562,7 @@ export default function ScimSettingsSection({
                   className={fieldClass}
                   value={teamId}
                   aria-label="Operational team"
+                  disabled={busy}
                   onChange={e => {
                     setTeamId(e.target.value);
                     setAdoptMemberIds([]);
@@ -572,7 +584,10 @@ export default function ScimSettingsSection({
                   void run(
                     () =>
                       result(previewScimBindingAction({ groupId, teamId, adoptMemberIds })).then(
-                        setImpact
+                        value => {
+                          setImpact(value);
+                          setImpactStale(false);
+                        }
                       ),
                     'Impact preview ready.'
                   )
@@ -585,10 +600,16 @@ export default function ScimSettingsSection({
                   <p>
                     {impact.group} → {impact.team}
                   </p>
-                  <p>
-                    {impact.additions} members added; {impact.removals} existing memberships
-                    removed; {impact.protectedOwners} owners protected.
-                  </p>
+                  {impactStale ? (
+                    <p role="status">
+                      Selections changed. Refresh the impact preview before approval.
+                    </p>
+                  ) : (
+                    <p>
+                      {impact.additions} members added; {impact.removals} existing memberships
+                      removed; {impact.protectedOwners} owners protected.
+                    </p>
+                  )}
                   {impact.legacyCandidates.length > 0 && (
                     <fieldset className="space-y-2">
                       <legend>Legacy ownership adoption (optional)</legend>
@@ -601,8 +622,10 @@ export default function ScimSettingsSection({
                         <label key={member.id} className="flex gap-2">
                           <input
                             type="checkbox"
+                            disabled={busy}
                             checked={adoptMemberIds.includes(member.id)}
                             onChange={event => {
+                              setImpactStale(true);
                               setAdoptMemberIds(ids =>
                                 event.target.checked
                                   ? [...ids, member.id]
@@ -613,10 +636,12 @@ export default function ScimSettingsSection({
                           Adopt directory ownership for {member.userId}
                         </label>
                       ))}
-                      <p>
-                        {impact.adoptedMemberships} memberships approved for adoption;{' '}
-                        {impact.retainedManualMemberships} manual memberships retained.
-                      </p>
+                      {!impactStale && (
+                        <p>
+                          {impact.adoptedMemberships} memberships approved for adoption;{' '}
+                          {impact.retainedManualMemberships} manual memberships retained.
+                        </p>
+                      )}
                     </fieldset>
                   )}
                   <p>
@@ -624,7 +649,7 @@ export default function ScimSettingsSection({
                     team.
                   </p>
                   <Button
-                    disabled={busy}
+                    disabled={busy || impactStale}
                     onClick={() =>
                       void run(
                         () =>
@@ -693,6 +718,7 @@ export default function ScimSettingsSection({
                       scopes: form.getAll('scope'),
                       lifetimeDays: Number(form.get('days')),
                       overlapMinutes: Number(form.get('overlap')),
+                      acknowledgeLegacyCutover: legacyCutoverAcknowledged,
                     })
                   ).then(value => setSecret(value.token)),
                 'Credential created. Copy it now and verify the provider before retiring its predecessor.'
@@ -742,7 +768,28 @@ export default function ScimSettingsSection({
                 </label>
               ))}
             </fieldset>
-            <Button disabled={busy || !connector?.enabled} type="submit">
+            {connector?.id === 'legacy' && connector.credentialAuthority === 'LEGACY' && (
+              <label className="sm:col-span-2 flex gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  disabled={busy}
+                  checked={legacyCutoverAcknowledged}
+                  onChange={event => setLegacyCutoverAcknowledged(event.target.checked)}
+                />
+                I acknowledge that registry cutover immediately retires the legacy token. Its
+                overlap does not apply.
+              </label>
+            )}
+            <Button
+              disabled={
+                busy ||
+                !connector?.enabled ||
+                (connector.id === 'legacy' &&
+                  connector.credentialAuthority === 'LEGACY' &&
+                  !legacyCutoverAcknowledged)
+              }
+              type="submit"
+            >
               Create replacement credential
             </Button>
           </form>
@@ -774,7 +821,11 @@ export default function ScimSettingsSection({
                       ? 'Revoked'
                       : new Date(credential.expiresAt).getTime() <= observedAt
                         ? 'Expired'
-                        : 'Active'}
+                        : !connector?.enabled
+                          ? 'Blocked · connection disabled'
+                          : connector.credentialAuthority !== 'REGISTRY'
+                            ? 'Blocked · registry inactive'
+                            : 'Active'}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">

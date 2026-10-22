@@ -153,6 +153,7 @@ export async function createCredential(input: {
   scopes: string[];
   lifetimeDays: number;
   overlapMinutes: number;
+  acknowledgeLegacyCutover?: boolean;
 }) {
   const actor = await getControlActor(true);
   if (actor.kind !== 'admin') throw new Error('Administrator sign-in required.');
@@ -163,6 +164,14 @@ export async function createCredential(input: {
     const connector = await tx.scimConnector.findUniqueOrThrow({
       where: { id: input.connectorId },
     });
+    if (
+      connector.id === 'legacy' &&
+      connector.credentialAuthority === 'LEGACY' &&
+      !input.acknowledgeLegacyCutover
+    )
+      throw new Error(
+        'Administrator acknowledgement required for immediate retirement of the legacy token before creating a registry credential.'
+      );
     const expiresAt = new Date(now.getTime() + input.lifetimeDays * 86400000);
     const overlapEnd = new Date(now.getTime() + input.overlapMinutes * 60000);
     await tx.scimCredential.updateMany({

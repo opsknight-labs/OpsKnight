@@ -568,6 +568,7 @@ model User {
   releasedRetentionHolds      DataRetentionHold[]          @relation("RetentionHoldReleasedBy")
   initiatedEncryptionRuns     EncryptionMigrationRun[]     @relation("EncryptionRunInitiator")
 
+  // Case-insensitive SCIM equality also uses User_email_scim_lower_idx (SQL expression index).
   @@index([email])
   @@index([role, status])
   @@index([status])

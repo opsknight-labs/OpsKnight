@@ -290,3 +290,40 @@ Runbook history browser assertions follow the current custom select, search and 
 evidence text. The team parity journey reloads after out-of-band service fixture writes
 so a previously prefetched service list cannot hide the new services. Mobile/PWA CI uses
 the version-matched Playwright image to avoid the observed Ubuntu package-download hang.
+
+### Deep-audit regression pass
+
+The additional email expression-index migration preserves stored email case and historical
+accounts. The upgrade and restored-snapshot harnesses apply it after the existing five
+migrations. Mixed-case linked-account filtering (including count=0), duplicate creation and
+rename rejection, User member types, optional displayName removal and atomic legacy-cutover
+acknowledgement have PostgreSQL regressions. UI regressions cover selection invalidation,
+legacy warnings across connections and disabled credential labels.
+
+The local 25-binding diagnostic fixture contains 250,000 directory memberships, 10,000
+operational members and directory grants. The action returned 25 summaries (4,983 bytes)
+in 2,175–4,963 ms across three observations; process RSS delta ranged from 0 to
+540,672 bytes. The instrumented run recorded one SQL query at 4,933 ms versus
+4,963 ms for the whole action. These are action-process
+RSS and action roundtrip measurements (with Prisma query-duration events also recorded), not server-memory measurements or a production
+latency guarantee. The test enforces a 16-KiB response bound, a 96-MiB process RSS delta
+limit and a 10-second local latency budget. Missing, unexpected and independent manual
+counts are separately verified against multiple connector sources.
+
+Live Entra/Okta and production rolling upgrade, failover, rollback and PgBouncer resource
+budgets remain external release gates. The independent automation browser gate remains
+with its existing work; this regression pass does not alter it.
+
+The completed local pass also passed 167 unit/API/auth/UI tests, all 43 PostgreSQL
+regressions, the optimized production build and Chromium/Firefox/WebKit journeys
+against that build. Two compiled replicas passed duplicate provisioning, shared
+admission and credential revocation. Warmed-session deactivation, role downgrade
+and grant-removal observations were 69/26/235 ms locally; these are measurements,
+not a network-wide production maximum.
+
+The million-membership HTTP re-run (100 groups × 10,000) observed p50/p95/p99 of
+438/1,314/2,003 ms with zero HTTP errors and a maximum 1,727,158-byte response.
+Client RSS delta was 52,084,736 bytes with 10 database connections. The two-app
+PostgreSQL stop/restart check returned retryable 503s without fallback or partial
+writes and recovered successfully. The baseline harness again observed its three
+expected old-route failures and three passing current-route regressions.

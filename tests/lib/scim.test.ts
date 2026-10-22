@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/prisma', () => ({
   default: {
     scimCredential: {
+      findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -19,6 +20,7 @@ vi.mock('@/lib/auth-control/actor', () => ({
 }));
 import prisma from '@/lib/prisma';
 import {
+  getScimConfig,
   getScimSchemas,
   getServiceProviderConfig,
   isScimRequestAuthorized,
@@ -112,6 +114,27 @@ describe('SCIM protocol helpers', () => {
       new Error('database unavailable')
     );
     expect(await isScimRequestAuthorized(`Bearer ${process.env.SCIM_BEARER_TOKEN}`)).toBe(false);
+  });
+
+  it('reports active legacy authentication independently of another connector registry key', async () => {
+    process.env.SCIM_BEARER_TOKEN = 'legacy-environment-token-00000000000000000001';
+    vi.mocked(prisma.scimCredential.findFirst).mockResolvedValueOnce({
+      id: 'other-key',
+      connectorId: 'other',
+      tokenHint: 'abcd',
+      createdAt: new Date(),
+    } as never);
+    expect(await getScimConfig()).toMatchObject({
+      enabled: true,
+      source: 'ENV',
+      legacyCredentialSource: 'ENV',
+      createdAt: null,
+      updatedAt: null,
+    });
+    vi.mocked(prisma.systemConfig.findUnique).mockResolvedValueOnce({
+      value: { enabled: false },
+    } as never);
+    expect(await getScimConfig()).toMatchObject({ enabled: false, legacyCredentialSource: null });
   });
 
   it('accepts only bounded externalId and userName equality filters', () => {

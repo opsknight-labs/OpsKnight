@@ -104,7 +104,7 @@
     "api:clients:check": "npm run api:clients -- --check",
     "test:api:clients": "vitest run tests/unit/api-v2-sdk.test.ts && python3 -m unittest discover -s tests/sdk -p \"test_*.py\"",
     "certify:api:clients:live": "node tests/sdk/live-workflows.mjs",
-    "certify:scim:unit": "vitest run --no-file-parallelism --maxWorkers=1 tests/lib/scim.test.ts tests/lib/scim-protocol.test.ts tests/lib/oidc-identity-resolution.test.ts tests/lib/auth-control-actor.test.ts tests/lib/session-security-projection.test.ts tests/lib/auth-oidc-unit.test.ts tests/lib/auth-session-lifecycle.test.ts tests/lib/auth-oidc-provider-compat.test.ts tests/lib/authorization-cache-boundary.test.ts tests/lib/microsoft-teams-identity.test.ts tests/api/scim-users.test.ts tests/api/scim-groups.test.ts tests/api/scim-metadata.test.ts",
+    "certify:scim:unit": "vitest run --no-file-parallelism --maxWorkers=1 tests/components/scim-settings-consistency.test.tsx tests/lib/scim.test.ts tests/lib/scim-protocol.test.ts tests/lib/oidc-identity-resolution.test.ts tests/lib/auth-control-actor.test.ts tests/lib/session-security-projection.test.ts tests/lib/auth-oidc-unit.test.ts tests/lib/auth-session-lifecycle.test.ts tests/lib/auth-oidc-provider-compat.test.ts tests/lib/authorization-cache-boundary.test.ts tests/lib/microsoft-teams-identity.test.ts tests/api/scim-users.test.ts tests/api/scim-groups.test.ts tests/api/scim-metadata.test.ts",
     "certify:scim:db": "SCIM_CERTIFICATION=1 vitest run --no-file-parallelism --maxWorkers=1 tests/integration/scim-lifecycle-database.test.ts tests/integration/scim-capacity-database.test.ts",
     "certify:scim:baseline": "node scripts/scim/certify-baseline.mjs",
     "certify:scim:upgrade": "node scripts/scim/certify-upgrade.mjs",

@@ -187,8 +187,7 @@ create, read, rename, PUT, ordered atomic PATCH and grant-revocation-on-DELETE. 
 filters support `displayName`, `externalId` and `id`. Group queries honor
 `excludedAttributes=members` without loading member collections.
 
-`startIndex` is a positive integer; `count` is a nonnegative integer capped at
-100. `count=0` returns only the result count. Ordering is deterministic. Requests
+`startIndex` is a positive integer; `count` is a nonnegative integer capped at 100. `count=0` returns only the result count. Ordering is deterministic. Requests
 are capped at 1 MiB, 100 PATCH operations and 10,000 members per group mutation.
 Each connector admits at most 600 requests per minute through a shared PostgreSQL
 counter. Unsupported queries and paths fail explicitly.
@@ -286,3 +285,32 @@ truncated. Request `excludedAttributes=members` to enumerate metadata for up to
 support up to 10,000 members. Oversized representations return SCIM 413; responses
 also have an 8 MiB serialized byte limit. Reduce count or exclude members when
 requested by the error. `count=0` still returns totals without representations.
+
+### Case handling, optional fields and large diagnostics
+
+`userName` equality is case-insensitive, including explicitly linked existing accounts whose
+stored email uses mixed case. A non-unique PostgreSQL `lower(email)` index supports these
+lookups without rewriting historical accounts. SCIM creates, renames and new directory
+bindings reject conflicting case-insensitive names rather than silently adopting an account.
+Existing historical duplicates need administrator review; the migration neither merges nor
+deletes them. The additive index uses ordinary `CREATE INDEX`, which blocks writes
+to the User table while it builds; rehearse its duration on a production-sized
+restored copy before rollout. Email-formatted login names and a single matching work email remain the
+supported OpsKnight contract.
+
+Group member objects may include the standard `type: "User"` subattribute. Nested
+`type: "Group"` memberships are unsupported and rejected. Removing optional `displayName`
+falls back to the remaining formatted/structured name or the login-name prefix. Required
+login attributes, lifecycle status and role authority remain protected.
+
+The legacy credential warning is independent of credentials on other connections and is
+visible while using another connection. Registry cutover on the legacy connection requires
+fresh administrator authorization and explicit acknowledgement: its old environment or
+database token stops working immediately. The overlap setting applies to registry
+credentials, not to the old legacy token. Disabled connections label unexpired credentials
+as blocked rather than active.
+
+Drift diagnostics return up to 25 binding summaries using PostgreSQL counts and anti-joins.
+They do not return directory/team member arrays to the application. Desired team access is
+the union of every bound source; manual memberships are counted separately. Changing legacy
+adoption selections invalidates the preview and disables approval until it is refreshed.

@@ -29,8 +29,14 @@ export function patchUser(existing: UserDocument, body: unknown) {
       emails: 'emails',
     };
     if (simple[key]) {
-      if (remove && ['username', 'active', 'emails', 'displayname'].includes(key))
+      if (remove && ['username', 'active', 'emails'].includes(key))
         throw new ScimFailure(400, `${path} is required.`, 'mutability');
+      if (remove && key === 'displayname') {
+        // formatted was synthesized from the stored display name, not independently owned.
+        const name = { ...((document.name as Record<string, unknown>) ?? {}) };
+        if (name.formatted === document.displayName) delete name.formatted;
+        document.name = name;
+      }
       if (remove) delete document[simple[key]];
       else document[simple[key]] = value;
       // OpsKnight's work email and login name are one authoritative attribute.

@@ -3,11 +3,13 @@ import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { scimDriftAction } from '@/app/(app)/settings/system/scim-actions';
 import { reconcileTeam } from '@/lib/scim/lifecycle/membership';
 import { hashToken } from '@/lib/scim/security/credentials';
 import { users } from '@/lib/scim/lifecycle/users';
 import { groups } from '@/lib/scim/lifecycle/groups';
 import { handle } from '@/lib/scim/protocol/http';
+vi.mock('@/lib/rbac', () => ({ assertAdmin: vi.fn() }));
 vi.mock('@/lib/auth-control/actor', () => ({
   getControlActor: vi.fn(),
   lockControlActor: vi.fn(),
@@ -57,6 +59,9 @@ suite('SCIM indexed capacity certification', () => {
     await prisma.$disconnect();
   });
   it('serves bounded searches/pagination at 100k users and 10k groups within local latency budgets', async () => {
+    const lookupPlan =
+      await prisma.$queryRaw`EXPLAIN (FORMAT JSON) SELECT id FROM "User" WHERE lower(email) = lower(${'SCIM-LOAD-99999@EXAMPLE.TEST'})`;
+    expect(JSON.stringify(lookupPlan)).toContain('User_email_scim_lower_idx');
     const durations: number[] = [];
     for (let i = 0; i < 100; i++) {
       const start = performance.now();
@@ -149,6 +154,61 @@ suite('SCIM indexed capacity certification', () => {
         revokedDirectoryMembers: 10000,
         groupDeleteMs: elapsedMs,
         transactionBudgetMs: 10000,
+      }) + '\n'
+    );
+  }, 120000);
+  it('returns bounded SQL drift aggregates for 25 bound 10K-member groups', async () => {
+    const connectorId = 'scim-drift-capacity';
+    await prisma.scimConnector.upsert({
+      where: { id: connectorId },
+      create: { id: connectorId, name: 'Drift capacity' },
+      update: {},
+    });
+    await prisma.team.upsert({
+      where: { id: connectorId },
+      create: { id: connectorId, name: 'Drift capacity team' },
+      update: {},
+    });
+    await prisma.$executeRaw`INSERT INTO "ScimGroup" (id, "connectorId", name, "updatedAt") SELECT 'scim-drift-group-' || i, ${connectorId}, 'Drift capacity ' || i, CURRENT_TIMESTAMP FROM generate_series(1, 25) i ON CONFLICT DO NOTHING`;
+    await prisma.$executeRaw`INSERT INTO "ScimGroupTeamBinding" (id, "groupId", "teamId", "approvedBy") SELECT 'scim-drift-binding-' || i, 'scim-drift-group-' || i, ${connectorId}, 'capacity-certifier' FROM generate_series(1, 25) i ON CONFLICT DO NOTHING`;
+    await prisma.$executeRaw`INSERT INTO "ScimGroupMembership" ("groupId", "userId") SELECT 'scim-drift-group-' || g, 'scim-load-user-' || u FROM generate_series(1, 25) g CROSS JOIN generate_series(1, 10000) u ON CONFLICT DO NOTHING`;
+    await prisma.$executeRaw`INSERT INTO "TeamMember" (id, "teamId", "userId", role) SELECT 'scim-drift-member-' || i, ${connectorId}, 'scim-load-user-' || i, 'MEMBER'::"TeamRole" FROM generate_series(1, 10000) i ON CONFLICT DO NOTHING`;
+    await prisma.$executeRaw`INSERT INTO "ScimTeamGrant" ("bindingId", "userId", "teamMemberId") SELECT 'scim-drift-binding-1', 'scim-load-user-' || i, 'scim-drift-member-' || i FROM generate_series(1, 10000) i ON CONFLICT DO NOTHING`;
+    const databaseDurations: number[] = [];
+    let measuring = true;
+    prisma.$on('query', query => {
+      if (measuring) databaseDurations.push(query.duration);
+    });
+    const memory = process.memoryUsage().rss;
+    const started = performance.now();
+    const result = await scimDriftAction({ connectorId, page: 1 });
+    const latencyMs = performance.now() - started;
+    measuring = false;
+    expect(databaseDurations.length).toBeGreaterThan(0);
+    const rssDeltaBytes = Math.max(0, process.memoryUsage().rss - memory);
+    if ('scimError' in result) throw new Error(result.scimError);
+    expect(result).toHaveLength(25);
+    expect(
+      result.every(
+        row =>
+          row.missingMembers === 0 &&
+          row.unexpectedDirectoryGrants === 0 &&
+          row.independentManualMembers === 0
+      )
+    ).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(16384);
+    expect(rssDeltaBytes).toBeLessThan(96 * 1024 * 1024);
+    expect(latencyMs).toBeLessThan(10000);
+    process.stdout.write(
+      JSON.stringify({
+        diagnosticBindings: 25,
+        directoryMembers: 250000,
+        latencyMs,
+        databaseQueryMs: databaseDurations.reduce((sum, duration) => sum + duration, 0),
+        databaseQueries: databaseDurations.length,
+        rssDeltaBytes,
+        responseBytes: Buffer.byteLength(JSON.stringify(result)),
+        note: 'Action process RSS and roundtrip latency; not database server RSS or production SLA.',
       }) + '\n'
     );
   }, 120000);

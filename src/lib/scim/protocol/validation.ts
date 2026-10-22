@@ -14,7 +14,16 @@ export const enterpriseSchema = 'urn:ietf:params:scim:schemas:extension:enterpri
 export const patchSchema = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
 export const identifier = z.string().trim().min(1).max(320);
 export const memberSchema = z
-  .object({ value: identifier, display: z.string().optional(), $ref: z.string().optional() })
+  .object({
+    value: identifier,
+    display: z.string().optional(),
+    $ref: z.string().optional(),
+    type: z
+      .string()
+      .transform(value => value.toLowerCase())
+      .pipe(z.literal('user'))
+      .optional(),
+  })
   .strict();
 export const groupSchema = z
   .object({

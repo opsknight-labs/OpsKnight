@@ -9,6 +9,7 @@ import {
   pagination,
   readBody,
   userSchema,
+  groupSchema,
   parse,
   enterpriseSchema,
 } from '@/lib/scim/protocol/validation';
@@ -81,6 +82,32 @@ describe('bounded SCIM protocol and ordered PATCH', () => {
       expect(() => patchUser(user, patch({ op: 'replace', path, value: 'attacker' }))).toThrow();
     expect(() => parse(userSchema, { ...user, active: 'invalid' })).toThrow();
   });
+  it('accepts standard User member types on create and ordered PATCH, but rejects nested groups', () => {
+    expect(
+      groupSchema.parse({ displayName: 'Team', members: [{ value: 'user-1', type: 'User' }] })
+        .members
+    ).toHaveLength(1);
+    expect(
+      patchGroup(
+        { displayName: 'Team', members: [] },
+        patch({ op: 'add', path: 'members', value: [{ value: 'user-1', type: 'User' }] })
+      ).members
+    ).toEqual([{ value: 'user-1' }]);
+    expect(() =>
+      groupSchema.parse({ displayName: 'Team', members: [{ value: 'group-1', type: 'Group' }] })
+    ).toThrow();
+  });
+  it('removes optional displayName without removing structured names or required login attributes', () => {
+    const result = patchUser(
+      { ...user, name: { formatted: 'Alice', givenName: 'Alice', familyName: 'Ng' } },
+      patch({ op: 'remove', path: 'displayName' })
+    );
+    expect(result.displayName).toBeUndefined();
+    expect(result.name).toEqual({ givenName: 'Alice', familyName: 'Ng' });
+    expect(result.userName).toBe(user.userName);
+    expect(result.active).toBe(true);
+  });
+
   it('applies group membership operations in exact request order', () => {
     const group = { displayName: 'Directory', members: [{ value: 'a' }] };
     expect(
