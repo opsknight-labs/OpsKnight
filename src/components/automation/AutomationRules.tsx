@@ -37,6 +37,7 @@ import type { LintIssue } from '@/lib/automation/compiler';
 import { LimitCounter, NativeSelect } from './authoring/primitives';
 import { useShallowStableArray, useStableCallback } from './authoring/hooks';
 import { describeAction, describeCondition, ROUTE_ACTIONS } from './authoring/rule-language';
+import { notify } from '@/lib/toast';
 
 import type { Data } from './presentation-types';
 
@@ -487,9 +488,9 @@ export function AutomationRules({
     edit({ ...draft, rules });
     // eslint-disable-next-line react-hooks/immutability
     if (activeDraggedRuleRef) activeDraggedRuleRef.current = null;
-    setAnnouncement(
-      `${moved.name} moved to ${PHASES[moved.phase].noun} position ${(phaseIndexes.get(targetId) ?? 0) + 1}.`
-    );
+    const moveMsg = `${moved.name} moved to ${PHASES[moved.phase].noun} position ${(phaseIndexes.get(targetId) ?? 0) + 1}.`;
+    setAnnouncement(moveMsg);
+    notify.success(moveMsg, { id: 'automation:rule:reorder' });
   });
 
   const addRule = (phase: Rule['phase']) => {
@@ -506,6 +507,10 @@ export function AutomationRules({
               ...draft.rules.filter(r => r.phase === 'ROUTE'),
             ]
           : [...draft.rules, rule],
+    });
+    notify.success(`${PHASES[phase].noun} rule created`, {
+      id: `automation:rule:${rule.id}:add`,
+      description: 'Configure conditions and actions below.',
     });
   };
 

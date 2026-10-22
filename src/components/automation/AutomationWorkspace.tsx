@@ -11,7 +11,15 @@ import {
 } from '@/lib/automation/contract';
 import { compileAutomation, type LintIssue } from '@/lib/automation/compiler';
 import { Button } from '@/components/ui/shadcn/button';
-import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/shadcn/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import { AutomationActivity } from './AutomationActivity';
 import { AutomationContext } from './AutomationContext';
 import { AutomationOverview } from './AutomationOverview';
@@ -33,6 +41,8 @@ import { useContextAuthoring } from './workspace/useContextAuthoring';
 import { useSampleTest } from './workspace/useSampleTest';
 import { ValidationSummary } from './workspace/ValidationSummary';
 import { WorkspaceHeader } from './workspace/WorkspaceHeader';
+import { notify } from '@/lib/toast';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 
 type ReviewAction = 'publish' | 'restore' | 'LIVE' | 'activateCandidate';
 type RestorableVersion = Data['versions'][number] & { snapshot: Snapshot };
@@ -79,6 +89,37 @@ export default function AutomationWorkspace({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const announcementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const notifyAction = useCallback(
+    (message: string, tone: 'success' | 'info' | 'error' = 'success', description?: string) => {
+      setAnnouncement(message);
+      if (tone === 'success') {
+        notify.success(message, { description });
+      } else if (tone === 'error') {
+        notify.error(message, { description });
+      } else {
+        notify.info(message, { description });
+      }
+
+      if (announcementTimeoutRef.current) {
+        clearTimeout(announcementTimeoutRef.current);
+      }
+      announcementTimeoutRef.current = setTimeout(() => {
+        setAnnouncement('');
+      }, 6000);
+    },
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      if (announcementTimeoutRef.current) {
+        clearTimeout(announcementTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const [review, setReview] = useState<ReviewAction | null>(null);
   const [reviewData, setReviewData] = useState<Data | null>(null);
   const [restoreVersion, setRestoreVersion] = useState<RestorableVersion | null>(null);
@@ -116,8 +157,19 @@ export default function AutomationWorkspace({
     removeRule,
     removeField,
     applyUndo,
-  } = useAutomationDraft({ serviceId, ownerId: status?.recoveryOwnerId ?? null, canEdit: !!status?.canEdit, onError: setError });
-  const context = useContextAuthoring({ serviceId, draft, edit, onError: setError });
+  } = useAutomationDraft({
+    serviceId,
+    ownerId: status?.recoveryOwnerId ?? null,
+    canEdit: !!status?.canEdit,
+    onError: setError,
+  });
+  const context = useContextAuthoring({
+    serviceId,
+    draft,
+    edit,
+    onError: setError,
+    onNotify: notifyAction,
+  });
   const tester = useSampleTest({
     serviceId,
     draft,
@@ -197,28 +249,34 @@ export default function AutomationWorkspace({
           ...input,
           serviceId,
           expectedActiveVersionId,
-          ...(input.action === 'publish' ? {
-            expectedRevision: revision.current,
-            expectedCandidateVersionId: reviewData?.candidateVersionId ?? status?.candidateVersionId ?? null,
-          } : {}),
+          ...(input.action === 'publish'
+            ? {
+                expectedRevision: revision.current,
+                expectedCandidateVersionId:
+                  reviewData?.candidateVersionId ?? status?.candidateVersionId ?? null,
+              }
+            : {}),
         });
         if (!response.ok) {
           // A stale active version or draft revision: refresh so a retry uses current state.
           if (response.code === 'CONFLICT') await load(area);
           setError(response.error);
+          notifyAction(response.error, 'error');
           return false;
         }
-        setAnnouncement(successMessage);
+        notifyAction(successMessage, 'success');
         await load(area);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Automation request failed');
+        const errMsg = err instanceof Error ? err.message : 'Automation request failed';
+        setError(errMsg);
+        notifyAction(errMsg, 'error');
         return false;
       } finally {
         setBusy(false);
       }
     },
-    [flush, conflict, serviceId, revision, load, area, reviewData, status]
+    [flush, conflict, serviceId, revision, load, area, reviewData, status, notifyAction]
   );
 
   const openReview = useCallback(
@@ -244,17 +302,22 @@ export default function AutomationWorkspace({
     setError('');
     try {
       const response = await automationAction({
-        action: 'discardCandidate', serviceId, expectedCandidateVersionId: candidateId,
+        action: 'discardCandidate',
+        serviceId,
+        expectedCandidateVersionId: candidateId,
       });
       if (!response.ok) {
         setError(response.error);
+        notifyAction(response.error, 'error');
         return;
       }
       setConfirmDiscardCandidate(false);
-      setAnnouncement('Candidate discarded.');
+      notifyAction('Candidate discarded.', 'info');
       await load('overview');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not discard candidate');
+      const errMsg = cause instanceof Error ? cause.message : 'Could not discard candidate';
+      setError(errMsg);
+      notifyAction(errMsg, 'error');
     } finally {
       setBusy(false);
     }
@@ -265,19 +328,24 @@ export default function AutomationWorkspace({
     try {
       if (!(await flush())) return;
       const response = await automationAction({
-        action: 'restoreDraft', serviceId, sourceVersionId: versionId,
+        action: 'restoreDraft',
+        serviceId,
+        sourceVersionId: versionId,
         expectedRevision: revision.current,
       });
       if (!response.ok) {
         setError(response.error);
+        notifyAction(response.error, 'error');
         return;
       }
       discardForServerCopy();
       setArea('rules');
       await load('rules');
-      setAnnouncement('Historical version restored as an editable draft.');
+      notifyAction('Historical version restored as an editable draft.', 'success');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not restore draft');
+      const errMsg = cause instanceof Error ? cause.message : 'Could not restore draft';
+      setError(errMsg);
+      notifyAction(errMsg, 'error');
     } finally {
       setBusy(false);
     }
@@ -315,17 +383,26 @@ export default function AutomationWorkspace({
     setReview(null);
     setRestoreVersion(null);
   }, []);
-  const confirmReview = (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean, acknowledgeMaterialDifferences: boolean) => {
+  const confirmReview = (
+    acknowledgeNoShadow: boolean,
+    acknowledgeShadowErrors: boolean,
+    acknowledgeMaterialDifferences: boolean
+  ) => {
     void command(
       review === 'LIVE'
         ? { action: 'mode', mode: 'LIVE', acknowledgeNoShadow, acknowledgeShadowErrors }
         : review === 'activateCandidate'
-          ? { action: 'activateCandidate', expectedCandidateVersionId: reviewData?.candidateVersionId,
-              acknowledgeNoShadow, acknowledgeShadowErrors, acknowledgeMaterialDifferences }
-        : {
-            action: 'publish',
-            ...(review === 'restore' ? { sourceVersionId: restoreVersion?.id } : {}),
-          },
+          ? {
+              action: 'activateCandidate',
+              expectedCandidateVersionId: reviewData?.candidateVersionId,
+              acknowledgeNoShadow,
+              acknowledgeShadowErrors,
+              acknowledgeMaterialDifferences,
+            }
+          : {
+              action: 'publish',
+              ...(review === 'restore' ? { sourceVersionId: restoreVersion?.id } : {}),
+            },
       reviewData?.activeVersionId ?? null,
       review === 'LIVE' || review === 'activateCandidate'
         ? 'Automation mode set to LIVE.'
@@ -346,7 +423,7 @@ export default function AutomationWorkspace({
         ? sumShadowAggregates(reviewData?.aggregates, reviewData?.activeVersionId ?? null)
         : review === 'activateCandidate'
           ? sumShadowAggregates(reviewData?.candidateAggregates)
-        : sumShadowAggregates(data?.aggregates),
+          : sumShadowAggregates(data?.aggregates),
     [review, reviewData, data]
   );
   const reviewBefore = useMemo(
@@ -359,9 +436,9 @@ export default function AutomationWorkspace({
         ? snapshotSchema.parse(reviewData.activeVersion.snapshot)
         : review === 'activateCandidate' && reviewData?.candidateVersion?.snapshot
           ? snapshotSchema.parse(reviewData.candidateVersion.snapshot)
-        : review === 'restore' && restoreVersion
-          ? snapshotSchema.parse(restoreVersion.snapshot)
-          : draft,
+          : review === 'restore' && restoreVersion
+            ? snapshotSchema.parse(restoreVersion.snapshot)
+            : draft,
     [review, reviewData, restoreVersion, draft]
   );
   const publishBlockedReason = conflict
@@ -401,12 +478,18 @@ export default function AutomationWorkspace({
       const outcome = applyAutomationTemplate(draft, kind);
       if ('error' in outcome) {
         setError(outcome.error);
+        notifyAction(outcome.error, 'error');
         return;
       }
       edit(outcome.snapshot);
+      notifyAction(
+        'Automation template applied',
+        'success',
+        'Starter rules and context fields added to draft.'
+      );
       setArea('rules');
     },
-    [draft, edit]
+    [draft, edit, notifyAction]
   );
   const reloadTheirs = () => {
     discardForServerCopy();
@@ -426,8 +509,16 @@ export default function AutomationWorkspace({
         before={reviewBefore}
         mode={status?.mode ?? 'DISABLED'}
         snapshot={reviewSnapshot}
-        version={review === 'activateCandidate' ? reviewData?.candidateVersion?.versionNumber ?? null : (review === 'LIVE' ? reviewData : status)?.activeVersion?.versionNumber ?? null}
-        candidateFallbacks={review === 'activateCandidate' ? reviewData?.candidateAggregates?.reduce((sum, row) => sum + row.fallbacks, 0) ?? 0 : 0}
+        version={
+          review === 'activateCandidate'
+            ? (reviewData?.candidateVersion?.versionNumber ?? null)
+            : ((review === 'LIVE' ? reviewData : status)?.activeVersion?.versionNumber ?? null)
+        }
+        candidateFallbacks={
+          review === 'activateCandidate'
+            ? (reviewData?.candidateAggregates?.reduce((sum, row) => sum + row.fallbacks, 0) ?? 0)
+            : 0
+        }
         enabled={status?.enabled ?? false}
         counts={counts}
         busy={busy}
@@ -442,15 +533,26 @@ export default function AutomationWorkspace({
         onCancel={() => setConfirmDisable(false)}
         onConfirm={confirmDisableMode}
       />
-      <AlertDialog open={confirmDiscardCandidate} onOpenChange={open => !open && !busy && setConfirmDiscardCandidate(false)}>
+      <AlertDialog
+        open={confirmDiscardCandidate}
+        onOpenChange={open => !open && !busy && setConfirmDiscardCandidate(false)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Discard candidate?</AlertDialogTitle>
-            <AlertDialogDescription>Stop staged shadow evaluation. The active LIVE version stays in place.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Stop staged shadow evaluation. The active LIVE version stays in place.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Keep candidate</AlertDialogCancel>
-            <Button variant="destructive" disabled={busy} onClick={() => void discardPendingCandidate()}>Discard candidate</Button>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void discardPendingCandidate()}
+            >
+              Discard candidate
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -461,12 +563,10 @@ export default function AutomationWorkspace({
         onViewRules={viewAffectedRules}
         onConfirm={field => {
           removeField(field);
+          notifyAction(`Context field "${field.label}" removed`, 'info');
           setDeleteField(null);
         }}
       />
-      <p role="status" className="sr-only">
-        {announcement}
-      </p>
       <p aria-live="polite" className="sr-only">
         {saveState === 'Saved' ? 'All changes saved' : ''}
       </p>
@@ -479,6 +579,14 @@ export default function AutomationWorkspace({
           onPublish={publish}
           onModeChange={changeMode}
         />
+        {announcement && (
+          <InlineNotice
+            tone="success"
+            title={announcement}
+            onDismiss={() => setAnnouncement('')}
+            className="animate-in fade-in slide-in-from-top-2 duration-200"
+          />
+        )}
         {status && !status.enabled && <GlobalSwitchNotice />}
         {error && (
           <ErrorNotice message={error} onRetrySave={retryable ? () => void save() : undefined} />

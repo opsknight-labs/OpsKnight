@@ -9,15 +9,11 @@ import {
   type Rule,
   type Snapshot,
 } from '@/lib/automation/contract';
+import { notify } from '@/lib/toast';
 import { draftStorageKey } from './constants';
 
 export type SaveState =
-  | 'Saved'
-  | 'Unsaved'
-  | 'Saving…'
-  | 'Conflict detected'
-  | 'Save failed — retry'
-  | 'Offline';
+  'Saved' | 'Unsaved' | 'Saving…' | 'Conflict detected' | 'Save failed — retry' | 'Offline';
 
 export type UndoEntry = { label: string; restore: (current: Snapshot) => Snapshot };
 
@@ -295,6 +291,9 @@ export function useAutomationDraft({
           rules: [...latest.rules.slice(0, index), rule, ...latest.rules.slice(index)],
         }),
       });
+      notify.info(`Rule "${rule.name}" deleted`, {
+        id: `automation:rule:${rule.id}:delete`,
+      });
       edit({ ...current, rules: current.rules.filter(candidate => candidate.id !== rule.id) });
     },
     [edit]
@@ -337,6 +336,7 @@ export function useAutomationDraft({
     if (!undo) return;
     edit(undo.restore(draftRef.current));
     setUndo(null);
+    notify.success('Change undone', { id: 'automation:undo:applied' });
   }, [undo, edit]);
 
   const isInitialized = useCallback(() => initialized.current, []);
