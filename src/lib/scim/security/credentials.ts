@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
@@ -17,12 +17,42 @@ function matches(token: string, hash: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+const admissionSecret = randomBytes(32);
+const localAdmission = new Map<string, { count: number; until: number }>();
+const invalidTokens = new Map<string, number>();
+function negativeKey(authorization: string | null) {
+  return createHmac('sha256', admissionSecret)
+    .update((authorization ?? '').slice(0, 1024))
+    .digest('hex');
+}
+function preauthenticate(authorization: string | null) {
+  // Bounded process-local admission prevents repeated misses from touching PostgreSQL.
+  // No raw bearer or reversible identifier is retained. Registry checks remain uncached.
+  const key = createHmac('sha256', admissionSecret)
+    .update((authorization ?? '').slice(0, 1024))
+    .digest('hex');
+  const now = Date.now();
+  if (localAdmission.size >= 4096) {
+    for (const [key, entry] of localAdmission) if (entry.until <= now) localAdmission.delete(key);
+    if (localAdmission.size >= 4096 && !localAdmission.has(key))
+      throw new ScimFailure(429, 'Authentication admission is busy. Retry in one minute.');
+  }
+  const entry = localAdmission.get(key);
+  if (entry && entry.until > now) {
+    if (++entry.count > 1200)
+      throw new ScimFailure(429, 'Credential admission limit exceeded. Retry in one minute.');
+  } else localAdmission.set(key, { count: 1, until: now + 60000 });
+}
 function denied(connectorId: string, reason: string): null {
   recordAuthFailure(connectorId, reason);
   return null;
 }
 
 export async function authenticate(authorization: string | null): Promise<ScimPrincipal | null> {
+  preauthenticate(authorization);
+  const invalidKey = negativeKey(authorization);
+  if ((invalidTokens.get(invalidKey) ?? 0) > Date.now())
+    return denied('unknown', 'repeated_invalid');
   const match = /^Bearer ([^\s]{32,512})$/i.exec(authorization ?? '');
   if (!match) return denied('unknown', 'malformed');
   const token = match[1];
@@ -40,10 +70,14 @@ export async function authenticate(authorization: string | null): Promise<ScimPr
       credential.connector.credentialAuthority !== 'REGISTRY'
     )
       return denied(credential.connectorId, 'inactive');
-    await prisma.scimCredential.update({
-      where: { id: credential.id },
-      data: { lastUsedAt: new Date() },
-    });
+    if (!credential.lastUsedAt || credential.lastUsedAt.getTime() < Date.now() - 60000)
+      await prisma.scimCredential.updateMany({
+        where: {
+          id: credential.id,
+          OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: new Date(Date.now() - 60000) } }],
+        },
+        data: { lastUsedAt: new Date() },
+      });
     return {
       connectorId: credential.connectorId,
       credentialId: credential.id,
@@ -51,8 +85,11 @@ export async function authenticate(authorization: string | null): Promise<ScimPr
     };
   }
   const legacy = await prisma.scimConnector.findUnique({ where: { id: 'legacy' } });
-  if (!legacy?.enabled || legacy.credentialAuthority !== 'LEGACY')
+  if (!legacy?.enabled || legacy.credentialAuthority !== 'LEGACY') {
+    if (invalidTokens.size >= 4096) invalidTokens.clear();
+    invalidTokens.set(invalidKey, Date.now() + 5000);
     return denied('unknown', 'unknown_credential');
+  }
   const record = await prisma.systemConfig.findUnique({ where: { key: 'scim_configuration' } });
   if (record) {
     const config = record.value as { enabled?: boolean; secretTokenHash?: string } | null;
@@ -75,7 +112,16 @@ export async function authorize(request: Request, scope?: string) {
   if (!principal) throw new ScimFailure(401, 'Invalid, expired or revoked SCIM credential.');
   if (scope && !principal.scopes.includes(scope))
     throw new ScimFailure(403, `Credential requires ${scope} scope.`);
-  const limit = await consumeAuthRateLimit('scim:connector', principal.connectorId, 600, 60000);
+  const configured = Number(process.env.SCIM_CONNECTOR_REQUESTS_PER_MINUTE ?? 600);
+  const requestsPerMinute = Number.isInteger(configured)
+    ? Math.max(1, Math.min(configured, 1200))
+    : 600;
+  const limit = await consumeAuthRateLimit(
+    'scim:connector',
+    principal.connectorId,
+    requestsPerMinute,
+    60000
+  );
   if (!limit.allowed)
     throw new ScimFailure(429, 'Connector request limit exceeded. Retry in one minute.');
   return principal;
@@ -124,7 +170,7 @@ export async function createCredential(input: {
     });
     await tx.scimConnector.update({
       where: { id: connector.id },
-      data: { credentialAuthority: 'REGISTRY', enabled: true },
+      data: { credentialAuthority: 'REGISTRY' },
     });
     if (connector.id === 'legacy') {
       // Older replicas also see a disabled database record, fencing their env fallback.

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/prisma', () => ({
   default: {
-    scimCredential: { findUnique: vi.fn().mockResolvedValue(null) },
+    scimCredential: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     scimConnector: {
       findUnique: vi
         .fn()
@@ -44,6 +47,32 @@ describe('SCIM protocol helpers', () => {
     expect(await isScimRequestAuthorized('Bearer short')).toBe(false);
   });
 
+  it('bounds repeated unknown token misses before querying PostgreSQL again', async () => {
+    const { authenticate } = await import('@/lib/scim/security/credentials');
+    vi.mocked(prisma.scimConnector.findUnique).mockResolvedValueOnce(null);
+    const before = vi.mocked(prisma.scimCredential.findUnique).mock.calls.length;
+    const token = `Bearer repeated-unknown-token-${Date.now()}-certification`;
+    expect(await authenticate(token)).toBeNull();
+    expect(await authenticate(token)).toBeNull();
+    expect(vi.mocked(prisma.scimCredential.findUnique).mock.calls.length - before).toBe(1);
+  });
+  it('revalidates active credentials while coalescing last-used writes', async () => {
+    const { authenticate, hashToken } = await import('@/lib/scim/security/credentials');
+    const token = 'active-credential-last-used-certification-only';
+    vi.mocked(prisma.scimCredential.findUnique).mockResolvedValueOnce({
+      id: 'key',
+      connectorId: 'source',
+      tokenHash: hashToken(token),
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60000),
+      lastUsedAt: new Date(),
+      scopes: ['users:read'],
+      connector: { enabled: true, credentialAuthority: 'REGISTRY' },
+    } as never);
+    const before = vi.mocked(prisma.scimCredential.updateMany).mock.calls.length;
+    expect(await authenticate(`Bearer ${token}`)).toMatchObject({ connectorId: 'source' });
+    expect(vi.mocked(prisma.scimCredential.updateMany).mock.calls.length).toBe(before);
+  });
   it('compares a configured bearer token exactly', async () => {
     process.env.SCIM_BEARER_TOKEN = 'a-secure-scim-token-with-at-least-32-characters';
     expect(await isScimRequestAuthorized(`Bearer ${process.env.SCIM_BEARER_TOKEN}`)).toBe(true);

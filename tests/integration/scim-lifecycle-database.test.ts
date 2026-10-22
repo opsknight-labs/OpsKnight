@@ -8,6 +8,9 @@ import { getControlActor } from '@/lib/auth-control/actor';
 import {
   createScimCredentialAction,
   detachScimBindingAction,
+  restoreScimIdentityAction,
+  previewScimBindingAction,
+  approveScimBindingAction,
   revokeScimCredentialAction,
 } from '@/app/(app)/settings/system/scim-actions';
 import { hashToken, authenticate } from '@/lib/scim/security/credentials';
@@ -24,6 +27,7 @@ vi.mock('@/lib/auth-control/actor', () => ({
   getControlActor: vi.fn(),
   lockControlActor: vi.fn(),
 }));
+vi.mock('@/lib/rbac', () => ({ assertAdmin: vi.fn() }));
 const token = 'scim-certification-only-token-000000000000001';
 const tokenB = 'scim-certification-only-token-000000000000002';
 const ids: string[] = [];
@@ -443,6 +447,253 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
       (await call('users', 'POST', { userName: user.email, externalId: identity.externalId }))
         .status
     ).toBe(409);
+  });
+  it('requires explicit active true after disable and removes old grants permanently on DELETE and rehire', async () => {
+    const created = await (
+      await call('users', 'POST', {
+        userName: `rehire-${Date.now()}@example.test`,
+        externalId: `rehire-${Date.now()}`,
+      })
+    ).json();
+    const directory = await prisma.scimGroup.create({
+      data: {
+        connectorId: 'cert-a',
+        name: 'Rehire team',
+        memberships: { create: { userId: created.id } },
+        bindings: { create: { teamId, approvedBy: ids[0] } },
+      },
+    });
+    await prisma.$transaction(tx => reconcileTeam(tx, teamId));
+    expect(
+      (
+        await call(
+          'users',
+          'PATCH',
+          patch({ op: 'replace', path: 'active', value: false }),
+          created.id
+        )
+      ).status
+    ).toBe(200);
+    for (const active of [undefined, false]) {
+      const response = await call(
+        'users',
+        'PUT',
+        {
+          userName: created.userName,
+          displayName: 'Profile only',
+          ...(active === undefined ? {} : { active }),
+        },
+        created.id
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()).active).toBe(false);
+    }
+    expect(
+      (await call('users', 'PUT', { userName: created.userName, active: true }, created.id)).status
+    ).toBe(200);
+    expect((await call('users', 'DELETE', undefined, created.id)).status).toBe(204);
+    expect(await prisma.scimGroupMembership.count({ where: { userId: created.id } })).toBe(0);
+    expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(0);
+    vi.mocked(getControlActor).mockResolvedValue({ kind: 'admin', id: ids[0] } as Awaited<
+      ReturnType<typeof getControlActor>
+    >);
+    expect(await restoreScimIdentityAction({ id: created.id })).toBeUndefined();
+    expect((await call('users', 'PUT', { userName: created.userName }, created.id)).status).toBe(
+      200
+    );
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).status).toBe(
+      'DISABLED'
+    );
+    expect(
+      (
+        await call(
+          'users',
+          'PATCH',
+          patch({ op: 'replace', path: 'active', value: true }),
+          created.id
+        )
+      ).status
+    ).toBe(200);
+    expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(0);
+    expect(
+      (
+        await call(
+          'groups',
+          'PATCH',
+          patch({ op: 'replace', path: 'displayName', value: 'No stale references' }),
+          directory.id
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          'groups',
+          'PATCH',
+          patch({ op: 'add', path: 'members', value: [{ value: created.id }] }),
+          directory.id
+        )
+      ).status
+    ).toBe(200);
+    expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(1);
+  });
+  it('requires explicit selection to adopt matching legacy membership provenance without replacing rows', async () => {
+    const directoryUsers: Array<{ id: string }> = [];
+    for (const label of ['adopted', 'manual'])
+      directoryUsers.push(
+        await prisma.user.create({
+          data: { name: label, email: `${label}-legacy-${Date.now()}@example.test` },
+        })
+      );
+    const team = await prisma.team.create({
+      data: {
+        name: `Legacy adoption ${Date.now()}`,
+        scimExternalId: `legacy-adopt-${Date.now()}`,
+        members: {
+          create: [
+            { userId: ids[0], role: 'OWNER' },
+            ...directoryUsers.map(user => ({ userId: user.id, role: 'MEMBER' as const })),
+          ],
+        },
+      },
+      include: { members: true },
+    });
+    await prisma.scimConnector.upsert({
+      where: { id: 'legacy' },
+      create: { id: 'legacy', name: 'Legacy' },
+      update: {},
+    });
+    const directory = await prisma.scimGroup.create({
+      data: {
+        id: team.id,
+        connectorId: 'legacy',
+        name: team.name,
+        scimExternalId: team.scimExternalId,
+        memberships: { create: directoryUsers.map(user => ({ userId: user.id })) },
+      },
+    });
+    vi.mocked(getControlActor).mockResolvedValue({ kind: 'admin', id: ids[0] } as Awaited<
+      ReturnType<typeof getControlActor>
+    >);
+    const selected = team.members.find(member => member.userId === directoryUsers[0].id)!;
+    const preview = await previewScimBindingAction({
+      groupId: directory.id,
+      teamId: team.id,
+      adoptMemberIds: [selected.id],
+    });
+    if ('scimError' in preview) throw new Error(preview.scimError);
+    expect(preview.adoptedMemberships).toBe(1);
+    expect(
+      await approveScimBindingAction({
+        groupId: directory.id,
+        teamId: team.id,
+        adoptMemberIds: [],
+        revision: preview.revision,
+      })
+    ).toMatchObject({ scimError: expect.stringContaining('changed') });
+    expect(await prisma.scimGroupTeamBinding.count({ where: { groupId: directory.id } })).toBe(0);
+
+    expect(
+      await approveScimBindingAction({
+        groupId: directory.id,
+        teamId: team.id,
+        adoptMemberIds: [selected.id],
+        revision: preview.revision,
+      })
+    ).toBeUndefined();
+    expect(await prisma.teamMember.findUnique({ where: { id: selected.id } })).toEqual(selected);
+    expect(await prisma.scimTeamGrant.count({ where: { teamMemberId: selected.id } })).toBe(1);
+    await prisma.$transaction(async tx => {
+      await tx.scimGroupMembership.deleteMany({ where: { groupId: directory.id } });
+      await reconcileTeam(tx, team.id);
+    });
+    expect(
+      await prisma.teamMember.count({ where: { teamId: team.id, userId: directoryUsers[0].id } })
+    ).toBe(0);
+    expect(
+      await prisma.teamMember.count({ where: { teamId: team.id, userId: directoryUsers[1].id } })
+    ).toBe(1);
+    expect(await prisma.teamMember.count({ where: { teamId: team.id, role: 'OWNER' } })).toBe(1);
+  });
+  it('preserves a disabled connector while issuing a fresh credential', async () => {
+    const connector = await prisma.scimConnector.create({
+      data: { name: 'Disabled rotation', enabled: false },
+    });
+    vi.mocked(getControlActor).mockResolvedValue({ kind: 'admin', id: ids[0] } as Awaited<
+      ReturnType<typeof getControlActor>
+    >);
+    const credential = await createScimCredentialAction({
+      connectorId: connector.id,
+      name: 'Does not enable',
+      scopes: ['users:read'],
+      lifetimeDays: 1,
+      overlapMinutes: 0,
+    });
+    if ('scimError' in credential) throw new Error(credential.scimError);
+    expect(
+      (await prisma.scimConnector.findUniqueOrThrow({ where: { id: connector.id } })).enabled
+    ).toBe(false);
+    expect(await authenticate(`Bearer ${credential.token}`)).toBeNull();
+  });
+  it('fences a write already admitted before connector disablement', async () => {
+    const credential = await prisma.scimCredential.findUniqueOrThrow({
+      where: { id: 'cert-key-a' },
+    });
+    const admitted = {
+      connectorId: 'cert-a',
+      credentialId: credential.id,
+      scopes: credential.scopes,
+    };
+    await prisma.scimConnector.update({ where: { id: 'cert-a' }, data: { enabled: false } });
+    try {
+      const { recheck } = await import('@/lib/scim/security/credentials');
+      await expect(prisma.$transaction(tx => recheck(tx, admitted))).rejects.toMatchObject({
+        status: 401,
+      });
+    } finally {
+      await prisma.scimConnector.update({ where: { id: 'cert-a' }, data: { enabled: true } });
+    }
+  });
+  it('rolls back user tombstone and directory grant cleanup when deletion audit fails', async () => {
+    const created = await (
+      await call('users', 'POST', {
+        userName: `delete-atomic-${Date.now()}@example.test`,
+        externalId: `delete-atomic-${Date.now()}`,
+      })
+    ).json();
+    const directory = await prisma.scimGroup.create({
+      data: {
+        connectorId: 'cert-a',
+        name: 'Atomic user delete',
+        memberships: { create: { userId: created.id } },
+        bindings: { create: { teamId, approvedBy: ids[0] } },
+      },
+    });
+    await prisma.$transaction(tx => reconcileTeam(tx, teamId));
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION scim_cert_fail_user_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'user.deleted' THEN RAISE EXCEPTION 'isolated user deletion certification'; END IF; RETURN NEW; END $$`
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TRIGGER scim_cert_fail_user_delete BEFORE INSERT ON "ScimEvent" FOR EACH ROW EXECUTE FUNCTION scim_cert_fail_user_delete()'
+    );
+    try {
+      expect((await call('users', 'DELETE', undefined, created.id)).status).toBe(503);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).toEqual(before);
+      expect(
+        (await prisma.scimIdentity.findUniqueOrThrow({ where: { userId: created.id } })).deletedAt
+      ).toBeNull();
+      expect(
+        await prisma.scimGroupMembership.count({
+          where: { groupId: directory.id, userId: created.id },
+        })
+      ).toBe(1);
+      expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(1);
+      expect(await prisma.scimTeamGrant.count({ where: { userId: created.id } })).toBe(1);
+    } finally {
+      await prisma.$executeRawUnsafe('DROP TRIGGER scim_cert_fail_user_delete ON "ScimEvent"');
+      await prisma.$executeRawUnsafe('DROP FUNCTION scim_cert_fail_user_delete()');
+    }
   });
   it('prevents duplicate identities across concurrent requests/connections', async () => {
     const externalId = `concurrent-${Date.now()}`;

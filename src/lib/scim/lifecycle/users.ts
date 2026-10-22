@@ -18,6 +18,7 @@ import {
 import { patchUser, type UserDocument } from '../protocol/patch';
 import { json } from '../protocol/http';
 import { event } from './events';
+import { reconcileTeam } from './membership';
 import { applyProfileAuthority, requestedProfileFields } from './profile';
 
 function profile(document: UserDocument): {
@@ -47,6 +48,18 @@ function profile(document: UserDocument): {
   };
 }
 export async function users(request: NextRequest, id?: string) {
+  if (!id && !['GET', 'POST'].includes(request.method)) {
+    const response = json(
+      {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
+        status: '405',
+        detail: 'Use a resource URL for mutations.',
+      },
+      405
+    );
+    response.headers.set('Allow', 'GET, POST');
+    return response;
+  }
   const principal = await authorize(
     request,
     request.method === 'GET' ? 'users:read' : 'users:write'
@@ -198,7 +211,8 @@ export async function users(request: NextRequest, id?: string) {
           : parse(userSchema, body);
     if (document.externalId && document.externalId !== identity.externalId)
       throw new ScimFailure(400, 'externalId is immutable.', 'mutability');
-    const active = request.method !== 'DELETE' && document.active !== false;
+    const active =
+      request.method !== 'DELETE' && (document.active ?? existing.status !== 'DISABLED');
     const revoke =
       (existing.status !== 'DISABLED' && !active) || existing.email !== document.userName;
     const nextProfile = profile(document);
@@ -231,6 +245,29 @@ export async function users(request: NextRequest, id?: string) {
         ...(request.method === 'DELETE' ? { deletedAt: new Date() } : {}),
       },
     });
+    // DELETE clears directory intent; rehire requires a fresh provider group sync.
+    if (request.method === 'DELETE') {
+      const memberships = await tx.scimGroupMembership.findMany({
+        where: { userId: id, group: { connectorId: principal.connectorId } },
+        select: { groupId: true },
+      });
+      const affected = await tx.scimGroupTeamBinding.findMany({
+        where: {
+          group: { connectorId: principal.connectorId, memberships: { some: { userId: id } } },
+        },
+        select: { teamId: true },
+      });
+      await tx.scimGroupMembership.deleteMany({
+        where: { userId: id, group: { connectorId: principal.connectorId } },
+      });
+      if (memberships.length)
+        await tx.scimGroup.updateMany({
+          where: { id: { in: memberships.map(member => member.groupId) } },
+          data: { updatedAt: new Date() },
+        });
+      for (const teamId of new Set(affected.map(binding => binding.teamId)))
+        await reconcileTeam(tx, teamId);
+    }
     const teamCount = !active ? await tx.teamMember.count({ where: { userId: id } }) : 0;
     const directEscalationRules = !active
       ? await tx.escalationRule.count({ where: { targetUserId: id } })

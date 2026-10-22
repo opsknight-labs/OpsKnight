@@ -788,7 +788,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 }
               }
 
-              const dbUser = await getSessionSecurityProjection(token.sub);
+              const dbUser = await getSessionSecurityProjection(token.sub, true);
 
               if (dbUser) {
                 delete (token as AugmentedJWT).error;

@@ -32,6 +32,26 @@ describe('session security projection', () => {
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
   });
 
+  it('bypasses a warmed projection for security-critical reads after another replica revokes access', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'user-1',
+      tokenVersion: 1,
+      status: 'ACTIVE',
+      role: 'ADMIN',
+    } as never);
+    await getSessionSecurityProjection('user-1');
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'user-1',
+      tokenVersion: 2,
+      status: 'DISABLED',
+      role: 'USER',
+    } as never);
+    expect(await getSessionSecurityProjection('user-1', true)).toMatchObject({
+      tokenVersion: 2,
+      status: 'DISABLED',
+      role: 'USER',
+    });
+  });
   it('reads fresh security state after explicit invalidation', async () => {
     vi.mocked(prisma.user.findUnique)
       .mockResolvedValueOnce({

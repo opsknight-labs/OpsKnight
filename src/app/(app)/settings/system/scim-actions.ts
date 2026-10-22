@@ -242,19 +242,48 @@ export async function revokeScimCredentialAction(input: unknown) {
   }
 }
 
-const bindingSchema = z.object({ groupId: idSchema, teamId: idSchema }).strict();
+const bindingSchema = z
+  .object({
+    groupId: idSchema,
+    teamId: idSchema,
+    adoptMemberIds: z.array(idSchema).max(10000).default([]),
+  })
+  .strict();
 async function preview(
   tx: Pick<typeof prisma, 'scimGroup' | 'team' | 'teamMember' | 'service' | 'escalationRule'>,
   groupId: string,
-  teamId: string
+  teamId: string,
+  adoptMemberIds: string[] = []
 ) {
   const [group, team, members, services, escalations] = await Promise.all([
     tx.scimGroup.findUniqueOrThrow({ where: { id: groupId }, include: { memberships: true } }),
-    tx.team.findUniqueOrThrow({ where: { id: teamId }, select: { name: true } }),
-    tx.teamMember.findMany({ where: { teamId }, select: { userId: true, role: true } }),
+    tx.team.findUniqueOrThrow({
+      where: { id: teamId },
+      select: { name: true, scimExternalId: true },
+    }),
+    tx.teamMember.findMany({
+      where: { teamId },
+      select: { id: true, userId: true, role: true, scimGrant: true },
+    }),
     tx.service.count({ where: { teamId } }),
     tx.escalationRule.count({ where: { targetTeamId: teamId } }),
   ]);
+  const directoryUsers = new Set(group.memberships.map(member => member.userId));
+  const legacyMatch =
+    group.connectorId === 'legacy' &&
+    group.id === teamId &&
+    group.scimExternalId !== null &&
+    group.scimExternalId === team.scimExternalId;
+  const candidates = legacyMatch
+    ? members.filter(
+        member => member.role === 'MEMBER' && !member.scimGrant && directoryUsers.has(member.userId)
+      )
+    : [];
+  const approved = new Set(adoptMemberIds);
+  if (adoptMemberIds.some(id => !candidates.some(member => member.id === id)))
+    throw new Error(
+      'Membership or operational impact changed. Select only eligible legacy members.'
+    );
   const existing = new Set(members.map(m => m.userId));
   const state = {
     group: group.name,
@@ -264,6 +293,11 @@ async function preview(
     services,
     escalations,
     removals: 0,
+    adoptedMemberships: approved.size,
+    legacyCandidates: candidates.map(member => ({ id: member.id, userId: member.userId })),
+    retainedManualMemberships: members.filter(
+      member => !member.scimGrant && !approved.has(member.id)
+    ).length,
   };
   // Approval pins exactly the previewed membership and operational associations.
   const { createHash } = await import('node:crypto');
@@ -271,8 +305,11 @@ async function preview(
     .update(
       JSON.stringify({
         state,
+        adoptedMemberIds: [...approved].sort(),
         users: group.memberships.map(m => m.userId).sort(),
-        members: members.map(m => `${m.userId}:${m.role}`).sort(),
+        members: members
+          .map(m => `${m.id}:${m.userId}:${m.role}:${m.scimGrant?.bindingId ?? 'manual'}`)
+          .sort(),
       })
     )
     .digest('hex');
@@ -281,32 +318,46 @@ async function preview(
 export async function previewScimBindingAction(input: unknown) {
   try {
     await assertAdmin();
-    const { groupId, teamId } = bindingSchema.parse(input);
-    return await preview(prisma, groupId, teamId);
+    const { groupId, teamId, adoptMemberIds } = bindingSchema.parse(input);
+    return await preview(prisma, groupId, teamId, adoptMemberIds);
   } catch (error) {
     return await adminFailure(error);
   }
 }
 export async function approveScimBindingAction(input: unknown) {
   try {
-    const { groupId, teamId, revision } = bindingSchema
+    const { groupId, teamId, revision, adoptMemberIds } = bindingSchema
       .extend({ revision: z.string().length(64) })
       .parse(input);
     const actor = await getControlActor(true);
     if (actor.kind !== 'admin') throw new Error('Administrator sign-in required.');
     const changedUserIds = await runSerializableTransaction(async tx => {
       await lockControlActor(tx, actor);
-      const impact = await preview(tx, groupId, teamId);
+      const impact = await preview(tx, groupId, teamId, adoptMemberIds);
       if (impact.revision !== revision)
         throw new Error(
           'Membership or operational impact changed. Preview again before approving.'
         );
       const group = await tx.scimGroup.findUniqueOrThrow({ where: { id: groupId } });
-      await tx.scimGroupTeamBinding.upsert({
+      const binding = await tx.scimGroupTeamBinding.upsert({
         where: { groupId_teamId: { groupId, teamId } },
         create: { groupId, teamId, approvedBy: actor.id },
         update: {},
       });
+      if (adoptMemberIds.length) {
+        const members = await tx.teamMember.findMany({
+          where: { id: { in: adoptMemberIds }, teamId, role: 'MEMBER', scimGrant: null },
+        });
+        if (members.length !== adoptMemberIds.length)
+          throw new Error('Membership or operational impact changed. Preview again.');
+        await tx.scimTeamGrant.createMany({
+          data: members.map(member => ({
+            bindingId: binding.id,
+            userId: member.userId,
+            teamMemberId: member.id,
+          })),
+        });
+      }
       const reconciliation = await reconcileTeam(tx, teamId);
       await tx.scimEvent.create({
         data: {
@@ -451,12 +502,25 @@ export async function scimDriftAction(input: unknown) {
       orderBy: { id: 'asc' },
       include: {
         group: { include: { memberships: { select: { userId: true } } } },
-        team: { include: { members: { select: { userId: true } } } },
+        team: { include: { members: { select: { userId: true, scimGrant: true } } } },
       },
     });
-    return await bindings.map(binding => {
+    const teamBindings = await prisma.scimGroupTeamBinding.findMany({
+      where: { teamId: { in: bindings.map(binding => binding.teamId) } },
+      include: { group: { include: { memberships: { select: { userId: true } } } } },
+    });
+    return bindings.map(binding => {
       const actual = new Set(binding.team.members.map(m => m.userId));
+      const desired = new Set(
+        teamBindings
+          .filter(other => other.teamId === binding.teamId)
+          .flatMap(other => other.group.memberships.map(member => member.userId))
+      );
       return {
+        unexpectedDirectoryGrants: binding.team.members.filter(
+          member => member.scimGrant && !desired.has(member.userId)
+        ).length,
+        independentManualMembers: binding.team.members.filter(member => !member.scimGrant).length,
         groupId: binding.groupId,
         teamId: binding.teamId,
         group: binding.group.name,
