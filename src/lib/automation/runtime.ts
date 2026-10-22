@@ -151,7 +151,9 @@ export async function prepareAutomation(
           phaseStarted = now;
         }
         const elapsedMs = now - evalStart;
-        if (elapsedMs > LIMITS.evaluationMs) {
+        const evaluationTimeoutLimit =
+          Number(process.env.AUTOMATION_EVALUATION_TIMEOUT_MS) || LIMITS.evaluationMs;
+        if (elapsedMs > evaluationTimeoutLimit) {
           logger.warn('automation.evaluation_timeout', {
             ...timeoutPosition,
             elapsedMs,
@@ -231,13 +233,15 @@ export async function prepareAutomation(
       config.mode === 'LIVE' && priority?.state === 'RECOGNIZED'
         ? String(priority.value)
         : classification.priority;
-    if (runtime.mode === 'LIVE') {
+    const effectivePolicyId =
+      runtime.mode === 'LIVE' ? runtime.policyId : (servicePolicy?.id ?? null);
+    if (effectivePolicyId) {
       const snapshotStart = performance.now();
-      runtime.responderPolicy = runtime.policyId
-        ? await captureResponderSnapshot(tx, runtime.policyId)
-        : null;
-      if (runtime.policyId && !runtime.responderPolicy) throw new Error('POLICY_MISSING');
-      runtime.policyName = runtime.responderPolicy?.name ?? null;
+      runtime.responderPolicy = await captureResponderSnapshot(tx, effectivePolicyId);
+      if (runtime.mode === 'LIVE' && !runtime.responderPolicy) throw new Error('POLICY_MISSING');
+      if (runtime.mode === 'LIVE') {
+        runtime.policyName = runtime.responderPolicy?.name ?? null;
+      }
       runtime.responderSnapshotMs = performance.now() - snapshotStart;
     }
     // Bounded safe scalar summaries are queued; observation writes occur in the general worker.
@@ -318,7 +322,6 @@ export async function prepareAutomation(
   runtime.durationMs = performance.now() - engineStartedAt;
   return runtime;
 }
-const tagIdCache = new Map<string, string>();
 
 function compactSummaryWrites(writes: Array<{ fieldKey: string; value: unknown }> | undefined) {
   if (!writes || !writes.length) return [];
@@ -413,6 +416,8 @@ export async function persistAutomation(
   let summary: unknown = null;
   let responseContext: unknown = null;
 
+  const useRawCte = typeof tx.$executeRaw === 'function';
+
   if (runtime.mode === 'LIVE') {
     const responderPolicy = runtime.responderPolicy;
     summary = encodeExplanation(
@@ -440,20 +445,28 @@ export async function persistAutomation(
           })
         : null;
 
-    if (result?.tags.length) {
-      const missing = result.tags.filter(name => !tagIdCache.has(name));
-      if (missing.length) {
-        await tx.tag.createMany({ data: missing.map(name => ({ name })), skipDuplicates: true });
-        const loaded = await tx.tag.findMany({
-          where: { name: { in: missing } },
-          select: { id: true, name: true },
-        });
-        for (const tag of loaded) tagIdCache.set(tag.name, tag.id);
+    if (result?.tags.length && !useRawCte) {
+      let loaded = await tx.tag.findMany({
+        where: { name: { in: result.tags } },
+        select: { id: true, name: true },
+      });
+      if (loaded.length < result.tags.length) {
+        const existingNames = new Set(loaded.map(t => t.name));
+        const missing = result.tags.filter(name => !existingNames.has(name));
+        if (missing.length) {
+          await tx.tag.createMany({
+            data: missing.map(name => ({ name })),
+            skipDuplicates: true,
+          });
+          loaded = await tx.tag.findMany({
+            where: { name: { in: result.tags } },
+            select: { id: true, name: true },
+          });
+        }
       }
-      const tagIds = result.tags.map(name => tagIdCache.get(name)).filter(Boolean) as string[];
-      if (tagIds.length) {
+      if (loaded.length) {
         await tx.incidentTag.createMany({
-          data: tagIds.map(tagId => ({ incidentId, tagId })),
+          data: loaded.map(tag => ({ incidentId, tagId: tag.id })),
           skipDuplicates: true,
         });
       }
@@ -521,10 +534,6 @@ export async function persistAutomation(
       })
     : null;
 
-  const useRawCte =
-    typeof tx.$executeRaw === 'function' &&
-    (process.env.NODE_ENV !== 'test' || process.env.FORCE_AUTOMATION_RAW_INSERT === 'true');
-
   if (useRawCte) {
     const traceId = randomUUID();
     const jobId = `AUTOMATION_OBSERVE:${incidentId}`;
@@ -534,31 +543,148 @@ export async function persistAutomation(
       const summaryJson = JSON.stringify(summary);
       const responseContextJson = responseContext ? JSON.stringify(responseContext) : null;
       const detailJson = JSON.stringify(encodedDetail);
+      const tags = result?.tags ?? [];
 
       if (hasBackgroundJob) {
         const jobJson = JSON.stringify(jobPayload);
-        await tx.$executeRaw(Prisma.sql`
-          WITH ins_decision AS (
-            INSERT INTO "IncidentAutomationDecision" (
-              "incidentId", "serviceId", "versionId", "mode", "routeType",
-              "escalationPolicyId", "escalationPolicyNameSnapshot",
-              "matchedRouteRuleId", "matchedRouteRuleName",
-              "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
-              "summary", "responseContext", "createdAt"
-            ) VALUES (
-              ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
-              ${runtime.mode}::"AutomationMode",
-              ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
-              ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
-              ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
-              ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
-              ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
-              ${summaryJson}::jsonb,
-              ${responseContextJson}::jsonb,
-              NOW()
+        if (tags.length) {
+          await tx.$executeRaw(Prisma.sql`
+            WITH ins_tags_def AS (
+              INSERT INTO "Tag" ("id", "name")
+              SELECT gen_random_uuid()::text, name
+              FROM unnest(${tags}::text[]) AS name
+              ON CONFLICT ("name") DO NOTHING
+              RETURNING id, name
+            ),
+            all_tags AS (
+              SELECT id FROM ins_tags_def
+              UNION
+              SELECT id FROM "Tag" WHERE name = ANY(${tags}::text[])
+            ),
+            ins_tags AS (
+              INSERT INTO "IncidentTag" ("id", "incidentId", "tagId")
+              SELECT gen_random_uuid()::text, ${incidentId}, id FROM all_tags
+              ON CONFLICT ("incidentId", "tagId") DO NOTHING
+            ),
+            ins_decision AS (
+              INSERT INTO "IncidentAutomationDecision" (
+                "incidentId", "serviceId", "versionId", "mode", "routeType",
+                "escalationPolicyId", "escalationPolicyNameSnapshot",
+                "matchedRouteRuleId", "matchedRouteRuleName",
+                "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
+                "summary", "responseContext", "createdAt"
+              ) VALUES (
+                ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+                ${runtime.mode}::"AutomationMode",
+                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
+                ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
+                ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
+                ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
+                ${summaryJson}::jsonb,
+                ${responseContextJson}::jsonb,
+                NOW()
+              )
+            ),
+            ins_trace AS (
+              INSERT INTO "AutomationTrace" (
+                "id", "incidentId", "serviceId", "versionId", "mode", "phase",
+                "evaluationAt", "durationMs", "fallbackReason", "detail"
+              ) VALUES (
+                ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+                ${runtime.mode}::"AutomationMode", 'INITIAL',
+                ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
+                ${detailJson}::jsonb
+              )
             )
-          ),
-          ins_trace AS (
+            INSERT INTO "BackgroundJob" (
+              "id", "type", "scheduledAt", "payload", "maxAttempts", "createdAt", "updatedAt"
+            ) VALUES (
+              ${jobId}, 'SCHEDULED_TASK'::"JobType", ${runtime.evaluationAt},
+              ${jobJson}::jsonb, 3, NOW(), NOW()
+            );
+          `);
+        } else {
+          await tx.$executeRaw(Prisma.sql`
+            WITH ins_decision AS (
+              INSERT INTO "IncidentAutomationDecision" (
+                "incidentId", "serviceId", "versionId", "mode", "routeType",
+                "escalationPolicyId", "escalationPolicyNameSnapshot",
+                "matchedRouteRuleId", "matchedRouteRuleName",
+                "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
+                "summary", "responseContext", "createdAt"
+              ) VALUES (
+                ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+                ${runtime.mode}::"AutomationMode",
+                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
+                ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
+                ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
+                ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
+                ${summaryJson}::jsonb,
+                ${responseContextJson}::jsonb,
+                NOW()
+              )
+            ),
+            ins_trace AS (
+              INSERT INTO "AutomationTrace" (
+                "id", "incidentId", "serviceId", "versionId", "mode", "phase",
+                "evaluationAt", "durationMs", "fallbackReason", "detail"
+              ) VALUES (
+                ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+                ${runtime.mode}::"AutomationMode", 'INITIAL',
+                ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
+                ${detailJson}::jsonb
+              )
+            )
+            INSERT INTO "BackgroundJob" (
+              "id", "type", "scheduledAt", "payload", "maxAttempts", "createdAt", "updatedAt"
+            ) VALUES (
+              ${jobId}, 'SCHEDULED_TASK'::"JobType", ${runtime.evaluationAt},
+              ${jobJson}::jsonb, 3, NOW(), NOW()
+            );
+          `);
+        }
+      } else {
+        if (tags.length) {
+          await tx.$executeRaw(Prisma.sql`
+            WITH ins_tags_def AS (
+              INSERT INTO "Tag" ("id", "name")
+              SELECT gen_random_uuid()::text, name
+              FROM unnest(${tags}::text[]) AS name
+              ON CONFLICT ("name") DO NOTHING
+              RETURNING id, name
+            ),
+            all_tags AS (
+              SELECT id FROM ins_tags_def
+              UNION
+              SELECT id FROM "Tag" WHERE name = ANY(${tags}::text[])
+            ),
+            ins_tags AS (
+              INSERT INTO "IncidentTag" ("id", "incidentId", "tagId")
+              SELECT gen_random_uuid()::text, ${incidentId}, id FROM all_tags
+              ON CONFLICT ("incidentId", "tagId") DO NOTHING
+            ),
+            ins_decision AS (
+              INSERT INTO "IncidentAutomationDecision" (
+                "incidentId", "serviceId", "versionId", "mode", "routeType",
+                "escalationPolicyId", "escalationPolicyNameSnapshot",
+                "matchedRouteRuleId", "matchedRouteRuleName",
+                "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
+                "summary", "responseContext", "createdAt"
+              ) VALUES (
+                ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+                ${runtime.mode}::"AutomationMode",
+                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
+                ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
+                ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
+                ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
+                ${summaryJson}::jsonb,
+                ${responseContextJson}::jsonb,
+                NOW()
+              )
+            )
             INSERT INTO "AutomationTrace" (
               "id", "incidentId", "serviceId", "versionId", "mode", "phase",
               "evaluationAt", "durationMs", "fallbackReason", "detail"
@@ -567,47 +693,41 @@ export async function persistAutomation(
               ${runtime.mode}::"AutomationMode", 'INITIAL',
               ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
               ${detailJson}::jsonb
+            );
+          `);
+        } else {
+          await tx.$executeRaw(Prisma.sql`
+            WITH ins_decision AS (
+              INSERT INTO "IncidentAutomationDecision" (
+                "incidentId", "serviceId", "versionId", "mode", "routeType",
+                "escalationPolicyId", "escalationPolicyNameSnapshot",
+                "matchedRouteRuleId", "matchedRouteRuleName",
+                "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
+                "summary", "responseContext", "createdAt"
+              ) VALUES (
+                ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+                ${runtime.mode}::"AutomationMode",
+                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
+                ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
+                ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
+                ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
+                ${summaryJson}::jsonb,
+                ${responseContextJson}::jsonb,
+                NOW()
+              )
             )
-          )
-          INSERT INTO "BackgroundJob" (
-            "id", "type", "scheduledAt", "payload", "maxAttempts", "createdAt", "updatedAt"
-          ) VALUES (
-            ${jobId}, 'SCHEDULED_TASK'::"JobType", ${runtime.evaluationAt},
-            ${jobJson}::jsonb, 3, NOW(), NOW()
-          );
-        `);
-      } else {
-        await tx.$executeRaw(Prisma.sql`
-          WITH ins_decision AS (
-            INSERT INTO "IncidentAutomationDecision" (
-              "incidentId", "serviceId", "versionId", "mode", "routeType",
-              "escalationPolicyId", "escalationPolicyNameSnapshot",
-              "matchedRouteRuleId", "matchedRouteRuleName",
-              "basePriority", "finalPriority", "evaluationAt", "fallbackReason",
-              "summary", "responseContext", "createdAt"
+            INSERT INTO "AutomationTrace" (
+              "id", "incidentId", "serviceId", "versionId", "mode", "phase",
+              "evaluationAt", "durationMs", "fallbackReason", "detail"
             ) VALUES (
-              ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
-              ${runtime.mode}::"AutomationMode",
-              ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
-              ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
-              ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
-              ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
-              ${runtime.evaluationAt}, ${runtime.fallbackReason ?? null},
-              ${summaryJson}::jsonb,
-              ${responseContextJson}::jsonb,
-              NOW()
-            )
-          )
-          INSERT INTO "AutomationTrace" (
-            "id", "incidentId", "serviceId", "versionId", "mode", "phase",
-            "evaluationAt", "durationMs", "fallbackReason", "detail"
-          ) VALUES (
-            ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
-            ${runtime.mode}::"AutomationMode", 'INITIAL',
-            ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
-            ${detailJson}::jsonb
-          );
-        `);
+              ${traceId}, ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
+              ${runtime.mode}::"AutomationMode", 'INITIAL',
+              ${runtime.evaluationAt}, ${runtime.durationMs}, ${runtime.fallbackReason ?? null},
+              ${detailJson}::jsonb
+            );
+          `);
+        }
       }
       const elapsed = performance.now() - rawStarted;
       runtime.decisionPersistenceMs = elapsed / 2;
@@ -654,6 +774,7 @@ export async function persistAutomation(
   } else {
     // Fallback path for unit test mocks where $executeRaw is not available
     const writes: Promise<unknown>[] = [];
+
     if (runtime.mode === 'LIVE') {
       const decisionPersistenceStarted = performance.now();
       writes.push(

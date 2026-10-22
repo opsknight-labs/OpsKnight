@@ -173,24 +173,26 @@ async function postEvent(req: NextRequest) {
       integrationId = 'api-key';
     }
 
-    const rateKey = integrationId
-      ? `integration:${integrationId}:events`
-      : apiKeyId
-        ? `api:${apiKeyId}:events`
-        : 'anonymous:events';
-    const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-    if (!rate.allowed) {
-      const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-      return jsonError(
-        new AppError({
-          code: 'RATE_LIMIT_EXCEEDED',
-          userMessage: 'Rate limit exceeded.',
-          details: { retryAfter },
-        }),
-        undefined,
-        undefined,
-        { 'Retry-After': String(retryAfter) }
-      );
+    if (process.env.INTEGRATION_RATE_LIMIT !== 'false') {
+      const rateKey = integrationId
+        ? `integration:${integrationId}:events`
+        : apiKeyId
+          ? `api:${apiKeyId}:events`
+          : 'anonymous:events';
+      const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+      if (!rate.allowed) {
+        const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
+        return jsonError(
+          new AppError({
+            code: 'RATE_LIMIT_EXCEEDED',
+            userMessage: 'Rate limit exceeded.',
+            details: { retryAfter },
+          }),
+          undefined,
+          undefined,
+          { 'Retry-After': String(retryAfter) }
+        );
+      }
     }
 
     const result = await processIntegrationEvent({

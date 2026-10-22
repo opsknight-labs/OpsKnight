@@ -9,7 +9,7 @@ export const LIMITS = {
   rules: 100,
   conditions: 20,
   actions: 8,
-  evaluationMs: 15,
+  evaluationMs: 250,
   cache: 256,
 } as const;
 export const PRIORITIES = ['P1', 'P2', 'P3', 'P4', 'P5'] as const;

@@ -26,7 +26,16 @@ export function controlledK6Launch(
     return {
       target,
       command: env.K6_BINARY || 'k6',
-      args: ['run', '--summary-export', output, 'tests/load/scenarios/automation.js'],
+      args: [
+        'run',
+        '--summary-export',
+        output,
+        '-e',
+        `AUTOMATION_PREALLOC_VUS=${env.AUTOMATION_PREALLOC_VUS || '300'}`,
+        '-e',
+        `AUTOMATION_MAX_VUS=${env.AUTOMATION_MAX_VUS || '500'}`,
+        'tests/load/scenarios/automation.js',
+      ],
       summaryPath: output,
     };
   if (!/^[a-z0-9-]+$/.test(profile) || !/^\d+$/.test(runId))

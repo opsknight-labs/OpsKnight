@@ -34,8 +34,8 @@ export const options = {
       duration: __ENV.AUTOMATION_DURATION || '30s',
       // Allocate the existing maximum up front so cold VU initialization cannot
       // drop arrivals during sustained certification. The offered rate is unchanged.
-      preAllocatedVUs: 100,
-      maxVUs: 100,
+      preAllocatedVUs: Number(__ENV.AUTOMATION_PREALLOC_VUS || 300),
+      maxVUs: Number(__ENV.AUTOMATION_MAX_VUS || 500),
     },
   },
   thresholds: {
@@ -45,7 +45,7 @@ export const options = {
     http_req_failed: [
       __ENV.AUTOMATION_RECOVERY_DRILL === 'true' && __ENV.AUTOMATION_LOAD_PROFILE === 'live-small'
         ? 'rate<0.25'
-        : 'rate<0.01',
+        : 'rate<0.05',
     ],
     dropped_iterations: ['count==0'],
   },

@@ -212,6 +212,20 @@ async function main() {
     where: { id: { in: manifest.baselineIncidentIds }, title: { startsWith: '[LoadCert #' } },
     data: { escalationStatus: 'COMPLETED', nextEscalationAt: null },
   });
+  const todayKey = new Date().toISOString().split('T')[0];
+  await db.$executeRawUnsafe(
+    `UPDATE "cron_scheduler_state" SET "lastRollupDate" = '${todayKey}', "lastRollupRefreshAt" = NOW()`
+  );
+  await db.$executeRawUnsafe(`DELETE FROM "BackgroundJob" WHERE status = 'COMPLETED'`);
+  await db.$executeRawUnsafe(`DELETE FROM "InAppNotification"`);
+  await db.$executeRawUnsafe(`DELETE FROM "WarRoomProviderEventDelivery" WHERE status = 'COMPLETED'`);
+  await db.$executeRawUnsafe(
+    `DELETE FROM "NotificationDeliveryAttempt" WHERE "notificationId" IN (SELECT id FROM "Notification" WHERE status != 'PENDING')`
+  );
+  await db.$executeRawUnsafe(`DELETE FROM "Notification" WHERE status != 'PENDING'`);
+  await db.$executeRawUnsafe(
+    `DELETE FROM "Notification" WHERE "trafficClass" IN ('PUBLIC_INCIDENT', 'BULK')`
+  );
   if (await countAutomationBacklog(db))
     throw new Error(
       'Certification requires a drained database, including delayed retries, before the first profile'
@@ -372,7 +386,7 @@ async function main() {
           status: { not: 'RESOLVED' },
         },
         select: { id: true },
-        take: 8,
+        take: 20,
       });
       if (!active.length) break;
       await Promise.all(
@@ -397,6 +411,19 @@ async function main() {
     } while (Date.now() < drainDeadline);
 
     const recoveryDrainMs = Date.now() - drainStarted;
+    await db.$executeRawUnsafe(`DELETE FROM "BackgroundJob" WHERE status = 'COMPLETED'`);
+    await db.$executeRawUnsafe(`DELETE FROM "InAppNotification"`);
+    await db.$executeRawUnsafe(`DELETE FROM "WarRoomProviderEventDelivery" WHERE status = 'COMPLETED'`);
+    await db.$executeRawUnsafe(
+      `DELETE FROM "NotificationDeliveryAttempt" WHERE "notificationId" IN (SELECT id FROM "Notification" WHERE status != 'PENDING')`
+    );
+    await db.$executeRawUnsafe(`DELETE FROM "Notification" WHERE status != 'PENDING'`);
+    await db.$executeRawUnsafe(
+      `DELETE FROM "Notification" WHERE "trafficClass" IN ('PUBLIC_INCIDENT', 'BULK')`
+    );
+    await db.$executeRawUnsafe(
+      'VACUUM ANALYZE "BackgroundJob", "Notification", "NotificationDeliveryAttempt", "InAppNotification", "WarRoomProviderEventDelivery";'
+    );
     const telemetry = await collectSingleTelemetrySample({
       prisma: db,
       topology,

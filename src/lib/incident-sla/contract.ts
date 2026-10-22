@@ -47,30 +47,19 @@ export type NewIncidentSlaContract = {
  * Read both scopes in one SQL snapshot; immutable versions make all rule reads stable.
  * Missing workspace configuration fails closed, never substitutes runtime constants.
  */
-type SlaPoliciesWithRules = Prisma.IncidentSlaPolicyGetPayload<{ include: { rules: true } }>[];
-const slaPolicyCache = new Map<string, { expiresAt: number; policies: SlaPoliciesWithRules }>();
-
 export async function resolveNewIncidentSlaContract(
   tx: Prisma.TransactionClient,
   input: { serviceId: string; priority?: string | null; now: Date }
 ): Promise<NewIncidentSlaContract> {
-  const nowMs = Date.now();
-  const cached = slaPolicyCache.get(input.serviceId);
-  let policies: SlaPoliciesWithRules;
-  if (cached && nowMs < cached.expiresAt) {
-    policies = cached.policies;
-  } else {
-    policies = await tx.incidentSlaPolicy.findMany({
-      where: {
-        scopeKey: { in: [`service:${input.serviceId}`, 'workspace'] },
-        sealedAt: { not: null },
-      },
-      orderBy: { version: 'desc' },
-      distinct: ['scopeKey'],
-      include: { rules: true },
-    });
-    slaPolicyCache.set(input.serviceId, { expiresAt: nowMs + 5000, policies });
-  }
+  const policies = await tx.incidentSlaPolicy.findMany({
+    where: {
+      scopeKey: { in: [`service:${input.serviceId}`, 'workspace'] },
+      sealedAt: { not: null },
+    },
+    orderBy: { version: 'desc' },
+    distinct: ['scopeKey'],
+    include: { rules: true },
+  });
   const service = policies.find(policy => policy.scopeKey === `service:${input.serviceId}`);
   const workspace = policies.find(policy => policy.scopeKey === 'workspace');
   const match = input.priority

@@ -26,6 +26,7 @@ import { addOperationalMetric, observeOperationalHistogram } from './metrics/ope
 import { checkAlertFlapping } from './flapping';
 import { initializeEscalationExecution } from './escalation/repository';
 import { buildResponderRoutingFromAutomation } from './escalation/routing';
+import { captureResponderSnapshot } from './escalation/automation-snapshot';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -596,7 +597,36 @@ export async function processEvent(
       if (!isFlapping) {
         // Escalation state and its first due job commit with the incident, so
         // an OPEN incident with a policy is never left with nothing scheduled.
-        const inMemoryRouting = automation ? buildResponderRoutingFromAutomation(automation) : null;
+        let inMemoryRouting = automation ? buildResponderRoutingFromAutomation(automation) : null;
+        if (!inMemoryRouting && service.escalationPolicyId) {
+          try {
+            const snapshot = await captureResponderSnapshot(tx, service.escalationPolicyId);
+            if (snapshot) {
+              inMemoryRouting = {
+                type: 'DEFAULT_POLICY',
+                policy: {
+                  id: snapshot.id,
+                  name: snapshot.name,
+                  description: null,
+                  archivedAt: null,
+                  archivedBy: null,
+                  revision: 0,
+                  createdAt: incidentCreatedAt,
+                  updatedAt: incidentCreatedAt,
+                  steps: snapshot.steps.map(({ conditions: _conditions, ...step }) => ({
+                    ...step,
+                    targetUser: null,
+                    targetTeam: null,
+                    targetSchedule: null,
+                  })),
+                },
+                pinnedConditions: new Map(snapshot.steps.map(step => [step.id, step.conditions])),
+              };
+            }
+          } catch {
+            // Fall back to standard lookup if snapshot capture fails
+          }
+        }
         await initializeEscalationExecution(tx, {
           incidentId: newIncident.id,
           serviceId,

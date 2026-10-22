@@ -25,15 +25,16 @@ export function buildResponderRoutingFromAutomation(
     result: { outcome: { type: string } } | null;
   }
 ): ResponderRouting | null {
-  if (automation.mode !== 'LIVE') return null;
-  if (automation.result?.outcome.type === 'NO_ESCALATION') {
+  if (automation.mode === 'LIVE' && automation.result?.outcome.type === 'NO_ESCALATION') {
     return { type: 'NO_ESCALATION', policy: null };
   }
-  if (automation.policyId) {
-    const snapshot = automation.responderPolicy;
-    if (!snapshot) return null;
+  const snapshot = automation.responderPolicy;
+  if (snapshot) {
     return {
-      type: automation.result?.outcome.type === 'ESCALATION_POLICY' ? 'SELECTED_POLICY' : 'DEFAULT_POLICY',
+      type:
+        automation.mode === 'LIVE' && automation.result?.outcome.type === 'ESCALATION_POLICY'
+          ? 'SELECTED_POLICY'
+          : 'DEFAULT_POLICY',
       policy: {
         id: snapshot.id,
         name: snapshot.name,
@@ -53,6 +54,7 @@ export function buildResponderRoutingFromAutomation(
       pinnedConditions: new Map(snapshot.steps.map(step => [step.id, step.conditions])),
     };
   }
+  if (automation.mode !== 'LIVE') return null;
   return { type: 'DEFAULT_FANOUT', policy: null };
 }
 

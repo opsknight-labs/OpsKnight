@@ -187,22 +187,9 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
   }
 }
 
-let cachedClockOffsetMs = 0;
-let lastClockSampleAt = 0;
 async function databaseClock(tx: Prisma.TransactionClient): Promise<Date> {
-  const now = Date.now();
-  if (now - lastClockSampleAt > 5000) {
-    try {
-      const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS "now"`;
-      if (clock?.now) {
-        cachedClockOffsetMs = clock.now.getTime() - Date.now();
-        lastClockSampleAt = now;
-      }
-    } catch {
-      // Fall back to local time on error
-    }
-  }
-  return new Date(Date.now() + cachedClockOffsetMs);
+  const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS "now"`;
+  return clock?.now ?? new Date();
 }
 
 async function enqueueSideEffects(
