@@ -5,11 +5,13 @@ import Link from 'next/link';
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   FlaskConical,
   GitCompare,
   ListChecks,
   Pencil,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -172,17 +174,23 @@ export const AutomationOverview = memo(function AutomationOverview({
       {/* Top Stats Strip */}
       <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
-          <dt className="text-[11px] font-medium text-muted-foreground">Evaluated · 7 days</dt>
+          <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+            <span>Evaluated · 7 days</span>
+            <Activity className="h-3.5 w-3.5 text-sky-500/70" aria-hidden="true" />
+          </dt>
           <dd className="mt-1 flex items-baseline justify-between">
             <span className="text-xl font-bold tracking-tight tabular-nums text-foreground">
               {evaluated.toLocaleString()}
             </span>
-            <span className="text-[10px] text-muted-foreground">7d window</span>
+            <span className="text-[10px] font-medium text-muted-foreground">7d window</span>
           </dd>
         </div>
 
         <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
-          <dt className="text-[11px] font-medium text-muted-foreground">Same behavior</dt>
+          <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+            <span>Same behavior</span>
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500/70" aria-hidden="true" />
+          </dt>
           <dd className="mt-1 flex items-baseline justify-between">
             <span className="text-xl font-bold tracking-tight tabular-nums text-foreground">
               {same.toLocaleString()}
@@ -199,24 +207,34 @@ export const AutomationOverview = memo(function AutomationOverview({
         </div>
 
         <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
-          <dt className="text-[11px] font-medium text-muted-foreground">Different routes</dt>
+          <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+            <span>Different routes</span>
+            <GitCompare className="h-3.5 w-3.5 text-indigo-500/70" aria-hidden="true" />
+          </dt>
           <dd className="mt-1 flex items-baseline justify-between">
             <span className="text-xl font-bold tracking-tight tabular-nums text-foreground">
               {diffRoutes.toLocaleString()}
             </span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[10px] font-medium text-muted-foreground">
               {counts?.priorities ?? 0} priority diffs
             </span>
           </dd>
         </div>
 
         <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
-          <dt className="text-[11px] font-medium text-muted-foreground">Fallbacks / errors</dt>
+          <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+            <span>Fallbacks / errors</span>
+            {errors === 0 ? (
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500/70" aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500/70" aria-hidden="true" />
+            )}
+          </dt>
           <dd className="mt-1 flex items-baseline justify-between">
             <span className="text-xl font-bold tracking-tight tabular-nums text-foreground">
               {errors}
             </span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[10px] font-medium text-muted-foreground">
               {errors === 0 ? 'Zero failures' : 'Action required'}
             </span>
           </dd>
@@ -226,7 +244,49 @@ export const AutomationOverview = memo(function AutomationOverview({
       {/* Main Split: Readiness & Governance vs Action Hub */}
       <div className="grid gap-3.5 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <Panel icon={ListChecks} title="LIVE readiness · active version">
+          <Panel
+            icon={ListChecks}
+            title="LIVE readiness · active version"
+            action={
+              <Badge
+                variant="outline"
+                className={cn(
+                  'gap-1 text-[10px] font-semibold',
+                  data.enabled &&
+                    !!data.activeVersion &&
+                    !!counts?.evaluated &&
+                    !counts?.errors &&
+                    !data.unmappedCount
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    data.enabled &&
+                      !!data.activeVersion &&
+                      !!counts?.evaluated &&
+                      !counts?.errors &&
+                      !data.unmappedCount
+                      ? 'bg-emerald-500'
+                      : 'bg-amber-500'
+                  )}
+                  aria-hidden="true"
+                />
+                {
+                  [
+                    data.enabled,
+                    !!data.activeVersion,
+                    !!counts?.evaluated,
+                    !counts?.errors,
+                    !data.unmappedCount,
+                  ].filter(Boolean).length
+                }{' '}
+                / 5 checks ready
+              </Badge>
+            }
+          >
             <div className="space-y-3">
               <ul className="space-y-2">
                 <Check ok={data.enabled}>
@@ -292,19 +352,25 @@ export const AutomationOverview = memo(function AutomationOverview({
             </div>
             <div className="space-y-1.5 pt-1">
               <Button
-                className="h-8.5 w-full justify-start gap-2 text-xs font-medium shadow-xs"
+                className="group h-8.5 w-full justify-between px-3 text-xs font-medium shadow-xs"
                 onClick={() => setArea('rules')}
               >
-                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                Edit automation
+                <span className="flex items-center gap-2">
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  Edit automation
+                </span>
+                <ArrowRight className="h-3 w-3 opacity-60 transition-transform group-hover:translate-x-0.5" />
               </Button>
               <Button
                 variant="outline"
-                className="h-8.5 w-full justify-start gap-2 text-xs font-medium"
+                className="group h-8.5 w-full justify-between px-3 text-xs font-medium"
                 onClick={() => setArea('test')}
               >
-                <FlaskConical className="h-3.5 w-3.5" aria-hidden="true" />
-                Test an event
+                <span className="flex items-center gap-2">
+                  <FlaskConical className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  Test an event
+                </span>
+                <ArrowRight className="h-3 w-3 opacity-60 transition-transform group-hover:translate-x-0.5" />
               </Button>
             </div>
           </div>
@@ -332,17 +398,25 @@ export const AutomationOverview = memo(function AutomationOverview({
               {differences.slice(0, 5).map(trace => {
                 const detail = trace.detail as TraceDetailShape;
                 return (
-                  <li key={trace.id} className="py-2.5 first:pt-0 last:pb-0">
+                  <li
+                    key={trace.id}
+                    className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0"
+                  >
                     <span className="font-medium text-foreground">
                       {detail.result?.matchedRule?.name ?? 'Service fallback'}
-                    </span>{' '}
-                    <span className="text-muted-foreground">→</span>{' '}
-                    <span className="text-muted-foreground">
-                      {detail.fallbackReason ??
-                        (detail.result?.outcome?.type === 'NO_ESCALATION'
-                          ? 'No responder paging'
-                          : (detail.policyName ?? 'Service default'))}
                     </span>
+                    <div className="inline-flex items-center gap-1.5">
+                      <ArrowRight className="h-3 w-3 text-muted-foreground/60" aria-hidden="true" />
+                      <Badge
+                        variant="secondary"
+                        className="px-1.5 py-0 text-[10px] font-mono text-muted-foreground font-normal"
+                      >
+                        {detail.fallbackReason ??
+                          (detail.result?.outcome?.type === 'NO_ESCALATION'
+                            ? 'No responder paging'
+                            : (detail.policyName ?? 'Service default'))}
+                      </Badge>
+                    </div>
                   </li>
                 );
               })}
@@ -393,26 +467,39 @@ export const AutomationOverview = memo(function AutomationOverview({
             {visibleTraces.slice(0, 5).map(trace => (
               <details
                 key={trace.id}
-                className="overflow-hidden rounded-lg border border-border/70 bg-background text-xs"
+                className="overflow-hidden rounded-lg border border-border/70 bg-background text-xs transition-colors hover:border-border"
               >
                 <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-medium hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                  <span className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <Link
-                      className="text-primary hover:underline"
+                      className="font-medium text-primary hover:underline"
                       href={`/incidents/${trace.incidentId}`}
                     >
                       Incident
                     </Link>
-                    <span className="text-muted-foreground/60">·</span>
-                    <span className="font-mono text-[11px] text-muted-foreground">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'px-1.5 py-0 font-mono text-[9px] font-bold uppercase tracking-wide',
+                        trace.mode === 'LIVE'
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      )}
+                    >
                       {trace.mode}
-                    </span>
-                    <span className="text-muted-foreground/60">·</span>
+                    </Badge>
                     <span className="text-foreground/80">
                       {trace.fallbackReason ?? 'Evaluated'}
                     </span>
-                  </span>
-                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                  </div>
+                  <span
+                    className={cn(
+                      'font-mono text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded',
+                      trace.durationMs < 5
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
                     {trace.durationMs.toFixed(2)} ms
                   </span>
                 </summary>

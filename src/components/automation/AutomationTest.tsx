@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { ChevronDown, Play, Sparkles } from 'lucide-react';
+import { ChevronDown, FlaskConical, Play, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -67,13 +67,25 @@ export function AutomationTest({
         aria-labelledby={`${id}-input`}
         className="min-w-0 space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-xs"
       >
-        <div>
-          <h3 id={`${id}-input`} className="text-sm font-semibold tracking-tight text-foreground">
-            Sample event
-          </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Sample tests use the production evaluator and create no incidents or notifications.
-          </p>
+        <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+          <div>
+            <h3
+              id={`${id}-input`}
+              className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
+            >
+              <FlaskConical className="h-4 w-4 text-primary" aria-hidden="true" />
+              Sample event
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Sample tests use the production evaluator and create no incidents or notifications.
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+          >
+            Sandbox
+          </Badge>
         </div>
 
         {data.canReadSensitive === false && (
@@ -251,9 +263,12 @@ export function AutomationTest({
         </div>
 
         {!result ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 p-8 text-center text-xs text-muted-foreground">
-            <Sparkles className="h-5 w-5 mb-2 text-muted-foreground/50" />
-            <p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 p-10 text-center text-xs text-muted-foreground bg-muted/5">
+            <div className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Sparkles className="h-4.5 w-4.5 text-primary" aria-hidden="true" />
+            </div>
+            <p className="font-semibold text-foreground text-xs">Ready for simulation</p>
+            <p className="mt-1 max-w-sm text-muted-foreground">
               Run a sample event to trace rule matches, priority overrides, and responder route
               decisions.
             </p>

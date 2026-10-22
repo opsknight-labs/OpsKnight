@@ -48,12 +48,34 @@ function VersionComparison({ active, snapshot }: { active: Snapshot; snapshot: S
       <div className="space-y-1">
         <p className="font-medium text-foreground">Changes compared with the active version:</p>
         {changes.length ? (
-          <ul className="divide-y divide-border/60 rounded-lg border border-border/70 bg-background text-xs">
-            {changes.map((change, index) => (
-              <li key={index} className="break-words px-3 py-2 text-foreground/90">
-                {change}
-              </li>
-            ))}
+          <ul className="divide-y divide-border/60 rounded-lg border border-border/70 bg-background text-xs overflow-hidden">
+            {changes.map((change, index) => {
+              const isAdded = change.toLowerCase().includes('added');
+              const isRemoved =
+                change.toLowerCase().includes('removed') ||
+                change.toLowerCase().includes('deleted');
+              const isModified =
+                change.toLowerCase().includes('modified') ||
+                change.toLowerCase().includes('changed');
+
+              return (
+                <li
+                  key={index}
+                  className={cn(
+                    'flex items-start gap-2.5 break-words px-3 py-2 text-foreground/90 border-l-2',
+                    isAdded
+                      ? 'border-l-emerald-500 bg-emerald-500/5'
+                      : isRemoved
+                        ? 'border-l-rose-500 bg-rose-500/5'
+                        : isModified
+                          ? 'border-l-amber-500 bg-amber-500/5'
+                          : 'border-l-transparent'
+                  )}
+                >
+                  <span className="flex-1">{change}</span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-muted-foreground">
@@ -131,115 +153,136 @@ export const AutomationActivity = memo(function AutomationActivity({
           </p>
         </div>
       ) : (
-        <ol className="space-y-2.5">
-          {data.versions.map(version => {
+        <ol className="relative space-y-3">
+          {data.versions.map((version, index) => {
             const isActive = version.id === data.activeVersionId;
             const expanded = versionView === version.id;
             const snapshot = snapshots.get(version.id);
+            const isLast = index === data.versions.length - 1;
 
             return (
-              <li
-                key={version.id}
-                className={cn(
-                  'overflow-hidden rounded-xl border bg-card p-3.5 transition-all shadow-xs',
-                  isActive
-                    ? 'border-primary/50 ring-1 ring-primary/20'
-                    : 'border-border/80 hover:border-border'
+              <li key={version.id} className="relative pl-7">
+                {/* Timeline connector line */}
+                {!isLast && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute left-[11px] top-6 bottom-[-16px] w-[2px] bg-border/60"
+                  />
                 )}
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground font-mono">
-                        Version {version.versionNumber}
-                      </h4>
-                      {isActive && (
-                        <Badge className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-[10px] font-semibold">
-                          <Star
-                            className="h-3 w-3 fill-emerald-500 text-emerald-500"
-                            aria-hidden="true"
-                          />
-                          Active
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" aria-hidden="true" />
-                        {new Date(version.publishedAt).toLocaleString()}
-                      </span>
-                      <span>·</span>
-                      <span className="flex items-center gap-1 font-medium text-foreground/80">
-                        <User className="h-3 w-3" aria-hidden="true" />
-                        {version.publisherName}
-                      </span>
-                      {version.sourceVersionId && (
-                        <>
-                          <span>·</span>
-                          <span className="text-muted-foreground">
-                            Restored from previous version
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-1.5 px-2.5 text-xs font-medium"
-                      aria-expanded={expanded}
-                      disabled={loading === version.id}
-                      onClick={async () => {
-                        if (expanded) setVersionView(null);
-                        else if (await fetchSnapshot(version.id)) setVersionView(version.id);
-                      }}
-                    >
-                      {loading === version.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
-                      )}
-                      View / compare
-                    </Button>
+                {/* Timeline node dot */}
+                <div
+                  aria-hidden="true"
+                  className={cn(
+                    'absolute left-[7px] top-4.5 h-2.5 w-2.5 rounded-full ring-4 transition-all',
+                    isActive
+                      ? 'bg-emerald-500 ring-emerald-500/20 shadow-xs'
+                      : 'bg-muted-foreground/40 ring-background'
+                  )}
+                />
 
-                    {data.canPublish && (
+                <div
+                  className={cn(
+                    'overflow-hidden rounded-xl border bg-card p-3.5 transition-all shadow-xs',
+                    isActive
+                      ? 'border-emerald-500/40 ring-1 ring-emerald-500/20'
+                      : 'border-border/80 hover:border-border'
+                  )}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground font-mono">
+                          Version {version.versionNumber}
+                        </h4>
+                        {isActive && (
+                          <Badge className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-[10px] font-semibold">
+                            <Star
+                              className="h-3 w-3 fill-emerald-500 text-emerald-500"
+                              aria-hidden="true"
+                            />
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" aria-hidden="true" />
+                          {new Date(version.publishedAt).toLocaleString()}
+                        </span>
+                        <span>·</span>
+                        <span className="flex items-center gap-1 font-medium text-foreground/80">
+                          <User className="h-3 w-3" aria-hidden="true" />
+                          {version.publisherName}
+                        </span>
+                        {version.sourceVersionId && (
+                          <>
+                            <span>·</span>
+                            <span className="text-muted-foreground">
+                              Restored from previous version
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Button
                         variant="outline"
                         size="sm"
                         className="h-8 gap-1.5 px-2.5 text-xs font-medium"
-                        disabled={busy || loading === version.id}
+                        aria-expanded={expanded}
+                        disabled={loading === version.id}
                         onClick={async () => {
-                          const loaded = await fetchSnapshot(version.id);
-                          if (loaded) onRestore({ ...version, snapshot: loaded });
+                          if (expanded) setVersionView(null);
+                          else if (await fetchSnapshot(version.id)) setVersionView(version.id);
                         }}
                       >
-                        <History className="h-3.5 w-3.5" aria-hidden="true" />
-                        Restore as new version
+                        {loading === version.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                        View / compare
                       </Button>
-                    )}
 
-                    {data.canEdit && onRestoreDraft && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1.5 px-2.5 text-xs font-medium"
-                        disabled={busy}
-                        onClick={() => onRestoreDraft(version.id)}
-                      >
-                        <History className="h-3.5 w-3.5" aria-hidden="true" />
-                        Restore as draft
-                      </Button>
-                    )}
+                      {data.canPublish && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2.5 text-xs font-medium"
+                          disabled={busy || loading === version.id}
+                          onClick={async () => {
+                            const loaded = await fetchSnapshot(version.id);
+                            if (loaded) onRestore({ ...version, snapshot: loaded });
+                          }}
+                        >
+                          <History className="h-3.5 w-3.5" aria-hidden="true" />
+                          Restore as new version
+                        </Button>
+                      )}
+
+                      {data.canEdit && onRestoreDraft && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2.5 text-xs font-medium"
+                          disabled={busy}
+                          onClick={() => onRestoreDraft(version.id)}
+                        >
+                          <History className="h-3.5 w-3.5" aria-hidden="true" />
+                          Restore as draft
+                        </Button>
+                      )}
+                    </div>
                   </div>
+
+                  {expanded && snapshot && active.success && (
+                    <div className="mt-3">
+                      <VersionComparison active={active.data} snapshot={snapshot} />
+                    </div>
+                  )}
                 </div>
-
-                {expanded && snapshot && active.success && (
-                  <div className="mt-3">
-                    <VersionComparison active={active.data} snapshot={snapshot} />
-                  </div>
-                )}
               </li>
             );
           })}

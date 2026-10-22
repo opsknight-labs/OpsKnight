@@ -1,8 +1,9 @@
 'use client';
 import { memo, useId, useMemo } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Compass, Database, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { cn } from '@/lib/utils';
 import { builtinFields, LIMITS, type Field, type Rule } from '@/lib/automation/contract';
@@ -42,12 +43,14 @@ export const FieldCatalogRow = memo(function FieldCatalogRow({
         aria-pressed={selected}
         onClick={() => onSelect(field.key)}
         className={cn(
-          'grid min-h-10.5 w-full gap-x-3 gap-y-1 px-3.5 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center',
-          selected ? 'bg-primary/5 ring-1 ring-primary/30' : 'hover:bg-muted/40'
+          'grid min-h-11 w-full gap-x-3 gap-y-1 px-3.5 py-2.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center border-l-2',
+          selected
+            ? 'bg-primary/5 ring-1 ring-primary/30 border-l-primary shadow-xs'
+            : 'border-l-transparent hover:bg-muted/40'
         )}
       >
         <span className="min-w-0">
-          <span className="block truncate font-medium text-foreground">{field.label}</span>
+          <span className="block truncate font-semibold text-foreground">{field.label}</span>
           <span className="block truncate font-mono text-[11px] text-muted-foreground">
             {field.key}
           </span>
@@ -55,7 +58,7 @@ export const FieldCatalogRow = memo(function FieldCatalogRow({
         <span>
           <span
             className={cn(
-              'rounded border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
+              'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase',
               field.type === 'ENUM'
                 ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300'
                 : field.type === 'BOOLEAN'
@@ -131,13 +134,14 @@ export const FieldDetail = memo(function FieldDetail({
   return (
     <section
       aria-label={`${field.label} details`}
-      className="min-w-0 space-y-4 rounded-lg border bg-card p-4"
+      className="min-w-0 space-y-4 rounded-xl border border-border/80 bg-card p-4 shadow-xs"
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="flex flex-wrap items-center gap-2 font-semibold tracking-tight">
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border/60 pb-3">
+        <div className="min-w-0 space-y-0.5">
+          <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+            <Database className="h-4 w-4 text-primary" aria-hidden="true" />
             {field.label}
-            <span className="rounded-md border border-border/70 px-1.5 py-px text-[11px] font-medium text-muted-foreground">
+            <span className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {FIELD_TYPE_LABELS[field.type]}
             </span>
           </h3>
@@ -147,16 +151,17 @@ export const FieldDetail = memo(function FieldDetail({
           <Button
             variant="ghost"
             size="sm"
-            className="h-10 text-muted-foreground hover:text-destructive sm:h-9"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             onClick={() => onRemove(field)}
           >
-            <Trash2 aria-hidden="true" />
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             Remove field
           </Button>
         )}
       </div>
-      <div className="space-y-1.5 rounded-md bg-muted/60 p-3 text-sm">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
+        <h4 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <Compass className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
           Mapping provenance
         </h4>
         {field.mappings.length === 0 && (
@@ -165,15 +170,23 @@ export const FieldDetail = memo(function FieldDetail({
           </p>
         )}
         {field.mappings.map((mapping, index) => (
-          <p key={index} className="min-w-0">
-            {mapping.integrationType ?? 'All integrations'} ·{' '}
-            {mapping.source === 'EVENT' ? 'Normalized event' : 'Provider payload'} ·{' '}
-            <code className="break-all font-mono text-xs">{mapping.path}</code>
-          </p>
+          <div key={index} className="min-w-0 font-medium flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
+              {mapping.integrationType ?? 'All integrations'}
+            </Badge>
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
+              {mapping.source === 'EVENT' ? 'Normalized event' : 'Provider payload'}
+            </Badge>
+            <code className="break-all rounded bg-background px-1.5 py-0.5 font-mono text-[11px] border border-border/60 text-foreground">
+              {mapping.path}
+            </code>
+          </div>
         ))}
       </div>
-      <div className="space-y-1 text-sm">
-        <p>Recognized: {field.allowedValues?.join(', ') || field.type.toLowerCase()}</p>
+      <div className="space-y-1 rounded-lg border border-border/60 bg-muted/10 p-3 text-xs">
+        <p className="font-medium text-foreground">
+          Recognized: {field.allowedValues?.join(', ') || field.type.toLowerCase()}
+        </p>
         <p className="text-muted-foreground">Aliases: {aliasSummary}</p>
       </div>
       {canEdit && (
