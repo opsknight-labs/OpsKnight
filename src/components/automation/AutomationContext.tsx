@@ -282,7 +282,7 @@ export function AutomationContext({
               placeholder="Search context fields…"
               value={contextSearch}
               onChange={event => setContextSearch(event.target.value)}
-              className="h-8.5 pl-8 text-xs bg-background"
+              className="search-input h-8.5 !pl-8 text-xs bg-background"
             />
           </div>
           {draft.fields.length === 0 ? (

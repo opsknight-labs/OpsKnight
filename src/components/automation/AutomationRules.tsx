@@ -544,7 +544,7 @@ export function AutomationRules({
             placeholder="Search rules…"
             value={ruleSearch}
             onChange={event => setRuleSearch(event.target.value)}
-            className="h-8 pl-8 text-xs bg-background"
+            className="search-input h-8 !pl-8 text-xs bg-background"
           />
         </div>
         <NativeSelect

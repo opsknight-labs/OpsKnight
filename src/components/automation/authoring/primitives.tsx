@@ -425,25 +425,26 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
             {options.length > 5 && (
               <div className="p-1.5 border-b border-border/60 bg-muted/20">
                 <div className="relative flex items-center">
-                  <Search className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground/60 pointer-events-none" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search options, paths, integrations..."
-                    className="h-7 w-full rounded-md bg-background/80 pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground/60 border border-border/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/40"
+                    className="search-input h-7.5 w-full rounded-md bg-background/90 !pl-2.5 !pr-7 text-xs text-foreground placeholder:text-muted-foreground/60 border border-border/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/40 transition-colors"
                     onClick={e => e.stopPropagation()}
                     autoFocus
                   />
-                  {searchQuery && (
+                  {searchQuery ? (
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2 p-0.5 text-muted-foreground hover:text-foreground"
+                      className="absolute right-2 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                       aria-label="Clear search"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
+                  ) : (
+                    <Search className="absolute right-2.5 h-3.5 w-3.5 text-muted-foreground/50 pointer-events-none" />
                   )}
                 </div>
               </div>
