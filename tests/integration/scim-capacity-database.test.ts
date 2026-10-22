@@ -2,6 +2,8 @@
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import { reconcileTeam } from '@/lib/scim/lifecycle/membership';
 import { hashToken } from '@/lib/scim/security/credentials';
 import { users } from '@/lib/scim/lifecycle/users';
 import { groups } from '@/lib/scim/lifecycle/groups';
@@ -31,11 +33,14 @@ suite('SCIM indexed capacity certification', () => {
         name: 'Capacity fixture',
         tokenHash: hashToken(token),
         tokenHint: token.slice(-4),
-        scopes: ['users:read', 'groups:read'],
+        scopes: ['users:read', 'groups:read', 'groups:write'],
         createdBy: 'capacity-certifier',
         expiresAt: new Date(Date.now() + 86400000),
       },
-      update: { expiresAt: new Date(Date.now() + 86400000) },
+      update: {
+        expiresAt: new Date(Date.now() + 86400000),
+        scopes: ['users:read', 'groups:read', 'groups:write'],
+      },
     });
     await prisma.$executeRaw`INSERT INTO "User" (id, email, name, status, "updatedAt") SELECT 'scim-load-user-' || i, 'scim-load-' || i || '@example.test', 'Capacity user ' || i, 'ACTIVE', CURRENT_TIMESTAMP FROM generate_series(1, 100000) i ON CONFLICT DO NOTHING`;
     await prisma.$executeRaw`INSERT INTO "ScimIdentity" (id, "connectorId", "externalId", "userId") SELECT 'scim-load-identity-' || i, 'scim-load', 'directory-' || i, 'scim-load-user-' || i FROM generate_series(1, 100000) i ON CONFLICT DO NOTHING`;
@@ -97,4 +102,52 @@ suite('SCIM indexed capacity certification', () => {
     >`EXPLAIN SELECT "userId" FROM "ScimIdentity" WHERE "connectorId" = 'scim-load' AND "externalId" = 'directory-90000' AND "deletedAt" IS NULL`;
     expect(plan.map(row => row['QUERY PLAN']).join('\n')).toMatch(/Index (?:Only )?Scan/);
   });
+  it('revokes a 10,000-member bound group within the standard transaction timeout', async () => {
+    const team = await prisma.team.create({
+      data: {
+        name: `Capacity revocation ${Date.now()}`,
+        members: { create: { userId: 'scim-load-user-100000', role: 'OWNER' } },
+      },
+    });
+    const service = await prisma.service.create({
+      data: { name: `Capacity service ${Date.now()}`, teamId: team.id },
+    });
+    await runSerializableTransaction(async tx => {
+      await tx.scimGroupTeamBinding.create({
+        data: {
+          groupId: 'scim-load-group-1',
+          teamId: team.id,
+          approvedBy: 'capacity-certifier',
+        },
+      });
+      await reconcileTeam(tx, team.id);
+    });
+    expect(await prisma.teamMember.count({ where: { teamId: team.id } })).toBe(10001);
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: 'scim-load-user-1' } });
+    const request = new NextRequest('https://capacity.test/api/scim/v2/Groups/scim-load-group-1', {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const started = performance.now();
+    expect((await handle(() => groups(request, 'scim-load-group-1'), request)).status).toBe(204);
+    const elapsedMs = performance.now() - started;
+    expect(await prisma.teamMember.count({ where: { teamId: team.id } })).toBe(1);
+    expect(
+      await prisma.teamMember.findFirst({ where: { teamId: team.id, role: 'OWNER' } })
+    ).not.toBeNull();
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: before.id } })).tokenVersion).toBe(
+      before.tokenVersion + 1
+    );
+    expect((await prisma.service.findUniqueOrThrow({ where: { id: service.id } })).teamId).toBe(
+      team.id
+    );
+    expect(elapsedMs).toBeLessThan(10000);
+    process.stdout.write(
+      JSON.stringify({
+        revokedDirectoryMembers: 10000,
+        groupDeleteMs: elapsedMs,
+        transactionBudgetMs: 10000,
+      }) + '\n'
+    );
+  }, 120000);
 });

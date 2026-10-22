@@ -52,7 +52,8 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
-      - run: npm ci
+      # Match the repository lockfile installation policy used by integration/security CI.
+      - run: npm ci --legacy-peer-deps
       - run: npx prisma generate && npx prisma migrate deploy
       - run: npm run certify:scim:snapshot
         env:

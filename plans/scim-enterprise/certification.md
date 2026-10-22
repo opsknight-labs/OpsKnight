@@ -195,6 +195,14 @@ lifecycle approval are the supported boundary.
 - The SCIM workflow now also runs on pushes to this feature branch, including the
   synthetic snapshot rehearsal. A draft PR is unnecessary to trigger it.
 
-Follow-up local results: 87 unit/API tests, 32 PostgreSQL lifecycle/capacity tests,
+Follow-up local results: 87 unit/API tests, 33 PostgreSQL lifecycle/capacity tests,
 and the full Chromium/Firefox/WebKit journeys passed. TypeScript and lint passed.
 The synthetic backup/restore upgrade rehearsal passed.
+
+The reconciliation service batches membership insertions, removals, session-version
+updates and grant transfers. A real SCIM DELETE revoked 10,000 directory-created
+memberships in 2.64 seconds within the default 10-second transaction budget,
+preserving the manual owner and service assignment. This is a local engineering
+measurement, not a production SLA. The optimized production build also passed
+for the access-policy revision. CI installation follows the existing repository
+`npm ci --legacy-peer-deps` policy for its lockfile's optional peer dependencies.

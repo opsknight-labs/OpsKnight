@@ -12,57 +12,79 @@ export async function reconcileTeam(
     include: { group: { include: { memberships: true } }, grants: true },
   });
   const retiring = new Set(retiringBindingIds);
-  const changedUserIds = new Set<string>();
-  let revokedMemberships = 0;
-  let transferredGrants = 0;
   const desired = new Map<string, string>();
   for (const binding of bindings)
     if (!retiring.has(binding.id))
       for (const member of binding.group.memberships) desired.set(member.userId, binding.id);
   const current = await tx.teamMember.findMany({ where: { teamId } });
   const byId = new Map(current.map(member => [member.id, member]));
+  const existingUsers = new Set(current.map(member => member.userId));
+  const obsoleteGrantMembers: string[] = [];
+  const removedMembers: string[] = [];
+  const changedUserIds = new Set<string>();
+  const removedUserIds: string[] = [];
+  const transfers = new Map<string, { from: string; to: string; users: string[] }>();
+  let transferredGrants = 0;
   for (const binding of bindings)
     for (const grant of binding.grants) {
       const member = byId.get(grant.teamMemberId);
       const desiredBinding = desired.get(grant.userId);
       if (desiredBinding && desiredBinding !== binding.id) {
-        await tx.scimTeamGrant.update({
-          where: { bindingId_userId: { bindingId: binding.id, userId: grant.userId } },
-          data: { bindingId: desiredBinding },
-        });
+        const key = `${binding.id}:${desiredBinding}`;
+        const transfer = transfers.get(key) ?? { from: binding.id, to: desiredBinding, users: [] };
+        transfer.users.push(grant.userId);
+        transfers.set(key, transfer);
         transferredGrants++;
       }
       if (!desiredBinding) {
+        obsoleteGrantMembers.push(grant.teamMemberId);
         // Local role promotions establish manual authority; preferences never do.
         if (member?.role === 'MEMBER') {
-          const removed = await tx.teamMember.deleteMany({
-            where: { id: member.id, role: 'MEMBER' },
-          });
-          if (removed.count) {
-            changedUserIds.add(member.userId);
-            revokedMemberships += removed.count;
-            await tx.team.updateMany({
-              where: { id: teamId, teamLeadId: member.userId },
-              data: { teamLeadId: null },
-            });
-          }
+          removedMembers.push(member.id);
+          removedUserIds.push(member.userId);
+          changedUserIds.add(member.userId);
         }
-        await tx.scimTeamGrant.deleteMany({
-          where: { bindingId: binding.id, userId: grant.userId },
-        });
       }
     }
-  const existingUsers = new Set(current.map(m => m.userId));
-  for (const [userId, bindingId] of desired)
-    if (!existingUsers.has(userId)) {
-      const member = await tx.teamMember.create({ data: { teamId, userId, role: 'MEMBER' } });
-      changedUserIds.add(userId);
-      await tx.scimTeamGrant.create({ data: { bindingId, userId, teamMemberId: member.id } });
-    }
+  const additions = [...desired.keys()].filter(userId => !existingUsers.has(userId));
+  additions.forEach(userId => changedUserIds.add(userId));
+  // Lock User before Team, matching local administration. Session and grant writes commit together.
   if (changedUserIds.size)
     await tx.user.updateMany({
       where: { id: { in: [...changedUserIds] } },
       data: { tokenVersion: { increment: 1 } },
     });
+  for (const transfer of transfers.values())
+    await tx.scimTeamGrant.updateMany({
+      where: { bindingId: transfer.from, userId: { in: transfer.users } },
+      data: { bindingId: transfer.to },
+    });
+  const revokedMemberships = removedMembers.length
+    ? (await tx.teamMember.deleteMany({ where: { id: { in: removedMembers }, role: 'MEMBER' } }))
+        .count
+    : 0;
+  if (removedUserIds.length)
+    await tx.team.updateMany({
+      where: { id: teamId, teamLeadId: { in: removedUserIds } },
+      data: { teamLeadId: null },
+    });
+  if (obsoleteGrantMembers.length)
+    await tx.scimTeamGrant.deleteMany({ where: { teamMemberId: { in: obsoleteGrantMembers } } });
+  if (additions.length) {
+    await tx.teamMember.createMany({
+      data: additions.map(userId => ({ teamId, userId, role: 'MEMBER' })),
+    });
+    const inserted = await tx.teamMember.findMany({
+      where: { teamId, userId: { in: additions } },
+      select: { id: true, userId: true },
+    });
+    await tx.scimTeamGrant.createMany({
+      data: inserted.map(member => ({
+        teamMemberId: member.id,
+        userId: member.userId,
+        bindingId: desired.get(member.userId)!,
+      })),
+    });
+  }
   return { changedUserIds: [...changedUserIds], revokedMemberships, transferredGrants };
 }
