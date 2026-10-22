@@ -158,6 +158,8 @@ export function getControlBaseUrl() {
 export function loadSeedManifest() {
   const candidates = [
     __ENV.LOAD_SEED_MANIFEST,
+    '../../../artifacts/load-certification/swarm-pgbouncer/seed-manifest.json',
+    '../../../artifacts/load-certification/seed-manifest.json',
     '../../artifacts/load-certification/seed-manifest.json',
     './artifacts/load-certification/seed-manifest.json',
   ].filter(Boolean);
