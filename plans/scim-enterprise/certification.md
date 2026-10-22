@@ -246,7 +246,19 @@ real provider retries/SSO, real deployment failover/rollback and server resource
 budgets are still external release gates. This branch must not be called fully
 10/10 externally certified until those gates have independent evidence.
 
-Final local regression pass: 97 unit/API/security tests, 38 PostgreSQL
+Final local regression pass: 161 unit/API/security tests, 39 PostgreSQL
 lifecycle/capacity scenarios, 50 adjacent API/auth tests and three browser
 journeys passed. Baseline, staged upgrade, restored-snapshot upgrade,
 two-replica credentials, warmed sessions and outage/restart harnesses passed.
+
+Invited users also retain INVITED status on profile-only PUT/PATCH; only ACTIVE
+users serialize active=true. Disable/reactivate events represent actual status
+transitions. An additional 64 auth/session regressions are included in the
+certification unit command. A capacity run under simultaneous compilation hit
+the unchanged transaction budget; capacity certification is rerun without
+competing compiler load, and production load budgets remain deployment gates.
+
+The final idle-compiler capacity rerun passed all 39 PostgreSQL scenarios;
+10,000-member DELETE took 2.29 seconds. The final optimized production build
+passed. Expanded SCIM CI also passed on `b867d5af1` before the invited-account
+refinement; the final commit is independently rerun by branch CI.

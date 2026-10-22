@@ -695,6 +695,41 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
       await prisma.$executeRawUnsafe('DROP FUNCTION scim_cert_fail_user_delete()');
     }
   });
+  it('preserves invited account status during profile-only PUT and PATCH', async () => {
+    const user = await prisma.user.create({
+      data: {
+        name: 'Invited directory account',
+        email: `invited-scim-${Date.now()}@example.test`,
+        status: 'INVITED',
+        scimIdentities: { create: { connectorId: 'cert-a', externalId: `invited-${Date.now()}` } },
+      },
+    });
+    expect(
+      (
+        await call(
+          'users',
+          'PUT',
+          { userName: user.email, displayName: 'Updated invited' },
+          user.id
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          'users',
+          'PATCH',
+          patch({ op: 'replace', path: 'title', value: 'Profile only' }),
+          user.id
+        )
+      ).status
+    ).toBe(200);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
+      status: 'INVITED',
+      tokenVersion: user.tokenVersion,
+    });
+    expect((await (await call('users', 'GET', undefined, user.id)).json()).active).toBe(false);
+  });
   it('prevents duplicate identities across concurrent requests/connections', async () => {
     const externalId = `concurrent-${Date.now()}`;
     const payload = { userName: `${externalId}@example.test`, externalId };

@@ -191,7 +191,7 @@ export async function users(request: NextRequest, id?: string) {
       userName: existing.email,
       externalId: identity.externalId,
       displayName: existing.name,
-      active: existing.status !== 'DISABLED',
+      active: existing.status === 'ACTIVE',
       title: existing.jobTitle,
       name: {
         formatted: existing.name,
@@ -211,10 +211,21 @@ export async function users(request: NextRequest, id?: string) {
           : parse(userSchema, body);
     if (document.externalId && document.externalId !== identity.externalId)
       throw new ScimFailure(400, 'externalId is immutable.', 'mutability');
-    const active =
-      request.method !== 'DELETE' && (document.active ?? existing.status !== 'DISABLED');
+    const explicitActive =
+      request.method === 'PATCH'
+        ? requestedProfileFields(body, 'PATCH').has('active')
+        : document.active !== undefined;
+    const status =
+      request.method === 'DELETE'
+        ? 'DISABLED'
+        : !explicitActive
+          ? existing.status
+          : document.active === true
+            ? 'ACTIVE'
+            : 'DISABLED';
+    const active = status === 'ACTIVE';
     const revoke =
-      (existing.status !== 'DISABLED' && !active) || existing.email !== document.userName;
+      (existing.status !== status && status === 'DISABLED') || existing.email !== document.userName;
     const nextProfile = profile(document);
     if (!document.photos && nextProfile.name === existing.name)
       nextProfile.avatarUrl = existing.avatarUrl ?? nextProfile.avatarUrl;
@@ -229,7 +240,7 @@ export async function users(request: NextRequest, id?: string) {
     const user = await updateUserSecurityState(
       id,
       {
-        status: active ? 'ACTIVE' : 'DISABLED',
+        status,
         ...(revoke ? { tokenVersion: { increment: 1 } } : {}),
       },
       request.method === 'DELETE' ? {} : nextProfile,
@@ -290,9 +301,9 @@ export async function users(request: NextRequest, id?: string) {
       principal,
       request.method === 'DELETE'
         ? 'user.deleted'
-        : !active
+        : existing.status !== status && status === 'DISABLED'
           ? 'user.disabled'
-          : existing.status === 'DISABLED'
+          : existing.status !== status && status === 'ACTIVE'
             ? 'user.reactivated'
             : 'user.updated',
       id,

@@ -163,7 +163,7 @@ export function serializeScimUser(user: ScimUserShape, baseUrl = '') {
     ...(user.avatarUrl && /^https?:\/\//i.test(user.avatarUrl)
       ? { photos: [{ value: user.avatarUrl, primary: true, type: 'photo' }] }
       : {}),
-    active: user.status !== 'DISABLED',
+    active: user.status === 'ACTIVE',
     meta: {
       resourceType: 'User',
       location: baseUrl ? `${baseUrl}/api/scim/v2/Users/${user.id}` : undefined,
