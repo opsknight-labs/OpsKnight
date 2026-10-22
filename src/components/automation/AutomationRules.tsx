@@ -511,6 +511,16 @@ export function AutomationRules({
     return { phaseIndexes, phaseTotals };
   }, [draft.rules]);
 
+  const ruleCounts = useMemo(() => {
+    let enabled = 0;
+    let disabled = 0;
+    for (const rule of draft.rules) {
+      if (rule.enabled) enabled++;
+      else disabled++;
+    }
+    return { all: draft.rules.length, enabled, disabled };
+  }, [draft.rules]);
+
   const onToggle = useStableCallback((id: string) =>
     setExpandedRules(previous => {
       const next = new Set(mobile ? [] : previous);
@@ -673,16 +683,60 @@ export function AutomationRules({
             </button>
           )}
         </div>
+        {/* Segmented Filter Pills */}
+        <div
+          role="group"
+          aria-label="Filter rules by state"
+          className="hidden sm:inline-flex items-center rounded-lg border border-border/70 bg-muted/40 p-0.5 text-xs"
+        >
+          <button
+            type="button"
+            onClick={() => setRuleStateFilter('all')}
+            className={cn(
+              'rounded-md px-2 py-1 text-xs font-medium transition-all',
+              ruleStateFilter === 'all'
+                ? 'bg-background text-foreground shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            All <span className="opacity-70 font-mono">({ruleCounts.all})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRuleStateFilter('enabled')}
+            className={cn(
+              'rounded-md px-2 py-1 text-xs font-medium transition-all',
+              ruleStateFilter === 'enabled'
+                ? 'bg-background text-emerald-700 dark:text-emerald-400 shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Enabled <span className="opacity-70 font-mono">({ruleCounts.enabled})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRuleStateFilter('disabled')}
+            className={cn(
+              'rounded-md px-2 py-1 text-xs font-medium transition-all',
+              ruleStateFilter === 'disabled'
+                ? 'bg-background text-foreground shadow-2xs font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Disabled <span className="opacity-70 font-mono">({ruleCounts.disabled})</span>
+          </button>
+        </div>
+
         <NativeSelect
           aria-label="Filter rules"
-          wrapperClassName="w-auto shrink-0"
+          wrapperClassName="w-auto shrink-0 sm:hidden"
           className="h-8 min-w-[7.5rem] text-xs font-medium bg-background"
           value={ruleStateFilter}
           onChange={event => setRuleStateFilter(event.target.value)}
         >
-          <option value="all">All rules</option>
-          <option value="enabled">Enabled</option>
-          <option value="disabled">Disabled</option>
+          <option value="all">All ({ruleCounts.all})</option>
+          <option value="enabled">Enabled ({ruleCounts.enabled})</option>
+          <option value="disabled">Disabled ({ruleCounts.disabled})</option>
         </NativeSelect>
         {!mobile && (
           <Button

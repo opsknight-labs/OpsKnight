@@ -120,6 +120,37 @@ export default function AutomationWorkspace({
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const keyToArea: Record<string, Area> = {
+        '1': 'overview',
+        '2': 'context',
+        '3': 'rules',
+        '4': 'test',
+        '5': 'activity',
+      };
+      const targetArea = keyToArea[e.key];
+      if (targetArea) {
+        e.preventDefault();
+        setArea(targetArea);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const [review, setReview] = useState<ReviewAction | null>(null);
   const [reviewData, setReviewData] = useState<Data | null>(null);
   const [restoreVersion, setRestoreVersion] = useState<RestorableVersion | null>(null);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { CheckCircle2, ChevronDown, Code2, FlaskConical, Play, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Code2, Copy, FlaskConical, Play, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -455,12 +455,39 @@ export function AutomationTest({
                       </p>
                     </div>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="border-primary/30 bg-primary/10 text-primary font-mono text-[10px]"
-                  >
-                    {result.durationMs.toFixed(2)} ms
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 gap-1 px-2 text-[10px] font-medium bg-background/80 shadow-2xs hover:bg-background"
+                      onClick={() => {
+                        const traceSummary = {
+                          decision:
+                            policyName ??
+                            (outcome?.type === 'NO_ESCALATION'
+                              ? 'No Escalation (Suppressed)'
+                              : 'Service Default Escalation'),
+                          matchedRule: result.result?.matchedRule?.name ?? 'Default Fallback',
+                          priority: result.classification?.priority ?? 'Unset',
+                          urgency: result.classification?.urgency ?? 'Unset',
+                          durationMs: result.durationMs,
+                          writes: result.result?.writes ?? [],
+                        };
+                        navigator.clipboard.writeText(JSON.stringify(traceSummary, null, 2));
+                        notify.success('Copied simulation trace to clipboard');
+                      }}
+                    >
+                      <Copy className="h-2.5 w-2.5" aria-hidden="true" />
+                      <span>Copy trace</span>
+                    </Button>
+                    <Badge
+                      variant="outline"
+                      className="border-primary/30 bg-primary/10 text-primary font-mono text-[10px]"
+                    >
+                      {result.durationMs.toFixed(2)} ms
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">

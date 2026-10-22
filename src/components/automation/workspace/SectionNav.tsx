@@ -26,7 +26,7 @@ export const SectionNav = memo(function SectionNav({
   return (
     <nav aria-label="Automation sections" className="overflow-x-auto pb-0.5">
       <div className="inline-flex min-w-full items-center gap-1 rounded-lg border border-border/70 bg-muted/40 p-1 sm:min-w-0">
-        {AREAS.map(({ id, label }) => {
+        {AREAS.map(({ id, label }, index) => {
           const selected = area === id;
           const Icon = TAB_ICONS.get(id);
           return (
@@ -34,6 +34,7 @@ export const SectionNav = memo(function SectionNav({
               key={id}
               type="button"
               aria-current={selected ? 'true' : undefined}
+              title={`${label} (press ${index + 1})`}
               onClick={() => onSelect(id)}
               className={cn(
                 'group inline-flex min-h-8.5 shrink-0 flex-1 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:flex-none',

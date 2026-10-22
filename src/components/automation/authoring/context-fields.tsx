@@ -1,6 +1,7 @@
 'use client';
 import { memo, useId, useMemo } from 'react';
-import { Compass, Database, Trash2 } from 'lucide-react';
+import { Compass, Copy, Database, Trash2 } from 'lucide-react';
+import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -161,7 +162,21 @@ export const FieldDetail = memo(function FieldDetail({
               {FIELD_TYPE_LABELS[field.type]}
             </span>
           </h3>
-          <p className="font-mono text-xs text-muted-foreground">automation.{field.key}</p>
+          <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+            <span>automation.{field.key}</span>
+            <button
+              type="button"
+              aria-label={`Copy automation.${field.key}`}
+              className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 text-[10px] font-sans font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+              onClick={() => {
+                navigator.clipboard.writeText(`automation.${field.key}`);
+                notify.success(`Copied automation.${field.key} to clipboard`);
+              }}
+            >
+              <Copy className="h-2.5 w-2.5" aria-hidden="true" />
+              <span>Copy</span>
+            </button>
+          </div>
         </div>
         {canEdit && (
           <Button
