@@ -98,7 +98,7 @@ export function ArchivedRuleCard({
               {binding.name || binding.runbook.name}
             </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Rule detached · Archived execution history retained
+              Rule detached · Archived history
             </p>
           </div>
         </div>
@@ -117,7 +117,7 @@ export function ArchivedRuleCard({
         >
           <Link href={`/services/${serviceId}/automations/${binding.id}`}>
             <FileSearch className="h-3.5 w-3.5" aria-hidden />
-            View Archived Evidence
+            View archived rule evidence
           </Link>
         </Button>
       </div>
