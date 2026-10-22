@@ -28,6 +28,7 @@ type TraceDetailShape = {
   shadowDifferent?: boolean;
   policyName?: string;
   fallbackReason?: string;
+  error?: string;
   result?: { matchedRule?: { name: string }; outcome?: { type?: string } };
 };
 
@@ -111,7 +112,7 @@ export const AutomationOverview = memo(function AutomationOverview({
         return (
           traceFilter === 'ALL' ||
           (traceFilter === 'ERROR'
-            ? !!detail.fallbackReason
+            ? !!detail.fallbackReason || !!detail.error
             : detail.result?.outcome?.type === traceFilter)
         );
       }),
@@ -123,6 +124,8 @@ export const AutomationOverview = memo(function AutomationOverview({
   const parityPct = evaluated > 0 ? ((same / evaluated) * 100).toFixed(1) : null;
   const diffRoutes = counts?.routes ?? 0;
   const errors = counts?.errors ?? 0;
+  const fallbacks = counts?.fallbacks ?? 0;
+  const totalFailures = errors + fallbacks;
 
   return (
     <div className="space-y-3.5">
@@ -224,7 +227,7 @@ export const AutomationOverview = memo(function AutomationOverview({
         <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
           <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
             <span>Fallbacks / errors</span>
-            {errors === 0 ? (
+            {totalFailures === 0 ? (
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500/70" aria-hidden="true" />
             ) : (
               <AlertTriangle className="h-3.5 w-3.5 text-amber-500/70" aria-hidden="true" />
@@ -232,10 +235,16 @@ export const AutomationOverview = memo(function AutomationOverview({
           </dt>
           <dd className="mt-1 flex items-baseline justify-between">
             <span className="text-xl font-bold tracking-tight tabular-nums text-foreground">
-              {errors}
+              {totalFailures.toLocaleString()}
             </span>
             <span className="text-[10px] font-medium text-muted-foreground">
-              {errors === 0 ? 'Zero failures' : 'Action required'}
+              {totalFailures === 0
+                ? 'Zero failures'
+                : errors > 0 && fallbacks > 0
+                  ? `${errors} err · ${fallbacks} fallback`
+                  : errors > 0
+                    ? `${errors} ${errors === 1 ? 'error' : 'errors'}`
+                    : `${fallbacks} ${fallbacks === 1 ? 'fallback' : 'fallbacks'}`}
             </span>
           </dd>
         </div>

@@ -7,6 +7,7 @@ export const emptyCounts: Counts = {
   priorities: 0,
   skips: 0,
   errors: 0,
+  fallbacks: 0,
 };
 
 /** Sums seven-day Shadow aggregates, optionally limited to one published version. */
@@ -19,12 +20,13 @@ export function sumShadowAggregates(
     .filter(row => versionId === undefined || row.versionId === versionId)
     .reduce(
       (sum, row) => ({
-        evaluated: sum.evaluated + row.evaluated,
-        same: sum.same + row.same,
-        routes: sum.routes + row.routeDifferent,
-        priorities: sum.priorities + row.priorityDifferent,
-        skips: sum.skips + row.noEscalationDifferent,
-        errors: sum.errors + row.errors,
+        evaluated: sum.evaluated + (row.evaluated ?? 0),
+        same: sum.same + (row.same ?? 0),
+        routes: sum.routes + (row.routeDifferent ?? 0),
+        priorities: sum.priorities + (row.priorityDifferent ?? 0),
+        skips: sum.skips + (row.noEscalationDifferent ?? 0),
+        errors: sum.errors + (row.errors ?? 0),
+        fallbacks: sum.fallbacks + (row.fallbacks ?? 0),
       }),
       emptyCounts
     );

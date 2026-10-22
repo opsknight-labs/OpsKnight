@@ -8,7 +8,7 @@ export type Counts = {
   priorities: number;
   skips: number;
   errors: number;
-  fallbacks?: number;
+  fallbacks: number;
 };
 
 import type { Observation } from '@/lib/automation/discovery';
