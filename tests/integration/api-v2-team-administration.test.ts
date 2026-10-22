@@ -162,16 +162,17 @@ it('does not count disabled owners and rejects assigning inactive members', asyn
     409
   );
 });
-it('blocks manual SCIM membership/lead changes through REST and the shared UI command', async () => {
+it('preserves local membership and lead authority for teams with legacy directory IDs', async () => {
   const { admin, team, target } = await fixture();
   const managed = await db.team.update({
     where: { id: team.id },
     data: { scimExternalId: 'managed-group' },
   });
-  expect((await put(admin.token, team.id, target.id, managed.revision, 'scim')).status).toBe(409);
+  expect((await put(admin.token, team.id, target.id, managed.revision, 'scim')).status).toBe(200);
   await expect(
     setTeamMembership(team.id, target.id, { role: 'MEMBER' }, admin.user)
-  ).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
+  ).resolves.toMatchObject({ teamId: team.id, userId: target.id });
+  const latest = await db.team.findUniqueOrThrow({ where: { id: team.id } });
   expect(
     (
       await invokeV2(
@@ -181,10 +182,10 @@ it('blocks manual SCIM membership/lead changes through REST and the shared UI co
         `/teams/${team.id}/lead`,
         { id: team.id },
         { userId: null },
-        headers(managed.revision, 'scim-lead')
+        headers(latest.revision, 'scim-lead')
       )
     ).status
-  ).toBe(409);
+  ).toBe(200);
 });
 it('changes only notifications without resetting roles or revoking unchanged sessions', async () => {
   const { admin, team, target } = await fixture();

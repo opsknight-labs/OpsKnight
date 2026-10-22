@@ -48,13 +48,19 @@ export async function resolveMicrosoftTeamsUser(identity: TeamsUserIdentity) {
 
   // Zero-touch auto-linking: match organisation users by Entra ID (aadObjectId)
   if (identity.aadObjectId) {
-    let matchedUser = await prisma.user.findFirst({
+    const directoryMatches = await prisma.scimIdentity.findMany({
       where: {
-        scimExternalId: identity.aadObjectId,
-        status: 'ACTIVE',
+        externalId: identity.aadObjectId,
+        deletedAt: null,
+        user: { status: 'ACTIVE' },
+        connector: { enabled: true, provider: 'ENTRA', tenantId: identity.tenantId },
       },
-      select: { id: true, name: true, email: true },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      take: 2,
     });
+    if (directoryMatches.length > 1) throw new Error('Ambiguous Teams directory identity');
+    let matchedUser: { id: string; name: string; email: string } | null =
+      directoryMatches[0]?.user ?? null;
 
     if (!matchedUser) {
       try {

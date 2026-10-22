@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getServerSession } from 'next-auth';
-import { clearMetricsCache, collectWithTimeout, GET } from '@/app/api/metrics/route';
+import { clearMetricsCache, collectWithTimeout, GET } from '@/lib/metrics/scrape';
 import prisma from '@/lib/prisma';
 
 vi.mock('next-auth', () => ({

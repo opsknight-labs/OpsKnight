@@ -94,10 +94,14 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
     }
 );
 
-export type NextRouteHandler = (
-  req: NextRequest,
-  context?: { params?: Promise<Record<string, string>> | Record<string, string> }
-) => Promise<Response>;
+export type NextRouteHandler = {
+  // Preserve direct invocation while exposing Next's required asynchronous route context.
+  (
+    req: NextRequest,
+    context?: { params?: Promise<Record<string, string>> | Record<string, string> }
+  ): Promise<Response>;
+  (req: NextRequest, context: { params: Promise<Record<string, string>> }): Promise<Response>;
+};
 
 /**
  * Declarative route factory for OpsKnight Public REST API v2.

@@ -473,6 +473,10 @@ model ProviderWorkerLease {
 }
 
 model User {
+  scimGivenName String?
+  scimFamilyName String?
+  scimIdentities ScimIdentity[]
+  scimMemberships ScimGroupMembership[]
   policyChecks RunbookPolicyCheck[]
   id                           String     @id @default(cuid())
   name                         String
@@ -602,6 +606,7 @@ model OidcIdentity {
 }
 
 model Team {
+  scimBindings ScimGroupTeamBinding[]
   /// Monotonic resource version for REST v2 ETags. A database trigger increments it on every update.
   /// The default is database-side so clients never write the column (safe during rolling upgrades).
   revision Int @default(dbgenerated("1"))
@@ -624,6 +629,7 @@ model Team {
 }
 
 model TeamMember {
+  scimGrant ScimTeamGrant?
   id                       String   @id @default(cuid())
   userId                   String
   teamId                   String
@@ -4537,4 +4543,120 @@ model RunbookPolicyCheck {
 model RunbookFleetAuthority {
   id String @id @default("default")
   revision BigInt @default(0)
+}
+
+// Directory resources have no implicit authority over operational teams.
+model ScimConnector {
+  profileFields String[] @default(["name", "email", "title", "department", "photos"])
+  id                  String           @id @default(cuid())
+  name                String
+  provider            String           @default("GENERIC")
+  enabled             Boolean          @default(true)
+  credentialAuthority String           @default("REGISTRY")
+  tenantId            String?
+  oidcIssuer          String?
+  oidcClientId        String?
+  trustedLinkEnabled  Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  credentials         ScimCredential[]
+  identities          ScimIdentity[]
+  groups              ScimGroup[]
+  events              ScimEvent[]
+}
+
+model ScimCredential {
+  id          String        @id @default(cuid())
+  connectorId String
+  connector   ScimConnector @relation(fields: [connectorId], references: [id])
+  name        String
+  tokenHash   String        @unique
+  tokenHint   String
+  scopes      String[]
+  generation  Int           @default(1)
+  createdBy   String
+  createdAt   DateTime      @default(now())
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  @@index([connectorId, revokedAt, expiresAt])
+}
+
+model ScimIdentity {
+  id           String        @id @default(cuid())
+  connectorId  String
+  connector    ScimConnector @relation(fields: [connectorId], references: [id])
+  externalId   String
+  userId       String        @unique
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deletedAt    DateTime?
+  lastSyncedAt DateTime      @default(now())
+
+  @@unique([connectorId, externalId])
+  @@index([connectorId, deletedAt, userId])
+}
+
+model ScimGroup {
+  id             String                 @id @default(cuid())
+  connectorId    String
+  connector      ScimConnector          @relation(fields: [connectorId], references: [id])
+  name           String
+  scimExternalId String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  memberships    ScimGroupMembership[]
+  bindings       ScimGroupTeamBinding[]
+
+  @@unique([connectorId, scimExternalId])
+  @@index([connectorId, name, id])
+}
+
+model ScimGroupMembership {
+  groupId String
+  group   ScimGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+model ScimGroupTeamBinding {
+  id         String          @id @default(cuid())
+  groupId    String
+  group      ScimGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  teamId     String
+  team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  approvedBy String
+  createdAt  DateTime        @default(now())
+  // Only rows actually created by this binding may be removed by reconciliation.
+  grants     ScimTeamGrant[]
+
+  @@unique([groupId, teamId])
+  @@index([teamId])
+}
+
+model ScimTeamGrant {
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  bindingId    String
+  binding      ScimGroupTeamBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  userId       String
+  teamMemberId String               @unique
+
+  @@id([bindingId, userId])
+}
+
+// Durable transactional activity/outbox; never contains raw provider payloads or secrets.
+model ScimEvent {
+  id          String        @id @default(cuid())
+  connectorId String
+  connector   ScimConnector @relation(fields: [connectorId], references: [id])
+  action      String
+  resourceId  String?
+  requestId   String
+  details     Json
+  createdAt   DateTime      @default(now())
+
+  @@index([connectorId, createdAt, id])
 }

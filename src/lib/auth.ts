@@ -1,3 +1,4 @@
+import { preserveScimOwnedOidcFields } from '@/lib/scim/lifecycle/oidc-profile';
 import { coerceBooleanClaim } from '@/lib/oidc/claims';
 import {
   assertCurrentOidcRegistration,
@@ -1129,11 +1130,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             try {
               const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
               const mappedRole = updateData.role as
-                | 'ADMIN'
-                | 'RESPONDER'
-                | 'AUDITOR'
-                | 'USER'
-                | undefined;
+                'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | undefined;
               const mappedRoleSource = updateData.roleSource as 'OIDC' | undefined;
               const mappedStatus = updateData.status as 'ACTIVE' | undefined;
               delete updateData.role;
@@ -1148,7 +1145,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 },
                 updateData,
                 undefined,
-                tx => assertCurrentOidcRegistration(tx, activeConfig),
+                async tx => {
+                  await assertCurrentOidcRegistration(tx, activeConfig);
+                  await preserveScimOwnedOidcFields(tx, targetUser.id, updateData);
+                },
                 targetUser.tokenVersion
               );
             } catch (error) {

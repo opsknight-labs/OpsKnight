@@ -6,12 +6,14 @@ const challengeFindUnique = vi.fn();
 const challengeUpdateMany = vi.fn();
 const linkUpsert = vi.fn();
 const userFindFirst = vi.fn();
+const directoryFindMany = vi.fn();
 const getGraphTokenMock = vi.fn();
 
 const prismaMock = {
   chatIdentityLink: { findUnique: linkFindUnique, upsert: linkUpsert },
   chatIdentityChallenge: { create: challengeCreate },
   user: { findFirst: userFindFirst },
+  scimIdentity: { findMany: directoryFindMany },
   $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback({
       chatIdentityChallenge: { findUnique: challengeFindUnique, updateMany: challengeUpdateMany },
@@ -28,6 +30,7 @@ vi.mock('@/lib/microsoft-teams/client', () => ({
 describe('Microsoft Teams explicit identity linking', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    directoryFindMany.mockResolvedValue([]);
   });
 
   it('resolves only an active, tenant-scoped matching identity', async () => {
@@ -83,11 +86,9 @@ describe('Microsoft Teams explicit identity linking', () => {
 
   it('auto-links an unlinked user matched by SCIM external ID', async () => {
     linkFindUnique.mockResolvedValue(null);
-    userFindFirst.mockResolvedValueOnce({
-      id: 'user-scim',
-      name: 'Scim Bob',
-      email: 'bob@example.com',
-    });
+    directoryFindMany.mockResolvedValueOnce([
+      { user: { id: 'user-scim', name: 'Scim Bob', email: 'bob@example.com' } },
+    ]);
     linkUpsert.mockResolvedValueOnce({ id: 'link-scim' });
 
     const { resolveMicrosoftTeamsUser } = await import('@/lib/microsoft-teams/identity');
@@ -99,9 +100,15 @@ describe('Microsoft Teams explicit identity linking', () => {
     });
 
     expect(result).toEqual({ linkId: 'link-scim', userId: 'user-scim', displayName: 'Scim Bob' });
-    expect(userFindFirst).toHaveBeenCalledWith({
-      where: { scimExternalId: 'aad-scim-1', status: 'ACTIVE' },
-      select: { id: true, name: true, email: true },
+    expect(directoryFindMany).toHaveBeenCalledWith({
+      where: {
+        externalId: 'aad-scim-1',
+        deletedAt: null,
+        user: { status: 'ACTIVE' },
+        connector: { enabled: true, provider: 'ENTRA', tenantId: 'tenant-1' },
+      },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      take: 2,
     });
     expect(linkUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,9 +126,11 @@ describe('Microsoft Teams explicit identity linking', () => {
 
   it('auto-links an unlinked user matched by Microsoft Graph lookup', async () => {
     linkFindUnique.mockResolvedValue(null);
-    userFindFirst
-      .mockResolvedValueOnce(null) // SCIM lookup returns null
-      .mockResolvedValueOnce({ id: 'user-graph', name: 'Graph Carol', email: 'carol@example.com' }); // Email lookup
+    userFindFirst.mockResolvedValueOnce({
+      id: 'user-graph',
+      name: 'Graph Carol',
+      email: 'carol@example.com',
+    });
     linkUpsert.mockResolvedValueOnce({ id: 'link-graph' });
     getGraphTokenMock.mockResolvedValueOnce('mock-graph-token');
 

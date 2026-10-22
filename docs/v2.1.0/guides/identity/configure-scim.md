@@ -1,6 +1,6 @@
 ---
 title: Configure SCIM provisioning
-description: Connect Microsoft Entra, Okta, or another SCIM 2.0 client and verify user, group, and team-membership lifecycle management.
+description: Configure isolated SCIM connectors, rotate credentials, and safely bind directory groups to operational teams.
 type: tutorial
 product_area: identity
 audience: [administrator, operator]
@@ -19,7 +19,7 @@ keywords:
   ]
 verification:
   level: source
-  verified_at: 2026-10-12
+  verified_at: 2026-10-21
   evidence:
     - src/lib/scim.ts
     - src/app/api/scim/v2/Users/route.ts
@@ -37,297 +37,197 @@ verification:
 
 # Configure SCIM provisioning
 
-SCIM remains a User lifecycle interface, separate from the system authentication
-mode. SSO Required blocks password invitations and password completion; it does
-not turn SCIM into an authentication provider. Dedicated emergency principals are
-not implemented in this increment. Imported legacy emergency password identities
-are ordinary User records: exclude them from provider assignments and automated
-offboarding rather than assuming SCIM cannot target them. Never run a deactivation
-drill against your only working administrator or recovery account.
+SCIM manages directory identities independently from SSO. OIDC controls sign-in and
+its explicit role mapping; SCIM profile changes never change system roles or role
+ownership. Dedicated emergency accounts and credentials are separate database
+principals and cannot be targeted through SCIM Users.
 
-OpsKnight exposes SCIM 2.0 **Users** and **Groups** APIs. Use them to manage
-accounts, account state, teams, and team membership from an identity provider:
+## Upgrade existing connections
 
-```text
-OIDC -> authentication and sign-in claims
-SCIM Users -> account provisioning and deprovisioning
-SCIM Groups -> OpsKnight teams and team membership
-```
+Run the database migrations before deploying application replicas that use the new
+registry. The migrations retain existing SCIM user and group IDs. Directory groups
+are copied from teams with a non-null legacy external ID, including directory user
+memberships. Operational teams, services, incidents, escalation rules, dashboard
+references, owners and manually granted memberships remain in place.
 
-SCIM group membership does not assign an OpsKnight system role. Keep role
-management in OIDC claims or OpsKnight, with one documented authority for
-elevated access.
+Existing teams are **not automatically bound**. Review each directory group in the
+SCIM workspace and approve a team binding after viewing its impact. Previously
+provisioned teams without a stable external ID require administrator review; they
+are not exposed to directory credentials by matching their names.
 
-## Before you begin
+Historical profile-only SCIM writes that overwrote the role source of an OIDC-linked
+account are repaired to OIDC authority. Re-evaluate privileged mappings during the
+pilot rollout. The migration grants no new roles.
 
-You need administrator access to the provider and OpsKnight, an externally
-reachable HTTPS origin, a high-entropy token, and a low-risk pilot scope.
-Inventory existing OpsKnight teams before enabling groups: a SCIM Group maps
-directly to a Team, and group deletion deletes the team and removes its
-associations.
+The `legacy` connector initially uses the existing database configuration or, only
+when no database configuration exists, `SCIM_BEARER_TOKEN`. A disabled database
+configuration, invalid database token, or database outage never falls back to an
+environment token. Creating the first registry credential retires the legacy lane
+immediately and replaces the legacy database record with a disabled migration marker so older replicas cannot restore its environment fallback. Drain SCIM traffic to old application versions before the cutover. Copy and verify the replacement in the provider during a maintenance
+window; the legacy lane has no overlap after that transition.
 
-## Generate the SCIM credential
+## Create and configure a connection
 
-Open **Settings -> System -> SSO -> SCIM Provisioning**.
+Open **Settings → System → SCIM → Connections**. Name the connection, select Entra,
+Okta or Generic, and enable provisioning. Select **Save as a new connection** for a
+separate directory authority. Users, groups and credentials are isolated by
+connection; knowing another connector's internal resource ID grants no access.
 
-1. Copy the displayed **Tenant URL**.
-2. Select **Generate SCIM Token**.
-3. Copy the revealed token directly into the identity provider.
-4. Confirm **Active & Ready**, **UI Managed**, and the expected token hint.
-5. Hide the value after use. Never put it in tickets, screenshots, or logs.
+Choose which profile attributes the connection owns (name, email, title, department, photos). Updates to fields owned elsewhere are rejected; omitted fields owned elsewhere are preserved. Account status is owned by the approved lifecycle connection, while roles remain OIDC or manual.
 
-Generation, rotation, and revocation are audited. Existing deployments can
-instead set `SCIM_BEARER_TOKEN` to at least 32 random characters:
-
-```bash
-openssl rand -hex 32
-```
-
-Store it in a secret manager and restart affected web replicas. The UI reports
-**Environment Fallback**; a UI-managed credential takes precedence.
-
-The base URL and authentication header are:
+Use the displayed base URL:
 
 ```text
 https://opsknight.example.com/api/scim/v2
-Authorization: Bearer <SCIM_BEARER_TOKEN>
+Authorization: Bearer <one-time-secret>
 ```
 
-## Discovery endpoints
+In **Security**, create a credential with a descriptive purpose, the required
+`users:read`, `users:write`, `groups:read`, and `groups:write` scopes, an expiration
+of 1–365 days, and a previous-credential overlap of 0–1,440 minutes. The default is
+90 days and 60 minutes of overlap. Store the secret in the provider immediately.
+Only its SHA-256 digest and last four characters are stored. The new secret is
+shown once and cleared from the screen after five minutes. It cannot be revealed
+later.
 
-| Method | Path                           | Result                                         |
-| ------ | ------------------------------ | ---------------------------------------------- |
-| `GET`  | `/ServiceProviderConfig`       | Supported SCIM capabilities and authentication |
-| `GET`  | `/ResourceTypes`               | User and Group definitions                     |
-| `GET`  | `/ResourceTypes/{User\|Group}` | One resource type                              |
-| `GET`  | `/Schemas`                     | User and Group schemas                         |
-| `GET`  | `/Schemas/{schema-URN}`        | One schema                                     |
+Credential creation, rotation, revocation, source changes, binding approvals and
+restoration approvals require a current administrator who signed in within the
+existing two-hour freshness window. Emergency recovery timing is unchanged.
 
-Discovery advertises PATCH and filtering, with at most 100 results. Bulk,
-sorting, password changes, and ETags are not supported.
+During registry rotation, existing credentials expire no later than the chosen
+overlap deadline. Test the new credential before retiring the previous credential.
+You can return the provider to the previous token during its remaining overlap.
+Immediate revocation has no overlap. Credential validity and write admission are
+checked against PostgreSQL on every replica.
 
-## Users contract
+Disabling a connection blocks provisioning without deleting users, groups, teams
+or operational associations. It does not itself offboard users: disable accounts
+through the provider before disconnecting when access removal is intended.
 
-The schema is `urn:ietf:params:scim:schemas:core:2.0:User`.
+## Map provider attributes
 
-| Method                          | Path          | Behavior                                     |
-| ------------------------------- | ------------- | -------------------------------------------- |
-| `GET`, `POST`                   | `/Users`      | List/filter users or create one user         |
-| `GET`, `PUT`, `PATCH`, `DELETE` | `/Users/{id}` | Read, replace, update, or deprovision a user |
+Configure an immutable directory object identifier as `externalId` on creation.
+RFC 7643 makes this attribute optional, but the OpsKnight connector contract
+requires it to prevent unsafe identity adoption and ambiguous retries.
 
-`externalId` is the required immutable directory identifier; `userName` is the
-required normalized email. `displayName`, `emails`, an HTTP(S) `photos` value,
-and `active` are supported. Duplicate email or external ID returns `409` rather
-than adopting an unmanaged account.
+Map the login email to `userName`. The single supported work email must equal
+`userName`. Map `displayName`, `name.formatted`, `name.givenName`,
+`name.familyName`, `active`, `title`, and the enterprise-user extension
+`department` as needed. Profile images accept HTTP(S) URLs. Unmapped attributes,
+privilege changes and unsupported PATCH paths fail with SCIM errors.
 
-The collection uses one-based `startIndex`, a maximum `count` of 100, and only:
+For Entra, use Enterprise applications → Provisioning → Automatic. Enter the Tenant
+URL and one-time Secret Token. Map `objectId` to `externalId` and the intended login
+email to `userName`. Enable group provisioning only after reviewing the directory
+to operational-team boundary.
 
-```text
-externalId eq "directory-object-id"
-userName eq "person@example.com"
-```
+For Okta, configure SCIM Integration with HTTP Header bearer authentication and
+`userName` lookup. Map an immutable directory identifier to `externalId`; enable
+create, update and deactivate. Push Groups creates directory groups. Team bindings
+require separate approval.
 
-`PUT` can replace email, name, state, and photo, but not `externalId`. `PATCH`
-accepts add/replace for `active`, `displayName`, `name`/`name.formatted`, and
-`photos`/`avatarUrl`, including a pathless object. Text booleans are normalized.
+## Verify lifecycle behavior
 
-## Groups contract
+Provider Test Connection verifies connectivity and authentication, not the full
+lifecycle. Use disposable accounts and groups:
 
-The schema is `urn:ietf:params:scim:schemas:core:2.0:Group`. Each Group is an
-OpsKnight Team; group members become team members with role `MEMBER`.
+1. Create a user; query it by `externalId` and confirm its stable returned ID.
+2. Update its profile; verify role authority and session version are unchanged.
+3. Create a group; add/remove users already provisioned through that connection.
+4. View the group under **Users & Groups**, select an operational team and preview
+   additions, protected owners, services and escalation rules. Approve the preview.
+5. Replace membership; verify manual memberships and owner privileges survive.
+6. Disable the user; ordinary access is revoked. Review Activity for affected team
+   memberships and future on-call shifts, and arrange operational coverage.
+7. Reactivate through the same source and confirm the same identity is retained.
+8. Delete the group; the directory group is removed while team membership and
+   operational routing remain intact.
+9. Rotate and revoke credentials, then confirm retired tokens fail.
 
-| Method                          | Path           | Behavior                                |
-| ------------------------------- | -------------- | --------------------------------------- |
-| `GET`, `POST`                   | `/Groups`      | List/filter teams or create a team      |
-| `GET`, `PUT`, `PATCH`, `DELETE` | `/Groups/{id}` | Read, replace, update, or delete a team |
+Local team edits establish manual membership authority. Directory synchronization
+removes only membership rows it created and still owns. Detaching a binding retains
+operational memberships. The API never receives authority to delete operational
+teams through ordinary group deletion.
 
-`displayName` is required, unique, and limited to 100 characters. `externalId`
-is optional. A member value may be an OpsKnight user ID or that user's SCIM
-`externalId`. Responses include the internal ID, `/Users/{id}` reference, and
-display name.
+## Existing accounts, SSO and rehires
 
-`GET /Groups` includes teams created inside OpsKnight. It uses one-based
-pagination, a maximum `count` of 100, and these filters:
+Email collisions return `409`; they never authorize account adoption. In
+**Diagnostics**, an administrator can approve an existing account binding using a
+verified OpsKnight user ID and immutable directory ID. The approval preserves
+status and role authority and explicitly grants that connection lifecycle control.
+One connection owns a user's lifecycle at a time.
 
-```text
-displayName eq "Platform Engineering"
-externalId eq "directory-group-id"
-id eq "opsknight-team-id"
-```
+Existing OIDC linking approval remains available. For Entra, an administrator may
+opt into the trusted bridge only after binding the exact tenant, issuer and OIDC
+client ID. Automatic linking requires matching verified tenant/object claims and
+a live directory identity from that exact registered source. Ambiguous matches
+are rejected. Email equality alone never authorizes the bridge.
 
-Create rejects a duplicate name or external ID. OpsKnight deduplicates resolved
-members and ignores unknown references, so provision users before groups and
-treat missing members as synchronization failures.
+SCIM-disabled users cannot reactivate through JIT sign-in. DELETE retains a
+disabled account and identity tombstone for audit, preventing a new POST from
+adopting it. Approve restoration in **Users & Groups**, then have the provider
+reactivate the existing resource. Restoration approval alone does not enable
+access.
 
-`PUT` replaces all membership only when `members` is present; otherwise it
-preserves membership. `PATCH` supports add, remove, and replace, including:
+## Supported protocol
 
-```text
-members[value eq "directory-user-id"]
-```
+Discovery endpoints include `/ServiceProviderConfig`, `/ResourceTypes`,
+`/ResourceTypes/{User|Group}`, `/Schemas` and `/Schemas/{schema-URN}`. They advertise
+core User/Group schemas and the supported enterprise-user extension. PATCH,
+equality filters and offset pagination are supported. Bulk, sorting, password
+changes and ETags are not advertised.
 
-Removing `members` without a value removes everyone. Pathless objects can
-update `displayName`, `externalId`, and membership. Changes emit
-`scim.group.created`, `.updated`, `.patched`, and `.deleted` audit actions.
+Users support create, read, PUT, ordered atomic PATCH, disable/reactivate and safe
+DELETE. Equality filters support `externalId` and `userName`. Groups support
+create, read, rename, PUT, ordered atomic PATCH and detach-on-DELETE. Equality
+filters support `displayName`, `externalId` and `id`. Group queries honor
+`excludedAttributes=members` without loading member collections.
 
-### Group deletion is destructive
+`startIndex` is a positive integer; `count` is a nonnegative integer capped at
+100. `count=0` returns only the result count. Ordering is deterministic. Requests
+are capped at 1 MiB, 100 PATCH operations and 10,000 members per group mutation.
+Each connector admits at most 600 requests per minute through a shared PostgreSQL
+counter. Unsupported queries and paths fail explicitly.
 
-`DELETE /Groups/{id}` removes all team membership, clears this team from
-services, incidents, escalation-rule targets, and dashboards, and then deletes
-the team. It returns `204`; there is no disabled group record.
+Responses use `application/scim+json`, stable resource metadata and `Location` on
+creation. Errors use SCIM bodies; `401` includes a bearer challenge, `403` denotes
+missing scope, `409` denotes identity/security conflicts, and `429`/`503` include
+`Retry-After`. Internal database errors and bearer secrets are never returned.
 
-Before production rollout, learn whether provider unassignment or group
-deletion sends SCIM DELETE. Test only with a disposable team that owns no
-production resources, and preserve a break-glass administration path.
+## Diagnostics and reconciliation
 
-## Configure Microsoft Entra
+Activity is durable and written in the same transaction as lifecycle mutations.
+A failed audit insert rolls the mutation back. `X-Request-ID` correlates API
+responses with mutation activity. No raw bearer tokens or provider payloads are
+stored in activity records.
 
-1. Open **Identity -> Applications -> Enterprise applications**, then select
-   the OpsKnight application.
-2. Open **Provisioning**, choose **New configuration**, and use **Automatic**.
-3. Enter the SCIM base URL as **Tenant URL** and the bearer token as **Secret
-   Token**, then select **Test Connection**.
-4. Under user mappings, map Entra object ID to `externalId`, sign-in email to
-   `userName`, display name to `displayName`, and enabled state to `active`.
-   Remove unsupported mappings and match on the stable object ID.
-5. Under group mappings, map group object ID to `externalId`, group name to
-   `displayName`, and membership to `members`.
-6. Scope synchronization to assigned users and groups, add an operator contact,
-   and configure accidental-deletion protection for your policy.
-7. Assign only a pilot group whose users are assigned. Provision one user on
-   demand before provisioning the group.
-8. Confirm the account, OpsKnight team, and membership. Rename the group and
-   add/remove one member to prove incremental synchronization.
-9. Test deletion only with a disposable unassociated team.
+Diagnostics compares the first 25 local group/team bindings against stored
+directory intent. Preview and approve a binding again to repair missing
+memberships. This comparison cannot infer the provider's current remote state;
+use provider logs for assignments or changes the provider has not delivered.
+Directory and activity lists use server pagination and bounded searches.
 
-**Test Connection** proves discovery and authentication, not lifecycle
-correctness. Entra OIDC and SCIM use different credentials.
+OpenTelemetry instruments `scim.requests`, `scim.request.duration` and
+`scim.authentication.failures`; configure the application's OpenTelemetry
+exporter to collect them. PostgreSQL credential last-use/expiry and activity
+records provide durable operational history. Monitor database lock waits,
+serialization retries, pool saturation and deactivation warnings alongside these
+metrics. Profile-only updates do not revoke unrelated user sessions.
 
-## Configure Okta
+## Certification and rollout
 
-1. Enable SCIM provisioning for the OpsKnight application.
-2. Under **Provisioning -> Integration**, enter the base URL, choose **HTTP
-   Header**, enter the bearer token, and select **Test API Credentials**.
-3. Map Okta's stable user ID to `externalId`, email to `userName`, name to
-   `displayName`, and lifecycle state to `active`.
-4. Under **To App**, enable create users, update attributes, and deactivate
-   users. Verify one pilot user's create/update/deactivate/reactivate cycle.
-5. Under **Push Groups**, select one disposable pilot group by name or rule.
-6. Verify that Okta creates or deliberately links exactly one OpsKnight team.
-   Add and remove a pilot user and confirm membership follows.
-7. Determine the effect of **Unlink pushed group** and provider deletion in
-   your Okta policy before permitting production group deletion.
+See `plans/scim-enterprise/certification.md` in the
+repository for reproducible unit, PostgreSQL, capacity, browser and multi-replica
+checks and their limitations. Live Entra/Okta tenant certification is distinct
+from local provider-shaped request tests. It remains a release gate when those
+tenants are available.
 
-Do not push a name that collides with an unrelated OpsKnight team. Verify the
-exact target before accepting any offered link.
+Use a database backup and a pilot source before rollout. Restore a backup to an
+isolated environment and rehearse the rollout. After adopting the isolated group
+model, reverting to the old application would restore unsafe operational-team
+semantics; rollback requires a reviewed application/database recovery procedure,
+not automatically dropping identity or audit tables.
 
-## Configure another client
-
-1. Read `ServiceProviderConfig`, `ResourceTypes`, and `Schemas`.
-2. Filter Users by pilot `externalId` and `userName`, then create the user.
-3. Store the returned user `id`; update and disable the account once.
-4. Create a uniquely named group with a stable `externalId` and pilot member.
-5. Store its returned `id`; verify member values and `/Users/{id}` references.
-6. Rename it, add/remove a member, and reconcile the final representation.
-7. Exercise DELETE only in a test deployment after reviewing deletion behavior.
-
-Do not infer bulk, sort, password, manager, phone, address, or entitlement
-support from the general SCIM specification.
-
-## Verify end to end
-
-Verify all of the following in the pilot scope:
-
-1. Missing and incorrect tokens return `401`.
-2. Discovery lists User and Group and accurately reports capabilities.
-3. A second user sync updates rather than duplicates the account.
-4. User filters reconcile the same resource; updates and deactivation work.
-5. One directory group creates one team with its expected external ID.
-6. Add/remove membership and rename the group without creating duplicates.
-7. Team membership does not unexpectedly grant a system role.
-8. Unassigned users and groups stay outside the provisioning scope.
-9. Successful group mutations are audited and failures are visible without
-   exposing the token.
-10. A disposable deletion behaves exactly as approved.
-
-Never test deprovisioning with the only administrator or break-glass account.
-
-## User deletion and roles
-
-Setting `active=false` disables the user and invalidates existing access.
-`DELETE /Users/{id}` also disables the account, clears its SCIM binding, and
-retains the internal record for audit, incident history, and ownership. Plan
-rehire behavior when the retained record still uses the same email.
-
-SCIM `externalId` and OIDC `(issuer, sub)` are separate identities. Use SCIM
-Groups for teams and membership; use OIDC claims or manual administration for
-system roles. Do not assume membership assigns `ADMIN`, `RESPONDER`, `USER`, or
-`AUDITOR`.
-
-## Rotate or revoke the token
-
-OpsKnight accepts one active credential. Pause provisioning, select **Rotate
-Token**, update the provider, test one user and group update, then resume. There
-is no dual-token overlap. **Revoke** disables the UI-managed credential without
-deleting users or teams; remove `SCIM_BEARER_TOKEN` too for a complete shutdown.
-
-After generation or rotation, the UI is the controlled place to retrieve the
-active UI-managed token. Restrict Settings access accordingly and copy it only
-into the identity provider or secret-management workflow. The stored token is
-encrypted; the displayed token hint identifies the active credential but cannot
-authenticate. A UI-managed credential takes precedence over the environment
-fallback, so rotating only `SCIM_BEARER_TOKEN` has no effect while the
-UI-managed token remains active.
-
-## Troubleshooting
-
-### Requests return `401`
-
-Check the active token source and hint, minimum length, accidental whitespace,
-stale provider secret, and replicas not restarted after environment rotation.
-
-### Test connection returns `404`
-
-Use the base URL ending in `/api/scim/v2`, not an OIDC callback, home page, or
-resource URL. Confirm the proxy forwards `/api/scim/`.
-
-### Provisioning returns `409`
-
-Search users by `externalId` and `userName`; search groups by `externalId` and
-`displayName`. Correct the mapping or intentional link. Do not delete an
-unrelated account or production team to make a retry pass.
-
-### A local user is absent from `/Users`
-
-Only SCIM-managed users are returned; a local/OIDC account cannot be silently
-adopted. In contrast, `/Groups` includes existing OpsKnight teams, so review
-group-name collisions carefully.
-
-### A group member is missing
-
-Provision the user first. Confirm the value is the user's OpsKnight ID or exact
-SCIM `externalId`. Unknown member references are ignored; retry membership once
-the user exists and verify the final Group response.
-
-### Group removal deleted a team
-
-This is the implemented DELETE behavior. Stop the provider job, inspect service,
-incident, escalation-rule, and dashboard associations, recover the intended
-team configuration, and change provider deletion policy before resuming.
-
-### Deactivated user history remains
-
-This is expected: access is revoked while the internal record remains for
-history. If a user appears signed in, verify the operation, shared session state
-across replicas, and a new authenticated request rather than an old browser view.
-
-Continue with [OIDC single sign-on](configure-oidc/) and
-[manage users](../administration/manage-users/).
-
-## Emergency identity exclusion
-
-SCIM Users and Groups manage ordinary workspace lifecycle. Independent emergency
-accounts and credentials have separate tables, cookies and authorization and never
-become SCIM/JIT Users, responder assignments or team members. Disabling an ordinary
-SCIM user revokes its ordinary access; it does not disable a separate independently
-held emergency identity. Keep emergency custody outside the federation failure path.
+Authoritative compatibility inputs: [RFC 7644](https://www.rfc-editor.org/rfc/rfc7644),
+[Microsoft Entra SCIM guidance](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups),
+and [Okta SCIM 2.0 guidance](https://developer.okta.com/docs/api/openapi/okta-scim/guides/scim-20/).
