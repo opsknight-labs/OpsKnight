@@ -36,7 +36,7 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --label opsknight.scim.certification=20261021
-          --health-cmd 'pg_isready -U scim_certifier -d enterprise_scim_test'
+          --health-cmd "pg_isready -U scim_certifier -d enterprise_scim_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://scim_certifier:isolated-ci-only@localhost:5432/enterprise_scim_test
