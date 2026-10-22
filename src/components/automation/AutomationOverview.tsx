@@ -23,6 +23,7 @@ import { TraceDetail } from './TraceDetail';
 import type { Data, Counts, Area } from './presentation-types';
 import { toneClasses } from './workspace/status';
 import { NativeSelect } from './authoring/primitives';
+import { calculateDeduplicatedFailures } from './workspace/shadow-counts';
 
 type TraceDetailShape = {
   shadowDifferent?: boolean;
@@ -125,7 +126,8 @@ export const AutomationOverview = memo(function AutomationOverview({
   const diffRoutes = counts?.routes ?? 0;
   const errors = counts?.errors ?? 0;
   const fallbacks = counts?.fallbacks ?? 0;
-  const totalFailures = errors + fallbacks;
+  const totalFailures = calculateDeduplicatedFailures(errors, fallbacks);
+  const hasFailures = errors > 0 || fallbacks > 0;
 
   return (
     <div className="space-y-3.5">
@@ -285,11 +287,15 @@ export const AutomationOverview = memo(function AutomationOverview({
               style={{ width: `${Math.min(100, Math.max(0, (diffRoutes / evaluated) * 100))}%` }}
               title={`Divergent routes: ${diffRoutes}`}
             />
-            {errors > 0 && (
+            {totalFailures > 0 && (
               <div
                 className="bg-amber-500 transition-all duration-300"
-                style={{ width: `${Math.min(100, Math.max(0, (errors / evaluated) * 100))}%` }}
-                title={`Errors/fallbacks: ${errors}`}
+                style={{
+                  width: `${Math.min(100, Math.max(0, (totalFailures / evaluated) * 100))}%`,
+                }}
+                title={`Errors/fallbacks: ${totalFailures}${
+                  errors > 0 && fallbacks > 0 ? ` (${errors} err, ${fallbacks} fallback)` : ''
+                }`}
               />
             )}
           </div>
@@ -304,10 +310,10 @@ export const AutomationOverview = memo(function AutomationOverview({
                 <span className="h-2 w-2 rounded-full bg-indigo-500 inline-block" />
                 <span>Divergent routes ({diffRoutes.toLocaleString()})</span>
               </span>
-              {errors > 0 && (
+              {totalFailures > 0 && (
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />
-                  <span>Errors / fallbacks ({errors})</span>
+                  <span>Errors / fallbacks ({totalFailures.toLocaleString()})</span>
                 </span>
               )}
             </div>
@@ -330,7 +336,7 @@ export const AutomationOverview = memo(function AutomationOverview({
                   data.enabled &&
                     !!data.activeVersion &&
                     !!counts?.evaluated &&
-                    !counts?.errors &&
+                    !hasFailures &&
                     !data.unmappedCount
                     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                     : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
@@ -342,7 +348,7 @@ export const AutomationOverview = memo(function AutomationOverview({
                     data.enabled &&
                       !!data.activeVersion &&
                       !!counts?.evaluated &&
-                      !counts?.errors &&
+                      !hasFailures &&
                       !data.unmappedCount
                       ? 'bg-emerald-500'
                       : 'bg-amber-500'
@@ -354,7 +360,7 @@ export const AutomationOverview = memo(function AutomationOverview({
                     data.enabled,
                     !!data.activeVersion,
                     !!counts?.evaluated,
-                    !counts?.errors,
+                    !hasFailures,
                     !data.unmappedCount,
                   ].filter(Boolean).length
                 }{' '}
@@ -377,9 +383,19 @@ export const AutomationOverview = memo(function AutomationOverview({
                     ? `${counts.evaluated} Shadow evaluations · ${((counts.same / counts.evaluated) * 100).toFixed(1)}% same behavior`
                     : 'No Shadow traffic for this version'}
                 </Check>
-                <Check ok={!counts?.errors}>
-                  {counts?.errors
-                    ? `${counts.errors} fallbacks/errors require review`
+                <Check ok={!hasFailures}>
+                  {hasFailures
+                    ? `${totalFailures} ${
+                        errors > 0 && fallbacks > 0
+                          ? 'fallbacks/errors require review'
+                          : errors > 0
+                            ? errors === 1
+                              ? 'error requires review'
+                              : 'errors require review'
+                            : fallbacks === 1
+                              ? 'fallback requires review'
+                              : 'fallbacks require review'
+                      }`
                     : 'No recorded Shadow fallbacks/errors'}
                 </Check>
                 <Check ok={!data.unmappedCount}>

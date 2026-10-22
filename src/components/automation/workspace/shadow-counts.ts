@@ -31,3 +31,14 @@ export function sumShadowAggregates(
       emptyCounts
     );
 }
+
+/**
+ * Calculates the deduplicated count of failed evaluations from errors and fallbacks.
+ * Because runtime errors during shadow execution trigger fallbacks (as observed in
+ * `src/lib/automation/runtime.ts`), individual failure events increment both the error
+ * and fallback counters. Deduplicating by taking the maximum avoids inflating failure
+ * metrics (e.g., 3 failed evaluations appearing as 6 failures).
+ */
+export function calculateDeduplicatedFailures(errors: number = 0, fallbacks: number = 0): number {
+  return Math.max(errors, fallbacks);
+}

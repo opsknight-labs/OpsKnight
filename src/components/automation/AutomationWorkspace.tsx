@@ -548,7 +548,7 @@ export default function AutomationWorkspace({
         candidateFallbacks={
           review === 'activateCandidate'
             ? (reviewData?.candidateAggregates?.reduce((sum, row) => sum + row.fallbacks, 0) ?? 0)
-            : 0
+            : (counts?.fallbacks ?? 0)
         }
         enabled={status?.enabled ?? false}
         counts={counts}
