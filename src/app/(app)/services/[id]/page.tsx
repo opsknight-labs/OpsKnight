@@ -1045,7 +1045,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
   // --- TAB 4: NOTIFICATIONS CONTENT ---
   const notificationsContent = (
-    <div className="space-y-6">
+    <div className="space-y-3.5">
       {isSaved && <ServiceSettingsFlashToast serviceId={id} />}
 
       {canManageService ? (
