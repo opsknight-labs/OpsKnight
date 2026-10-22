@@ -343,4 +343,5 @@ development server (three journeys, 1.7 minutes). A preceding cold-server Chromi
 run timed out during login before reaching SCIM; its Firefox and WebKit journeys
 passed. The earlier optimized production build and three-browser production
 journeys cover the preceding deep-audit implementation; final-head CI recompiles
-and exercises the readiness guard against the production server.
+and exercises the readiness guard against its isolated development server; the
+general workflow separately builds the production application.
