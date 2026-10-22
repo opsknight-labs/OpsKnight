@@ -19,6 +19,7 @@ import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { updateServiceChatOpsSettings } from '@/app/(app)/services/actions';
 import { notify } from '@/lib/toast';
 import type { WarRoomProviderSet, ServiceWarRoomPolicy } from '@/lib/incident-collaboration/types';
+import { NativeSelect } from '@/components/automation/authoring/primitives';
 
 const VIDEO_BRIDGE_OPTIONS = [
   { value: 'INHERIT', label: 'Inherit Global' },
@@ -305,19 +306,18 @@ export default function ChatOpsWarRoomSettings({
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="warRoomVideoBridge">Override Video Bridge</Label>
-                <select
+                <NativeSelect
                   id="warRoomVideoBridge"
                   name="warRoomVideoBridge"
                   defaultValue={warRoomVideoBridge ?? 'INHERIT'}
                   disabled={!canManage}
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {VIDEO_BRIDGE_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="warRoomCustomBridgeUrl">Custom Bridge URL</Label>

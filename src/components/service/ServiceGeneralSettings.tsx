@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import EscalationPolicyCombobox from '@/components/service/EscalationPolicyCombobox';
+import { NativeSelect } from '@/components/automation/authoring/primitives';
 
 interface TeamOption {
   id: string;
@@ -248,13 +249,12 @@ export default function ServiceGeneralSettings({
                     {teams.length} available
                   </span>
                 </Label>
-                <select
+                <NativeSelect
                   id="teamId"
                   name="teamId"
                   value={teamId}
                   onChange={e => setTeamId(e.target.value)}
                   disabled={!canManageService || isPending}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">No Owning Team (Unassigned)</option>
                   {teams.map(t => (
@@ -262,7 +262,7 @@ export default function ServiceGeneralSettings({
                       {t.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             </div>
 

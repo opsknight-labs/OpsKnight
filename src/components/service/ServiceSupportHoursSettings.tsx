@@ -8,6 +8,7 @@ import { saveSupportHoursPolicyAction } from '@/app/(app)/settings/incident-sla/
 import { notify } from '@/lib/toast';
 import { Calendar, Globe, Building2, Plus, Trash2, Check, Loader2, Info, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NativeSelect } from '@/components/automation/authoring/primitives';
 
 type SupportMode = 'INHERIT' | 'ALWAYS' | 'SCHEDULED';
 
@@ -474,7 +475,7 @@ export default function ServiceSupportHoursSettings({
                         className="h-8 w-36 text-xs font-mono"
                       />
 
-                      <select
+                      <NativeSelect
                         aria-label={`Exception ${index + 1} availability`}
                         disabled={!canManage || pending}
                         value={exception.available ? 'AVAILABLE' : 'UNAVAILABLE'}
@@ -493,11 +494,11 @@ export default function ServiceSupportHoursSettings({
                             )
                           );
                         }}
-                        className="h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-xs"
+                        wrapperClassName="w-auto"
                       >
                         <option value="UNAVAILABLE">Unavailable (Holiday)</option>
                         <option value="AVAILABLE">Special Coverage</option>
-                      </select>
+                      </NativeSelect>
 
                       {exception.available && (
                         <>
