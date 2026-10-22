@@ -388,31 +388,36 @@ export function AutomationContext({
               canReadSensitive={canReadSensitive}
               updateField={stableUpdateField}
               onRemove={stableDeleteField}
+              onClose={() => setSelectedKey(null)}
             />
           )}
           {data.canEdit && (
             <section
               aria-labelledby={`${formId}-title`}
-              className="space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-xs"
+              className="space-y-3 rounded-xl border border-border/80 bg-card p-3 sm:p-3.5 shadow-xs"
             >
-              <div className="border-b border-border/60 pb-2.5">
+              <div className="border-b border-border/60 pb-2">
                 <h3
                   id={`${formId}-title`}
-                  className="text-sm font-semibold tracking-tight text-foreground"
+                  className="text-sm font-semibold tracking-tight text-foreground flex items-center gap-1.5"
                 >
+                  <Plus className="h-4 w-4 text-primary" aria-hidden="true" />
                   Add context field
                 </h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="mt-0.5 text-[11.5px] text-muted-foreground">
                   Pick where the value comes from, name it, then (for choices) list the canonical
                   values rules will compare against.
                 </p>
               </div>
-              <AuthoringFieldset legend="1. Source">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`${formId}-integration`}>Integration</Label>
+              <AuthoringFieldset compact legend="1. Source">
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor={`${formId}-integration`} className="text-xs font-medium">
+                      Integration
+                    </Label>
                     <NativeSelect
                       id={`${formId}-integration`}
+                      className="h-8 text-xs bg-background"
                       value={integrationType}
                       onChange={e => {
                         if (handleIntegrationTypeChange) {
@@ -429,10 +434,13 @@ export function AutomationContext({
                       ))}
                     </NativeSelect>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`${formId}-observed`}>Observed field</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor={`${formId}-observed`} className="text-xs font-medium">
+                      Observed field
+                    </Label>
                     <NativeSelect
                       id={`${formId}-observed`}
+                      className="h-8 text-xs bg-background"
                       value={
                         observedOptions.find(
                           o =>
@@ -504,32 +512,38 @@ export function AutomationContext({
                   </div>
                 </div>
                 {observedOptions.length === 0 && (
-                  <Hint>
+                  <Hint className="text-[11px] leading-tight">
                     No observed fields for this integration yet. Use discovery to find fields, or
                     enter a path under Advanced mapping.
                   </Hint>
                 )}
-                <div>
+                <div className="pt-0.5">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-10 px-2 sm:h-9"
+                    className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
                     aria-expanded={advanced}
                     aria-controls={advanced ? `${formId}-advanced` : undefined}
                     onClick={() => setAdvanced(!advanced)}
                   >
                     <ChevronDown
-                      className={cn('transition-transform', advanced && 'rotate-180')}
+                      className={cn('h-3.5 w-3.5 transition-transform', advanced && 'rotate-180')}
                       aria-hidden="true"
                     />
                     Advanced mapping
                   </Button>
                   {advanced && (
-                    <div id={`${formId}-advanced`} className="mt-2 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`${formId}-source-type`}>Payload source</Label>
+                    <div
+                      id={`${formId}-advanced`}
+                      className="mt-2 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-2.5"
+                    >
+                      <div className="space-y-1">
+                        <Label htmlFor={`${formId}-source-type`} className="text-xs font-medium">
+                          Payload source
+                        </Label>
                         <NativeSelect
                           id={`${formId}-source-type`}
+                          className="h-8 text-xs bg-background"
                           value={effectiveSource ?? ''}
                           aria-invalid={!effectiveSource && !!observedPath ? true : undefined}
                           onChange={e => setSource(e.target.value as 'PROVIDER' | 'EVENT')}
@@ -544,7 +558,7 @@ export function AutomationContext({
                             Raw provider webhook (e.g. GitHub, CloudWatch)
                           </option>
                         </NativeSelect>
-                        <Hint>
+                        <Hint className="text-[11px] leading-tight">
                           {effectiveSource === 'EVENT'
                             ? 'Extracted from OpsKnight standardized event payload (e.g. payload.*, event_action)'
                             : effectiveSource === 'PROVIDER'
@@ -552,11 +566,13 @@ export function AutomationContext({
                               : 'Select whether this field is extracted from OpsKnight normalized event or raw provider webhook'}
                         </Hint>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`${formId}-path`}>Source path</Label>
+                      <div className="space-y-1">
+                        <Label htmlFor={`${formId}-path`} className="text-xs font-medium">
+                          Source path
+                        </Label>
                         <Input
                           id={`${formId}-path`}
-                          className="font-mono"
+                          className="h-8 font-mono text-xs bg-background"
                           placeholder={
                             effectiveSource === 'EVENT'
                               ? 'payload.custom_details.environment'
@@ -568,7 +584,9 @@ export function AutomationContext({
                             setIntType(undefined);
                           }}
                         />
-                        <Hint>Dot-separated path into the event or provider payload.</Hint>
+                        <Hint className="text-[11px] leading-tight">
+                          Dot-separated path into the event or provider payload.
+                        </Hint>
                       </div>
                     </div>
                   )}
@@ -577,13 +595,16 @@ export function AutomationContext({
                   <InlineError id={`${formId}-source-error`}>{problems.source}</InlineError>
                 )}
               </AuthoringFieldset>
-              <AuthoringFieldset legend="2. Name and type">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`${formId}-label`}>Field label</Label>
+              <AuthoringFieldset compact legend="2. Name and type">
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor={`${formId}-label`} className="text-xs font-medium">
+                      Field label
+                    </Label>
                     <Input
                       id={`${formId}-label`}
                       maxLength={100}
+                      className="h-8 text-xs bg-background"
                       aria-invalid={!!problems.label || undefined}
                       aria-describedby={`${formId}-label-note`}
                       value={fieldLabel}
@@ -594,17 +615,20 @@ export function AutomationContext({
                         <InlineError>{problems.label}</InlineError>
                       ) : (
                         newKey && (
-                          <Hint>
+                          <Hint className="text-[11px] leading-tight">
                             Key: <code className="font-mono">automation.{newKey}</code>
                           </Hint>
                         )
                       )}
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`${formId}-type`}>Treat as</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor={`${formId}-type`} className="text-xs font-medium">
+                      Treat as
+                    </Label>
                     <NativeSelect
                       id={`${formId}-type`}
+                      className="h-8 text-xs bg-background"
                       value={fieldType}
                       onChange={e => setFieldType(e.target.value as Field['type'])}
                     >
@@ -613,7 +637,7 @@ export function AutomationContext({
                       <option value="NUMBER">Number</option>
                       <option value="BOOLEAN">True / False</option>
                     </NativeSelect>
-                    <Hint>
+                    <Hint className="text-[11px] leading-tight">
                       {fieldType === 'ENUM'
                         ? 'Values are normalized to a fixed list of choices.'
                         : fieldType === 'NUMBER'
@@ -626,8 +650,10 @@ export function AutomationContext({
                 </div>
               </AuthoringFieldset>
               {fieldType === 'ENUM' && (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold tracking-tight">3. Canonical values</p>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold tracking-tight text-foreground">
+                    3. Canonical values
+                  </p>
                   <CanonicalValuesEditor
                     values={values}
                     usedValues={EMPTY_SET}
@@ -636,8 +662,10 @@ export function AutomationContext({
                   {problems.values && <InlineError>{problems.values}</InlineError>}
                 </div>
               )}
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
                 <Button
+                  size="sm"
+                  className="h-8 text-xs font-medium gap-1.5 shadow-xs"
                   disabled={
                     draft.fields.length >= LIMITS.fields ||
                     !fieldLabel.trim() ||
@@ -645,7 +673,7 @@ export function AutomationContext({
                   }
                   onClick={addField}
                 >
-                  <Plus aria-hidden="true" />
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                   Add field
                 </Button>
                 {problems.limit && <InlineError>{problems.limit}</InlineError>}

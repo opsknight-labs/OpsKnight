@@ -1,6 +1,6 @@
 'use client';
 import { memo, useId, useMemo } from 'react';
-import { Compass, Copy, Database, Trash2 } from 'lucide-react';
+import { Compass, Copy, Database, Trash2, X } from 'lucide-react';
 import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
@@ -109,6 +109,7 @@ export const FieldDetail = memo(function FieldDetail({
   canReadSensitive,
   updateField,
   onRemove,
+  onClose,
 }: {
   field: Field;
   rules: Rule[];
@@ -117,6 +118,7 @@ export const FieldDetail = memo(function FieldDetail({
   canReadSensitive: boolean;
   updateField: (key: string, update: Partial<Field>) => void;
   onRemove: (field: Field) => void;
+  onClose?: () => void;
 }) {
   const caseId = useId();
   const usedValues = useMemo(
@@ -151,77 +153,106 @@ export const FieldDetail = memo(function FieldDetail({
   return (
     <section
       aria-label={`${field.label} details`}
-      className="min-w-0 space-y-4 rounded-xl border border-border/80 bg-card p-4 shadow-xs"
+      className="min-w-0 space-y-3 rounded-xl border border-border/80 bg-card p-3 sm:p-3.5 shadow-xs"
     >
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border/60 pb-3">
-        <div className="min-w-0 space-y-0.5">
-          <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-            <Database className="h-4 w-4 text-primary" aria-hidden="true" />
-            {field.label}
-            <span className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {FIELD_TYPE_LABELS[field.type]}
-            </span>
-          </h3>
-          <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-            <span>automation.{field.key}</span>
-            <button
-              type="button"
-              aria-label={`Copy automation.${field.key}`}
-              className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 text-[10px] font-sans font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-              onClick={() => {
-                navigator.clipboard.writeText(`automation.${field.key}`);
-                notify.success(`Copied automation.${field.key} to clipboard`);
-              }}
-            >
-              <Copy className="h-2.5 w-2.5" aria-hidden="true" />
-              <span>Copy</span>
-            </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+            <Database className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground truncate">
+                {field.label}
+              </h3>
+              <span className="rounded border border-border/70 bg-muted/40 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {FIELD_TYPE_LABELS[field.type]}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+              <span>automation.{field.key}</span>
+              <button
+                type="button"
+                aria-label={`Copy automation.${field.key}`}
+                className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/60 px-1.5 py-px text-[9.5px] font-sans font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                onClick={() => {
+                  navigator.clipboard.writeText(`automation.${field.key}`);
+                  notify.success(`Copied automation.${field.key} to clipboard`);
+                }}
+              >
+                <Copy className="h-2.5 w-2.5" aria-hidden="true" />
+                <span>Copy</span>
+              </button>
+            </div>
           </div>
         </div>
-        {canEdit && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => onRemove(field)}
-          >
-            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Remove field
-          </Button>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => onRemove(field)}
+            >
+              <Trash2 className="h-3 w-3" aria-hidden="true" />
+              Remove field
+            </Button>
+          )}
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Close field details"
+              className="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground"
+              onClick={onClose}
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
-        <h4 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          <Compass className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-          Mapping provenance
-        </h4>
-        {field.mappings.length === 0 && (
-          <p className="text-muted-foreground">
-            No source mapping. This field is set by rules only.
+
+      <div className="grid gap-2 sm:grid-cols-2 rounded-lg border border-border/60 bg-muted/15 p-2 text-xs">
+        <div className="space-y-1">
+          <h4 className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Compass className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+            Mapping provenance
+          </h4>
+          {field.mappings.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">
+              No source mapping. This field is set by rules only.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {field.mappings.map((mapping, index) => (
+                <div key={index} className="min-w-0 font-medium flex flex-wrap items-center gap-1">
+                  <Badge variant="outline" className="px-1.5 py-0 text-[9.5px] font-normal">
+                    {mapping.integrationType ?? 'All integrations'}
+                  </Badge>
+                  <Badge variant="secondary" className="px-1.5 py-0 text-[9.5px] font-normal">
+                    {mapping.source === 'EVENT' ? 'Normalized event' : 'Provider payload'}
+                  </Badge>
+                  <code className="break-all rounded bg-background px-1.5 py-0 font-mono text-[10.5px] border border-border/60 text-foreground">
+                    {mapping.path}
+                  </code>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1 border-t sm:border-t-0 sm:border-l border-border/50 sm:pl-2.5 pt-1.5 sm:pt-0">
+          <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+            Recognized &amp; Aliases
+          </span>
+          <p className="font-medium text-foreground text-[11px] truncate">
+            Recognized: {field.allowedValues?.join(', ') || field.type.toLowerCase()}
           </p>
-        )}
-        {field.mappings.map((mapping, index) => (
-          <div key={index} className="min-w-0 font-medium flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
-              {mapping.integrationType ?? 'All integrations'}
-            </Badge>
-            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
-              {mapping.source === 'EVENT' ? 'Normalized event' : 'Provider payload'}
-            </Badge>
-            <code className="break-all rounded bg-background px-1.5 py-0.5 font-mono text-[11px] border border-border/60 text-foreground">
-              {mapping.path}
-            </code>
-          </div>
-        ))}
+          <p className="text-muted-foreground text-[11px] truncate">Aliases: {aliasSummary}</p>
+        </div>
       </div>
-      <div className="space-y-1 rounded-lg border border-border/60 bg-muted/10 p-3 text-xs">
-        <p className="font-medium text-foreground">
-          Recognized: {field.allowedValues?.join(', ') || field.type.toLowerCase()}
-        </p>
-        <p className="text-muted-foreground">Aliases: {aliasSummary}</p>
-      </div>
+
       {canEdit && (
-        <div className="space-y-4">
+        <div className="space-y-2.5">
           {field.type === 'ENUM' && (
             <CanonicalValuesEditor
               values={field.allowedValues ?? []}
@@ -234,30 +265,43 @@ export const FieldDetail = memo(function FieldDetail({
             canonicalValues={field.type === 'ENUM' ? field.allowedValues : undefined}
             onChange={aliases => updateField(field.key, { aliases })}
           />
-          <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1">
-            <Switch
-              id={caseId}
-              checked={field.caseSensitive}
-              onCheckedChange={caseSensitive => updateField(field.key, { caseSensitive })}
-            />
-            <Label htmlFor={caseId}>Case sensitive</Label>
-            <span className="text-xs text-muted-foreground">
-              {field.caseSensitive
-                ? '“Prod” and “prod” are different values.'
-                : '“Prod” and “prod” are treated as the same value.'}
-            </span>
-          </div>
-          <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1">
-            <Switch
-              id={`${caseId}-display`}
-              checked={field.displayOnly ?? false}
-              onCheckedChange={displayOnly => updateField(field.key, { displayOnly })}
-            />
-            <Label htmlFor={`${caseId}-display`}>Display-only field</Label>
-            <span className="text-xs text-muted-foreground">
-              Captured for incident presentation and runbook context without requiring rule
-              conditions.
-            </span>
+          <div className="grid gap-2 sm:grid-cols-2 rounded-lg border border-border/60 bg-muted/15 p-2 text-xs">
+            <div className="flex items-center justify-between gap-2 rounded-md bg-background/60 border border-border/50 px-2.5 py-1.5">
+              <div className="space-y-0.5 min-w-0 pr-2">
+                <Label htmlFor={caseId} className="text-xs font-semibold cursor-pointer">
+                  Case sensitive
+                </Label>
+                <p className="text-[10.5px] text-muted-foreground line-clamp-1">
+                  {field.caseSensitive
+                    ? '“Prod” and “prod” are different values.'
+                    : '“Prod” and “prod” are treated as the same value.'}
+                </p>
+              </div>
+              <Switch
+                id={caseId}
+                checked={field.caseSensitive}
+                onCheckedChange={caseSensitive => updateField(field.key, { caseSensitive })}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-md bg-background/60 border border-border/50 px-2.5 py-1.5">
+              <div className="space-y-0.5 min-w-0 pr-2">
+                <Label
+                  htmlFor={`${caseId}-display`}
+                  className="text-xs font-semibold cursor-pointer"
+                >
+                  Display-only field
+                </Label>
+                <p className="text-[10.5px] text-muted-foreground line-clamp-1">
+                  Captured for incident presentation and runbook context without requiring rule
+                  conditions.
+                </p>
+              </div>
+              <Switch
+                id={`${caseId}-display`}
+                checked={field.displayOnly ?? false}
+                onCheckedChange={displayOnly => updateField(field.key, { displayOnly })}
+              />
+            </div>
           </div>
         </div>
       )}
