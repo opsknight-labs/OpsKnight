@@ -67,22 +67,6 @@ jobs:
       - run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/scim-lifecycle-database.test.ts tests/integration/scim-capacity-database.test.ts
         env: { VITEST_USE_REAL_DB: '1', SCIM_LOAD_TEST: '1' }
       - run: npx ts-node --project tsconfig.script.json scripts/scim/seed-certification.ts
-      - name: Configure bounded Ubuntu package downloads
-        run: |
-          sudo python3 - <<'PYTHON'
-          from pathlib import Path
-          sources = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.sources'), *Path('/etc/apt/sources.list.d').glob('*.list')]
-          for source in sources:
-              if source.exists():
-                  text = source.read_text()
-                  text = text.replace('http://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
-                  text = text.replace('https://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
-                  source.write_text(text)
-          Path('/etc/apt/apt.conf.d/80-scim-download-bounds').write_text('Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n')
-          PYTHON
-      - name: Install browser dependencies
-        timeout-minutes: 8
-        run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run dev -- --port 3028 > /tmp/scim-server.log 2>&1 &
       - run: |
           node --input-type=module <<'JS'
@@ -106,7 +90,17 @@ jobs:
       - run: npm run certify:scim:replicas && npm run certify:scim:sessions
         env:
           SCIM_CERT_REPLICA_URLS: http://localhost:3028,http://localhost:3029
-      - run: npx playwright test --config playwright.scim.config.ts
+      # Keep browser binaries/system libraries aligned with the installed test package.
+      - name: Certify Chromium, Firefox and WebKit
+        timeout-minutes: 10
+        run: |
+          SCIM_PLAYWRIGHT_VERSION=$(node -p "require('@playwright/test/package.json').version")
+          docker run --rm --init --ipc=host --network host \
+            -e CI=true -e DATABASE_URL -e NEXTAUTH_SECRET -e API_KEY_SECRET \
+            -e SCIM_E2E_BASE_URL -e SCIM_E2E_ADMIN_EMAIL -e SCIM_E2E_ADMIN_PASSWORD \
+            -v "$PWD:/work" -w /work \
+            "mcr.microsoft.com/playwright:v${SCIM_PLAYWRIGHT_VERSION}-noble" \
+            npx playwright test --config playwright.scim.config.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
