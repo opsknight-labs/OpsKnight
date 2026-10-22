@@ -25,6 +25,7 @@ try {
     '20261021150000_scim_provenance_guards',
     '20261021160000_scim_privacy_erasure',
     '20261021170000_scim_profile_authority',
+    '20261022100000_scim_grant_revocation_policy',
   ]
     .map(name => readFileSync(`prisma/migrations/${name}/migration.sql`, 'utf8'))
     .join('\n');

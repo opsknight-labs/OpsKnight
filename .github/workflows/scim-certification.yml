@@ -1,5 +1,7 @@
 name: SCIM identity lifecycle certification
 on:
+  push:
+    branches: ['feat/enterprise-scim-2.1']
   workflow_dispatch:
   pull_request:
     paths:
@@ -33,6 +35,7 @@ jobs:
           POSTGRES_DB: enterprise_scim_test
         ports: ['5432:5432']
         options: >-
+          --label opsknight.scim.certification=20261021
           --health-cmd 'pg_isready -U scim_certifier -d enterprise_scim_test'
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
@@ -51,6 +54,10 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: npx prisma generate && npx prisma migrate deploy
+      - run: npm run certify:scim:snapshot
+        env:
+          SCIM_CERT_DOCKER: docker
+          SCIM_CERT_DB_CONTAINER: ${{ job.services.postgres.id }}
       - run: npm run certify:scim:baseline
       - run: npx tsc --noEmit
       - run: npx eslint src/lib/scim.ts src/lib/scim src/lib/auth.ts src/lib/oidc-identity-resolution.ts src/lib/teams/administration.ts src/lib/microsoft-teams/identity.ts src/app/api/scim/v2 'src/app/(app)/settings/system/scim-actions.ts' src/components/settings/ScimSettingsSection.tsx --max-warnings 0

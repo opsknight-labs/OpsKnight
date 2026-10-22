@@ -140,13 +140,17 @@ lifecycle. Use disposable accounts and groups:
 6. Disable the user; ordinary access is revoked. Review Activity for affected team
    memberships and future on-call shifts, and arrange operational coverage.
 7. Reactivate through the same source and confirm the same identity is retained.
-8. Delete the group; the directory group is removed while team membership and
-   operational routing remain intact.
+8. Delete the group; its solely directory-owned team memberships are revoked.
+   Manual grants, owners and operational configuration remain intact.
 9. Rotate and revoke credentials, then confirm retired tokens fail.
 
-Local team edits establish manual membership authority. Directory synchronization
-removes only membership rows it created and still owns. Detaching a binding retains
-operational memberships. The API never receives authority to delete operational
+Pre-existing manual memberships and explicit local role changes establish manual authority. Directory synchronization
+removes only membership rows it created and still owns. Deleting a group or detaching a binding revokes its directory-owned memberships
+unless another approved group still grants them. Notification preferences never
+convert a directory grant to manual ownership. Local role promotions and
+pre-existing manual memberships remain. Revocation invalidates ordinary sessions
+and clears a revoked member’s team-lead assignment; services, schedules and
+escalation rules remain for coverage review. The API never receives authority to delete operational
 teams through ordinary group deletion.
 
 ## Existing accounts, SSO and rehires
@@ -179,7 +183,7 @@ changes and ETags are not advertised.
 
 Users support create, read, PUT, ordered atomic PATCH, disable/reactivate and safe
 DELETE. Equality filters support `externalId` and `userName`. Groups support
-create, read, rename, PUT, ordered atomic PATCH and detach-on-DELETE. Equality
+create, read, rename, PUT, ordered atomic PATCH and grant-revocation-on-DELETE. Equality
 filters support `displayName`, `externalId` and `id`. Group queries honor
 `excludedAttributes=members` without loading member collections.
 

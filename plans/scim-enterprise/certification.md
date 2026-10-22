@@ -9,8 +9,13 @@ Directory authority is represented by `ScimConnector`, `ScimIdentity`, `ScimGrou
 `ScimGroupMembership`, `ScimGroupTeamBinding`, `ScimTeamGrant`, `ScimCredential` and
 transactional `ScimEvent` records. Directory groups never implicitly own an
 operational team. Existing-team binding requires a fresh administrator and an
-impact preview pinned to the membership snapshot. Directory deletion detaches
-bindings and preserves operational memberships and routing.
+impact preview pinned to the membership snapshot. Directory deletion and administrator detachment revoke memberships still owned
+solely by the retiring binding. Other approved group grants transfer provenance;
+manual memberships, actual local role promotions and owners remain. Notification
+preferences do not convert directory grants to manual ownership. Revocation bumps
+session versions and clears a revoked member's team-lead assignment. Teams,
+services, schedules and escalation rules remain intact, with an audit coverage
+review flag when memberships were revoked.
 
 System roles retain OIDC/manual authority. Profile updates never claim SCIM role
 ownership. Connector profile field policy governs name, email, title, department
@@ -167,3 +172,29 @@ rollback; do not drop identity/audit records as an automatic rollback action.
 Advanced provider-side drift fetching and arbitrary multi-source lifecycle
 ownership are not advertised. Local drift comparison and explicit single-source
 lifecycle approval are the supported boundary.
+
+## Initial review follow-up (2026-10-22)
+
+- Integrated `origin/main` at `58e9271cc` (follow-redirects 1.16.1) by rebasing the
+  feature branch; no merge into main and no pull request.
+- Adopted `REVOKE_DIRECTORY_GRANTS` for group DELETE and administrative detach.
+  PostgreSQL tests cover sole grants, notification edits, another group still
+  granting access, manual members/promotions, session-version revocation,
+  team-lead cleanup and transaction rollback when audit insertion fails.
+- The browser journey uses the provisioned user's own scoped API key to assert
+  team-member API access before binding removal and denial after removal. It
+  exercises administrator detachment, reapproval and HTTP group DELETE.
+- `npm run certify:scim:snapshot` creates a synthetic production-like baseline
+  with 100,000 users, 10,000 groups and 100,000 directory memberships, takes a
+  PostgreSQL custom-format backup, restores into a separate database and applies
+  all staged migrations. It verified 10,000 OIDC role-source repairs, stable IDs,
+  unchanged operational memberships/owner/service, no implicit bindings and
+  preservation of the legacy credential authority until explicit registry
+  adoption. No real production snapshot was available or used. Registry cutover
+  remains covered by the separate PostgreSQL lifecycle test.
+- The SCIM workflow now also runs on pushes to this feature branch, including the
+  synthetic snapshot rehearsal. A draft PR is unnecessary to trigger it.
+
+Follow-up local results: 87 unit/API tests, 32 PostgreSQL lifecycle/capacity tests,
+and the full Chromium/Firefox/WebKit journeys passed. TypeScript and lint passed.
+The synthetic backup/restore upgrade rehearsal passed.

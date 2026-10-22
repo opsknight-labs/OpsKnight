@@ -108,6 +108,7 @@
     "certify:scim:db": "vitest run --no-file-parallelism --maxWorkers=1 tests/integration/scim-lifecycle-database.test.ts tests/integration/scim-capacity-database.test.ts",
     "certify:scim:baseline": "node scripts/scim/certify-baseline.mjs",
     "certify:scim:upgrade": "node scripts/scim/certify-upgrade.mjs",
+    "certify:scim:snapshot": "node scripts/scim/certify-snapshot-upgrade.mjs",
     "certify:scim:replicas": "node scripts/scim/certify-replicas.mjs",
     "certify:scim:outage": "node scripts/scim/certify-outage.mjs",
     "certify:scim:browser": "playwright test --config playwright.scim.config.ts",

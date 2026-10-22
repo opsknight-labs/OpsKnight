@@ -254,8 +254,8 @@ export default function ScimSettingsSection({
           </p>
           <p className="text-sm text-muted-foreground">
             Directory groups are separate from operational teams. Existing-team synchronization
-            requires an administrator impact preview and approval. Directory deletion retains
-            operational memberships and routing.
+            requires an administrator impact preview and approval. Directory deletion revokes its
+            directory-owned team access while preserving manual grants, owners and routing.
           </p>
           {initialConfig.source === 'ENV' && connector?.credentialAuthority === 'LEGACY' && (
             <p className="text-sm text-amber-700 dark:text-amber-300">
@@ -578,7 +578,8 @@ export default function ScimSettingsSection({
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                Detaching retains operational memberships and owners.
+                Detaching revokes directory-owned memberships. Other approved groups, manual grants
+                and owners remain.
               </p>
               <Button
                 variant="outline"
@@ -586,7 +587,7 @@ export default function ScimSettingsSection({
                 onClick={() =>
                   void run(
                     () => result(detachScimBindingAction({ groupId, teamId })),
-                    'Binding detached. Operational memberships retained.'
+                    'Binding detached. Directory-owned access revoked; manual access retained.'
                   )
                 }
               >

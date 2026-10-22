@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { getControlActor } from '@/lib/auth-control/actor';
 import {
   createScimCredentialAction,
+  detachScimBindingAction,
   revokeScimCredentialAction,
 } from '@/app/(app)/settings/system/scim-actions';
 import { hashToken, authenticate } from '@/lib/scim/security/credentials';
@@ -342,7 +343,7 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
       receiveTeamNotifications: false,
     });
   });
-  it('deletes directory group and retains all operational associations and members', async () => {
+  it('deletes a directory group while preserving independent manual grants and associations', async () => {
     const before = await prisma.teamMember.findMany({ where: { teamId } });
     expect((await call('groups', 'DELETE', undefined, groupId)).status).toBe(204);
     expect(await prisma.teamMember.findMany({ where: { teamId } })).toEqual(before);
@@ -683,6 +684,168 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
       ).status
     ).toBe(200);
     expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(0);
+  });
+
+  it('revokes solely owned grants on group DELETE, including notification-edited members', async () => {
+    const created = await (
+      await call('users', 'POST', {
+        userName: `delete-grant-${Date.now()}@example.test`,
+        externalId: `delete-grant-${Date.now()}`,
+      })
+    ).json();
+    const directory = await prisma.scimGroup.create({
+      data: {
+        connectorId: 'cert-a',
+        name: 'Delete revocation',
+        memberships: { create: { userId: created.id } },
+        bindings: { create: { teamId, approvedBy: ids[0] } },
+      },
+    });
+    await prisma.$transaction(tx => reconcileTeam(tx, teamId));
+    const member = await prisma.teamMember.findUniqueOrThrow({
+      where: { userId_teamId: { userId: created.id, teamId } },
+    });
+    await prisma.teamMember.update({
+      where: { id: member.id },
+      data: { receiveTeamNotifications: false },
+    });
+    expect(await prisma.scimTeamGrant.count({ where: { teamMemberId: member.id } })).toBe(1);
+    await prisma.team.update({ where: { id: teamId }, data: { teamLeadId: created.id } });
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
+    expect((await call('groups', 'DELETE', undefined, directory.id)).status).toBe(204);
+    expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(0);
+    expect(await prisma.scimTeamGrant.count({ where: { teamMemberId: member.id } })).toBe(0);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).tokenVersion).toBe(
+      before.tokenVersion + 1
+    );
+    expect((await prisma.team.findUniqueOrThrow({ where: { id: teamId } })).teamLeadId).toBeNull();
+    expect(await prisma.service.count({ where: { teamId } })).toBe(1);
+    const audit = await prisma.scimEvent.findFirstOrThrow({
+      where: { resourceId: directory.id, action: 'group.deleted' },
+    });
+    expect(audit.details).toMatchObject({
+      policy: 'REVOKE_DIRECTORY_GRANTS',
+      teams: [{ teamId, revokedMemberships: 1, coverageReviewRequired: true }],
+    });
+  });
+  it('transfers another group grant on DELETE and revokes on the final administrative detach', async () => {
+    const created = await (
+      await call('users', 'POST', {
+        userName: `detach-grant-${Date.now()}@example.test`,
+        externalId: `detach-grant-${Date.now()}`,
+      })
+    ).json();
+    const directoryGroups = [];
+    for (const label of ['A', 'B'])
+      directoryGroups.push(
+        await prisma.scimGroup.create({
+          data: {
+            connectorId: 'cert-a',
+            name: `Detach union ${label}`,
+            memberships: { create: { userId: created.id } },
+            bindings: { create: { teamId, approvedBy: ids[0] } },
+          },
+          include: { bindings: true },
+        })
+      );
+    await prisma.$transaction(tx => reconcileTeam(tx, teamId));
+    const grant = await prisma.scimTeamGrant.findFirstOrThrow({ where: { userId: created.id } });
+    const owningGroup = directoryGroups.find(group => group.bindings[0].id === grant.bindingId)!;
+    const survivingGroup = directoryGroups.find(group => group.id !== owningGroup.id)!;
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
+    expect((await call('groups', 'DELETE', undefined, owningGroup.id)).status).toBe(204);
+    expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(1);
+    expect(
+      (await prisma.scimTeamGrant.findFirstOrThrow({ where: { userId: created.id } })).bindingId
+    ).toBe(survivingGroup.bindings[0].id);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).tokenVersion).toBe(
+      before.tokenVersion
+    );
+    vi.mocked(getControlActor).mockResolvedValue({ kind: 'admin', id: ids[0] } as Awaited<
+      ReturnType<typeof getControlActor>
+    >);
+    expect(await detachScimBindingAction({ groupId: survivingGroup.id, teamId })).toBeUndefined();
+    expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(0);
+    expect(await prisma.scimGroup.count({ where: { id: survivingGroup.id } })).toBe(1);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).tokenVersion).toBe(
+      before.tokenVersion + 1
+    );
+  });
+  it('preserves pre-existing manual members and actual role promotions when deleting their directory group', async () => {
+    const users = [];
+    for (const label of ['manual', 'promoted'])
+      users.push(
+        await (
+          await call('users', 'POST', {
+            userName: `${label}-preservation-${Date.now()}@example.test`,
+            externalId: `${label}-preservation-${Date.now()}`,
+          })
+        ).json()
+      );
+    const manual = await prisma.teamMember.create({
+      data: { teamId, userId: users[0].id, role: 'MEMBER' },
+    });
+    const directory = await prisma.scimGroup.create({
+      data: {
+        connectorId: 'cert-a',
+        name: 'Manual grant preservation',
+        memberships: { create: users.map(user => ({ userId: user.id })) },
+        bindings: { create: { teamId, approvedBy: ids[0] } },
+      },
+    });
+    await prisma.$transaction(tx => reconcileTeam(tx, teamId));
+    const promoted = await prisma.teamMember.update({
+      where: { userId_teamId: { teamId, userId: users[1].id } },
+      data: { role: 'ADMIN' },
+    });
+    const before = await prisma.user.findMany({
+      where: { id: { in: users.map(user => user.id) } },
+      orderBy: { id: 'asc' },
+    });
+    expect((await call('groups', 'DELETE', undefined, directory.id)).status).toBe(204);
+    expect(await prisma.teamMember.findUnique({ where: { id: manual.id } })).toEqual(manual);
+    expect(await prisma.teamMember.findUnique({ where: { id: promoted.id } })).toEqual(promoted);
+    expect(
+      await prisma.user.findMany({
+        where: { id: { in: users.map(user => user.id) } },
+        orderBy: { id: 'asc' },
+      })
+    ).toEqual(before);
+    expect(await prisma.teamMember.count({ where: { teamId, role: 'OWNER' } })).toBe(1);
+  });
+  it('rolls back group deletion and access revocation when its audit fails', async () => {
+    const created = await (
+      await call('users', 'POST', {
+        userName: `delete-rollback-${Date.now()}@example.test`,
+        externalId: `delete-rollback-${Date.now()}`,
+      })
+    ).json();
+    const directory = await prisma.scimGroup.create({
+      data: {
+        connectorId: 'cert-a',
+        name: 'Delete rollback',
+        memberships: { create: { userId: created.id } },
+        bindings: { create: { teamId, approvedBy: ids[0] } },
+      },
+    });
+    await prisma.$transaction(tx => reconcileTeam(tx, teamId));
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION scim_cert_fail_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'group.deleted' THEN RAISE EXCEPTION 'isolated delete certification failure'; END IF; RETURN NEW; END $$`
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TRIGGER scim_cert_fail_delete BEFORE INSERT ON "ScimEvent" FOR EACH ROW EXECUTE FUNCTION scim_cert_fail_delete()'
+    );
+    try {
+      expect((await call('groups', 'DELETE', undefined, directory.id)).status).toBe(503);
+      expect(await prisma.teamMember.count({ where: { teamId, userId: created.id } })).toBe(1);
+      expect(await prisma.scimGroup.count({ where: { id: directory.id } })).toBe(1);
+      expect(await prisma.scimTeamGrant.count({ where: { userId: created.id } })).toBe(1);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).toEqual(before);
+    } finally {
+      await prisma.$executeRawUnsafe('DROP TRIGGER scim_cert_fail_delete ON "ScimEvent"');
+      await prisma.$executeRawUnsafe('DROP FUNCTION scim_cert_fail_delete()');
+    }
   });
 
   it('keeps OIDC profile synchronization from overwriting directory-owned fields or preserving a withdrawn role', async () => {

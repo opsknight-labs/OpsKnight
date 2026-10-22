@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { invalidateSessionSecurityProjections } from '@/lib/session-security-projection';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { SCIM_LIST_SCHEMA, parseScimGroupFilter, serializeScimGroup } from '@/lib/scim';
 import { authorize, recheck } from '../security/credentials';
@@ -88,6 +89,7 @@ export async function groups(request: NextRequest, id?: string) {
     });
   }
   const body = request.method === 'DELETE' ? null : await readBody(request);
+  const changedUserIds = new Set<string>();
   const result = await runSerializableTransaction(async tx => {
     await recheck(tx, principal);
     const existing = id
@@ -98,10 +100,23 @@ export async function groups(request: NextRequest, id?: string) {
       : null;
     if (id && !existing) throw new ScimFailure(404, 'SCIM group not found.');
     if (request.method === 'DELETE' && existing) {
-      // Detach only. Operational memberships, owners and associations survive directory deletion.
+      // Reconcile before cascading bindings: their grant provenance is needed for revocation.
+      const retiring = existing.bindings.map(binding => binding.id);
+      const teams = [];
+      for (const binding of existing.bindings) {
+        const impact = await reconcileTeam(tx, binding.teamId, retiring);
+        impact.changedUserIds.forEach(userId => changedUserIds.add(userId));
+        teams.push({
+          teamId: binding.teamId,
+          revokedMemberships: impact.revokedMemberships,
+          transferredGrants: impact.transferredGrants,
+          coverageReviewRequired: impact.revokedMemberships > 0,
+        });
+      }
       await tx.scimGroup.delete({ where: { id: existing.id } });
-      await event(tx, principal, 'group.detached', existing.id, {
-        retainedTeamIds: existing.bindings.map(b => b.teamId),
+      await event(tx, principal, 'group.deleted', existing.id, {
+        policy: 'REVOKE_DIRECTORY_GRANTS',
+        teams,
       });
       return null;
     }
@@ -156,12 +171,16 @@ export async function groups(request: NextRequest, id?: string) {
         data: additions.map(userId => ({ groupId: group.id, userId })),
         skipDuplicates: true,
       });
-    for (const binding of existing?.bindings ?? []) await reconcileTeam(tx, binding.teamId);
+    for (const binding of existing?.bindings ?? []) {
+      const impact = await reconcileTeam(tx, binding.teamId);
+      impact.changedUserIds.forEach(userId => changedUserIds.add(userId));
+    }
     await event(tx, principal, existing ? 'group.updated' : 'group.created', group.id, {
       members: ids.length,
     });
     return tx.scimGroup.findUniqueOrThrow({ where: { id: group.id }, include });
   });
+  invalidateSessionSecurityProjections([...changedUserIds]);
   if (!result) return new Response(null, { status: 204 });
   return json(
     serialize(result, origin, exclude),

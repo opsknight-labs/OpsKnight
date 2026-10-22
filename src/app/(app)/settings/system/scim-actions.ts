@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { adminFailure } from '@/lib/scim/security/admin-errors';
 import prisma from '@/lib/prisma';
+import { invalidateSessionSecurityProjections } from '@/lib/session-security-projection';
 import { assertAdmin } from '@/lib/rbac';
 import { getControlActor, lockControlActor } from '@/lib/auth-control/actor';
 import { runSerializableTransaction } from '@/lib/db-utils';
@@ -293,7 +294,7 @@ export async function approveScimBindingAction(input: unknown) {
       .parse(input);
     const actor = await getControlActor(true);
     if (actor.kind !== 'admin') throw new Error('Administrator sign-in required.');
-    await runSerializableTransaction(async tx => {
+    const changedUserIds = await runSerializableTransaction(async tx => {
       await lockControlActor(tx, actor);
       const impact = await preview(tx, groupId, teamId);
       if (impact.revision !== revision)
@@ -306,7 +307,7 @@ export async function approveScimBindingAction(input: unknown) {
         create: { groupId, teamId, approvedBy: actor.id },
         update: {},
       });
-      await reconcileTeam(tx, teamId);
+      const reconciliation = await reconcileTeam(tx, teamId);
       await tx.scimEvent.create({
         data: {
           connectorId: group.connectorId,
@@ -316,7 +317,9 @@ export async function approveScimBindingAction(input: unknown) {
           details: { actorId: actor.id, teamId, ...impact },
         },
       });
+      return reconciliation.changedUserIds;
     });
+    invalidateSessionSecurityProjections(changedUserIds);
   } catch (error) {
     return await adminFailure(error);
   }
@@ -326,20 +329,33 @@ export async function detachScimBindingAction(input: unknown) {
     const { groupId, teamId } = bindingSchema.parse(input);
     const actor = await getControlActor(true);
     if (actor.kind !== 'admin') throw new Error('Administrator sign-in required.');
-    await runSerializableTransaction(async tx => {
+    const changedUserIds = await runSerializableTransaction(async tx => {
       await lockControlActor(tx, actor);
       const group = await tx.scimGroup.findUniqueOrThrow({ where: { id: groupId } });
-      await tx.scimGroupTeamBinding.delete({ where: { groupId_teamId: { groupId, teamId } } });
+      const binding = await tx.scimGroupTeamBinding.findUniqueOrThrow({
+        where: { groupId_teamId: { groupId, teamId } },
+      });
+      const reconciliation = await reconcileTeam(tx, teamId, [binding.id]);
+      await tx.scimGroupTeamBinding.delete({ where: { id: binding.id } });
       await tx.scimEvent.create({
         data: {
           connectorId: group.connectorId,
           action: 'binding.detached',
           resourceId: groupId,
           requestId: crypto.randomUUID(),
-          details: { actorId: actor.id, teamId, membershipsRetained: true },
+          details: {
+            actorId: actor.id,
+            teamId,
+            policy: 'REVOKE_DIRECTORY_GRANTS',
+            revokedMemberships: reconciliation.revokedMemberships,
+            transferredGrants: reconciliation.transferredGrants,
+            coverageReviewRequired: reconciliation.revokedMemberships > 0,
+          },
         },
       });
+      return reconciliation.changedUserIds;
     });
+    invalidateSessionSecurityProjections(changedUserIds);
   } catch (error) {
     return await adminFailure(error);
   }
