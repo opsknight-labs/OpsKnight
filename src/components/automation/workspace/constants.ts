@@ -35,7 +35,8 @@ export const AREAS: ReadonlyArray<{ id: Area; label: string; description: string
 
 export const DRAFT_AREAS: ReadonlyArray<Area> = ['context', 'rules', 'test'];
 
-export const draftStorageKey = (serviceId: string) => `automation-draft:${serviceId}`;
+export const draftStorageKey = (ownerId: string, serviceId: string) =>
+  `automation-draft:${ownerId}:${serviceId}`;
 
 export const defaultSample = JSON.stringify(
   {

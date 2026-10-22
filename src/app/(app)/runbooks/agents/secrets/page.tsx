@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { KeyRound, Lock, ShieldOff } from 'lucide-react';
+import { KeyRound, Lock, Plus, ShieldOff } from 'lucide-react';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -127,7 +127,12 @@ export default async function RunbookSecretsPage({
         <ConfigureSheet
           title="Create scoped secret"
           description="Grant the credential only to the Agent or pool that requires it."
-          trigger={<Button>Create secret</Button>}
+          trigger={
+            <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs">
+              <Plus className="h-4 w-4" />
+              <span>Create secret</span>
+            </Button>
+          }
         >
           <ActionForm
             action={createRunbookSecretAction}

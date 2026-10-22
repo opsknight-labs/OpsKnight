@@ -125,30 +125,35 @@ export async function claimInboundDelivery(
     }
   }
 
+  // Refresh the cutoff timestamp after polling so concurrent duplicate deliveries that
+  // expired during polling are reclaimed rather than emitting spurious BUSY 503s.
+  const postPollCutoff = new Date();
+
   if (!existing || existing.status === InboundDeliveryStatus.COMPLETED) {
     return { disposition: 'COMPLETED' };
   }
   if (
     existing.status === InboundDeliveryStatus.PROCESSING &&
     existing.leaseExpiresAt &&
-    existing.leaseExpiresAt > now
+    existing.leaseExpiresAt > postPollCutoff
   ) {
     return { disposition: 'BUSY' };
   }
 
+  const freshLeaseExpiresAt = new Date(postPollCutoff.getTime() + INBOUND_DELIVERY_LEASE_MS);
   const claimed = await prisma.inboundDelivery.updateMany({
     where: {
       id: existing.id,
       OR: [
         { status: InboundDeliveryStatus.FAILED },
-        { status: InboundDeliveryStatus.PROCESSING, leaseExpiresAt: { lte: now } },
+        { status: InboundDeliveryStatus.PROCESSING, leaseExpiresAt: { lte: postPollCutoff } },
       ],
     },
     data: {
       status: InboundDeliveryStatus.PROCESSING,
       attempt: { increment: 1 },
       leaseToken,
-      leaseExpiresAt,
+      leaseExpiresAt: freshLeaseExpiresAt,
       lastError: null,
     },
   });

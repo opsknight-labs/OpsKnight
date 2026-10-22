@@ -1,3 +1,4 @@
+import { RunbookVersionNotFoundError } from './errors';
 import 'server-only';
 import prisma from '@/lib/prisma';
 import { flattenSteps, parseRunbookDefinition, sortJsonValue } from './definition';
@@ -13,7 +14,8 @@ export async function getVersionImpact(
   });
   const base = versions.find(version => version.id === baseVersionId);
   const next = versions.find(version => version.id === nextVersionId);
-  if (!base || !next) throw new Error('Both versions must belong to this runbook.');
+  if (!base) throw new RunbookVersionNotFoundError(baseVersionId);
+  if (!next) throw new RunbookVersionNotFoundError(nextVersionId);
   const before = new Map(
     flattenSteps(parseRunbookDefinition(base.definition, base.inputs)).map(step => [step.key, step])
   );
@@ -37,14 +39,13 @@ export async function getVersionImpact(
   }));
   const rules = await prisma.serviceAutomationRule.findMany({
     where: { runbookId },
-    select: {
-      id: true,
-      name: true,
-      serviceId: true,
-      enabled: true,
-      mode: true,
-      versionStrategy: true,
-      runbookVersionId: true,
+    include: {
+      service: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
     orderBy: { id: 'asc' },
     take: 501,
@@ -61,11 +62,52 @@ export async function getVersionImpact(
         .filter(input => !next.inputs.some(current => current.key === input.key))
         .map(input => input.key),
     },
-    rules: rules.slice(0, 500).map(rule => ({
-      ...rule,
-      impact:
-        rule.versionStrategy === 'LATEST_PUBLISHED' ? 'TRACKS_NEW_PUBLICATION' : 'PINNED_UNCHANGED',
-    })),
+    inputDetails: {
+      added: next.inputs
+        .filter(input => !base.inputs.some(previous => previous.key === input.key))
+        .map(input => ({
+          key: input.key,
+          label: input.label,
+          type: input.type,
+          required: input.required,
+        })),
+      removed: base.inputs
+        .filter(input => !next.inputs.some(current => current.key === input.key))
+        .map(input => ({
+          key: input.key,
+          label: input.label,
+          type: input.type,
+          required: input.required,
+        })),
+      baseCount: base.inputs.length,
+      nextCount: next.inputs.length,
+    },
+    rules: rules.slice(0, 500).map(rule => {
+      const service =
+        'service' in rule &&
+        rule.service &&
+        typeof rule.service === 'object' &&
+        'name' in rule.service
+          ? {
+              id: String((rule.service as { id?: unknown }).id ?? ''),
+              name: String((rule.service as { name?: unknown }).name ?? ''),
+            }
+          : null;
+      return {
+        id: rule.id,
+        name: rule.name,
+        serviceId: rule.serviceId,
+        enabled: rule.enabled,
+        mode: rule.mode,
+        versionStrategy: rule.versionStrategy,
+        runbookVersionId: rule.runbookVersionId,
+        service,
+        impact:
+          rule.versionStrategy === 'LATEST_PUBLISHED'
+            ? 'TRACKS_NEW_PUBLICATION'
+            : 'PINNED_UNCHANGED',
+      };
+    }),
     rulesTruncated: rules.length > 500,
     warning:
       'Comparison is static. Existing executions and pinned rules retain their frozen versions. Local policy and permission checks are required before activation.',

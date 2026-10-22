@@ -40,7 +40,22 @@ export async function getBindingReadiness(
     armed: presentation.armed,
     checks,
   });
-  if (!binding.enabled) return result('PAUSED');
+  if (!binding.enabled) {
+    if (binding.defaultAgentPoolId) {
+      const pool = await db.runbookAgentPool.findUnique({
+        where: { id: binding.defaultAgentPoolId },
+        select: { lifecycle: true },
+      });
+      if (pool?.lifecycle === 'RETIRED')
+        checks.push({
+          code: 'TARGET_POOL_RETIRED',
+          state: 'blocked',
+          message:
+            'The selected Agent pool is retired. Select an active pool before enabling this rule.',
+        });
+    }
+    return result('PAUSED');
+  }
   if (binding.mode !== 'MANUAL' && !presentation.armed)
     checks.push({
       code: 'NO_TRIGGER',
@@ -162,9 +177,15 @@ export async function getBindingReadiness(
       const pool = binding.defaultAgentPoolId
         ? await db.runbookAgentPool.findUnique({
             where: { id: binding.defaultAgentPoolId },
-            select: { mode: true },
+            select: { mode: true, lifecycle: true },
           })
         : null;
+      if (pool?.lifecycle === 'RETIRED')
+        checks.push({
+          code: 'TARGET_NOT_FOUND',
+          state: 'blocked',
+          message: 'The selected Agent pool is retired.',
+        });
       if (
         pool?.mode === 'LOCAL_HOSTS' &&
         eligibleAgents !== 1 &&

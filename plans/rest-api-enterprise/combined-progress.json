@@ -1,0 +1,188 @@
+{
+  "status": "in_progress",
+  "pr": 886,
+  "automationSourceCommit": "a4e8723f6",
+  "scope": "Single PR for the complete approved coverage plan",
+  "implementedOperations": [
+    "validateAutomation",
+    "simulateAutomation",
+    "restoreAutomationDraft",
+    "listAutomationDecisions",
+    "listAutomationObservations",
+    "listAutomationVersions",
+    "getAutomationVersion",
+    "getServiceAutomation",
+    "updateServiceAutomationMode",
+    "publishAutomationVersion",
+    "getAutomationDraft",
+    "saveAutomationDraft",
+    "getAutomationCandidate",
+    "discardAutomationCandidate",
+    "activateAutomationCandidate",
+    "getAutomationSettings",
+    "updateAutomationSettings"
+  ],
+  "checks": {
+    "schemaMigration": "All combined migrations applied to an isolated PostgreSQL 16 test database",
+    "automationDatabase": "49 passed, 1 skipped",
+    "restDatabase": "18 passed",
+    "apiContractsAndExplorer": "736 passed",
+    "initialUnitRun": "7452 passed, 6 failed, 4 skipped across 885 files; fixes for the four failed files verified separately",
+    "correctedFiles": [
+      "tests/components/incident/IncidentQuickLinksCard.test.tsx",
+      "tests/api/recovery-stream-policy.test.ts",
+      "tests/api/sla-stream.test.ts",
+      "tests/unit/api-v2-authorization-matrix.test.ts"
+    ],
+    "restoredCheckpoint": "137 focused regression tests passed on rebased foundation",
+    "automationAndRestDatabase": "69 passed, 1 skipped across 3 PostgreSQL suites",
+    "typecheck": "passed",
+    "lint": "changed source files passed with zero warnings",
+    "combinedCi": {
+      "sourceCommit": "53e86ca490489ca5ffe2fbd6a76fb3dbc962ec4b",
+      "successful": 50,
+      "skipped": 10,
+      "neutral": 1,
+      "failed": 0,
+      "pending": 0,
+      "manifest": "ci-53e86ca.json"
+    },
+    "automationControlPlane": {
+      "status": "local_checks_passed_latest_ci_pending",
+      "manifest": "automation-m1-certification.json",
+      "automationOperations": 17,
+      "browserPassed": 36,
+      "postgresPassed": 124,
+      "postgresSkipped": 1,
+      "unitPassed": 521,
+      "upgradePassed": 12,
+      "liveSdks": [
+        "TypeScript",
+        "Python"
+      ]
+    },
+    "automationPrivacy": {
+      "manifest": "automation-privacy-certification.json",
+      "status": "local_checks_passed_latest_ci_pending",
+      "postgresPassed": 131,
+      "postgresSkipped": 1,
+      "browserMatrixPassed": 36,
+      "settingsBrowserPassed": 4,
+      "unitPassed": 1239
+    }
+  },
+  "limitations": [
+    "Combined build, browser and upgrade CI passed at 53e86ca; subsequent changes require new certification",
+    "Remaining endpoint families not implemented",
+    "No combined load, HA, recovery or real-agent certification claimed",
+    "Historical automation evidence imported from its branch is not certification of this combined tree"
+  ],
+  "reviewFollowup": {
+    "sourceParent": "53e86ca490489ca5ffe2fbd6a76fb3dbc962ec4b",
+    "status": "local_checks_passed_latest_ci_pending",
+    "restTests": 21,
+    "automationTests": 51,
+    "automationSkipped": 1,
+    "productionBrowserTests": 32,
+    "applicationReplicas": 2,
+    "coverage": "Functional SDK/UI/ingestion parity and publication safety; not load/HA or full enterprise coverage"
+  },
+  "registeredOperationCount": 314,
+  "currentReview": {
+    "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
+    "milestone": "M0",
+    "status": "local_worker_journey_passed_latest_ci_pending",
+    "topology": "Two production web replicas plus a real PostgreSQL-backed general worker",
+    "implemented": [
+      "Await incident-specific observation job completion",
+      "Transient observation rollback and durable worker retry scenario",
+      "Explicit material-difference approval with transactional reviewed-evidence audit",
+      "Distinct error and fallback counters",
+      "Bounded candidate evidence backlog and daily freshness",
+      "Staged activation/discard logs",
+      "Worst-size candidate ingestion timing experiment"
+    ],
+    "remaining": [
+      "Latest commit CI and broader M0 paging, rollback, fault and authorization race cases",
+      "Remaining automation and enterprise REST operations",
+      "Approved latency acceptance, concurrent load, HA and rolling-upgrade certification"
+    ],
+    "evidence": "candidate-worker-certification.json"
+  },
+  "candidateReadinessFollowUp": {
+    "status": "implemented_locally_verified_latest_ci_pending",
+    "evidence": "plans/rest-api-enterprise/automation-readiness-certification.json",
+    "operationCountUnchanged": 101,
+    "remaining": "Candidate isolation, remaining enterprise domains, final-commit CI and production release gates"
+  },
+  "runbookLifecycleFollowUp": {
+    "status": "implemented_locally_verified_latest_ci_pending",
+    "operationIds": [
+      "getRunbookMetadata",
+      "updateRunbookMetadata",
+      "archiveRunbook",
+      "restoreRunbook",
+      "checkRunbookDeletion",
+      "deleteRunbook",
+      "duplicateRunbook",
+      "compareRunbookVersions"
+    ],
+    "remaining": "Rules, agents, secrets, approvals, reruns, complete certification",
+    "evidence": "plans/rest-api-enterprise/runbook-lifecycle-certification.json"
+  },
+  "runbookServiceRules": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "operationIds": [
+      "listServiceRunbookRules",
+      "createServiceRunbookRule",
+      "getServiceRunbookRule",
+      "updateServiceRunbookRule",
+      "detachServiceRunbookRule",
+      "validateServiceRunbookRule",
+      "listRunbookRulePolicyChecks",
+      "requestRunbookRulePolicyChecks",
+      "activateServiceRunbookRule",
+      "pauseServiceRunbookRule",
+      "duplicateServiceRunbookRule",
+      "replaceRunbookRuleTriggers"
+    ],
+    "remaining": "Combined runbook certification, full enterprise coverage, mixed-version rollout and production load/HA acceptance remain open.",
+    "evidence": "plans/rest-api-enterprise/runbook-rules-certification.json"
+  },
+  "statusPageSubscribers": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 5,
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
+    "evidence": "plans/rest-api-enterprise/status-page-subscriber-certification.json"
+  },
+  "statusPageConfiguration": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 11,
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
+    "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
+    "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
+  },
+  "statusPagePublication": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 3,
+    "remaining": "Domain ownership, validated assets, preview, and remaining enterprise families and combined certification.",
+    "mutationContract": "Required concrete If-Match and Idempotency-Key; accepted queue job, request audit and replay commit together. Worker canonical outcome audit and receipt commit together. Completion does not imply LIVE publication.",
+    "evidence": "plans/rest-api-enterprise/status-page-publication-certification.json"
+  },
+  "runbookAdministration": {
+    "status": "local_verification_passed_runtime_certification_pending",
+    "addedOperations": 20,
+    "evidence": "plans/rest-api-enterprise/runbook-administration-certification.json"
+  },
+  "kindNativeWorker": {
+    "status": "passed_at_pinned_older_image",
+    "applicationRevision": "133f1ee66997df4b429f20ad224ed58aef4041d7",
+    "evidence": "plans/rest-api-enterprise/kind-certification-progress.json",
+    "latestBranchCertified": false
+  },
+  "agentAdministrationReview": {
+    "status": "local_verification_passed_final_image_and_release_gates_open",
+    "evidence": "plans/rest-api-enterprise/agent-administration-review-remediation.json",
+    "addedOperations": 6
+  }
+}

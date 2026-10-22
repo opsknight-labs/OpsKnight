@@ -1,3 +1,5 @@
+import { generateApiKey } from '@/lib/api-keys';
+import { Client } from '../../sdk/typescript/client';
 import { test, expect, type Page } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -101,6 +103,7 @@ test('global history stays synchronized across application pages and authenticat
   // as a fresh request, rather than leave stale authenticated UI on screen.
   await context.clearCookies();
   await page.goBack();
+  await page.waitForLoadState('domcontentloaded');
   await page.reload();
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await expect(page.locator('input[type="email"]')).toBeVisible();
@@ -120,7 +123,10 @@ test('global history stays synchronized across application pages and authenticat
   await page.goForward();
   await assertDestination(destinations[1]);
 });
-test('library, ordered builder, typed inputs and publish confirmation', async ({ page }) => {
+test('library, ordered builder, typed inputs and publish confirmation', async ({
+  page: initialPage,
+}) => {
+  let page = initialPage;
   await login(page);
   await page.getByRole('button', { name: 'New Runbook', exact: true }).first().click();
   await page.getByLabel('Name', { exact: true }).fill('UI Service Recovery');
@@ -191,7 +197,13 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Draft saved' })
   ).toBeVisible();
-  await page.reload();
+  // A fresh document proves persistence without racing the saved tab's router
+  // refresh. Firefox can abort a reload while that refresh is committing.
+  const savedUrl = page.url();
+  const savedTab = page;
+  page = await savedTab.context().newPage();
+  await page.goto(savedUrl);
+  await savedTab.close();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await expect(
     page.locator('[role="tabpanel"]:visible').getByLabel('Input 1 key', { exact: true })
@@ -254,7 +266,9 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.getByRole('combobox', { name: 'Initial secret grant' }).click();
   await page.getByPlaceholder('Search initial secret grant…').fill(agentName);
   await page.getByRole('option', { name: `Agent · ${agentName}`, exact: true }).click();
-  await expect(page.getByRole('combobox', { name: 'Initial secret grant' })).toContainText(agentName);
+  await expect(page.getByRole('combobox', { name: 'Initial secret grant' })).toContainText(
+    agentName
+  );
   await page.getByRole('button', { name: 'Create encrypted secret', exact: true }).click();
   await expect
     .poll(async () => prisma.runbookSecret.count({ where: { name: secretName } }))
@@ -266,6 +280,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await expect(secretRow.getByLabel('Secret value hidden')).toBeVisible();
   await secretRow.getByRole('link', { name: 'Manage grants / Rotate' }).click();
   await page.waitForURL(/\/runbooks\/agents\/secrets\?.*secret=/);
+  await expect(page.locator('#secret-detail-title')).toHaveText(secretName);
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
   await page.getByPlaceholder('Search grant to target…').fill(poolName);
   await page.getByRole('option', { name: `Pool · ${poolName}`, exact: true }).click();
@@ -291,6 +306,10 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .getByRole('navigation', { name: 'Infrastructure sections' })
     .getByRole('link', { name: /^agents/i })
     .click();
+  // Sonner pauses dismissal while hovered. Moving directly onto the next
+  // top-right action can keep its overlapping success stack alive indefinitely.
+  await page.mouse.move(0, 0);
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Enroll agent', exact: true }).click();
   const cancelledName = `UI cancelled enrollment ${Date.now()}`;
   await page.getByLabel('Agent name', { exact: true }).fill(cancelledName);
@@ -433,8 +452,9 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
     .poll(async () => prisma.runbookTrigger.count({ where: { bindingId: binding.id } }))
     .toBe(1);
   // A refreshed revision proves the server tree was applied; feedback must survive it.
+  expect(binding.configurationRevision).toBeGreaterThan(triggerRevision);
   await expect(triggerForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
-    String(triggerRevision + 1)
+    String(binding.configurationRevision)
   );
   expect(
     (
@@ -455,8 +475,18 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
     await configurationForm.locator('[name="expectedConfigurationRevision"]').inputValue()
   );
   await configurationForm.getByRole('button', { name: 'Save binding', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: binding.id } })).name
+    )
+    .toBe('Browser verified rule');
+  const configuredRule = await prisma.serviceAutomationRule.findUniqueOrThrow({
+    where: { id: binding.id },
+  });
+  expect(configuredRule.configurationRevision).toBeGreaterThan(configurationRevision);
   await expect(configurationForm.locator('[name="expectedConfigurationRevision"]')).toHaveValue(
-    String(configurationRevision + 1)
+    String(configuredRule.configurationRevision)
   );
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' }).first()
@@ -522,6 +552,8 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
       prisma.runbookExecution.count({ where: { incidentId: incident.id, runbookId: id } })
     )
     .toBe(1);
+  // Wait for the action's preview reset/refresh before starting a new navigation.
+  await expect(page.getByRole('region', { name: 'Execution preview' })).toHaveCount(0);
   const execution = await prisma.runbookExecution.findFirstOrThrow({
     where: { incidentId: incident.id, runbookId: id },
   });
@@ -726,7 +758,7 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     });
     if (width < 1024 && (await closeNavigation.isVisible())) await closeNavigation.click();
     await page
-      .getByRole('heading', { name: /^Service [Aa]utomations$/i })
+      .getByRole('heading', { name: /^Service [Aa]utomations/i })
       .evaluate(element => element.scrollIntoView({ block: 'start' }));
     await noOverflow(page);
     await page.screenshot({
@@ -742,7 +774,11 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
     }
   }
   await page.goto(`/services/${serviceId}/automations/${rule.id}`);
-  await expect(page.getByRole('region', { name: 'What the evidence establishes' })).toBeVisible();
+  await expect(
+    page.getByRole('region', {
+      name: /What the evidence establishes|Safety & Verification Pillars/i,
+    })
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: ruleName, exact: true })).toBeVisible();
   await page
     .getByRole('button', { name: 'Validate configuration · No execution', exact: true })
@@ -1012,14 +1048,19 @@ test('server pagination, administrator labels, effective capabilities and budget
     .getByRole('textbox', { name: `Labels for ${agent.name}` })
     .fill('{"env":"prod","host":"node-a"}');
   await page.getByRole('button', { name: 'Save scheduling labels' }).click();
+  await expect(
+    page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' })
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save scheduling labels' })).toBeEnabled();
   await expect
     .poll(
       async () => (await prisma.runbookAgent.findUniqueOrThrow({ where: { id: agent.id } })).labels
     )
     .toEqual({ env: 'prod', host: 'node-a' });
-  await page.keyboard.press('Escape');
-  // Initialize signing through the real setup page; this case must also run in isolation.
-  await page.goto(`/runbooks/agents/${agent.id}/setup`);
+  // Use the real application navigation after action completion. A raw page.goto
+  // can race the action's router.refresh and interrupt WebKit's navigation.
+  await page.getByRole('link', { name: 'Upgrade installed Agent · preserve identity' }).click();
+  await page.waitForURL(`**/runbooks/agents/${agent.id}/setup`);
   await expect
     .poll(() => prisma.runbookExecutionSigningKey.count({ where: { state: 'ACTIVE' } }))
     .toBe(1);
@@ -1030,18 +1071,27 @@ test('server pagination, administrator labels, effective capabilities and budget
     .click();
   await page.waitForURL('**/runbooks/agents/security');
   await expect(
-    page.getByText('Automatic remediation budgets', { exact: true }).filter({ visible: true })
+    page
+      .getByText(/Automatic remediation budgets|Remediation Safeguards & Budgets/i)
+      .filter({ visible: true })
+      .first()
   ).toBeVisible();
   await page
-    .getByRole('spinbutton', { name: 'Automatic executions per incident', exact: true })
+    .getByRole('spinbutton', {
+      name: /Automatic executions per incident|Executions Limit/i,
+    })
     .fill('2');
   await page
-    .getByRole('spinbutton', { name: 'Automatic writes per incident', exact: true })
+    .getByRole('spinbutton', {
+      name: /Automatic writes per incident|State Writes/i,
+    })
     .fill('1');
   await page
-    .getByRole('spinbutton', { name: 'Automatic non-idempotent actions per incident', exact: true })
+    .getByRole('spinbutton', {
+      name: /Automatic non-idempotent actions per incident|Non-Idempotent/i,
+    })
     .fill('0');
-  await page.getByRole('button', { name: 'Save remediation budgets' }).click();
+  await page.getByRole('button', { name: /Save [Rr]emediation [Bb]udgets/i }).click();
   // Later browsers may already have these DB values; wait for the action's UI response too.
   await expect(
     page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved' })
@@ -1054,9 +1104,14 @@ test('server pagination, administrator labels, effective capabilities and budget
     )
     .toBe(2);
   await expect(
-    page.getByText('Pinned execution public key', { exact: true }).filter({ visible: true })
+    page
+      .getByText(/Pinned execution public key|Pinned Public Key/i)
+      .filter({ visible: true })
+      .first()
   ).toBeVisible();
-  const stageIdentity = page.getByRole('button', { name: 'Stage next signing identity' });
+  const stageIdentity = page.getByRole('button', {
+    name: /Stage next signing identity/i,
+  });
   if ((await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })) === 0) {
     await stageIdentity.click();
   } else {
@@ -1066,8 +1121,8 @@ test('server pagination, administrator labels, effective capabilities and budget
   await expect
     .poll(async () => prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } }))
     .toBe(1);
-  await expect(page.getByRole('button', { name: 'Activate acknowledged identity' })).toBeVisible();
-  await page.getByRole('button', { name: 'Activate acknowledged identity' }).click();
+  await expect(page.getByRole('button', { name: /Activate acknowledged identity/i })).toBeVisible();
+  await page.getByRole('button', { name: /Activate acknowledged identity/i }).click();
   await expect(
     page
       .getByRole('main')
@@ -1490,4 +1545,290 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
     history.getByText('Detached; activation unavailable', { exact: true }).filter({ visible: true })
   ).toBeVisible();
   await history.close();
+});
+
+test('REST lifecycle changes appear in the administrator UI and retain independent draft identities', async ({
+  page,
+}, testInfo) => {
+  await login(page);
+  const actor = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL } });
+  const issued = generateApiKey();
+  const credential = await prisma.apiKey.create({
+    data: {
+      name: 'Lifecycle browser certification',
+      userId: actor.id,
+      prefix: issued.prefix,
+      tokenHash: issued.tokenHash,
+      scopes: ['runbooks:write'],
+    },
+  });
+  const client = new Client({
+    baseUrl: `${new URL(page.url()).origin}/api/v2`,
+    token: issued.token,
+    allowInsecureHttp: true,
+  });
+  try {
+    const created = await client.call('createRunbook', {
+      body: {
+        name: `REST lifecycle ${testInfo.project.name}`,
+        slug: `rest-lifecycle-${crypto.randomUUID()}`,
+      },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const params = { id: created.data.id };
+    const before = await client.call('getRunbookMetadata', { params });
+    const renamed = await client.call('updateRunbookMetadata', {
+      params,
+      body: { name: `Reviewed REST lifecycle ${testInfo.project.name}` },
+      headers: { 'If-Match': `"${before.data.revision}"`, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    await page.goto(`/runbooks/${params.id}`);
+    await expect(page.getByRole('heading', { name: renamed.data.name, exact: true })).toBeVisible();
+    const archived = await client.call('archiveRunbook', {
+      params,
+      body: {},
+      headers: { 'If-Match': `"${renamed.data.revision}"`, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    await page.reload();
+    await expect(page.getByText('Archived', { exact: true }).first()).toBeVisible();
+    const restored = await client.call('restoreRunbook', {
+      params,
+      body: {},
+      headers: {
+        'If-Match': `"${archived.data.revision}"`,
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+    });
+    await page.reload();
+    await expect(page.getByText('Archived', { exact: true })).toHaveCount(0);
+    const copy = await client.call('duplicateRunbook', {
+      params,
+      body: {},
+      headers: {
+        'If-Match': `"${restored.data.revision}"`,
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+    });
+    expect(copy.data.draftVersionId).not.toBe(created.data.draftVersionId);
+    await page.goto(`/runbooks/${copy.data.id}`);
+    await expect(page.getByRole('heading', { name: copy.data.name, exact: true })).toBeVisible();
+    const copyParams = { id: copy.data.id };
+    expect((await client.call('checkRunbookDeletion', { params: copyParams })).data.canDelete).toBe(
+      true
+    );
+    await client.call('deleteRunbook', {
+      params: copyParams,
+      body: { confirmationText: copy.data.name },
+      headers: { 'If-Match': `"${copy.data.revision}"`, 'Idempotency-Key': crypto.randomUUID() },
+    });
+    await expect(client.call('getRunbookMetadata', { params: copyParams })).rejects.toMatchObject({
+      status: 404,
+    });
+    await testInfo.attach('rest-lifecycle-ui-parity', {
+      body: JSON.stringify({
+        project: testInfo.project.name,
+        renamed: true,
+        archiveVisible: true,
+        restoreVisible: true,
+        independentCopy: true,
+        safeDeletion: true,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
+    await prisma.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
+  }
+});
+
+test('REST service rules share UI readiness, automatic activation and paused configuration edits', async ({
+  page,
+}, testInfo) => {
+  await login(page);
+  const actor = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL } });
+  const issued = generateApiKey();
+  const credential = await prisma.apiKey.create({
+    data: {
+      name: 'REST rule UI certification',
+      userId: actor.id,
+      prefix: issued.prefix,
+      tokenHash: issued.tokenHash,
+      scopes: [
+        'runbooks:write',
+        'runbooks:publish',
+        'runbook-rules:read',
+        'runbook-rules:write',
+        'runbook-rules:activate',
+      ],
+    },
+  });
+  const client = new Client({
+    baseUrl: `${new URL(page.url()).origin}/api/v2`,
+    token: issued.token,
+    allowInsecureHttp: true,
+  });
+  try {
+    const book = await client.call('createRunbook', {
+      body: {
+        name: `REST rule UI ${testInfo.project.name}`,
+        slug: `rule-ui-${crypto.randomUUID()}`,
+      },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const version = await client.call('publishRunbookDraft', {
+      params: { id: book.data.id, versionId: book.data.draftVersionId },
+      body: {},
+      headers: { 'If-Match': '"0"', 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const result = await client.call('createServiceRunbookRule', {
+      params: { id: serviceId },
+      body: {
+        configuration: {
+          runbookId: book.data.id,
+          runbookVersionId: version.data.id,
+          name: `Reviewed rule ${testInfo.project.name}`,
+          mode: 'AUTOMATIC',
+          versionStrategy: 'PINNED',
+        },
+        expectedVersionId: version.data.id,
+        trigger: { event: 'INCIDENT_CREATED', conditions: [] },
+      },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+    });
+    const params = { id: serviceId, ruleId: result.data.id };
+    let current = result.data;
+    await page.goto(`/services/${serviceId}/automations/${current.id}`);
+    await expect(page.getByRole('heading', { name: current.name, exact: true })).toBeVisible();
+    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    const review = await client.call('validateServiceRunbookRule', { params, body: {} });
+    expect(review.data.configurationRevision).toBe(current.configurationRevision);
+    current = (
+      await client.call('activateServiceRunbookRule', {
+        params,
+        body: { confirmMatchAll: true },
+        headers: {
+          'If-Match': `"${current.configurationRevision}"`,
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+      })
+    ).data;
+    expect(current.enabled).toBe(true);
+    await page.reload();
+    await expect(page.getByText('Automatic', { exact: true }).first()).toBeVisible();
+    const staleRevision = current.configurationRevision;
+    current = (
+      await client.call('replaceRunbookRuleTriggers', {
+        params,
+        body: {
+          event: 'INCIDENT_CREATED',
+          conditions: [{ field: 'incident.urgency', operator: 'EQUALS', value: 'HIGH' }],
+        },
+        headers: {
+          'If-Match': `"${current.configurationRevision}"`,
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+      })
+    ).data;
+    expect(current.enabled).toBe(false);
+    await page.reload();
+    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    await expect(
+      client.call('activateServiceRunbookRule', {
+        params,
+        body: { confirmMatchAll: true },
+        headers: { 'If-Match': `"${staleRevision}"`, 'Idempotency-Key': crypto.randomUUID() },
+      })
+    ).rejects.toMatchObject({ status: 412 });
+    for (const width of [375, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await noOverflow(page);
+    }
+    await testInfo.attach('rest-runbook-rule-ui-parity', {
+      body: JSON.stringify({
+        project: testInfo.project.name,
+        pausedCreation: true,
+        reviewedActivation: true,
+        editsPauseAutomatically: true,
+        staleActivationRejected: true,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
+    await prisma.apiKey.update({ where: { id: credential.id }, data: { revokedAt: new Date() } });
+  }
+});
+
+test('service objectives retain immutable versions through UI create edit and archive', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto('/settings/service-objectives');
+  await expect(
+    page.getByRole('heading', { name: 'Service objectives', exact: true })
+  ).toBeVisible();
+  const name = `Response objective ${crypto.randomUUID()}`;
+  const createSection = page
+    .locator('details')
+    .filter({ has: page.locator('summary', { hasText: /^Create objective$/ }) });
+  await createSection.locator('summary').click();
+  await createSection.getByLabel('Measurement', { exact: true }).selectOption('MTTA');
+  await createSection.getByLabel('Name', { exact: true }).fill(name);
+  await createSection
+    .getByLabel('Target (percent for uptime, minutes for MTTA/MTTR)', { exact: true })
+    .fill('20');
+  await createSection.getByLabel('Comparison', { exact: true }).selectOption('LESS_THAN_OR_EQUAL');
+  await createSection.getByRole('button', { name: 'Create objective', exact: true }).click();
+  const article = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name, exact: true }) });
+  await expect(article).toBeVisible();
+  await article.getByText('Edit objective', { exact: true }).click();
+  await article
+    .getByLabel('Target (percent for uptime, minutes for MTTA/MTTR)', { exact: true })
+    .fill('15');
+  await article.getByRole('button', { name: 'Save new version', exact: true }).click();
+  await expect(article.getByText(/Version 2/)).toBeVisible();
+  const versions = await prisma.serviceObjective.findMany({
+    where: { name },
+    orderBy: { version: 'asc' },
+  });
+  expect(versions.map(version => version.target)).toEqual([20, 15]);
+  expect(versions[0].activeTo).not.toBeNull();
+  expect(versions[1].activeTo).toBeNull();
+  await article
+    .locator('summary')
+    .filter({ hasText: /^Archive objective$/ })
+    .click();
+  await article.getByRole('button', { name: 'Archive objective', exact: true }).click();
+  await expect(article).not.toBeVisible();
+  const retained = await prisma.serviceObjective.findMany({ where: { name } });
+  expect(retained).toHaveLength(2);
+  expect(retained.every(version => version.activeTo !== null)).toBe(true);
+  const legacy = await prisma.serviceObjective.create({
+    data: {
+      lineageId: `so_${crypto.randomUUID()}`,
+      serviceId,
+      name: `Legacy latency ${crypto.randomUUID()}`,
+      metricType: 'LATENCY_P99',
+      target: 250,
+      comparator: 'LESS_THAN_OR_EQUAL',
+      windowType: 'SEVEN_DAYS',
+    },
+  });
+  await page.reload();
+  const legacyArticle = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name: legacy.name, exact: true }) });
+  await expect(legacyArticle).toBeVisible();
+  await expect(legacyArticle.getByText('Edit objective', { exact: true })).toHaveCount(0);
+  await expect(legacyArticle.getByText(/legacy target; evaluation unavailable/)).toBeVisible();
+  await legacyArticle
+    .locator('summary')
+    .filter({ hasText: /^Archive objective$/ })
+    .click();
+  await legacyArticle.getByRole('button', { name: 'Archive objective', exact: true }).click();
+  await expect(legacyArticle).not.toBeVisible();
+  expect(
+    (await prisma.serviceObjective.findUniqueOrThrow({ where: { id: legacy.id } })).activeTo
+  ).not.toBeNull();
+  await noOverflow(page);
 });

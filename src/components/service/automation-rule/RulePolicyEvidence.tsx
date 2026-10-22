@@ -77,9 +77,9 @@ function Checked({ row }: { row: RulePolicyRow }) {
 export function RulePolicyEvidence({ checks }: { checks: RulePolicyRow[] }) {
   if (checks.length === 0)
     return (
-      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center">
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs px-4 py-8 text-center">
         <ShieldCheck className="h-6 w-6 text-muted-foreground" aria-hidden />
-        <p className="text-sm font-medium">No Agent policy checks recorded.</p>
+        <p className="text-sm font-semibold text-foreground">No Agent policy checks recorded.</p>
         <p className="text-xs text-muted-foreground">
           Use “Check Agent policy · No execution” to request evidence from eligible Agents.
         </p>
@@ -87,27 +87,32 @@ export function RulePolicyEvidence({ checks }: { checks: RulePolicyRow[] }) {
     );
   return (
     <>
-      <div className="hidden overflow-hidden rounded-lg border md:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs md:block">
         <Table aria-label="Read-only policy evidence">
           <TableHeader className="bg-muted/40">
-            <TableRow>
-              <TableHead>Status</TableHead>
-              <TableHead>Agent</TableHead>
-              <TableHead>Checked</TableHead>
-              <TableHead>Policy hash</TableHead>
-              <TableHead className="text-right">Definition checksum</TableHead>
+            <TableRow className="border-border/60">
+              <TableHead className="font-semibold text-xs">Status</TableHead>
+              <TableHead className="font-semibold text-xs">Agent</TableHead>
+              <TableHead className="font-semibold text-xs">Checked</TableHead>
+              <TableHead className="font-semibold text-xs">Policy hash</TableHead>
+              <TableHead className="text-right font-semibold text-xs">
+                Definition checksum
+              </TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody className="divide-y divide-border/60">
             {checks.map(check => (
-              <TableRow key={check.id}>
+              <TableRow key={check.id} className="border-border/60 hover:bg-muted/30">
                 <TableCell>
                   <PolicyStatusBadge status={check.status} />
                 </TableCell>
-                <TableCell className="max-w-[12rem] truncate font-medium" title={check.agent}>
+                <TableCell
+                  className="max-w-[12rem] truncate font-medium text-xs"
+                  title={check.agent}
+                >
                   {check.agent}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-xs">
                   <Checked row={check} />
                 </TableCell>
                 <TableCell
@@ -127,12 +132,15 @@ export function RulePolicyEvidence({ checks }: { checks: RulePolicyRow[] }) {
           </TableBody>
         </Table>
       </div>
-      <ul aria-label="Read-only policy evidence" className="divide-y rounded-lg border md:hidden">
+      <ul
+        aria-label="Read-only policy evidence"
+        className="divide-y divide-border/60 rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs md:hidden"
+      >
         {checks.map(check => (
           <li key={check.id} className="space-y-1.5 px-3 py-3 text-sm">
             <div className="flex items-center justify-between gap-2">
               <PolicyStatusBadge status={check.status} />
-              <span className="truncate font-medium">{check.agent}</span>
+              <span className="truncate font-medium text-xs">{check.agent}</span>
             </div>
             <div className="text-xs text-muted-foreground">
               {check.checked ? (

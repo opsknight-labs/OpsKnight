@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { logger } from './logger';
+import { postgresSqlState } from './postgres-error';
 
 export const TRANSACTION_MAX_ATTEMPTS = Number(process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 5);
 export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = Number(
@@ -15,6 +16,9 @@ const RETRY_DELAYS = [20, 50, 100, 200, 400];
 
 export function isRetryableTransactionError(error: unknown): boolean {
   if (!error) return false;
+  const state = postgresSqlState(error);
+  if (state) return state === '40001' || state === '40P01';
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) return false;
 
   const code =
     typeof error === 'object' && 'code' in error && error.code != null ? String(error.code) : null;

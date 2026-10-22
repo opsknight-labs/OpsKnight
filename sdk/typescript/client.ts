@@ -25,7 +25,7 @@ interface Envelope {
   data?: unknown;
   pagination?: { hasMore: boolean; nextCursor: string | null };
 }
-async function readJson(response: Response): Promise<unknown> {
+async function readBytes(response: Response): Promise<Uint8Array> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('API returned an empty JSON body.');
   const chunks: Uint8Array[] = [];
@@ -50,6 +50,10 @@ async function readJson(response: Response): Promise<unknown> {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
+  return bytes;
+}
+async function readJson(response: Response): Promise<unknown> {
+  const bytes = await readBytes(response);
   try {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
@@ -191,6 +195,11 @@ export class Client {
         throw new ApiError(response.status, code, response.headers.get('x-request-id'));
       }
       if (response.status === 204) return null;
+      if (definition.kind === 'binary') {
+        if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/json'))
+          throw new Error('API returned an unexpected export content type.');
+        return readBytes(response);
+      }
       return readJson(response);
     }
   }

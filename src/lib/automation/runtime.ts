@@ -1,3 +1,5 @@
+import { isSensitiveObservation, protectObservationValues } from './observation-privacy';
+import { compareAutomationOutcomes } from './comparison';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import type { EvaluationPosition } from './evaluator/guard';
@@ -45,8 +47,8 @@ export type RuntimeEvaluation = {
   mode: 'SHADOW' | 'LIVE';
   versionId: string | null;
   versionNumber: number | null;
-  /** Declared fields of the evaluated version (builtins first); never raw payload paths. */
   contextFields: ResponseContextFieldDefinition[];
+  candidateVersionId?: string | null;
   evaluationAt: Date;
   durationMs: number;
   extractionMs: number;
@@ -60,6 +62,20 @@ export type RuntimeEvaluation = {
   result: Evaluation | null;
   fallbackReason: string | null;
   shadowDifferent: boolean;
+  candidateResult?: Evaluation | null;
+  candidateFallbackReason?: string | null;
+  candidateShadowDifferent?: boolean;
+  candidateShadow?: {
+    versionId: string;
+    bucketDate: string;
+    evaluated: number;
+    same: number;
+    priorityDifferent: number;
+    routeDifferent: number;
+    noEscalationDifferent: number;
+    errors: number;
+    fallbacks: number;
+  };
   basePriority: string | null;
   finalPriority: string | null;
   policyId: string | null;
@@ -124,9 +140,8 @@ export async function prepareAutomation(
           select: { id: true, compiledSnapshot: true, checksum: true, versionNumber: true },
         });
     if (!cached && !stored) throw new Error('VERSION_MISSING');
-    const loaded = cached ?? loadCompiledVersion(stored!);
-    const version = loaded.compiled;
-    runtime.versionNumber = loaded.versionNumber;
+    const version = cached ?? loadCompiledVersion(stored!);
+    runtime.versionNumber = version.versionNumber;
     runtime.contextFields = responseContextFieldDefinitions(version);
     runtime.versionLoadMs = performance.now() - versionLoadStart;
     let timeoutPosition: EvaluationPosition = {
@@ -205,7 +220,7 @@ export async function prepareAutomation(
       initialContext: context,
       evaluationAt: evaluationAt.toISOString(),
       guard,
-      fieldsByKey: loaded.fieldsByKey,
+      fieldsByKey: version.fieldsByKey,
     });
     runtime.evaluatorMs = performance.now() - pureEvalStart;
     guard();
@@ -267,10 +282,9 @@ export async function prepareAutomation(
           .map(field => ({ ...field, source: 'PROVIDER' as const }))
           .filter(field => !observedKeys.has(`PROVIDER:${field.path}`))
       : [];
-    runtime.observations = [...configuredObservations, ...discoveredProviderObservations].slice(
-      0,
-      LIMITS.fields
-    );
+    runtime.observations = [...configuredObservations, ...discoveredProviderObservations]
+      .filter(observation => !isSensitiveObservation(observation))
+      .slice(0, LIMITS.fields);
   } catch (error) {
     // Database failures must abort ingestion and use the transaction/replay path,
     // never silently commit a different responder route as an engine fallback.
@@ -317,6 +331,124 @@ export async function prepareAutomation(
           throw snapshotError;
         runtime.responderPolicy = undefined;
       }
+    }
+  }
+  // Parallel candidate evaluation in SHADOW mode during LIVE routing
+  if (config.mode === 'LIVE' && config.candidateVersionId) {
+    runtime.candidateVersionId = config.candidateVersionId;
+    const candBudgetStart = performance.now();
+    const candGuard = (_position?: EvaluationPosition) => {
+      const elapsed = performance.now() - candBudgetStart;
+      if (elapsed > LIMITS.evaluationMs) {
+        throw new Error('EVALUATION_TIMEOUT');
+      }
+    };
+    try {
+      candGuard();
+      const cachedCandidate = getCachedCompiledVersion(config.candidateVersionId);
+      const storedCandidate = cachedCandidate
+        ? null
+        : await tx.automationVersion.findUnique({
+            where: { id: config.candidateVersionId },
+            select: { id: true, compiledSnapshot: true, checksum: true, versionNumber: true },
+          });
+      candGuard();
+      if (!cachedCandidate && !storedCandidate) throw new Error('VERSION_MISSING');
+      const candidateVersion = cachedCandidate ?? loadCompiledVersion(storedCandidate!);
+      candGuard();
+      const candidateExtracted = extractContextWithProvenance({
+        fields: candidateVersion.fields,
+        providerPayload: envelope.providerPayload,
+        normalizedEvent: envelope.event,
+        integrationType: envelope.integrationType,
+      });
+      const candidateContext: Context = candidateExtracted.context;
+      Object.assign(
+        candidateContext,
+        builtinContext({
+          ...classification,
+          severity: envelope.event.payload.severity,
+          integrationType: envelope.integrationType,
+          source: envelope.event.payload.source,
+        })
+      );
+      candGuard();
+      const candidateResult = evaluateAutomation({
+        version: candidateVersion,
+        initialContext: candidateContext,
+        evaluationAt: evaluationAt.toISOString(),
+        guard: candGuard,
+        fieldsByKey: candidateVersion.fieldsByKey,
+      });
+      candGuard();
+      runtime.candidateResult = candidateResult;
+
+      // Compare candidate outcome against the actual LIVE routing decision
+      const candPriority = candidateResult.enrichedContext.priority;
+      const { priorityDifferent, routeDifferent, noEscalationDifferent } =
+        compareAutomationOutcomes({
+          actual: runtime.fallbackReason
+            ? { type: 'SERVICE_DEFAULT' }
+            : (runtime.result?.outcome ?? { type: 'SERVICE_DEFAULT' }),
+          hypothetical: candidateResult.outcome,
+          defaultPolicyId: servicePolicy?.id ?? null,
+          actualPolicyId: runtime.policyId,
+          actualPriority: runtime.finalPriority,
+          hypotheticalPriority:
+            candPriority?.state === 'RECOGNIZED'
+              ? String(candPriority.value)
+              : runtime.basePriority,
+        });
+
+      runtime.candidateShadowDifferent = priorityDifferent || routeDifferent;
+      const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
+      runtime.candidateShadow = {
+        versionId: config.candidateVersionId,
+        bucketDate: bucketDate.toISOString(),
+        evaluated: 1,
+        same: Number(!priorityDifferent && !routeDifferent),
+        priorityDifferent: Number(priorityDifferent),
+        routeDifferent: Number(routeDifferent),
+        noEscalationDifferent: Number(noEscalationDifferent),
+        errors: 0,
+        fallbacks: 0,
+      };
+    } catch (candErr) {
+      // Database errors must abort the ingestion transaction and use the transaction/replay path.
+      // They must never be swallowed, which would leave the PostgreSQL transaction in an aborted state.
+      if (
+        candErr instanceof Prisma.PrismaClientKnownRequestError ||
+        candErr instanceof Prisma.PrismaClientUnknownRequestError ||
+        candErr instanceof Prisma.PrismaClientInitializationError
+      )
+        throw candErr;
+
+      // Evaluator timeouts and domain invalidities become shadow error/fallback diagnostics
+      // without disrupting production LIVE incident routing.
+      const reason = candErr instanceof Error ? candErr.message : 'VERSION_INVALID';
+      runtime.candidateFallbackReason = [
+        'VERSION_MISSING',
+        'VERSION_INVALID',
+        'EXTRACTION_LIMIT',
+        'CONTEXT_FIELD_LIMIT',
+        'EVALUATION_TIMEOUT',
+        'POLICY_MISSING',
+      ].includes(reason)
+        ? reason
+        : 'VERSION_INVALID';
+      runtime.candidateShadowDifferent = true;
+      const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
+      runtime.candidateShadow = {
+        versionId: config.candidateVersionId,
+        bucketDate: bucketDate.toISOString(),
+        evaluated: 1,
+        same: 0,
+        priorityDifferent: 0,
+        routeDifferent: 0,
+        noEscalationDifferent: 0,
+        errors: 1,
+        fallbacks: 1,
+      };
     }
   }
   runtime.durationMs = performance.now() - engineStartedAt;
@@ -392,6 +524,8 @@ export async function persistAutomation(
     runtime.shadowDifferent = priorityDifferent || routeDifferent || !!runtime.fallbackReason;
     const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
     shadow = { versionId: runtime.versionId, bucketDate: bucketDate.toISOString(), ...counts };
+  } else if (runtime.mode === 'LIVE' && runtime.candidateShadow) {
+    shadow = runtime.candidateShadow;
   }
   const fullDetail = () => ({
     result: result
@@ -411,6 +545,22 @@ export async function persistAutomation(
     normalization: runtime.normalization,
     policyName: runtime.policyName,
     destinationNames,
+    ...(runtime.candidateVersionId
+      ? {
+          candidate: {
+            versionId: runtime.candidateVersionId,
+            result: runtime.candidateResult
+              ? {
+                  outcome: runtime.candidateResult.outcome,
+                  matchedRule: runtime.candidateResult.matchedRule,
+                  priority: runtime.candidateResult.enrichedContext.priority,
+                }
+              : null,
+            fallbackReason: runtime.candidateFallbackReason,
+            shadowDifferent: runtime.candidateShadowDifferent,
+          },
+        }
+      : {}),
   });
 
   let summary: unknown = null;
@@ -513,8 +663,18 @@ export async function persistAutomation(
   );
   if (encodedDetail.diagnosticLevel === 'FULL')
     runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(encodedDetail), 'utf8');
+  // Default-off previews are removed before durable enqueueing, not just at response time.
+  if (runtime.observations.length && typeof tx.$queryRaw === 'function') {
+    await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR SHARE`;
+  }
+  const observationSettings = runtime.observations.length ? await getAutomationSettings(tx) : null;
+  const protectedObservations = protectObservationValues(
+    envelope.serviceId,
+    runtime.observations,
+    observationSettings?.automationStoreObservationPreviews === true
+  );
 
-  const hasBackgroundJob = Boolean(runtime.observations.length || shadow);
+  const hasBackgroundJob = Boolean(protectedObservations.length || shadow);
   const jobPayload = hasBackgroundJob
     ? asJson({
         task: 'AUTOMATION_OBSERVE',
@@ -522,14 +682,7 @@ export async function persistAutomation(
         serviceId: envelope.serviceId,
         integrationId: envelope.integrationId,
         integrationType: envelope.integrationType,
-        observations: runtime.observations.map(o => ({
-          key: o.key,
-          path: o.path,
-          value: o.value,
-          type: o.type,
-          unmapped: o.unmapped,
-          ...(o.source ? { source: o.source } : {}),
-        })),
+        observations: protectedObservations,
         ...(shadow ? { shadow } : {}),
       })
     : null;
@@ -878,6 +1031,10 @@ export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
   if (runtime.mode === 'SHADOW' && runtime.shadowDifferent)
     addOperationalMetric('opsknight_automation_shadow_difference_total', 1, {
       outcome: runtime.result?.outcome.type ?? 'FALLBACK',
+    });
+  if (runtime.candidateShadowDifferent)
+    addOperationalMetric('opsknight_automation_shadow_difference_total', 1, {
+      outcome: runtime.candidateResult?.outcome.type ?? 'FALLBACK',
     });
   if (runtime.fallbackReason)
     addOperationalMetric('opsknight_automation_fallback_total', 1, {

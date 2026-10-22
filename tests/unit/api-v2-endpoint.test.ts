@@ -69,9 +69,108 @@ vi.mock('@/lib/api-v2/auth', async importOriginal => {
 });
 
 import { defineV2Route } from '@/lib/api-v2/endpoint';
+import { fingerprintV2SensitiveValue } from '@/lib/api-v2/auth';
+import { executeIdempotentOperation } from '@/lib/idempotency';
+import { runSerializableTransaction } from '@/lib/db-utils';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 
 describe('defineV2Route Endpoint Factory', () => {
+  it('prepares authorized configuration before opening a mutation transaction and keeps it out of responses', async () => {
+    let inTransaction = false;
+    const configuration = { privateConfiguration: 'owned-test-configuration' };
+    const prepare = vi.fn(async () => {
+      expect(inTransaction).toBe(false);
+      return configuration;
+    });
+    vi.mocked(runSerializableTransaction).mockImplementationOnce(async fn => {
+      inTransaction = true;
+      try {
+        return await fn({} as Parameters<Parameters<typeof runSerializableTransaction>[0]>[0]);
+      } finally {
+        inTransaction = false;
+      }
+    });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.TEAM_MANAGE,
+      idempotent: true,
+      idempotencyRequired: true,
+      prepare,
+      handler: async context => {
+        expect(inTransaction).toBe(true);
+        expect(context.prepared).toBe(configuration);
+        return { data: { accepted: true } };
+      },
+    });
+    const response = await route(
+      new NextRequest('http://localhost/api/v2/teams', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'Idempotency-Key': 'prepared-configuration',
+        },
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(await response.text()).not.toContain('owned-test-configuration');
+  });
+
+  it('rejects missing authority or a required retry key before configuration preparation', async () => {
+    for (const [authorization, expectedStatus] of [
+      ['Bearer viewer-token', 403],
+      ['Bearer admin-token', 400],
+    ] as const) {
+      const prepare = vi.fn();
+      const handler = vi.fn();
+      const route = defineV2Route({
+        action: AUTHORIZATION_ACTIONS.TEAM_MANAGE,
+        idempotent: true,
+        idempotencyRequired: true,
+        prepare,
+        handler,
+      });
+      const response = await route(
+        new NextRequest('http://localhost/api/v2/teams', {
+          method: 'POST',
+          headers: { authorization },
+        })
+      );
+      expect(response.status).toBe(expectedStatus);
+      expect(prepare).not.toHaveBeenCalled();
+      expect(handler).not.toHaveBeenCalled();
+    }
+  });
+
+  it('evicts local security projections only after successful commit, never after rollback', async () => {
+    let committed = false;
+    const invalidate = vi.fn(() => {
+      expect(committed).toBe(true);
+    });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.TEAM_MANAGE,
+      idempotent: true,
+      invalidateAfterCommit: invalidate,
+      handler: async () => ({ data: { userId: 'affected-user' } }),
+    });
+    vi.mocked(runSerializableTransaction).mockImplementationOnce(async fn => {
+      const result = await fn(
+        {} as Parameters<Parameters<typeof runSerializableTransaction>[0]>[0]
+      );
+      committed = true;
+      return result;
+    });
+    const request = () =>
+      new NextRequest('http://localhost/api/v2/teams', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer admin-token' },
+      });
+    expect((await route(request())).status).toBe(200);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    vi.mocked(runSerializableTransaction).mockRejectedValueOnce(new Error('commit failed'));
+    expect((await route(request())).status).toBe(500);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
   it('handles standard GET request with pagination and envelopes', async () => {
     const route = defineV2Route({
       action: AUTHORIZATION_ACTIONS.INCIDENT_READ,
@@ -270,5 +369,58 @@ describe('defineV2Route Endpoint Factory', () => {
         body: {},
       })
     );
+  });
+});
+
+describe('sensitive idempotency input projections', () => {
+  it('keys stable fingerprints to the authenticated credential', () => {
+    const request = (token: string) =>
+      new NextRequest('http://localhost/api/v2/runbooks/secrets', {
+        headers: { authorization: `Bearer ${token}` },
+      });
+    const digest = fingerprintV2SensitiveValue(request('credential-one'), 'low-entropy-value');
+    expect(digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(fingerprintV2SensitiveValue(request('credential-one'), 'low-entropy-value')).toBe(
+      digest
+    );
+    expect(fingerprintV2SensitiveValue(request('credential-two'), 'low-entropy-value')).not.toBe(
+      digest
+    );
+    expect(fingerprintV2SensitiveValue(request('credential-one'), 'different-value')).not.toBe(
+      digest
+    );
+    expect(() => fingerprintV2SensitiveValue(request(''), 'value')).toThrow();
+  });
+  it('passes only the projected input into the journal while preserving the validated handler body', async () => {
+    const secret = 'private-submitted-material';
+    const handler = vi.fn().mockResolvedValue({ data: { id: 'metadata-only' } });
+    const route = defineV2Route({
+      action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
+      bodySchema: z.object({ value: z.string() }).strict(),
+      idempotent: true,
+      idempotencyRequired: true,
+      idempotencyPayload: ({ req, body }) => ({
+        valueFingerprint: fingerprintV2SensitiveValue(req, body.value),
+      }),
+      handler,
+    });
+    const response = await route(
+      new NextRequest('http://localhost/api/v2/runbooks/secrets', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer admin-token',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'projection-test',
+        },
+        body: JSON.stringify({ value: secret }),
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ body: { value: secret } }));
+    const journalCall = vi.mocked(executeIdempotentOperation).mock.calls.at(-1)!;
+    expect(journalCall[1].payload).toEqual({
+      valueFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(JSON.stringify(journalCall[1].payload)).not.toContain(secret);
   });
 });

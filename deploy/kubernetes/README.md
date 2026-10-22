@@ -92,3 +92,17 @@ count restored only after the new template is applied (`--wait=false` permits th
 controlled sequence). Never resume old binaries on a migrated database or treat
 `--atomic` as database rollback. See
 [Upgrade existing SSO](../../docs/v2.1.0/guides/identity/upgrade-existing-sso.md).
+
+When upgrading an older Helm release whose PgBouncer Deployment lacks the
+`app.kubernetes.io/component=pgbouncer` label, verify its container is the configured
+PgBouncer image and add that metadata label before running the upgrade. The
+pre-upgrade guard executes before Helm applies updated Deployment metadata:
+
+```bash
+kubectl -n opsknight get deployment opsknight-pgbouncer -o jsonpath='{.spec.template.spec.containers[*].image}'
+kubectl -n opsknight label deployment opsknight-pgbouncer app.kubernetes.io/component=pgbouncer --overwrite
+```
+
+Use the actual namespace and Helm-generated Deployment name. Keep application
+Deployments stopped until migration and new runtime readiness complete; do not
+label application Deployments as infrastructure or disable the cutover guard.

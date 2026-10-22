@@ -8,22 +8,12 @@ import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
 import { disallowedScopesForRole } from '@/lib/api-scope-registry';
 import { validatePasswordStrength } from '@/lib/passwords';
-import {
-  getEmailConfig,
-  getSMSConfig,
-  getVoiceConfig,
-  getPushConfig,
-  getWhatsAppConfig,
-} from '@/lib/notification-providers';
+import { getPushConfig } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import { isValidTimeZone } from '@/lib/timezone';
-import {
-  CAPABILITIES,
-  hasCapability,
-  isApiScope,
-} from '@/lib/authorization';
+import { CAPABILITIES, hasCapability, isApiScope } from '@/lib/authorization';
 import { getCurrentUser } from '@/lib/rbac';
 import {
   createServiceAccount,
@@ -32,6 +22,7 @@ import {
   deleteServiceAccount,
 } from '@/lib/api-v2/service-accounts';
 import { invalidateV2AuthCache } from '@/lib/api-v2/auth';
+import { updateNotificationPreferences as updateSharedNotificationPreferences } from '@/lib/notifications/preferences';
 
 type ActionState = {
   error?: string | null;
@@ -249,129 +240,29 @@ export async function updateNotificationPreferences(
 ): Promise<ActionState> {
   try {
     const user = await getCurrentUser();
-
-    const emailEnabled =
-      formData.get('emailNotificationsEnabled') === 'on' ||
-      formData.get('emailNotificationsEnabled') === 'true';
-    const smsEnabled =
-      formData.get('smsNotificationsEnabled') === 'on' ||
-      formData.get('smsNotificationsEnabled') === 'true';
-    const pushEnabled =
-      formData.get('pushNotificationsEnabled') === 'on' ||
-      formData.get('pushNotificationsEnabled') === 'true';
-    const voiceEnabled =
-      formData.get('voiceNotificationsEnabled') === 'on' ||
-      formData.get('voiceNotificationsEnabled') === 'true';
-    const whatsappEnabled =
-      formData.get('whatsappNotificationsEnabled') === 'on' ||
-      formData.get('whatsappNotificationsEnabled') === 'true';
-
     const hasPhoneField = formData.has('phoneNumber') || formData.has('phoneNumberWhatsApp');
     const submittedPhone = formData.has('phoneNumber')
       ? (formData.get('phoneNumber') as string | null)?.trim() || null
       : formData.has('phoneNumberWhatsApp')
         ? (formData.get('phoneNumberWhatsApp') as string | null)?.trim() || null
         : undefined;
-    const effectivePhone = hasPhoneField ? (submittedPhone ?? null) : (user.phoneNumber ?? null);
-
-    if ((smsEnabled || voiceEnabled || whatsappEnabled) && !effectivePhone) {
-      return {
-        error:
-          'A valid phone number is required when SMS, Voice, or WhatsApp notifications are enabled.',
-      };
-    }
-
-    if (effectivePhone) {
-      const phoneRegex = /^\+[1-9]\d{1,14}$/;
-      if (!phoneRegex.test(effectivePhone)) {
-        return { error: 'Phone number must be in E.164 format (e.g., +1234567890)' };
-      }
-    }
-
-    if (emailEnabled) {
-      const emailConfig = await getEmailConfig();
-      if (!emailConfig.enabled) {
-        return {
-          error: 'Email notifications cannot be enabled because no email provider is configured.',
-        };
-      }
-    }
-
-    if (smsEnabled) {
-      const smsConfig = await getSMSConfig();
-      if (!smsConfig.enabled) {
-        return {
-          error: 'SMS notifications cannot be enabled because no SMS provider is configured.',
-        };
-      }
-    }
-
-    if (voiceEnabled) {
-      const voiceConfig = await getVoiceConfig();
-      if (!voiceConfig.enabled) {
-        return {
-          error: 'Voice notifications cannot be enabled because Twilio Voice is not configured.',
-        };
-      }
-    }
-
-    if (pushEnabled) {
-      const pushConfig = await getPushConfig();
-      if (!pushConfig.enabled) {
-        return {
-          error:
-            'Push notifications cannot be enabled because no push notification provider is configured.',
-        };
-      }
-    }
-
-    if (whatsappEnabled) {
-      const whatsappConfig = await getWhatsAppConfig();
-      if (!whatsappConfig.enabled) {
-        return {
-          error:
-            'WhatsApp notifications cannot be enabled because no WhatsApp provider is configured.',
-        };
-      }
-    }
-
-    await prisma.$transaction(async tx => {
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          emailNotificationsEnabled: emailEnabled,
-          smsNotificationsEnabled: smsEnabled,
-          voiceNotificationsEnabled: voiceEnabled,
-          pushNotificationsEnabled: pushEnabled,
-          whatsappNotificationsEnabled: whatsappEnabled,
-          ...(hasPhoneField ? { phoneNumber: submittedPhone ?? null } : {}),
-        },
-      });
-      await logAudit(
-        {
-          action: 'user.notification_preferences.updated',
-          entityType: 'USER',
-          entityId: user.id,
-          actorId: user.id,
-          oldValue: {
-            emailNotificationsEnabled: user.emailNotificationsEnabled,
-            smsNotificationsEnabled: user.smsNotificationsEnabled,
-            voiceNotificationsEnabled: user.voiceNotificationsEnabled,
-            pushNotificationsEnabled: user.pushNotificationsEnabled,
-            whatsappNotificationsEnabled: user.whatsappNotificationsEnabled,
-            hasPhoneNumber: Boolean(user.phoneNumber),
-          },
-          newValue: {
-            emailNotificationsEnabled: emailEnabled,
-            smsNotificationsEnabled: smsEnabled,
-            voiceNotificationsEnabled: voiceEnabled,
-            pushNotificationsEnabled: pushEnabled,
-            whatsappNotificationsEnabled: whatsappEnabled,
-            hasPhoneNumber: Boolean(effectivePhone),
-          },
-        },
-        tx
-      );
+    await updateSharedNotificationPreferences(user.id, {
+      emailEnabled:
+        formData.get('emailNotificationsEnabled') === 'on' ||
+        formData.get('emailNotificationsEnabled') === 'true',
+      smsEnabled:
+        formData.get('smsNotificationsEnabled') === 'on' ||
+        formData.get('smsNotificationsEnabled') === 'true',
+      pushEnabled:
+        formData.get('pushNotificationsEnabled') === 'on' ||
+        formData.get('pushNotificationsEnabled') === 'true',
+      voiceEnabled:
+        formData.get('voiceNotificationsEnabled') === 'on' ||
+        formData.get('voiceNotificationsEnabled') === 'true',
+      whatsappEnabled:
+        formData.get('whatsappNotificationsEnabled') === 'on' ||
+        formData.get('whatsappNotificationsEnabled') === 'true',
+      ...(hasPhoneField ? { phoneNumber: submittedPhone ?? null } : {}),
     });
 
     revalidatePath('/settings/profile');
@@ -382,7 +273,10 @@ export async function updateNotificationPreferences(
       error,
     });
     return {
-      error: 'Unable to update notification preferences. Please try again.',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unable to update notification preferences. Please try again.',
     };
   }
 }

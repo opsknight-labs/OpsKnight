@@ -23,6 +23,10 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
+vi.mock('@/lib/status-pages/subscriber-administration', () => ({
+  removeStatusPageSubscribers: vi.fn(async () => ({ count: 1, changed: 1 })),
+}));
+
 import { DELETE } from '@/app/api/status-page/subscribers/route';
 
 describe('DELETE /api/status-page/subscribers bulk limits', () => {

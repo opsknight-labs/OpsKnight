@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   topLevelUserAvatarUpsert: vi.fn(),
   topLevelUserAvatarDeleteMany: vi.fn(),
   txUserUpdate: vi.fn(),
+  txUserFindUnique: vi.fn(),
   txUserAvatarUpsert: vi.fn(),
   txUserAvatarDeleteMany: vi.fn(),
   apiKeyFindUnique: vi.fn(),
@@ -21,7 +22,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const tx = {
-  user: { update: mocks.txUserUpdate },
+  $queryRaw: vi.fn().mockResolvedValue([{ id: 'user-1' }]),
+  user: { update: mocks.txUserUpdate, findUnique: mocks.txUserFindUnique },
   userAvatar: {
     upsert: mocks.txUserAvatarUpsert,
     deleteMany: mocks.txUserAvatarDeleteMany,
@@ -94,6 +96,17 @@ describe('settings persistence contracts', () => {
     });
     mocks.userUpdate.mockResolvedValue({});
     mocks.txUserUpdate.mockResolvedValue({});
+    mocks.txUserFindUnique.mockResolvedValue({
+      id: 'user-1',
+      revision: 1,
+      timeZone: 'UTC',
+      phoneNumber: '+919876543210',
+      emailNotificationsEnabled: false,
+      smsNotificationsEnabled: false,
+      pushNotificationsEnabled: false,
+      voiceNotificationsEnabled: false,
+      whatsappNotificationsEnabled: false,
+    });
     mocks.txUserAvatarUpsert.mockResolvedValue({});
     mocks.txUserAvatarDeleteMany.mockResolvedValue({ count: 1 });
     mocks.getEmailConfig.mockResolvedValue({ enabled: true });
@@ -110,16 +123,18 @@ describe('settings persistence contracts', () => {
     const result = await updateNotificationPreferences({}, formData);
 
     expect(result).toEqual({ success: true });
-    expect(mocks.txUserUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
-      data: {
-        emailNotificationsEnabled: false,
-        smsNotificationsEnabled: true,
-        voiceNotificationsEnabled: false,
-        pushNotificationsEnabled: false,
-        whatsappNotificationsEnabled: false,
-      },
-    });
+    expect(mocks.txUserUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: {
+          emailNotificationsEnabled: false,
+          smsNotificationsEnabled: true,
+          voiceNotificationsEnabled: false,
+          pushNotificationsEnabled: false,
+          whatsappNotificationsEnabled: false,
+        },
+      })
+    );
   });
 
   it('clears the phone only when the field is explicitly submitted empty', async () => {
@@ -144,13 +159,15 @@ describe('settings persistence contracts', () => {
 
     expect(result).toEqual({ success: true });
     expect(mocks.getVoiceConfig).toHaveBeenCalled();
-    expect(mocks.txUserUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
-      data: expect.objectContaining({
-        smsNotificationsEnabled: false,
-        voiceNotificationsEnabled: true,
-      }),
-    });
+    expect(mocks.txUserUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({
+          smsNotificationsEnabled: false,
+          voiceNotificationsEnabled: true,
+        }),
+      })
+    );
   });
 
   it('validates channel enablement against the effective stored phone', async () => {
@@ -160,6 +177,17 @@ describe('settings persistence contracts', () => {
       email: 'test@example.com',
       role: 'ADMIN',
       phoneNumber: null,
+    });
+    mocks.txUserFindUnique.mockResolvedValue({
+      id: 'user-1',
+      revision: 1,
+      timeZone: 'UTC',
+      phoneNumber: null,
+      emailNotificationsEnabled: false,
+      smsNotificationsEnabled: false,
+      pushNotificationsEnabled: false,
+      voiceNotificationsEnabled: false,
+      whatsappNotificationsEnabled: false,
     });
     const formData = new FormData();
     formData.set('whatsappNotificationsEnabled', 'true');

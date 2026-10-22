@@ -30,6 +30,24 @@ const DROP_WITHOUT_IF_EXISTS_ALLOWLIST = new Set(['20260104135828_remove_nextaut
 // under the same name or new migrations. Any byte change restores the strict error.
 const REVIEWED_APPLIED_MIGRATIONS = new Map([
   [
+    '20261020110000_dashboard_api_revision',
+    {
+      sha256: '49594429ed7c9e61db0a80030dda198796abe25b56d2b755de9eb182191c8fb6',
+      rule: 'ENUM_MIXED_OPERATIONS',
+      reason:
+        'Already-applied dashboard migration: revision-column and trigger DDL never references the new DASHBOARD audit enum value; preserve deployed Prisma checksums.',
+    },
+  ],
+  [
+    '20261020111000_saved_report_definitions',
+    {
+      sha256: '50f4d7bb64fae0036e502a04b35f6931cc504bf1f9ca84d998343a65a59f905e',
+      rule: 'ENUM_MIXED_OPERATIONS',
+      reason:
+        'Already-applied saved-report migration: table/index/trigger DDL never references the new SAVED_REPORT audit enum value; preserve deployed Prisma checksums.',
+    },
+  ],
+  [
     '20261012140000_enterprise_authentication',
     {
       sha256: '776e112c24d76b573bb589ba2779e4a7a09160aa9126a2f2d7b157bf457c0dcb',

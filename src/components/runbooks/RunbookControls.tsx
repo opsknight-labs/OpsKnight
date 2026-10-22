@@ -212,6 +212,7 @@ export function ConfirmAction({
   label,
   variant = 'destructive',
   successMessage = 'Changes applied',
+  className,
 }: {
   action: RunbookFormAction;
   title: string;
@@ -219,13 +220,14 @@ export function ConfirmAction({
   label: string;
   variant?: ComponentProps<typeof Button>['variant'];
   successMessage?: string;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const destructive = variant === 'destructive';
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button variant={variant} size="sm">
+        <Button variant={variant} size="sm" className={className}>
           {label}
         </Button>
       </AlertDialogTrigger>
@@ -312,7 +314,7 @@ export function FormSelect({
               key={option.value}
               value={option.value}
               disabled={option.disabled}
-              className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors focus:bg-primary/10 focus:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
+              className="rounded-xl pl-3 pr-8 py-2 text-xs font-medium cursor-pointer transition-colors focus:bg-primary/10 focus:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
             >
               {option.label}
             </SelectItem>

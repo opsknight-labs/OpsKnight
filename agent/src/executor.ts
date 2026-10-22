@@ -384,7 +384,15 @@ export function isSystemdActiveRequired(step: ClaimedAttempt['step']): boolean {
     config.requireActive === true ||
     config.expectedStatus === 'active' ||
     step.phase === 'verification' ||
-    config.phase === 'verification'
+    config.phase === 'verification' ||
+    Boolean(
+      step.key &&
+      (/\bverification\b/i.test(step.key) ||
+        (/^verify_/i.test(step.key) && !/diagnostic/i.test(step.key)))
+    ) ||
+    Boolean(
+      step.name && /\bverif(y|ication)\b/i.test(step.name) && !/\bdiagnostic\b/i.test(step.name)
+    )
   );
 }
 
@@ -424,10 +432,8 @@ export function resolveCommandResult(
 
   if (isSystemdStatus) {
     const config = attempt.step.config ?? {};
-    const expected = config.expectedState;
-    const requireActive =
-      expected === 'active' || config.requireActive === true || config.expectedStatus === 'active';
-    const requireInactive = expected === 'inactive';
+    const requireActive = isSystemdActiveRequired(attempt.step);
+    const requireInactive = config.expectedState === 'inactive';
 
     if (code === 0) {
       if (requireInactive) {

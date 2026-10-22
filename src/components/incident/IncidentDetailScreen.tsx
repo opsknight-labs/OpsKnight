@@ -55,6 +55,7 @@ export type IncidentDetailScreenProps = {
   backHref: string;
   backLabel?: string;
   presentation?: 'desktop' | 'mobile';
+  initialTab?: string;
 };
 
 /**
@@ -67,6 +68,7 @@ export default async function IncidentDetailScreen({
   backHref,
   backLabel = 'Back to Incidents',
   presentation = 'desktop',
+  initialTab,
 }: IncidentDetailScreenProps) {
   const user = await assertCanViewIncident(id);
   const appUrl = await getAppUrl();
@@ -492,6 +494,8 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
+      {presentation === 'mobile' && <IncidentAutomationCard incidentId={id} />}
+
       {presentation === 'mobile' && (
         <div id="automation-decision" className="scroll-mt-24">
           <IncidentAutomationCard incidentId={id} />
@@ -636,6 +640,7 @@ export default async function IncidentDetailScreen({
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-6 2xl:col-span-9">
           <IncidentDetailTabs
+            defaultTab={initialTab || 'overview'}
             eventCount={totalEventsCount}
             noteCount={totalNotesCount}
             activityContent={activityContent}

@@ -1,29 +1,38 @@
 import { redactRunbookDisplayName } from '@/lib/runbooks/display-name';
 import ExecutionTroubleshooting from '@/components/runbooks/executions/ExecutionTroubleshooting';
 import { getExecutionProgress, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
-import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { redactRunbookOutput } from '@/lib/runbooks/redaction';
 import { formatDiagnosticEvidence } from '@/lib/runbooks/presentation/diagnostics';
 import { computePlanDigest } from '@/lib/runbooks/definition';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
   ArrowUpRight,
+  CheckCircle2,
+  Clock,
+  Flame,
   Layers,
+  Play,
   RotateCcw,
+  Server,
   ShieldAlert,
   ShieldCheck,
+  Terminal,
+  Workflow,
+  XCircle,
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
-import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { ConfirmAction } from '@/components/runbooks/RunbookControls';
 import { ExecutionProgressBar } from '@/components/runbooks/executions/ExecutionProgressBar';
+import { cn } from '@/lib/utils';
 import {
   ExecutionStepTimeline,
   type TimelineStep,
@@ -119,7 +128,6 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
 
   const { totalSteps, completedSteps, failedStepName } = getExecutionProgress(execution.steps);
   const failedStep = execution.steps.find(step => step.stepKey === failedStepName);
-  const navigation = await getRunbookNavigationSummary();
   const now = new Date();
   const fmt = (value: Date | null, fallback: string) =>
     value
@@ -161,7 +169,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       errorMessage: step.errorMessage ? redactRunbookOutput(step.errorMessage) : null,
       outputPreview: step.outputPreview ? redactRunbookOutput(step.outputPreview) : null,
       outputArtifactId: step.outputArtifactId,
-      verification: formatDiagnosticEvidence(step.verificationResult),
+      verification: formatDiagnosticEvidence(step.verificationResult, inputValues),
       requiresApproval: step.requiresApproval,
       approvedBy: step.approvedBy?.name ?? null,
       approvedAt: step.approvedAt ? fmt(step.approvedAt, '') : null,
@@ -201,7 +209,10 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
         planDigest: att.planDigest,
         outputPreview: att.outputPreview ? redactRunbookOutput(att.outputPreview) : null,
         outputArtifactId: att.outputArtifactId,
-        evidence: formatDiagnosticEvidence({ before: att.preState, after: att.postState }),
+        evidence: formatDiagnosticEvidence(
+          { before: att.preState, after: att.postState },
+          inputValues
+        ),
         artifactCount: att._count.artifacts,
         artifacts: att.artifacts,
       })),
@@ -210,75 +221,93 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      <RunbookPageHeader
-        breadcrumbs={[
-          { label: 'Runbooks', href: '/runbooks' },
-          { label: 'Executions', href: '/runbooks/executions' },
-          { label: runbookName },
-        ]}
+      <DetailHeroBanner
+        breadcrumb={{
+          label: 'Executions',
+          href: '/runbooks/executions',
+          current: runbookName,
+        }}
+        tag="Automation Execution"
         title={runbookName}
-        description={
-          <span>
-            Execution <span className="font-mono">{execution.id}</span> · queued{' '}
-            {fmt(execution.createdAt, 'at an unrecorded time')}
-          </span>
-        }
-        badge={<RunbookStatusBadge status={execution.status} />}
-        actions={
-          <>
-            <Button asChild variant="ghost" size="sm" className="gap-1.5">
-              <Link href="/runbooks/executions">
-                <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-                All executions
-              </Link>
-            </Button>
-            {execution.incident && (
-              <Button asChild variant="outline" size="sm" className="gap-1.5">
-                <Link href={`/incidents/${execution.incident.id}?tab=runbooks`}>
-                  Open incident
-                  <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
-                </Link>
-              </Button>
+        icon={
+          <div
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border shadow-inner transition-transform',
+              execution.status === 'SUCCEEDED'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : execution.status === 'RUNNING'
+                  ? 'border-sky-500/30 bg-sky-500/10 text-sky-400'
+                  : isFailure
+                    ? 'border-rose-500/30 bg-rose-500/10 text-rose-400'
+                    : execution.status === 'WAITING_APPROVAL'
+                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                      : 'border-zinc-700 bg-zinc-800 text-slate-300'
             )}
-          </>
-        }
-      />
-
-      {/* Static here so the execution summary can own the sticky slot below the app header. */}
-      <RunbookModuleNav summary={navigation} className="static" />
-
-      <section
-        aria-label="Execution summary"
-        className="sticky top-0 z-20 rounded-2xl border border-border/80 dark:border-border/60 bg-card/95 dark:bg-card/85 px-5 py-4 shadow-xs backdrop-blur-md supports-[backdrop-filter]:bg-card/80"
-      >
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <RunbookStatusBadge status={execution.status} />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold" title={runbookName}>
-                {runbookName}
-              </p>
-              <p
-                className="truncate text-xs text-muted-foreground tabular-nums"
-                title={targetLabel}
-              >
-                {durationText}
-                {execution.startedAt
-                  ? ` · started ${fmt(execution.startedAt, '')}`
-                  : ' · waiting for a worker'}
-                {` · ${targetLabel}`}
-              </p>
-            </div>
+          >
+            {execution.status === 'SUCCEEDED' ? (
+              <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+            ) : execution.status === 'RUNNING' ? (
+              <Play className="h-6 w-6 animate-pulse" aria-hidden="true" />
+            ) : isFailure ? (
+              <XCircle className="h-6 w-6" aria-hidden="true" />
+            ) : execution.status === 'WAITING_APPROVAL' ? (
+              <ShieldAlert className="h-6 w-6 text-amber-400" aria-hidden="true" />
+            ) : (
+              <Workflow className="h-6 w-6" aria-hidden="true" />
+            )}
           </div>
-          {totalSteps > 0 && (
-            <ExecutionProgressBar
-              totalSteps={totalSteps}
-              completedSteps={completedSteps}
-              status={execution.status}
-              size="lg"
-              className="order-last basis-full sm:order-none sm:max-w-xs sm:basis-auto"
-            />
-          )}
+        }
+        badges={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <RunbookStatusBadge status={execution.status} />
+            <Badge
+              variant="outline"
+              className="border-white/20 bg-white/5 text-slate-300 font-mono text-[11px] font-normal shadow-2xs"
+            >
+              v{execution.runbookVersion.version}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="border-white/10 bg-white/5 text-slate-400 font-mono text-[11px] gap-1 shadow-2xs"
+              title={`Execution ID: ${execution.id}`}
+            >
+              <Terminal className="h-3 w-3 text-slate-400" aria-hidden="true" />
+              <span className="hidden sm:inline">ID: </span>
+              {execution.id}
+            </Badge>
+            {execution.incident && (
+              <Badge
+                variant="outline"
+                className="border-rose-500/40 bg-rose-500/10 text-rose-300 text-[11px] font-medium gap-1 shadow-2xs"
+              >
+                <Flame className="h-3 w-3 text-rose-400" aria-hidden="true" />
+                Incident Linked
+              </Badge>
+            )}
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-slate-300 leading-relaxed">
+            <span>
+              Runbook{' '}
+              <Link
+                href={`/runbooks/${execution.runbook.id}`}
+                className="font-semibold text-white hover:text-primary transition-colors underline-offset-2 hover:underline"
+              >
+                {runbookName}
+              </Link>
+            </span>
+            <span className="text-slate-500"> · </span>
+            <span>Queued {fmt(execution.createdAt, 'at an unrecorded time')}</span>
+            {execution.startedAt && (
+              <>
+                <span className="text-slate-500"> · </span>
+                <span>Started {fmt(execution.startedAt, '')}</span>
+              </>
+            )}
+          </p>
+        }
+        actions={
           <div className="flex flex-wrap items-center gap-2">
             <RunbookLiveRefresh
               enabled={isActive}
@@ -313,17 +342,107 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 asChild
                 size="sm"
                 variant={isFailure ? 'default' : 'outline'}
-                className="gap-1.5 shadow-2xs"
+                className={cn(
+                  'gap-1.5 font-semibold shadow-xs',
+                  !isFailure && 'border-zinc-700 bg-zinc-800 text-slate-100 hover:bg-zinc-700'
+                )}
               >
                 <a href="#rerun">
                   <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                  Re-run
+                  Re-run execution
                 </a>
               </Button>
             )}
+            {execution.incident && (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-zinc-700 bg-zinc-800/80 text-slate-200 hover:bg-zinc-700 shadow-2xs"
+              >
+                <Link href={`/incidents/${execution.incident.id}?tab=runbooks`}>
+                  Open incident
+                  <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </Button>
+            )}
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-slate-300 hover:text-white hover:bg-white/5"
+            >
+              <Link href="/runbooks/executions">
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                All executions
+              </Link>
+            </Button>
           </div>
-        </div>
-      </section>
+        }
+        statsPlacement="bottom"
+        stats={[
+          {
+            label: 'Status',
+            value: execution.status.replace(/_/g, ' '),
+            valueClassName: cn(
+              'capitalize',
+              execution.status === 'SUCCEEDED' && 'text-emerald-400',
+              execution.status === 'RUNNING' && 'text-sky-400',
+              isFailure && 'text-rose-400',
+              execution.status === 'WAITING_APPROVAL' && 'text-amber-400'
+            ),
+            subtext: isActive
+              ? 'In-flight execution'
+              : execution.status === 'SUCCEEDED'
+                ? 'All steps completed'
+                : isFailure
+                  ? failedStepName
+                    ? `Failed on ${failedStepName}`
+                    : 'Execution failed'
+                  : 'Execution ended',
+            icon:
+              execution.status === 'SUCCEEDED' ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              ) : execution.status === 'RUNNING' ? (
+                <Activity className="h-3.5 w-3.5 text-sky-400 animate-pulse" />
+              ) : isFailure ? (
+                <XCircle className="h-3.5 w-3.5 text-rose-400" />
+              ) : (
+                <Clock className="h-3.5 w-3.5 text-slate-400" />
+              ),
+          },
+          {
+            label: 'Progress',
+            value: totalSteps > 0 ? `${completedSteps} of ${totalSteps} Steps` : '0 Steps',
+            subtext: `${totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0}% completed`,
+            icon: <Workflow className="h-3.5 w-3.5 text-slate-400" />,
+          },
+          {
+            label: 'Duration',
+            value: durationText,
+            subtext: execution.completedAt
+              ? `Ended ${fmt(execution.completedAt, '')}`
+              : isActive
+                ? 'Running now'
+                : 'Waiting',
+            icon: <Clock className="h-3.5 w-3.5 text-sky-400" />,
+          },
+          {
+            label: 'Target',
+            value: execution.resolvedTargetAgent
+              ? execution.resolvedTargetAgent.name
+              : execution.resolvedTargetAgentPool
+                ? execution.resolvedTargetAgentPool.name
+                : 'Control Plane',
+            subtext: execution.resolvedTargetAgent
+              ? (execution.resolvedTargetAgent.hostname ?? 'Direct Agent')
+              : execution.resolvedTargetAgentPool
+                ? `${execution.resolvedTargetAgentPool.mode} Fleet`
+                : 'Direct execution',
+            icon: <Server className="h-3.5 w-3.5 text-indigo-400" />,
+          },
+        ]}
+      />
 
       {waitingStep && (
         <section
@@ -399,28 +518,48 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       )}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <SectionCard
-          icon={Layers}
-          title="Steps"
-          description="In execution order, including prechecks, approvals and verification. Output and attempt details expand per step."
-          actions={
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {completedSteps} of {totalSteps} complete
-            </span>
-          }
-        >
-          <ExecutionStepTimeline
-            executionId={execution.id}
-            runbookName={runbookName}
-            steps={timelineSteps}
-            canApprove={canApprove}
-            canDownloadArtifacts={permissions.capabilities.includes(
-              CAPABILITIES.RUNBOOK_ARTIFACT_DOWNLOAD
-            )}
-            targetLabel={targetLabel}
-            versionLabel={versionLabel}
-          />
-        </SectionCard>
+        <div className="min-w-0 space-y-5">
+          <SectionCard
+            icon={Layers}
+            title="Steps"
+            description="In execution order, including prechecks, approvals and verification. Output and attempt details expand per step."
+            actions={
+              totalSteps > 0 ? (
+                <div className="flex items-center gap-3">
+                  <ExecutionProgressBar
+                    totalSteps={totalSteps}
+                    completedSteps={completedSteps}
+                    status={execution.status}
+                    size="sm"
+                    className="w-36 sm:w-48"
+                  />
+                </div>
+              ) : null
+            }
+          >
+            <ExecutionStepTimeline
+              executionId={execution.id}
+              runbookName={runbookName}
+              steps={timelineSteps}
+              canApprove={canApprove}
+              canDownloadArtifacts={permissions.capabilities.includes(
+                CAPABILITIES.RUNBOOK_ARTIFACT_DOWNLOAD
+              )}
+              targetLabel={targetLabel}
+              versionLabel={versionLabel}
+            />
+          </SectionCard>
+
+          {!isActive && (
+            <div id="rerun" className="scroll-mt-40">
+              <ExecutionRerunPanel
+                executionId={execution.id}
+                blockedReason={rerunBlockedReason}
+                canExecute={canExecute}
+              />
+            </div>
+          )}
+        </div>
 
         <aside className="space-y-5">
           <SectionCard title="Details">
@@ -510,16 +649,6 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               ]}
             />
           </SectionCard>
-
-          {!isActive && (
-            <div id="rerun" className="scroll-mt-40">
-              <ExecutionRerunPanel
-                executionId={execution.id}
-                blockedReason={rerunBlockedReason}
-                canExecute={canExecute}
-              />
-            </div>
-          )}
         </aside>
       </div>
     </div>

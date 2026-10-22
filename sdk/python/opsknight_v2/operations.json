@@ -1,8 +1,1448 @@
 {
+  "getChatOpsConfiguration": {
+    "method": "GET",
+    "path": "/settings/chatops",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateChatOpsConfiguration": {
+    "method": "PUT",
+    "path": "/settings/chatops",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listCustomFieldDefinitions": {
+    "method": "GET",
+    "path": "/custom-fields",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createCustomFieldDefinition": {
+    "method": "POST",
+    "path": "/custom-fields",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getCustomFieldDefinition": {
+    "method": "GET",
+    "path": "/custom-fields/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateCustomFieldDefinition": {
+    "method": "PATCH",
+    "path": "/custom-fields/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteCustomFieldDefinition": {
+    "method": "DELETE",
+    "path": "/custom-fields/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "createAuditExport": {
+    "method": "POST",
+    "path": "/audit-exports",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getAuditExport": {
+    "method": "GET",
+    "path": "/audit-exports/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadAuditExport": {
+    "method": "GET",
+    "path": "/audit-exports/{id}/download",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listNotificationProviders": {
+    "method": "GET",
+    "path": "/notification-providers",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getNotificationProvider": {
+    "method": "GET",
+    "path": "/notification-providers/{provider}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "configureNotificationProvider": {
+    "method": "PUT",
+    "path": "/notification-providers/{provider}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getNotificationProviderDiagnostics": {
+    "method": "GET",
+    "path": "/notification-providers/{provider}/diagnostics",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "testNotificationProvider": {
+    "method": "POST",
+    "path": "/notification-providers/{provider}/test",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "rotateWebPushKeys": {
+    "method": "POST",
+    "path": "/notification-providers/web-push/rotate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getMyNotificationPreferences": {
+    "method": "GET",
+    "path": "/users/me/notification-preferences",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateMyNotificationPreferences": {
+    "method": "PATCH",
+    "path": "/users/me/notification-preferences",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listTeamActivity": {
+    "method": "GET",
+    "path": "/teams/{id}/activity",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listTeamServices": {
+    "method": "GET",
+    "path": "/teams/{id}/services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "assignTeamService": {
+    "method": "PUT",
+    "path": "/teams/{id}/services/{serviceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listTeamMembers": {
+    "method": "GET",
+    "path": "/teams/{id}/members",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setTeamMember": {
+    "method": "PUT",
+    "path": "/teams/{id}/members/{userId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "removeTeamMember": {
+    "method": "DELETE",
+    "path": "/teams/{id}/members/{userId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getUserInvitationPolicy": {
+    "method": "GET",
+    "path": "/users/invitation-policy",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createUserInvitation": {
+    "method": "POST",
+    "path": "/users/invitations",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getUserInvitation": {
+    "method": "GET",
+    "path": "/users/{id}/invitation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "renewUserInvitation": {
+    "method": "POST",
+    "path": "/users/{id}/invitation",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getUserAdministration": {
+    "method": "GET",
+    "path": "/users/{id}/administration",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getUserDependencies": {
+    "method": "GET",
+    "path": "/users/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "administerUser": {
+    "method": "PATCH",
+    "path": "/users/{id}/administration",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getTeamLead": {
+    "method": "GET",
+    "path": "/teams/{id}/lead",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setTeamLead": {
+    "method": "PUT",
+    "path": "/teams/{id}/lead",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSigningIdentities": {
+    "method": "GET",
+    "path": "/runbooks/signing-identities",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "stageRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "activateRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities/{id}/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "retireRunbookSigningIdentity": {
+    "method": "POST",
+    "path": "/runbooks/signing-identities/{id}/retire",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecretUsage": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}/usage",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "retireRunbookAgentPool": {
+    "method": "POST",
+    "path": "/runbooks/agent-pools/{id}/retire",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookAgentPools": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookAgentPool": {
+    "method": "POST",
+    "path": "/runbooks/agent-pools",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookAgentPool": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookAgentPool": {
+    "method": "PATCH",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteRunbookAgentPool": {
+    "method": "DELETE",
+    "path": "/runbooks/agent-pools/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "checkRunbookAgentPoolDeletion": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}/deletion-check",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookAgentPoolMembers": {
+    "method": "GET",
+    "path": "/runbooks/agent-pools/{id}/members",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setRunbookAgentPoolMember": {
+    "method": "PUT",
+    "path": "/runbooks/agent-pools/{id}/members/{agentId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "removeRunbookAgentPoolMember": {
+    "method": "DELETE",
+    "path": "/runbooks/agent-pools/{id}/members/{agentId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getRunbookAgentConfiguration": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}/configuration",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookAgentConfiguration": {
+    "method": "PATCH",
+    "path": "/runbooks/agents/{id}/configuration",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecrets": {
+    "method": "GET",
+    "path": "/runbooks/secrets",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookSecret": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "rotateRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets/{id}/rotate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookSecretGrants": {
+    "method": "GET",
+    "path": "/runbooks/secrets/{id}/grants",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "grantRunbookSecret": {
+    "method": "POST",
+    "path": "/runbooks/secrets/{id}/grants",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "revokeRunbookSecretGrant": {
+    "method": "DELETE",
+    "path": "/runbooks/secrets/{id}/grants/{grantId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getRunbookSettings": {
+    "method": "GET",
+    "path": "/settings/runbooks",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookSettings": {
+    "method": "PATCH",
+    "path": "/settings/runbooks",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookAgents": {
+    "method": "GET",
+    "path": "/runbooks/agents",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookAgent": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookAgentPolicyStatus": {
+    "method": "GET",
+    "path": "/runbooks/agents/{id}/policy-status",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createRunbookAgentEnrollment": {
+    "method": "POST",
+    "path": "/runbooks/agent-enrollments",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getRunbookAgentEnrollment": {
+    "method": "GET",
+    "path": "/runbooks/agent-enrollments/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "revokeRunbookAgent": {
+    "method": "POST",
+    "path": "/runbooks/agents/{id}/revoke",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listRunbookExecutionSteps": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/steps",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutions": {
+    "method": "GET",
+    "path": "/runbooks/executions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutionEvidence": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/evidence",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRunbookExecutionEvents": {
+    "method": "GET",
+    "path": "/runbooks/executions/{id}/events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "approveRunbookExecutionStep": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/steps/{stepId}/approve",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "rejectRunbookExecutionStep": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/steps/{stepId}/reject",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "previewRunbookExecutionRerun": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/rerun-preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "rerunRunbookExecution": {
+    "method": "POST",
+    "path": "/runbooks/executions/{id}/rerun",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceObjectiveCatalog": {
+    "method": "GET",
+    "path": "/service-objectives/catalog",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceObjectives": {
+    "method": "GET",
+    "path": "/service-objectives",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceObjective": {
+    "method": "GET",
+    "path": "/service-objectives/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceObjective": {
+    "method": "PATCH",
+    "path": "/service-objectives/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "archiveServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives/{id}/archive",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listServiceObjectiveVersions": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/versions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceObjectiveSnapshots": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/snapshots",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getServiceObjectiveHistory": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/history",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "evaluateServiceObjective": {
+    "method": "POST",
+    "path": "/service-objectives/{id}/evaluate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceObjectiveEvaluation": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/evaluations/{evaluationId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getStatusPagePublication": {
+    "method": "GET",
+    "path": "/status-pages/{id}/publication",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "retryStatusPagePublication": {
+    "method": "POST",
+    "path": "/status-pages/{id}/publication/retry",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPagePublicationJob": {
+    "method": "GET",
+    "path": "/status-pages/{id}/publication/jobs/{jobId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listStatusPageServices": {
+    "method": "GET",
+    "path": "/status-pages/{id}/services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setStatusPageServices": {
+    "method": "PUT",
+    "path": "/status-pages/{id}/services",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "updateStatusPageService": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/services/{serviceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageAppearance": {
+    "method": "GET",
+    "path": "/status-pages/{id}/appearance",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageAppearance": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/appearance",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPagePrivacy": {
+    "method": "GET",
+    "path": "/status-pages/{id}/privacy",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPagePrivacy": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/privacy",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageContent": {
+    "method": "GET",
+    "path": "/status-pages/{id}/content",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateStatusPageContent": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/content",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getStatusPageSettings": {
+    "method": "GET",
+    "path": "/status-pages/{id}/settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "uploadStatusPageAsset": {
+    "method": "POST",
+    "path": "/status-pages/{id}/assets",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listStatusPageAssets": {
+    "method": "GET",
+    "path": "/status-pages/{id}/assets",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteStatusPageAsset": {
+    "method": "DELETE",
+    "path": "/status-pages/{id}/assets/{assetId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "updateStatusPageSettings": {
+    "method": "PATCH",
+    "path": "/status-pages/{id}/settings",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listStatusPageSubscribers": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscribers",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriber": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscribers/{subscriberId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "removeStatusPageSubscriber": {
+    "method": "DELETE",
+    "path": "/status-pages/{id}/subscribers/{subscriberId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriberStats": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscriber-stats",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getStatusPageSubscriptionSettings": {
+    "method": "GET",
+    "path": "/status-pages/{id}/subscription-settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceRunbookRules": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceRunbookRule": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceRunbookRule": {
+    "method": "PATCH",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "detachServiceRunbookRule": {
+    "method": "DELETE",
+    "path": "/services/{id}/runbook-rules/{ruleId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listRunbookRulePolicyChecks": {
+    "method": "GET",
+    "path": "/services/{id}/runbook-rules/{ruleId}/policy-checks",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "requestRunbookRulePolicyChecks": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/policy-checks",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "activateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "pauseServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/pause",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "duplicateServiceRunbookRule": {
+    "method": "POST",
+    "path": "/services/{id}/runbook-rules/{ruleId}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "replaceRunbookRuleTriggers": {
+    "method": "PUT",
+    "path": "/services/{id}/runbook-rules/{ruleId}/triggers",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "compareRunbookVersions": {
+    "method": "GET",
+    "path": "/runbooks/{id}/versions/{versionId}/diff",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getRunbookMetadata": {
+    "method": "GET",
+    "path": "/runbooks/{id}/metadata",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateRunbookMetadata": {
+    "method": "PATCH",
+    "path": "/runbooks/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "archiveRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/archive",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "restoreRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/restore",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "checkRunbookDeletion": {
+    "method": "GET",
+    "path": "/runbooks/{id}/delete-check",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteRunbook": {
+    "method": "DELETE",
+    "path": "/runbooks/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "duplicateRunbook": {
+    "method": "POST",
+    "path": "/runbooks/{id}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateAutomation": {
+    "method": "POST",
+    "path": "/services/{id}/automation/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "simulateAutomation": {
+    "method": "POST",
+    "path": "/services/{id}/automation/simulate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "restoreAutomationDraft": {
+    "method": "POST",
+    "path": "/services/{id}/automation/restore",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listAutomationDecisions": {
+    "method": "GET",
+    "path": "/services/{id}/automation/decisions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listAutomationObservations": {
+    "method": "GET",
+    "path": "/services/{id}/automation/observations",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listAutomationVersions": {
+    "method": "GET",
+    "path": "/services/{id}/automation/versions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getAutomationVersion": {
+    "method": "GET",
+    "path": "/services/{id}/automation/versions/{versionId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getServiceAutomation": {
+    "method": "GET",
+    "path": "/services/{id}/automation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceAutomationMode": {
+    "method": "PATCH",
+    "path": "/services/{id}/automation/mode",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "publishAutomationVersion": {
+    "method": "POST",
+    "path": "/services/{id}/automation/publish",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getAutomationDraft": {
+    "method": "GET",
+    "path": "/services/{id}/automation/draft",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "saveAutomationDraft": {
+    "method": "PUT",
+    "path": "/services/{id}/automation/draft",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getAutomationCandidate": {
+    "method": "GET",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "discardAutomationCandidate": {
+    "method": "DELETE",
+    "path": "/services/{id}/automation/candidate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "activateAutomationCandidate": {
+    "method": "POST",
+    "path": "/services/{id}/automation/candidates/activate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getAutomationSettings": {
+    "method": "GET",
+    "path": "/settings/automation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateAutomationSettings": {
+    "method": "PATCH",
+    "path": "/settings/automation",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "listIncidentWatchers": {
     "method": "GET",
     "path": "/incidents/{id}/watchers",
     "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentTags": {
+    "method": "GET",
+    "path": "/incidents/{id}/tags",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentCustomFields": {
+    "method": "GET",
+    "path": "/incidents/{id}/custom-fields",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentTemplates": {
+    "method": "GET",
+    "path": "/incidents/templates",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createIncidentTemplate": {
+    "method": "POST",
+    "path": "/incidents/templates",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getIncidentTemplate": {
+    "method": "GET",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateIncidentTemplate": {
+    "method": "PATCH",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteIncidentTemplate": {
+    "method": "DELETE",
+    "path": "/incidents/templates/{templateId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "getIncidentCustomField": {
+    "method": "GET",
+    "path": "/incidents/{id}/custom-fields/{fieldId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setIncidentCustomField": {
+    "method": "PUT",
+    "path": "/incidents/{id}/custom-fields/{fieldId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "addIncidentTag": {
+    "method": "POST",
+    "path": "/incidents/{id}/tags",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "removeIncidentTag": {
+    "method": "DELETE",
+    "path": "/incidents/{id}/tags/{tagId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getIncidentRoutingDecision": {
+    "method": "GET",
+    "path": "/incidents/{id}/routing-decision",
+    "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
@@ -217,6 +1657,115 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getEscalationPolicyDependencies": {
+    "method": "GET",
+    "path": "/escalation-policies/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "validateEscalationPolicy": {
+    "method": "GET",
+    "path": "/escalation-policies/{id}/validation",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "previewStatusPage": {
+    "method": "GET",
+    "path": "/status-pages/{id}/preview",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listScheduleLayers": {
+    "method": "GET",
+    "path": "/schedules/{id}/layers",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createScheduleLayer": {
+    "method": "POST",
+    "path": "/schedules/{id}/layers",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getScheduleLayer": {
+    "method": "GET",
+    "path": "/schedules/{id}/layers/{layerId}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateScheduleLayer": {
+    "method": "PATCH",
+    "path": "/schedules/{id}/layers/{layerId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteScheduleLayer": {
+    "method": "DELETE",
+    "path": "/schedules/{id}/layers/{layerId}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "reorderScheduleLayers": {
+    "method": "PUT",
+    "path": "/schedules/{id}/layers/order",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "previewScheduleCoverage": {
+    "method": "POST",
+    "path": "/schedules/{id}/coverage/preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getScheduleDependencies": {
+    "method": "GET",
+    "path": "/schedules/{id}/dependencies",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listScheduleChanges": {
+    "method": "GET",
+    "path": "/schedules/{id}/changes",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "updateEscalationPolicy": {
     "method": "PATCH",
     "path": "/escalation-policies/{id}",
@@ -337,6 +1886,86 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listIntegrationTypes": {
+    "method": "GET",
+    "path": "/integrations/types",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createServiceIntegration": {
+    "method": "POST",
+    "path": "/services/{id}/integrations",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getIntegrationCredentialState": {
+    "method": "GET",
+    "path": "/integrations/{id}/credentials",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "rotateIntegrationCredentials": {
+    "method": "POST",
+    "path": "/integrations/{id}/credentials",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "validateIntegrationPayload": {
+    "method": "POST",
+    "path": "/integrations/{id}/test",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getIntegrationDiagnostics": {
+    "method": "GET",
+    "path": "/integrations/{id}/diagnostics",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "validateIntegrationConfiguration": {
+    "method": "POST",
+    "path": "/integrations/{id}/validate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIntegrationUsage": {
+    "method": "GET",
+    "path": "/integrations/{id}/usage",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "deleteIntegration": {
+    "method": "DELETE",
+    "path": "/integrations/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
   "updateIntegration": {
     "method": "PATCH",
     "path": "/integrations/{id}",
@@ -369,6 +1998,110 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listNotificationAttempts": {
+    "method": "GET",
+    "path": "/notifications/{id}/attempts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getNotificationFeedback": {
+    "method": "GET",
+    "path": "/notifications/{id}/feedback",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentResponseActivity": {
+    "method": "GET",
+    "path": "/incidents/{id}/response-activity",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentWarRooms": {
+    "method": "GET",
+    "path": "/incidents/{id}/war-rooms",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentAlerts": {
+    "method": "GET",
+    "path": "/incidents/{id}/alerts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentRunbookExecutions": {
+    "method": "GET",
+    "path": "/incidents/{id}/runbook-executions",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listIncidentNotificationAttempts": {
+    "method": "GET",
+    "path": "/incidents/{id}/notification-attempts",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getIncidentAvailableActions": {
+    "method": "GET",
+    "path": "/incidents/{id}/available-actions",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listRelatedIncidents": {
+    "method": "GET",
+    "path": "/incidents/{id}/related-incidents",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listOperationalEvents": {
+    "method": "GET",
+    "path": "/operational-events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listServiceChangeEvents": {
+    "method": "GET",
+    "path": "/services/{id}/change-events",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "previewEscalationPolicy": {
+    "method": "POST",
+    "path": "/escalation-policies/{id}/preview",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getServiceHealthSummary": {
+    "method": "GET",
+    "path": "/services/{id}/health-summary",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getPostmortem": {
     "method": "GET",
     "path": "/postmortems/{id}",
@@ -377,11 +2110,90 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listPostmortemVersions": {
+    "method": "GET",
+    "path": "/postmortems/{id}/versions",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listPostmortemActionItems": {
+    "method": "GET",
+    "path": "/postmortems/{id}/action-items",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "replacePostmortemActionItems": {
+    "method": "PUT",
+    "path": "/postmortems/{id}/action-items",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "updatePostmortemActionItem": {
+    "method": "PATCH",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deletePostmortemActionItem": {
+    "method": "DELETE",
+    "path": "/postmortems/{id}/action-items/{itemId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "publishPostmortem": {
+    "method": "POST",
+    "path": "/postmortems/{id}/publish",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "listPostmortemContributors": {
+    "method": "GET",
+    "path": "/postmortems/{id}/contributors",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "replacePostmortemContributors": {
+    "method": "PUT",
+    "path": "/postmortems/{id}/contributors",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
   "updatePostmortem": {
     "method": "PATCH",
     "path": "/postmortems/{id}",
     "kind": "item",
-    "idempotency": "natural",
+    "idempotency": "supported",
     "requiredHeaders": [],
     "bodyRequired": true
   },
@@ -415,6 +2227,199 @@
     "kind": "item",
     "idempotency": null,
     "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getReportCatalog": {
+    "method": "GET",
+    "path": "/reports/catalog",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "queryReportMetrics": {
+    "method": "POST",
+    "path": "/reports/query",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listSavedReports": {
+    "method": "GET",
+    "path": "/reports/saved",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createSavedReport": {
+    "method": "POST",
+    "path": "/reports/saved",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getSavedReport": {
+    "method": "GET",
+    "path": "/reports/saved/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateSavedReport": {
+    "method": "PATCH",
+    "path": "/reports/saved/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteSavedReport": {
+    "method": "DELETE",
+    "path": "/reports/saved/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": false
+  },
+  "createReportExport": {
+    "method": "POST",
+    "path": "/reports/exports",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getReportExport": {
+    "method": "GET",
+    "path": "/reports/exports/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadReportExport": {
+    "method": "GET",
+    "path": "/reports/exports/{id}/download",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "cancelReportExport": {
+    "method": "POST",
+    "path": "/reports/exports/{id}/cancel",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "listReportDashboards": {
+    "method": "GET",
+    "path": "/dashboards",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createReportDashboard": {
+    "method": "POST",
+    "path": "/dashboards",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "getReportDashboard": {
+    "method": "GET",
+    "path": "/dashboards/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getReportDashboardData": {
+    "method": "GET",
+    "path": "/dashboards/{id}/data",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "downloadReportDashboardData": {
+    "method": "GET",
+    "path": "/dashboards/{id}/export",
+    "kind": "binary",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "duplicateReportDashboard": {
+    "method": "POST",
+    "path": "/dashboards/{id}/duplicate",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": true
+  },
+  "listReportDashboardWidgets": {
+    "method": "GET",
+    "path": "/dashboards/{id}/widgets",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "replaceReportDashboardWidgets": {
+    "method": "PUT",
+    "path": "/dashboards/{id}/widgets",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "updateReportDashboard": {
+    "method": "PATCH",
+    "path": "/dashboards/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "deleteReportDashboard": {
+    "method": "DELETE",
+    "path": "/dashboards/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
     "bodyRequired": false
   },
   "executeRunbook": {
@@ -474,6 +2479,24 @@
     "idempotency": "natural",
     "requiredHeaders": [],
     "bodyRequired": true
+  },
+  "cancelScheduleOverride": {
+    "method": "DELETE",
+    "path": "/schedules/{id}/overrides/{overrideId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key"
+    ],
+    "bodyRequired": false
+  },
+  "getScheduleCoverage": {
+    "method": "GET",
+    "path": "/schedules/{id}/coverage",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
   },
   "getSchedule": {
     "method": "GET",
@@ -570,6 +2593,101 @@
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
+  },
+  "getServiceNotificationSettings": {
+    "method": "GET",
+    "path": "/services/{id}/notification-settings",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceNotificationSettings": {
+    "method": "PATCH",
+    "path": "/services/{id}/notification-settings",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceSupportHours": {
+    "method": "GET",
+    "path": "/services/{id}/support-hours",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceSupportHours": {
+    "method": "PUT",
+    "path": "/services/{id}/support-hours",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceClassificationPolicy": {
+    "method": "GET",
+    "path": "/services/{id}/response-policy/classification",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceClassificationPolicy": {
+    "method": "PUT",
+    "path": "/services/{id}/response-policy/classification",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getServiceSlaPolicy": {
+    "method": "GET",
+    "path": "/services/{id}/response-policy/sla",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceSlaPolicy": {
+    "method": "PUT",
+    "path": "/services/{id}/response-policy/sla",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
+  },
+  "getWorkspaceSlaPolicy": {
+    "method": "GET",
+    "path": "/settings/incident-sla",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateWorkspaceSlaPolicy": {
+    "method": "PUT",
+    "path": "/settings/incident-sla",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": [
+      "Idempotency-Key",
+      "If-Match"
+    ],
+    "bodyRequired": true
   },
   "updateService": {
     "method": "PATCH",

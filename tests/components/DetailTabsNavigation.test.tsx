@@ -1,3 +1,4 @@
+import React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DetailTabs from '@/components/ui/DetailTabs';
@@ -57,6 +58,7 @@ it('navigates once for a real pointer sequence and repeated selection while navi
   fireEvent.click(tab);
   expect(navigation.replace).toHaveBeenCalledTimes(1);
 });
+
 it('supports keyboard tab activation without duplicate server navigation', async () => {
   render(<DetailTabs tabs={tabs} navigationMode="server" />);
   const first = screen.getByRole('tab', { name: 'Overview' });
@@ -69,4 +71,32 @@ it('supports keyboard tab activation without duplicate server navigation', async
     expect(screen.getByRole('tab', { name: 'Runbooks' })).toHaveAttribute('aria-selected', 'true')
   );
   expect(navigation.replace).toHaveBeenCalledTimes(1);
+});
+
+it('supports controlled tab switching back and forth without dropping click events', async () => {
+  function ControlledTabsWrapper() {
+    const [current, setCurrent] = React.useState('overview');
+    return <DetailTabs tabs={tabs} activeTab={current} onTabChange={setCurrent} />;
+  }
+  render(<ControlledTabsWrapper />);
+  const runbooksTab = screen.getByRole('tab', { name: 'Runbooks' });
+  const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+
+  // 1. Switch to Runbooks
+  fireEvent.pointerDown(runbooksTab, { button: 0, pointerType: 'mouse' });
+  fireEvent.mouseDown(runbooksTab, { button: 0 });
+  fireEvent.click(runbooksTab);
+  await waitFor(() => expect(runbooksTab).toHaveAttribute('aria-selected', 'true'));
+
+  // 2. Switch back to Overview
+  fireEvent.pointerDown(overviewTab, { button: 0, pointerType: 'mouse' });
+  fireEvent.mouseDown(overviewTab, { button: 0 });
+  fireEvent.click(overviewTab);
+  await waitFor(() => expect(overviewTab).toHaveAttribute('aria-selected', 'true'));
+
+  // 3. Switch to Runbooks again (must not be blocked by stale selection ref)
+  fireEvent.pointerDown(runbooksTab, { button: 0, pointerType: 'mouse' });
+  fireEvent.mouseDown(runbooksTab, { button: 0 });
+  fireEvent.click(runbooksTab);
+  await waitFor(() => expect(runbooksTab).toHaveAttribute('aria-selected', 'true'));
 });

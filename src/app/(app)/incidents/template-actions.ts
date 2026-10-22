@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { IncidentUrgency } from '@prisma/client';
 import { assertIncidentTemplateNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
+import { createIncidentTemplate, deleteIncidentTemplate, incidentTemplateReadWhere, IncidentTemplateInputSchema } from '@/lib/incidents/templates';
 
 export async function createTemplate(formData: FormData) {
   try {
@@ -34,8 +35,9 @@ export async function createTemplate(formData: FormData) {
     throw error;
   }
 
-  await prisma.incidentTemplate.create({
-    data: {
+  await createIncidentTemplate(
+    prisma,
+    IncidentTemplateInputSchema.parse({
       name: normalizedName,
       description,
       title,
@@ -43,10 +45,10 @@ export async function createTemplate(formData: FormData) {
       defaultUrgency,
       defaultPriority: defaultPriority || null,
       defaultServiceId: defaultServiceId || null,
-      createdById: user.id,
       isPublic,
-    },
-  });
+    }),
+    user.id
+  );
 
   revalidatePath('/incidents/templates');
   revalidatePath('/incidents');
@@ -68,9 +70,7 @@ export async function getAllTemplates(userId?: string) {
   }
 
   const where = effectiveUserId
-    ? {
-        OR: [{ isPublic: true }, { createdById: effectiveUserId }],
-      }
+    ? incidentTemplateReadWhere(effectiveUserId, false)
     : { isPublic: true };
 
   const templates = await prisma.incidentTemplate.findMany({
@@ -92,22 +92,7 @@ export async function deleteTemplate(templateId: string) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
 
-  const template = await prisma.incidentTemplate.findUnique({
-    where: { id: templateId },
-    select: { createdById: true },
-  });
-
-  if (!template) {
-    throw new Error('Template not found');
-  }
-
-  if (user.role !== 'ADMIN' && template.createdById !== user.id) {
-    throw new Error('Unauthorized. You can only delete templates you created.');
-  }
-
-  await prisma.incidentTemplate.delete({
-    where: { id: templateId },
-  });
+  await deleteIncidentTemplate(prisma, templateId, user.id, user.role === 'ADMIN');
 
   revalidatePath('/incidents/templates');
 }

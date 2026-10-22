@@ -1238,9 +1238,10 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
     gap: 0.75rem !important;
   }
 
-  /* Compact list items - exclude toasts (each toast is an <li>) */
-  li:not(.login-card li):not([data-sonner-toaster] *) {
-    padding: 0.375rem 0 !important;
+  /* Compact unstyled list items - preserve component padding and list cards */
+  li:not(.login-card li):not([data-sonner-toaster] *):not([class*="px-"]):not([class*="p-"]):not([class*="pl-"]):not([class*="pr-"]):not(ul.divide-y li):not(ol.divide-y li) {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
   }
 
   /* Reduce hero section padding - exclude login */

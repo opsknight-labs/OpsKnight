@@ -2,13 +2,16 @@
   "specificationVersion": 1,
   "objective": "Complete the eight-phase OpsKnight REST API v2 enterprise plan without duplicating domain logic or overstating certification.",
   "releaseStatus": "not_certified",
-  "worktree": "opsknight-rest-enterprise",
-  "branch": "feat/rest-api-enterprise-completion",
+  "worktree": "opsknight-api-contracts",
+  "branch": "feat/api-13-enterprise-contracts",
   "sources": {
     "capabilities": "src/lib/api-v2/capability-catalog.ts",
     "operations": "src/lib/api-v2/openapi-registry.ts",
     "mutationContracts": "src/lib/api-v2/mutation-contract.ts",
-    "openapi": "sdk/openapi-v2.json"
+    "openapi": "sdk/openapi-v2.json",
+    "coveragePlan": "plans/rest-api-enterprise/complete-feature-coverage-plan.md",
+    "workflowInventory": "plans/rest-api-enterprise/workflow-inventory.json",
+    "commandStandard": "plans/rest-api-enterprise/domain-command-standard.md"
   },
   "phases": [
     {
@@ -35,11 +38,12 @@
         "Shared domain commands join the outer idempotency/audit transaction",
         "Concrete strong draft revision preconditions, including before idempotency replay",
         "Execution cancellation ownership and service-team boundaries",
-        "Credential migration checklist with role and PostgreSQL compatibility tests"
+        "Credential migration checklist with role and PostgreSQL compatibility tests",
+        "Explicit administrator-only subscriber contact/revocation scopes with safe DTOs and transactionally suppressed delivery"
       ],
       "remaining": [
         "Migrate older handwritten routes with equivalent resource contracts",
-        "Dedicated agent, secret, subscriber and rotation policies",
+        "Combined certification of the implemented Agent, secret and signing-rotation policies",
         "Complete cross-resource and negative authorization matrix for future operations"
       ]
     },
@@ -49,22 +53,28 @@
       "delivered": [
         "Six canonical incident lifecycle operations",
         "Shared UI/REST watcher commands",
-        "Active schedule participant add, move and remove operations"
+        "Active schedule participant add, move and remove operations",
+        "Five team membership/lead operations with shared UI/REST commands, SCIM restrictions, owner invariants, session revocation and all-writer revisions"
       ],
       "remaining": [
         "Incident custom-field updates, tags, templates and collaboration",
         "Layer editing, override cancellation and coverage previews",
-        "Team membership and manual identity administration",
+        "Managed team services/activity and manual user lifecycle administration",
         "Service settings and escalation usage/validation operations"
       ]
     },
     {
       "phase": 4,
-      "status": "pending",
+      "status": "in_progress",
       "remaining": [
-        "Integrate and certify the separate service-automation evaluator before exposing management",
-        "Integration setup/configuration/rotation/test/delete commands",
-        "Notification preference and provider diagnostics contracts"
+        "Complete combined-branch certification of the 17 implemented automation operations, including the deployed API-only lifecycle and upgrade evidence",
+        "Outbound webhook/ChatOps/Jira integration control plane and OAuth setup-session status APIs",
+        "Notification provider test-send and diagnostic deployment verification"
+      ],
+      "delivered": [
+        "Inbound integration types/create/configuration/enable-disable/validate/test/usage/diagnostics/credential-state/rotation/delete operations with explicit admin scopes",
+        "Encrypted routing keys with fingerprint lookup, one-time creation/rotation disclosure, 24-hour overlap ceiling and legacy upgrade tooling",
+        "PostgreSQL tests for concurrent idempotency replay, credential rotation/expiry, no-incident test validation and in-flight-safe deletion"
       ]
     },
     {
@@ -77,24 +87,36 @@
         "Optional reviewed-plan digest fence",
         "Cancellation requests retain CANCEL_REQUESTED semantics",
         "Privileged editable draft views with revision-bound preservation of hidden configuration and defaults",
-        "Serializable binding enablement and deterministic archive snapshot race coverage"
+        "Serializable binding enablement and deterministic archive snapshot race coverage",
+        "Eight metadata/lifecycle operations with canonical audit and revision fencing",
+        "Twelve service-rule, policy-check, discovery and readiness operations with trigger invariants",
+        "Seven execution intervention operations: scoped step/evidence/event reads, exact-plan approval/rejection and preview-authorized rerun, with canonical transactional audit and replay",
+        "Six explicit-scope fleet, policy, one-time enrollment and terminal revocation operations",
+        "Twenty pool/configuration, write-only secret/grant and Runbook settings operations with configuration revisions, durable replay and canonical audit",
+        "Safe pool retirement and exact secret usage inspection",
+        "Four execution-signing administration operations retaining all-Agent pin acknowledgement and 24-hour retirement grace",
+        "Shared claim fence and database authority revision serialize grants/membership/retirement across stale snapshots; targeted fleet reconciliation benchmarked"
       ],
       "remaining": [
-        "Metadata/lifecycle endpoints",
-        "Service rules and policy checks",
-        "Approvals, agents, pools, enrollment and secret grants",
-        "Docker and Kubernetes target-isolation/recovery certification"
+        "Combined final-image REST Agent lifecycle covering live retirement, secret grants, signing rotation, cancellation and multi-replica recovery; baseline basic HTTPS/physical Agent CI already passed",
+        "Mixed-version and broader enterprise release gates"
       ]
     },
     {
       "phase": 6,
-      "status": "pending",
+      "status": "in_progress",
       "remaining": [
-        "Status components/subscribers/branding and publication reconciliation",
+        "Status-page domain ownership, validated branding assets, preview and combined certification",
         "Structured postmortem impact, collaboration and action items",
-        "Durable report/export jobs and result authorization",
-        "Product decision on unfinished SLO management",
+        "Dashboard exports and broader report/export parity; metric export jobs now have encrypted artifacts and result authorization",
+        "Service-objective history/evaluation UI parity and combined certification of the four supported measurements",
         "Audit exports, dashboards and approved operational configuration"
+      ],
+      "delivered": [
+        "Five scoped subscriber administration operations",
+        "Eleven revision-fenced configuration/component operations",
+        "Three publication inspection/durable-retry operations using canonical reconciliation",
+        "Eleven service-objective operations with immutable definitions, explicit revision fences, precision-preserving history and bounded authorized evaluation jobs; administrator UI uses the same commands"
       ]
     },
     {
@@ -135,5 +157,149 @@
     "The temporary memory-backed database proves transaction behavior, not crash durability.",
     "The admin:manage runbook scope change requires the documented credential migration.",
     "Live SDK tests used a local production build and isolated PostgreSQL, not a customer production deployment."
-  ]
+  ],
+  "followupDelivery": {
+    "id": "API-13 through API-24",
+    "branch": "feat/api-13-enterprise-contracts",
+    "worktree": "opsknight-api-contracts",
+    "status": "in_progress",
+    "delivered": [
+      "Capability-family source mapping and delivery ownership",
+      "Preserved complete feature coverage plan and eight pending release gates",
+      "Shared command and operation admission standard",
+      "Inventory, source-path and registered mutation contract drift checks",
+      "Integrated service-automation branch a4e8723f6 into the combined worktree while retaining newer authentication, agent and notification safeguards",
+      "Shared global automation settings command and explicit-scope GET/PATCH with strong revisions and durable replay",
+      "Automation versioning commands support caller-owned transactions and credential-attributed canonical audit",
+      "Service automation draft GET/PUT and publication POST with dedicated scopes, team membership checks, strong revisions, canonical audit and generated SDK schemas",
+      "Nine automation configuration, validation, safe simulation, mode, history, editable restoration and redacted diagnostic operations; shared UI commands, fenced configuration revisions and typed SDK contracts",
+      "Discovery preview storage defaults off with administrator opt-in, pre-enqueue minimization, service-scoped keyed identities, bounded sensitive-field filtering, transactional opt-out cleanup and populated legacy upgrade evidence"
+    ],
+    "remaining": [
+      "Latest-commit CI and production qualification for the locally verified automation control plane",
+      "Remaining runbook, integration, schedule, identity, notification, status and reporting endpoint families",
+      "Full integration regression verification and combined-system Docker/Kind, load, HA and upgrade certification"
+    ],
+    "deliveryPolicy": "One PR (#886) for the entire approved plan, as explicitly requested by the user.",
+    "implementedAutomationOperations": [
+      "validateAutomation",
+      "simulateAutomation",
+      "restoreAutomationDraft",
+      "listAutomationDecisions",
+      "listAutomationObservations",
+      "listAutomationVersions",
+      "getAutomationVersion",
+      "getServiceAutomation",
+      "updateServiceAutomationMode",
+      "publishAutomationVersion",
+      "getAutomationDraft",
+      "saveAutomationDraft",
+      "getAutomationCandidate",
+      "discardAutomationCandidate",
+      "activateAutomationCandidate",
+      "getAutomationSettings",
+      "updateAutomationSettings"
+    ],
+    "registeredOperationCount": 314,
+    "automationEvidence": "plans/rest-api-enterprise/automation-m1-certification.json"
+  },
+  "candidateReadinessFollowUp": {
+    "status": "implemented_locally_verified_latest_ci_pending",
+    "evidence": "plans/rest-api-enterprise/automation-readiness-certification.json",
+    "operationCountUnchanged": 101,
+    "remaining": "Candidate isolation, remaining enterprise domains, final-commit CI and production release gates"
+  },
+  "runbookLifecycleFollowUp": {
+    "status": "implemented_locally_verified_latest_ci_pending",
+    "operationIds": [
+      "getRunbookMetadata",
+      "updateRunbookMetadata",
+      "archiveRunbook",
+      "restoreRunbook",
+      "checkRunbookDeletion",
+      "deleteRunbook",
+      "duplicateRunbook",
+      "compareRunbookVersions"
+    ],
+    "remaining": "Rules, agents, secrets, approvals, reruns, complete certification",
+    "evidence": "plans/rest-api-enterprise/runbook-lifecycle-certification.json"
+  },
+  "runbookServiceRules": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "operationIds": [
+      "listServiceRunbookRules",
+      "createServiceRunbookRule",
+      "getServiceRunbookRule",
+      "updateServiceRunbookRule",
+      "detachServiceRunbookRule",
+      "validateServiceRunbookRule",
+      "listRunbookRulePolicyChecks",
+      "requestRunbookRulePolicyChecks",
+      "activateServiceRunbookRule",
+      "pauseServiceRunbookRule",
+      "duplicateServiceRunbookRule",
+      "replaceRunbookRuleTriggers"
+    ],
+    "remaining": "Combined runbook certification, full enterprise coverage, mixed-version rollout and production load/HA acceptance remain open.",
+    "evidence": "plans/rest-api-enterprise/runbook-rules-certification.json"
+  },
+  "statusPageSubscribers": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 5,
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
+    "evidence": "plans/rest-api-enterprise/status-page-subscriber-certification.json"
+  },
+  "statusPageConfiguration": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 11,
+    "remaining": "Domains, validated branding assets, preview and combined status-page certification; other enterprise families.",
+    "evidence": "plans/rest-api-enterprise/status-page-configuration-certification.json",
+    "mutationContract": "Required concrete If-Match and Idempotency-Key; replay record/configuration/canonical audit commit atomically, publication runs after commit."
+  },
+  "registeredOperationCount": 314,
+  "statusPagePublication": {
+    "status": "local_checks_passed_latest_ci_pending",
+    "addedOperations": 3,
+    "remaining": "Domain ownership, validated assets, preview, and remaining enterprise families and combined certification.",
+    "mutationContract": "Required concrete If-Match and Idempotency-Key; accepted queue job, request audit and replay commit together. Worker canonical outcome audit and receipt commit together. Completion does not imply LIVE publication.",
+    "evidence": "plans/rest-api-enterprise/status-page-publication-certification.json"
+  },
+  "runbookFleet": {
+    "status": "partial",
+    "operations": [
+      "listRunbookAgents",
+      "getRunbookAgent",
+      "getRunbookAgentPolicyStatus",
+      "createRunbookAgentEnrollment",
+      "getRunbookAgentEnrollment",
+      "revokeRunbookAgent"
+    ],
+    "safety": [
+      "Explicit administrator fleet/enroll/revoke scopes, not implied by admin:manage",
+      "One-time token never stored or redisclosed by idempotency replay",
+      "Canonical shared UI/REST enrollment and revocation audits",
+      "Agent row lock serializes claims against terminal revocation",
+      "Fleet keyset pagination index"
+    ],
+    "remaining": [
+      "Combined final-image REST-driven fleet/pool/secret/signing lifecycle and multi-replica recovery certification"
+    ]
+  },
+  "teamAdministration": {
+    "status": "implemented_local_verification_in_progress",
+    "operations": [
+      "listTeamMembers",
+      "setTeamMember",
+      "removeTeamMember",
+      "getTeamLead",
+      "setTeamLead",
+      "listTeamServices",
+      "assignTeamService",
+      "listTeamActivity"
+    ],
+    "remaining": [
+      "Complete user identity lifecycle",
+      "Exact-head CI and final combined certification"
+    ]
+  }
 }

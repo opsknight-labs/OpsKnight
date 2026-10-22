@@ -166,7 +166,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               <SelectItem
                 key={opt.value}
                 value={opt.value}
-                className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                className="rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
               >
                 {opt.label}
               </SelectItem>

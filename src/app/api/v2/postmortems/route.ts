@@ -46,12 +46,17 @@ export const GET = defineV2Route({
       take: pagination.limit + 1,
       select: {
         id: true,
+        revision: true,
         incidentId: true,
         title: true,
         summary: true,
         rootCause: true,
         resolution: true,
         lessons: true,
+        impact: true,
+        timeline: true,
+        contributingFactors: true,
+        fiveWhys: true,
         status: true,
         isPublic: true,
         publishedAt: true,
@@ -104,6 +109,12 @@ export const POST = defineV2Route({
         userMessage: `Incident with id '${body.incidentId}' not found.`,
       });
     }
+    if (incident.status !== 'RESOLVED') {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'Postmortems can only be created for resolved incidents.',
+      });
+    }
 
     const existing = await db.postmortem.findUnique({
       where: { incidentId: body.incidentId },
@@ -126,6 +137,10 @@ export const POST = defineV2Route({
         rootCause: body.rootCause ?? null,
         resolution: body.resolution ?? body.mitigation ?? null,
         lessons: body.lessons ?? null,
+        impact: body.impact ?? undefined,
+        timeline: body.timeline ?? undefined,
+        contributingFactors: body.contributingFactors ?? undefined,
+        fiveWhys: body.fiveWhys ?? undefined,
         status: body.status,
         isPublic: body.isPublic,
         publishedAt: body.status === 'PUBLISHED' ? new Date() : null,
@@ -133,12 +148,17 @@ export const POST = defineV2Route({
       },
       select: {
         id: true,
+        revision: true,
         incidentId: true,
         title: true,
         summary: true,
         rootCause: true,
         resolution: true,
         lessons: true,
+        impact: true,
+        timeline: true,
+        contributingFactors: true,
+        fiveWhys: true,
         status: true,
         isPublic: true,
         publishedAt: true,
@@ -171,6 +191,6 @@ export const POST = defineV2Route({
       tx,
     });
 
-    return { status: 201, data: postmortem };
+    return { status: 201, data: postmortem, headers: { ETag: `"${postmortem.revision}"` } };
   },
 });

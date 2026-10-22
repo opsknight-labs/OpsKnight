@@ -1,13 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
-import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
+import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
   Activity,
+  AlertCircle,
   Archive,
+  ArrowRight,
   CheckCircle2,
+  Clock,
   FileX,
   Hash,
   History,
@@ -23,6 +26,7 @@ import {
 } from 'lucide-react';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { cn } from '@/lib/utils';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -71,7 +75,6 @@ export default async function RunbookDetailPage({
   const { id } = await params;
   const { query, page: rawVersionPage } = runbookPageQuery(await searchParams);
   const rawBindingPage = Math.max(1, Math.min(10000, Number(query.bindingPage) || 1));
-  const navigationPromise = getRunbookNavigationSummary();
   const permissionsPromise = getUserPermissions();
   const userPromise = getCurrentUser();
 
@@ -92,7 +95,7 @@ export default async function RunbookDetailPage({
     Math.max(1, Math.ceil(runbookMeta._count.bindings / 20))
   );
 
-  const [permissions, user, runbook, navigation, serviceCount, topServiceGroups] =
+  const [permissions, user, runbook, serviceCount, topServiceGroups, navigation] =
     await Promise.all([
       permissionsPromise,
       userPromise,
@@ -142,7 +145,6 @@ export default async function RunbookDetailPage({
           _count: { select: { executions: true, bindings: true, versions: true } },
         },
       }),
-      navigationPromise,
       prisma.service.count({ where: { runbookBindings: { some: { runbookId: id } } } }),
       prisma.serviceAutomationRule.groupBy({
         by: ['serviceId'],
@@ -151,6 +153,7 @@ export default async function RunbookDetailPage({
         orderBy: { _count: { serviceId: 'desc' } },
         take: 5,
       }),
+      getRunbookNavigationSummary(),
     ]);
   if (!runbook) notFound();
   const userTimeZone = getUserTimeZone(user);
@@ -388,6 +391,7 @@ export default async function RunbookDetailPage({
         action={publishDraftAction.bind(null, runbook.draftVersion.id, runbook.id)}
         label="Publish draft"
         variant="default"
+        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-xs"
         title={`Publish immutable v${runbook.draftVersion.version}?`}
         description="Only the saved draft is published. Save any builder changes first. Published definitions cannot be edited."
         successMessage="Draft published"
@@ -396,8 +400,13 @@ export default async function RunbookDetailPage({
       <ActionForm
         action={cloneVersionAction.bind(null, nextDraftSource.id, runbook.id)}
         successMessage="Draft created"
+        className="w-full sm:w-auto"
       >
-        <SubmitButton size="sm" pendingLabel="Creating draft…">
+        <SubmitButton
+          size="sm"
+          pendingLabel="Creating draft…"
+          className="w-full sm:w-auto bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs"
+        >
           <PencilLine className="h-4 w-4" aria-hidden="true" />
           Create next editable draft
         </SubmitButton>
@@ -409,6 +418,125 @@ export default async function RunbookDetailPage({
     successMetric.completed > 0
       ? `${Math.round((successMetric.succeeded / successMetric.completed) * 100)}%`
       : '100%';
+
+  const dangerZoneCard = hasManageCapability ? (
+    <div className="rounded-2xl border border-destructive/25 bg-card/60 dark:bg-card/30 backdrop-blur-xs overflow-hidden shadow-xs">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between border-b border-destructive/15 bg-destructive/[0.03] px-5 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 text-destructive">
+            <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div>
+            <h3 className="text-xs font-semibold text-foreground tracking-tight">Danger Zone</h3>
+            <p className="text-[11px] text-muted-foreground">
+              Lifecycle actions affecting all service bindings
+            </p>
+          </div>
+        </div>
+        <span className="hidden sm:inline-flex items-center rounded-md border border-destructive/20 bg-destructive/5 px-2 py-0.5 text-[10px] font-medium text-destructive">
+          Privileged
+        </span>
+      </div>
+
+      {/* Compact Actions List */}
+      <div className="divide-y divide-border/60">
+        {/* Row 1: Archive / Restore */}
+        <div className="flex flex-col gap-2.5 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground">
+              {isArchived ? 'Restore to active library' : 'Archive runbook'}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isArchived
+                ? 'Re-enables editing and service bindings.'
+                : 'Disables active execution while preserving audit history.'}
+            </p>
+          </div>
+          <div className="shrink-0">
+            {isArchived ? (
+              <ConfirmAction
+                action={handleRestoreRunbook}
+                title={`Restore ${runbook.name}?`}
+                description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
+                label="Restore Runbook"
+                variant="outline"
+                className="h-8 rounded-lg px-3 text-xs font-medium border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                successMessage="Runbook restored"
+              />
+            ) : (
+              <ConfirmAction
+                action={archiveRunbookAction.bind(null, runbook.id)}
+                title={`Archive ${runbook.name}?`}
+                description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
+                label="Archive Runbook"
+                variant="outline"
+                className="h-8 rounded-lg px-3 text-xs font-medium border-border/80 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5 transition-colors"
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Delete */}
+        <div className="flex flex-col gap-2.5 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-xs font-semibold text-destructive">Permanently delete runbook</p>
+            <p className="text-[11px] text-muted-foreground">
+              {deleteEligibility?.canDelete
+                ? 'No executions or published versions exist. Deletion is irreversible.'
+                : (deleteEligibility?.reason ??
+                  'Cannot delete: Runbook has execution history. Archive it to preserve evidence.')}
+            </p>
+          </div>
+          <div className="shrink-0">
+            {deleteEligibility?.canDelete ? (
+              <ConfigureSheet
+                title={`Delete ${runbook.name}`}
+                description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
+                trigger={
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 rounded-lg px-3 text-xs font-medium shadow-2xs"
+                  >
+                    Delete runbook
+                  </Button>
+                }
+              >
+                <ActionForm
+                  action={handleDeleteRunbook}
+                  className="space-y-4"
+                  successMessage="Runbook deleted"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="delete-confirmation" className="text-xs">
+                      Confirm runbook name or slug
+                    </Label>
+                    <Input
+                      id="delete-confirmation"
+                      name="confirmation"
+                      placeholder={runbook.slug}
+                      required
+                      autoComplete="off"
+                      className="font-mono text-xs rounded-xl"
+                    />
+                  </div>
+                  <SubmitButton variant="destructive" pendingLabel="Deleting…">
+                    Permanently delete runbook
+                  </SubmitButton>
+                </ActionForm>
+              </ConfigureSheet>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground select-none">
+                <Lock className="h-3 w-3" aria-hidden="true" />
+                Deletion locked
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
@@ -422,7 +550,7 @@ export default async function RunbookDetailPage({
         tag="Automation & Remediation Catalog"
         title={runbook.name}
         icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20 backdrop-blur-xs shadow-xs">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
             <Workflow className="h-6 w-6" aria-hidden="true" />
           </div>
         }
@@ -432,9 +560,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/40 text-[10px] font-mono gap-1"
+                className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[10px] font-mono gap-1"
               >
-                <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
                 Published v{runbook.publishedVersion.version}
               </Badge>
             )}
@@ -442,9 +570,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-amber-500/20 text-amber-100 border-amber-400/40 text-[10px] font-mono gap-1"
+                className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px] font-mono gap-1"
               >
-                <PencilLine className="h-3 w-3 text-amber-300" />
+                <PencilLine className="h-3 w-3 text-amber-400" />
                 Draft v{runbook.draftVersion.version}
               </Badge>
             )}
@@ -452,9 +580,9 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-rose-500/20 text-rose-100 border-rose-400/40 text-[10px] gap-1"
+                className="bg-rose-500/10 text-rose-300 border-rose-500/30 text-[10px] gap-1"
               >
-                <Archive className="h-3 w-3 text-rose-300" />
+                <Archive className="h-3 w-3 text-rose-400" />
                 Archived
               </Badge>
             )}
@@ -462,16 +590,16 @@ export default async function RunbookDetailPage({
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] gap-1"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] gap-1"
               >
-                <Users className="h-3 w-3" />
+                <Users className="h-3 w-3 text-slate-400" />
                 {runbook.ownerTeam.name}
               </Badge>
             ) : (
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-primary-foreground/10 text-primary-foreground/80 border-primary-foreground/20 text-[10px] gap-1"
+                className="bg-zinc-800/60 text-slate-400 border-zinc-700/60 text-[10px] gap-1"
               >
                 <Users className="h-3 w-3" />
                 No owner team
@@ -480,16 +608,16 @@ export default async function RunbookDetailPage({
             <Badge
               variant="outline"
               size="xs"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-mono gap-1"
+              className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px] font-mono gap-1"
             >
-              <Hash className="h-3 w-3" />
+              <Hash className="h-3 w-3 text-slate-400" />
               {runbook.slug}
             </Badge>
           </>
         }
         subtitle={
           <div className="space-y-1.5">
-            <p className="text-xs text-primary-foreground/85 leading-relaxed max-w-3xl">
+            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
               {runbook.description ||
                 'Enterprise automated remediation runbook with guardrails, parameter bindings, and auditable history.'}
             </p>
@@ -499,7 +627,7 @@ export default async function RunbookDetailPage({
                   <Link
                     key={tag}
                     href={`/runbooks?tag=${encodeURIComponent(tag)}`}
-                    className="rounded-full bg-primary-foreground/10 px-2.5 py-0.5 font-mono text-[10px] text-primary-foreground/90 ring-1 ring-inset ring-primary-foreground/20 hover:bg-primary-foreground/25 transition-colors"
+                    className="rounded-full bg-zinc-800/80 px-2.5 py-0.5 font-mono text-[10px] text-slate-300 border border-zinc-700/80 hover:bg-zinc-700/80 hover:text-white transition-colors"
                   >
                     #{tag}
                   </Link>
@@ -514,6 +642,7 @@ export default async function RunbookDetailPage({
             {canManage && (
               <RunbookDetailsSheet
                 runbook={{
+                  revision: runbook.revision,
                   name: runbook.name,
                   slug: runbook.slug,
                   description: runbook.description,
@@ -544,6 +673,7 @@ export default async function RunbookDetailPage({
             />
           </div>
         }
+        statsPlacement="bottom"
         stats={[
           {
             label: 'Live Version',
@@ -601,13 +731,25 @@ export default async function RunbookDetailPage({
       />
       <RunbookModuleNav summary={navigation} />
       <DetailTabs
-        defaultTab={runbook.draftVersion ? 'builder' : 'overview'}
+        defaultTab={
+          typeof query.tab === 'string' &&
+          ['overview', 'builder', 'versions', 'bindings', 'executions'].includes(query.tab)
+            ? query.tab
+            : runbook.draftVersion
+              ? 'builder'
+              : 'overview'
+        }
         tabs={[
           {
             id: 'overview',
             label: 'Overview',
             icon: <LayoutDashboard className="h-4 w-4" />,
-            content: overview,
+            content: (
+              <div className="space-y-6">
+                {overview}
+                {dangerZoneCard}
+              </div>
+            ),
           },
           {
             id: 'builder',
@@ -727,155 +869,190 @@ export default async function RunbookDetailPage({
             icon: <PlayCircle className="h-4 w-4" />,
             count: runbook._count.executions,
             content: (
-              <SectionCard
-                title="Recent executions"
-                description="The latest 30 runs across all versions."
-                icon={PlayCircle}
-                bodyClassName="p-0"
-                actions={
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={`/runbooks/executions?runbook=${runbook.id}`}>
-                      View all executions
-                    </Link>
-                  </Button>
-                }
-              >
-                {runbook.executions.length > 0 ? (
-                  <ul className="divide-y">
-                    {runbook.executions.map(execution => (
-                      <li
-                        key={execution.id}
-                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
-                      >
-                        <div className="min-w-0 space-y-0.5">
-                          <Link
-                            className="block text-sm font-medium underline-offset-4 hover:underline"
-                            href={`/runbooks/executions/${execution.id}`}
-                          >
-                            {formatTimestamp(execution.createdAt)}
-                            <span className="sr-only"> · Open full execution</span>
-                          </Link>
-                          <p className="text-xs text-muted-foreground">
-                            {execution.runbookVersion
-                              ? `Version ${execution.runbookVersion.version}`
-                              : 'Version unknown'}
-                            {execution.incidentId && (
-                              <>
-                                {' · '}
-                                <Link
-                                  className="text-primary underline-offset-4 hover:underline"
-                                  href={`/incidents/${execution.incidentId}?tab=runbooks`}
-                                >
-                                  Inspect incident execution
-                                </Link>
-                              </>
-                            )}
-                          </p>
-                        </div>
-                        <StatusBadge status={execution.status} />
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="p-5">
-                    <EmptyHint
-                      icon={PlayCircle}
-                      title="No executions yet"
-                      description="Run history appears here after responders start this runbook."
-                    />
+              <div className="space-y-6">
+                {/* Executions KPI Summary Grid */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Total Runs
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-foreground">
+                        {runbook._count.executions}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">recorded</span>
+                    </div>
                   </div>
-                )}
-              </SectionCard>
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Succeeded
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                        {successMetric.succeeded}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">passed</span>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Failed / Timeout
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                        {
+                          runbook.executions.filter(
+                            e => e.status === 'FAILED' || e.status === 'TIMED_OUT'
+                          ).length
+                        }
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">errors</span>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Success Rate
+                    </p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-foreground">
+                        {successRateDisplay}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">overall</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Executions List Card */}
+                <SectionCard
+                  title="Recent executions"
+                  description="The latest runs across all versions with execution status and incident linkage."
+                  icon={PlayCircle}
+                  bodyClassName="p-0"
+                  actions={
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl shadow-2xs font-medium"
+                    >
+                      <Link href={`/runbooks/executions?runbook=${runbook.id}`}>
+                        View all executions
+                        <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  }
+                >
+                  {runbook.executions.length > 0 ? (
+                    <ul className="divide-y divide-border/60">
+                      {runbook.executions.map(execution => {
+                        const isSucceeded = execution.status === 'SUCCEEDED';
+                        const isFailed =
+                          execution.status === 'FAILED' || execution.status === 'TIMED_OUT';
+                        const isRunning = [
+                          'RUNNING',
+                          'CLAIMED',
+                          'WAITING_APPROVAL',
+                          'WAITING_AGENT',
+                        ].includes(execution.status);
+
+                        return (
+                          <li
+                            key={execution.id}
+                            className="flex flex-col gap-3 px-6 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:py-5 last:pb-6"
+                          >
+                            <div className="flex items-start gap-3.5 min-w-0">
+                              <div
+                                className={cn(
+                                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border mt-0.5 shadow-2xs',
+                                  isSucceeded
+                                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                    : isFailed
+                                      ? 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                      : isRunning
+                                        ? 'border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-400 animate-pulse'
+                                        : 'border-border/60 bg-muted/60 text-muted-foreground'
+                                )}
+                              >
+                                {isSucceeded ? (
+                                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                                ) : isFailed ? (
+                                  <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                                ) : isRunning ? (
+                                  <Activity className="h-4 w-4" aria-hidden="true" />
+                                ) : (
+                                  <Clock className="h-4 w-4" aria-hidden="true" />
+                                )}
+                              </div>
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Link
+                                    href={`/runbooks/executions/${execution.id}`}
+                                    className="text-sm font-semibold text-foreground hover:text-primary transition-colors hover:underline underline-offset-4"
+                                  >
+                                    Run #{execution.id.slice(-8)}
+                                  </Link>
+                                  {execution.runbookVersion ? (
+                                    <span className="inline-flex items-center rounded-md border border-border/60 bg-muted/50 px-2 py-0.5 font-mono text-[11px] font-medium text-foreground">
+                                      v{execution.runbookVersion.version}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center rounded-md border border-border/40 bg-muted/30 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                                      v?
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-muted-foreground">
+                                    · {formatTimestamp(execution.createdAt)}
+                                  </span>
+                                </div>
+                                {execution.incidentId ? (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <span className="text-muted-foreground">Triggered for:</span>
+                                    <Link
+                                      href={`/incidents/${execution.incidentId}?tab=runbooks`}
+                                      className="inline-flex items-center gap-1 font-medium text-primary hover:underline underline-offset-4"
+                                    >
+                                      <ShieldAlert className="h-3 w-3 text-amber-500" />
+                                      Incident #{execution.incidentId.slice(-8)}
+                                    </Link>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">Manual run</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 sm:justify-end sm:shrink-0 pt-1 sm:pt-0 border-t border-border/40 sm:border-0">
+                              <StatusBadge status={execution.status} />
+                              <Button
+                                asChild
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                <Link href={`/runbooks/executions/${execution.id}`}>
+                                  <span>Inspect</span>
+                                  <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <div className="p-8">
+                      <EmptyHint
+                        icon={PlayCircle}
+                        title="No executions yet"
+                        description="Run history appears here after responders start this runbook."
+                      />
+                    </div>
+                  )}
+                </SectionCard>
+              </div>
             ),
           },
         ]}
       />
-      {hasManageCapability && (
-        <SectionCard
-          tone="danger"
-          icon={ShieldAlert}
-          title="Danger zone"
-          description="Lifecycle changes that affect every service using this runbook."
-          bodyClassName="divide-y divide-border/60 py-0"
-        >
-          <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {isArchived ? 'Restore to active library' : 'Archive runbook'}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {isArchived
-                  ? 'Re-enables management. Bindings stay disabled until reviewed.'
-                  : 'Disables all executions and bindings while preserving execution and audit history.'}
-              </p>
-            </div>
-            {isArchived ? (
-              <ConfirmAction
-                action={handleRestoreRunbook}
-                title={`Restore ${runbook.name}?`}
-                description="Restores this runbook to the active library. All service bindings will remain disabled until re-enabled."
-                label="Restore Runbook"
-                variant="outline"
-                successMessage="Runbook restored"
-              />
-            ) : (
-              <ConfirmAction
-                action={archiveRunbookAction.bind(null, runbook.id)}
-                title={`Archive ${runbook.name}?`}
-                description="This removes the Runbook from the active library and disables all bindings. Historical executions are preserved."
-                label="Archive Runbook"
-                variant="outline"
-              />
-            )}
-          </div>
-
-          <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-start">
-            <div className="max-w-xl space-y-1">
-              <p className="text-sm font-medium text-destructive">Permanently delete runbook</p>
-              <p className="text-xs text-muted-foreground">
-                {deleteEligibility?.canDelete
-                  ? 'This runbook has no published versions and no executions. Deletion is permanent.'
-                  : (deleteEligibility?.reason ??
-                    'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.')}
-              </p>
-            </div>
-            {deleteEligibility?.canDelete && (
-              <ConfigureSheet
-                title={`Delete ${runbook.name}`}
-                description={`To permanently delete this runbook, type its exact slug "${runbook.slug}" or name "${runbook.name}" to confirm.`}
-                trigger={
-                  <Button variant="destructive" size="sm" className="rounded-xl shadow-2xs">
-                    Delete runbook
-                  </Button>
-                }
-              >
-                <ActionForm
-                  action={handleDeleteRunbook}
-                  className="space-y-4"
-                  successMessage="Runbook deleted"
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="delete-confirmation" className="text-xs">
-                      Confirm runbook name or slug
-                    </Label>
-                    <Input
-                      id="delete-confirmation"
-                      name="confirmation"
-                      placeholder={runbook.slug}
-                      required
-                      autoComplete="off"
-                      className="font-mono text-xs rounded-xl"
-                    />
-                  </div>
-                  <SubmitButton variant="destructive" pendingLabel="Deleting…">
-                    Permanently delete runbook
-                  </SubmitButton>
-                </ActionForm>
-              </ConfigureSheet>
-            )}
-          </div>
-        </SectionCard>
-      )}
     </main>
   );
 }

@@ -5,12 +5,9 @@ import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
-import {
-  decryptProviderConfig,
-  encryptProviderConfig,
-  mergeSensitiveProviderFields,
-  SECRET_MASK,
-} from '@/lib/encrypted-provider-config';
+import { decryptProviderConfig, encryptProviderConfig } from '@/lib/encrypted-provider-config';
+import { notificationProviderKeySchema } from '@/lib/notifications/provider-schema';
+import { saveNotificationProvider } from '@/lib/notifications/providers';
 
 const SUPPORTED_PROVIDERS = new Set([
   'twilio',
@@ -48,16 +45,6 @@ async function getCommittedUpdatedAt(id: string): Promise<string> {
   return committed.updatedAt.toISOString();
 }
 
-function isSecretPlaceholder(value: unknown): boolean {
-  return (
-    value === SECRET_MASK ||
-    value === '********' ||
-    value === '' ||
-    value === undefined ||
-    value === null
-  );
-}
-
 async function recoverableExistingConfig(provider: string, config: Record<string, unknown> | null) {
   if (!config) return { config: {}, recoveredFromDecryptionError: false };
   try {
@@ -69,39 +56,6 @@ async function recoverableExistingConfig(provider: string, config: Record<string
     // Never reuse unreadable ciphertext as though it were plaintext. An administrator
     // may disable the provider or replace every secret with a new value.
     return { config: {}, recoveredFromDecryptionError: true };
-  }
-}
-
-function recoverySecretFields(provider: string): readonly string[] {
-  // WhatsApp override credentials are optional; Twilio's SMS credentials are
-  // the recoverable baseline for that provider.
-  switch (provider) {
-    case 'twilio':
-      return ['accountSid', 'authToken'];
-    case 'aws-sns':
-    case 'ses':
-      return ['accessKeyId', 'secretAccessKey'];
-    case 'resend':
-    case 'sendgrid':
-      return ['apiKey'];
-    case 'smtp':
-      return ['password'];
-    case 'web-push':
-      return ['vapidPrivateKey'];
-    default:
-      return [];
-  }
-}
-
-function assertRecoveryHasReplacementSecrets(provider: string, config: Record<string, unknown>) {
-  const suppliedValues = new Map(Object.entries(config));
-  const missing = recoverySecretFields(provider).filter(field =>
-    isSecretPlaceholder(suppliedValues.get(field))
-  );
-  if (missing.length > 0) {
-    throw new Error(
-      'This provider has unreadable credentials. Enter replacement values for all secret fields before enabling it.'
-    );
   }
 }
 
@@ -120,17 +74,15 @@ export async function updateNotificationProvider(
   expectedUpdatedAt?: string | null
 ): Promise<{ success: true; updatedAt: string }> {
   await assertAdmin();
-
   const normalizedProvider = provider.trim().toLowerCase();
-  if (!SUPPORTED_PROVIDERS.has(normalizedProvider)) {
+  const parsedProvider = notificationProviderKeySchema.safeParse(normalizedProvider);
+  if (!parsedProvider.success || !SUPPORTED_PROVIDERS.has(normalizedProvider)) {
     throw new Error(`Unsupported notification provider '${provider}'.`);
   }
-
   const user = await getCurrentUser();
   const existingProvider = providerId
     ? await prisma.notificationProvider.findUnique({ where: { id: providerId } })
     : await prisma.notificationProvider.findUnique({ where: { provider: normalizedProvider } });
-
   if (providerId && !existingProvider) {
     throw new SettingsChangedError();
   }
@@ -138,84 +90,26 @@ export async function updateNotificationProvider(
     throw new Error('Provider identity does not match the stored configuration. Reload the page.');
   }
 
-  const expectedRevision = parseExpectedUpdatedAt(expectedUpdatedAt);
-  if (existingProvider && !expectedRevision) {
+  const expectedTimestamp = parseExpectedUpdatedAt(expectedUpdatedAt);
+  if (existingProvider && !expectedTimestamp) {
     throw new Error('Settings revision is required. Reload the page and try again.');
   }
-  if (!existingProvider && expectedRevision) {
+  if (!existingProvider && expectedTimestamp) {
     throw new SettingsChangedError();
   }
-
-  const recovered = await recoverableExistingConfig(
-    normalizedProvider,
-    (existingProvider?.config as Record<string, unknown> | undefined) ?? null
-  );
-  if (enabled && recovered.recoveredFromDecryptionError) {
-    assertRecoveryHasReplacementSecrets(normalizedProvider, config);
+  if (existingProvider && expectedTimestamp?.getTime() !== existingProvider.updatedAt.getTime()) {
+    throw new SettingsChangedError();
   }
-  const mergedConfig = mergeSensitiveProviderFields(normalizedProvider, config, recovered.config);
-  const encryptedConfig = await encryptProviderConfig(normalizedProvider, mergedConfig);
-
-  const providerRecordId = await prisma.$transaction(async tx => {
-    let id: string;
-
-    if (existingProvider) {
-      const updateResult = await tx.notificationProvider.updateMany({
-        where: {
-          id: existingProvider.id,
-          provider: normalizedProvider,
-          updatedAt: expectedRevision!,
-        },
-        data: {
-          enabled,
-          config: encryptedConfig as Prisma.InputJsonValue,
-          updatedBy: user.id,
-        },
-      });
-
-      if (updateResult.count !== 1) {
-        throw new SettingsChangedError();
-      }
-      id = existingProvider.id;
-    } else {
-      const created = await tx.notificationProvider.create({
-        data: {
-          provider: normalizedProvider,
-          enabled,
-          config: encryptedConfig as Prisma.InputJsonValue,
-          updatedBy: user.id,
-        },
-        select: { id: true },
-      });
-      id = created.id;
-    }
-
-    await logAudit(
-      {
-        action: 'notification_provider.updated',
-        entityType: 'SYSTEM_CONFIG',
-        entityId: id,
-        actorId: user.id,
-        oldValue: existingProvider
-          ? { provider: normalizedProvider, enabled: existingProvider.enabled }
-          : null,
-        newValue: { provider: normalizedProvider, enabled },
-        details: {
-          provider: normalizedProvider,
-          recoveredFromDecryptionError: recovered.recoveredFromDecryptionError,
-        },
-      },
-      tx
-    );
-
-    return id;
+  const result = await saveNotificationProvider({
+    provider: parsedProvider.data,
+    enabled,
+    config,
+    actorId: user.id,
+    expectedRevision: existingProvider?.revision ?? null,
   });
-
-  const updatedAt = await getCommittedUpdatedAt(providerRecordId);
   revalidatePath('/settings/system');
   revalidatePath('/settings/notifications');
-
-  return { success: true, updatedAt };
+  return { success: true, updatedAt: result.updatedAt };
 }
 
 export async function generateVapidKeys(options?: {
@@ -256,8 +150,8 @@ export async function generateVapidKeys(options?: {
   const subject = options?.subject?.trim() || 'mailto:admin@example.com';
   const shouldRotate = !!options?.rotate;
   const keepPrevious = options?.keepPrevious !== false;
-  const nextHistory =
-    shouldRotate && keepPrevious && existingConfig.vapidPublicKey
+  const nextHistory = shouldRotate
+    ? keepPrevious && existingConfig.vapidPublicKey
       ? [
           {
             publicKey: String(existingConfig.vapidPublicKey),
@@ -265,7 +159,8 @@ export async function generateVapidKeys(options?: {
           },
           ...previousKeys,
         ]
-      : previousKeys;
+      : []
+    : previousKeys;
 
   const nextConfig = {
     ...existingConfig,

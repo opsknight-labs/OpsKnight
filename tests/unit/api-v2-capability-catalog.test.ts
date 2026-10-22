@@ -16,29 +16,95 @@ describe('truthful capability inventory', () => {
     );
     for (const capability of API_CAPABILITY_CATALOG) {
       expect(capability.explanation.length).toBeGreaterThan(30);
-      expect(capability.operationIds.length > 0).toBe(capability.status === 'available');
+      expect(capability.operationIds.length > 0).toBe(
+        ['available', 'partial'].includes(capability.status)
+      );
     }
   });
   it('retains explicit security and product decisions for unfinished plan areas', () => {
-    for (const id of [
-      'service-automation',
-      'identity-lifecycle',
-      'runbook-agents',
-      'runbook-secrets',
-      'status-management',
-      'report-exports',
-      'slo-management',
-      'operational-settings',
-    ]) {
+    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'incident-collaboration')).toMatchObject({
+      status: 'partial',
+      operationIds: ['listIncidentWarRooms'],
+    });
+    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'operational-settings')).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining(['getWorkspaceSlaPolicy', 'updateWorkspaceSlaPolicy']),
+    });
+    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'audit-export')).toMatchObject({
+      status: 'partial',
+      operationIds: ['createAuditExport', 'getAuditExport', 'downloadAuditExport'],
+    });
+    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'postmortem-workflows')).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining(['createPostmortem', 'updatePostmortem']),
+    });
+    expect(API_CAPABILITY_CATALOG.find(capability => capability.id === 'report-exports')).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining(['createReportExport', 'downloadReportExport']),
+    });
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'identity-lifecycle')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: [
+        'getUserAdministration',
+        'getUserDependencies',
+        'administerUser',
+        'getUserInvitationPolicy',
+        'createUserInvitation',
+        'getUserInvitation',
+        'renewUserInvitation',
+      ],
+    });
+    for (const id of ['runbook-agents', 'runbook-secrets']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
-        'not-supported'
+        'partial'
       );
     }
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'slo-management')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining([
+        'createServiceObjective',
+        'evaluateServiceObjective',
+        'getServiceObjectiveHistory',
+      ]),
+    });
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'service-automation')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining(['getAutomationDraft', 'publishAutomationVersion']),
+    });
+    expect(
+      API_CAPABILITY_CATALOG.find(capability => capability.id === 'status-management')
+    ).toMatchObject({
+      status: 'partial',
+      operationIds: expect.arrayContaining([
+        'listStatusPageSubscribers',
+        'removeStatusPageSubscriber',
+        'getStatusPageContent',
+        'updateStatusPagePrivacy',
+        'setStatusPageServices',
+      ]),
+    });
     for (const id of ['agent-protocol', 'scim', 'provider-oauth', 'sensitive-maintenance']) {
       expect(API_CAPABILITY_CATALOG.find(capability => capability.id === id)?.status).toBe(
         'restricted'
       );
     }
+  });
+  it('keeps publication identity separate from the draft validator', () => {
+    const spec = getOpenApiV2Spec() as {
+      paths: Record<
+        string,
+        Record<string, { responses: Record<string, { headers?: Record<string, unknown> }> }>
+      >;
+    };
+    expect(
+      spec.paths['/services/{id}/automation/publish'].post.responses['200'].headers?.ETag
+    ).toBeUndefined();
   });
   it('documents required preconditions and their error statuses', () => {
     const spec = getOpenApiV2Spec() as {

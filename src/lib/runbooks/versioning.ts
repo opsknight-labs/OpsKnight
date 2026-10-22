@@ -1,10 +1,10 @@
+import { AppError } from '@/lib/errors';
 import 'server-only';
 import { assertAuthoringDefinition } from './authoring-validation';
 
 import type { Prisma, RunbookInput, RunbookVersion } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
-import { runSerializableTransaction } from '@/lib/db-utils';
 import {
   computeDefinitionChecksum,
   parseRunbookDefinition,
@@ -40,38 +40,14 @@ const EMPTY_DEFINITION: RunbookDefinition = {
   ],
 };
 
-export type VersioningClient = Prisma.TransactionClient;
-
-export type VersioningActor = string | { id: string; apiKeyId: string };
-
-async function logVersioningAudit(
-  actor: VersioningActor,
-  event: Parameters<typeof logAudit>[0],
-  tx: VersioningClient
-) {
-  return logAudit(
-    {
-      ...event,
-      ...(typeof actor === 'string'
-        ? {}
-        : {
-            source: 'API' as const,
-            details: {
-              ...(event.details as Prisma.InputJsonObject | undefined),
-              apiClientId: actor.apiKeyId,
-            },
-          }),
-    },
-    tx
-  );
-}
-
-function inVersioningTransaction<T>(
-  tx: VersioningClient | undefined,
-  command: (client: VersioningClient) => Promise<T>
-): Promise<T> {
-  return tx ? command(tx) : runSerializableTransaction(command);
-}
+import {
+  runRunbookCommand as inVersioningTransaction,
+  logRunbookCommandAudit as logVersioningAudit,
+  type RunbookCommandClient,
+  type RunbookCommandActor,
+} from './command-context';
+export type VersioningClient = RunbookCommandClient;
+export type VersioningActor = RunbookCommandActor;
 
 export function toInputCreateMany(inputs: RunbookInputInput[]) {
   return inputs.map((input, index) => ({
@@ -122,7 +98,7 @@ export async function createRunbook(
       },
       include: { inputs: { orderBy: { sequence: 'asc' } } },
     });
-    await tx.runbook.update({
+    const updatedRunbook = await tx.runbook.update({
       where: { id: runbook.id },
       data: { draftVersionId: draft.id },
     });
@@ -137,7 +113,7 @@ export async function createRunbook(
       },
       tx
     );
-    return { ...runbook, draftVersionId: draft.id, draftVersion: draft };
+    return { ...updatedRunbook, draftVersion: draft };
   });
 }
 
@@ -145,13 +121,16 @@ export async function updateRunbookMetadata(
   runbookId: string,
   input: UpdateRunbookInput,
   actor: VersioningActor,
-  client?: VersioningClient
+  client?: VersioningClient,
+  expectedRevision?: number
 ) {
   const actorId = typeof actor === 'string' ? actor : actor.id;
   const data = updateRunbookSchema.parse(input);
   return inVersioningTransaction(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { action: 'update' });
     const current = await tx.runbook.findUniqueOrThrow({ where: { id: runbookId } });
+    if (expectedRevision !== undefined && current.revision !== expectedRevision)
+      throw new AppError({ code: 'PRECONDITION_FAILED' });
     const updated = await tx.runbook.update({ where: { id: runbookId }, data });
     await logVersioningAudit(
       actor,
@@ -407,6 +386,8 @@ export async function archiveRunbook(
   const actorId = typeof actor === 'string' ? actor : actor.id;
   return inVersioningTransaction(client, async tx => {
     await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'archive' });
+    const current = await tx.runbook.findUniqueOrThrow({ where: { id: runbookId } });
+    if (current.archivedAt) return current;
     const archivedAt = new Date();
     const runbook = await tx.runbook.update({
       where: { id: runbookId },

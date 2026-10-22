@@ -27,6 +27,29 @@ export function tabForAnchor(anchor: string, hasRunbooks: boolean): string | nul
   return null;
 }
 
+export function isIncidentTabAvailable(
+  tabId: string,
+  options: {
+    hasResponse?: boolean;
+    hasRunbooks?: boolean;
+    hasPostmortem?: boolean;
+  }
+): boolean {
+  switch (tabId) {
+    case 'overview':
+    case 'timeline':
+      return true;
+    case 'response':
+      return Boolean(options.hasResponse);
+    case 'runbooks':
+      return Boolean(options.hasRunbooks);
+    case 'postmortem':
+      return Boolean(options.hasPostmortem);
+    default:
+      return false;
+  }
+}
+
 export default function IncidentDetailTabs({
   defaultTab = 'overview',
   eventCount,
@@ -38,13 +61,47 @@ export default function IncidentDetailTabs({
   postmortemStatus,
   className,
 }: IncidentDetailTabsProps) {
-  const [tab, setTab] = useState(defaultTab);
   const hasRunbooks = !!runbooksContent;
+  const hasResponse = !!responseContent;
+  const hasPostmortem = !!postmortemContent;
+
+  const isAvailable = React.useCallback(
+    (t: string) => isIncidentTabAvailable(t, { hasResponse, hasRunbooks, hasPostmortem }),
+    [hasResponse, hasRunbooks, hasPostmortem]
+  );
+
+  const [tab, setTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('tab');
+      if (p && isAvailable(p)) {
+        return p;
+      }
+    }
+    return defaultTab && isAvailable(defaultTab) ? defaultTab : 'overview';
+  });
+
+  if (!isAvailable(tab) && tab !== 'overview') {
+    setTab('overview');
+  }
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = new URLSearchParams(window.location.search).get('tab');
+      if (p && isAvailable(p)) {
+        setTab(p);
+      } else {
+        setTab('overview');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isAvailable]);
+
   useEffect(() => {
     const sync = () => {
       const anchor = decodeURIComponent(window.location.hash.slice(1));
       const target = tabForAnchor(anchor, hasRunbooks);
-      if (!target) return;
+      if (!target || !isAvailable(target)) return;
       setTab(target);
       // Wait for the newly selected tab panel to mount before scrolling.
       window.requestAnimationFrame(() =>
@@ -56,9 +113,26 @@ export default function IncidentDetailTabs({
     sync();
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
-  }, [hasRunbooks]);
+  }, [hasRunbooks, isAvailable]);
+
+  const handleTabChange = (nextTab: string) => {
+    if (!isAvailable(nextTab)) return;
+    setTab(nextTab);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (nextTab === 'overview') {
+        params.delete('tab');
+      } else {
+        params.set('tab', nextTab);
+      }
+      const query = params.toString();
+      const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+      window.history.replaceState(null, '', newUrl);
+    }
+  };
+
   return (
-    <Tabs value={tab} onValueChange={setTab} className={cn('w-full', className)}>
+    <Tabs value={tab} onValueChange={handleTabChange} className={cn('w-full', className)}>
       <div className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden text-card-foreground transition-all">
         {/* Compact, Unified Header Bar */}
         <div className="px-3 sm:px-4 py-2 border-b border-border/80 bg-muted/30 flex items-center justify-between gap-3">

@@ -1,0 +1,180 @@
+{
+  "sourceParent": "1a7d0e06aeb7c499120c7912118e907afec96fc7",
+  "createdAt": "2026-10-19T11:54:21.881Z",
+  "environment": "Shared local PostgreSQL 16/Docker VM; reference performance only",
+  "measurementNotes": [
+    "Query count covers the complete transaction and canonical audit.",
+    "WAL positions are cluster-wide and may include co-resident writes.",
+    "Every iteration changes one Agent and checks membership in half the configured pools; unrelated Agent membership remains untouched.",
+    "Advisory-lock statement duration includes execution and waiting at millisecond resolution; it is not isolated lock-wait attribution. Production load/HA remain pending."
+  ],
+  "runs": [
+    {
+      "agents": 100,
+      "pools": 100,
+      "samples": [
+        {
+          "elapsedMs": 54.20637500000021,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 1,
+          "revisionDelta": 50,
+          "walBytes": 96256,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 23.00258299999996,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 100,
+          "walBytes": 117216,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 25.263458999999784,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 100,
+          "walBytes": 105640,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 28.210125000000062,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 100,
+          "walBytes": 110728,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 35.348165999999765,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 1,
+          "revisionDelta": 100,
+          "walBytes": 102112,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 22.02449999999999,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 100,
+          "walBytes": 91008,
+          "membershipCount": 50
+        }
+      ]
+    },
+    {
+      "agents": 1000,
+      "pools": 1000,
+      "samples": [
+        {
+          "elapsedMs": 247.6087910000001,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 500,
+          "walBytes": 1083992,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 412.8905,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1169824,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 350.90879099999984,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1133912,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 373.74762499999997,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1132712,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 508.69916699999976,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1112912,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 366.7992919999997,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1100208,
+          "membershipCount": 500
+        }
+      ]
+    },
+    {
+      "agents": 5000,
+      "pools": 1000,
+      "samples": [
+        {
+          "elapsedMs": 597.5504999999994,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 500,
+          "walBytes": 1069856,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 565.8394170000001,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1163808,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 619.1696660000007,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1133528,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 581.4917499999992,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 1,
+          "revisionDelta": 1000,
+          "walBytes": 1143000,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 669.0273749999997,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1142640,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 546.0196250000008,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1085624,
+          "membershipCount": 500
+        }
+      ]
+    }
+  ],
+  "sourceSha256": {
+    "src/lib/runbooks/pool-labels.ts": "d995b680bffd91ee1eb48aa615d791fc1daa8c23a0f188853bfa26a58186f4cd",
+    "src/lib/runbooks/pool-commands.ts": "fd6acf81b121f1f4cdf055c28be41301a8249eb6c58c8188a69660d30bbe20e2",
+    "tests/benchmarks/runbook-fleet.ts": "ae529b1777e79cf44629099c96f6f21a37f310332b0fbd8c951e549f1c08b34b"
+  }
+}

@@ -5,6 +5,7 @@ import { assertCanModifyService, getUserPermissions } from '@/lib/rbac';
 import { emitAuditEvent } from '@/lib/audit';
 import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 import type { AuthorizedPolicyActor } from './policy-actor';
+import type { Prisma } from '@prisma/client';
 
 const windowSchema = z
   .object({
@@ -124,7 +125,8 @@ export const supportHoursPolicySchema = z
 
 export async function saveSupportHoursPolicy(
   raw: unknown,
-  authorizedActor?: AuthorizedPolicyActor
+  authorizedActor?: AuthorizedPolicyActor,
+  client?: Prisma.TransactionClient
 ) {
   const input = supportHoursPolicySchema.parse(raw);
   const mode = input.mode ?? (input.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
@@ -145,8 +147,8 @@ export async function saveSupportHoursPolicy(
   } else if (!permissions.capabilities.includes('admin.manage')) {
     throw new IncidentResponsePolicyError('UNAUTHORIZED');
   }
-  return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`response-support:${input.scopeKey}`}, 0))`;
+  const save = async (tx: Prisma.TransactionClient) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`response-support:${input.scopeKey}`}, 0))::text`;
     const previous = await tx.responseSupportHoursPolicy.findFirst({
       where: { scopeKey: input.scopeKey, sealedAt: { not: null } },
       orderBy: { version: 'desc' },
@@ -194,10 +196,12 @@ export async function saveSupportHoursPolicy(
           windowCount: sealed.windows.length,
           exceptionCount: sealed.exceptions.length,
           slaClockUnaffected: true,
+          apiClientId: authorizedActor?.apiClientId ?? null,
         },
       },
       tx
     );
     return sealed;
-  });
+  };
+  return client ? save(client) : prisma.$transaction(save);
 }

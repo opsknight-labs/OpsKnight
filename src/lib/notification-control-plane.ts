@@ -1,3 +1,7 @@
+import {
+  invitationDeliveryRevoked,
+  type InvitationDeliveryPolicy,
+} from '@/lib/users/invitation-policy';
 import 'server-only';
 
 import crypto from 'crypto';
@@ -125,6 +129,7 @@ export type CentralNotificationPayload =
     }
   | {
       kind: 'EMAIL';
+      invitationPolicy?: InvitationDeliveryPolicy;
       to: string;
       subject: string;
       html?: string;
@@ -293,7 +298,8 @@ const centralNotificationInputSchema = z
   })
   .strict();
 
-type NotificationStore = Pick<Prisma.TransactionClient, 'notification'>;
+type NotificationStore = Pick<Prisma.TransactionClient, 'notification'> &
+  Partial<Pick<Prisma.TransactionClient, 'userNotificationEndpoint'>>;
 
 type DeliveryResult = {
   success: boolean;
@@ -542,11 +548,12 @@ export async function createCentralNotificationIntent(
   );
   let unavailableEndpointStatus: string | undefined;
   if (input.recipientType === 'USER' && input.userId) {
-    const endpoint = await syncUserNotificationEndpoint({
-      userId: input.userId,
-      channel: input.channel,
-      address: input.recipientAddress,
-    });
+    const endpoint = await syncUserNotificationEndpoint(
+      { userId: input.userId, channel: input.channel, address: input.recipientAddress },
+      store.userNotificationEndpoint
+        ? { userNotificationEndpoint: store.userNotificationEndpoint }
+        : undefined
+    );
     if (!endpoint.available) unavailableEndpointStatus = endpoint.status;
   }
   const serializedPayload = JSON.stringify(input.payload);
@@ -968,6 +975,22 @@ type AuthenticationDeliveryMetadata = {
   userId: string | null;
 };
 
+/** New invitation payloads bind the recipient, immutable user and current generation. */
+async function userInvitationDeliveryRevoked(
+  payload: CentralNotificationPayload,
+  candidate?: AuthenticationDeliveryMetadata
+): Promise<string | null> {
+  if (payload.kind !== 'EMAIL' || payload.invitationPolicy === undefined) return null;
+  if (
+    !candidate ||
+    candidate.sourceType !== 'USER_INVITATION' ||
+    candidate.userId !== payload.invitationPolicy?.userId ||
+    candidate.recipientId !== candidate.userId
+  )
+    return 'Invitation delivery has invalid recipient metadata.';
+  return invitationDeliveryRevoked(payload.invitationPolicy, payload.to);
+}
+
 /** Recheck queued security mail at dispatch, including address changes after enqueue. */
 async function authenticationSecurityDeliveryRevoked(
   payload: CentralNotificationPayload,
@@ -1179,6 +1202,16 @@ async function dispatchPayload(
           error: `Pinned Email provider ${payload.providerKey} is unavailable`,
         };
       return executeProvider(CircuitBreakers.email(payload.providerKey), async () => {
+        try {
+          const revoked = await userInvitationDeliveryRevoked(payload, authenticationMetadata);
+          if (revoked) return { success: true, skipped: true, error: revoked };
+        } catch {
+          return {
+            success: false,
+            errorCode: 'INVITATION_POLICY_UNAVAILABLE',
+            error: 'Invitation recipient policy unavailable.',
+          };
+        }
         if (authenticationMetadata) {
           try {
             const revoked = await authenticationSecurityDeliveryRevoked(
@@ -2163,6 +2196,7 @@ async function deliverCentralNotificationOwned(
   let supersededReason: string | null;
   try {
     supersededReason =
+      (await userInvitationDeliveryRevoked(payload, candidate)) ??
       (await authenticationSecurityDeliveryRevoked(payload, candidate)) ??
       (await statusSubscriberDeliveryRevoked(payload)) ??
       (await statusWebhookDeliveryRevoked(payload)) ??

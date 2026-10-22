@@ -212,7 +212,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const [actor, user] = await Promise.all([getCurrentAuthorizationActor(), getCurrentUser()]);
   const userTimeZone = getUserTimeZone(user);
   const canReadRunbooks = hasCapability(actor.role, CAPABILITIES.RUNBOOK_READ_ALL);
-  const loadRunbookView = canReadRunbooks && activeTab === 'runbooks';
+  const loadRunbookView = canReadRunbooks;
   const incidentAccess = incidentReadWhere(actor);
 
   let canManageService = false;
@@ -1271,9 +1271,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px]"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Users className="h-3 w-3 mr-1" />
+                <Users className="h-3 w-3 mr-1 text-slate-400" />
                 {service.team.name}
               </Badge>
             )}
@@ -1282,7 +1282,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px]"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
                 {service.slaTier}
               </Badge>
@@ -1292,9 +1292,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               <Badge
                 variant="outline"
                 size="xs"
-                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px]"
+                className="bg-zinc-800/80 text-slate-300 border-zinc-700/80 text-[10px]"
               >
-                <Globe className="h-3 w-3 mr-1" />
+                <Globe className="h-3 w-3 mr-1 text-slate-400" />
                 {service.region}
               </Badge>
             )}
@@ -1302,10 +1302,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         }
         subtitle={
           <div className="space-y-1">
-            <p className="text-xs text-primary-foreground/85 leading-relaxed max-w-3xl">
+            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
               {service.description || 'No description provided for this service.'}
             </p>
-            <p className="text-[11px] text-primary-foreground/70">
+            <p className="text-[11px] text-slate-400">
               30-day reliability metrics • Active incident count excludes snoozed alerts
             </p>
           </div>
@@ -1370,9 +1370,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         escalationContent={escalationContent}
         runbooksContent={
           !canReadRunbooks ? (
-            <p className="p-4 text-sm">Runbook access requires additional permission.</p>
-          ) : !loadRunbookView ? (
-            <Link href={`/services/${id}?tab=runbooks`}>Load service Runbooks</Link>
+            <p className="p-4 text-sm text-muted-foreground">
+              Runbook access requires additional permission.
+            </p>
           ) : (
             <ServiceRunbooks
               serviceId={service.id}

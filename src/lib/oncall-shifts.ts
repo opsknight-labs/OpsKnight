@@ -172,16 +172,19 @@ export async function getActiveOnCallShifts(
 }
 
 /**
- * Resolves all shifts across all schedules within a time window for coverage & on-call hours calculations.
+ * Resolves shifts in a time window for coverage and on-call hours calculations.
+ * Pass a schedule id for bounded single-schedule API reads.
  */
 export async function getWindowOnCallShifts(
   windowStart: Date,
-  windowEnd: Date
+  windowEnd: Date,
+  scheduleId?: string
 ): Promise<DynamicOnCallShift[]> {
   if (!prisma?.onCallSchedule?.findMany) {
     return [];
   }
   const schedules = await prisma.onCallSchedule.findMany({
+    where: scheduleId ? { id: scheduleId } : undefined,
     include: {
       layers: {
         include: {

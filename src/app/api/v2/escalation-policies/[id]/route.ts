@@ -199,29 +199,26 @@ export const DELETE = withV2Observability(async function DELETE(
     enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.ESCALATION_POLICY_MANAGE);
 
     const { id } = await params;
-    const policy = await prisma.escalationPolicy.findUnique({
-      where: { id },
-      include: {
-        services: { select: { id: true, name: true } },
-      },
-    });
-
-    if (!policy) {
-      throw new AppError({
-        code: 'ESCALATION_POLICY_NOT_FOUND',
-        userMessage: `Escalation policy with id '${id}' was not found.`,
-      });
-    }
-
-    if (policy.services.length > 0) {
-      const serviceNames = policy.services.map(s => s.name).join(', ');
-      throw new AppError({
-        code: 'ESCALATION_POLICY_IN_USE',
-        userMessage: `Cannot delete escalation policy '${policy.name}' because ${policy.services.length} service(s) are using it (${serviceNames}). Reassign those services first.`,
-      });
-    }
-
     await prisma.$transaction(async tx => {
+      // A service assigning this policy must acquire a key-share FK lock. FOR UPDATE
+      // serializes that assignment with the dependency check and deletion.
+      const locked = await tx.$queryRaw<Array<{ id: string; name: string }>>`
+        SELECT "id", "name" FROM "EscalationPolicy" WHERE "id" = ${id} FOR UPDATE
+      `;
+      const policy = locked[0];
+      if (!policy) throw new AppError({ code: 'ESCALATION_POLICY_NOT_FOUND' });
+      const [services, versionRefs, decisions] = await Promise.all([
+        tx.service.count({ where: { escalationPolicyId: id } }),
+        tx.automationVersionPolicyRef.count({ where: { escalationPolicyId: id } }),
+        tx.incidentAutomationDecision.count({ where: { escalationPolicyId: id } }),
+      ]);
+      if (services || versionRefs || decisions) {
+        throw new AppError({
+          code: 'ESCALATION_POLICY_IN_USE',
+          userMessage: 'Reassign services and retire historical automation references before deleting this policy.',
+          details: { services, versionRefs, decisions },
+        });
+      }
       await tx.escalationRuleCondition.deleteMany({ where: { rule: { policyId: id } } });
       await tx.escalationRule.deleteMany({ where: { policyId: id } });
       await tx.escalationPolicy.delete({ where: { id } });
@@ -234,10 +231,10 @@ export const DELETE = withV2Observability(async function DELETE(
         details: { name: policy.name },
         tx,
       });
-    });
+    }, { timeout: 10_000 });
 
     return apiV2Success(
-      { success: true, message: `Escalation policy '${policy.name}' deleted successfully.` },
+      { success: true, message: 'Escalation policy deleted successfully.' },
       { headers: rlHeaders }
     );
   } catch (error) {

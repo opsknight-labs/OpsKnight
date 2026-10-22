@@ -6,10 +6,10 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { prismaToAppError } from '@/lib/prisma-errors';
-import { CustomFieldCreateSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { emitAuditEvent } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
+import { createDefinitionSchema, validateDefinition } from '@/lib/custom-fields/definitions';
 
 const CUSTOM_FIELD_KEY_CONFLICT = {
   code: 'VALIDATION_FAILED' as const,
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
     }
 
-    const parsed = CustomFieldCreateSchema.safeParse(body);
+    const parsed = createDefinitionSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(
         new AppError({
@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
       );
     }
     const { name, key, type, required, defaultValue, options, showInList } = parsed.data;
+    validateDefinition(parsed.data);
 
     const customField = await prisma.$transaction(async tx => {
       // Serialize the read-next-order/create sequence so concurrent admins cannot

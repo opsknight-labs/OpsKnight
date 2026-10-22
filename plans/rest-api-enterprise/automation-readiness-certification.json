@@ -1,0 +1,72 @@
+{
+  "sourceParent": "200b38aa0c187cf1554852855f341d88ab5b54be",
+  "measuredAt": "2026-10-18T10:15:59.710207+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Candidate activation readiness follow-up; incomplete enterprise coverage and production qualification.",
+  "policyDefaults": {
+    "minimumEvaluations": 100,
+    "maximumEvidenceAgeHours": 48,
+    "maximumPendingObservations": 0,
+    "maximumErrorRate": 0
+  },
+  "productionBuild": "passed",
+  "typecheck": "passed",
+  "changedSourceLint": "passed with zero warnings",
+  "generatedClientsCheck": "passed",
+  "unit": {
+    "passed": 1239,
+    "files": 62
+  },
+  "postgresRegression": {
+    "passed": 144,
+    "skipped": 1,
+    "files": 23
+  },
+  "readinessPostgresCases": 12,
+  "browser": {
+    "startTime": "2026-10-18T10:12:11.726Z",
+    "duration": 207060.566,
+    "expected": 40,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "liveSdk": "TypeScript and Python production HTTP workflows passed",
+  "upgradeEvidence": "automation-readiness-upgrade.json",
+  "localLoadEvidence": "automation-readiness-local-load.json",
+  "limitations": [
+    "Daily bucket freshness is coarse, not event-time freshness.",
+    "Defaults are review floors, not production workload representativeness.",
+    "Policy governs candidate activation; existing mode-change contract is unchanged.",
+    "Readiness revision precondition is optional for older REST clients; UI submits it.",
+    "Readiness policy tests use explicit synthetic aggregates; browser journey independently proves real worker evidence.",
+    "Candidate evaluation remains inline; production p95/p99 limits and deployment profile are awaiting user input.",
+    "No mixed-version, Docker/Kind, one/two/four replica HA or full domain certification is claimed."
+  ],
+  "sourceSha256": {
+    "prisma/schema.prisma": "b74ac3da061c468d25575eb78d7338d505f5388eb28174504e7df676a3f4cadc",
+    "sdk/openapi-v2.json": "c07f67d620c7cf62ac9a6c7f175b17f499c2230ddb386b7d9dcd509ce862b69b",
+    "sdk/python/opsknight_v2/models.py": "dc346ad96fb3b2b2d588ec478cfa86f170c2858e53459f5eeb46ee45edccf583",
+    "sdk/typescript/schema.ts": "450e4909953a72643298e0c7ce93d83d8b3282e10427c0ad1ac5e4851d377d79",
+    "src/app/(app)/services/[id]/automation/actions.ts": "52e41cf8814f2845865b578bfc97906d571fabbe31628161f36150744fd75694",
+    "src/app/api/v2/services/[id]/automation/candidate/route.ts": "8674595d481dfe6d7a2964d44e1afab1a546258bf52b5eda6f2b86bf3bf8de17",
+    "src/app/api/v2/services/[id]/automation/candidates/activate/route.ts": "694ea2e7af5778e8f6c48b58caa3aa75a3768be47a340a1bcfea695da6660cdd",
+    "src/components/automation/AutomationReviewDialog.tsx": "4eda07eb9824ddbbb5d09a32dca2086e060c3d2185aa5e2317190bbb4431c21f",
+    "src/components/automation/AutomationWorkspace.tsx": "7a284f40ae3203ceaac0d872d1cb8c6cc1e89a01140435e4abd67755b6b09898",
+    "src/components/settings/AutomationSettings.tsx": "1be1d2a5817f9f4a7a7092667296231c1e996da25af9451bd680fd1d6d5cd6f5",
+    "src/lib/api-v2/enterprise-openapi.ts": "36a4934d8e8d0a7dcd740a56ad5fd4bb947103cf953499f4491496163e70d1e9",
+    "src/lib/automation/settings-command.ts": "7c23511a368450cb94764d31b7235876f34d42398aeb51917e02b9ae331f0c8c",
+    "src/lib/automation/settings.ts": "601ae826d66b8b61966c3a70df45e8fddcca6f76e5aae0bb79d5f2b8ec7e1463",
+    "src/lib/automation/versioning.ts": "40250c83e4c1bfcdbefa0eb74c3ddc97e3f5b1062340dfc36db36c391818b04d",
+    "tests/e2e/automation.spec.ts": "c96512bff55a6f249ada2268819a1f3b14b3f7344a8d28b8cfae9113f8ff54a3",
+    "tests/integration/automation-candidate-comparison.test.ts": "77201c06969065d0269cb4c9cb5bd76435637b5a66a74385832bc23fb220f55b",
+    "tests/integration/automation-certification.test.ts": "0c773eae55e2e3be4efa0842e1cf94fde96d88b4284d72ede9a7c6054eee08b9",
+    "tests/integration/automation-settings.test.ts": "25c564db12df5d16673eaed42de18e66f55ac02ba449591cc8a36edf7bbf95a3",
+    "tests/unit/api-v2-automation-settings.test.ts": "20b37288856adcfc983d3078e3d421ad78d228f3318994ca4faf8910ac64cfa1",
+    "prisma/migrations/20261018103000_automation_readiness_policy/migration.sql": "bce7c0772e82191e41b775bf8f83cc96bbbde8747333e4db28174c4f219c1675",
+    "prisma/migrations/20261018104000_automation_settings_policy_fence/migration.sql": "480ec291b96dd2cdcb7dba7ced5442d1c181c13519f6f054b1f6b46e80962be3",
+    "src/lib/automation/readiness-policy.ts": "98084cd9986be7ccdd63fccb06ea7934f38818d894b7255e1852641235f646f1",
+    "src/lib/automation/readiness.ts": "ff5d6dd54ce93278918d1134bb6e28621cf7b1129375fa2a883ed63588e86a5d",
+    "tests/integration/automation-readiness-policy.test.ts": "619a26444bcbfe66cd15405d2ce01b79f0bfea8d4211941ab6bf4c86469e1a2a"
+  }
+}

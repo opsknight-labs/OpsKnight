@@ -106,6 +106,10 @@ class Client:
                 raw = response.read(_MAX_RESPONSE_BYTES + 1)
                 if len(raw) > _MAX_RESPONSE_BYTES:
                     raise ValueError("API response exceeds the supported size.")
+                if 200 <= status < 300 and definition["kind"] == "binary":
+                    if not response.headers.get("Content-Type", "").lower().startswith("application/json"):
+                        raise ValueError("API returned an unexpected export content type.")
+                    return raw
                 payload = None
                 if raw:
                     try:

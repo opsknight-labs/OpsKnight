@@ -67,20 +67,25 @@ export default function DetailHeroBanner({
         </Link>
       )}
 
-      {/* Main Glassmorphic Hero Banner */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 text-slate-100 shadow-xl ring-1 ring-white/5">
+      {/* Main Glassmorphic Hero Banner (Matching OpsKnight Command Center & Services style) */}
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-3.5 sm:p-4.5 md:p-5 text-slate-100 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
 
-        <div className="relative flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+        <div
+          className={cn(
+            'relative flex flex-col justify-between gap-3.5 lg:flex-row',
+            statsPlacement === 'bottom' ? 'lg:items-start' : 'lg:items-center'
+          )}
+        >
           {/* Left: Icon/Avatar & Identity Details */}
-          <div className="flex items-start gap-3.5">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             {icon && <div className="shrink-0">{icon}</div>}
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {(tag || badges) && (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {tag && (
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                       {tag}
                     </p>
                   )}
@@ -88,100 +93,107 @@ export default function DetailHeroBanner({
                 </div>
               )}
 
-              <h1 className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-white md:text-[1.65rem]">
+              <h1 className="mt-0.5 text-lg sm:text-xl md:text-2xl font-extrabold tracking-tight text-white">
                 {title}
               </h1>
 
               {subtitle && (
-                <div className="mt-1 text-xs text-slate-300 leading-relaxed">{subtitle}</div>
+                <div className="mt-0.5 text-xs text-slate-300 leading-relaxed max-w-3xl">
+                  {subtitle}
+                </div>
               )}
             </div>
           </div>
 
-          {/* Right: Summary Metric Capsules & Action Slots (Inline mode) */}
+          {/* Right: Summary Metric Capsules & Action Slots (Inline mode or Header Actions) */}
           {(statsPlacement !== 'bottom' || bannerActions) && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div
+              className={cn(
+                'flex shrink-0 items-center gap-3',
+                statsPlacement === 'bottom'
+                  ? 'w-full sm:w-auto sm:justify-end'
+                  : 'flex-col sm:flex-row items-stretch sm:items-center'
+              )}
+            >
               {statsPlacement !== 'bottom' && stats.length > 0 && (
-                <div
-                  className={cn(
-                    'grid gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs',
-                    stats.length === 1 && 'grid-cols-1 min-w-[120px]',
-                    stats.length === 2 && 'grid-cols-2 min-w-[200px]',
-                    stats.length === 3 && 'grid-cols-3 min-w-[280px]',
-                    stats.length === 4 &&
-                      'grid-cols-2 sm:grid-cols-4 min-w-[240px] sm:min-w-[360px]',
-                    stats.length >= 5 &&
-                      'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 min-w-[280px] lg:min-w-[480px]'
-                  )}
-                >
-                  {stats.map((stat, idx) => {
-                    const statContent = (
-                      <>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                          {stat.label}
-                        </p>
-                        <div
-                          className={cn(
-                            'mt-0.5 flex items-center justify-center gap-1 text-sm font-bold text-white min-w-0 max-w-full',
-                            stat.valueClassName
-                          )}
-                        >
-                          {stat.icon && <span className="shrink-0">{stat.icon}</span>}
-                          <span
-                            className="truncate max-w-full"
-                            title={
-                              stat.tooltip ??
-                              (typeof stat.value === 'string' ? stat.value : undefined)
-                            }
-                          >
-                            {stat.value}
-                          </span>
-                        </div>
-                        {stat.subtext && (
-                          <p className="text-[9px] text-slate-400 mt-0.5 truncate">
-                            {stat.subtext}
+                <div className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto">
+                  <div
+                    className={cn(
+                      'flex sm:grid gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs',
+                      stats.length === 1 && 'sm:grid-cols-1 sm:min-w-[120px]',
+                      stats.length === 2 && 'sm:grid-cols-2 sm:min-w-[200px]',
+                      stats.length === 3 && 'sm:grid-cols-3 sm:min-w-[280px]',
+                      stats.length === 4 && 'sm:grid-cols-4 sm:min-w-[360px]',
+                      stats.length === 5 && 'sm:grid-cols-5 sm:min-w-[440px]',
+                      stats.length >= 6 &&
+                        'sm:grid-cols-3 lg:grid-cols-6 sm:min-w-[360px] lg:min-w-[520px]'
+                    )}
+                  >
+                    {stats.map((stat, idx) => {
+                      const statContent = (
+                        <>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            {stat.label}
                           </p>
-                        )}
-                      </>
-                    );
+                          <div
+                            className={cn(
+                              'mt-0.5 flex items-center justify-center gap-1 text-sm font-bold text-white min-w-0 max-w-full',
+                              stat.valueClassName
+                            )}
+                          >
+                            {stat.icon && <span className="shrink-0">{stat.icon}</span>}
+                            <span
+                              className="truncate max-w-full"
+                              title={
+                                stat.tooltip ??
+                                (typeof stat.value === 'string' ? stat.value : undefined)
+                              }
+                            >
+                              {stat.value}
+                            </span>
+                          </div>
+                          {stat.subtext && (
+                            <p className="text-[9px] text-slate-400 mt-0.5 truncate">
+                              {stat.subtext}
+                            </p>
+                          )}
+                        </>
+                      );
 
-                    const itemClassName = cn(
-                      'min-w-0 overflow-hidden rounded-lg px-2.5 py-1.5 text-center transition-all duration-150',
-                      idx > 0 && stats.length <= 3 && 'border-l border-zinc-800/80',
-                      idx > 0 && stats.length === 4 && 'sm:border-l sm:border-zinc-800/80',
-                      idx % 2 === 1 &&
-                        stats.length === 4 &&
-                        'border-l border-zinc-800/80 sm:border-l',
-                      idx > 0 && stats.length >= 5 && 'lg:border-l lg:border-zinc-800/80',
-                      idx % 2 === 1 &&
-                        stats.length >= 5 &&
-                        'border-l border-zinc-800/80 lg:border-l',
-                      stat.href &&
-                        'hover:bg-zinc-800/60 hover:text-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
-                      stat.active &&
-                        'bg-zinc-800/80 border-zinc-700/80 ring-1 ring-white/10 font-bold',
-                      stat.className
-                    );
+                      const itemClassName = cn(
+                        'flex-1 sm:flex-initial min-w-[95px] sm:min-w-0 overflow-hidden rounded-lg px-2.5 py-1.5 text-center transition-all duration-150',
+                        idx > 0 && 'border-l border-zinc-800/80',
+                        stat.href &&
+                          'hover:bg-zinc-800/60 hover:text-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
+                        stat.active &&
+                          'bg-zinc-800/90 text-white font-bold ring-1 ring-white/10 shadow-xs',
+                        stat.className
+                      );
 
-                    return stat.href ? (
-                      <Link
-                        key={stat.label || idx}
-                        href={stat.href}
-                        className={itemClassName}
-                        aria-label={`Filter by ${stat.label}`}
-                      >
-                        {statContent}
-                      </Link>
-                    ) : (
-                      <div key={stat.label || idx} className={itemClassName}>
-                        {statContent}
-                      </div>
-                    );
-                  })}
+                      return stat.href ? (
+                        <Link
+                          key={stat.label || idx}
+                          href={stat.href}
+                          className={itemClassName}
+                          aria-label={`Filter by ${stat.label}`}
+                        >
+                          {statContent}
+                        </Link>
+                      ) : (
+                        <div key={stat.label || idx} className={itemClassName}>
+                          {statContent}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
-              {bannerActions && <div className="shrink-0">{bannerActions}</div>}
+              {bannerActions && (
+                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                  {bannerActions}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -190,23 +202,25 @@ export default function DetailHeroBanner({
         {statsPlacement === 'bottom' && stats.length > 0 && (
           <div
             className={cn(
-              'mt-5 grid gap-2 sm:gap-3',
+              'mt-3.5 pt-3 border-t border-zinc-800/70 grid gap-1.5 sm:gap-2',
               stats.length === 1 && 'grid-cols-1',
               stats.length === 2 && 'grid-cols-2',
               stats.length === 3 && 'grid-cols-1 sm:grid-cols-3',
               stats.length === 4 && 'grid-cols-2 sm:grid-cols-4',
-              stats.length >= 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+              stats.length === 5 && 'grid-cols-2 sm:grid-cols-5',
+              stats.length === 6 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
+              stats.length >= 7 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
             )}
           >
             {stats.map((stat, idx) => {
               const statContent = (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate w-full">
+                  <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate w-full">
                     {stat.label}
                   </p>
                   <div
                     className={cn(
-                      'mt-0.5 flex h-7 items-center justify-center gap-1.5 text-sm sm:text-base font-extrabold text-white min-w-0 max-w-full px-1',
+                      'mt-0.5 flex h-6 items-center justify-center gap-1.5 text-xs sm:text-sm md:text-base font-extrabold text-white min-w-0 max-w-full px-1',
                       stat.valueClassName
                     )}
                   >
@@ -231,10 +245,11 @@ export default function DetailHeroBanner({
               );
 
               const itemClassName = cn(
-                'min-w-0 overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[72px]',
+                'min-w-0 overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2 sm:p-2.5 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[58px]',
+                idx === 4 && stats.length === 5 && 'col-span-2 sm:col-span-1',
                 stat.href &&
-                  'hover:bg-zinc-800/60 hover:border-zinc-700/80 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
-                stat.active && 'bg-zinc-800/80 border-zinc-700/80 ring-1 ring-white/10 font-bold',
+                  'hover:bg-zinc-800/80 hover:border-zinc-700/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
+                stat.active && 'bg-zinc-800/90 border-zinc-700/80 ring-1 ring-white/10 font-bold',
                 stat.className
               );
 
@@ -287,13 +302,13 @@ export function DetailHeroBannerSkeleton({
       )}
 
       {/* Main Glassmorphic Hero Banner Container */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 shadow-xl ring-1 ring-white/5">
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.02] blur-3xl" />
 
         <div className="relative flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           {/* Left: Icon & Titles */}
           <div className="flex items-start gap-3.5">
-            <Skeleton className="h-12 w-12 shrink-0 rounded-xl bg-zinc-800/80 ring-1 ring-white/10" />
+            <Skeleton className="h-12 w-12 shrink-0 rounded-2xl bg-zinc-800/80 ring-1 ring-white/10" />
             <div className="space-y-2 min-w-0">
               <Skeleton className="h-3.5 w-32 bg-zinc-800/80 rounded-sm" />
               <Skeleton className="h-6 sm:h-7 w-48 sm:w-56 bg-zinc-700/80 rounded-md" />
@@ -342,18 +357,23 @@ export function DetailHeroBannerSkeleton({
         {statsCount > 0 && statsPlacement === 'bottom' && (
           <div
             className={cn(
-              'mt-5 grid gap-2 sm:gap-3',
+              'mt-3.5 pt-3 border-t border-zinc-800/70 grid gap-1.5 sm:gap-2',
               statsCount === 1 && 'grid-cols-1',
               statsCount === 2 && 'grid-cols-2',
               statsCount === 3 && 'grid-cols-1 sm:grid-cols-3',
               statsCount === 4 && 'grid-cols-2 sm:grid-cols-4',
-              statsCount >= 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+              statsCount === 5 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+              statsCount === 6 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
+              statsCount >= 7 && 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
             )}
           >
             {Array.from({ length: statsCount }).map((_, idx) => (
               <div
                 key={idx}
-                className="rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 flex flex-col items-center justify-center gap-1.5 min-h-[72px]"
+                className={cn(
+                  'rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2 sm:p-2.5 flex flex-col items-center justify-center gap-1.5 min-h-[58px]',
+                  idx === 4 && statsCount === 5 && 'col-span-2 sm:col-span-1'
+                )}
               >
                 <Skeleton className="h-2.5 w-16 bg-zinc-800/80 rounded-xs" />
                 <Skeleton className="h-5 w-10 bg-zinc-700/80 rounded-xs" />

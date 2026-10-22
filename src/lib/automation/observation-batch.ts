@@ -1,10 +1,15 @@
+import { clearObservationJobPreviews } from './observation-payload-privacy';
+import { getAutomationSettings } from './settings';
+import { isSensitiveObservation, observationValueHash } from './observation-privacy';
 /* eslint-disable security/detect-object-injection -- Rollup counter keys come from a fixed typed constant list. */
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import type { ObservationJob } from './jobs';
 
 const receipt = (job: ObservationJob) =>
-  `AUTOMATION_OBSERVATION_RECEIPT:${createHash('sha256').update(JSON.stringify(job)).digest('hex')}`;
+  `AUTOMATION_OBSERVATION_RECEIPT:${createHash('sha256')
+    .update(JSON.stringify([job.serviceId, job.logicalKey]))
+    .digest('hex')}`;
 
 export type ObservationBatchResult = {
   recorded: boolean;
@@ -18,6 +23,7 @@ export async function persistObservationBatch(
   current: ObservationJob,
   parse: (payload: unknown) => ObservationJob | null
 ): Promise<ObservationBatchResult> {
+  await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR SHARE`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`automation-observations:${current.serviceId}`}, 0))`;
   if (await tx.backgroundJob.findUnique({ where: { id: receipt(current) } }))
     return { recorded: false, unmapped: [] };
@@ -43,6 +49,8 @@ export async function persistObservationBatch(
     seen.add(id);
     return true;
   });
+  const allowPreviews =
+    (await getAutomationSettings(tx)).automationStoreObservationPreviews === true;
   let remaining = Math.max(
     0,
     5000 -
@@ -63,15 +71,17 @@ export async function persistObservationBatch(
     for (const job of group) {
       const eventIdentities = new Set<string>();
       for (const observed of job.observations) {
-        const hash = createHash('sha256').update(observed.value).digest('hex');
-        const source =
-          observed.source ?? (job.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
+        if (isSensitiveObservation(observed)) continue;
+        const hash = observed.valueHash ?? observationValueHash(current.serviceId, observed.value);
+        if (!hash) continue;
+        const source = observed.source ?? (job.integrationType === 'EVENTS_API' ? 'EVENT' : 'PROVIDER');
         const identity = JSON.stringify([observed.key, observed.path, source, hash]);
         if (eventIdentities.has(identity)) continue;
         eventIdentities.add(identity);
         const prior = observations.get(identity);
         observations.set(identity, {
           ...observed,
+          value: allowPreviews ? observed.value : '',
           hash,
           count: (prior?.count ?? 0) + 1,
           integrationType: job.integrationType,
@@ -163,6 +173,10 @@ export async function persistObservationBatch(
       ),
     });
   }
+  await clearObservationJobPreviews(
+    tx,
+    jobs.map(job => job.logicalKey)
+  );
   await tx.backgroundJob.createMany({
     data: jobs.map(job => ({
       id: receipt(job),

@@ -1,0 +1,317 @@
+{
+  "sourceCommit": "53e86ca490489ca5ffe2fbd6a76fb3dbc962ec4b",
+  "pr": 886,
+  "status": "ci_passed_feature_coverage_incomplete",
+  "checks": [
+    {
+      "name": "validate-release-tag",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117322947549"
+    },
+    {
+      "name": "validate",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525138/job/117322927128"
+    },
+    {
+      "name": "L0 Syntax, Config & Capacity Validation",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525080/job/117322926845"
+    },
+    {
+      "name": "authentication",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525086/job/117322926970"
+    },
+    {
+      "name": "multi-replica-failover-load",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525075/job/117322926828"
+    },
+    {
+      "name": "teams-contract-and-delivery",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525103/job/117322927029"
+    },
+    {
+      "name": "Detect validation changes",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322926945"
+    },
+    {
+      "name": "Detect validation changes",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322917256"
+    },
+    {
+      "name": "validate",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525134/job/117322927007"
+    },
+    {
+      "name": "CodeQL",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117322927159"
+    },
+    {
+      "name": "automation",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525098/job/117322926948"
+    },
+    {
+      "name": "Fast validation (L0 lint/typecheck + L1 unit)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525116/job/117322927301"
+    },
+    {
+      "name": "release-quality",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117322928090"
+    },
+    {
+      "name": "L1-L5 Swarm Convergence, Scaling, Secret Rotation & Mode Switching",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525080/job/117322973475"
+    },
+    {
+      "name": "published-release-upgrade",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525086/job/117322927031"
+    },
+    {
+      "name": "Native Linux Agent artifacts & installer verification",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322927123"
+    },
+    {
+      "name": "Native Linux Agent artifacts & installer verification",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322917025"
+    },
+    {
+      "name": "ESLint Security",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117322927201"
+    },
+    {
+      "name": "Application build & budgets (canonical E2E artifact)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525116/job/117322927095"
+    },
+    {
+      "name": "integration-certification",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117322928512"
+    },
+    {
+      "name": "Emergency recovery browser certification",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525086/job/117322926862"
+    },
+    {
+      "name": "Runbook maintenance alert rules",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957529"
+    },
+    {
+      "name": "Runbook maintenance alert rules",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952545"
+    },
+    {
+      "name": "SCA (Dependencies & Containers)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117322927177"
+    },
+    {
+      "name": "Database integration (L2)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525116/job/117322927272"
+    },
+    {
+      "name": "build",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117322927685"
+    },
+    {
+      "name": "Runbook authoring and browser matrix",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957585"
+    },
+    {
+      "name": "Runbook authoring and browser matrix",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952594"
+    },
+    {
+      "name": "Secret Scanning (TruffleHog)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117322927225"
+    },
+    {
+      "name": "Auth browser E2E (L3)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525116/job/117323928498"
+    },
+    {
+      "name": "sbom-provenance",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117324590577"
+    },
+    {
+      "name": "Runbook fault injection and database safety",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957548"
+    },
+    {
+      "name": "Runbook fault injection and database safety",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952559"
+    },
+    {
+      "name": "IaC Security (Checkov)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117322927008"
+    },
+    {
+      "name": "Mobile & PWA browser E2E (L3)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525116/job/117323928465"
+    },
+    {
+      "name": "pgbouncer-image",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117324590670"
+    },
+    {
+      "name": "DAST (OWASP ZAP)",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117322927901"
+    },
+    {
+      "name": "Disposable Docker and Kind physical actions",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957520"
+    },
+    {
+      "name": "Disposable Docker and Kind physical actions",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952595"
+    },
+    {
+      "name": "test",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525116/job/117324941182"
+    },
+    {
+      "name": "agent-image",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117324590779"
+    },
+    {
+      "name": "Authenticated HTTP idle-fleet capacity",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957523"
+    },
+    {
+      "name": "Authenticated HTTP idle-fleet capacity",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952540"
+    },
+    {
+      "name": "SAST (CodeQL & ESLint)",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117323412491"
+    },
+    {
+      "name": "promote-release-tags",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117324590995"
+    },
+    {
+      "name": "Real HTTPS Agent enrollment and deployment candidate",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957572"
+    },
+    {
+      "name": "Real HTTPS Agent enrollment and deployment candidate",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952609"
+    },
+    {
+      "name": "Security Summary",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525142/job/117323677867"
+    },
+    {
+      "name": "native-agent-release-artifacts",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117324591094"
+    },
+    {
+      "name": "deployment-manifests / validate",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957614"
+    },
+    {
+      "name": "deployment-manifests / validate",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952730"
+    },
+    {
+      "name": "publish-github-release",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525152/job/117324591226"
+    },
+    {
+      "name": "swarm-manifests / L0 Syntax, Config & Capacity Validation",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117322957665"
+    },
+    {
+      "name": "swarm-manifests / L0 Syntax, Config & Capacity Validation",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117322952767"
+    },
+    {
+      "name": "swarm-manifests / L1-L5 Swarm Convergence, Scaling, Secret Rotation & Mode Switching",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007525130/job/117323058435"
+    },
+    {
+      "name": "swarm-manifests / L1-L5 Swarm Convergence, Scaling, Secret Rotation & Mode Switching",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/actions/runs/39007521607/job/117323023956"
+    },
+    {
+      "name": "ESLint",
+      "conclusion": "NEUTRAL",
+      "url": "https://github.com/opsknight-labs/OpsKnight/runs/117323208482"
+    },
+    {
+      "name": "Checkov",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/runs/117323058596"
+    },
+    {
+      "name": "CodeQL",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/runs/117323382448"
+    },
+    {
+      "name": "Trivy",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/runs/117323083407"
+    },
+    {
+      "name": "\ud83d\udd12 Security: Scan Summary",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/opsknight-labs/OpsKnight/runs/117323749337"
+    }
+  ],
+  "limitations": [
+    "This certificate applies only to the recorded source commit, before subsequent review fixes.",
+    "Complete enterprise REST coverage and combined cross-domain load/HA certification remain pending.",
+    "Ten skipped checks and one neutral check are recorded explicitly; they are not passing certification scenarios."
+  ]
+}

@@ -1,3 +1,4 @@
+import { automationReadinessPolicySchema } from '../../src/lib/automation/readiness-policy';
 import { generateApiKey } from '@/lib/api-keys';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -15,6 +16,8 @@ let email: string;
 const password = 'Automation-Local-Test-938!';
 let serviceId: string;
 test.beforeAll(async ({}, testInfo) => {
+  if (!new URL(process.env.DATABASE_URL!).pathname.endsWith('_test'))
+    throw new Error('Automation browser certification requires an isolated test database');
   email = `automation-e2e-${testInfo.project.name}-${Date.now()}@example.com`;
   const passwordHash = await bcrypt.hash(password, 12);
   await db.user.upsert({
@@ -180,7 +183,9 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       page.getByText('production', { exact: true }).filter({ visible: true }).first()
     ).toBeVisible();
     await expect(
-      page.getByText('Personal paging intentionally skipped', { exact: false })
+      page
+        .getByText('Personal paging intentionally skipped', { exact: false })
+        .filter({ visible: true })
     ).toBeVisible();
     expect(
       await db.notification.count({
@@ -199,7 +204,8 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       expect(operation.requestPayload).toMatchObject({ origin: 'AUTOMATION' });
     }
     const delivery = page.getByRole('region', { name: 'Channel notification status' });
-    await expect(delivery).toContainText('Queued');
+    if (notificationCase !== 'TEAMS') await expect(delivery).toContainText('Queued');
+    if (notificationCase !== 'SLACK') await expect(delivery).toContainText('Failed');
     await expect(delivery).not.toContainText('Delivery confirmed');
     await page.getByText(/^Show \d+ more context fields$/).click();
     await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
@@ -717,5 +723,770 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
   await testInfo.attach('large-policy-viewport', {
     body: await page.screenshot(),
     contentType: 'image/png',
+  });
+});
+
+test('SDK authoring, UI activation and HTTP ingestion share the published routing decision', async ({
+  page,
+}, testInfo) => {
+  const { Client } = await import('../../sdk/typescript/client');
+  const service = await db.service.create({ data: { name: `SDK journey ${randomUUID()}` } });
+  const serviceId = service.id;
+  const actor = await db.user.findUniqueOrThrow({ where: { email } });
+  const credential = generateApiKey();
+  const key = await db.apiKey.create({
+    data: {
+      name: 'Automation SDK browser journey',
+      userId: actor.id,
+      prefix: credential.prefix,
+      tokenHash: credential.tokenHash,
+      scopes: [
+        'automation:read',
+        'automation:write',
+        'automation:publish',
+        'automation-settings:read',
+        'automation-settings:write',
+      ],
+    },
+  });
+  const integration = await db.integration.create({
+    data: {
+      serviceId,
+      name: 'SDK browser ingestion',
+      key: randomUUID(),
+      type: 'EVENTS_API_V2',
+    },
+  });
+  const client = new Client({
+    baseUrl: 'http://127.0.0.1:3193/api/v2',
+    token: credential.token,
+    allowInsecureHttp: true,
+    maxRetries: 0,
+  });
+  const publisher = new Client({
+    baseUrl: `http://127.0.0.1:${process.env.PLAYWRIGHT_PRODUCTION_SERVER === 'true' && process.env.PLAYWRIGHT_EXTERNAL_SERVER !== 'true' ? 3194 : 3193}/api/v2`,
+    token: credential.token,
+    allowInsecureHttp: true,
+    maxRetries: 0,
+  });
+  let observationFaultInstalled = false;
+  try {
+    const settings = await client.call('getAutomationSettings', {});
+    await client.call('updateAutomationSettings', {
+      body: {
+        automationEnabled: true,
+        automationTraceRetentionDays: settings.data.automationTraceRetentionDays,
+      },
+      headers: {
+        'If-Match': `"${settings.data.automationSettingsRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    });
+    const draft = await client.call('getAutomationDraft', { params: { id: serviceId } });
+    const snapshot = {
+      schemaVersion: 1 as const,
+      fields: [],
+      rules: [
+        {
+          id: 'sdk-enrich',
+          name: 'SDK priority',
+          phase: 'ENRICH' as const,
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'SET_PRIORITY' as const, value: 'P1' as const }],
+        },
+        {
+          id: 'sdk-no-page',
+          name: 'SDK intentional suppression',
+          phase: 'ROUTE' as const,
+          enabled: true,
+          conditions: [
+            { fieldKey: 'source', operator: 'EQ' as const, value: 'sdk-browser-certification' },
+          ],
+          actions: [{ type: 'NO_ESCALATION' as const }],
+        },
+      ],
+    };
+    const saved = await client.call('saveAutomationDraft', {
+      params: { id: serviceId },
+      body: { snapshot },
+      headers: { 'If-Match': `"${draft.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    const published = await publisher.call('publishAutomationVersion', {
+      params: { id: serviceId },
+      body: { expectedActiveVersionId: null },
+      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    const csrf = await (await page.request.get('/api/auth/csrf')).json();
+    await page.request.post('/api/auth/callback/credentials', {
+      form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+    });
+    await page.goto(
+      testInfo.project.name === 'desktop'
+        ? `/services/${serviceId}?tab=automation`
+        : `/m/services/${serviceId}/automation`
+    );
+    const workspace = page.getByRole('region', { name: 'Service automation' });
+    await expect(workspace.getByText(/Version 1 ·/)).toBeVisible();
+    await workspace.getByLabel('Automation mode').selectOption('SHADOW');
+    await expect(workspace.getByLabel('Automation mode')).toHaveValue('SHADOW');
+    await workspace.getByLabel('Automation mode').selectOption('LIVE');
+    await page.getByRole('checkbox', { name: /I understand this version/ }).check();
+    await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
+    await expect(workspace.getByLabel('Automation mode')).toHaveValue('LIVE');
+    await expect(
+      workspace.getByRole('button', { name: 'Publish candidate', exact: true })
+    ).toBeEnabled();
+
+    // Author and publish candidate Version 2 with distinct enrichment (P2 priority)
+    const candidateDraft = await client.call('getAutomationDraft', { params: { id: serviceId } });
+    const candidateSnapshot = {
+      schemaVersion: 1 as const,
+      fields: [],
+      rules: [
+        {
+          id: 'sdk-enrich-v2',
+          name: 'Candidate V2 priority',
+          phase: 'ENRICH' as const,
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'SET_PRIORITY' as const, value: 'P2' as const }],
+        },
+        {
+          id: 'sdk-no-page',
+          name: 'SDK intentional suppression',
+          phase: 'ROUTE' as const,
+          enabled: true,
+          conditions: [
+            { fieldKey: 'source', operator: 'EQ' as const, value: 'sdk-browser-certification' },
+          ],
+          actions: [{ type: 'NO_ESCALATION' as const }],
+        },
+      ],
+    };
+    const savedV2 = await client.call('saveAutomationDraft', {
+      params: { id: serviceId },
+      body: { snapshot: candidateSnapshot },
+      headers: { 'If-Match': `"${candidateDraft.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    const candidatePub = await client.call('publishAutomationVersion', {
+      params: { id: serviceId },
+      body: { expectedActiveVersionId: published.data.id, expectedCandidateVersionId: null },
+      headers: { 'If-Match': `"${savedV2.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(candidatePub.data.versionNumber).toBe(2);
+    expect(
+      await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
+    ).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: published.data.id,
+      candidateVersionId: candidatePub.data.id,
+    });
+
+    if (testInfo.project.name === 'desktop') {
+      // A test-owned trigger rejects the first worker attempt only. It changes no
+      // aggregate rows and leaves the durable queue's real retry policy intact.
+      if (!/^[a-z0-9]+$/.test(candidatePub.data.id)) throw new Error('Invalid fixture version id');
+      await db.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION automation_browser_fail_observation_once() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW."versionId" = '${candidatePub.data.id}' AND EXISTS (
+            SELECT 1 FROM "BackgroundJob" WHERE type = 'SCHEDULED_TASK'
+              AND status = 'PROCESSING' AND attempts = 1
+              AND payload->>'task' = 'AUTOMATION_OBSERVE'
+              AND payload->'shadow'->>'versionId' = NEW."versionId"
+          ) THEN RAISE EXCEPTION 'Injected transient candidate observation failure'; END IF;
+          RETURN NEW;
+        END $$`);
+      await db.$executeRawUnsafe(
+        'CREATE TRIGGER automation_browser_fail_observation_once BEFORE INSERT OR UPDATE ON "AutomationShadowAggregate" FOR EACH ROW EXECUTE FUNCTION automation_browser_fail_observation_once()'
+      );
+      observationFaultInstalled = true;
+    }
+
+    // Ingest pre-cutover alert 1: must use Version 1 LIVE decision while candidate shadows safely
+    const dedupKey1 = randomUUID();
+    const ingestion1 = await page.request.post('/api/events', {
+      headers: { Authorization: `Token token=${integration.key}` },
+      data: {
+        event_action: 'trigger',
+        dedup_key: dedupKey1,
+        payload: {
+          summary: 'Pre-cutover routing journey',
+          source: 'sdk-browser-certification',
+          severity: 'warning',
+        },
+      },
+    });
+    expect(ingestion1.ok()).toBe(true);
+    const accepted1 = (await ingestion1.json()) as {
+      data: { result: { action: string; incident: { id: string } } };
+    };
+    expect(accepted1.data.result.action).toBe('triggered');
+    const incident1 = await db.incident.findUniqueOrThrow({
+      where: { id: accepted1.data.result.incident.id },
+    });
+    expect(incident1.serviceId).toBe(serviceId);
+    const decision1 = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident1.id },
+    });
+    expect(decision1).toMatchObject({
+      versionId: published.data.id,
+      mode: 'LIVE',
+      routeType: 'NO_ESCALATION',
+      finalPriority: 'P1',
+    });
+    expect(incident1.priority).toBe('P1');
+
+    if (testInfo.project.name === 'desktop') {
+      await expect
+        .poll(
+          async () => {
+            const job = await db.backgroundJob.findUnique({
+              where: { id: `AUTOMATION_OBSERVE:${incident1.id}` },
+            });
+            return {
+              status: job?.status,
+              attempts: job?.attempts,
+              scheduledForRetry: Boolean(job && job.scheduledAt.getTime() > Date.now()),
+            };
+          },
+          {
+            timeout: 30000,
+            message: 'Real worker requeues the failed first attempt with durable backoff',
+          }
+        )
+        .toEqual({ status: 'PENDING', attempts: 1, scheduledForRetry: true });
+      const delayedEvidence = await client.call('getAutomationCandidate', {
+        params: { id: serviceId },
+      });
+      expect(delayedEvidence.data.shadowAggregates.evaluated).toBe(0);
+      expect(delayedEvidence.data.evidenceFreshness.pendingObservations).toBe(1);
+      expect(delayedEvidence.data.evidenceFreshness.latestEvidenceBucketDate).toBeNull();
+      await testInfo.attach('candidate-observation-delayed-evidence', {
+        body: JSON.stringify(delayedEvidence.data.evidenceFreshness),
+        contentType: 'application/json',
+      });
+    }
+
+    // The real general worker must consume this incident's durable observation;
+    // ingestion alone does not materialize shadow aggregates.
+    await expect
+      .poll(
+        async () =>
+          (
+            await db.backgroundJob.findUnique({
+              where: { id: `AUTOMATION_OBSERVE:${incident1.id}` },
+            })
+          )?.status,
+        {
+          timeout: 120000,
+          message: 'General worker completes candidate observation through durable retry',
+        }
+      )
+      .toBe('COMPLETED');
+    const observation = await db.backgroundJob.findUniqueOrThrow({
+      where: { id: `AUTOMATION_OBSERVE:${incident1.id}` },
+    });
+    expect(observation.attempts).toBe(testInfo.project.name === 'desktop' ? 2 : 1);
+    expect(observation.completedAt).not.toBeNull();
+    await testInfo.attach('candidate-observation-worker', {
+      body: JSON.stringify({
+        id: observation.id,
+        status: observation.status,
+        attempts: observation.attempts,
+        createdAt: observation.createdAt,
+        completedAt: observation.completedAt,
+      }),
+      contentType: 'application/json',
+    });
+    // Confirm candidate shadow evaluation accumulated evidence without applying candidate side effects
+    const candidateAgg = await db.automationShadowAggregate.findFirst({
+      where: { versionId: candidatePub.data.id },
+    });
+    expect(candidateAgg?.evaluated).toBe(1);
+    expect(candidateAgg?.priorityDifferent).toBe(1);
+    const candidateEvidence = await client.call('getAutomationCandidate', {
+      params: { id: serviceId },
+    });
+    expect(candidateEvidence.data.shadowAggregates).toMatchObject({
+      evaluated: 1,
+      priorityDifferent: 1,
+    });
+    expect(candidateEvidence.data.evidenceFreshness).toMatchObject({
+      pendingObservations: 0,
+      pendingObservationsTruncated: false,
+    });
+    expect(candidateEvidence.data.evidenceFreshness.latestEvidenceBucketDate).not.toBeNull();
+    await expect(
+      client.call('activateAutomationCandidate', {
+        params: { id: serviceId },
+        body: {
+          expectedCandidateVersionId: candidatePub.data.id,
+          expectedActiveVersionId: published.data.id,
+          acknowledgeNoShadow: true,
+        },
+        headers: { 'Idempotency-Key': randomUUID() },
+      })
+    ).rejects.toMatchObject({ status: 400 });
+
+    // Operator browser journey: inspect candidate shadow evidence and activate candidate into LIVE
+    await page.goto(
+      testInfo.project.name === 'desktop'
+        ? `/services/${serviceId}?tab=automation`
+        : `/m/services/${serviceId}/automation`
+    );
+    await expect(page.getByText('Pending candidate · Version 2')).toBeVisible();
+    await page.getByRole('button', { name: 'Activate candidate (LIVE cutover)' }).click();
+    await expect(page.getByText('Review candidate activation · Cutover to LIVE')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Confirm LIVE', exact: true })).toBeDisabled();
+    const evidenceException = page.getByRole('checkbox', {
+      name: /I understand this version has insufficient recent Shadow evidence/,
+    });
+    await evidenceException.focus();
+    await page.keyboard.press('Space');
+    const differenceApproval = page.getByRole('checkbox', {
+      name: 'I approve the observed routing, priority and suppression differences.',
+    });
+    await differenceApproval.focus();
+    await page.keyboard.press('Space');
+    const confirmCutover = page.getByRole('button', { name: 'Confirm LIVE', exact: true });
+    if (testInfo.project.name === 'desktop' || testInfo.project.name === 'mobile') {
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await expect(confirmCutover).toBeFocused();
+    } else {
+      // Touch WebKit does not enable desktop full-keyboard Tab navigation.
+      // Verify keyboard activation from the accessible control's focus instead.
+      await confirmCutover.focus();
+    }
+    await page.keyboard.press('Enter');
+    await expect(workspace.getByText(/Version 2 ·/)).toBeVisible();
+    expect(
+      await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
+    ).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: candidatePub.data.id,
+      candidateVersionId: null,
+    });
+
+    // Ingest post-cutover alert 2: must route with newly activated Version 2 decisions
+    const dedupKey2 = randomUUID();
+    const ingestion2 = await page.request.post('/api/events', {
+      headers: { Authorization: `Token token=${integration.key}` },
+      data: {
+        event_action: 'trigger',
+        dedup_key: dedupKey2,
+        payload: {
+          summary: 'Post-cutover routing journey',
+          source: 'sdk-browser-certification',
+          severity: 'warning',
+        },
+      },
+    });
+    expect(ingestion2.ok()).toBe(true);
+    const accepted2 = (await ingestion2.json()) as {
+      data: { result: { action: string; incident: { id: string } } };
+    };
+    expect(accepted2.data.result.action).toBe('triggered');
+    const incident2 = await db.incident.findUniqueOrThrow({
+      where: { id: accepted2.data.result.incident.id },
+    });
+    expect(incident2.serviceId).toBe(serviceId);
+    const decision2 = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident2.id },
+    });
+    expect(decision2).toMatchObject({
+      versionId: candidatePub.data.id,
+      mode: 'LIVE',
+      routeType: 'NO_ESCALATION',
+      finalPriority: 'P2',
+    });
+    expect(incident2.priority).toBe('P2');
+
+    // Incident 1 remains permanently pinned to Version 1
+    const pinnedIncident1 = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident1.id },
+    });
+    expect(pinnedIncident1.versionId).toBe(published.data.id);
+    expect(pinnedIncident1.finalPriority).toBe('P1');
+
+    // Discard journey: Stage Version 3 candidate and discard through accessible confirmation dialog
+    const draftV3 = await client.call('getAutomationDraft', { params: { id: serviceId } });
+    const candidatePub3 = await client.call('publishAutomationVersion', {
+      params: { id: serviceId },
+      body: { expectedActiveVersionId: candidatePub.data.id, expectedCandidateVersionId: null },
+      headers: { 'If-Match': `"${draftV3.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(candidatePub3.data.versionNumber).toBe(3);
+    await page.reload();
+    await expect(page.getByText('Pending candidate · Version 3')).toBeVisible();
+    await page.getByRole('button', { name: 'Discard candidate' }).click();
+    await expect(page.getByText('Discard candidate automation version?')).toBeVisible();
+    await page.getByRole('button', { name: 'Discard candidate', exact: true }).click();
+    await expect(page.getByText('Pending candidate · Version 3')).not.toBeVisible();
+    expect(
+      await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
+    ).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: candidatePub.data.id,
+      candidateVersionId: null,
+    });
+
+    // Cleanup: revoke credentials
+    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+    await expect(
+      client.call('getAutomationDraft', { params: { id: serviceId } })
+    ).rejects.toMatchObject({ status: 401 });
+  } finally {
+    if (observationFaultInstalled) {
+      await db.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS automation_browser_fail_observation_once ON "AutomationShadowAggregate"'
+      );
+      await db.$executeRawUnsafe(
+        'DROP FUNCTION IF EXISTS automation_browser_fail_observation_once()'
+      );
+    }
+    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+  }
+});
+
+test('API-only automation authoring, diagnostics and historical restoration use the deployed SDK', async ({
+  page,
+}, testInfo) => {
+  const { Client } = await import('../../sdk/typescript/client');
+  const actor = await db.user.findUniqueOrThrow({ where: { email } });
+  const service = await db.service.create({ data: { name: `API lifecycle ${randomUUID()}` } });
+  const integration = await db.integration.create({
+    data: {
+      name: 'API lifecycle ingestion',
+      serviceId: service.id,
+      key: randomUUID(),
+      type: 'EVENTS_API_V2',
+    },
+  });
+  const issued = generateApiKey();
+  const key = await db.apiKey.create({
+    data: {
+      name: 'API lifecycle certification',
+      userId: actor.id,
+      prefix: issued.prefix,
+      tokenHash: issued.tokenHash,
+      scopes: [
+        'automation:read',
+        'automation:write',
+        'automation:publish',
+        'automation-settings:read',
+        'automation-settings:write',
+        'incidents:read',
+      ],
+    },
+  });
+  const client = new Client({
+    baseUrl: 'http://127.0.0.1:3193/api/v2',
+    token: issued.token,
+    allowInsecureHttp: true,
+    maxRetries: 0,
+  });
+  const params = { id: service.id };
+  const snapshot = {
+    schemaVersion: 1 as const,
+    fields: [
+      {
+        fieldId: 'environment',
+        key: 'environment',
+        label: 'Environment',
+        type: 'STRING' as const,
+        caseSensitive: false,
+        aliases: {},
+        mappings: [{ source: 'EVENT' as const, path: 'payload.custom_details.environment' }],
+      },
+    ],
+    rules: [
+      {
+        id: 'suppress',
+        name: 'Certification suppression',
+        phase: 'ROUTE' as const,
+        enabled: true,
+        conditions: [
+          {
+            fieldKey: 'environment',
+            operator: 'EQ' as const,
+            value: 'private-certification-value',
+          },
+        ],
+        actions: [{ type: 'NO_ESCALATION' as const }],
+      },
+    ],
+  };
+  const event = {
+    event_action: 'trigger' as const,
+    dedup_key: randomUUID(),
+    payload: {
+      summary: 'API lifecycle certification',
+      source: 'private-certification-source',
+      severity: 'info' as const,
+      custom_details: { environment: 'private-certification-value' },
+    },
+  };
+  try {
+    const settings = await client.call('getAutomationSettings', {});
+    await client.call('updateAutomationSettings', {
+      body: {
+        automationEnabled: true,
+        automationTraceRetentionDays: settings.data.automationTraceRetentionDays,
+      },
+      headers: {
+        'If-Match': `"${settings.data.automationSettingsRevision}"`,
+        'Idempotency-Key': randomUUID(),
+      },
+    });
+    const initial = await client.call('getAutomationDraft', { params });
+    const saved = await client.call('saveAutomationDraft', {
+      params,
+      body: { snapshot },
+      headers: { 'If-Match': `"${initial.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(
+      (await client.call('validateAutomation', { params, body: { snapshot } })).data.valid
+    ).toBe(true);
+    const simulation = await client.call('simulateAutomation', {
+      params,
+      body: { snapshot, event, integrationType: integration.type, integrationId: integration.id },
+    });
+    expect(simulation.data.result?.outcome.type).toBe('NO_ESCALATION');
+    expect(JSON.stringify(simulation)).not.toContain('private-certification-value');
+    expect(await db.incident.count({ where: { serviceId: service.id } })).toBe(0);
+    const published = await client.call('publishAutomationVersion', {
+      params,
+      body: { expectedActiveVersionId: null },
+      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    const configuration = await client.call('getServiceAutomation', { params });
+    expect(configuration.data.mode).toBe('DISABLED');
+    const live = await client.call('updateServiceAutomationMode', {
+      params,
+      body: { mode: 'LIVE', expectedActiveVersionId: published.data.id, acknowledgeNoShadow: true },
+      headers: { 'If-Match': `"${configuration.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(live.data.effectiveMode).toBe('LIVE');
+    const history = await client.call('listAutomationVersions', { params, query: { limit: 1 } });
+    expect(history.data[0].id).toBe(published.data.id);
+    const inspected = await client.call('getAutomationVersion', {
+      params: { ...params, versionId: published.data.id },
+    });
+    expect(inspected.data.snapshot).toEqual(snapshot);
+    const ingested = await page.request.post('/api/events', {
+      headers: { Authorization: `Token token=${integration.key}` },
+      data: event,
+    });
+    expect(ingested.ok()).toBe(true);
+    const incident = await db.incident.findFirstOrThrow({ where: { serviceId: service.id } });
+    await expect
+      .poll(
+        async () =>
+          (
+            await db.backgroundJob.findUnique({
+              where: { id: `AUTOMATION_OBSERVE:${incident.id}` },
+            })
+          )?.status,
+        { timeout: 120000 }
+      )
+      .toBe('COMPLETED');
+    const decisions = await client.call('listAutomationDecisions', { params });
+    expect(decisions.data[0]).toMatchObject({
+      incidentId: incident.id,
+      versionId: published.data.id,
+      routeType: 'NO_ESCALATION',
+    });
+    const observations = await client.call('listAutomationObservations', {
+      params,
+      query: { limit: 10 },
+    });
+    expect(observations.data.some(observation => observation.fieldKey === 'environment')).toBe(
+      true
+    );
+    expect(JSON.stringify(observations)).not.toContain('private-certification-value');
+    const restored = await client.call('restoreAutomationDraft', {
+      params,
+      body: { sourceVersionId: published.data.id },
+      headers: { 'If-Match': `"${saved.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(restored.data.restoredFromVersionId).toBe(published.data.id);
+    const afterRestore = await client.call('getServiceAutomation', { params });
+    expect(afterRestore.data).toMatchObject({
+      mode: 'LIVE',
+      activeVersionId: published.data.id,
+      candidateVersionId: null,
+    });
+    const disabled = await client.call('updateServiceAutomationMode', {
+      params,
+      body: { mode: 'DISABLED', expectedActiveVersionId: published.data.id },
+      headers: { 'If-Match': `"${afterRestore.data.revision}"`, 'Idempotency-Key': randomUUID() },
+    });
+    expect(disabled.data.effectiveMode).toBe('DISABLED');
+    await testInfo.attach('api-only-automation-lifecycle', {
+      body: JSON.stringify({
+        versionId: published.data.id,
+        restoredRevision: restored.data.revision,
+        decisions: decisions.data.length,
+        observations: observations.data.length,
+        finalMode: disabled.data.effectiveMode,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
+    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+  }
+});
+
+test('administrator explicitly opts into discovery previews and disables storage through the UI', async ({
+  page,
+}, testInfo) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  await page.goto('/settings/system');
+  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  const settings = page.getByRole('region', { name: 'Global automation settings' });
+  const previews = settings.getByRole('checkbox', {
+    name: 'Store diagnostic field-value previews',
+  });
+  await expect(previews).not.toBeChecked();
+  const originalPolicy = automationReadinessPolicySchema.parse(
+    (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+      .automationReadinessPolicy
+  );
+  try {
+    const minimum = settings.getByLabel('Minimum candidate evaluations');
+    const originalMinimum = await minimum.inputValue();
+    await minimum.fill('101');
+    await previews.check();
+    await settings.getByRole('button', { name: 'Save automation settings', exact: true }).click();
+    await expect(settings.getByRole('status')).toHaveText('Automation settings saved.');
+    expect(
+      (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+        .automationStoreObservationPreviews
+    ).toBe(true);
+    expect(
+      (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+        .automationReadinessPolicy
+    ).toMatchObject({ minimumEvaluations: 101 });
+    const sample = await db.automationContextObservation.create({
+      data: {
+        serviceId,
+        integrationId: 'privacy-ui-fixture',
+        integrationType: 'EVENTS_API',
+        fieldKey: 'environment',
+        sourcePath: 'payload.environment',
+        fieldType: 'STRING',
+        normalizedRawValueHash: randomUUID(),
+        rawValuePreview: 'opt-in-ui-fixture',
+      },
+    });
+    await minimum.fill(originalMinimum);
+    await previews.uncheck();
+    await settings.getByRole('button', { name: 'Save automation settings', exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          (await db.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+            .automationStoreObservationPreviews
+      )
+      .toBe(false);
+    // Settings hide previews immediately; a real general worker performs bounded physical cleanup.
+    await expect
+      .poll(
+        async () =>
+          (await db.automationContextObservation.findUniqueOrThrow({ where: { id: sample.id } }))
+            .rawValuePreview
+      )
+      .toBe('');
+    await testInfo.attach('discovery-preview-opt-out', {
+      body: JSON.stringify({
+        project: testInfo.project.name,
+        optInPersisted: true,
+        previewClearedByDurableWorkerAfterOptOut: true,
+        readinessPolicyReviewedAndRestored: true,
+      }),
+      contentType: 'application/json',
+    });
+  } finally {
+    // Test cleanup leaves subsequent profiles on the product's privacy-preserving default.
+    await db.systemSettings.update({
+      where: { id: 'default' },
+      data: {
+        automationStoreObservationPreviews: false,
+        automationReadinessPolicy: originalPolicy,
+      },
+    });
+  }
+});
+
+test('administrator sees failed diagnostic cleanup and retries it to completion', async ({
+  page,
+}, testInfo) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  const cleanupId = randomUUID();
+  await db.systemSettings.upsert({
+    where: { id: 'default' },
+    create: { automationStoreObservationPreviews: false },
+    update: { automationStoreObservationPreviews: false },
+  });
+  const observation = await db.automationContextObservation.create({
+    data: {
+      serviceId,
+      integrationId: `cleanup-ui-${cleanupId}`,
+      integrationType: 'EVENTS_API',
+      fieldKey: 'environment',
+      sourcePath: 'payload.environment',
+      fieldType: 'STRING',
+      normalizedRawValueHash: 'a'.repeat(64),
+      rawValuePreview: 'cleanup-ui-fixture',
+    },
+  });
+  await db.backgroundJob.create({
+    data: {
+      id: `AUTOMATION_PRIVACY_CLEANUP:${cleanupId}:0`,
+      type: 'SCHEDULED_TASK',
+      status: 'FAILED',
+      attempts: 10,
+      maxAttempts: 10,
+      scheduledAt: new Date(),
+      payload: { task: 'AUTOMATION_PRIVACY_CLEANUP', cleanupId, batch: 0 },
+    },
+  });
+  await page.goto('/settings/system');
+  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  const settings = page.getByRole('region', { name: 'Global automation settings' });
+  await expect(settings.getByText(/Diagnostic cleanup: FAILED/)).toBeVisible();
+  await settings.getByRole('button', { name: 'Retry diagnostic cleanup', exact: true }).click();
+  await expect
+    .poll(async () => {
+      await settings.getByRole('button', { name: 'Refresh cleanup status', exact: true }).click();
+      return settings.getByText(/Diagnostic cleanup:/).textContent();
+    })
+    .toContain('COMPLETE');
+  expect(
+    (await db.automationContextObservation.findUniqueOrThrow({ where: { id: observation.id } }))
+      .rawValuePreview
+  ).toBe('');
+  expect(
+    await db.auditLog.count({
+      where: { action: 'automation.privacy.cleanup.retried', actor: { email } },
+    })
+  ).toBe(1);
+  await testInfo.attach('diagnostic-cleanup-recovery', {
+    body: JSON.stringify({
+      project: testInfo.project.name,
+      failedStateVisible: true,
+      retryAudited: true,
+      workerCompletionVisible: true,
+    }),
+    contentType: 'application/json',
   });
 });

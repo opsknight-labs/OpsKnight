@@ -5,15 +5,24 @@ import { runV2AuditedMutation, type V2AuditParams } from './audit';
 import { recordIdempotency } from './observability';
 import {
   executeIdempotentOperation,
+  readIdempotentOperationResult,
   type IdempotentExecution,
 } from '@/lib/idempotency';
+import prisma from '@/lib/prisma';
+import { AppError } from '@/lib/errors';
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'P2002');
+}
 
 export async function runV2IdempotentMutation<T>(
   req: NextRequest,
   principalId: string,
   scope: string,
   payload: unknown,
-  execute: (tx: Prisma.TransactionClient) => Promise<T>
+  execute: (tx: Prisma.TransactionClient) => Promise<T>,
+  onReplay?: (tx: Prisma.TransactionClient) => Promise<void>,
+  persistResult?: (value: T) => T
 ): Promise<IdempotentExecution<T>> {
   const idempotencyKey = req.headers.get('idempotency-key')?.trim();
 
@@ -24,17 +33,32 @@ export async function runV2IdempotentMutation<T>(
     });
   }
 
-  return runSerializableTransaction(async tx => {
-    return executeIdempotentOperation(tx, {
-      scope,
-      context: {
-        key: idempotencyKey,
-        principalId,
-      },
-      payload,
-      execute: () => execute(tx),
+  const context = { key: idempotencyKey, principalId };
+  try {
+    return await runSerializableTransaction(async tx => {
+      return executeIdempotentOperation(tx, {
+        scope,
+        context,
+        payload,
+        execute: () => execute(tx),
+        onReplay,
+        persistResult,
+      });
     });
-  });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    // Concurrent requests can race on a business unique key or on the durable
+    // idempotency receipt itself. Re-read in a fresh snapshot: if the same key
+    // committed, return that receipt; otherwise report a resource conflict.
+    const replay = await prisma.$transaction(tx =>
+      readIdempotentOperationResult<T>(tx, { scope, context, payload, onReplay })
+    );
+    if (replay) return replay;
+    throw new AppError({
+      code: 'RESOURCE_CONFLICT',
+      userMessage: 'The requested resource conflicts with a concurrent change.',
+    });
+  }
 }
 
 export function idempotencyResponseHeaders(replayed: boolean): Record<string, string> {

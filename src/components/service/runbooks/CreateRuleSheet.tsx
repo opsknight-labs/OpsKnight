@@ -60,7 +60,7 @@ export function CreateRuleSheet({
       title="Create automation rule"
       description="Attach a library workflow to this service. Nothing runs when you save."
       trigger={
-        <Button size="sm" className="h-9 gap-1.5">
+        <Button size="sm" className="h-9 px-3.5 gap-2 rounded-xl font-semibold shadow-xs">
           <Plus className="h-4 w-4" aria-hidden />
           <span>Create rule</span>
         </Button>

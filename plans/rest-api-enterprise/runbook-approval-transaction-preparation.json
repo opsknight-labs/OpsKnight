@@ -1,0 +1,35 @@
+{
+  "sourceParent": "048a33fd8f84c7bfadc07fcb50d40f7ab319c175",
+  "measuredAt": "2026-10-18T12:57:26.994900+00:00",
+  "scope": "Shared approval transaction preparation and revision-fence fixture compatibility; section 3C REST endpoints remain unfinished.",
+  "approvalTransactionCases": 3,
+  "executionSafetyCases": 65,
+  "unitActionCases": 31,
+  "postgresCoverage": {
+    "unchangedSuites": 14,
+    "unchangedCasesPassed": 176,
+    "correctedPreviewSuiteCasesPassed": 37,
+    "totalDistinctCases": 213,
+    "note": "The broad 15-suite run passed 212 with one preview fixture failure. Corrected preview suite rerun passed all 37, preserving stale/invalid authorization checks; the other 14 suites were unchanged."
+  },
+  "typecheck": "passed on feature and synthetic merge tree",
+  "changedSourceLint": "passed, zero warnings",
+  "mergeCompatibility": {
+    "base": "afa9809d86c66bf6951fcd073f537ff664283307",
+    "issue": "Main and feature added RunbookDefinitionError imports at different locations, creating a duplicate in GitHub merged CI builds.",
+    "fix": "Use the same import location as main; synthetic merged tree has one declaration and passes strict typecheck.",
+    "productionBuild": "passed on synthetic main plus feature tree"
+  },
+  "limits": [
+    "No new execution approval/intervention endpoint is claimed.",
+    "Existing UI approval and actor policy are unchanged.",
+    "Latest-commit CI and complete enterprise certification remain pending."
+  ],
+  "sha256": {
+    "src/lib/runbooks/orchestrator.ts": "e89aa398b9d2ab09f0b53030f889b554b7bccbbcede322110efb78a20ae124f5",
+    "src/lib/runbooks/policy-checks.ts": "2efb78e828a1e896fb937cdb24d3329f0ac9ed95c07733421435c9cd29b8832c",
+    "tests/integration/runbook-approval-command-transactions.test.ts": "450264eb148c565f049e2f7f2d531afc872a29f10d164a6455e392a4d00a63d3",
+    "tests/integration/runbook-execution-safety.test.ts": "7e6f7b00241c6c420e044bfbfedfc849c75e27e31c33ad4fa45727feda853b66",
+    "tests/integration/runbook-preview-authorization.test.ts": "f72e6fd258e1ee097e11f66732024987c30abe4056220bf618f79cc15d7e7cfe"
+  }
+}

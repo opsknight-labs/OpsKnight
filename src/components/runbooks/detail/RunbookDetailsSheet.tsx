@@ -21,6 +21,7 @@ export function RunbookDetailsSheet({
   archiveAction,
 }: {
   runbook: {
+    revision: number;
     name: string;
     slug: string;
     description: string;
@@ -36,13 +37,18 @@ export function RunbookDetailsSheet({
       title="Runbook details"
       description="Stable metadata shared by every version."
       trigger={
-        <Button variant="secondary" size="sm">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 border-zinc-700/80 bg-zinc-800/80 text-slate-200 hover:bg-zinc-700 hover:text-white shadow-xs"
+        >
           <Settings2 className="h-4 w-4" />
           Details
         </Button>
       }
     >
       <ActionForm action={action} className="space-y-4" successMessage="Details saved">
+        <input type="hidden" name="expectedRevision" value={runbook.revision} />
         <div className="space-y-2">
           <Label htmlFor="metadata-name">Name</Label>
           <Input

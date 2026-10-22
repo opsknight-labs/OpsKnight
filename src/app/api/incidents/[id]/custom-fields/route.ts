@@ -3,8 +3,9 @@ import { assertResponderOrAbove } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCustomFieldSchema } from '@/lib/validation';
-import { validateCustomFieldValue } from '@/lib/custom-fields';
+import { setIncidentCustomField } from '@/lib/incidents/custom-fields';
 import { logger } from '@/lib/logger';
+import { isAppError } from '@/lib/errors';
 
 /**
  * Update Custom Field Value for Incident
@@ -44,42 +45,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return jsonError('Incident not found', 404);
     }
 
-    // Verify custom field exists
-    const customField = await prisma.customField.findUnique({
-      where: { id: customFieldId },
-    });
-
-    if (!customField) {
-      return jsonError('Custom field not found', 404);
-    }
-
-    // Validate and normalize custom field value
-    const validation = validateCustomFieldValue(customField, value);
-    if (!validation.valid) {
-      return jsonError(validation.error || 'Invalid custom field value', 400);
-    }
-
-    // Upsert custom field value
-    await prisma.customFieldValue.upsert({
-      where: {
-        incidentId_customFieldId: {
-          incidentId,
-          customFieldId,
-        },
-      },
-      update: {
-        value: validation.normalizedValue,
-      },
-      create: {
-        incidentId,
-        customFieldId,
-        value: validation.normalizedValue,
-      },
-    });
+    await prisma.$transaction(tx => setIncidentCustomField(tx, incidentId, customFieldId, value ?? null));
 
     logger.info('api.incident.custom_field.updated', { incidentId, customFieldId });
     return jsonOk({ success: true }, 200);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (isAppError(error)) return jsonError(error.userMessage, error.status);
     logger.error('api.incident.custom_field.update_error', {
       error: error instanceof Error ? error.message : String(error),
     });

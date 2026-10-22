@@ -26,6 +26,7 @@ import {
   type ScheduleDependency,
 } from '@/lib/schedules/mutations';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { createScheduleLayer, updateScheduleLayer, deleteScheduleLayer, reorderScheduleLayers } from '@/lib/schedules/layer-commands';
 
 type ScheduleFormState = ScheduleActionState;
 
@@ -283,63 +284,23 @@ export async function createLayer(
   }
 
   try {
-    const layer = await runSerializableTransaction(async tx => {
-      const lowestPriorityLayer = await tx.onCallLayer.findFirst({
-        where: { scheduleId },
-        orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
-        select: { priority: true },
-      });
-
-      if (responderIds.length > 0) {
-        const activeResponders = await tx.user.count({
-          where: { id: { in: responderIds }, status: 'ACTIVE' },
-        });
-        if (activeResponders !== responderIds.length) {
-          throw new AppError({
-            code: 'SCHEDULE_RESPONDER_NOT_ACTIVE',
-            userMessage: 'One or more selected responders are no longer active.',
-            action: 'Choose active responders and try again.',
-          });
-        }
-
-        const existingAssignment = await tx.onCallLayerUser.findFirst({
-          where: { userId: { in: responderIds }, layer: { scheduleId } },
-          select: { user: { select: { name: true } }, layer: { select: { name: true } } },
-        });
-        if (existingAssignment) {
-          throw new AppError({
-            code: 'SCHEDULE_LAYER_USER_DUPLICATE',
-            userMessage: `${existingAssignment.user.name} is already assigned to "${existingAssignment.layer.name}" in this schedule.`,
-            action: 'Remove them from that layer before adding them here.',
-          });
-        }
-      }
-
-      return tx.onCallLayer.create({
-        data: {
-          scheduleId,
-          name,
-          start: startDate,
-          end: endDate && !Number.isNaN(endDate.getTime()) ? endDate : null,
-          rotationLengthHours: rotationLength,
-          shiftLengthHours: shiftLength,
-          restrictions,
-          // New layers are appended as fallback coverage. This keeps the visual
-          // order and the effective precedence identical from the first save.
-          priority: lowestPriorityLayer ? lowestPriorityLayer.priority - 1 : 0,
-          users:
-            responderIds.length > 0
-              ? { create: responderIds.map((userId, index) => ({ userId, position: index + 1 })) }
-              : undefined,
+    await runSerializableTransaction(async tx => {
+      const created = await createScheduleLayer(
+        tx, scheduleId,
+        {
+          name, start: startDate, end: endDate,
+          rotationLengthHours: rotationLength, shiftLengthHours: shiftLength,
+          restrictions: restrictions ?? null,
         },
-      });
-    });
-    await logAudit({
-      action: 'schedule.layer.created',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: { layerId: layer.id, name },
+        responderIds
+      );
+      await logAudit({
+        action: 'schedule.layer.created',
+        entityType: 'SCHEDULE',
+        entityId: scheduleId,
+        actorId,
+        details: { layerId: created.id, name },
+      }, tx);
     });
 
     const scheduleName = await getScheduleName(scheduleId);
@@ -367,36 +328,16 @@ export async function deleteLayer(
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   try {
-    const layer = await prisma.onCallLayer.findFirst({
-      where: { id: layerId, scheduleId },
-      select: { name: true },
-    });
-
-    if (!layer) {
-      return scheduleActionError(
-        new AppError({
-          code: 'SCHEDULE_LAYER_NOT_FOUND',
-          userMessage: 'Layer not found for this schedule.',
-          details: { scheduleId, layerId },
-        }),
-        'Layer not found for this schedule.'
-      );
-    }
-
-    await prisma.$transaction([
-      prisma.onCallLayerUser.deleteMany({
-        where: { layerId },
-      }),
-      prisma.onCallLayer.delete({
-        where: { id: layerId },
-      }),
-    ]);
-    await logAudit({
-      action: 'schedule.layer.deleted',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: { layerId, name: layer.name },
+    const layer = await runSerializableTransaction(async tx => {
+      const removed = await deleteScheduleLayer(tx, scheduleId, layerId);
+      await logAudit({
+        action: 'schedule.layer.deleted',
+        entityType: 'SCHEDULE',
+        entityId: scheduleId,
+        actorId,
+        details: { layerId, name: removed.name },
+      }, tx);
+      return removed;
     });
 
     const scheduleName = await getScheduleName(scheduleId);
@@ -542,23 +483,22 @@ export async function updateLayer(
   }
 
   try {
-    await prisma.onCallLayer.update({
-      where: { id: layerId },
-      data: {
-        name,
-        start: startDate,
-        end: endDate && !Number.isNaN(endDate.getTime()) ? endDate : null,
-        rotationLengthHours: rotationLength,
-        shiftLengthHours: shiftLength,
-        restrictions,
-      },
-    });
-    await logAudit({
-      action: 'schedule.layer.updated',
-      entityType: 'SCHEDULE',
-      entityId: layerMeta.scheduleId,
-      actorId,
-      details: { layerId, name },
+    await runSerializableTransaction(async tx => {
+      await updateScheduleLayer(
+        tx, layerMeta.scheduleId, layerId,
+        {
+          name, start: startDate, end: endDate,
+          rotationLengthHours: rotationLength, shiftLengthHours: shiftLength,
+          restrictions: restrictions ?? null,
+        }
+      );
+      await logAudit({
+        action: 'schedule.layer.updated',
+        entityType: 'SCHEDULE',
+        entityId: layerMeta.scheduleId,
+        actorId,
+        details: { layerId, name },
+      }, tx);
     });
 
     const scheduleName = await getScheduleName(layerMeta.scheduleId);
@@ -587,7 +527,7 @@ export async function moveLayerPrecedence(
   }
 
   try {
-    const result = await prisma.$transaction(async tx => {
+    const result = await runSerializableTransaction(async tx => {
       const layer = await tx.onCallLayer.findUnique({
         where: { id: layerId },
         select: { scheduleId: true },
@@ -599,6 +539,7 @@ export async function moveLayerPrecedence(
           details: { layerId },
         });
       }
+      await tx.$queryRaw`SELECT "id" FROM "OnCallSchedule" WHERE "id" = ${layer.scheduleId} FOR UPDATE`;
 
       const layers = await tx.onCallLayer.findMany({
         where: { scheduleId: layer.scheduleId },
@@ -618,24 +559,15 @@ export async function moveLayerPrecedence(
       const reordered = [...layers];
       const [movedLayer] = reordered.splice(currentIndex, 1);
       reordered.splice(targetIndex, 0, movedLayer);
-      await Promise.all(
-        reordered.map((candidate, index) =>
-          tx.onCallLayer.update({
-            where: { id: candidate.id },
-            data: { priority: reordered.length - index },
-          })
-        )
-      );
-
-      return { scheduleId: layer.scheduleId };
-    });
-
-    await logAudit({
-      action: 'schedule.layer.precedence_updated',
-      entityType: 'SCHEDULE',
-      entityId: result.scheduleId,
-      actorId,
-      details: { layerId, direction },
+      const result = await reorderScheduleLayers(tx, layer.scheduleId, reordered.map(candidate => candidate.id));
+      await logAudit({
+        action: 'schedule.layer.precedence_updated',
+        entityType: 'SCHEDULE',
+        entityId: result.scheduleId,
+        actorId,
+        details: { layerId, direction },
+      }, tx);
+      return result;
     });
     revalidatePath(`/schedules/${result.scheduleId}`);
     revalidatePath('/schedules');

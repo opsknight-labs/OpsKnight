@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   trace: vi.fn(),
 }));
 vi.mock('@/lib/automation/access', () => ({ assertAutomationAccess: mocks.access }));
+vi.mock('@/lib/automation/settings', () => ({
+  getAutomationSettings: vi.fn(async () => ({ automationStoreObservationPreviews: false })),
+}));
 vi.mock('@/lib/automation/runtime', () => ({ automationEnabled: vi.fn(async () => true) }));
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -65,6 +68,11 @@ it('does not query stored alert payloads for readers without sensitive incident 
 it('redacts observation previews and diagnostic trace values for Auditors', async () => {
   const context = await getAutomationArea('service-a', 'context');
   expect(context.observations[0].rawValuePreview).toBe('[redacted]');
+  expect(mocks.observation).toHaveBeenCalledWith(
+    expect.objectContaining({
+      select: expect.not.objectContaining({ normalizedRawValueHash: true }),
+    })
+  );
   const trace = await getAutomationArea('service-a', 'trace');
   expect(trace.traces[0].detail).toEqual({ redacted: true, shadowDifferent: true });
   expect(JSON.stringify(trace)).not.toContain('customer-private');
@@ -90,9 +98,10 @@ it('fetches metadata without full snapshots for version history', async () => {
 });
 it('scopes selected snapshots to the service and rejects corrupt stored data', async () => {
   mocks.versionSelected.mockResolvedValue({ versionNumber: 14, snapshot: { corrupt: true } });
-  await expect(getAutomationVersionSnapshot('service-a', 'version-a')).rejects.toThrow(
-    'Version 14 failed integrity validation'
-  );
+  await expect(getAutomationVersionSnapshot('service-a', 'version-a')).rejects.toMatchObject({
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
   expect(mocks.versionSelected).toHaveBeenCalledWith(
     expect.objectContaining({ where: { id: 'version-a', serviceId: 'service-a' } })
   );
@@ -122,4 +131,28 @@ it('recalculates unmapped readiness after a new active alias handles an older ob
   const overview = await getAutomationArea('service-a', 'overview');
   expect(overview.unmappedCount).toBe(0);
   expect(overview.activeVersion?.snapshot).toBeUndefined();
+});
+it('uses recorded normalization status when preview minimization prevents re-evaluation', async () => {
+  mocks.versionOne.mockResolvedValue({
+    id: 'active',
+    versionNumber: 2,
+    snapshot: {
+      ...emptySnapshot,
+      fields: [
+        {
+          fieldId: 'env',
+          key: 'environment',
+          label: 'Environment',
+          type: 'STRING',
+          aliases: {},
+          mappings: [],
+        },
+      ],
+    },
+  });
+  mocks.observation.mockResolvedValue([
+    { fieldKey: 'environment', rawValuePreview: '', unmapped: false },
+    { fieldKey: 'environment', rawValuePreview: '', unmapped: true },
+  ]);
+  expect((await getAutomationArea('service-a', 'overview')).unmappedCount).toBe(1);
 });

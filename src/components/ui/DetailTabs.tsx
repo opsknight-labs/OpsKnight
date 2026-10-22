@@ -1,9 +1,36 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
+import React, { useMemo, useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { cn } from '@/lib/utils';
+
+function TabUrlSync({
+  urlParamName,
+  validTabIds,
+  onUrlTabChange,
+}: {
+  urlParamName: string;
+  validTabIds: Set<string>;
+  onUrlTabChange: (tab: string) => void;
+}) {
+  const searchParams = useSearchParams();
+  const lastParamRef = useRef<string | null>(null);
+  const onUrlTabChangeRef = useRef(onUrlTabChange);
+  useEffect(() => {
+    onUrlTabChangeRef.current = onUrlTabChange;
+  }, [onUrlTabChange]);
+
+  useEffect(() => {
+    if (!searchParams) return;
+    const urlTab = searchParams.get(urlParamName);
+    if (urlTab && validTabIds.has(urlTab) && urlTab !== lastParamRef.current) {
+      lastParamRef.current = urlTab;
+      onUrlTabChangeRef.current(urlTab);
+    }
+  }, [searchParams, urlParamName, validTabIds]);
+  return null;
+}
 
 export type DetailTabItem = {
   id: string;
@@ -48,37 +75,28 @@ export default function DetailTabs({
 }: DetailTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const validTabIds = useMemo(() => new Set(tabs.map(t => t.id)), [tabs]);
   const fallbackDefaultTab = tabs[0]?.id || 'overview';
   const initialTab = defaultTab && validTabIds.has(defaultTab) ? defaultTab : fallbackDefaultTab;
 
-  // Resolve current active tab from URL or defaults
-  const resolvedUrlTab = useMemo(() => {
-    if (controlledActiveTab) return controlledActiveTab;
-    if (syncWithUrl && searchParams) {
-      const urlTab = searchParams.get(urlParamName);
-      if (urlTab && validTabIds.has(urlTab)) {
-        return urlTab;
-      }
-    }
-    return initialTab;
-  }, [controlledActiveTab, syncWithUrl, searchParams, urlParamName, validTabIds, initialTab]);
-
   // Optimistic local state for instantaneous 0ms tab switching & zero lag
-  const [selectedTab, setSelectedTab] = useState(resolvedUrlTab);
-  const [previousUrlTab, setPreviousUrlTab] = useState(resolvedUrlTab);
-  const selection = useRef(resolvedUrlTab);
+  const [selectedTab, setSelectedTab] = useState(controlledActiveTab || initialTab);
+  const selection = useRef(selectedTab);
 
-  // Reset URL-derived state before committing a stale tab on external navigation.
-  if (previousUrlTab !== resolvedUrlTab) {
-    setPreviousUrlTab(resolvedUrlTab);
-    setSelectedTab(resolvedUrlTab);
+  const [prevControlledActiveTab, setPrevControlledActiveTab] = useState(controlledActiveTab);
+  if (controlledActiveTab !== prevControlledActiveTab) {
+    setPrevControlledActiveTab(controlledActiveTab);
+    if (controlledActiveTab) {
+      setSelectedTab(controlledActiveTab);
+    }
   }
+
   useEffect(() => {
-    selection.current = resolvedUrlTab;
-  }, [resolvedUrlTab]);
+    if (controlledActiveTab) {
+      selection.current = controlledActiveTab;
+    }
+  }, [controlledActiveTab]);
 
   // Listen to popstate (browser back/forward) to update optimistic state
   useEffect(() => {
@@ -88,23 +106,25 @@ export default function DetailTabs({
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         const urlTab = urlParams.get(urlParamName);
-        if (urlTab && validTabIds.has(urlTab)) {
-          selection.current = urlTab;
-          setSelectedTab(urlTab);
-        } else {
-          selection.current = initialTab;
-          setSelectedTab(initialTab);
+        const targetTab = urlTab && validTabIds.has(urlTab) ? urlTab : initialTab;
+        selection.current = targetTab;
+        setSelectedTab(targetTab);
+        if (onTabChange) {
+          onTabChange(targetTab);
         }
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [syncWithUrl, urlParamName, validTabIds, initialTab]);
+  }, [syncWithUrl, urlParamName, validTabIds, initialTab, onTabChange]);
+
+  const currentTab = controlledActiveTab || selectedTab;
 
   const handleTabChange = (nextTabId: string) => {
-    // Mouse/focus activation can arrive before React commits the selected value.
-    if (nextTabId === selection.current) return;
+    if (nextTabId === currentTab) return;
+    // Debounce duplicate in-flight activations for the same pending tab
+    if (nextTabId === selection.current && nextTabId !== currentTab) return;
     if (syncWithUrl && typeof window !== 'undefined') {
       const change = new CustomEvent('opsknight:settings-navigation', {
         cancelable: true,
@@ -139,93 +159,112 @@ export default function DetailTabs({
     }
   };
 
-  const currentTab = controlledActiveTab || selectedTab;
-
   return (
-    <Tabs value={currentTab} onValueChange={handleTabChange} className={cn('space-y-6', className)}>
-      {/* Centralized Elevated Navigation Header */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="overflow-x-auto pb-1 scrollbar-none flex-1 min-w-0 w-full">
-          <TabsList
-            className={cn(
-              'h-auto w-full rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
-              layout === 'grid' && [
-                'grid min-w-[540px]',
-                tabs.length === 2 && 'grid-cols-2',
-                tabs.length === 3 && 'grid-cols-3',
-                tabs.length === 4 && 'grid-cols-4',
-                tabs.length === 5 && 'grid-cols-5',
-                tabs.length >= 6 && 'grid-cols-6',
-              ],
-              layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 flex-wrap sm:flex-nowrap',
-              listClassName
-            )}
-          >
-            {tabs.map(tab => (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                disabled={tab.disabled}
-                className={cn(
-                  'group relative flex items-center justify-center gap-2 rounded-lg py-2.5 px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
-                  'border border-border/40 bg-background/50 text-muted-foreground/90 shadow-2xs',
-                  'hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]',
-                  'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20'
-                )}
-              >
-                {tab.icon && (
-                  <span className="shrink-0 transition-transform duration-150 group-hover:scale-110 group-data-[state=active]:text-primary group-hover:text-primary">
-                    {tab.icon}
-                  </span>
-                )}
-                <span className="truncate">{tab.label}</span>
+    <>
+      {syncWithUrl && controlledActiveTab === undefined && (
+        <Suspense fallback={null}>
+          <TabUrlSync
+            urlParamName={urlParamName}
+            validTabIds={validTabIds}
+            onUrlTabChange={tab => {
+              selection.current = tab;
+              setSelectedTab(tab);
+              if (onTabChange) {
+                onTabChange(tab);
+              }
+            }}
+          />
+        </Suspense>
+      )}
+      <Tabs
+        value={currentTab}
+        onValueChange={handleTabChange}
+        className={cn('space-y-6', className)}
+      >
+        {/* Centralized Elevated Navigation Header */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="overflow-x-auto pb-1 scrollbar-none flex-1 min-w-0 w-full">
+            <TabsList
+              className={cn(
+                'h-auto w-full rounded-xl border border-border/80 bg-muted/60 p-1.5 backdrop-blur-xs shadow-2xs gap-1.5',
+                layout === 'grid' && [
+                  'flex sm:grid min-w-max sm:min-w-0',
+                  tabs.length === 2 && 'sm:grid-cols-2',
+                  tabs.length === 3 && 'sm:grid-cols-3',
+                  tabs.length === 4 && 'sm:grid-cols-4',
+                  tabs.length === 5 && 'sm:grid-cols-5',
+                  tabs.length >= 6 && 'sm:grid-cols-6',
+                ],
+                layout === 'auto' && 'inline-flex min-w-full sm:min-w-0 flex-wrap sm:flex-nowrap',
+                listClassName
+              )}
+            >
+              {tabs.map(tab => (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  disabled={tab.disabled}
+                  className={cn(
+                    'group relative flex flex-1 sm:flex-initial items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-2 sm:py-2.5 px-3 sm:px-3.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap shrink-0',
+                    'border border-border/40 bg-background/50 text-muted-foreground/90 shadow-2xs',
+                    'hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]',
+                    'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:border-primary/50 data-[state=active]:shadow-xs data-[state=active]:ring-2 data-[state=active]:ring-primary/20'
+                  )}
+                >
+                  {tab.icon && (
+                    <span className="shrink-0 transition-transform duration-150 group-hover:scale-110 group-data-[state=active]:text-primary group-hover:text-primary">
+                      {tab.icon}
+                    </span>
+                  )}
+                  <span className="whitespace-nowrap">{tab.label}</span>
 
-                {/* Count Pill */}
-                {tab.count !== undefined && tab.count !== null && (
-                  <span
-                    className={cn(
-                      'ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition-colors',
-                      'bg-muted-foreground/15 text-muted-foreground',
-                      'group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary group-data-[state=active]:font-bold'
-                    )}
-                  >
-                    {tab.count}
-                  </span>
-                )}
+                  {/* Count Pill */}
+                  {tab.count !== undefined && tab.count !== null && (
+                    <span
+                      className={cn(
+                        'ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition-colors',
+                        'bg-muted-foreground/15 text-muted-foreground',
+                        'group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary group-data-[state=active]:font-bold'
+                      )}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
 
-                {/* Custom Badge Tag */}
-                {tab.badge && (
-                  <span className="ml-0.5 shrink-0 transition-transform duration-150 group-hover:scale-105">
-                    {tab.badge}
-                  </span>
-                )}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+                  {/* Custom Badge Tag */}
+                  {tab.badge && (
+                    <span className="ml-0.5 shrink-0 transition-transform duration-150 group-hover:scale-105">
+                      {tab.badge}
+                    </span>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+
+          {/* Optional Right Action Slot */}
+          {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
         </div>
 
-        {/* Optional Right Action Slot */}
-        {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
-      </div>
-
-      {/* Render children or tab contents with smooth transition animation */}
-      {children
-        ? children
-        : tabs.map(tab =>
-            tab.content ? (
-              <TabsContent
-                key={tab.id}
-                value={tab.id}
-                className={cn(
-                  'focus-visible:outline-hidden data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:slide-in-from-bottom-1 data-[state=active]:duration-200',
-                  contentClassName
-                )}
-              >
-                {tab.content}
-              </TabsContent>
-            ) : null
-          )}
-    </Tabs>
+        {/* Render children or tab contents with smooth transition animation */}
+        {children
+          ? children
+          : tabs.map(tab =>
+              tab.content ? (
+                <TabsContent
+                  key={tab.id}
+                  value={tab.id}
+                  className={cn(
+                    'focus-visible:outline-hidden data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:slide-in-from-bottom-1 data-[state=active]:duration-200',
+                    contentClassName
+                  )}
+                >
+                  {tab.content}
+                </TabsContent>
+              ) : null
+            )}
+      </Tabs>
+    </>
   );
 }
 

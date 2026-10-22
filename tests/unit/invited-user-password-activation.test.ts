@@ -12,6 +12,7 @@ const mockPrisma = vi.hoisted(() => ({
   user: {
     findFirst: vi.fn(),
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
   },
@@ -73,6 +74,11 @@ describe('Invited User Password Activation and Recovery Flow', () => {
   describe('issueUserInviteToken', () => {
     it('generates an invite link pointing to set-password on the canonical appUrl', async () => {
       mockPrisma.user.update.mockResolvedValue({ invitationGeneration: 2 });
+      mockPrisma.user.findUniqueOrThrow.mockResolvedValueOnce({
+        status: 'INVITED',
+        email: 'invited@example.com',
+        invitationGeneration: 2,
+      });
       mockPrisma.userToken.updateMany.mockResolvedValue({ count: 1 });
       mockPrisma.userToken.create.mockResolvedValue({ id: 'token-id' });
 

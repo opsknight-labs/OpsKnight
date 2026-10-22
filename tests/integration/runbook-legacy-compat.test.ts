@@ -69,6 +69,11 @@ async function legacyRule(mode: 'SUGGESTED' | 'AUTOMATIC') {
       triggers: { create: { event: 'INCIDENT_CREATED' } },
     },
   });
+  // Trigger authoring intentionally pauses AUTOMATIC bindings; explicitly activate
+  // the completed read-only legacy fixture after its trigger is attached.
+  if (mode === 'AUTOMATIC') {
+    await db.serviceAutomationRule.update({ where: { id: rule.id }, data: { enabled: true } });
+  }
   return { service, rule };
 }
 

@@ -7,6 +7,7 @@ import {
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
+import { etagHeaders, ifMatchWhere, parseIfMatch } from '@/lib/api-v2/concurrency';
 
 export const GET = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_READ,
@@ -24,12 +25,17 @@ export const GET = defineV2Route<{ id: string }>({
       },
       select: {
         id: true,
+        revision: true,
         incidentId: true,
         title: true,
         summary: true,
         rootCause: true,
         resolution: true,
         lessons: true,
+        impact: true,
+        timeline: true,
+        contributingFactors: true,
+        fiveWhys: true,
         status: true,
         isPublic: true,
         publishedAt: true,
@@ -62,24 +68,34 @@ export const GET = defineV2Route<{ id: string }>({
       });
     }
 
-    return { data: postmortem };
+    return { data: postmortem, headers: { ...etagHeaders(postmortem.revision), 'Cache-Control': 'no-store' } };
   },
 });
 
 export const PATCH = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
   bodySchema: PostmortemUpdateV2Schema,
-  handler: async ({ actor, apiKey, params, body }) => {
+  idempotent: true,
+  replayAuthGuard: async ({ actor, params, tx }) => {
+    const found = await tx!.postmortem.findFirst({ where: {
+      AND: [{ OR: [{ id: params.id }, { incidentId: params.id }] }, postmortemReadWhere(actor)],
+    }, select: { id: true } });
+    if (!found) throw new AppError({ code: 'POSTMORTEM_NOT_FOUND' });
+  },
+  handler: async ({ actor, apiKey, params, body, req, tx }) => {
     const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
+    const db = tx ?? prisma;
+    const expectedRevision = parseIfMatch(req);
 
-    const existing = await prisma.postmortem.findFirst({
+    const existing = await db.postmortem.findFirst({
       where: {
         AND: [
           { OR: [{ id }, { incidentId: id }] },
           accessWhere,
         ],
       },
+      include: { incident: { select: { status: true } } },
     });
 
     if (!existing) {
@@ -87,6 +103,14 @@ export const PATCH = defineV2Route<{ id: string }>({
         code: 'POSTMORTEM_NOT_FOUND',
         userMessage: `Postmortem with id '${id}' not found.`,
       });
+    }
+    if (body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
+      if (existing.status === 'ARCHIVED' || existing.incident.status !== 'RESOLVED') {
+        throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'Only postmortems for resolved incidents can be published.' });
+      }
+      if ((body.summary ?? existing.summary ?? '').trim().length < 5) {
+        throw new AppError({ code: 'VALIDATION_FAILED', userMessage: 'A postmortem summary is required before publication.' });
+      }
     }
 
     let publishedAt = existing.publishedAt;
@@ -96,9 +120,8 @@ export const PATCH = defineV2Route<{ id: string }>({
       publishedAt = null;
     }
 
-    const updated = await prisma.$transaction(async tx => {
-      const rec = await tx.postmortem.update({
-        where: { id: existing.id },
+    const updatedCount = await db.postmortem.updateMany({
+        where: { id: existing.id, ...ifMatchWhere(expectedRevision) },
         data: {
           ...(body.title !== undefined ? { title: body.title } : {}),
           ...(body.summary !== undefined ? { summary: body.summary } : {}),
@@ -109,17 +132,30 @@ export const PATCH = defineV2Route<{ id: string }>({
               ? { resolution: body.mitigation }
               : {}),
           ...(body.lessons !== undefined ? { lessons: body.lessons } : {}),
+          ...(body.impact !== undefined ? { impact: body.impact } : {}),
+          ...(body.timeline !== undefined ? { timeline: body.timeline } : {}),
+          ...(body.contributingFactors !== undefined ? { contributingFactors: body.contributingFactors } : {}),
+          ...(body.fiveWhys !== undefined ? { fiveWhys: body.fiveWhys } : {}),
           ...(body.status !== undefined ? { status: body.status, publishedAt } : {}),
           ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
         },
+    });
+    if (updatedCount.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
+    const rec = await db.postmortem.findUniqueOrThrow({
+        where: { id: existing.id },
         select: {
           id: true,
+          revision: true,
           incidentId: true,
           title: true,
           summary: true,
           rootCause: true,
           resolution: true,
           lessons: true,
+          impact: true,
+          timeline: true,
+          contributingFactors: true,
+          fiveWhys: true,
           status: true,
           isPublic: true,
           publishedAt: true,
@@ -141,9 +177,9 @@ export const PATCH = defineV2Route<{ id: string }>({
           },
         },
       });
-
       await logV2Audit({
-        action: 'postmortem.updated',
+        action: body.status === 'PUBLISHED' && existing.status !== 'PUBLISHED'
+          ? 'postmortem.published' : 'postmortem.updated',
         entityType: 'INCIDENT',
         entityId: rec.incidentId,
         actorId: actor.id,
@@ -152,18 +188,16 @@ export const PATCH = defineV2Route<{ id: string }>({
         tx,
       });
 
-      return rec;
-    });
-
-    return { data: updated };
+    return { data: rec, headers: { ...etagHeaders(rec.revision), 'Cache-Control': 'no-store' } };
   },
 });
 
 export const DELETE = defineV2Route<{ id: string }>({
   action: AUTHORIZATION_ACTIONS.POSTMORTEM_MANAGE,
-  handler: async ({ actor, apiKey, params }) => {
+  handler: async ({ actor, apiKey, params, req }) => {
     const { id } = params;
     const accessWhere = postmortemReadWhere(actor);
+    const expectedRevision = parseIfMatch(req);
 
     const existing = await prisma.postmortem.findFirst({
       where: {
@@ -182,9 +216,10 @@ export const DELETE = defineV2Route<{ id: string }>({
     }
 
     await prisma.$transaction(async tx => {
-      await tx.postmortem.delete({
-        where: { id: existing.id },
+      const deleted = await tx.postmortem.deleteMany({
+        where: { id: existing.id, ...ifMatchWhere(expectedRevision) },
       });
+      if (deleted.count !== 1) throw new AppError({ code: 'PRECONDITION_FAILED' });
 
       await logV2Audit({
         action: 'postmortem.deleted',

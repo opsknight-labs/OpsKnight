@@ -8,13 +8,19 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      certification_archive:
+        description: Build a native ARM64 application archive for disposable cluster certification
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: docker-image-${{ github.ref }}
+  group: docker-image-${{ github.ref }}-${{ inputs.certification_archive && 'certification' || 'standard' }}
   cancel-in-progress: true
 
 env:
@@ -23,6 +29,62 @@ env:
   IMAGE_NAME_AGENT: ghcr.io/${{ github.repository_owner }}/opsknight-agent
 
 jobs:
+  certification-archive:
+    if: github.event_name == 'workflow_dispatch' && inputs.certification_archive
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Select immutable local image tag
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          echo "tag=opsknight-pr886:${GITHUB_SHA:0:9}" >> "$GITHUB_OUTPUT"
+      - name: Set up native builder
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build official production Dockerfile without publishing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: false
+          load: true
+          tags: ${{ steps.image.outputs.tag }}
+          build-args: |
+            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
+          provenance: false
+          sbom: false
+      - name: Verify source and architecture and export checksummed archive
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect "$IMAGE" --format '{{.Architecture}}')" = arm64
+          test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$GITHUB_SHA"
+          mkdir -p /tmp/certification-image
+          docker image inspect "$IMAGE" --format '{{json .}}' | jq '{Id,Architecture,Os,RepoTags,revision:.Config.Labels["org.opencontainers.image.revision"]}' > /tmp/certification-image/image-metadata.json
+          docker save "$IMAGE" -o /tmp/certification-image/application.tar
+          cd /tmp/certification-image
+          sha256sum application.tar image-metadata.json > SHA256SUMS
+      - name: Retain certification image for one day
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: arm64-certification-${{ github.sha }}
+          path: /tmp/certification-image/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
   validate-release-tag:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
@@ -175,7 +237,7 @@ jobs:
   build:
     needs: [release-quality, integration-certification]
     if: >-
-      !cancelled() &&
+      !cancelled() && !inputs.certification_archive &&
       (!startsWith(github.ref, 'refs/tags/v') ||
         (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'))
     runs-on: ubuntu-22.04

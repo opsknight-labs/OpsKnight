@@ -184,8 +184,10 @@ describe('Runbooks State Machine Safety and Invariants', () => {
       { poolId: 'pool_1' },
     ] as never);
 
-    // Locked candidate returned by SKIP LOCKED is candidate2 directly
-    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ id: 'att_valid' }] as never);
+    // Identity fence precedes the candidate locked with SKIP LOCKED.
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ id: agentId }] as never)
+      .mockResolvedValueOnce([{ id: 'att_valid' }] as never);
 
     // Attempt claim on candidate2 succeeds
     vi.mocked(prisma.runbookStepAttempt.updateMany).mockResolvedValueOnce({ count: 1 });

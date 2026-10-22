@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Network, Server, Users } from 'lucide-react';
+import { Network, Plus, Server, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -143,7 +143,12 @@ export default async function RunbookAgentPoolsPage({
           <ConfigureSheet
             title="Create Agent pool"
             description="Choose target semantics explicitly."
-            trigger={<Button>Create pool</Button>}
+            trigger={
+              <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs">
+                <Plus className="h-4 w-4" />
+                <span>Create pool</span>
+              </Button>
+            }
           >
             <ActionForm
               action={createAgentPoolAction}

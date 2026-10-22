@@ -144,12 +144,12 @@ describe('ApiKeysPanel Component', () => {
     expect(screen.queryByText(title('response-policy:write'))).toBeNull();
   });
 
-  it('does not offer reserved scopes, which currently grant nothing', () => {
+  it('offers newly supported user administration scope for explicit review', () => {
     render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} isAdmin={true} />);
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
     expect(screen.getByText(title('runbooks:write'))).toBeVisible();
     expect(screen.getByText(title('runbooks:publish'))).toBeVisible();
-    expect(screen.queryByText(title('users:write'))).toBeNull();
+    expect(screen.getByText(title('users:write'))).toBeVisible();
   });
 
   it('hides administrative scopes for non-admins, following the registry', () => {

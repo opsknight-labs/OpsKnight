@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { AppError, isAppError } from '@/lib/errors';
+import { postgresSqlState } from '@/lib/postgres-error';
 
 /**
  * Translate Prisma/driver failures into the public error contract so every route
@@ -18,6 +19,11 @@ const UNAVAILABLE_CODES = new Set([
 
 export function mapDatabaseError(error: unknown): unknown {
   if (isAppError(error)) return error;
+  const state = postgresSqlState(error);
+  if (state === '40001' || state === '40P01')
+    return new AppError({ code: 'TRANSIENT_CONFLICT', cause: error });
+  if (state === '57014')
+    return new AppError({ code: 'DATABASE_UNAVAILABLE', cause: error, details: { retryAfter: 2 } });
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     switch (error.code) {

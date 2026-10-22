@@ -1,5 +1,15 @@
 import type { ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  GitBranch,
+  History,
+  PlayCircle,
+  Radio,
+  ScrollText,
+  Server,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function RuleSection({
@@ -120,33 +130,63 @@ export function RuleActionTile({
 }
 
 export const RULE_SECTIONS = [
-  { id: 'checks', label: 'Run & validate' },
-  { id: 'overview', label: 'Readiness' },
-  { id: 'trigger', label: 'Trigger' },
-  { id: 'target', label: 'Target' },
-  { id: 'version', label: 'Version' },
-  { id: 'history', label: 'History' },
-  { id: 'policy', label: 'Policy' },
-  { id: 'audit', label: 'Audit' },
+  { id: 'checks', label: 'Run & validate', icon: PlayCircle },
+  { id: 'overview', label: 'Readiness', icon: Activity },
+  { id: 'trigger', label: 'Trigger', icon: Radio },
+  { id: 'target', label: 'Target', icon: Server },
+  { id: 'version', label: 'Version & inputs', icon: GitBranch },
+  { id: 'history', label: 'History', icon: History },
+  { id: 'policy', label: 'Policy evidence', icon: ShieldCheck },
+  { id: 'audit', label: 'Audit trail', icon: ScrollText },
 ] as const;
 
-export function RuleSectionNav() {
+export function RuleSectionNav({
+  badges,
+}: {
+  badges?: Partial<
+    Record<
+      (typeof RULE_SECTIONS)[number]['id'],
+      { label: string; tone?: 'danger' | 'warning' | 'info' | 'success' }
+    >
+  >;
+}) {
   return (
     <nav
       aria-label="Rule evidence sections"
       className="sticky top-0 z-20 -mx-1 overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-background/95 p-1.5 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-background/80"
     >
       <ul className="flex min-w-max gap-1">
-        {RULE_SECTIONS.map(section => (
-          <li key={section.id}>
-            <a
-              href={`#${section.id}`}
-              className="block whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {section.label}
-            </a>
-          </li>
-        ))}
+        {RULE_SECTIONS.map(section => {
+          const Icon = section.icon;
+          const badge = badges?.[section.id];
+          return (
+            <li key={section.id}>
+              <a
+                href={`#${section.id}`}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground hover:shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Icon className="h-3.5 w-3.5 opacity-70" />
+                <span>{section.label}</span>
+                {badge && (
+                  <span
+                    className={cn(
+                      'ml-0.5 rounded-full px-1.5 py-0 text-[10px] font-mono font-bold leading-tight border shadow-2xs',
+                      badge.tone === 'danger'
+                        ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                        : badge.tone === 'warning'
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : badge.tone === 'success'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'border-border/80 bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {badge.label}
+                  </span>
+                )}
+              </a>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

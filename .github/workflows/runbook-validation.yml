@@ -156,11 +156,15 @@ jobs:
           tests/integration/runbook-execution-safety.test.ts
           tests/integration/runbook-preview-authorization.test.ts
           tests/integration/runbook-lifecycle-database.test.ts
+          tests/integration/api-v2-runbook-rules.test.ts
+          tests/integration/runbook-rule-command-transactions.test.ts
+          tests/integration/runbook-approval-command-transactions.test.ts
           tests/integration/runbook-binding-readiness-database.test.ts
           tests/integration/runbook-artifact-retention-database.test.ts
           tests/integration/runbook-operational-backlog-database.test.ts
           tests/integration/runbook-nonce-maintenance-database.test.ts
           tests/integration/runbook-policy-checks-database.test.ts
+          tests/integration/runbook-pool-membership-concurrency.test.ts
           tests/integration/runbook-worker-evidence-database.test.ts
           tests/integration/runbook-review-regressions-database.test.ts
           tests/integration/runbook-resolve-race.test.ts

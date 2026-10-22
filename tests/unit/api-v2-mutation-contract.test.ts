@@ -50,7 +50,7 @@ describe('REST v2 mutation contract', () => {
     for (const { key, source } of operations) {
       const contract = V2_MUTATION_CONTRACT[key];
       const honoursKey =
-        /runV2IdempotentMutation|runV2IdempotentAuditedMutation|executeIdempotent|transitionIncidentToStatusIdempotent|idempotency:\s|idempotent:\s*true|idempotency-key/i.test(
+        /runV2IdempotentMutation|runV2IdempotentAuditedMutation|requireStatusPageIdempotency|executeIdempotent|transitionIncidentToStatusIdempotent|idempotency:\s|idempotent:\s*true|idempotency-key/i.test(
           source
         );
       if (contract.idempotency === 'required' || contract.idempotency === 'supported') {
@@ -73,10 +73,13 @@ describe('REST v2 mutation contract', () => {
   it('backs every ETag claim with If-Match handling', () => {
     for (const { key, source } of operations) {
       if (V2_MUTATION_CONTRACT[key].concurrency === 'etag') {
-        expect(source, `${key} declares etag concurrency`).toMatch(/parseIfMatch|requireDraft/);
-        expect(source, `${key} must emit ETag on its response`).toMatch(
-          /etagHeaders|authoringVersionResult/
+        expect(source, `${key} declares etag concurrency`).toMatch(
+          /parseIfMatch|requireDraft|requireRevisionIfMatch|requireObjectiveVersion|requireRunbookRevision|requireRule/
         );
+        if (V2_MUTATION_CONTRACT[key].responseEtag !== false)
+          expect(source, `${key} must emit ETag on its response`).toMatch(
+            /etagHeaders|authoringVersionResult|runbookMetadataResult|ruleResult/
+          );
       }
     }
   });

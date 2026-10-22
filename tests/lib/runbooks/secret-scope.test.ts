@@ -15,7 +15,7 @@ describe('Runbook secret execution scope', () => {
     const result = await resolveSecretInputValues(
       { password: 'secret://database-password', region: 'us-east-1' },
       { agentId: 'agent-1', targetAgentPoolId: 'pool-1' },
-      { runbookSecret: { findMany } } as never
+      { $queryRaw: vi.fn().mockResolvedValue([]), runbookSecret: { findMany } } as never
     );
     expect(result).toEqual({ password: 'plain:ciphertext', region: 'us-east-1' });
     expect(findMany).toHaveBeenCalledWith({
@@ -36,6 +36,7 @@ describe('Runbook secret execution scope', () => {
   it('does not fall back to an unscoped secret when no grant matches', async () => {
     await expect(
       resolveSecretInputValues({ token: 'secret://production-token' }, { agentId: 'agent-1' }, {
+        $queryRaw: vi.fn().mockResolvedValue([]),
         runbookSecret: { findMany: vi.fn().mockResolvedValue([]) },
       } as never)
     ).rejects.toThrow('not granted to this Agent or execution pool');

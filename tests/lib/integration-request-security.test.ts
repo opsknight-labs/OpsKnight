@@ -97,4 +97,43 @@ describe('inbound delivery inbox', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) })
     );
   });
+
+  it('reclaims an expired lease after polling with a refreshed cutoff timestamp', async () => {
+    inboundDelivery.create.mockRejectedValueOnce({ code: 'P2002' });
+    // First query: active lease expiring very shortly (e.g. 10ms)
+    inboundDelivery.findUnique.mockResolvedValueOnce({
+      id: 'delivery-1',
+      status: 'PROCESSING',
+      leaseExpiresAt: new Date(Date.now() + 10),
+    });
+    // Second query (after polling loop): lease has now expired
+    inboundDelivery.findUnique.mockResolvedValueOnce({
+      id: 'delivery-1',
+      status: 'PROCESSING',
+      leaseExpiresAt: new Date(Date.now() - 50),
+    });
+    inboundDelivery.updateMany.mockResolvedValueOnce({ count: 1 });
+    inboundDelivery.findUnique.mockResolvedValueOnce({ attempt: 2 });
+
+    const result = await claimInboundDelivery('integration-1', 'GITHUB', 'delivery-1');
+    expect(result).toMatchObject({
+      disposition: 'CLAIMED',
+      id: 'delivery-1',
+      attempt: 2,
+    });
+    // Ensure updateMany used a fresh cutoff predicate
+    expect(inboundDelivery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'delivery-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              status: 'PROCESSING',
+              leaseExpiresAt: expect.objectContaining({ lte: expect.any(Date) }),
+            }),
+          ]),
+        }),
+      })
+    );
+  });
 });

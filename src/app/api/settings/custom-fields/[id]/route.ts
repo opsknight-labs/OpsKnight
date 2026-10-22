@@ -6,10 +6,10 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { prismaToAppError } from '@/lib/prisma-errors';
-import { CustomFieldUpdateSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { emitAuditEvent } from '@/lib/audit';
 import { Prisma } from '@prisma/client';
+import { updateDefinitionSchema, validateDefinition } from '@/lib/custom-fields/definitions';
 
 /**
  * Update Custom Field
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
     }
 
-    const parsed = CustomFieldUpdateSchema.safeParse(body);
+    const parsed = updateDefinitionSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(
         new AppError({
@@ -62,9 +62,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const updatedField = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "CustomField" WHERE "id" = ${id} FOR UPDATE`;
       const existing = await tx.customField.findUnique({ where: { id } });
       if (!existing) {
         throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Custom field not found.' });
+      }
+
+      const nextOptions = options === undefined
+        ? (Array.isArray(existing.options) ? existing.options.filter((item): item is string => typeof item === 'string') : null)
+        : options;
+      validateDefinition({
+        name: name ?? existing.name, type: existing.type,
+        required: required ?? existing.required,
+        defaultValue: defaultValue === undefined ? existing.defaultValue : defaultValue,
+        options: nextOptions,
+      });
+      if (existing.type === 'SELECT' && options !== undefined) {
+        const incompatible = await tx.customFieldValue.count({
+          where: { customFieldId: id, value: { not: null, notIn: nextOptions ?? [] } },
+        });
+        if (incompatible) throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'Existing incident values use options being removed.' });
       }
 
       const updated = await tx.customField.update({
@@ -133,12 +150,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
 
     await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "CustomField" WHERE "id" = ${id} FOR UPDATE`;
       const existing = await tx.customField.findUnique({ where: { id } });
       if (!existing) {
         throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Custom field not found.' });
       }
 
-      await tx.customFieldValue.deleteMany({ where: { customFieldId: id } });
+      const usageCount = await tx.customFieldValue.count({ where: { customFieldId: id } });
+      if (usageCount) throw new AppError({
+        code: 'RESOURCE_CONFLICT', userMessage: 'Remove incident values before deleting this field.',
+      });
       await tx.customField.delete({ where: { id } });
 
       await emitAuditEvent(

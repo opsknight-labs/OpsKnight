@@ -366,7 +366,8 @@ export async function setGlobalDefaultWarRoomProviders(
 export async function setGlobalMeetingProvider(
   meetingProvider: IncidentMeetingProvider,
   userId?: string,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  syncChatOpsConfig = true
 ): Promise<void> {
   const client = tx || prisma;
   if (!client?.systemConfig?.upsert) return;
@@ -383,7 +384,7 @@ export async function setGlobalMeetingProvider(
     },
   });
 
-  if (client?.chatOpsConfig?.update) {
+  if (syncChatOpsConfig && client?.chatOpsConfig?.update) {
     await client.chatOpsConfig
       .update({
         where: { id: 'default' },

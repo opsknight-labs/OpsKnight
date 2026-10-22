@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
+import { listTeamActivity } from '@/lib/teams/activity';
 import { assertCanViewTeam, getUserPermissions } from '@/lib/rbac';
 import {
   addTeamMember,
@@ -122,7 +123,9 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
   }
 
   const ownerCount = team.members.filter(m => m.role === 'OWNER').length;
-  const isTeamOwner = team.members.some(m => m.userId === permissions.id && m.role === 'OWNER');
+  const isTeamOwner =
+    permissions.role !== 'AUDITOR' &&
+    team.members.some(m => m.userId === permissions.id && m.role === 'OWNER');
   const canUpdateTeam = permissions.isAdmin || isTeamOwner;
   const canDeleteTeam = permissions.isAdmin;
   const canManageMembers = permissions.isAdmin || isTeamOwner;
@@ -159,27 +162,12 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
         })
       : Promise.resolve([]),
     canManageMembers
-      ? prisma.auditLog.findMany({
-          where: {
-            OR: [
-              { entityType: 'TEAM', entityId: id },
-              { entityType: 'TEAM_MEMBER', entityId: { startsWith: `${id}:` } },
-            ],
-          },
-          include: {
-            actor: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                avatarUrl: true,
-                gender: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 25,
-        })
+      ? prisma.$transaction(
+          async tx =>
+            (await listTeamActivity(tx, id, { id: permissions.id }, { limit: 25, cursor: null }))
+              .data,
+          { isolationLevel: 'Serializable' }
+        )
       : Promise.resolve([]),
   ]);
 

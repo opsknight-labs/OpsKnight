@@ -53,8 +53,8 @@ describe('user management security contract', () => {
     const users = readFileSync('src/app/(app)/users/actions.ts', 'utf8');
     const invariant = readFileSync('src/lib/users/admin-invariants.ts', 'utf8');
 
-    expect(teams).toContain('removeTeamMembership(memberId)');
-    expect(users).toContain('removeTeamMembership(memberId)');
+    expect(teams).toContain('removeTeamMembership(memberId,');
+    expect(users).toContain('removeTeamMembership(memberId,');
     expect(invariant).toContain('LOCK_KEYS.USER_ADMIN_INVARIANT');
     expect(invariant).toContain("status: 'ACTIVE'");
     expect(invariant).toContain('runSerializableTransaction(');

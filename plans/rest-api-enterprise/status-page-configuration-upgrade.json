@@ -1,0 +1,21 @@
+{
+  "measuredAt": "2026-10-18T21:01:25.843Z",
+  "baseline": "9ffd69e9d",
+  "database": "Isolated populated PostgreSQL 16 upgrade",
+  "before": {
+    "name": "Status upgrade page",
+    "enabled": true,
+    "showIncidentTitles": false
+  },
+  "afterUpgrade": {
+    "enabled": true,
+    "showIncidentTitles": false,
+    "revision": 1
+  },
+  "afterNestedPresentationWrite": {
+    "revision": 2,
+    "enabled": true,
+    "showIncidentTitles": false
+  },
+  "scope": "Preserves populated settings and fences subsequent nested presentation edits. No rolling-upgrade/load certification."
+}

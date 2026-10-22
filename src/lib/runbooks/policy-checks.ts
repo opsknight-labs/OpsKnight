@@ -4,7 +4,13 @@ import { hasUnverifiablePolicyInput } from '../../../agent/src/policy-inputs';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { logAudit } from '@/lib/audit';
+import {
+  runRunbookCommand,
+  logRunbookCommandAudit,
+  type RunbookCommandActor,
+  type RunbookCommandClient,
+} from './command-context';
+import { lockServiceRuleForUpdate } from './locking';
 import {
   flattenSteps,
   parseRunbookDefinition,
@@ -36,9 +42,15 @@ export function policyCheckSteps(
 export function samePolicySnapshot(before: unknown, after: unknown) {
   return JSON.stringify(sortJsonValue(before)) === JSON.stringify(sortJsonValue(after));
 }
-export async function requestRulePolicyChecks(serviceId: string, ruleId: string, actorId: string) {
-  return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT id FROM "ServiceRunbookBinding" WHERE id = ${ruleId} AND "serviceId" = ${serviceId} FOR UPDATE`;
+export async function requestRulePolicyChecks(
+  serviceId: string,
+  ruleId: string,
+  actor: RunbookCommandActor,
+  client?: RunbookCommandClient
+) {
+  const actorId = typeof actor === 'string' ? actor : actor.id;
+  return runRunbookCommand(client, async tx => {
+    await lockServiceRuleForUpdate(tx, serviceId, ruleId);
     const rule = await tx.serviceAutomationRule.findFirst({
       where: { id: ruleId, serviceId, detachedAt: null },
       include: {
@@ -106,21 +118,23 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
       );
     // Each durable row freezes the selected version and redacted configuration.
     // Insert bounded batches atomically: activation cannot observe a partial request.
-    for (let offset = 0; offset < agents.length; offset += POLICY_CERTIFICATION_BATCH_SIZE) {
+    const checks = agents.map(agent => ({
+      id: crypto.randomUUID(),
+      ruleId,
+      agentId: agent.id,
+      versionId: version.id,
+      checksum: version.checksum,
+      steps: steps as unknown as Prisma.InputJsonValue,
+      expiresAt: new Date(now.getTime() + 5 * 60_000),
+      createdById: actorId,
+    }));
+    for (let offset = 0; offset < checks.length; offset += POLICY_CERTIFICATION_BATCH_SIZE) {
       await tx.runbookPolicyCheck.createMany({
-        data: agents.slice(offset, offset + POLICY_CERTIFICATION_BATCH_SIZE).map(agent => ({
-          id: crypto.randomUUID(),
-          ruleId,
-          agentId: agent.id,
-          versionId: version.id,
-          checksum: version.checksum,
-          steps: steps as unknown as Prisma.InputJsonValue,
-          expiresAt: new Date(now.getTime() + 5 * 60_000),
-          createdById: actorId,
-        })),
+        data: checks.slice(offset, offset + POLICY_CERTIFICATION_BATCH_SIZE),
       });
     }
-    await logAudit(
+    await logRunbookCommandAudit(
+      actor,
       {
         action: 'runbook.rule.policy_check.requested',
         entityType: 'RUNBOOK',
@@ -130,7 +144,12 @@ export async function requestRulePolicyChecks(serviceId: string, ruleId: string,
       },
       tx
     );
-    return { saved: true, checkedTargets: agents.length };
+    return {
+      saved: true,
+      checkedTargets: agents.length,
+      checkIds: checks.map(check => check.id),
+      status: 'PENDING' as const,
+    };
   });
 }
 export async function pendingAgentPolicyChecks(agentId: string) {

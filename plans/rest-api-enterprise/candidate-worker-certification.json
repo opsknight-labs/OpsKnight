@@ -1,0 +1,100 @@
+{
+  "reviewedCommit": "6ebbeb75c090b076df9241ff5f4d927449809024",
+  "status": "local_functional_worker_journey_passed_latest_ci_pending",
+  "topology": {
+    "webReplicas": 2,
+    "generalWorkers": 1,
+    "database": "isolated local PostgreSQL test database",
+    "application": "production Next.js build"
+  },
+  "browser": {
+    "startTime": "2026-10-18T06:44:18.575Z",
+    "duration": 177977.352,
+    "expected": 32,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "observationJobs": [
+    {
+      "project": "desktop",
+      "id": "AUTOMATION_OBSERVE:cmvdgne1g0066fen29y3s6r7x",
+      "status": "COMPLETED",
+      "attempts": 2,
+      "createdAt": "2026-10-18T06:44:47.963Z",
+      "completedAt": "2026-10-18T06:45:56.364Z"
+    },
+    {
+      "project": "mobile",
+      "id": "AUTOMATION_OBSERVE:cmvdgpcn800d6fen2h28ehkt8",
+      "status": "COMPLETED",
+      "attempts": 1,
+      "createdAt": "2026-10-18T06:46:19.469Z",
+      "completedAt": "2026-10-18T06:46:19.757Z"
+    },
+    {
+      "project": "iphone",
+      "id": "AUTOMATION_OBSERVE:cmvdgpxk000k6fen2dllprcix",
+      "status": "COMPLETED",
+      "attempts": 1,
+      "createdAt": "2026-10-18T06:46:46.566Z",
+      "completedAt": "2026-10-18T06:46:47.194Z"
+    },
+    {
+      "project": "tablet",
+      "id": "AUTOMATION_OBSERVE:cmvdgqj3c00r6fen29i0q7xjn",
+      "status": "COMPLETED",
+      "attempts": 1,
+      "createdAt": "2026-10-18T06:47:14.479Z",
+      "completedAt": "2026-10-18T06:47:14.644Z"
+    }
+  ],
+  "delayedEvidence": [
+    {
+      "project": "desktop",
+      "latestEvidenceBucketDate": null,
+      "pendingObservations": 1,
+      "pendingObservationsTruncated": false,
+      "oldestSampledPendingAgeMs": 1893
+    }
+  ],
+  "sourceDigests": {
+    ".github/workflows/automation-validation.yml": "1c4a77132fe75325afdba5b4fee1675036892daf0995e286d415220de71963cd",
+    "playwright.automation.config.ts": "ce62f8931860298f3789c17596e4d4fb3258b8c0fc2bae06565e0253ccd62847",
+    "sdk/typescript/schema.ts": "c4ec4d4910a8a18df0b56c8db3de1b0aa0cea15605e5f1cf3ced0a5a6db4fc91",
+    "src/app/(app)/services/[id]/automation/actions.ts": "4b677c2c8a105d2ba66c2fdbd4efbacd3e1bb1c1eaf21488d2857c484c69dcd1",
+    "src/app/api/v2/services/[id]/automation/candidate/route.ts": "0c225ef5c51b0ce2f242231f8e2480936fd6bd1e9c2e7e6add3d9ea2ab12519e",
+    "src/app/api/v2/services/[id]/automation/candidates/activate/route.ts": "6317181c251fbd37d3d3f010110ca39175239608221401c4c7893b23299a5424",
+    "src/components/automation/AutomationOverview.tsx": "f0aae1a56bbb533647a19685a61bc71c518cbea150e247fe4d3f0ce396770423",
+    "src/components/automation/AutomationReviewDialog.tsx": "f0141c8bcee7af8ce9f70236b0af8dcad617d0d326dc7772935e34eb74bd664b",
+    "src/components/automation/AutomationWorkspace.tsx": "505935bf15867dd3334a5dcefab39d0971bf59e4dce4f741ea88833ae3798b3b",
+    "src/components/automation/presentation-types.ts": "fce6956bc213f2bf2fc775fc3d5ffe806b2395225773216202d14bd18331dd54",
+    "src/lib/api-v2/enterprise-openapi.ts": "0694e1cf5b8193d99a23de1832fdb38f2844c1b9edff8c153d73cea4376c7ce6",
+    "src/lib/automation/versioning.ts": "dd0e6a849872367487fce236768f05d5e9a6674b5fbddc861a811dfd49e5f066",
+    "tests/components/automation-authoring.test.tsx": "2445af196e51ab14ad9e70790282a18637568d77dc46988c24e27030244a77da",
+    "tests/e2e/automation.spec.ts": "eef0a9469f59a579855f84f7dbe8d6e0decfc8ba9aea2574fd8d96d6949198d4",
+    "tests/integration/automation-certification.test.ts": "5393bf7cf4c105768dcd03cd1d4234b71bff53a76f4c1b4c27162e0391dc0ccf",
+    "tests/unit/api-v2-workflow-inventory.test.ts": "db5f2baaa477562ead280cb57446f59a415b9bbce626ba79f3887c0afd2a0fea",
+    "src/lib/automation/evidence-freshness.ts": "b8d2bf1e3a26e26a296e4969beac0f5150322f958392fed89594dc2ff700a7d1",
+    "tests/integration/automation-candidate-latency.test.ts": "eacc5f497d776b2ffa697fe1731846fd6ecdafe18e5c9289b5b39ac9919698b1",
+    "tests/integration/automation-evidence-freshness.test.ts": "7c534c8fd6524f10d259d62de149a88630170ffda8499b968ccb35241525ab38"
+  },
+  "databaseTests": {
+    "passed": 64,
+    "skipped": 1
+  },
+  "pythonSdkTests": 9,
+  "latencyEvidence": "candidate-latency-local.json",
+  "limitations": [
+    "Source inputs are identified by digests; the reviewed commit is the base, not a claim that its failing browser run passed.",
+    "Current head requires new GitHub CI.",
+    "One desktop injected observation failure; normal worker-backed lifecycle on all four profiles.",
+    "Chromium desktop/mobile Tab navigation and WebKit focused keyboard activation are tested; not a complete accessibility certificate.",
+    "Additional paging/policy/suppression profiles, reviewed rollback, wider fault/race cases, approved latency acceptance, 1/2/4 replica load/HA and rolling-version coexistence remain outstanding.",
+    "M0 broader acceptance and M1\u2013M5 enterprise delivery are not certified complete."
+  ],
+  "focusedUnitTests": 159,
+  "typecheck": "passed",
+  "changedSourceLint": "passed_zero_warnings",
+  "productionBuild": "passed"
+}

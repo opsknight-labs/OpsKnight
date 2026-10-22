@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { Prisma, Role, RoleSource, UserStatus } from '@prisma/client';
+import { AppError } from '@/lib/errors';
 import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import {
@@ -22,9 +23,10 @@ export async function updateUserSecurityState(
   additionalData: Prisma.UserUpdateInput = {},
   sideEffects?: SecurityMutationSideEffects,
   beforeWrite?: SecurityMutationSideEffects,
-  expectedTokenVersion?: number
+  expectedTokenVersion?: number,
+  client?: Prisma.TransactionClient
 ) {
-  const updated = await runSerializableTransaction(async tx => {
+  const command = async (tx: Prisma.TransactionClient) => {
     await beforeWrite?.(tx);
     await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
     const target = await tx.user.findUnique({
@@ -46,7 +48,10 @@ export async function updateUserSecurityState(
         where: { id: { not: userId }, role: 'ADMIN', status: 'ACTIVE' },
       });
       if (otherActiveAdmins === 0) {
-        throw new Error('Operation would leave the system with no active administrators.');
+        throw new AppError({
+          code: 'RESOURCE_CONFLICT',
+          userMessage: 'Operation would leave the system with no active administrators.',
+        });
       }
     }
 
@@ -56,8 +61,9 @@ export async function updateUserSecurityState(
     });
     await sideEffects?.(tx);
     return updated;
-  });
-  invalidateSessionSecurityProjection(userId);
+  };
+  const updated = client ? await command(client) : await runSerializableTransaction(command);
+  if (!client) invalidateSessionSecurityProjection(userId);
   return updated;
 }
 
@@ -88,7 +94,10 @@ export async function bulkUpdateUserSecurityState(
         where: { role: 'ADMIN', status: 'ACTIVE' },
       });
       if (totalActiveAdmins - removesActiveAdmins < 1) {
-        throw new Error('Operation would leave the system with no active administrators.');
+        throw new AppError({
+          code: 'RESOURCE_CONFLICT',
+          userMessage: 'Operation would leave the system with no active administrators.',
+        });
       }
     }
     const updated = await tx.user.updateMany({

@@ -1,0 +1,67 @@
+{
+  "sourceParent": "35f925da0dbcdf5f7ef6cc47f5f6c55d484490c2",
+  "updatedAt": "2026-10-19T11:08:44.113305+00:00",
+  "status": "local_verification_passed_runtime_certification_pending",
+  "registeredOperationCount": 184,
+  "newOperationCount": 20,
+  "coverage": [
+    "Agent pool create/read/update/deletion checks/safe deletion and explicit membership",
+    "Agent configuration metadata and health-independent revisions",
+    "Write-only secret create/rotate, metadata reads, scoped grants and revocation",
+    "Runbook settings read/update with explicit artifact cleanup confirmation"
+  ],
+  "checks": {
+    "actualRoutePostgres": {
+      "passed": 30,
+      "files": [
+        "api-v2-runbook-pools.test.ts",
+        "api-v2-runbook-secret-administration.test.ts",
+        "api-v2-runbook-fleet.test.ts"
+      ]
+    },
+    "selectedClaimPostgres": {
+      "passed": 8,
+      "notSelected": 57,
+      "filter": "claim|revok|enroll"
+    },
+    "unitContractsAndSdk": {
+      "passed": 350,
+      "files": 10
+    },
+    "authorizationMatrix": {
+      "passed": 7,
+      "snapshot": "All new operations allow ADMIN with the exact scope; RESPONDER/AUDITOR/USER denied."
+    },
+    "pythonSdk": {
+      "passed": 9
+    },
+    "typecheck": "passed",
+    "changedSourceLint": "passed with zero warnings",
+    "sdkBuildAndDrift": "passed",
+    "workflowActionlint": "passed"
+  },
+  "securityProperties": [
+    "Dedicated explicit scopes; broad administration does not imply secret management",
+    "Concrete revisions and durable retry receipts commit atomically with canonical API-attributed audits",
+    "Secret values encrypted at rest, excluded from response/journal/audit projections and database metadata read selections",
+    "Authenticated-credential-keyed HMAC binds secret input fingerprints without low-entropy unkeyed journal hashes",
+    "Pool selectors, Agent labels and membership changes cannot expand secret-granted access without explicit grant scope",
+    "Shared fleet mutation lock and parent row locks serialize grant and configuration mutations",
+    "Database triggers cover UI and direct database writers; Agent heartbeat updates preserve configuration revisions",
+    "Pool mutation reconciles only the affected pool; collection reads use bounded indexed cursor pagination"
+  ],
+  "limitations": [
+    "No deployed-image certification for these twenty operations yet; certified Kind image is older 133f1ee66",
+    "Already accepted Agent claims may retain secrets delivered before grant revocation",
+    "Identity, integrations, notification and remaining product API families remain incomplete",
+    "Real-Agent execution and combined load/HA/mixed-version certification remain open"
+  ],
+  "sourceSha256": {
+    "src/lib/runbooks/pool-commands.ts": "0a2338221bf3c307152825b4f232a4c87530cee81927a3fda2f6a2c860870d72",
+    "src/lib/runbooks/secrets.ts": "28bd34378c473861a122d00e109c409226909387962cfc28947aa3051b85d086",
+    "src/lib/runbooks/settings-commands.ts": "2b705656522d6a9e074583cb329a220a7bc2aeab774ed0a0fde0323a211dfee1",
+    "src/lib/api-v2/runbook-administration-openapi.ts": "f78ef20ae565c7eaf227b94ec28fe06905142e925e0ee3d61376b9f04b02c3d7",
+    "tests/integration/api-v2-runbook-pools.test.ts": "ee2275a332eee5a7181e3abc1c0db4e3f250cb196dd957eb8de76ab3b013ad6c",
+    "tests/integration/api-v2-runbook-secret-administration.test.ts": "9b6ca5f83c268f0c6ed2a790bf17563d0e753253653684aa522f7586724d453e"
+  }
+}

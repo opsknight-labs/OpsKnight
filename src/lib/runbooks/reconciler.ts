@@ -1,11 +1,85 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { DEFAULT_STEP_TIMEOUT_SECONDS, isSafeToRetryAfterUnknown } from './types';
 import { finalizeExecutionDeadline } from './deadline';
 import { retryDelayMs } from './safety';
+import { lockFleetClaim } from './pool-labels';
+
+function executionPoolIds(targetPoolId: string | null, selection: Prisma.JsonValue) {
+  const sourcePoolId =
+    selection &&
+    typeof selection === 'object' &&
+    !Array.isArray(selection) &&
+    typeof selection.sourcePoolId === 'string'
+      ? selection.sourcePoolId
+      : null;
+  return [...new Set([targetPoolId, sourcePoolId].filter((id): id is string => id !== null))];
+}
+
+async function hasRetiredPool(tx: Prisma.TransactionClient, ids: string[]) {
+  if (!ids.length) return false;
+  // Preserve assignment/retirement serialization for direct database writers,
+  // too. A read of only the explicit target misses selected-Agent provenance.
+  const pools = await tx.$queryRaw<Array<{ lifecycle: string }>>(Prisma.sql`
+    SELECT lifecycle FROM "RunbookAgentPool" WHERE id IN (${Prisma.join(ids)})
+    ORDER BY id FOR SHARE
+  `);
+  return pools.some(pool => pool.lifecycle === 'RETIRED');
+}
+
+async function failRetiredPoolAttempt(tx: Prisma.TransactionClient, id: string, now: Date) {
+  const attempt = await tx.runbookStepAttempt.findFirst({
+    where: {
+      id,
+      OR: [{ status: 'PENDING' }, { status: 'CLAIMED', leaseExpiresAt: { lt: now } }],
+    },
+    select: {
+      executionStepId: true,
+      targetAgentPoolId: true,
+      executionStep: {
+        select: { executionId: true, execution: { select: { targetSelection: true } } },
+      },
+    },
+  });
+  if (!attempt) return false;
+  if (
+    !(await hasRetiredPool(
+      tx,
+      executionPoolIds(attempt.targetAgentPoolId, attempt.executionStep.execution.targetSelection)
+    ))
+  )
+    return false;
+  const error = {
+    errorCode: 'TARGET_POOL_RETIRED',
+    errorMessage: 'The target Agent pool was retired. Select an active target for a new execution.',
+  };
+  const changed = await tx.runbookStepAttempt.updateMany({
+    where: {
+      id,
+      OR: [{ status: 'PENDING' }, { status: 'CLAIMED', leaseExpiresAt: { lt: now } }],
+    },
+    data: { status: 'FAILED', completedAt: now, leaseToken: null, leaseExpiresAt: null, ...error },
+  });
+  if (changed.count !== 1) return false;
+  const step = await tx.runbookExecutionStep.updateMany({
+    where: { id: attempt.executionStepId, status: { in: ['READY', 'WAITING_AGENT', 'RUNNING'] } },
+    data: { status: 'FAILED', completedAt: now, ...error },
+  });
+  if (step.count === 1)
+    await tx.backgroundJob.create({
+      data: {
+        type: 'RUNBOOK',
+        status: 'PENDING',
+        scheduledAt: now,
+        maxAttempts: 8,
+        payload: { kind: 'ADVANCE_EXECUTION', executionId: attempt.executionStep.executionId },
+      },
+    });
+  return true;
+}
 
 export async function reconcileRunbooks(limit = 100, connection?: Prisma.TransactionClient) {
   const db = connection ?? prisma;
@@ -64,6 +138,25 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
   for (const { id: executionId } of overdueExecutions) {
     await transaction(tx => finalizeExecutionDeadline(tx, executionId, now));
   }
+  // Retirement prevents new fences. Unstarted work must converge without
+  // retrying into a pool whose database assignment guard now rejects it.
+  // A live claimed lease is left intact until its holder finishes or expires.
+  const retiredTargets = await db.$queryRaw<Array<{ id: string }>>`
+    SELECT a.id FROM "RunbookStepAttempt" a
+    JOIN "RunbookExecutionStep" s ON s.id = a."executionStepId"
+    JOIN "RunbookExecution" e ON e.id = s."executionId"
+    WHERE (a.status = 'PENDING' OR (a.status = 'CLAIMED' AND a."leaseExpiresAt" < ${now}))
+      AND EXISTS (
+        SELECT 1 FROM "RunbookAgentPool" p WHERE p.lifecycle = 'RETIRED'
+          AND p.id IN (a."targetAgentPoolId", e."targetSelection"->>'sourcePoolId')
+      )
+    ORDER BY a."createdAt", a.id LIMIT ${limit}
+  `;
+  for (const attempt of retiredTargets)
+    await transaction(async tx => {
+      await lockFleetClaim(tx);
+      await failRetiredPoolAttempt(tx, attempt.id, now);
+    });
   const expired = await db.runbookStepAttempt.findMany({
     where: {
       OR: [
@@ -76,7 +169,14 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
     include: {
       executionStep: {
         include: {
-          execution: { select: { cancelRequestedAt: true, status: true, deadlineAt: true } },
+          execution: {
+            select: {
+              cancelRequestedAt: true,
+              status: true,
+              deadlineAt: true,
+              targetSelection: true,
+            },
+          },
         },
       },
       targetAgentPool: { select: { mode: true } },
@@ -87,6 +187,8 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
   for (const attempt of expired) {
     if (attempt.status === 'PENDING') {
       await transaction(async tx => {
+        await lockFleetClaim(tx);
+        if (await failRetiredPoolAttempt(tx, attempt.id, now)) return;
         const timedOut = await tx.runbookStepAttempt.updateMany({
           where: { id: attempt.id, status: 'PENDING', claimDeadlineAt: { lt: now } },
           data: {
@@ -199,6 +301,11 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
       continue;
     }
     await transaction(async tx => {
+      await lockFleetClaim(tx);
+      const retiredPool = await hasRetiredPool(
+        tx,
+        executionPoolIds(attempt.targetAgentPoolId, attempt.executionStep.execution.targetSelection)
+      );
       const marked = await tx.runbookStepAttempt.updateMany({
         where: { id: attempt.id, status: 'RUNNING', leaseExpiresAt: { lt: now } },
         data: {
@@ -211,6 +318,7 @@ export async function reconcileRunbooks(limit = 100, connection?: Prisma.Transac
       });
       if (marked.count !== 1) return;
       const safeRetry =
+        !retiredPool &&
         isSafeToRetryAfterUnknown(attempt.executionStep.riskClass) &&
         !attempt.executionStep.execution.cancelRequestedAt &&
         attempt.executionStep.execution.deadlineAt > now &&

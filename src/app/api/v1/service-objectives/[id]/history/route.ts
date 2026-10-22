@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
+import { serviceObjectiveReadWhere, requireSharedObjectiveHistory } from '@/lib/slo/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { v1ErrorResponse } from '@/lib/api-v1-errors';
 
@@ -11,6 +11,7 @@ const MAX_VERSIONS = 200;
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const actor = await getCurrentAuthorizationActor();
+    requireSharedObjectiveHistory(actor);
     const lineageId = (await params).id;
     const searchParams = new URL(request.url).searchParams;
     const limit = Math.min(Math.max(Number(searchParams.get('limit')) || 100, 1), 500);

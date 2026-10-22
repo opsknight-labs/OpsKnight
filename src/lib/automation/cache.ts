@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { LIMITS, type CompiledSnapshot, type CompiledField, builtinFields } from './contract';
-export type CachedCompiledVersion = {
+export type CachedCompiledVersion = CompiledSnapshot & {
   compiled: CompiledSnapshot;
   versionNumber: number;
   fieldsByKey: Map<string, CompiledField | (typeof builtinFields)[number]>;
@@ -21,7 +21,7 @@ export const checksum = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(canonical(value)))
     .digest('hex');
-export function getCachedCompiledVersion(id: string): CachedCompiledVersion | undefined {
+export function getCachedCompiledVersion(id: string) {
   const cached = versions.get(id);
   if (cached) {
     versions.delete(id);
@@ -53,6 +53,7 @@ export function loadCompiledVersion(version: {
     [...builtinFields, ...compiled.fields].map(field => [field.key, field])
   );
   const entry: CachedCompiledVersion = {
+    ...compiled,
     compiled,
     versionNumber: version.versionNumber,
     fieldsByKey,

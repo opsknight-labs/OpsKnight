@@ -68,15 +68,11 @@ export type JobType =
   | 'ENCRYPTION_LIFECYCLE'
   | 'COMPLIANCE_EVALUATION_SWEEP'
   | 'COMPLIANCE_DRIFT_PROJECT'
-  | 'RUNBOOK';
+  | 'RUNBOOK'
+  | 'REPORT_EXPORT'
+  | 'AUDIT_EXPORT';
 export type JobStatus =
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'PENDING_V2'
-  | 'PROCESSING_V2'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'CANCELLED';
+  'PENDING' | 'PROCESSING' | 'PENDING_V2' | 'PROCESSING_V2' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 export const GENERAL_WORKER_EXCLUDED_JOB_TYPES: readonly JobType[] = [
   'ESCALATION',
@@ -175,6 +171,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.projectionVersion;
     case 'runId':
       return values.runId;
+    case 'exportId':
+      return values.exportId;
     case 'evaluationId':
       return values.evaluationId;
     case 'controlId':
@@ -306,6 +304,18 @@ export interface ClaimJobsOptions {
 }
 
 export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueMaintenanceResult> {
+  try {
+    const { expireDueReportExports } = await import('../api-v2/report-exports');
+    await expireDueReportExports();
+  } catch (error) {
+    logger.warn('[Queue] Failed to expire report exports', { error });
+  }
+  try {
+    const { expireDueAuditExports } = await import('../api-v2/audit-exports');
+    await expireDueAuditExports();
+  } catch (error) {
+    logger.warn('[Queue] Failed to expire audit exports', { error });
+  }
   // Reconcile and sweep any zombie/timed-out encryption lifecycle jobs atomically
   try {
     const { reconcileTerminalEncryptionLifecycleJobs } = await import('../encryption/worker');
@@ -847,6 +857,18 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
     }, PROCESSING_LEASE_HEARTBEAT_MS);
 
     switch (job.type) {
+      case 'AUDIT_EXPORT': {
+        const { processAuditExportJob } = await import('../api-v2/audit-exports');
+        await processAuditExportJob(requiredPayloadString(job.payload, 'exportId'), job.id, job.claimToken);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
+        return true;
+      }
+      case 'REPORT_EXPORT': {
+        const { processReportExportJob } = await import('../api-v2/report-exports');
+        await processReportExportJob(requiredPayloadString(job.payload, 'exportId'), job.id, job.claimToken);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
+        return true;
+      }
       case 'RUNBOOK': {
         const { processRunbookJob } = await import('../runbooks/orchestrator');
         await processRunbookJob(job.payload);
@@ -1354,13 +1376,29 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         return true;
       }
       case 'SCHEDULED_TASK': {
+        if (payloadValue(job.payload, 'task') === 'SERVICE_OBJECTIVE_EVALUATE') {
+          const { processObjectiveEvaluation } = await import('../slo/evaluation-jobs');
+          await processObjectiveEvaluation(job.id, job.claimToken);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
+          return true;
+        }
+        if (payloadValue(job.payload, 'task') === 'STATUS_PAGE_PUBLICATION_RETRY') {
+          const { processStatusPagePublicationRetry } =
+            await import('../status-pages/publication-jobs');
+          await processStatusPagePublicationRetry(job.id, job.claimToken);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
+          return true;
+        }
         if (
-          ['AUTOMATION_NOTIFY', 'AUTOMATION_OBSERVE', 'AUTOMATION_RETENTION'].includes(
-            String(payloadValue(job.payload, 'task'))
-          )
+          [
+            'AUTOMATION_NOTIFY',
+            'AUTOMATION_OBSERVE',
+            'AUTOMATION_RETENTION',
+            'AUTOMATION_PRIVACY_CLEANUP',
+          ].includes(String(payloadValue(job.payload, 'task')))
         ) {
           const { processAutomationJob } = await import('../automation/jobs');
-          await processAutomationJob(job.payload);
+          await processAutomationJob(job.payload, job.id);
           await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }

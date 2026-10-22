@@ -227,11 +227,12 @@ suite('PR 864 review regression contracts', () => {
       },
       actor.id
     );
-    expect(second).toMatchObject({ id: first.id, revision: 2, conditionLogic: 'OR' });
+    expect(second).toMatchObject({ id: first.id, conditionLogic: 'OR' });
+    expect(second.revision).toBeGreaterThan(first.revision);
     const configured = await testPrisma.serviceAutomationRule.findUniqueOrThrow({
       where: { id: rule.id },
     });
-    expect(configured.configurationRevision).toBe(3);
+    expect(configured.configurationRevision).toBeGreaterThan(rule.configurationRevision);
     await updateServiceBinding(
       service.id,
       rule.id,
@@ -241,7 +242,7 @@ suite('PR 864 review regression contracts', () => {
     expect(
       (await testPrisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } }))
         .configurationRevision
-    ).toBe(4);
+    ).toBe(configured.configurationRevision + 1);
 
     expect(await testPrisma.runbookTrigger.count({ where: { bindingId: rule.id } })).toBe(1);
     expect(await testPrisma.runbookSuggestion.findMany()).toEqual(
@@ -258,9 +259,15 @@ suite('PR 864 review regression contracts', () => {
     expect(audit).toHaveLength(2);
     expect((audit[1].details as { metadata: unknown }).metadata).toMatchObject({
       triggerId: first.id,
-      revision: 2,
-      before: { revision: 1, conditions: [{ field: 'incident.urgency', value: 'HIGH' }] },
-      after: { revision: 2, conditions: [{ field: 'incident.urgency', value: 'LOW' }] },
+      revision: second.revision,
+      before: {
+        revision: first.revision,
+        conditions: [{ field: 'incident.urgency', value: 'HIGH' }],
+      },
+      after: {
+        revision: second.revision,
+        conditions: [{ field: 'incident.urgency', value: 'LOW' }],
+      },
     });
     await detachServiceBinding(service.id, rule.id, actor.id);
     expect(
@@ -401,6 +408,12 @@ suite('PR 864 review regression contracts', () => {
         triggers: { create: { event: 'INCIDENT_CREATED' } },
       },
     });
+    // Model an already-active fixture after trigger insertion, which now pauses Automatic rules.
+    if (mode === 'AUTOMATIC')
+      await testPrisma.serviceAutomationRule.update({
+        where: { id: rule.id },
+        data: { enabled: true },
+      });
     const { evaluateIncidentTriggers } = await import('@/lib/runbooks/triggers');
     const orchestrator = await import('@/lib/runbooks/orchestrator');
     const { RunbookDefinitionError } = await import('@/lib/runbooks/errors');

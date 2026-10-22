@@ -8,10 +8,15 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
+  getPolicy: vi.fn(),
+  setProviders: vi.fn(),
+  setMeeting: vi.fn(),
+  executeRaw: vi.fn(),
 }));
 
 const tx = {
-  chatOpsConfig: { create: mocks.create, findUniqueOrThrow: mocks.findUniqueOrThrow },
+  $executeRaw: mocks.executeRaw,
+  chatOpsConfig: { create: mocks.create, findUnique: mocks.findUnique },
 };
 
 vi.mock('@/lib/rbac', () => ({
@@ -28,6 +33,12 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/audit', () => ({
   logAudit: mocks.logAudit,
+}));
+
+vi.mock('@/lib/incident-collaboration/policy', () => ({
+  getGlobalWarRoomPolicy: mocks.getPolicy,
+  setGlobalDefaultWarRoomProviders: mocks.setProviders,
+  setGlobalMeetingProvider: mocks.setMeeting,
 }));
 
 vi.mock('next/cache', () => ({
@@ -48,8 +59,13 @@ describe('ChatOps settings contract', () => {
     vi.clearAllMocks();
     mocks.assertAdmin.mockResolvedValue({ id: 'admin-1' });
     mocks.findUnique.mockResolvedValue(null);
-    mocks.create.mockResolvedValue({});
+    mocks.create.mockImplementation(async () => {
+      mocks.findUnique.mockResolvedValue({ updatedAt: new Date('2026-09-09T00:00:00Z') });
+      return {};
+    });
     mocks.findUniqueOrThrow.mockResolvedValue({ updatedAt: new Date('2026-09-09T00:00:00Z') });
+    mocks.getPolicy.mockResolvedValue({ defaultProviders: ['SLACK', 'MICROSOFT_TEAMS'], defaultMeetingProvider: 'NONE' });
+    mocks.executeRaw.mockResolvedValue(1);
     mocks.transaction.mockImplementation(async callback => callback(tx));
   });
 

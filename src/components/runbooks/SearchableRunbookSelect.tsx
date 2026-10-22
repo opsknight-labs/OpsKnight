@@ -33,6 +33,7 @@ export type SearchableRunbookSelectProps = {
   onChange?: (value: string) => void;
   required?: boolean;
   className?: string;
+  triggerClassName?: string;
   placeholder?: string;
   ariaLabel?: string;
 };
@@ -56,6 +57,7 @@ export function SearchableRunbookSelect({
   onChange,
   required = false,
   className,
+  triggerClassName,
   placeholder,
   ariaLabel,
 }: SearchableRunbookSelectProps) {
@@ -83,7 +85,7 @@ export function SearchableRunbookSelect({
         if (!response.ok) throw new Error('Search failed');
         const json = await response.json();
         const opts = json.options ?? json.data?.options ?? [];
-        setOptions(opts);
+        if (!controller.signal.aborted) setOptions(opts);
       } catch {
         if (!controller.signal.aborted) setError(true);
       } finally {
@@ -97,34 +99,41 @@ export function SearchableRunbookSelect({
     };
   }, [kind, search, selectedValue]);
 
+  const [selectedLabel, setSelectedLabel] = useState('');
+
   const fallbackLabel = label.toLowerCase();
   const selectedOption = options.find(o => o.value === selectedValue);
   const displayLabel = selectedOption
     ? selectedOption.label
-    : selectedValue
-      ? selectedValue
-      : (placeholder ??
-        (required
-          ? label
-            ? `Select ${fallbackLabel}…`
-            : 'Select…'
-          : label
-            ? `All ${fallbackLabel}`
-            : 'All'));
+    : selectedLabel && selectedValue
+      ? selectedLabel
+      : selectedValue
+        ? selectedValue
+        : (placeholder ??
+          (required
+            ? label
+              ? `Select ${fallbackLabel}…`
+              : 'Select…'
+            : label
+              ? `All ${fallbackLabel}`
+              : 'All'));
 
   // eslint-disable-next-line security/detect-object-injection -- kind is a closed union of known select types
   const KindIcon = KIND_ICONS[kind] ?? Server;
 
   const handleSelect = (val: string) => {
-    const nextVal = val === selectedValue ? '' : val;
-    setInternalValue(nextVal);
-    onChange?.(nextVal || 'all');
+    const opt = options.find(o => o.value === val);
+    setInternalValue(val);
+    if (opt) setSelectedLabel(opt.label);
+    else if (!val) setSelectedLabel('');
+    onChange?.(val || 'all');
     setOpen(false);
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     setInternalValue('');
+    setSelectedLabel('');
     onChange?.('all');
   };
 
@@ -151,7 +160,8 @@ export function SearchableRunbookSelect({
               className={cn(
                 'h-9 w-full justify-between rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 shadow-2xs text-xs font-medium px-2.5 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-primary/50 data-[state=open]:ring-2 data-[state=open]:ring-primary/20',
                 !required && selectedValue ? 'pr-12' : 'pr-2.5',
-                !selectedValue && 'text-muted-foreground'
+                !selectedValue && 'text-muted-foreground',
+                triggerClassName
               )}
             >
               <div className="flex items-center gap-2 min-w-0 truncate">
@@ -195,7 +205,11 @@ export function SearchableRunbookSelect({
                       : 'Search…'
                 }
                 value={search}
-                onValueChange={setSearch}
+                onValueChange={nextSearch => {
+                  if (nextSearch === search) return;
+                  setLoading(true);
+                  setSearch(nextSearch);
+                }}
                 className="h-8 text-xs rounded-lg"
               />
               {loading && (
@@ -234,6 +248,7 @@ export function SearchableRunbookSelect({
                     <CommandItem
                       key={option.value}
                       value={option.value}
+                      disabled={loading}
                       onSelect={() => handleSelect(option.value)}
                       className="rounded-xl px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors duration-150 hover:bg-muted/70 aria-selected:bg-primary/10 aria-selected:text-primary flex items-center gap-2"
                     >

@@ -1,0 +1,628 @@
+{
+  "sourceParent": "22e554be2",
+  "createdAt": "2026-10-19T12:11:12.531Z",
+  "environment": "Shared local PostgreSQL 16/Docker VM; reference performance only",
+  "measurementNotes": [
+    "Query count covers the complete transaction and canonical audit.",
+    "WAL positions are cluster-wide and may include co-resident writes.",
+    "Every iteration changes one Agent and checks membership in half the configured pools; unrelated Agent membership remains untouched.",
+    "Advisory-lock statement duration includes execution and waiting at millisecond resolution; it is not isolated lock-wait attribution. Production load/HA remain pending.",
+    "Concurrent waves use eight command-owned Serializable writers, including the unchanged production retry budget. Per-writer failures are retained, not retried by the harness."
+  ],
+  "runs": [
+    {
+      "agents": 100,
+      "pools": 100,
+      "samples": [
+        {
+          "elapsedMs": 88.20695799999976,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 1,
+          "revisionDelta": 50,
+          "walBytes": 94760,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 55.49370799999997,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 5,
+          "revisionDelta": 100,
+          "walBytes": 117192,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 54.05529099999967,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 4,
+          "revisionDelta": 100,
+          "walBytes": 105640,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 43.94220800000039,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 100,
+          "walBytes": 110712,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 41.72504200000003,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 100,
+          "walBytes": 102112,
+          "membershipCount": 50
+        },
+        {
+          "elapsedMs": 40.152625000000626,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 1,
+          "revisionDelta": 100,
+          "walBytes": 91008,
+          "membershipCount": 50
+        }
+      ],
+      "concurrentWaves": [
+        {
+          "writers": 8,
+          "elapsedMs": 775.2035839999999,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 44.87629099999958,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 465.2651670000005,
+              "success": true
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 733.1087500000003,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 290.2840409999999,
+              "success": true
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 185.32579199999964,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 740.148792,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 731.082042,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 741.217541,
+              "success": false,
+              "code": "P2010"
+            }
+          ]
+        },
+        {
+          "writers": 8,
+          "elapsedMs": 627.390958,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 603.6369169999998,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 164.3755000000001,
+              "success": true
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 11.011124999999993,
+              "success": true
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 601.3189999999995,
+              "success": true
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 336.16283399999975,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 297.729292,
+              "success": true
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 59.251916999999594,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 282.67674999999963,
+              "success": true
+            }
+          ]
+        },
+        {
+          "writers": 8,
+          "elapsedMs": 601.6023330000007,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 307.31887499999993,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 303.37879200000043,
+              "success": true
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 574.9458750000013,
+              "success": true
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 165.50287499999922,
+              "success": true
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 332.1750000000002,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 26.81983300000047,
+              "success": true
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 82.63983300000018,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 577.3182500000003,
+              "success": false,
+              "code": "P2010"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "agents": 1000,
+      "pools": 1000,
+      "samples": [
+        {
+          "elapsedMs": 183.2639589999999,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 500,
+          "walBytes": 1079392,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 232.36166700000103,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1155856,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 308.75995799999873,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1154760,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 274.8114170000008,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1162072,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 298.93312499999956,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1094680,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 265.8524579999994,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1059600,
+          "membershipCount": 500
+        }
+      ],
+      "concurrentWaves": [
+        {
+          "writers": 8,
+          "elapsedMs": 1328.281667000001,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 572.060958,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 301.22412500000064,
+              "success": true
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 1229.2417499999992,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 1232.1344170000011,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 824.2394160000003,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 1227.4957090000007,
+              "success": true
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 147.00679200000013,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 1231.3687500000015,
+              "success": false,
+              "code": "P2010"
+            }
+          ]
+        },
+        {
+          "writers": 8,
+          "elapsedMs": 858.9740000000002,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 431.93904100000145,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 756.0469589999993,
+              "success": true
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 34.33495900000162,
+              "success": true
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 5.835791999999856,
+              "success": true
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 182.7659169999988,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 758.4802909999999,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 757.7949169999993,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 39.024333999999726,
+              "success": true
+            }
+          ]
+        },
+        {
+          "writers": 8,
+          "elapsedMs": 1593.0610419999994,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 146.45125000000007,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 468.0459579999988,
+              "success": true
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 714.5737079999999,
+              "success": true
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 1016.9583750000002,
+              "success": true
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 1509.5355,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 843.3607499999998,
+              "success": true
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 1233.7851250000003,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 1511.2161669999987,
+              "success": false,
+              "code": "P2010"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "agents": 5000,
+      "pools": 1000,
+      "samples": [
+        {
+          "elapsedMs": 576.2431250000009,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 500,
+          "walBytes": 1067624,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 725.5437090000014,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1173760,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 809.7874579999989,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1120608,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 726.6007499999978,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1164704,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 895.447833000002,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 0,
+          "revisionDelta": 1000,
+          "walBytes": 1110016,
+          "membershipCount": 500
+        },
+        {
+          "elapsedMs": 1034.0770830000001,
+          "queryCount": 15,
+          "advisoryLockStatementMs": 1,
+          "revisionDelta": 1000,
+          "walBytes": 1070456,
+          "membershipCount": 500
+        }
+      ],
+      "concurrentWaves": [
+        {
+          "writers": 8,
+          "elapsedMs": 1356.0003749999996,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 148.92224999999962,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 1253.7511249999989,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 1252.0617920000004,
+              "success": true
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 1256.3373749999992,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 333.3326249999991,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 1255.2419169999994,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 843.3657080000012,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 559.7092080000002,
+              "success": true
+            }
+          ]
+        },
+        {
+          "writers": 8,
+          "elapsedMs": 1236.7205840000024,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 754.0753750000003,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 278.60141699999804,
+              "success": true
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 1140.1113750000004,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 1141.9217919999974,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 1137.2574999999997,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 9.702124999999796,
+              "success": true
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 427.33866599999965,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 220.60016699999687,
+              "success": true
+            }
+          ]
+        },
+        {
+          "writers": 8,
+          "elapsedMs": 1455.4231669999972,
+          "results": [
+            {
+              "writer": 0,
+              "elapsedMs": 1002.929916000001,
+              "success": true
+            },
+            {
+              "writer": 1,
+              "elapsedMs": 1362.3493750000016,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 2,
+              "elapsedMs": 1363.1472499999982,
+              "success": false,
+              "code": "P2010"
+            },
+            {
+              "writer": 3,
+              "elapsedMs": 1360.413542000002,
+              "success": true
+            },
+            {
+              "writer": 4,
+              "elapsedMs": 141.80004199999894,
+              "success": true
+            },
+            {
+              "writer": 5,
+              "elapsedMs": 701.5164159999986,
+              "success": true
+            },
+            {
+              "writer": 6,
+              "elapsedMs": 484.12358400000085,
+              "success": true
+            },
+            {
+              "writer": 7,
+              "elapsedMs": 1364.019959000001,
+              "success": false,
+              "code": "P2010"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sourceSha256": {
+    "tests/benchmarks/runbook-fleet.ts": "7ca4f0060329a3a83e89f371b22f5da9977d70ff46ea97ac8985e429b3fc6964",
+    "src/lib/runbooks/pool-labels.ts": "d995b680bffd91ee1eb48aa615d791fc1daa8c23a0f188853bfa26a58186f4cd",
+    "src/lib/runbooks/pool-commands.ts": "fd6acf81b121f1f4cdf055c28be41301a8249eb6c58c8188a69660d30bbe20e2",
+    "src/lib/db-utils.ts": "680e2280d77c39be4d6678ba1003189bc64e73b55285bf7cbb3ccf2549e25b2b"
+  },
+  "assessment": {
+    "concurrentRequests": 72,
+    "succeeded": 53,
+    "failed": 19,
+    "membershipConsistency": "passed for successful and rolled-back writers",
+    "capacityConclusion": "Eight concurrent fleet writers exceed the current conflict-free envelope. Do not interpret constant SQL count as constant database write cost. Serialize bulk fleet administration and retry HTTP 409 with bounded jitter; no production throughput SLA certified."
+  }
+}

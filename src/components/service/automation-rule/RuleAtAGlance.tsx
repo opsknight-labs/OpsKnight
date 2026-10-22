@@ -21,16 +21,16 @@ export type RuleGlance = {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2 text-sm">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right font-medium break-words">{children}</dd>
+    <div className="flex items-start justify-between gap-3 py-1.5 text-xs">
+      <dt className="shrink-0 text-muted-foreground font-medium text-xs">{label}</dt>
+      <dd className="min-w-0 text-right font-semibold break-words text-foreground">{children}</dd>
     </div>
   );
 }
 
 export function RuleAtAGlance({ glance }: { glance: RuleGlance }) {
   return (
-    <dl className="divide-y">
+    <dl className="divide-y divide-border/60">
       <Row label="Mode">{glance.mode}</Row>
       <Row label="Status">
         <RuleStatusPill kind={glance.status} />
@@ -47,8 +47,22 @@ export function RuleAtAGlance({ glance }: { glance: RuleGlance }) {
           {glance.readiness.label}
         </span>
       </Row>
-      <Row label="Eligible Agents">{glance.eligibleAgents ?? '—'}</Row>
-      <Row label="Certified Agents">{glance.certifiedAgents}</Row>
+      <Row label="Eligible Agents">
+        {glance.eligibleAgents === 0 ? (
+          <span className="inline-flex items-center gap-1.5 font-semibold text-rose-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />0 online
+          </span>
+        ) : (
+          (glance.eligibleAgents ?? '—')
+        )}
+      </Row>
+      <Row label="Certified Agents">
+        {glance.certifiedAgents === 0 ? (
+          <span className="font-semibold text-rose-500">0 certified</span>
+        ) : (
+          glance.certifiedAgents
+        )}
+      </Row>
       <Row label="Last run">
         {glance.lastRun ? (
           <span className="inline-flex flex-wrap items-center justify-end gap-2">

@@ -25,7 +25,8 @@
   },
   "private": false,
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev",
+    "dev:webpack": "next dev --webpack",
     "build": "next build --webpack",
     "start": "node .next/standalone/server.js",
     "start:dev": "next start",
@@ -52,6 +53,8 @@
     "certify:collaboration": "npm run certify:collaboration:preflight",
     "certify:collaboration:preflight": "ts-node -r tsconfig-paths/register --project tsconfig.script.json scripts/certify-incident-collaboration-preflight.ts",
     "prisma:validate": "node scripts/validate-migrations.cjs",
+    "integrations:encrypt-legacy-keys:dry-run": "ts-node -r tsconfig-paths/register --project tsconfig.script.json scripts/integrations/encrypt-legacy-routing-keys.ts",
+    "integrations:encrypt-legacy-keys": "ts-node -r tsconfig-paths/register --project tsconfig.script.json scripts/integrations/encrypt-legacy-routing-keys.ts --apply",
     "prisma:health": "node scripts/check-migration-health.cjs",
     "prisma:auto-recover": "node --loader ts-node/esm scripts/auto-recover-migrations.ts",
     "prisma:migrate:safe": "npm run prisma:validate && npm run prisma:health && npx prisma migrate deploy && npm run prisma:indexes:status-platform && npm run prisma:indexes:sla-scheduler && npm run prisma:indexes:voice-attempts && npm run prisma:backfill:automation-source && node scripts/prepare-authentication-diagnostics.cjs",
@@ -100,7 +103,8 @@
     "api:clients": "TS_NODE_PROJECT=tsconfig.script.json node -r ts-node/register -r tsconfig-paths/register scripts/api-v2/generate-clients.ts",
     "api:clients:check": "npm run api:clients -- --check",
     "test:api:clients": "vitest run tests/unit/api-v2-sdk.test.ts && python3 -m unittest discover -s tests/sdk -p \"test_*.py\"",
-    "certify:api:clients:live": "node tests/sdk/live-workflows.mjs"
+    "certify:api:clients:live": "node tests/sdk/live-workflows.mjs",
+    "api:coverage": "TS_NODE_PROJECT=tsconfig.script.json node -r ts-node/register -r tsconfig-paths/register scripts/api-v2/coverage-matrix.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1149.0",

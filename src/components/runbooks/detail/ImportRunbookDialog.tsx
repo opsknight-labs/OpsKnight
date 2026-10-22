@@ -35,8 +35,12 @@ export function ImportRunbookDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5 shadow-2xs">
-          <Upload className="h-4 w-4" aria-hidden="true" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 border border-zinc-700/80 bg-zinc-800/90 text-zinc-100 hover:bg-zinc-700 hover:text-white shadow-xs focus-visible:ring-zinc-400"
+        >
+          <Upload className="h-4 w-4 text-zinc-300" aria-hidden="true" />
           <span>{triggerLabel}</span>
         </Button>
       </DialogTrigger>

@@ -1,0 +1,200 @@
+{
+  "sourceParent": "8081dadec0cb910445df25237cf195034ba2addb",
+  "measuredAt": "2026-10-18T07:35:16.520360+00:00",
+  "status": "local_checks_passed_latest_ci_pending",
+  "scope": "Phase 1 service-automation control-plane completion in PR #886; does not close the overall enterprise API plan.",
+  "registeredOperationCount": 101,
+  "automationOperationCount": 17,
+  "newOperations": [
+    "getServiceAutomation",
+    "validateAutomation",
+    "simulateAutomation",
+    "updateServiceAutomationMode",
+    "listAutomationVersions",
+    "getAutomationVersion",
+    "restoreAutomationDraft",
+    "listAutomationDecisions",
+    "listAutomationObservations"
+  ],
+  "topology": {
+    "webReplicas": 2,
+    "generalWorkers": 1,
+    "database": "isolated PostgreSQL 16",
+    "devices": [
+      "desktop",
+      "Android-sized mobile",
+      "iPhone",
+      "tablet"
+    ]
+  },
+  "browser": {
+    "startTime": "2026-10-18T07:29:08.899Z",
+    "duration": 181900.329,
+    "expected": 36,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "apiOnlyJourneys": [
+    {
+      "versionId": "cmvdiagd9007ikfeoxsdq0ul5",
+      "restoredRevision": 2,
+      "decisions": 1,
+      "observations": 6,
+      "finalMode": "DISABLED",
+      "project": "desktop"
+    },
+    {
+      "versionId": "cmvdib06100frkfeo6g63lmzp",
+      "restoredRevision": 2,
+      "decisions": 1,
+      "observations": 6,
+      "finalMode": "DISABLED",
+      "project": "mobile"
+    },
+    {
+      "versionId": "cmvdibnob00o0kfeohvmtrb9x",
+      "restoredRevision": 2,
+      "decisions": 1,
+      "observations": 6,
+      "finalMode": "DISABLED",
+      "project": "iphone"
+    },
+    {
+      "versionId": "cmvdicamu00w9kfeowgvz0tc3",
+      "restoredRevision": 2,
+      "decisions": 1,
+      "observations": 6,
+      "finalMode": "DISABLED",
+      "project": "tablet"
+    }
+  ],
+  "candidateObservationJobs": [
+    {
+      "id": "AUTOMATION_OBSERVE:cmvdi923g0066kfeoqm4x60mj",
+      "status": "COMPLETED",
+      "attempts": 2,
+      "createdAt": "2026-10-18T07:29:38.534Z",
+      "completedAt": "2026-10-18T07:30:40.851Z",
+      "project": "desktop"
+    },
+    {
+      "id": "AUTOMATION_OBSERVE:cmvdiayea00efkfeoxf92gsn9",
+      "status": "COMPLETED",
+      "attempts": 1,
+      "createdAt": "2026-10-18T07:31:07.048Z",
+      "completedAt": "2026-10-18T07:31:07.759Z",
+      "project": "mobile"
+    },
+    {
+      "id": "AUTOMATION_OBSERVE:cmvdiblk000mokfeodhkv06ht",
+      "status": "COMPLETED",
+      "attempts": 1,
+      "createdAt": "2026-10-18T07:31:37.063Z",
+      "completedAt": "2026-10-18T07:31:37.647Z",
+      "project": "iphone"
+    },
+    {
+      "id": "AUTOMATION_OBSERVE:cmvdic8ku00uxkfeoc97evobr",
+      "status": "COMPLETED",
+      "attempts": 1,
+      "createdAt": "2026-10-18T07:32:06.900Z",
+      "completedAt": "2026-10-18T07:32:07.570Z",
+      "project": "tablet"
+    }
+  ],
+  "unitTests": {
+    "passed": 521,
+    "files": 59,
+    "affectedFollowupTestsPassed": 17,
+    "primaryAuthorizationMatrixFollowupPassed": 7
+  },
+  "lifecyclePostgreSQLTests": {
+    "passed": 12,
+    "schemasValidatedAgainstRealResponses": true
+  },
+  "postgresRegression": {
+    "passed": 124,
+    "skipped": 1,
+    "files": 20,
+    "scope": "Exact PostgreSQL automation and queue workflow command on the final source tree"
+  },
+  "liveSdks": {
+    "typescript": "passed against the production build and PostgreSQL",
+    "python": "passed all nine new automation operations against HTTP, plus authoring and disablement",
+    "secrets": "ephemeral fixture tokens passed to Python on stdin; revoked in finally"
+  },
+  "pythonTransportTests": {
+    "passed": 9,
+    "runtime": "Python 3.12 Docker"
+  },
+  "upgrade": {
+    "passed": 12,
+    "files": 2,
+    "baseline": "097f4916a38ddcc6d1512f71b72bde36abbeb171",
+    "scope": "Existing published-schema identity fixture migrated through all current additive migrations, with authentication read-load checks."
+  },
+  "productionBuild": "passed",
+  "typecheck": "passed",
+  "changedSourceLint": "passed",
+  "generatedClientsCheck": "passed",
+  "sourceDigests": {
+    ".github/workflows/automation-validation.yml": "17b29268f25d20c045357f91aca17e48e09c4de034b086e29fafc5661c8aeb0c",
+    "prisma/migrations/20261018090000_automation_config_revision/migration.sql": "914ef4f4a11bac00380e195130cf46f7a5326389f6aa2302f6f6ce96fb2afcb3",
+    "prisma/migrations/20261018091000_automation_draft_restore_origin/migration.sql": "cba744e558d28c93f4c23657a4503f040c48263bf0b2065b24ffbacf566f335c",
+    "prisma/migrations/20261018092000_automation_observation_history_index/migration.sql": "ad419d8df170f9ea11f0842a1f33dc33e6112b9bc0106ad8073f64695a0b92ad",
+    "prisma/schema.prisma": "5faeb3b2a2ab54bee320e62fcdc5c2498feaa3e583a9315dacbc87c4bff5d12b",
+    "sdk/openapi-v2.json": "481a7f158d1f12ac6928789348620f1d0587924392d491c1e14991b8f0a135d4",
+    "sdk/python/opsknight_v2/client.pyi": "7617c3b68bb1df5b488edaa88ce878d49dd669a78b059d22019f256dd11fb2b4",
+    "sdk/python/opsknight_v2/models.py": "33057f73075d627c4692b715137cf31f6cc67fcdb26fb8717f84baf9f5f1d505",
+    "sdk/python/opsknight_v2/operations.json": "fe0cfbc12ca31f2c9a48769f8efca24ac95dad6457eb6185d7565f769ff2a5a4",
+    "sdk/typescript/schema.ts": "f21de00f35f166f43f13ff742b28341c9e2dd05864981d2f6ea8b15b457f1a9b",
+    "src/app/(app)/services/[id]/automation/actions.ts": "011241a0211ec14f89ff6b7d888fe5443a5860db270697358716ae8b73ed7b2f",
+    "src/app/api/v2/services/[id]/automation/decisions/route.ts": "a48a2580df1c1d48afa95852a227b27dcec358b7d1fd20cc529970f2bbfea0c7",
+    "src/app/api/v2/services/[id]/automation/draft/route.ts": "fe6b94f1a19a95c4530a118e30f798ed99d005d53c728e84c90c3e9c2c5ed777",
+    "src/app/api/v2/services/[id]/automation/mode/route.ts": "ee88c1a66297feb49660242a6a98d36b2a08f1b328bf27afb279e7f8110799e5",
+    "src/app/api/v2/services/[id]/automation/observations/route.ts": "42c2668072f73410bf4cd2d571d6981a99fb7b53c4780b3b66a51347149ce04b",
+    "src/app/api/v2/services/[id]/automation/restore/route.ts": "f8c880c5809e586b79e2f3c6a8d2ee111ee09b1d479c370b79a7e067eb467df9",
+    "src/app/api/v2/services/[id]/automation/route.ts": "2014b94dc472236495c0275521db56416c71ab2389d9e9d4d0147ae8b41fcc78",
+    "src/app/api/v2/services/[id]/automation/simulate/route.ts": "30bb02b857087835c60177b1b2d5dec5ef4dd208e42213676bf56849d11bea9a",
+    "src/app/api/v2/services/[id]/automation/validate/route.ts": "4ad088e065cd7bf588115b5eb4cdcba76705ea623fda3796451bdb509e74b792",
+    "src/app/api/v2/services/[id]/automation/versions/[versionId]/route.ts": "6419cb42e04f9cd84ff880f54f20a6a275c3d740ada928566073c80cf0c34350",
+    "src/app/api/v2/services/[id]/automation/versions/route.ts": "209a82530998f9a80e0a34979d0f1b4b10e7261644ea33dbfcaa9209efe16e6b",
+    "src/components/automation/AutomationActivity.tsx": "bbf2c7a1f09c272339ddbe7a505ea37a000aa0965cc3e206bab5455bbfab5823",
+    "src/components/automation/AutomationWorkspace.tsx": "e0e05822752ebbf90aff20d337a61a4d28e37896b060bc459ea1085ffc34d5ce",
+    "src/lib/api-v2/automation-access.ts": "befb4c48620f1d8e96446d2fd810926f82166b47f75e44de81548e77ba680fb3",
+    "src/lib/api-v2/automation-openapi.ts": "e3631a7dee67a0469cdba7226cd16f14db6145e977192d507c80c6613f8bec08",
+    "src/lib/api-v2/capability-catalog.ts": "c2d41c360e31bcf69ed2408d802b80d91b36d515db5712c3c5afde75f7ad97d1",
+    "src/lib/api-v2/endpoint-samples.ts": "a0a81bf18809532c294248549020836c3f51a8784ecd9ab56316bb9ff8241ce8",
+    "src/lib/api-v2/enterprise-openapi.ts": "98f32a25e8ffe405d2886a330a02dc23e21b4c9732bb928f153279ece54dbb7b",
+    "src/lib/api-v2/mutation-contract.ts": "048efea52d226b13b30b7f8f34fc6e48092d26f01fa39e634c281d12f24219ba",
+    "src/lib/api-v2/openapi-finalize.ts": "f50113e62e1d159f8303b95fc8eddc99c306b681a3c76a6393a66116523eea7b",
+    "src/lib/api-v2/openapi-registry.ts": "0b484200685783195154aaac46f02360cee78e0068beb16fd1da64f3bc276d93",
+    "src/lib/automation/authoring-contract.ts": "c35f1bc5cb45cf69cf94631e405cfd82a707316f1f117fa46ecf36a75569eaeb",
+    "src/lib/automation/authoring.ts": "731b0b36c7bee5b765891f60c3411baa920a1846fb32e23fe7a7ff5344690a18",
+    "src/lib/automation/configuration.ts": "dc6e03fb29eb57611f3f23f6a3bd14a0b3287ac44bb942404a11deb3d94aee01",
+    "src/lib/automation/history.ts": "9344a827d86a7b25d008bdbf1980753657aa02c1310cf5b995a5504a757f280a",
+    "src/lib/automation/observation-history.ts": "fe74969b74289c5084859bb364955527e272533a280ae7445006a5393ed0bc4b",
+    "src/lib/automation/versioning.ts": "2eb91829c30af8983afb347417c3a6a12b008dc50c2b763609e83056f23290ad",
+    "tests/components/automation-authoring.test.tsx": "867c1807011adefadcfc7153faa74d51ff7908e93e0f4c0bf364e4a6ea8fdfb8",
+    "tests/e2e/automation.spec.ts": "5d8747b1426e6642a778f258cd90d1fbbf21b49a278abecf0a8893b10a6ca0d5",
+    "tests/fixtures/api-v2-authorization-matrix.json": "7de22771248109df8c4ba614a61e5e7d1db75b867439bd1849fed3f0a927896b",
+    "tests/helpers/api-v2.ts": "4ec062cbe1b0e8e6044989d072969ac6042618b343aab23587d94a1b57937ea8",
+    "tests/integration/api-v2-automation-lifecycle.test.ts": "1ffbe97a92fabe423c172f271b9d7d1679f2619aa4157718019c19126df2f286",
+    "tests/lib/automation-area-access.test.ts": "561f3f1bd8279c04029d4d4226cf5accd80911953c81c4b7673ca1de6f823fab",
+    "tests/lib/automation-recent-discovery.test.ts": "14fd805992a3826a4e6b3fd1b54dc4b98a60f7f3cfa9cee30f9f81c8ac67a4fa",
+    "tests/sdk/live-workflow.py": "56ccb130dfd9192a8be16ca61c085ebba926109e0d22eef8d28a6913aed6ab35",
+    "tests/sdk/live-workflows.mjs": "199e5bc6136d2ed0701d5b561563442ad03255d0af0c38efc50a379b0552ab4d",
+    "tests/unit/api-v2-authorization-matrix.test.ts": "ad3877439e345b0dc2f30d732c63e1aa092f70d99b713f5a349625a9717c9866"
+  },
+  "additionalLocalEvidence": [
+    "automation-m1-local-load.json",
+    "automation-m1-upgrade-auth-load.json"
+  ],
+  "limitations": [
+    "GitHub CI must pass on the pushed commit; previous-commit checks are not certification of this source tree.",
+    "No combined production load, 1/2/4-replica HA, Docker/Kind agent fleet, provider outage or rolling application-version certification is claimed.",
+    "Local candidate latency measurements do not establish an approved production latency budget or representative evidence threshold.",
+    "Runbook, integration, schedule, identity, notification, status, reporting and product-approved SLO work remains in the same PR plan."
+  ]
+}

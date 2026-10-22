@@ -29,6 +29,7 @@ export interface V2RouteContext<TParams = any, TQuery = any, TBody = any> {
   apiKey: V2ApiKeyIdentity;
   rateLimitHeaders: Record<string, string>;
   tx?: Prisma.TransactionClient;
+  prepared?: unknown;
 }
 
 export type V2RouteHandlerResult<TResult = any> =
@@ -42,6 +43,13 @@ export type V2RouteHandlerResult<TResult = any> =
 
 export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = any> = {
   rateLimitTier?: V2OperationClass;
+  /** Authorized configuration reads before reserving a mutation transaction connection. Never perform provider I/O here. */
+  prepare?: (
+    ctx: Pick<
+      V2RouteContext<TParams, TQuery, TBody>,
+      'req' | 'params' | 'query' | 'body' | 'actor' | 'apiKey'
+    >
+  ) => Promise<unknown>;
   resourceExtractor?: (
     ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders' | 'tx'>
   ) => Promise<AuthorizationResource | undefined> | AuthorizationResource | undefined;
@@ -52,6 +60,27 @@ export type V2RouteConfig<TParams = any, TQuery = any, TBody = any, TResult = an
   idempotent?: boolean;
   idempotencyRequired?: boolean;
   idempotencyScope?: string | ((ctx: { params: TParams; body: TBody }) => string);
+  /**
+   * Optional resource-level authorization re-check executed before a cached
+   * idempotency result is returned. Runs inside the serializable replay transaction
+   * with a current database snapshot so it reads the authoritative membership/ownership
+   * state. Throw an AppError to deny replay (e.g. after team membership is revoked).
+   * Without this guard, callers whose access was removed after the first successful
+   * write can receive the stored response indefinitely.
+   */
+  replayAuthGuard?: (
+    ctx: Omit<V2RouteContext<TParams, TQuery, TBody>, 'rateLimitHeaders'>
+  ) => Promise<void>;
+  /** Transform secret-bearing inputs before fingerprinting; never persist an unkeyed secret digest. */
+  idempotencyPayload?: (
+    ctx: Pick<V2RouteContext<TParams, TQuery, TBody>, 'req' | 'params' | 'body'>
+  ) => Prisma.InputJsonValue;
+  /** One-time disclosure routes persist safe replay metadata, never their initial secret. */
+  persistIdempotencyResult?: (
+    result: V2RouteHandlerResult<TResult>
+  ) => V2RouteHandlerResult<TResult>;
+  /** Synchronous local cache eviction only, after the mutation transaction commits (also on replay). */
+  invalidateAfterCommit?: (result: V2RouteHandlerResult<TResult>) => void;
   scopedFilter?: boolean;
   handler: (ctx: V2RouteContext<TParams, TQuery, TBody>) => Promise<V2RouteHandlerResult<TResult>>;
 } & (
@@ -149,40 +178,74 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
           });
         }
 
-        if (config.preconditionRequired) requireRevisionIfMatch(req);
+        const expectedRevision = config.preconditionRequired
+          ? requireRevisionIfMatch(req)
+          : undefined;
+
+        if (config.idempotent && config.idempotencyRequired) {
+          const idempotencyKey = req.headers.get('idempotency-key')?.trim();
+          if (!idempotencyKey) {
+            throw new AppError({
+              code: 'IDEMPOTENCY_KEY_REQUIRED',
+              userMessage: 'The Idempotency-Key header is required for this operation.',
+            });
+          }
+        }
+
+        const prepared = config.prepare
+          ? await config.prepare({ req, params, query, body, actor, apiKey })
+          : undefined;
 
         // 7. Execute Handler (Idempotent vs Non-Idempotent)
         if (config.idempotent) {
-          if (config.idempotencyRequired) {
-            const idempotencyKey = req.headers.get('idempotency-key')?.trim();
-            if (!idempotencyKey) {
-              throw new AppError({
-                code: 'IDEMPOTENCY_KEY_REQUIRED',
-                userMessage: 'The Idempotency-Key header is required for this operation.',
-              });
-            }
-          }
-
           const scope =
             typeof config.idempotencyScope === 'function'
               ? config.idempotencyScope({ params, body })
               : (config.idempotencyScope ?? `${req.method}:${new URL(req.url).pathname}`);
 
-          const execution = await runV2IdempotentMutation(req, apiKey.id, scope, body, async tx => {
-            return await config.handler({
-              req,
-              params,
-              query,
-              body,
-              pagination,
-              actor,
-              apiKey,
-              rateLimitHeaders,
-              tx,
-            });
-          });
+          const receiptPayload = config.idempotencyPayload
+            ? config.idempotencyPayload({ req, params, body })
+            : body;
+          const execution = await runV2IdempotentMutation(
+            req,
+            apiKey.id,
+            scope,
+            expectedRevision === undefined
+              ? receiptPayload
+              : { contract: 'revision-bound-v1', body: receiptPayload, ifMatch: expectedRevision },
+            async tx => {
+              return await config.handler({
+                req,
+                params,
+                query,
+                body,
+                pagination,
+                actor,
+                apiKey,
+                rateLimitHeaders,
+                tx,
+                prepared,
+              });
+            },
+            config.replayAuthGuard
+              ? async tx => {
+                  await config.replayAuthGuard!({
+                    req,
+                    params,
+                    query,
+                    body,
+                    pagination,
+                    actor,
+                    apiKey,
+                    tx,
+                  });
+                }
+              : undefined,
+            config.persistIdempotencyResult
+          );
 
           const result = execution.value;
+          config.invalidateAfterCommit?.(result);
           if (result instanceof Response) {
             return result;
           }
@@ -219,6 +282,7 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
           actor,
           apiKey,
           rateLimitHeaders,
+          prepared,
         });
 
         if (result instanceof Response) {
