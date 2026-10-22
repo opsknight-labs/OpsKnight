@@ -7,8 +7,8 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const ARTIFACTS_DIR = path.join(REPO_ROOT, 'artifacts/load-certification/swarm-pgbouncer');
 
 function execSql(sql: string): string {
-  const cmd = `docker exec $(docker ps -q -f name=opsknight_opsknight-db) psql -U opsknight -d opsknight_db -t -A -c "${sql.replace(/"/g, '\\"')}"`;
-  return execSync(cmd, { encoding: 'utf8' }).trim();
+  const cmd = `docker exec -i $(docker ps -q -f name=opsknight_opsknight-db) psql -U opsknight -d opsknight_db -t -A`;
+  return execSync(cmd, { input: sql, encoding: 'utf8' }).trim();
 }
 
 function getDbMetrics() {

@@ -15,8 +15,8 @@ function execCmd(cmd: string): string {
 }
 
 function execSql(sql: string): string {
-  const cmd = `docker exec $(docker ps -q -f name=opsknight_opsknight-db) psql -U opsknight -d opsknight_db -t -A -c "${sql.replace(/"/g, '\\"')}"`;
-  return execSync(cmd, { encoding: 'utf8' }).trim();
+  const cmd = `docker exec -i $(docker ps -q -f name=opsknight_opsknight-db) psql -U opsknight -d opsknight_db -t -A`;
+  return execSync(cmd, { input: sql, encoding: 'utf8' }).trim();
 }
 
 async function sleep(ms: number) {
